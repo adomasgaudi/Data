@@ -47,6 +47,9 @@
       }
       footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: 0.82rem; color: var(--muted); }
       footer a { word-break: break-all; }
+      .chart-figure { margin: 0 0 1.75rem; }
+      .chart-figure canvas { width: 100%; height: auto; display: block; }
+      .chart-figure figcaption { margin-top: 0.5rem; }
     </style>
   </head>
   <body>
@@ -73,6 +76,12 @@
           load allows.
         </p>
       </div>
+
+      <figure class="chart-figure">
+        <canvas id="repsChart" width="720" height="440" role="img"
+          aria-label="Bench press: average reps to failure plotted against percentage of 1RM, with a best-fit curve."></canvas>
+        <figcaption class="note" id="chartCaption"></figcaption>
+      </figure>
 
       <table>
         <caption>Practical training loads (95%–50% of 1RM)</caption>
@@ -142,5 +151,153 @@
         </p>
       </footer>
     </div>
+
+    <script>
+      (function () {
+        // Bench-press only: [%1RM, average reps to failure] from Nuzzo et al. (Fig. 3).
+        var DATA = [
+          [95, 2.59], [90, 4.11], [85, 6.23], [80, 8.82], [75, 11.51], [70, 14.08],
+          [65, 16.59], [60, 19.34], [55, 22.79], [50, 27.25], [45, 33.01], [40, 40.45],
+          [35, 50.10], [30, 62.62], [25, 78.88], [20, 100.02], [15, 127.49],
+        ];
+
+        // Best-fit curve: least-squares cubic on ln(reps) vs a centred load.
+        // Cubic because the reps-vs-%1RM curve has an inflection (matches the
+        // study's own cubic-spline model); a straight line or simple exponential
+        // misses the steepening at very heavy and very light loads.
+        var tOf = function (x) { return (x - 55) / 40; };
+        var xs = [], ys = [];
+        for (var i = 0; i < DATA.length; i++) { xs.push(tOf(DATA[i][0])); ys.push(Math.log(DATA[i][1])); }
+        var coef = polyfit(xs, ys, 3);
+        var predict = function (x) {
+          var t = tOf(x);
+          return Math.exp(coef[0] + coef[1] * t + coef[2] * t * t + coef[3] * t * t * t);
+        };
+
+        // R^2 measured on the actual reps (not the log) so it means what people expect.
+        var meanR = 0; for (i = 0; i < DATA.length; i++) meanR += DATA[i][1]; meanR /= DATA.length;
+        var ssRes = 0, ssTot = 0;
+        for (i = 0; i < DATA.length; i++) {
+          ssRes += Math.pow(DATA[i][1] - predict(DATA[i][0]), 2);
+          ssTot += Math.pow(DATA[i][1] - meanR, 2);
+        }
+        var r2 = 1 - ssRes / ssTot;
+
+        drawChart();
+        document.getElementById("chartCaption").textContent =
+          "Dots = the study’s bench-press estimates. The line is the best-fit curve through them " +
+          "(least-squares cubic, R² = " + r2.toFixed(3) + " — a near-perfect match).";
+
+        // --- least squares via normal equations + Gaussian elimination ---
+        function polyfit(X, Y, deg) {
+          var n = deg + 1, m = X.length, A = [], b = [], r, c, k;
+          for (r = 0; r < n; r++) { A.push(new Array(n).fill(0)); b.push(0); }
+          for (k = 0; k < m; k++) {
+            var pw = [1];
+            for (var p = 1; p < 2 * deg + 1; p++) pw.push(pw[p - 1] * X[k]);
+            for (r = 0; r < n; r++) {
+              for (c = 0; c < n; c++) A[r][c] += pw[r + c];
+              b[r] += pw[r] * Y[k];
+            }
+          }
+          return solve(A, b);
+        }
+        function solve(A, b) {
+          var n = b.length, i, r, c;
+          for (i = 0; i < n; i++) {
+            var mx = i;
+            for (r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[mx][i])) mx = r;
+            var tA = A[i]; A[i] = A[mx]; A[mx] = tA;
+            var tb = b[i]; b[i] = b[mx]; b[mx] = tb;
+            for (r = i + 1; r < n; r++) {
+              var f = A[r][i] / A[i][i];
+              for (c = i; c < n; c++) A[r][c] -= f * A[i][c];
+              b[r] -= f * b[i];
+            }
+          }
+          var x = new Array(n).fill(0);
+          for (i = n - 1; i >= 0; i--) {
+            var s = b[i];
+            for (c = i + 1; c < n; c++) s -= A[i][c] * x[c];
+            x[i] = s / A[i][i];
+          }
+          return x;
+        }
+
+        function drawChart() {
+          var cv = document.getElementById("repsChart");
+          var LW = cv.width, LH = cv.height; // logical drawing size
+          var dpr = window.devicePixelRatio || 1;
+          cv.width = LW * dpr; cv.height = LH * dpr;
+          var ctx = cv.getContext("2d");
+          ctx.scale(dpr, dpr);
+
+          var ACCENT = "#284e86", INK = "#1a1a1a", GRID = "#ececec", MUTED = "#6b7280";
+          var mL = 54, mR = 18, mT = 18, mB = 42;
+          var pW = LW - mL - mR, pH = LH - mT - mB;
+          var xMin = 10, xMax = 100, yMin = 0, yMax = 135;
+          var xpx = function (x) { return mL + ((x - xMin) / (xMax - xMin)) * pW; };
+          var ypx = function (v) { return mT + (1 - (v - yMin) / (yMax - yMin)) * pH; };
+
+          ctx.font = "12px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+          ctx.textBaseline = "middle";
+
+          // y gridlines + labels
+          ctx.textAlign = "right";
+          for (var yv = 0; yv <= 125; yv += 25) {
+            var py = ypx(yv);
+            ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(mL, py); ctx.lineTo(mL + pW, py); ctx.stroke();
+            ctx.fillStyle = MUTED; ctx.fillText(String(yv), mL - 8, py);
+          }
+          // x gridlines + labels
+          ctx.textAlign = "center";
+          for (var xv = 20; xv <= 100; xv += 20) {
+            var px = xpx(xv);
+            ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(px, mT); ctx.lineTo(px, mT + pH); ctx.stroke();
+            ctx.fillStyle = MUTED; ctx.fillText(xv + "%", px, mT + pH + 16);
+          }
+
+          // axis titles
+          ctx.fillStyle = INK;
+          ctx.fillText("% of 1RM (load)", mL + pW / 2, LH - 6);
+          ctx.save();
+          ctx.translate(14, mT + pH / 2); ctx.rotate(-Math.PI / 2);
+          ctx.fillText("Reps to failure", 0, 0);
+          ctx.restore();
+
+          // best-fit curve
+          ctx.strokeStyle = ACCENT; ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          var first = true;
+          for (var x = 95; x >= 15; x -= 0.5) {
+            var v = predict(x), X = xpx(x), Y = ypx(v);
+            if (first) { ctx.moveTo(X, Y); first = false; } else ctx.lineTo(X, Y);
+          }
+          ctx.stroke();
+
+          // data points (white halo so they read on the line)
+          for (var d = 0; d < DATA.length; d++) {
+            var cx = xpx(DATA[d][0]), cy = ypx(DATA[d][1]);
+            ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#fff"; ctx.fill();
+            ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
+            ctx.fillStyle = INK; ctx.fill();
+          }
+
+          // legend (top-right inside plot)
+          var lx = mL + pW - 168, ly = mT + 10;
+          ctx.textAlign = "left";
+          ctx.fillStyle = "#fff"; ctx.fillRect(lx - 8, ly - 9, 176, 44);
+          ctx.strokeStyle = GRID; ctx.lineWidth = 1; ctx.strokeRect(lx - 8, ly - 9, 176, 44);
+          ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(lx + 4, ly, 3, 0, 2 * Math.PI); ctx.fill();
+          ctx.fillStyle = INK; ctx.fillText("Study estimates (Nuzzo et al.)", lx + 14, ly);
+          ctx.strokeStyle = ACCENT; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(lx, ly + 20); ctx.lineTo(lx + 10, ly + 20); ctx.stroke();
+          ctx.fillStyle = INK; ctx.fillText("Best-fit curve", lx + 14, ly + 20);
+        }
+      })();
+    </script>
   </body>
 </html>
