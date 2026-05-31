@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultBwCoeff } from "./profile";
+import { defaultBwCoeff, exerciseCategory } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -52,5 +52,28 @@ describe("defaultBwCoeff", () => {
     expect(defaultBwCoeff("Sled Leg Press")).toBe(0);
     expect(defaultBwCoeff("Cold shower")).toBe(0);
     expect(defaultBwCoeff("Stretch split")).toBe(0);
+  });
+});
+
+describe("exerciseCategory", () => {
+  it("classifies the main muscle groups", () => {
+    expect(exerciseCategory("Squat")).toBe("Legs");
+    expect(exerciseCategory("Romanian Deadlift")).toBe("Legs");
+    expect(exerciseCategory("Bench Press")).toBe("Chest");
+    expect(exerciseCategory("Lat Pulldown")).toBe("Back");
+    expect(exerciseCategory("Seated Shoulder Press")).toBe("Shoulders");
+    expect(exerciseCategory("Barbell Curl")).toBe("Arms");
+    expect(exerciseCategory("Hanging Leg Raise")).toBe("Core");
+  });
+  it("routes skills and non-lifts before muscle groups", () => {
+    expect(exerciseCategory("Front lever row old")).toBe("Skill");
+    expect(exerciseCategory("Handstand")).toBe("Skill");
+    expect(exerciseCategory("Handstand Push Ups")).toBe("Shoulders"); // push-up trains shoulders
+    expect(exerciseCategory("Stretch split")).toBe("Mobility");
+    expect(exerciseCategory("Bike machine Cardio")).toBe("Cardio");
+  });
+  it("falls back to Other for the noise", () => {
+    expect(exerciseCategory("Cold shower")).toBe("Mobility");
+    expect(exerciseCategory("KG - track food")).toBe("Other");
   });
 });

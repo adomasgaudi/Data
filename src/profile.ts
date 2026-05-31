@@ -159,6 +159,54 @@ export function groupOf(exerciseName: string): { group: string; scale: number } 
   return null;
 }
 
+/** The training categories shown in the "what they train" breakdown, in order. */
+export type TrainingCategory =
+  | "Legs"
+  | "Chest"
+  | "Back"
+  | "Shoulders"
+  | "Arms"
+  | "Core"
+  | "Skill"
+  | "Mobility"
+  | "Cardio"
+  | "Other";
+export const TRAINING_CATEGORIES: TrainingCategory[] = [
+  "Legs", "Chest", "Back", "Shoulders", "Arms", "Core", "Skill", "Mobility", "Cardio", "Other",
+];
+
+/**
+ * Best-guess muscle/movement category for an exercise, by keyword — so the athlete
+ * page can show what someone has actually been training. Order matters: skills and
+ * non-lifts are matched before the muscle groups so "front lever row" is a Skill,
+ * not Back, and a "hamstring stretch" is Mobility, not Legs.
+ */
+export function exerciseCategory(exerciseName: string): TrainingCategory {
+  const n = exerciseName.toLowerCase();
+  const has = (...k: string[]) => k.some((s) => n.includes(s));
+
+  if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
+    return "Mobility";
+  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege"))
+    return "Cardio";
+  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross", "pancake"))
+    return n.includes("push") ? "Shoulders" : "Skill"; // handstand PUSH-up trains shoulders
+
+  if (has("crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "knee raise", "knee tuck", "woodchop", "pallof", "rollout", "twist", "leg pull", "bicycle", "mountain climber", "flag", "vacuum"))
+    return "Core";
+  if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military press", "behind the neck", "arnold", "shrug", "shoulder raise", "delt"))
+    return "Shoulders";
+  if (has("curl", "tricep", "triceps", "pushdown", "preacher", "hammer", "wrist", "forearm", "finger", "skull", "jm press", "kickback"))
+    return "Arms";
+  if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up"))
+    return "Chest";
+  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper"))
+    return "Back";
+  if (has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell"))
+    return "Legs";
+  return "Other";
+}
+
 /**
  * Leverage-aware default for how much bodyweight an exercise effectively loads,
  * used for any exercise not pinned in EXERCISE_BW_COEFF. This is deliberately NOT

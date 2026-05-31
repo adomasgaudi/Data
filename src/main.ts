@@ -34,7 +34,15 @@ import {
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
-import { ATHLETES, EXERCISE_BW_COEFF, defaultBwCoeff, EXERCISE_GROUPS } from "./profile";
+import {
+  ATHLETES,
+  EXERCISE_BW_COEFF,
+  defaultBwCoeff,
+  EXERCISE_GROUPS,
+  exerciseCategory,
+  TRAINING_CATEGORIES,
+  type TrainingCategory,
+} from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 
 Chart.register(...registerables);
@@ -65,6 +73,7 @@ const els = {
   healthClose: $<HTMLButtonElement>("healthClose"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteProfile: $("athleteProfile"),
+  trainBreakdown: $("trainBreakdown"),
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
@@ -415,6 +424,7 @@ function renderAthlete() {
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   initCalendarMonth();
   renderAthleteProfile();
+  renderTrainBreakdown();
   populateProgressExercise();
   renderExercisesPage();
   renderWorkoutCalendar();
@@ -459,6 +469,54 @@ function renderAthleteProfile() {
   const parts = [`${p.weight} kg`, `${p.height} cm`, `${Math.round(p.bodyFat * 100)}% body fat`];
   if (p.age != null) parts.push(`age ${p.age}`);
   els.athleteProfile.textContent = parts.join("  ·  ");
+}
+
+// Category palette for the training breakdown (warm-to-cool, distinct hues).
+const CATEGORY_COLORS: Record<TrainingCategory, string> = {
+  Legs: "#284e86",
+  Chest: "#2f7d6b",
+  Back: "#3b66a6",
+  Shoulders: "#b8902f",
+  Arms: "#9c5bb8",
+  Core: "#c0603a",
+  Skill: "#5b8c3a",
+  Mobility: "#7fa1d4",
+  Cardio: "#6b7280",
+  Other: "#cbd5e1",
+};
+
+/** "What they train": a proportional bar of sets per muscle/movement category. */
+function renderTrainBreakdown() {
+  const counts = exerciseCountsForUser(data.records, els.athlete.value);
+  const byCat = new Map<TrainingCategory, number>();
+  let total = 0;
+  for (const c of counts) {
+    const cat = exerciseCategory(c.exerciseName);
+    byCat.set(cat, (byCat.get(cat) ?? 0) + c.count);
+    total += c.count;
+  }
+  if (total === 0) {
+    els.trainBreakdown.innerHTML = "";
+    return;
+  }
+  const cats = TRAINING_CATEGORIES.filter((c) => byCat.get(c));
+  const pct = (c: TrainingCategory) => (byCat.get(c)! / total) * 100;
+  const bar = cats
+    .map(
+      (c) =>
+        `<span class="tb-seg" style="width:${pct(c).toFixed(2)}%;background:${CATEGORY_COLORS[c]}" ` +
+        `title="${c}: ${byCat.get(c)} sets (${pct(c).toFixed(0)}%)"></span>`,
+    )
+    .join("");
+  const legend = cats
+    .map(
+      (c) =>
+        `<span class="tb-leg"><span class="tb-dot" style="background:${CATEGORY_COLORS[c]}"></span>${c} ${pct(c).toFixed(0)}%</span>`,
+    )
+    .join("");
+  els.trainBreakdown.innerHTML =
+    `<div class="tb-title muted">What ${escapeHtml(athleteLabel())} trains <span class="tb-sub">(${total.toLocaleString()} sets)</span></div>` +
+    `<div class="tb-bar">${bar}</div><div class="tb-legend">${legend}</div>`;
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
