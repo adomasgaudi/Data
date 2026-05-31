@@ -75,6 +75,10 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 }
 .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 .controls label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+/* Compact, top-aligned single control (e.g. the athlete picker). */
+.controls.compact { margin-bottom: 1rem; }
+.controls.compact label { flex: 0 0 auto; }
+.controls.compact select { font-size: 0.85rem; padding: 5px 8px; }
 .controls select, .controls input[type="search"] {
   background: var(--bg); color: var(--text);
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 0.95rem;
@@ -119,10 +123,24 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 @media (max-width: 640px) {
   body { font-size: 14px; }
   .topbar { flex-wrap: wrap; gap: 0.5rem; padding: 0.85rem 1rem; }
-  .tabs { padding: 0 1rem; }
-  main { padding: 1rem; }
+  main { padding: 1rem; padding-bottom: 4.5rem; } /* room for the fixed bottom nav */
   .panel { padding: 1rem; border-radius: 10px; }
   .chart-wrap { height: 220px; }
+
+  /* Main navigation becomes an app-style fixed bottom bar. */
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    gap: 0; padding: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--line); border-bottom: none;
+    box-shadow: 0 -1px 6px rgba(20, 24, 38, 0.07);
+    padding-bottom: env(safe-area-inset-bottom); /* iPhone home-bar gap */
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 0.85rem 0.5rem;
+    border-bottom: none; border-top: 2px solid transparent; margin-bottom: 0;
+  }
+  .tab.is-active { border-top-color: var(--accent); border-bottom-color: transparent; }
 
   /* Stack the filter controls; each one spans the full width and is easy to tap. */
   .controls { gap: 0.85rem; }
@@ -134,6 +152,10 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
     padding: 10px 12px;   /* larger tap target */
     font-size: 16px;      /* iOS won't zoom in on focus at >=16px */
   }
+
+  /* Athlete picker stays small and top-aligned, not full width. */
+  .controls.compact label { flex: 0 0 auto; }
+  .controls.compact select { width: auto; padding: 6px 10px; }
 
   .data-table th, .data-table td { padding: 6px 8px; }
 }
