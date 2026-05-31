@@ -89,6 +89,12 @@ body {
 }
 .status .warn { background: var(--gold); color: #fff; }
 main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
+.appfoot {
+  max-width: 980px; margin: 0 auto; padding: 0.5rem 1.5rem 2rem;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+.appfoot .status { font-size: 0.85rem; color: var(--muted); }
 .controls {
   display: flex; flex-wrap: wrap; gap: 1rem; align-items: end;
   margin-bottom: 1.5rem;
@@ -165,7 +171,8 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 @media (max-width: 640px) {
   body { font-size: 14px; }
   .topbar { flex-wrap: wrap; gap: 0.5rem; padding: 0.85rem 1rem; }
-  main { padding: 1rem; padding-bottom: 4.5rem; } /* room for the fixed bottom nav */
+  main { padding: 1rem; }
+  .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the fixed bottom nav */
   .panel { padding: 1rem; border-radius: 10px; }
   .chart-wrap { height: 220px; }
 

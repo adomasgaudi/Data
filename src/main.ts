@@ -75,7 +75,11 @@ function currentFormula(): OneRepMaxFormula {
 
 function renderStatus() {
   const users = distinctUsers(data.records).length;
+  let latest: string | null = null;
+  for (const r of data.records) if (r.date && (latest === null || r.date > latest)) latest = r.date;
+
   let html = `${data.records.length.toLocaleString()} sets · ${users} athletes`;
+  if (latest) html += ` · latest ${latest}`;
   if (data.issues.length) html += ` <span class="badge warn">${data.issues.length} parse issues</span>`;
   if (data.warnings.length) html += ` <span class="badge warn">${data.warnings.length} sanity warnings</span>`;
   els.status.innerHTML = html;
