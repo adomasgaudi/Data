@@ -7,6 +7,7 @@ import { Chart, registerables } from "chart.js";
 import { loadData, type LoadedData } from "./dataSource";
 import {
   distinctExercises,
+  distinctUsers,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -48,11 +49,8 @@ function currentFormula(): OneRepMaxFormula {
 }
 
 function renderStatus() {
-  const parts: string[] = [];
-  if (data.updatedAt) parts.push(`Updated ${new Date(data.updatedAt).toLocaleString()}`);
-  parts.push(`${data.records.length.toLocaleString()} sets`);
-  let html = parts.join(" · ");
-  if (data.usingFixture) html += ` <span class="badge">sample data</span>`;
+  const users = distinctUsers(data.records).length;
+  let html = `${data.records.length.toLocaleString()} sets · ${users} athletes`;
   if (data.issues.length) html += ` <span class="badge warn">${data.issues.length} parse issues</span>`;
   if (data.warnings.length) html += ` <span class="badge warn">${data.warnings.length} sanity warnings</span>`;
   els.status.innerHTML = html;
