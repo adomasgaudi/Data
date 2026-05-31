@@ -246,14 +246,13 @@ function renderLeaderboard() {
   }
 
   lbRows = rows;
-  // Per rep-band best 1RM for each athlete, for the stacked chart (replaces the
-  // old reps filter): one segment per band, value = best (added-weight) 1RM in it.
-  const bands = REP_RANGES.filter((r) => r.id !== "all");
-  const bandData = bands.map((band) => {
+  // Per rep-band best 1RM for each athlete (grouped bars, NOT summed): each band's
+  // value is the theoretical 1RM from sets whose reps fall only in that band.
+  const bandData = REP_BANDS.map((band) => {
     const f = filterRecords(comp, {
       excludeDropsets: els.excludeDropsets.checked,
       requireWeightAndReps: true,
-      ...(band.min !== undefined ? { minReps: band.min } : {}),
+      minReps: band.min,
       ...(band.max !== undefined ? { maxReps: band.max } : {}),
     });
     const byUser = new Map<string, number>();
@@ -315,22 +314,20 @@ function renderLeaderboardChart(
   const canvas = $<HTMLCanvasElement>("lbChart");
   lbChart?.destroy();
   const round = (n: number) => Math.round(n * 100) / 100;
-  // Give each athlete a fixed slice of height so bars stay thick and the y-axis
-  // names never overlap, however many athletes there are.
+  // Each athlete gets enough height for its group of band-bars (one per band),
+  // so bars stay readable and the y-axis names never overlap.
   const wrap = canvas.parentElement;
-  if (wrap) wrap.style.height = `${Math.max(200, rows.length * 46 + 56)}px`;
+  if (wrap) wrap.style.height = `${Math.max(220, rows.length * 74 + 56)}px`;
   lbChart = new Chart(canvas, {
     type: "bar",
     data: {
       labels: rows.map((r) => r.user),
       datasets: bandData.map((band, i) => ({
-        label: band.label,
+        label: `${band.label} reps`,
         data: rows.map((r) => round(band.byUser.get(r.username) ?? 0)),
         backgroundColor: BAND_COLORS[i % BAND_COLORS.length],
-        borderRadius: 3,
-        stack: "reps",
-        // Thick bars: each athlete category is mostly filled by its (stacked) bar.
-        categoryPercentage: 0.82,
+        borderRadius: 2,
+        categoryPercentage: 0.86,
         barPercentage: 0.96,
       })),
     },
@@ -347,8 +344,9 @@ function renderLeaderboardChart(
         },
       },
       scales: {
-        x: { stacked: true, grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
-        y: { stacked: true, grid: { display: false }, ticks: { color: "#1a1a1a", autoSkip: false } },
+        // Grouped (not stacked) so each band shows its own 1RM, not the sum.
+        x: { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
+        y: { grid: { display: false }, ticks: { color: "#1a1a1a", autoSkip: false } },
       },
     },
   });
@@ -1100,15 +1098,18 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-/** Rep-range presets for the leaderboard filter (overlapping by design). */
-const REP_RANGES: { id: string; label: string; min?: number; max?: number }[] = [
-  { id: "all", label: "All reps" },
-  { id: "1-3", label: "1–3 reps", min: 1, max: 3 },
-  { id: "3-6", label: "3–6 reps", min: 3, max: 6 },
-  { id: "5-10", label: "5–10 reps", min: 5, max: 10 },
-  { id: "8-15", label: "8–15 reps", min: 8, max: 15 },
-  { id: "15-30", label: "15–30 reps", min: 15, max: 30 },
-  { id: "30+", label: "30+ reps", min: 30 },
+/**
+ * Non-overlapping rep bands for the leaderboard histogram. Each band's 1RM is
+ * estimated only from sets whose reps fall in that band, so a 5-rep set counts
+ * once (in 4–6), never twice.
+ */
+const REP_BANDS: { id: string; label: string; min: number; max?: number }[] = [
+  { id: "1-3", label: "1–3", min: 1, max: 3 },
+  { id: "4-6", label: "4–6", min: 4, max: 6 },
+  { id: "7-10", label: "7–10", min: 7, max: 10 },
+  { id: "11-15", label: "11–15", min: 11, max: 15 },
+  { id: "16-20", label: "16–20", min: 16, max: 20 },
+  { id: "21+", label: "21+", min: 21 },
 ];
 
 function setSettingsOpen(open: boolean) {
