@@ -62,6 +62,7 @@ const els = {
   athleteProfile: $("athleteProfile"),
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
+  exerciseRecord: $("exerciseRecord"),
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
@@ -448,6 +449,7 @@ function renderExercisesPage() {
     renderExerciseDetail(selectedExercise);
     return;
   }
+  els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
   const counts = exerciseCountsForUser(data.records, els.athlete.value);
   const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
   els.athleteTitle.innerHTML =
@@ -477,6 +479,7 @@ function renderExerciseDetail(exName: string) {
   els.athleteTitle.innerHTML =
     `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}`;
   els.exercisesPager.innerHTML = "";
+  renderExerciseRecord(exName);
   const weeks = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName));
   const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
   const rows = weeks
@@ -488,6 +491,28 @@ function renderExerciseDetail(exName: string) {
     .join("");
   els.athleteTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No sets.</td></tr>`}</tbody>`;
+}
+
+/** Top-record card shown above the weeks list when an exercise is drilled into. */
+function renderExerciseRecord(exName: string) {
+  const username = els.athlete.value;
+  const pr = personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
+    currentFormula(),
+  ).find((p) => p.exerciseName === exName);
+  if (!pr) {
+    els.exerciseRecord.hidden = true;
+    els.exerciseRecord.innerHTML = "";
+    return;
+  }
+  els.exerciseRecord.hidden = false;
+  els.exerciseRecord.innerHTML =
+    `<div class="record-item"><span class="record-label">Best 1RM</span>` +
+    `<span class="record-value">${fmt(pr.bestE1rm.e1rm)} kg</span>` +
+    `<span class="record-meta">${wr(pr.bestE1rm.weight, pr.bestE1rm.reps)} · ${shortDate(pr.bestE1rm.date)}</span></div>` +
+    `<div class="record-item"><span class="record-label">Top weight</span>` +
+    `<span class="record-value">${wr(pr.topWeight.weight, pr.topWeight.reps)} kg</span>` +
+    `<span class="record-meta">${shortDate(pr.topWeight.date)}</span></div>`;
 }
 
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
