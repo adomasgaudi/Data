@@ -1,0 +1,11 @@
+# Netlify build + deploy config.
+# Connect this GitHub repo to Netlify and it picks this up automatically.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Functions live in netlify/functions and are auto-detected. The data function
+# declares its own route (/api/data) via `export const config = { path }`.
+[functions]
+  node_bundler = "esbuild"

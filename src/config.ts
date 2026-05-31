@@ -1,14 +1,14 @@
 /**
  * Runtime configuration. The data URL is the one wiring point between this
- * static site and your existing StrengthLevel -> Google Sheet pipeline.
+ * static site and the StrengthLevel fetcher.
  *
- * Set it at build/deploy time via the VITE_DATA_URL env var (e.g. in a .env
- * file or the Cloudflare/Netlify dashboard). It can point at either:
- *   1. the Apps Script web-app `doGet` JSON endpoint directly, or
- *   2. the `/api/data` proxy function (recommended — avoids any CORS surprises).
- * If unset, the app loads the bundled sample fixture so it always renders.
+ * Default is the same-origin "/api/data" serverless function, which fetches
+ * StrengthLevel server-side (the same way the Apps Script does) and returns the
+ * flattened set log. Override with VITE_DATA_URL at build/deploy time if needed.
+ * When opened as a bare local file (no server, so no /api/data), the app falls
+ * back to the bundled sample fixture so it still renders.
  */
-export const DATA_URL: string | undefined = import.meta.env.VITE_DATA_URL;
+export const DATA_URL: string = import.meta.env.VITE_DATA_URL ?? "/api/data";
 
 /** Default estimated-1RM formula. */
 export const DEFAULT_FORMULA = "epley" as const;
