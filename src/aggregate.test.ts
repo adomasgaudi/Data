@@ -19,6 +19,7 @@ import {
   exerciseProgressForUser,
   addedWeight1RM,
   scaleToGroup,
+  nearDuplicateExercises,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -96,6 +97,24 @@ describe("addedWeight1RM", () => {
     const capped = rec({ weight: 100, reps: 40 }); // bar-only, 40 reps
     const at15 = rec({ weight: 100, reps: 15 });
     expect(addedWeight1RM(capped, "epley")).toBeCloseTo(addedWeight1RM(at15, "epley")!, 6);
+  });
+});
+
+describe("nearDuplicateExercises", () => {
+  it("clusters typo/casing/plural variants of the same name", () => {
+    const recs = [
+      rec({ exerciseName: "Ab curl" }),
+      rec({ exerciseName: "Ab curls" }),
+      rec({ exerciseName: "Ab Curls" }),
+      rec({ exerciseName: "Stairs" }),
+      rec({ exerciseName: "Stairss" }),
+      rec({ exerciseName: "Bench Press" }), // unique → not flagged
+    ];
+    const dupes = nearDuplicateExercises(recs);
+    const abc = dupes.find((d) => d.names.includes("Ab curl"));
+    expect(abc?.names).toEqual(expect.arrayContaining(["Ab curl", "Ab curls", "Ab Curls"]));
+    expect(dupes.some((d) => d.names.includes("Stairs") && d.names.includes("Stairss"))).toBe(true);
+    expect(dupes.some((d) => d.names.includes("Bench Press"))).toBe(false);
   });
 });
 

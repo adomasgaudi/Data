@@ -19,6 +19,7 @@ import {
   leaderboard,
   personalRecords,
   scaleToGroup,
+  nearDuplicateExercises,
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
@@ -196,12 +197,10 @@ function renderStatus() {
 }
 
 function renderHealth() {
+  const dupes = nearDuplicateExercises(data.records);
   const total = data.issues.length + data.warnings.length;
-  els.healthBadge.textContent = total === 0 ? "✓ clear" : `⚠ ${total}`;
-  if (total === 0) {
-    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly.</p>`;
-    return;
-  }
+  els.healthBadge.textContent = total === 0 && dupes.length === 0 ? "✓ clear" : `⚠ ${total + dupes.length}`;
+
   const lines: string[] = [];
   for (const issue of data.issues.slice(0, 50))
     lines.push(`<div class="health-item warn">Row ${issue.index}: ${escapeHtml(issue.message)}</div>`);
@@ -209,6 +208,23 @@ function renderHealth() {
     lines.push(
       `<div class="health-item warn">${escapeHtml(w.record.user)} — ${escapeHtml(w.record.exerciseName)}: ${w.field} = ${w.value} (out of plausible range)</div>`,
     );
+
+  // Possible duplicate exercise names — the biggest threat to "perfect data".
+  if (dupes.length) {
+    lines.push(`<h3 class="health-section">Possible duplicate exercises (${dupes.length})</h3>`);
+    lines.push(
+      `<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">These names look like the same lift spelled differently. Merge them in the source sheet for cleaner stats.</p>`,
+    );
+    for (const d of dupes.slice(0, 40))
+      lines.push(
+        `<div class="health-item dup">${d.names.map((n) => escapeHtml(n)).join(" <span class='muted'>≈</span> ")} <span class="muted">(${d.sets} sets)</span></div>`,
+      );
+  }
+
+  if (lines.length === 0) {
+    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly and no duplicate exercise names.</p>`;
+    return;
+  }
   els.health.innerHTML = lines.join("");
 }
 

@@ -457,6 +457,33 @@ export interface PersonalRecord {
   bestE1rm: { e1rm: number; weight: number | null; reps: number; date: string };
 }
 
+/**
+ * Exercise names that probably refer to the same lift (typos / casing / plurals /
+ * trailing numbers), grouped so the owner can spot data to merge. Normalisation:
+ * lowercase, drop everything but letters, strip trailing plural s. "Stairs",
+ * "Stairss" and "Stairs 4" collapse to one cluster; "L-SIT", "L Sit", "L sit" too.
+ * Only clusters with more than one distinct raw spelling are returned.
+ */
+export function nearDuplicateExercises(records: readonly SetRecord[]): { names: string[]; sets: number }[] {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "").replace(/s+$/, "");
+  const clusters = new Map<string, Map<string, number>>();
+  for (const r of records) {
+    if (!r.exerciseName) continue;
+    const k = norm(r.exerciseName);
+    if (!k) continue;
+    let byName = clusters.get(k);
+    if (!byName) clusters.set(k, (byName = new Map()));
+    byName.set(r.exerciseName, (byName.get(r.exerciseName) ?? 0) + 1);
+  }
+  const out: { names: string[]; sets: number }[] = [];
+  for (const byName of clusters.values()) {
+    if (byName.size < 2) continue;
+    const names = [...byName.keys()].sort((a, b) => (byName.get(b) ?? 0) - (byName.get(a) ?? 0));
+    out.push({ names, sets: [...byName.values()].reduce((a, b) => a + b, 0) });
+  }
+  return out.sort((a, b) => b.names.length - a.names.length || b.sets - a.sets);
+}
+
 /** Best lift per (user, exercise): both heaviest weight and best estimated 1RM. */
 export function personalRecords(
   records: readonly SetRecord[],
