@@ -13,6 +13,8 @@ import {
   exerciseCountsForUser,
   setsForUserExercise,
   workoutsForUser,
+  workoutsWithRestDays,
+  weeksForUser,
   exerciseProgressForUser,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
@@ -194,6 +196,22 @@ describe("distinct helpers", () => {
     expect(days.map((d) => d.date)).toEqual(["2024-03-01", "2024-02-01", "2024-01-01"]);
     expect(days.every((d) => d.totalSets === 1)).toBe(true);
     expect(days[0]!.exercises).toEqual([{ exerciseName: "Squat", count: 1 }]);
+  });
+  it("fills gaps with empty rest days between first and last workout", () => {
+    const days = workoutsWithRestDays(workoutsForUser(FIXTURE, "ada"));
+    expect(days.length).toBe(61); // 2024-01-01 .. 2024-03-01 inclusive (leap Feb)
+    expect(days[0]!.date).toBe("2024-03-01");
+    expect(days[days.length - 1]!.date).toBe("2024-01-01");
+    expect(days.find((d) => d.date === "2024-02-01")!.totalSets).toBe(1);
+    const rest = days.find((d) => d.date === "2024-01-02")!;
+    expect(rest.totalSets).toBe(0);
+    expect(rest.exercises).toEqual([]);
+  });
+  it("groups one athlete's training by week (Monday), newest first", () => {
+    const weeks = weeksForUser(FIXTURE, "ada");
+    expect(weeks.map((w) => w.weekStart)).toEqual(["2024-02-26", "2024-01-29", "2024-01-01"]);
+    expect(weeks.every((w) => w.totalSets === 1)).toBe(true);
+    expect(weeks[2]!.exercises).toEqual([{ exerciseName: "Bench Press", count: 1 }]);
   });
   it("builds an exercise time series oldest-first with best e1RM per day", () => {
     const series = exerciseProgressForUser(FIXTURE, "ada", "Bench Press", "epley");

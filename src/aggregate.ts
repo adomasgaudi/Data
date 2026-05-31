@@ -193,6 +193,85 @@ export function workoutsForUser(records: readonly SetRecord[], username: string)
   return days.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
 }
 
+/** Summarise a bag of sets into exercise counts (most first) + ordered sets. */
+function summariseSets(sets: SetRecord[]): { exercises: ExerciseCount[]; sets: SetRecord[] } {
+  const counts = new Map<string, number>();
+  for (const s of sets) {
+    if (s.exerciseName === "") continue;
+    counts.set(s.exerciseName, (counts.get(s.exerciseName) ?? 0) + 1);
+  }
+  const exercises = [...counts]
+    .map(([exerciseName, count]) => ({ exerciseName, count }))
+    .sort((a, b) => b.count - a.count || a.exerciseName.localeCompare(b.exerciseName));
+  const ordered = [...sets].sort(
+    (a, b) => a.exerciseName.localeCompare(b.exerciseName) || a.setNumber - b.setNumber,
+  );
+  return { exercises, sets: ordered };
+}
+
+const MS_PER_DAY = 86_400_000;
+const utcOf = (iso: string): number => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return Date.UTC(y!, m! - 1, d!);
+};
+const isoOf = (ms: number): string => {
+  const dt = new Date(ms);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+};
+
+/**
+ * The day list with the gaps filled in: every calendar date from the first to
+ * the last workout, newest first. Days with no training come back as empty
+ * WorkoutDays (0 sets, no exercises) so the UI can show rest days.
+ */
+export function workoutsWithRestDays(workouts: readonly WorkoutDay[]): WorkoutDay[] {
+  if (workouts.length === 0) return [];
+  let min = workouts[0]!.date;
+  let max = workouts[0]!.date;
+  const byDate = new Map<string, WorkoutDay>();
+  for (const w of workouts) {
+    byDate.set(w.date, w);
+    if (w.date < min) min = w.date;
+    if (w.date > max) max = w.date;
+  }
+  const out: WorkoutDay[] = [];
+  for (let t = utcOf(max); t >= utcOf(min); t -= MS_PER_DAY) {
+    const iso = isoOf(t);
+    out.push(byDate.get(iso) ?? { date: iso, totalSets: 0, exercises: [], sets: [] });
+  }
+  return out;
+}
+
+export interface WeekGroup {
+  weekStart: string; // ISO date of the Monday that starts the week
+  totalSets: number;
+  exercises: ExerciseCount[];
+  sets: SetRecord[];
+}
+
+/** One athlete's training grouped by week (Monday start), newest first. */
+export function weeksForUser(records: readonly SetRecord[], username: string): WeekGroup[] {
+  const mondayOf = (iso: string): string => {
+    const dt = new Date(utcOf(iso));
+    dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7)); // back to Monday
+    return isoOf(dt.getTime());
+  };
+  const byWeek = new Map<string, SetRecord[]>();
+  for (const r of records) {
+    if (r.username !== username) continue;
+    const wk = mondayOf(r.date);
+    const list = byWeek.get(wk);
+    if (list) list.push(r);
+    else byWeek.set(wk, [r]);
+  }
+  const weeks: WeekGroup[] = [];
+  for (const [weekStart, sets] of byWeek) {
+    const summary = summariseSets(sets);
+    weeks.push({ weekStart, totalSets: sets.length, exercises: summary.exercises, sets: summary.sets });
+  }
+  return weeks.sort((a, b) => (a.weekStart > b.weekStart ? -1 : a.weekStart < b.weekStart ? 1 : 0));
+}
+
 export interface ExerciseDayPoint {
   date: string;
   sets: number;

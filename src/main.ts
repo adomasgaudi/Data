@@ -11,13 +11,15 @@ import {
   exerciseCountsForUser,
   setsForUserExercise,
   workoutsForUser,
+  workoutsWithRestDays,
+  weeksForUser,
   exerciseProgressForUser,
   filterRecords,
   leaderboard,
   personalRecords,
-  type LeaderboardEntry,
   type PersonalRecord,
   type WorkoutDay,
+  type ExerciseCount,
 } from "./aggregate";
 import { estimate1RM, setVolume, effectiveLoad, type OneRepMaxFormula } from "./metrics";
 import type { SetRecord } from "./domain";
@@ -43,6 +45,9 @@ const els = {
   repsBtn: $<HTMLButtonElement>("repsBtn"),
   repsMenu: $<HTMLUListElement>("repsMenu"),
   repsLabel: $("repsLabel"),
+  rankBtn: $<HTMLButtonElement>("rankBtn"),
+  rankMenu: $<HTMLUListElement>("rankMenu"),
+  rankLabel: $("rankLabel"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
   prSearch: $<HTMLInputElement>("prSearch"),
@@ -59,6 +64,9 @@ const els = {
   workoutsTitle: $("workoutsTitle"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
+  workoutView: $<HTMLSelectElement>("workoutView"),
+  restToggle: $<HTMLInputElement>("restToggle"),
+  restToggleLabel: $("restToggleLabel"),
   progressExercise: $<HTMLSelectElement>("progressExercise"),
   progressNote: $("progressNote"),
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
@@ -162,9 +170,18 @@ function renderHealth() {
   els.health.innerHTML = lines.join("");
 }
 
+interface LbRow {
+  user: string;
+  value: number; // the ranked number (kg, or ×BW)
+  valueText: string; // formatted for the table
+  best: string; // "weight×reps"
+  date: string;
+}
+
 function renderLeaderboard() {
   const exercise = exerciseDropdown?.value() ?? "";
   const formula = currentFormula();
+  const rel = (rankDropdown?.value() ?? "abs") === "rel";
   const range = REP_RANGES.find((r) => r.id === (repsDropdown?.value() ?? "all"));
   const filtered = filterRecords(computedRecords(), {
     excludeDropsets: els.excludeDropsets.checked,
@@ -174,37 +191,61 @@ function renderLeaderboard() {
   });
   const entries = leaderboard(filtered, exercise, formula);
 
+  let rows: LbRow[];
+  if (rel) {
+    // Bodyweight-lifted ranking: estimated 1RM divided by the athlete's bodyweight.
+    rows = entries
+      .map((e): LbRow | null => {
+        const bw = ATHLETES[e.username]?.weight;
+        if (!bw) return null; // can't compute a ratio without a bodyweight on file
+        const ratio = e.e1rm / bw;
+        return { user: e.user, value: ratio, valueText: `${ratio.toFixed(2)}× BW`, best: `${fmt(e.weight)}×${e.reps}`, date: e.date };
+      })
+      .filter((r): r is LbRow => r !== null)
+      .sort((a, b) => b.value - a.value);
+  } else {
+    rows = entries.map((e) => ({
+      user: e.user,
+      value: e.e1rm,
+      valueText: `${fmt(e.e1rm)} kg`,
+      best: `${fmt(e.weight)}×${e.reps}`,
+      date: e.date,
+    }));
+  }
+
   const repsNote = range && range.id !== "all" ? ` · ${range.label}` : "";
-  els.lbTitle.textContent = `Leaderboard — ${exercise}${repsNote} (est. 1RM, ${formula})`;
-  renderLeaderboardTable(entries);
-  renderLeaderboardChart(entries);
+  const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
+  els.lbTitle.textContent = `Leaderboard — ${exercise}${repsNote} (${metricNote})`;
+  renderLeaderboardTable(rows, rel);
+  renderLeaderboardChart(rows, rel);
 }
 
-function renderLeaderboardTable(entries: LeaderboardEntry[]) {
-  const head = `<thead><tr><th>Athlete</th><th class="num">Est. 1RM</th><th class="num">Best set</th><th class="num">Date</th></tr></thead>`;
-  const rows = entries
+function renderLeaderboardTable(rows: LbRow[], rel: boolean) {
+  const valueHead = rel ? "Per BW" : "Est. 1RM";
+  const head = `<thead><tr><th>Athlete</th><th class="num">${valueHead}</th><th class="num">Best set</th><th class="num">Date</th></tr></thead>`;
+  const body = rows
     .map(
-      (e, i) =>
-        `<tr><td class="${i === 0 ? "rank-1" : ""}">${escapeHtml(e.user)}</td>` +
-        `<td class="num">${fmt(e.e1rm)} kg</td><td class="num">${fmt(e.weight)}×${e.reps}</td><td class="num">${e.date}</td></tr>`,
+      (r, i) =>
+        `<tr><td class="${i === 0 ? "rank-1" : ""}">${escapeHtml(r.user)}</td>` +
+        `<td class="num">${r.valueText}</td><td class="num">${r.best}</td><td class="num">${r.date}</td></tr>`,
     )
     .join("");
   els.lbTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="4" class="muted">No data for this exercise.</td></tr>`}</tbody>`;
+    head + `<tbody>${body || `<tr><td colspan="4" class="muted">No data for this exercise.</td></tr>`}</tbody>`;
 }
 
-function renderLeaderboardChart(entries: LeaderboardEntry[]) {
+function renderLeaderboardChart(rows: LbRow[], rel: boolean) {
   const canvas = $<HTMLCanvasElement>("lbChart");
   lbChart?.destroy();
   lbChart = new Chart(canvas, {
     type: "bar",
     data: {
-      labels: entries.map((e) => e.user),
+      labels: rows.map((r) => r.user),
       datasets: [
         {
-          label: "Estimated 1RM (kg)",
-          data: entries.map((e) => Math.round(e.e1rm * 10) / 10),
-          backgroundColor: entries.map((_, i) => (i === 0 ? "#b8902f" : "#284e86")),
+          label: rel ? "1RM per bodyweight (×BW)" : "Estimated 1RM (kg)",
+          data: rows.map((r) => Math.round(r.value * 100) / 100),
+          backgroundColor: rows.map((_, i) => (i === 0 ? "#b8902f" : "#284e86")),
           borderRadius: 4,
         },
       ],
@@ -216,7 +257,8 @@ function renderLeaderboardChart(entries: LeaderboardEntry[]) {
       plugins: { legend: { display: false } },
       scales: {
         x: { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
-        y: { grid: { display: false }, ticks: { color: "#1a1a1a" } },
+        // autoSkip:false so every athlete label shows (not every other one).
+        y: { grid: { display: false }, ticks: { color: "#1a1a1a", autoSkip: false } },
       },
     },
   });
@@ -251,6 +293,16 @@ function renderPersonalRecords() {
 // (delegated) click handlers map a clicked row back to its data.
 let athleteExercises: string[] = [];
 let athleteWorkouts: WorkoutDay[] = [];
+
+// A row in the Workouts list: a day or a week (or an empty rest day).
+interface WorkoutGroup {
+  label: string;
+  totalSets: number;
+  exercises: ExerciseCount[];
+  sets: SetRecord[];
+  rest: boolean;
+}
+let workoutGroups: WorkoutGroup[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
 let recordsPage = 0;
@@ -400,63 +452,90 @@ function onExerciseRowClick(e: MouseEvent) {
   insertDetail(row, 3, setsTableHtml(sets, false));
 }
 
-// ---- Workouts page (one row per training day, 20/page, expandable) ----
+// ---- Workouts page (one row per day or week, 20/page, expandable) ----
+function buildWorkoutGroups(): WorkoutGroup[] {
+  if (els.workoutView.value === "week") {
+    return weeksForUser(data.records, els.athlete.value).map((w) => ({
+      label: `Week of ${shortDate(w.weekStart)}`,
+      totalSets: w.totalSets,
+      exercises: w.exercises,
+      sets: w.sets,
+      rest: false,
+    }));
+  }
+  const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
+  return days.map((d) => ({
+    label: shortDate(d.date),
+    totalSets: d.totalSets,
+    exercises: d.exercises,
+    sets: d.sets,
+    rest: d.totalSets === 0,
+  }));
+}
+
 function renderWorkoutsPage() {
+  workoutGroups = buildWorkoutGroups();
+  const byWeek = els.workoutView.value === "week";
+  els.restToggleLabel.hidden = byWeek; // rest days only make sense per day
+  const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — workouts ` +
-    `<span class="muted">(${athleteWorkouts.length} sessions · tap a day for all sets)</span>`;
+    `<span class="muted">(${active} ${byWeek ? "weeks" : "sessions"} · tap to expand)</span>`;
 
-  const head = `<thead><tr><th>Date</th><th>Did</th><th class="num">Sets</th></tr></thead>`;
+  const head = `<thead><tr><th>${byWeek ? "Week" : "Date"}</th><th>Did</th><th class="num">Sets</th></tr></thead>`;
   const start = workoutsPage * PAGE_SIZE;
-  const rows = athleteWorkouts
+  const rows = workoutGroups
     .slice(start, start + PAGE_SIZE)
-    .map((d, i) => {
+    .map((g, i) => {
+      if (g.rest) {
+        return `<tr class="rest-row"><td class="wo-date">${g.label}</td><td>rest</td><td class="num">0</td></tr>`;
+      }
       const abs = start + i;
-      const did = d.exercises
+      const did = g.exercises
         .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
         .join("<br>");
       return (
-        `<tr class="wo-row" data-index="${abs}"><td class="wo-date"><span class="caret">▸</span>${shortDate(d.date)}</td>` +
-        `<td>${did}</td><td class="num">${d.totalSets}</td></tr>`
+        `<tr class="wo-row" data-index="${abs}"><td class="wo-date"><span class="caret">▸</span>${g.label}</td>` +
+        `<td>${did}</td><td class="num">${g.totalSets}</td></tr>`
       );
     })
     .join("");
   els.workoutsTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="3" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
-  els.workoutsPager.innerHTML = pagerHtml(workoutsPage, athleteWorkouts.length);
+  els.workoutsPager.innerHTML = pagerHtml(workoutsPage, workoutGroups.length);
 }
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
 
-  // Second level: an exercise inside an expanded workout day -> show its sets.
+  // Second level: an exercise inside an expanded group -> show its sets.
   const exRow = target.closest("tr.wo-ex-row") as HTMLTableRowElement | null;
   if (exRow) {
     if (toggleCollapse(exRow)) return;
-    const day = athleteWorkouts[Number(exRow.dataset.day)];
-    const exName = day?.exercises[Number(exRow.dataset.exidx)]?.exerciseName;
-    if (!day || exName === undefined) return;
-    insertDetail(exRow, 2, setsTableHtml(day.sets.filter((s) => s.exerciseName === exName), false));
+    const grp = workoutGroups[Number(exRow.dataset.day)];
+    const exName = grp?.exercises[Number(exRow.dataset.exidx)]?.exerciseName;
+    if (!grp || exName === undefined) return;
+    insertDetail(exRow, 2, setsTableHtml(grp.sets.filter((s) => s.exerciseName === exName), false));
     return;
   }
 
-  // First level: a workout day -> list the exercises done that day.
+  // First level: a day/week -> list the exercises done in it.
   const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
   if (toggleCollapse(row)) return;
-  const dayIdx = Number(row.dataset.index);
-  const day = athleteWorkouts[dayIdx];
-  if (!day) return;
-  insertDetail(row, 3, workoutDayHtml(day, dayIdx));
+  const idx = Number(row.dataset.index);
+  const grp = workoutGroups[idx];
+  if (!grp) return;
+  insertDetail(row, 3, workoutGroupHtml(grp, idx));
 }
 
-/** Inner table of the exercises done on one day; each row expands to its sets. */
-function workoutDayHtml(day: WorkoutDay, dayIdx: number): string {
+/** Inner table of the exercises in one group; each row expands to its sets. */
+function workoutGroupHtml(group: WorkoutGroup, idx: number): string {
   const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
-  const rows = day.exercises
+  const rows = group.exercises
     .map(
       (e, i) =>
-        `<tr class="wo-ex-row" data-day="${dayIdx}" data-exidx="${i}">` +
+        `<tr class="wo-ex-row" data-day="${idx}" data-exidx="${i}">` +
         `<td><span class="caret">▸</span>${escapeHtml(e.exerciseName)}</td><td class="num">${e.count}</td></tr>`,
     )
     .join("");
@@ -717,6 +796,7 @@ function createDropdown(
 
 let exerciseDropdown: Dropdown | undefined;
 let repsDropdown: Dropdown | undefined;
+let rankDropdown: Dropdown | undefined;
 
 /** Rep-range presets for the leaderboard filter (overlapping by design). */
 const REP_RANGES: { id: string; label: string; min?: number; max?: number }[] = [
@@ -755,6 +835,13 @@ async function init() {
   repsDropdown.setItems(REP_RANGES.map((r) => ({ value: r.id, label: r.label })));
   repsDropdown.setValue("all");
 
+  rankDropdown = createDropdown(els.rankBtn, els.rankMenu, els.rankLabel, renderLeaderboard);
+  rankDropdown.setItems([
+    { value: "abs", label: "Total (kg)" },
+    { value: "rel", label: "Per bodyweight" },
+  ]);
+  rankDropdown.setValue("abs");
+
   els.formula.value = DEFAULT_FORMULA;
 
   // Populate athlete dropdown (alphabetical by display name).
@@ -786,6 +873,14 @@ async function init() {
   els.athlete.addEventListener("change", renderAthlete);
   els.progressExercise.addEventListener("change", renderProgress);
   els.summariseBtn.addEventListener("click", runSummary);
+  els.workoutView.addEventListener("change", () => {
+    workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.restToggle.addEventListener("change", () => {
+    workoutsPage = 0;
+    renderWorkoutsPage();
+  });
 
   // Expand/collapse rows.
   els.athleteTable.addEventListener("click", onExerciseRowClick);

@@ -160,6 +160,11 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .data-table tbody tr:hover { background: var(--accent-soft); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .wo-date { white-space: nowrap; }
+.rest-row { color: var(--muted); }
+.wo-controls { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
+/* Athlete tab: prefer fitting the width over horizontal scrolling. */
+#tab-athlete .data-table { min-width: 0; }
+#tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
 .ex-row, .wo-row, .wo-ex-row { cursor: pointer; }
 .ex-row:hover, .wo-row:hover, .wo-ex-row:hover { background: var(--accent-soft); }
 .caret { display: inline-block; margin-right: 0.5rem; color: var(--accent); transition: transform 0.15s; }

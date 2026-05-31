@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.4</span></h1>
+      <h1>Colosseum <span class="version">v0.5</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -52,6 +52,14 @@
                 <span id="repsLabel">All reps</span><span class="dropdown-caret">▾</span>
               </button>
               <ul class="dropdown-menu" id="repsMenu" role="listbox" hidden></ul>
+            </div>
+          </label>
+          <label>Rank by
+            <div class="dropdown" id="rankDropdown">
+              <button type="button" class="dropdown-toggle" id="rankBtn" aria-haspopup="listbox" aria-expanded="false">
+                <span id="rankLabel">Total (kg)</span><span class="dropdown-caret">▾</span>
+              </button>
+              <ul class="dropdown-menu" id="rankMenu" role="listbox" hidden></ul>
             </div>
           </label>
           <label class="check">
@@ -104,6 +112,17 @@
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel">
             <h2 id="workoutsTitle">Workouts</h2>
+            <div class="wo-controls">
+              <label class="inline-label">View
+                <select id="workoutView">
+                  <option value="day">By day</option>
+                  <option value="week">By week</option>
+                </select>
+              </label>
+              <label class="check" id="restToggleLabel">
+                <input type="checkbox" id="restToggle" /> Show rest days
+              </label>
+            </div>
             <table id="workoutsTable" class="data-table"></table>
             <div id="workoutsPager" class="pager"></div>
           </section>
