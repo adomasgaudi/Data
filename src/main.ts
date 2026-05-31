@@ -31,6 +31,7 @@ import {
   estimate1RM,
   setVolume,
   effectiveLoad,
+  linearFit,
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
@@ -924,8 +925,28 @@ function renderProgress() {
     return;
   }
   const series = exerciseProgressForUser(computedRecords(), els.athlete.value, exercise, currentFormula());
-  els.progressNote.textContent =
-    `Bars = sets per day · line = best estimated 1RM (${currentFormula()}) · ${series.length} session(s).`;
+
+  // Progression: fit a line to the estimated-1RM history to read a kg/week rate.
+  const pts = series.filter((p) => p.bestE1rm !== null);
+  let trendData: (number | null)[] = series.map(() => null);
+  let trendNote = "";
+  if (pts.length >= 2) {
+    const t0 = Date.parse(pts[0]!.date);
+    const day = (d: string) => (Date.parse(d) - t0) / 86_400_000;
+    const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
+    if (fit) {
+      const perWeek = fit.slope * 7;
+      const arrow = perWeek > 0.05 ? "▲" : perWeek < -0.05 ? "▼" : "▪";
+      trendNote = ` · trend ${arrow} ${perWeek >= 0 ? "+" : ""}${perWeek.toFixed(1)} kg/week`;
+      trendData = series.map((p) => Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10);
+    }
+  }
+  const best = pts.reduce((m, p) => (p.bestE1rm! > m.v ? { v: p.bestE1rm!, date: p.date } : m), { v: -Infinity, date: "" });
+  const latest = pts[pts.length - 1];
+  const summary = best.v > -Infinity
+    ? `Best ${fmt(best.v)} kg (${shortDate(best.date)}) · latest ${fmt(latest!.bestE1rm!)} kg${trendNote}`
+    : "No estimable 1RM yet";
+  els.progressNote.textContent = `${summary} · ${series.length} session(s). Bars = sets/day, gold = best 1RM, dashed = trend.`;
 
   const canvas = $<HTMLCanvasElement>("progressChart");
   progressChart = new Chart(canvas, {
@@ -953,6 +974,19 @@ function renderProgress() {
           spanGaps: true,
           pointRadius: 3,
           order: 1,
+        },
+        {
+          type: "line",
+          label: "Trend",
+          data: trendData,
+          yAxisID: "y1rm",
+          borderColor: "#c0603a",
+          borderDash: [6, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          spanGaps: true,
+          tension: 0,
+          order: 0,
         },
       ],
     },

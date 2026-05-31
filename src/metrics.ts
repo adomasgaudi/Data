@@ -121,6 +121,27 @@ export function estimate1RM(
   return epley1RM(weight, reps);
 }
 
+/**
+ * Ordinary least-squares line through points: returns slope and intercept, or
+ * null if there are fewer than two points or all x are equal. Used to read a
+ * progression rate (kg per day) off an athlete's estimated-1RM history.
+ */
+export function linearFit(points: readonly { x: number; y: number }[]): { slope: number; intercept: number } | null {
+  const n = points.length;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of points) {
+    sx += p.x;
+    sy += p.y;
+    sxx += p.x * p.x;
+    sxy += p.x * p.y;
+  }
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  return { slope, intercept: (sy - slope * sx) / n };
+}
+
 /** Total load moved by a set: weight * reps. Null if either is missing. */
 export function setVolume(weight: number | null, reps: number | null): number | null {
   if (weight === null || reps === null) return null;

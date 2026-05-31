@@ -11,6 +11,7 @@ import {
   nuzzoWeightForReps,
   nuzzoRepsAtWeight,
   estimate1RM,
+  linearFit,
 } from "./metrics";
 
 describe("epley1RM", () => {
@@ -74,6 +75,28 @@ describe("brzycki1RM", () => {
   it("is null at or above 37 reps (formula breaks down)", () => {
     expect(brzycki1RM(100, 37)).toBeNull();
     expect(brzycki1RM(100, 40)).toBeNull();
+  });
+});
+
+describe("linearFit", () => {
+  it("recovers the slope and intercept of a clean line", () => {
+    // y = 2x + 5
+    const fit = linearFit([
+      { x: 0, y: 5 },
+      { x: 1, y: 7 },
+      { x: 2, y: 9 },
+      { x: 3, y: 11 },
+    ])!;
+    expect(fit.slope).toBeCloseTo(2, 6);
+    expect(fit.intercept).toBeCloseTo(5, 6);
+  });
+  it("is null with too few points or vertical data", () => {
+    expect(linearFit([{ x: 1, y: 1 }])).toBeNull();
+    expect(linearFit([{ x: 3, y: 1 }, { x: 3, y: 9 }])).toBeNull();
+  });
+  it("reads a positive progression slope from an upward trend", () => {
+    const fit = linearFit([{ x: 0, y: 100 }, { x: 7, y: 105 }, { x: 14, y: 112 }])!;
+    expect(fit.slope).toBeGreaterThan(0);
   });
 });
 
