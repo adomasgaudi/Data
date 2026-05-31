@@ -42,8 +42,9 @@ body {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 0.9rem 1rem; box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12);
-  min-width: 180px;
+  min-width: 200px; display: flex; flex-direction: column; gap: 0.8rem;
 }
+.settings-hint { margin: 0; font-size: 0.72rem; color: var(--muted); line-height: 1.4; max-width: 220px; }
 .settings-panel label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8rem; color: var(--muted); }
 .settings-panel select {
   background: var(--bg); color: var(--text);

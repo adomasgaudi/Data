@@ -19,8 +19,9 @@ import {
   type PersonalRecord,
   type WorkoutDay,
 } from "./aggregate";
-import { estimate1RM, setVolume, type OneRepMaxFormula } from "./metrics";
+import { estimate1RM, setVolume, effectiveLoad, type OneRepMaxFormula } from "./metrics";
 import type { SetRecord } from "./domain";
+import { ATHLETES, EXERCISE_BW_COEFF, DEFAULT_BW_COEFF } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 
 Chart.register(...registerables);
@@ -35,6 +36,7 @@ const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   settingsPanel: $("settingsPanel"),
+  bwSource: $<HTMLSelectElement>("bwSource"),
   exerciseBtn: $<HTMLButtonElement>("exerciseBtn"),
   exerciseMenu: $<HTMLUListElement>("exerciseMenu"),
   exerciseLabel: $("exerciseLabel"),
@@ -73,6 +75,22 @@ function currentFormula(): OneRepMaxFormula {
   return els.formula.value === "brzycki" ? "brzycki" : "epley";
 }
 
+/**
+ * Records with the bodyweight-lifted load baked into `weight`, so the existing
+ * leaderboard / PR / progress maths produce bodyweight-aware estimated 1RMs.
+ * The chosen bodyweight source (profile table vs the value logged per set) is a
+ * Setting. Exercises with coefficient 0 are returned untouched.
+ */
+function computedRecords(): SetRecord[] {
+  const fromTable = els.bwSource.value !== "perset";
+  return data.records.map((r) => {
+    const coeff = EXERCISE_BW_COEFF[r.exerciseName] ?? DEFAULT_BW_COEFF;
+    if (coeff <= 0) return r;
+    const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
+    return { ...r, weight: effectiveLoad(r.weight, bw, coeff) };
+  });
+}
+
 function renderStatus() {
   const users = distinctUsers(data.records).length;
   let latest: string | null = null;
@@ -105,7 +123,7 @@ function renderLeaderboard() {
   const exercise = exerciseDropdown?.value() ?? "";
   const formula = currentFormula();
   const range = REP_RANGES.find((r) => r.id === (repsDropdown?.value() ?? "all"));
-  const filtered = filterRecords(data.records, {
+  const filtered = filterRecords(computedRecords(), {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
     ...(range?.min !== undefined ? { minReps: range.min } : {}),
@@ -163,7 +181,7 @@ function renderLeaderboardChart(entries: LeaderboardEntry[]) {
 
 function renderPersonalRecords() {
   const formula = currentFormula();
-  const filtered = filterRecords(data.records, { excludeDropsets: els.excludeDropsets.checked });
+  const filtered = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   let prs = personalRecords(filtered, formula);
 
   const q = els.prSearch.value.trim().toLowerCase();
@@ -353,7 +371,7 @@ function renderProgress() {
     els.progressNote.textContent = "No exercises to chart for this athlete.";
     return;
   }
-  const series = exerciseProgressForUser(data.records, els.athlete.value, exercise, currentFormula());
+  const series = exerciseProgressForUser(computedRecords(), els.athlete.value, exercise, currentFormula());
   els.progressNote.textContent =
     `Bars = sets per day · line = best estimated 1RM (${currentFormula()}) · ${series.length} session(s).`;
 
@@ -553,6 +571,7 @@ async function init() {
   });
 
   els.formula.addEventListener("change", renderAll);
+  els.bwSource.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
   els.prSearch.addEventListener("input", renderPersonalRecords);
   els.athlete.addEventListener("change", renderAthlete);

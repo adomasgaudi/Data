@@ -44,3 +44,20 @@ export function setVolume(weight: number | null, reps: number | null): number | 
   if (weight === null || reps === null) return null;
   return weight * reps;
 }
+
+/**
+ * Load to feed the 1RM formula for a movement that lifts part of the body:
+ *   coeff * bodyweight + addedWeight.
+ * coeff <= 0 means the body isn't part of the load — the added weight passes
+ * through unchanged (so a missing weight stays null and is filtered out as
+ * before). For coeff > 0 a missing added weight counts as 0 (bodyweight-only
+ * set), and an unknown bodyweight contributes 0.
+ */
+export function effectiveLoad(
+  addedWeight: number | null,
+  bodyweight: number | null,
+  coeff: number,
+): number | null {
+  if (coeff <= 0) return addedWeight;
+  return (bodyweight ?? 0) * coeff + (addedWeight ?? 0);
+}

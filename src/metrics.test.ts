@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { epley1RM, brzycki1RM, setVolume } from "./metrics";
+import { epley1RM, brzycki1RM, setVolume, effectiveLoad } from "./metrics";
 
 describe("epley1RM", () => {
   it("returns the weight itself for a single rep", () => {
@@ -73,5 +73,24 @@ describe("setVolume", () => {
   it("is null when either input is missing", () => {
     expect(setVolume(null, 5)).toBeNull();
     expect(setVolume(100, null)).toBeNull();
+  });
+});
+
+describe("effectiveLoad", () => {
+  it("adds the bodyweight fraction to the added weight", () => {
+    // Pull-up at coeff 0.95, 80 kg bodyweight, +10 kg belt → 0.95*80 + 10 = 86
+    expect(effectiveLoad(10, 80, 0.95)).toBeCloseTo(86, 6);
+    // Squat coeff 0.6, 100 kg bw, 140 kg bar → 60 + 140 = 200
+    expect(effectiveLoad(140, 100, 0.6)).toBeCloseTo(200, 6);
+  });
+  it("treats a bodyweight-only set (no added weight) as just the bodyweight part", () => {
+    expect(effectiveLoad(null, 80, 1)).toBeCloseTo(80, 6);
+  });
+  it("passes the added weight through unchanged when coeff <= 0", () => {
+    expect(effectiveLoad(100, 80, 0)).toBe(100);
+    expect(effectiveLoad(null, 80, 0)).toBeNull(); // stays null → filtered out as before
+  });
+  it("contributes nothing for the body part when bodyweight is unknown", () => {
+    expect(effectiveLoad(20, null, 0.95)).toBeCloseTo(20, 6);
   });
 });

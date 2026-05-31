@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.1.2.2</span></h1>
+      <h1>Colosseum <span class="version">v0.2</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -18,6 +18,13 @@
               <option value="brzycki">Brzycki</option>
             </select>
           </label>
+          <label>Bodyweight source
+            <select id="bwSource">
+              <option value="table">Profile table</option>
+              <option value="perset">Per-set (logged)</option>
+            </select>
+          </label>
+          <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
         </div>
       </div>
     </header>
