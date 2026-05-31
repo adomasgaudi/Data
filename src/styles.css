@@ -126,23 +126,27 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 }
 .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 .controls label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
-/* Leaderboard exercise picker: a plain word that opens the native dropdown on click. */
+/* Leaderboard exercise picker: a plain word with a small caret hinting it's tappable. */
 .lb-exercise-bar { margin-bottom: 0.4rem; }
 select.plain-select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   border: none; background: transparent; color: var(--text);
   font: inherit; font-size: 1.5rem; font-weight: 700; line-height: 1.2;
-  padding: 0; max-width: 100%; cursor: pointer;
+  padding: 0 26px 0 0; max-width: 100%; cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23284e86' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat; background-position: right center;
 }
 select.plain-select:hover, select.plain-select:focus { color: var(--accent); outline: none; }
-/* Subtle inline selects (reps / rank by) that sit by the leaderboard. */
+/* Subtle, button-outlined inline selects (reps / rank by) by the leaderboard. */
 select.subtle-select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
-  border: none; background: transparent; color: var(--muted);
-  font: inherit; font-size: 0.82rem; padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  font: inherit; font-size: 0.82rem; padding: 5px 26px 5px 10px; border-radius: 8px; cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center;
 }
 select.subtle-select:hover, select.subtle-select:focus {
-  color: var(--accent); background: var(--accent-soft); outline: none;
+  color: var(--accent); border-color: var(--accent); outline: none;
 }
 .lb-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -158,6 +162,28 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .calc-tab:hover { border-color: var(--accent); color: var(--accent); }
 .calc-tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+/* Workouts calendar */
+.wo-calendar { margin: 0 0 1.25rem; }
+.cal-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+.cal-head strong { font-size: 0.95rem; min-width: 9.5rem; text-align: center; }
+.cal-nav {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; width: 30px; height: 30px; font-size: 1rem; cursor: pointer; line-height: 1;
+}
+.cal-nav:hover { border-color: var(--accent); color: var(--accent); }
+.cal-count { margin-left: auto; font-size: 0.8rem; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-dow { text-align: center; font-size: 0.7rem; color: var(--muted); font-weight: 600; padding-bottom: 2px; }
+.cal-cell {
+  position: relative; aspect-ratio: 1 / 1; min-height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 8px; font-size: 0.85rem; color: var(--text);
+}
+.cal-cell.empty { border: none; }
+.cal-cell.trained { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.cal-sets {
+  position: absolute; bottom: 2px; right: 4px; font-size: 0.6rem; font-weight: 600; opacity: 0.9;
+}
 /* Compact, top-aligned single control (e.g. the athlete picker). */
 .controls.compact { margin-bottom: 1rem; }
 .controls.compact label { flex: 0 0 auto; }

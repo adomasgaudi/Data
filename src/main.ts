@@ -67,6 +67,7 @@ const els = {
   exerciseRecord: $("exerciseRecord"),
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
+  workoutCalendar: $("workoutCalendar"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutView: $<HTMLSelectElement>("workoutView"),
@@ -335,9 +336,11 @@ function renderAthlete() {
   athleteExercises = exerciseCountsForUser(data.records, els.athlete.value).map((c) => c.exerciseName);
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
+  initCalendarMonth();
   renderAthleteProfile();
   populateProgressExercise();
   renderExercisesPage();
+  renderWorkoutCalendar();
   renderWorkoutsPage();
   renderRecordsPage();
   renderProgress();
@@ -564,6 +567,74 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     sets: d.sets,
     rest: d.totalSets === 0,
   }));
+}
+
+// ---- Workouts calendar: a month grid with training days marked ----
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+let calYear = 2026;
+let calMonth = 0; // 0-based
+
+/** Map of this athlete's training dates (ISO) → sets that day. */
+function trainingDays(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const d of athleteWorkouts) if (d.totalSets > 0) m.set(d.date, d.totalSets);
+  return m;
+}
+
+/** Open the calendar on the athlete's most recent training month. */
+function initCalendarMonth() {
+  const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
+  const parts = latest?.split("-");
+  if (parts && parts.length >= 2) {
+    calYear = Number(parts[0]);
+    calMonth = Number(parts[1]) - 1;
+  }
+}
+
+function shiftCalendar(delta: number) {
+  calMonth += delta;
+  if (calMonth < 0) {
+    calMonth = 11;
+    calYear -= 1;
+  } else if (calMonth > 11) {
+    calMonth = 0;
+    calYear += 1;
+  }
+  renderWorkoutCalendar();
+}
+
+function renderWorkoutCalendar() {
+  const trained = trainingDays();
+  const startDow = (new Date(calYear, calMonth, 1).getDay() + 6) % 7; // Monday-first
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    .map((d) => `<div class="cal-dow">${d}</div>`)
+    .join("");
+
+  const cells: string[] = [];
+  for (let i = 0; i < startDow; i++) cells.push(`<div class="cal-cell empty"></div>`);
+  let monthCount = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const sets = trained.get(iso);
+    if (sets) monthCount++;
+    cells.push(
+      `<div class="cal-cell${sets ? " trained" : ""}"${sets ? ` title="${sets} sets"` : ""}>` +
+        `<span class="cal-day">${day}</span>${sets ? `<span class="cal-sets">${sets}</span>` : ""}</div>`,
+    );
+  }
+
+  els.workoutCalendar.innerHTML =
+    `<div class="cal-head">` +
+    `<button type="button" class="cal-nav" data-cal="prev" aria-label="Previous month">‹</button>` +
+    `<strong>${MONTH_NAMES[calMonth]} ${calYear}</strong>` +
+    `<button type="button" class="cal-nav" data-cal="next" aria-label="Next month">›</button>` +
+    `<span class="cal-count muted">${monthCount} training day${monthCount === 1 ? "" : "s"}</span>` +
+    `</div>` +
+    `<div class="cal-grid">${dow}${cells.join("")}</div>`;
 }
 
 function renderWorkoutsPage() {
@@ -1035,6 +1106,11 @@ async function init() {
   els.bwSource.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
   els.athlete.addEventListener("change", renderAthlete);
+  els.workoutCalendar.addEventListener("click", (e) => {
+    const nav = (e.target as HTMLElement).closest<HTMLElement>(".cal-nav");
+    if (nav?.dataset.cal === "prev") shiftCalendar(-1);
+    else if (nav?.dataset.cal === "next") shiftCalendar(1);
+  });
   els.progressExercise.addEventListener("change", renderProgress);
   els.summariseBtn.addEventListener("click", runSummary);
   els.workoutView.addEventListener("change", () => {
