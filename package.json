@@ -1,0 +1,25 @@
+{
+  "name": "sl-podium-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Strength training dashboard. Reads StrengthLevel data (ingested via the existing Apps Script pipeline) and computes leaderboards, PRs and estimated 1RMs over the full set log.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.7",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "fast-check": "^3.23.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.4"
+  }
+}

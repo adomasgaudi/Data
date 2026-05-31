@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SL Podium — Strength Dashboard</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>SL Podium</h1>
+      <div id="status" class="status">Loading…</div>
+    </header>
+
+    <main>
+      <section class="controls">
+        <label>Exercise
+          <select id="exercise"></select>
+        </label>
+        <label>1RM formula
+          <select id="formula">
+            <option value="epley">Epley</option>
+            <option value="brzycki">Brzycki</option>
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
+        </label>
+        <label>PR search
+          <input type="search" id="prSearch" placeholder="filter by user or exercise…" />
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2 id="lbTitle">Leaderboard</h2>
+        <div class="chart-wrap"><canvas id="lbChart"></canvas></div>
+        <table id="lbTable" class="data-table"></table>
+      </section>
+
+      <section class="panel">
+        <h2>Personal records <span class="muted" id="prCount"></span></h2>
+        <table id="prTable" class="data-table"></table>
+      </section>
+
+      <section class="panel" id="healthPanel" hidden>
+        <h2>Data health</h2>
+        <div id="health"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

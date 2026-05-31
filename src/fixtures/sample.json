@@ -1,0 +1,27 @@
+{
+  "updatedAt": "2026-05-30T12:00:00Z",
+  "rows": [
+    { "user": "Adomas", "username": "adomasgaudi", "date": "2026-05-02", "bodyweight": 82, "exercise_name": "Bench Press", "set_number": 1, "weight": 100, "reps": 5, "notes": "", "dropset": false, "percentile": 72 },
+    { "user": "Adomas", "username": "adomasgaudi", "date": "2026-05-02", "bodyweight": 82, "exercise_name": "Bench Press", "set_number": 2, "weight": 105, "reps": 3, "notes": "", "dropset": false, "percentile": 75 },
+    { "user": "Adomas", "username": "adomasgaudi", "date": "2026-05-09", "bodyweight": 82, "exercise_name": "Squat", "set_number": 1, "weight": 140, "reps": 5, "notes": "", "dropset": false, "percentile": 68 },
+    { "user": "Adomas", "username": "adomasgaudi", "date": "2026-05-16", "bodyweight": 82.5, "exercise_name": "Deadlift", "set_number": 1, "weight": 180, "reps": 3, "notes": "PR", "dropset": false, "percentile": 80 },
+    { "user": "Adomas", "username": "adomasgaudi", "date": "2026-05-23", "bodyweight": 82, "exercise_name": "Bench Press", "set_number": 1, "weight": 110, "reps": 1, "notes": "", "dropset": false, "percentile": 78 },
+    { "user": "Kristina", "username": "andromeda94", "date": "2026-05-03", "bodyweight": 61, "exercise_name": "Squat", "set_number": 1, "weight": 90, "reps": 5, "notes": "", "dropset": false, "percentile": 88 },
+    { "user": "Kristina", "username": "andromeda94", "date": "2026-05-10", "bodyweight": 61, "exercise_name": "Deadlift", "set_number": 1, "weight": 120, "reps": 3, "notes": "", "dropset": false, "percentile": 90 },
+    { "user": "Kristina", "username": "andromeda94", "date": "2026-05-17", "bodyweight": 61, "exercise_name": "Bench Press", "set_number": 1, "weight": 55, "reps": 5, "notes": "", "dropset": false, "percentile": 70 },
+    { "user": "Kristina", "username": "andromeda94", "date": "2026-05-24", "bodyweight": 61, "exercise_name": "Squat", "set_number": 1, "weight": 95, "reps": 3, "notes": "", "dropset": false, "percentile": 89 },
+    { "user": "Johan", "username": "johannesschut", "date": "2026-05-01", "bodyweight": 95, "exercise_name": "Bench Press", "set_number": 1, "weight": 130, "reps": 3, "notes": "", "dropset": false, "percentile": 85 },
+    { "user": "Johan", "username": "johannesschut", "date": "2026-05-08", "bodyweight": 95, "exercise_name": "Deadlift", "set_number": 1, "weight": 220, "reps": 1, "notes": "", "dropset": false, "percentile": 87 },
+    { "user": "Johan", "username": "johannesschut", "date": "2026-05-15", "bodyweight": 94.5, "exercise_name": "Squat", "set_number": 1, "weight": 180, "reps": 2, "notes": "", "dropset": false, "percentile": 83 },
+    { "user": "Johan", "username": "johannesschut", "date": "2026-05-22", "bodyweight": 95, "exercise_name": "Bench Press", "set_number": 2, "weight": 120, "reps": 6, "notes": "", "dropset": false, "percentile": 86 },
+    { "user": "Mantas", "username": "mantasp", "date": "2026-05-04", "bodyweight": 78, "exercise_name": "Squat", "set_number": 1, "weight": 160, "reps": 1, "notes": "", "dropset": false, "percentile": 84 },
+    { "user": "Mantas", "username": "mantasp", "date": "2026-05-11", "bodyweight": 78, "exercise_name": "Bench Press", "set_number": 1, "weight": 95, "reps": 5, "notes": "", "dropset": false, "percentile": 69 },
+    { "user": "Mantas", "username": "mantasp", "date": "2026-05-18", "bodyweight": 78, "exercise_name": "Deadlift", "set_number": 1, "weight": 200, "reps": 2, "notes": "", "dropset": false, "percentile": 82 },
+    { "user": "Marija", "username": "marijasenkus", "date": "2026-05-05", "bodyweight": 58, "exercise_name": "Deadlift", "set_number": 1, "weight": 100, "reps": 5, "notes": "", "dropset": false, "percentile": 86 },
+    { "user": "Marija", "username": "marijasenkus", "date": "2026-05-12", "bodyweight": 58, "exercise_name": "Squat", "set_number": 1, "weight": 80, "reps": 5, "notes": "", "dropset": false, "percentile": 81 },
+    { "user": "Marija", "username": "marijasenkus", "date": "2026-05-19", "bodyweight": 58, "exercise_name": "Bench Press", "set_number": 1, "weight": 45, "reps": 8, "notes": "", "dropset": true, "percentile": 64 },
+    { "user": "Laurynas", "username": "bebras", "date": "2026-05-06", "bodyweight": 88, "exercise_name": "Deadlift", "set_number": 1, "weight": 240, "reps": 1, "notes": "comp", "dropset": false, "percentile": 92 },
+    { "user": "Laurynas", "username": "bebras", "date": "2026-05-13", "bodyweight": 88, "exercise_name": "Squat", "set_number": 1, "weight": 190, "reps": 3, "notes": "", "dropset": false, "percentile": 90 },
+    { "user": "Laurynas", "username": "bebras", "date": "2026-05-20", "bodyweight": 88, "exercise_name": "Bench Press", "set_number": 1, "weight": 140, "reps": 2, "notes": "", "dropset": false, "percentile": 88 }
+  ]
+}
