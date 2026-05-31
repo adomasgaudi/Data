@@ -61,10 +61,38 @@
           </label>
         </section>
 
-        <section class="panel">
-          <h2 id="athleteTitle">Exercises</h2>
-          <table id="athleteTable" class="data-table"></table>
-        </section>
+        <nav class="subtabs" role="tablist">
+          <button class="subtab is-active" data-subtab="workouts" role="tab">Workouts</button>
+          <button class="subtab" data-subtab="exercises" role="tab">Exercises</button>
+          <button class="subtab" data-subtab="progress" role="tab">Progress</button>
+        </nav>
+
+        <div id="sub-workouts" class="subtab-panel">
+          <section class="panel">
+            <h2 id="workoutsTitle">Workouts</h2>
+            <table id="workoutsTable" class="data-table"></table>
+            <div id="workoutsPager" class="pager"></div>
+          </section>
+        </div>
+
+        <div id="sub-exercises" class="subtab-panel" hidden>
+          <section class="panel">
+            <h2 id="athleteTitle">Exercises</h2>
+            <table id="athleteTable" class="data-table"></table>
+            <div id="exercisesPager" class="pager"></div>
+          </section>
+        </div>
+
+        <div id="sub-progress" class="subtab-panel" hidden>
+          <section class="panel">
+            <h2 id="progressTitle">Progress over time</h2>
+            <label class="inline-label">Exercise
+              <select id="progressExercise"></select>
+            </label>
+            <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
+            <p class="muted" id="progressNote"></p>
+          </section>
+        </div>
       </div>
     </main>
 

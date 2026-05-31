@@ -17,6 +17,13 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   in ALL CAPS, the single most burning thing to pay attention to, in 2–10 words.
 - **Links go at the very bottom** of the message only — never inline in the
   middle of text.
+- **Commit message names start with a version** then a 1–2 word kebab
+  explainer, e.g. `0.0.2 athlete-pages`. Versioning is SemVer plus a 4th
+  "tweak" digit: `A.B.C.D` = major.minor.patch.tweak. Bump **D** for tiny
+  edits (text, colour, one-liner) and write it 4-segment (`0.0.1.1`); bump
+  **C** for a normal self-contained feature/fix, written 3-segment
+  (`0.0.2`). **B**/**A** for substantial/major work. Keep the longer detail
+  in the commit body as before.
 
 ## Project at a glance
 

@@ -41,6 +41,28 @@ body {
 }
 .tab:hover { color: var(--text); }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.subtabs { display: flex; gap: 0.5rem; margin: 0 0 1.25rem; }
+.subtab {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 0.35rem 0.85rem; border-radius: 99px;
+}
+.subtab:hover { color: var(--text); }
+.subtab.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.inline-label { display: inline-flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+.inline-label select {
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 0.95rem;
+}
+.inline-label select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pager { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.85rem; font-size: 0.85rem; }
+.pager:empty { display: none; }
+.page-btn {
+  background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  font: inherit; font-size: 0.85rem; cursor: pointer; padding: 5px 12px; border-radius: 8px;
+}
+.page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.page-btn:disabled { opacity: 0.45; cursor: default; }
 .status .badge {
   background: var(--accent); color: #fff; border-radius: 99px;
   padding: 1px 8px; font-weight: 600; margin-left: 6px;

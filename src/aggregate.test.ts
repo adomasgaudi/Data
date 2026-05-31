@@ -12,6 +12,8 @@ import {
   distinctUsers,
   exerciseCountsForUser,
   setsForUserExercise,
+  workoutsForUser,
+  exerciseProgressForUser,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -186,5 +188,17 @@ describe("distinct helpers", () => {
     const sets = setsForUserExercise(FIXTURE, "ada", "Bench Press");
     expect(sets.map((s) => s.date)).toEqual(["2024-02-01", "2024-01-01"]);
     expect(sets.every((s) => s.username === "ada" && s.exerciseName === "Bench Press")).toBe(true);
+  });
+  it("groups an athlete's sets into workout days, newest first", () => {
+    const days = workoutsForUser(FIXTURE, "ada");
+    expect(days.map((d) => d.date)).toEqual(["2024-03-01", "2024-02-01", "2024-01-01"]);
+    expect(days.every((d) => d.totalSets === 1)).toBe(true);
+    expect(days[0]!.exercises).toEqual([{ exerciseName: "Squat", count: 1 }]);
+  });
+  it("builds an exercise time series oldest-first with best e1RM per day", () => {
+    const series = exerciseProgressForUser(FIXTURE, "ada", "Bench Press", "epley");
+    expect(series.map((p) => p.date)).toEqual(["2024-01-01", "2024-02-01"]);
+    expect(series[0]).toEqual({ date: "2024-01-01", sets: 1, bestE1rm: 100 }); // 100x1
+    expect(series[1]!.bestE1rm).toBeCloseTo(105, 6); // 90x5 → Epley 105
   });
 });

@@ -156,6 +156,78 @@ export function setsForUserExercise(
     .sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : a.setNumber - b.setNumber));
 }
 
+export interface WorkoutDay {
+  date: string;
+  totalSets: number;
+  exercises: ExerciseCount[]; // exercises trained that day, most sets first
+  sets: SetRecord[]; // every set that day, grouped by exercise then set number
+}
+
+/**
+ * One athlete's training grouped into workout days (a day = one workout),
+ * newest first. Each day lists what they did and holds every set.
+ */
+export function workoutsForUser(records: readonly SetRecord[], username: string): WorkoutDay[] {
+  const byDate = new Map<string, SetRecord[]>();
+  for (const r of records) {
+    if (r.username !== username) continue;
+    const list = byDate.get(r.date);
+    if (list) list.push(r);
+    else byDate.set(r.date, [r]);
+  }
+  const days: WorkoutDay[] = [];
+  for (const [date, sets] of byDate) {
+    const counts = new Map<string, number>();
+    for (const s of sets) {
+      if (s.exerciseName === "") continue;
+      counts.set(s.exerciseName, (counts.get(s.exerciseName) ?? 0) + 1);
+    }
+    const exercises = [...counts]
+      .map(([exerciseName, count]) => ({ exerciseName, count }))
+      .sort((a, b) => b.count - a.count || a.exerciseName.localeCompare(b.exerciseName));
+    const ordered = [...sets].sort(
+      (a, b) => a.exerciseName.localeCompare(b.exerciseName) || a.setNumber - b.setNumber,
+    );
+    days.push({ date, totalSets: sets.length, exercises, sets: ordered });
+  }
+  return days.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
+}
+
+export interface ExerciseDayPoint {
+  date: string;
+  sets: number;
+  bestE1rm: number | null; // best estimated 1RM achieved that day, null if none computable
+}
+
+/**
+ * Time series for one athlete + exercise, oldest first: for each day they did
+ * it, how many sets and the best estimated 1RM. Feeds the progress graph.
+ */
+export function exerciseProgressForUser(
+  records: readonly SetRecord[],
+  username: string,
+  exerciseName: string,
+  formula: OneRepMaxFormula = "epley",
+): ExerciseDayPoint[] {
+  const byDate = new Map<string, SetRecord[]>();
+  for (const r of records) {
+    if (r.username !== username || r.exerciseName !== exerciseName) continue;
+    const list = byDate.get(r.date);
+    if (list) list.push(r);
+    else byDate.set(r.date, [r]);
+  }
+  return [...byDate]
+    .map(([date, sets]) => {
+      let best: number | null = null;
+      for (const s of sets) {
+        const e = estimate1RM(s.weight, s.reps, formula);
+        if (e !== null && (best === null || e > best)) best = e;
+      }
+      return { date, sets: sets.length, bestE1rm: best };
+    })
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
 export interface UserRef {
   user: string;
   username: string;
