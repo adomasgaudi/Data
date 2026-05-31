@@ -18,6 +18,7 @@ import {
   filterRecords,
   leaderboard,
   personalRecords,
+  scaleToGroup,
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
@@ -33,7 +34,7 @@ import {
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
-import { ATHLETES, EXERCISE_BW_COEFF, defaultBwCoeff } from "./profile";
+import { ATHLETES, EXERCISE_BW_COEFF, defaultBwCoeff, EXERCISE_GROUPS } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 
 Chart.register(...registerables);
@@ -166,6 +167,12 @@ function computedRecords(): SetRecord[] {
   });
 }
 
+/** If the leaderboard selection is a group, fold its members in (scaled); else as-is. */
+function selectionRecords(records: SetRecord[], selection: string): SetRecord[] {
+  const grp = EXERCISE_GROUPS.find((g) => g.name === selection);
+  return grp ? scaleToGroup(records, grp.name, grp.members) : records;
+}
+
 function renderStatus() {
   const users = distinctUsers(data.records).length;
   let latest: string | null = null;
@@ -211,7 +218,7 @@ function renderLeaderboard() {
   const exercise = els.exercise.value;
   const formula = currentFormula();
   const rel = els.rank.value === "rel";
-  const comp = computedRecords();
+  const comp = selectionRecords(computedRecords(), exercise);
   const filtered = filterRecords(comp, {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
@@ -356,8 +363,9 @@ function renderLeaderboardChart(
 function renderPersonalRecords() {
   const formula = currentFormula();
   const exercise = els.exercise.value;
-  const filtered = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
-  // Personal records for the currently selected exercise only (one row per athlete).
+  const base = selectionRecords(computedRecords(), exercise);
+  const filtered = filterRecords(base, { excludeDropsets: els.excludeDropsets.checked });
+  // Personal records for the currently selected exercise/group only (one row per athlete).
   const prs = personalRecords(filtered, formula).filter((p) => p.exerciseName === exercise);
   prs.sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
 
@@ -1125,12 +1133,18 @@ async function init() {
     return;
   }
 
-  // Leaderboard exercise / reps / rank as native selects.
+  // Leaderboard exercise picker: groups (that have data) first, then any
+  // ungrouped exercises. Selecting a group folds in its members (scaled).
   const exercises = distinctExercises(data.records);
-  els.exercise.innerHTML = exercises
+  const memberNames = new Set<string>();
+  for (const g of EXERCISE_GROUPS) for (const m of Object.keys(g.members)) memberNames.add(m);
+  const groupsWithData = EXERCISE_GROUPS.filter((g) => exercises.some((e) => g.members[e] !== undefined)).map((g) => g.name);
+  const ungrouped = exercises.filter((e) => !memberNames.has(e));
+  const exerciseOptions = [...groupsWithData, ...ungrouped];
+  els.exercise.innerHTML = exerciseOptions
     .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
     .join("");
-  els.exercise.value = exercises[0] ?? "";
+  els.exercise.value = exerciseOptions[0] ?? "";
   els.rank.innerHTML =
     `<option value="abs">Total (kg)</option><option value="rel">Per bodyweight</option>`;
   els.rank.value = "abs";

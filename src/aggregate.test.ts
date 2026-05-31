@@ -18,6 +18,7 @@ import {
   setsByWeek,
   exerciseProgressForUser,
   addedWeight1RM,
+  scaleToGroup,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -79,6 +80,32 @@ describe("addedWeight1RM", () => {
   it("a single rep returns exactly the added weight", () => {
     const r = rec({ weight: 200, origWeight: 140, reps: 1 });
     expect(addedWeight1RM(r, "epley")).toBeCloseTo(140, 6);
+  });
+});
+
+describe("scaleToGroup", () => {
+  it("keeps only members, relabels them, and scales load by 1/quotient", () => {
+    const recs = [
+      rec({ exerciseName: "Deadlift", weight: 200, origWeight: 200, reps: 1 }),
+      rec({ exerciseName: "Romanian Deadlift", weight: 140, origWeight: 140, reps: 1 }),
+      rec({ exerciseName: "Bench Press", weight: 100, reps: 1 }), // not a member → dropped
+    ];
+    const out = scaleToGroup(recs, "Deadlift", { Deadlift: 1, "Romanian Deadlift": 0.7 });
+    expect(out).toHaveLength(2);
+    expect(out.every((r) => r.exerciseName === "Deadlift")).toBe(true);
+    const rdl = out[1]!;
+    expect(rdl.weight).toBeCloseTo(200, 6); // 140 / 0.7
+    expect(rdl.origWeight).toBeCloseTo(200, 6);
+  });
+
+  it("makes an RDL's 1RM comparable to a deadlift's", () => {
+    const [scaled] = scaleToGroup(
+      [rec({ exerciseName: "Romanian Deadlift", weight: 140, origWeight: 140, reps: 1 })],
+      "Deadlift",
+      { "Romanian Deadlift": 0.7 },
+    );
+    // 140 at quotient 0.7 → a 200 deadlift-equivalent single.
+    expect(addedWeight1RM(scaled!, "epley")).toBeCloseTo(200, 6);
   });
 });
 

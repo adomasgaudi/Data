@@ -364,6 +364,28 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   return effective1RM - bodyweightLoad;
 }
 
+/**
+ * Collapse a group's member sets into one comparable exercise: keep only sets whose
+ * exercise is a group member, relabel them to `groupName`, and divide their load by
+ * the member's scaling quotient so everyone is compared on the reference lift (an
+ * RDL at quotient 0.7 becomes a ~1.43× deadlift-equivalent). Both the calc load and
+ * the displayed (added) weight scale together, so the 1RM scales cleanly too.
+ */
+export function scaleToGroup(
+  records: readonly SetRecord[],
+  groupName: string,
+  members: Record<string, number>,
+): SetRecord[] {
+  const out: SetRecord[] = [];
+  for (const r of records) {
+    const scale = members[r.exerciseName];
+    if (scale === undefined || scale <= 0) continue;
+    const sc = (w: number | null) => (w === null ? null : w / scale);
+    out.push({ ...r, exerciseName: groupName, weight: sc(r.weight), origWeight: sc(r.origWeight ?? r.weight) });
+  }
+  return out;
+}
+
 export interface BestSet {
   record: SetRecord;
   e1rm: number; // added-weight 1RM (bodyweight share peeled back off)
