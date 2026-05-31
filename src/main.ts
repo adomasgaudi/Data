@@ -58,8 +58,11 @@ const els = {
   lbTable: $<HTMLTableElement>("lbTable"),
   prTable: $<HTMLTableElement>("prTable"),
   prCount: $("prCount"),
-  healthPanel: $("healthPanel"),
   health: $("health"),
+  healthBtn: $<HTMLButtonElement>("healthBtn"),
+  healthBadge: $("healthBadge"),
+  healthPage: $("healthPage"),
+  healthClose: $<HTMLButtonElement>("healthClose"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteProfile: $("athleteProfile"),
   athleteTitle: $("athleteTitle"),
@@ -176,11 +179,12 @@ function renderStatus() {
 }
 
 function renderHealth() {
-  if (!data.issues.length && !data.warnings.length) {
-    els.healthPanel.hidden = true;
+  const total = data.issues.length + data.warnings.length;
+  els.healthBadge.textContent = total === 0 ? "✓ clear" : `⚠ ${total}`;
+  if (total === 0) {
+    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly.</p>`;
     return;
   }
-  els.healthPanel.hidden = false;
   const lines: string[] = [];
   for (const issue of data.issues.slice(0, 50))
     lines.push(`<div class="health-item warn">Row ${issue.index}: ${escapeHtml(issue.message)}</div>`);
@@ -1100,6 +1104,15 @@ async function init() {
     const t = e.target as Node;
     if (!els.settingsPanel.hidden && !els.settingsPanel.contains(t) && t !== els.settingsBtn)
       setSettingsOpen(false);
+  });
+
+  // Data health lives on its own overlay page, opened from Settings.
+  els.healthBtn.addEventListener("click", () => {
+    setSettingsOpen(false);
+    els.healthPage.hidden = false;
+  });
+  els.healthClose.addEventListener("click", () => {
+    els.healthPage.hidden = true;
   });
 
   els.formula.addEventListener("change", renderAll);

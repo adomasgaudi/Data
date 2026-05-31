@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.7.1</span></h1>
+      <h1>Colosseum <span class="version">v0.7.2</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -26,6 +26,9 @@
             </select>
           </label>
           <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
+          <button type="button" id="healthBtn" class="settings-link">
+            Data health <span id="healthBadge" class="muted"></span>
+          </button>
         </div>
       </div>
     </header>
@@ -63,10 +66,6 @@
           <table id="prTable" class="data-table"></table>
         </section>
 
-        <section class="panel" id="healthPanel" hidden>
-          <h2>Data health</h2>
-          <div id="health"></div>
-        </section>
       </div>
 
       <div id="tab-athlete" class="tab-panel" hidden>
@@ -213,6 +212,17 @@
     <footer class="appfoot">
       <div id="status" class="status">Loading…</div>
     </footer>
+
+    <div id="healthPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Data health</h2>
+          <button type="button" id="healthClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">Validation issues and out-of-range values found while loading the sheet.</p>
+        <div id="health"></div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

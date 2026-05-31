@@ -17,7 +17,8 @@
       "Bash(git commit -q -m '0.6.0 reps-percent-1rm-page *)",
       "Bash(git commit -q -m '0.6.1 reps-1rm-bench-chart *)",
       "Bash(git commit -q -m '0.7.0 native-selects-lb-layout-calc-tabs *)",
-      "Bash(git commit -q -m '0.7.1 workouts-calendar-and-select-affordances *)"
+      "Bash(git commit -q -m '0.7.1 workouts-calendar-and-select-affordances *)",
+      "Bash(git commit -q -m '0.7.2 data-health-overlay-from-settings *)"
     ]
   }
 }
