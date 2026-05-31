@@ -115,7 +115,7 @@ function renderLeaderboardChart(entries: LeaderboardEntry[]) {
         {
           label: "Estimated 1RM (kg)",
           data: entries.map((e) => Math.round(e.e1rm * 10) / 10),
-          backgroundColor: entries.map((_, i) => (i === 0 ? "#ffd166" : "#4f9dff")),
+          backgroundColor: entries.map((_, i) => (i === 0 ? "#b8902f" : "#284e86")),
           borderRadius: 4,
         },
       ],
@@ -126,8 +126,8 @@ function renderLeaderboardChart(entries: LeaderboardEntry[]) {
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: "#2a2f3a" }, ticks: { color: "#9aa3b2" } },
-        y: { grid: { display: false }, ticks: { color: "#e6e8ec" } },
+        x: { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
+        y: { grid: { display: false }, ticks: { color: "#1a1a1a" } },
       },
     },
   });
