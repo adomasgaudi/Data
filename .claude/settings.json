@@ -5,7 +5,16 @@
       "Bash(git commit -m ' *)",
       "Bash(git commit -q -m '0.5.6 exercise-top-record *)",
       "Bash(dir /s /b *.html *.ts)",
-      "Bash(git commit -q -m '0.5.7 test-tab-athlete-exercise-picker *)"
+      "Bash(git commit -q -m '0.5.7 test-tab-athlete-exercise-picker *)",
+      "WebFetch(domain:www.strongerbyscience.com)",
+      "WebSearch",
+      "WebFetch(domain:www.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:jameslnuzzo.substack.com)",
+      "WebFetch(domain:r.jina.ai)",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\)\" -o \"C:\\\\Users\\\\adoma\\\\AppData\\\\Local\\\\Temp\\\\fig3_bench.jpg\" \"https://cdn.ncbi.nlm.nih.gov/pmc/blobs/2e4f/10933212/de882a0cfc17/40279_2023_1937_Fig3_HTML.jpg\")",
+      "Read(//c/Users/adoma/AppData/Local/Temp/**)",
+      "Bash(git commit -q -m '0.6.0 reps-percent-1rm-page *)"
     ]
   }
 }
