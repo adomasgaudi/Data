@@ -4,26 +4,29 @@ A website that shows StrengthLevel training data for a group of athletes:
 leaderboards, personal records, and estimated 1RMs computed across everyone's
 full set log.
 
-It fetches data **directly from StrengthLevel, the same way the original Apps
-Script does** (load each athlete's profile → read their `user_id` → page through
-`/api/workouts` → flatten every set). That fetch runs **server-side** in a
-serverless function, because StrengthLevel — like most sites — refuses
-cross-site calls from a browser. (That is the same reason the original logic ran
-inside Apps Script on Google's servers rather than in a web page.)
+The data originates on StrengthLevel and reaches the site through the **existing
+Apps Script pipeline** (the scraper is intentionally *not* re-implemented here):
+StrengthLevel → Apps Script → a Google Sheet ("UD") → exported to
+`src/data/ud.csv`. That CSV is **bundled into the build**, so the dashboard is a
+single self-contained `index.html` that validates → computes → renders entirely
+in the browser, with no server or network needed at view time.
 
 ## How it fits together
 
 ```
-                         (runs on the server — no CORS / no browser limits)
-StrengthLevel  ──▶  Netlify function /api/data  ──▶  browser
-   profiles +        port of the Apps Script         validate → filter / sort /
-   /api/workouts     (src/strengthlevel.ts)          compute → render
+StrengthLevel ──▶ Apps Script ──▶ Google Sheet "UD" ──▶ src/data/ud.csv
+   (scrape)        (unchanged)                            │  bundled at build
+                                                          ▼
+                                          browser: validate → filter / sort /
+                                                   compute → render
 ```
 
-- The function result is cached on Netlify's edge (~6h), so the heavy scrape
-  runs at most occasionally, not for every visitor.
-- Open the built `index.html` as a bare local file (no server) and it shows
-  bundled **sample** data instead — handy for a quick look, but not real data.
+- **Refreshing the numbers:** drop a fresh export over `src/data/ud.csv` and
+  `npm run build`. Everything downstream is derived from the data, so a new CSV
+  (new athletes, new exercises) just works — nothing is hardcoded.
+- The built `index.html` opens straight from disk (no server) and shows the real
+  bundled data. `netlify/functions/` still holds the original server-side fetcher
+  for whenever a live StrengthLevel pull is wired back up.
 
 ## Why this stack (and how it minimizes AI error rates)
 
@@ -98,30 +101,28 @@ npm run typecheck
 npm run build     # -> dist/  (one self-contained index.html)
 ```
 
-`npm run dev` serves the UI, but `/api/data` only exists on Netlify, so local
-dev shows the sample data. To exercise the real function locally, install the
-Netlify CLI and run `netlify dev`.
+`npm run dev` serves the UI with the bundled `ud.csv` — the same real data the
+build ships, so local dev and production match. `server.host` is on, so a phone
+on the same Wi-Fi can open the printed Network URL.
 
-## Deploy (this is what makes real data show)
+## Deploy
 
-The site needs a server for the fetch, so it must be deployed. Easiest:
+The site is fully static (data is bundled), so deploy is just publishing `dist`:
 
-1. Push this repo to GitHub (already done on the working branch).
+1. Push this repo to GitHub.
 2. In Netlify: **Add new site → Import an existing project → pick this repo**.
-3. Netlify reads `netlify.toml` automatically — build `npm run build`, publish
-   `dist`, function in `netlify/functions`. Click **Deploy**.
-4. Open the site URL. First load runs the scrape (a few seconds); after that the
-   edge cache makes it instant. The leaderboard now shows real data.
+3. Netlify reads `netlify.toml` — build `npm run build`, publish `dist`. Deploy.
+4. To update the numbers later: replace `src/data/ud.csv` with a fresh export and
+   redeploy (or rebuild locally and open `dist/index.html`).
 
 No environment variables are required.
 
 ## Known caveats
 
-- **Units:** StrengthLevel returns weights in each athlete's configured unit
-  (kg or lb). The dashboard assumes kg and compares within the same athlete, so
-  it stays internally consistent; obvious out-of-range values are flagged by the
-  sanity check.
-- **First-load time / function limits:** a full scrape of ~20 athletes runs
-  concurrently to fit a serverless time budget. If a cold scrape ever exceeds
-  the function timeout, the fix is a scheduled pre-fetch into a cache — ask and
-  it can be added.
+- **Units:** StrengthLevel records each athlete's configured unit (kg or lb). The
+  dashboard assumes kg and compares within the same athlete, so it stays
+  internally consistent; obvious out-of-range values are flagged by the sanity
+  check, and likely duplicate exercise names are flagged on the Data Health page.
+- **Bodyweight-aware 1RMs are estimates:** the per-exercise bodyweight
+  coefficients and the exercise-group scaling quotients are sane defaults, not
+  measured truths — they're meant to be eyeballed and tuned.
