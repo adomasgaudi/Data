@@ -197,11 +197,14 @@ function renderHealth() {
 
 interface LbRow {
   user: string;
-  value: number; // the ranked number (kg, or ×BW)
+  value: number; // the ranked number (kg, or BW)
   valueText: string; // formatted for the table
   best: string; // "weight×reps"
   date: string;
+  e1rm: number; // added-weight estimated 1RM (kg)
+  ratio: number | null; // est 1RM ÷ bodyweight, null if no bodyweight on file
 }
+let lbRows: LbRow[] = []; // current leaderboard order, for the expandable detail rows
 
 function renderLeaderboard() {
   const exercise = els.exercise.value;
@@ -224,20 +227,26 @@ function renderLeaderboard() {
         const bw = ATHLETES[e.username]?.weight;
         if (!bw) return null; // can't compute a ratio without a bodyweight on file
         const ratio = e.e1rm / bw;
-        return { user: e.user, value: ratio, valueText: `${ratio.toFixed(2)}× BW`, best: wr(e.weight, e.reps), date: e.date };
+        return { user: e.user, value: ratio, valueText: `${ratio.toFixed(2)} BW`, best: wr(e.weight, e.reps), date: e.date, e1rm: e.e1rm, ratio };
       })
       .filter((r): r is LbRow => r !== null)
       .sort((a, b) => b.value - a.value);
   } else {
-    rows = entries.map((e) => ({
-      user: e.user,
-      value: e.e1rm,
-      valueText: fmt(e.e1rm),
-      best: wr(e.weight, e.reps),
-      date: e.date,
-    }));
+    rows = entries.map((e) => {
+      const bw = ATHLETES[e.username]?.weight;
+      return {
+        user: e.user,
+        value: e.e1rm,
+        valueText: fmt(e.e1rm),
+        best: wr(e.weight, e.reps),
+        date: e.date,
+        e1rm: e.e1rm,
+        ratio: bw ? e.e1rm / bw : null,
+      };
+    });
   }
 
+  lbRows = rows;
   const repsNote = range && range.id !== "all" ? ` · ${range.label}` : "";
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
   els.lbTitle.textContent = `${exercise}${repsNote} · ${metricNote}`;
@@ -247,16 +256,36 @@ function renderLeaderboard() {
 
 function renderLeaderboardTable(rows: LbRow[], rel: boolean) {
   const valueHead = rel ? "Per BW" : "Est. 1RM (kg)";
-  const head = `<thead><tr><th>Athlete</th><th class="num">${valueHead}</th><th class="num">Best set (kg)</th><th class="num">Date</th></tr></thead>`;
+  const head = `<thead><tr><th>Athlete</th><th class="num">${valueHead}</th><th class="num">Best set (kg)</th></tr></thead>`;
   const body = rows
     .map(
       (r, i) =>
-        `<tr><td class="${i === 0 ? "rank-1" : ""}">${escapeHtml(r.user)}</td>` +
-        `<td class="num">${r.valueText}</td><td class="num">${r.best}</td><td class="num">${r.date}</td></tr>`,
+        `<tr class="lb-row" data-index="${i}"><td class="${i === 0 ? "rank-1" : ""}">` +
+        `<span class="caret">▸</span>${escapeHtml(r.user)}</td>` +
+        `<td class="num">${r.valueText}</td><td class="num">${r.best}</td></tr>`,
     )
     .join("");
   els.lbTable.innerHTML =
-    head + `<tbody>${body || `<tr><td colspan="4" class="muted">No data for this exercise.</td></tr>`}</tbody>`;
+    head + `<tbody>${body || `<tr><td colspan="3" class="muted">No data for this exercise.</td></tr>`}</tbody>`;
+}
+
+/** Expand a leaderboard row to show the date and the other metric. */
+function onLeaderboardRowClick(e: MouseEvent) {
+  const row = (e.target as HTMLElement).closest("tr.lb-row") as HTMLTableRowElement | null;
+  if (!row) return;
+  if (toggleCollapse(row)) return;
+  const r = lbRows[Number(row.dataset.index)];
+  if (!r) return;
+  const item = (label: string, val: string) =>
+    `<div class="lb-detail-item"><span class="muted">${label}</span><strong>${val}</strong></div>`;
+  const detail =
+    `<div class="lb-detail">` +
+    item("Best set", r.best) +
+    item("Est. 1RM", `${fmt(r.e1rm)} kg`) +
+    item("Per bodyweight", r.ratio === null ? "—" : `${r.ratio.toFixed(2)} BW`) +
+    item("Achieved", shortDate(r.date)) +
+    `</div>`;
+  insertDetail(row, 3, detail);
 }
 
 function renderLeaderboardChart(rows: LbRow[], rel: boolean) {
@@ -320,6 +349,7 @@ let athleteWorkouts: WorkoutDay[] = [];
 // A row in the Workouts list: a day or a week (or an empty rest day).
 interface WorkoutGroup {
   label: string;
+  date: string; // ISO day (day view) or week-start (week view) — lets the calendar jump here
   totalSets: number;
   exercises: ExerciseCount[];
   sets: SetRecord[];
@@ -557,6 +587,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   if (els.workoutView.value === "week") {
     return weeksForUser(data.records, els.athlete.value).map((w) => ({
       label: `Week of ${shortDate(w.weekStart)}`,
+      date: w.weekStart,
       totalSets: w.totalSets,
       exercises: w.exercises,
       sets: w.sets,
@@ -566,6 +597,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
   return days.map((d) => ({
     label: shortDate(d.date),
+    date: d.date,
     totalSets: d.totalSets,
     exercises: d.exercises,
     sets: d.sets,
@@ -626,7 +658,7 @@ function renderWorkoutCalendar() {
     const sets = trained.get(iso);
     if (sets) monthCount++;
     cells.push(
-      `<div class="cal-cell${sets ? " trained" : ""}"${sets ? ` title="${sets} sets"` : ""}>` +
+      `<div class="cal-cell${sets ? " trained" : ""}"${sets ? ` data-date="${iso}" title="${sets} sets — tap to jump"` : ""}>` +
         `<span class="cal-day">${day}</span>${sets ? `<span class="cal-sets">${sets}</span>` : ""}</div>`,
     );
   }
@@ -639,6 +671,22 @@ function renderWorkoutCalendar() {
     `<span class="cal-count muted">${monthCount} training day${monthCount === 1 ? "" : "s"}</span>` +
     `</div>` +
     `<div class="cal-grid">${dow}${cells.join("")}</div>`;
+}
+
+/** Tapping a training day in the calendar: jump to that day in the list and open it. */
+function jumpToWorkoutDate(iso: string) {
+  if (els.workoutView.value !== "day") els.workoutView.value = "day"; // calendar is per-day
+  const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
+  if (idx < 0) return;
+  workoutsPage = Math.floor(idx / PAGE_SIZE);
+  renderWorkoutsPage();
+  const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
+  const grp = workoutGroups[idx];
+  if (!row || !grp) return;
+  insertDetail(row, 3, workoutGroupHtml(grp, idx)); // expand it like a tap would
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.add("wo-flash");
+  window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
 }
 
 function renderWorkoutsPage() {
@@ -955,9 +1003,11 @@ function renderTest() {
   const vol = setVolume(weight, reps);
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
-  const line = (title: string, formula: string, result: string) =>
-    `<div class="calc-row"><div class="calc-label">${title}</div>` +
-    `<div class="calc-formula">${formula}</div><div class="calc-result">${result}</div></div>`;
+  // One tight line per step: "Label — formula = result".
+  const line = (title: string, expr: string) =>
+    `<div class="calc-row"><span class="calc-label">${title}</span><span class="calc-expr">${expr}</span></div>`;
+  const res = (s: string) => `<span class="calc-result">${s}</span>`;
+  const eq = (formula: string, result: string | null) => (result === null ? formula : `${formula} = ${res(result)}`);
 
   // 1RM of the effective load for the selected formula, then peel the bodyweight
   // share back off so the answer is added (bar) weight — comparable to logged
@@ -969,40 +1019,34 @@ function renderTest() {
     formulaText = reps >= 37 ? "undefined at 37+ reps" : `${f2(effLoad)} × 36 / (37 − ${reps})`;
   } else if (calcTab === "nuzzo") {
     effective1RM = nuzzo1RM(effLoad, reps);
-    formulaText = reps === 1 ? "a single is the 1RM" : `${f2(effLoad)} ÷ ${f2(benchPctForReps(reps))}% (bench curve)`;
+    formulaText = reps === 1 ? "a single is the 1RM" : `${f2(effLoad)} ÷ ${f2(benchPctForReps(reps))}%`;
   } else {
     effective1RM = epley1RM(effLoad, reps);
     formulaText = `${f2(effLoad)} × (1 + ${reps}/30)`;
   }
   const addedWeight1RM = effective1RM === null ? null : effective1RM - bodyweightLoad;
-  // Per-bodyweight matches the leaderboard: added-weight 1RM ÷ bodyweight.
   const perBw = addedWeight1RM !== null && bw > 0 ? addedWeight1RM / bw : null;
+  const kg = (n: number | null) => (n === null ? null : `${f2(n)} kg`);
 
   const rows: string[] = [];
   if (isBodyweightLift) {
-    rows.push(line("Added weight (bar)", "what you loaded", `${f2(addedWeight)} kg`));
-    rows.push(line("Bodyweight load", `${coeff} × ${f2(bw)} bodyweight`, `${f2(bodyweightLoad)} kg`));
-    rows.push(line("Effective load", `added + bodyweight = ${f2(addedWeight)} + ${f2(bodyweightLoad)}`, `${f2(effLoad)} kg`));
-    rows.push(line("Effective 1RM", formulaText, effective1RM === null ? "—" : `${f2(effective1RM)} kg`));
-    rows.push(
-      line(
-        "Added-weight 1RM",
-        `effective 1RM − bodyweight load = ${effective1RM === null ? "—" : f2(effective1RM)} − ${f2(bodyweightLoad)}`,
-        addedWeight1RM === null ? "—" : `${f2(addedWeight1RM)} kg`,
-      ),
-    );
+    rows.push(line("BW load", eq(`${coeff} × ${f2(bw)}`, `${f2(bodyweightLoad)} kg`)));
+    rows.push(line("Effective", eq(`${f2(addedWeight)} + ${f2(bodyweightLoad)}`, `${f2(effLoad)} kg`)));
+    rows.push(line("Effective 1RM", eq(formulaText, kg(effective1RM))));
+    rows.push(line("Added 1RM", eq(`${effective1RM === null ? "—" : f2(effective1RM)} − ${f2(bodyweightLoad)}`, kg(addedWeight1RM))));
   } else {
-    rows.push(line("Estimated 1RM", formulaText, addedWeight1RM === null ? "—" : `${f2(addedWeight1RM)} kg`));
+    rows.push(line("Est. 1RM", eq(formulaText, kg(addedWeight1RM))));
   }
   if (calcTab === "nuzzo") {
-    rows.push(line("Bench: these reps ≈", `${reps} rep(s) on the bench curve`, `${f2(benchPctForReps(reps))}% of 1RM`));
+    rows.push(line("Bench %1RM", `${reps} reps ≈ ${res(`${f2(benchPctForReps(reps))}%`)}`));
   }
-  rows.push(line("Volume", `${f2(weight)} × ${reps}`, vol === null ? "—" : `${f2(vol)}`));
+  rows.push(line("Volume", eq(`${f2(weight)} × ${reps}`, vol === null ? null : f2(vol))));
   rows.push(
     line(
-      "Per bodyweight",
-      addedWeight1RM === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(addedWeight1RM)} ÷ ${f2(bw)}`,
-      perBw === null ? "—" : `${perBw.toFixed(2)}× BW`,
+      "Per BW",
+      addedWeight1RM === null || bw <= 0
+        ? "needs 1RM & BW"
+        : eq(`${f2(addedWeight1RM)} ÷ ${f2(bw)}`, perBw === null ? null : `${perBw.toFixed(2)} BW`),
     ),
   );
   els.calcOut.innerHTML = rows.join("");
@@ -1070,6 +1114,9 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
+  // Default to Marija for now, when present.
+  const marija = users.find((u) => u.username.toLowerCase().includes("marija") || u.user.toLowerCase().includes("marija"));
+  if (marija) els.athlete.value = marija.username;
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).
@@ -1130,8 +1177,10 @@ async function init() {
   els.athlete.addEventListener("change", renderAthlete);
   els.workoutCalendar.addEventListener("click", (e) => {
     const nav = (e.target as HTMLElement).closest<HTMLElement>(".cal-nav");
-    if (nav?.dataset.cal === "prev") shiftCalendar(-1);
-    else if (nav?.dataset.cal === "next") shiftCalendar(1);
+    if (nav?.dataset.cal === "prev") return shiftCalendar(-1);
+    if (nav?.dataset.cal === "next") return shiftCalendar(1);
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".cal-cell.trained");
+    if (cell?.dataset.date) jumpToWorkoutDate(cell.dataset.date);
   });
   els.progressExercise.addEventListener("change", renderProgress);
   els.summariseBtn.addEventListener("click", runSummary);
@@ -1145,6 +1194,7 @@ async function init() {
   });
 
   // Expand/collapse rows.
+  els.lbTable.addEventListener("click", onLeaderboardRowClick);
   els.athleteTable.addEventListener("click", onExerciseRowClick);
   // Back link in the exercise drill-in (lives in the title, outside the table).
   els.athleteTitle.addEventListener("click", (e) => {

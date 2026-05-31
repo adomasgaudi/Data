@@ -10,6 +10,8 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // HMR off: don't auto-reload the phone while editing. Refresh manually to see changes.
+    hmr: false,
   },
   test: {
     environment: "node",

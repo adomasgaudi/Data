@@ -105,6 +105,19 @@ body {
 .record-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .record-value { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
 .record-meta { font-size: 0.78rem; color: var(--muted); }
+/* Collapsible "AI summary (coming soon)" block at the bottom of the Athlete tab. */
+.ai-soon { margin-top: 1.5rem; }
+.ai-soon > summary {
+  cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 0.5rem;
+  color: var(--muted); font-size: 0.85rem; font-weight: 600; padding: 6px 0;
+}
+.ai-soon > summary::-webkit-details-marker { display: none; }
+.ai-soon > summary::before { content: "▸"; font-size: 0.7rem; }
+.ai-soon[open] > summary::before { content: "▾"; }
+.soon-badge {
+  font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px;
+}
 .summary-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .primary-btn {
   background: var(--accent); color: #fff; border: none; border-radius: 8px;
@@ -173,6 +186,11 @@ select.subtle-select:hover, select.subtle-select:focus {
   gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;
 }
 .lb-subtitle { margin: 0; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.lb-row { cursor: pointer; }
+.lb-detail { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; padding: 0.5rem 0.25rem; }
+.lb-detail-item { display: flex; flex-direction: column; gap: 1px; }
+.lb-detail-item .muted { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.lb-detail-item strong { font-size: 0.95rem; color: var(--accent); }
 .lb-filters { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 /* Calculator formula tabs (Epley / Brzycki / Nuzzo). */
 .calc-tabs { display: flex; gap: 4px; margin: 0 0 0.75rem; flex-wrap: wrap; }
@@ -200,7 +218,13 @@ select.subtle-select:hover, select.subtle-select:focus {
   border: 1px solid var(--line); border-radius: 8px; font-size: 0.85rem; color: var(--text);
 }
 .cal-cell.empty { border: none; }
-.cal-cell.trained { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.cal-cell.trained { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+.cal-cell.trained:hover { filter: brightness(1.1); }
+@keyframes wo-flash-kf {
+  0%, 100% { background: transparent; }
+  30% { background: var(--accent-soft); }
+}
+.wo-flash > td { animation: wo-flash-kf 1.5s ease; }
 .cal-sets {
   position: absolute; bottom: 2px; right: 4px; font-size: 0.6rem; font-weight: 600; opacity: 0.9;
 }
@@ -257,11 +281,12 @@ select.subtle-select:hover, select.subtle-select:focus {
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
 }
 .calc-inputs input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.calc-row { display: grid; grid-template-columns: 9rem 1fr auto; gap: 0.75rem; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.calc-row { padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 0.86rem; line-height: 1.45; }
 .calc-row:last-child { border-bottom: none; }
-.calc-label { font-weight: 600; font-size: 0.9rem; }
-.calc-formula { color: var(--muted); font-size: 0.85rem; }
-.calc-result { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.calc-label { font-weight: 700; color: var(--text); }
+.calc-label::after { content: " — "; color: var(--muted); font-weight: 400; }
+.calc-expr { color: var(--muted); }
+.calc-result { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .calc-explain p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.5; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
@@ -279,7 +304,6 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .link-btn:hover { filter: brightness(1.06); }
 .calc-explain code { background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; font-size: 0.85em; }
-@media (max-width: 640px) { .calc-row { grid-template-columns: 1fr auto; } .calc-formula { grid-column: 1 / -1; } }
 .go-chevron { color: var(--muted); margin-left: 0.4rem; }
 .back-btn {
   background: none; border: none; color: var(--accent); cursor: pointer;

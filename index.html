@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.8.0</span></h1>
+      <h1>Colosseum <span class="version">v0.8.1</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -77,14 +77,6 @@
         </section>
         <p id="athleteProfile" class="athlete-profile"></p>
 
-        <section class="panel summary-panel">
-          <div class="summary-head">
-            <button id="summariseBtn" class="primary-btn" type="button">✨ Summarise</button>
-            <span class="muted">AI overview of this athlete</span>
-          </div>
-          <p id="summaryOut" class="summary-out"></p>
-        </section>
-
         <nav class="subtabs" role="tablist">
           <button class="subtab is-active" data-subtab="workouts" role="tab">Workouts</button>
           <button class="subtab" data-subtab="exercises" role="tab">Exercises</button>
@@ -139,6 +131,17 @@
             <p class="muted" id="progressNote"></p>
           </section>
         </div>
+
+        <details class="ai-soon">
+          <summary>✨ AI summary <span class="soon-badge">coming soon</span></summary>
+          <section class="panel summary-panel">
+            <div class="summary-head">
+              <button id="summariseBtn" class="primary-btn" type="button">✨ Summarise</button>
+              <span class="muted">AI overview of this athlete</span>
+            </div>
+            <p id="summaryOut" class="summary-out"></p>
+          </section>
+        </details>
       </div>
 
       <div id="tab-test" class="tab-panel" hidden>
