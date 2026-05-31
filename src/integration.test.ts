@@ -22,7 +22,8 @@ describe("fixture integration", () => {
   });
 
   it("derives exercises and users", () => {
-    expect(distinctExercises(records)).toEqual(["Bench Press", "Deadlift", "Squat"]);
+    // Ordered by instance count, most popular first (Bench 9 > Squat 7 > Deadlift 6).
+    expect(distinctExercises(records)).toEqual(["Bench Press", "Squat", "Deadlift"]);
     expect(distinctUsers(records).length).toBeGreaterThanOrEqual(6);
   });
 

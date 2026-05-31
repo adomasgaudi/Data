@@ -155,8 +155,17 @@ describe("personalRecords", () => {
 });
 
 describe("distinct helpers", () => {
-  it("lists unique sorted exercises", () => {
-    expect(distinctExercises(FIXTURE)).toEqual(["Bench Press", "Squat"]);
+  it("lists unique exercises, most popular first", () => {
+    expect(distinctExercises(FIXTURE)).toEqual(["Bench Press", "Squat"]); // Bench 3 > Squat 2
+  });
+  it("orders by instance count, not alphabetically", () => {
+    const recs = [
+      rec({ exerciseName: "Zercher" }),
+      rec({ exerciseName: "Zercher" }),
+      rec({ exerciseName: "Ab Wheel" }),
+    ];
+    // "Ab Wheel" is first alphabetically but has fewer sets, so it ranks below.
+    expect(distinctExercises(recs)).toEqual(["Zercher", "Ab Wheel"]);
   });
   it("lists unique users with labels", () => {
     expect(distinctUsers(FIXTURE)).toEqual([
