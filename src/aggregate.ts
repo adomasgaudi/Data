@@ -5,7 +5,7 @@
  * is trivial for plain JS, so the only thing that matters is correctness.
  */
 import type { SetRecord } from "./domain";
-import { estimate1RM, type OneRepMaxFormula } from "./metrics";
+import { estimate1RM, MAX_1RM_REPS, type OneRepMaxFormula } from "./metrics";
 
 /** Generic "find the element maximizing a numeric key". Null-valued elements are
  * ignored. Returns null if no element yields a finite value. First max wins on
@@ -356,10 +356,15 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
  * a 1RM is never below the load lifted, addedWeight1RM is never below addedWeight.
  */
 export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
-  const effective1RM = estimate1RM(record.weight, record.reps, formula);
+  // Cap reps so a high-rep set can't extrapolate to an absurd 1RM (see MAX_1RM_REPS).
+  const reps = record.reps === null ? null : Math.min(record.reps, MAX_1RM_REPS);
+  const effective1RM = estimate1RM(record.weight, reps, formula);
   if (effective1RM === null) return null;
   const effectiveLoad = record.weight ?? 0;
-  const addedWeight = record.origWeight ?? effectiveLoad;
+  // origWeight is undefined only for bar-only lifts (no bodyweight folded in) → the
+  // whole load is "added". When it's explicitly null, it was a bodyweight-only set
+  // on a bodyweight lift, so the added weight is 0 and the body is the whole load.
+  const addedWeight = record.origWeight === undefined ? effectiveLoad : (record.origWeight ?? 0);
   const bodyweightLoad = effectiveLoad - addedWeight;
   return effective1RM - bodyweightLoad;
 }

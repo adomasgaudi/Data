@@ -101,6 +101,14 @@ export function nuzzoRepsAtWeight(weight: number | null, oneRepMax: number | nul
   return benchRepsAtPct((weight / oneRepMax) * 100);
 }
 
+/**
+ * Above this many reps, every rep→1RM formula is guesswork (Epley/Brzycki were
+ * fit on low-rep sets), so a 35-rep set would extrapolate to an absurd 1RM. For
+ * ranking we cap the reps fed to the formula here — the set still counts, but it
+ * can't masquerade as a huge max. Not applied to the teaching calculator.
+ */
+export const MAX_1RM_REPS = 15;
+
 export type OneRepMaxFormula = "epley" | "brzycki" | "nuzzo";
 
 export function estimate1RM(

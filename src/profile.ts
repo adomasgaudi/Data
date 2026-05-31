@@ -83,7 +83,6 @@ export const EXERCISE_GROUPS: ExerciseGroup[] = [
       "Overhead Squat": 0.55,
       "Goblet Squat": 0.5,
       "Box Squat": 0.95,
-      "Bodyweight Squat": 0.4,
     },
   },
   {
