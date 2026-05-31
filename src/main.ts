@@ -33,7 +33,14 @@ const $ = <T extends HTMLElement>(id: string): T => {
 
 const els = {
   status: $("status"),
-  exercise: $<HTMLSelectElement>("exercise"),
+  settingsBtn: $<HTMLButtonElement>("settingsBtn"),
+  settingsPanel: $("settingsPanel"),
+  exerciseBtn: $<HTMLButtonElement>("exerciseBtn"),
+  exerciseMenu: $<HTMLUListElement>("exerciseMenu"),
+  exerciseLabel: $("exerciseLabel"),
+  repsBtn: $<HTMLButtonElement>("repsBtn"),
+  repsMenu: $<HTMLUListElement>("repsMenu"),
+  repsLabel: $("repsLabel"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
   prSearch: $<HTMLInputElement>("prSearch"),
@@ -91,15 +98,19 @@ function renderHealth() {
 }
 
 function renderLeaderboard() {
-  const exercise = els.exercise.value;
+  const exercise = exerciseDropdown?.value() ?? "";
   const formula = currentFormula();
+  const range = REP_RANGES.find((r) => r.id === (repsDropdown?.value() ?? "all"));
   const filtered = filterRecords(data.records, {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
+    ...(range?.min !== undefined ? { minReps: range.min } : {}),
+    ...(range?.max !== undefined ? { maxReps: range.max } : {}),
   });
   const entries = leaderboard(filtered, exercise, formula);
 
-  els.lbTitle.textContent = `Leaderboard — ${exercise} (est. 1RM, ${formula})`;
+  const repsNote = range && range.id !== "all" ? ` · ${range.label}` : "";
+  els.lbTitle.textContent = `Leaderboard — ${exercise}${repsNote} (est. 1RM, ${formula})`;
   renderLeaderboardTable(entries);
   renderLeaderboardChart(entries);
 }
@@ -406,6 +417,95 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+// ---- Reusable custom ("physical") dropdown ----
+interface DropdownItem {
+  value: string;
+  label: string;
+}
+interface Dropdown {
+  value: () => string;
+  setValue: (v: string) => void;
+  setItems: (items: DropdownItem[]) => void;
+}
+
+function createDropdown(
+  btn: HTMLButtonElement,
+  menu: HTMLUListElement,
+  label: HTMLElement,
+  onChange: (value: string) => void,
+): Dropdown {
+  let value = "";
+  let items: DropdownItem[] = [];
+
+  const render = () => {
+    menu.innerHTML = items
+      .map(
+        (it) =>
+          `<li role="option" class="dropdown-item${it.value === value ? " is-selected" : ""}" ` +
+          `data-value="${escapeHtml(it.value)}">${escapeHtml(it.label)}</li>`,
+      )
+      .join("");
+  };
+  const open = () => {
+    menu.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    (menu.querySelector(".is-selected") as HTMLElement | null)?.scrollIntoView({ block: "nearest" });
+  };
+  const close = () => {
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+  };
+  const setValue = (v: string) => {
+    value = v;
+    label.textContent = items.find((it) => it.value === v)?.label ?? v ?? "—";
+    render();
+  };
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.hidden) open();
+    else close();
+  });
+  menu.addEventListener("click", (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLElement>(".dropdown-item");
+    if (li?.dataset.value === undefined) return;
+    setValue(li.dataset.value);
+    close();
+    onChange(li.dataset.value);
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== btn) close();
+  });
+
+  return {
+    value: () => value,
+    setValue,
+    setItems: (its) => {
+      items = its;
+      render();
+    },
+  };
+}
+
+let exerciseDropdown: Dropdown | undefined;
+let repsDropdown: Dropdown | undefined;
+
+/** Rep-range presets for the leaderboard filter (overlapping by design). */
+const REP_RANGES: { id: string; label: string; min?: number; max?: number }[] = [
+  { id: "all", label: "All reps" },
+  { id: "1-3", label: "1–3 reps", min: 1, max: 3 },
+  { id: "3-6", label: "3–6 reps", min: 3, max: 6 },
+  { id: "5-10", label: "5–10 reps", min: 5, max: 10 },
+  { id: "8-15", label: "8–15 reps", min: 8, max: 15 },
+  { id: "15-30", label: "15–30 reps", min: 15, max: 30 },
+  { id: "30+", label: "30+ reps", min: 30 },
+];
+
+function setSettingsOpen(open: boolean) {
+  els.settingsPanel.hidden = !open;
+  els.settingsBtn.setAttribute("aria-expanded", String(open));
+}
+
 async function init() {
   try {
     data = await loadData();
@@ -414,9 +514,16 @@ async function init() {
     return;
   }
 
-  // Populate exercise dropdown (sorted, most-popular default chosen as the first).
+  // Build the custom exercise + reps dropdowns.
   const exercises = distinctExercises(data.records);
-  els.exercise.innerHTML = exercises.map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join("");
+  exerciseDropdown = createDropdown(els.exerciseBtn, els.exerciseMenu, els.exerciseLabel, renderLeaderboard);
+  exerciseDropdown.setItems(exercises.map((e) => ({ value: e, label: e })));
+  exerciseDropdown.setValue(exercises[0] ?? "");
+
+  repsDropdown = createDropdown(els.repsBtn, els.repsMenu, els.repsLabel, renderLeaderboard);
+  repsDropdown.setItems(REP_RANGES.map((r) => ({ value: r.id, label: r.label })));
+  repsDropdown.setValue("all");
+
   els.formula.value = DEFAULT_FORMULA;
 
   // Populate athlete dropdown (alphabetical by display name).
@@ -430,7 +537,17 @@ async function init() {
   renderAll();
   setupTabs();
 
-  els.exercise.addEventListener("change", renderLeaderboard);
+  // Settings popover (holds the 1RM formula).
+  els.settingsBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setSettingsOpen(els.settingsPanel.hidden);
+  });
+  document.addEventListener("click", (e) => {
+    const t = e.target as Node;
+    if (!els.settingsPanel.hidden && !els.settingsPanel.contains(t) && t !== els.settingsBtn)
+      setSettingsOpen(false);
+  });
+
   els.formula.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
   els.prSearch.addEventListener("input", renderPersonalRecords);

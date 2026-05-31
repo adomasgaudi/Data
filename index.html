@@ -8,8 +8,19 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.1.1</span></h1>
-      <div id="status" class="status">Loading…</div>
+      <h1>Colosseum <span class="version">v0.1.2</span></h1>
+      <div class="topbar-right">
+        <div id="status" class="status">Loading…</div>
+        <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
+        <div id="settingsPanel" class="settings-panel" hidden>
+          <label>1RM formula
+            <select id="formula">
+              <option value="epley">Epley</option>
+              <option value="brzycki">Brzycki</option>
+            </select>
+          </label>
+        </div>
+      </div>
     </header>
 
     <nav class="tabs" role="tablist">
@@ -21,13 +32,20 @@
       <div id="tab-leaderboards" class="tab-panel">
         <section class="controls">
           <label>Exercise
-            <select id="exercise"></select>
+            <div class="dropdown" id="exerciseDropdown">
+              <button type="button" class="dropdown-toggle" id="exerciseBtn" aria-haspopup="listbox" aria-expanded="false">
+                <span id="exerciseLabel">—</span><span class="dropdown-caret">▾</span>
+              </button>
+              <ul class="dropdown-menu" id="exerciseMenu" role="listbox" hidden></ul>
+            </div>
           </label>
-          <label>1RM formula
-            <select id="formula">
-              <option value="epley">Epley</option>
-              <option value="brzycki">Brzycki</option>
-            </select>
+          <label>Reps
+            <div class="dropdown" id="repsDropdown">
+              <button type="button" class="dropdown-toggle" id="repsBtn" aria-haspopup="listbox" aria-expanded="false">
+                <span id="repsLabel">All reps</span><span class="dropdown-caret">▾</span>
+              </button>
+              <ul class="dropdown-menu" id="repsMenu" role="listbox" hidden></ul>
+            </div>
           </label>
           <label class="check">
             <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets

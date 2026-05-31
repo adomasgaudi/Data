@@ -30,6 +30,26 @@ body {
 .topbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.3px; }
 .topbar h1 .version { font-size: 0.7rem; font-weight: 500; color: var(--gold); letter-spacing: 0; vertical-align: middle; margin-left: 0.4rem; }
 .status { color: var(--muted); font-size: 0.85rem; }
+.topbar-right { position: relative; display: flex; align-items: center; gap: 0.75rem; }
+.icon-btn {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  font-size: 1rem; line-height: 1; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 8px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+.settings-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0.9rem 1rem; box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12);
+  min-width: 180px;
+}
+.settings-panel label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8rem; color: var(--muted); }
+.settings-panel select {
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 0.95rem;
+}
+.settings-panel select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .tabs {
   display: flex; gap: 0.25rem;
   padding: 0 1.5rem; border-bottom: 1px solid var(--line);
@@ -75,6 +95,28 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 }
 .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 .controls label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+/* Custom ("physical") dropdown — replaces the native <select> for exercises. */
+.dropdown { position: relative; }
+.dropdown-toggle {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  min-width: 200px; max-width: 100%;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 0.95rem; cursor: pointer;
+  text-align: left;
+}
+.dropdown-toggle:hover { border-color: var(--accent); }
+.dropdown-toggle[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dropdown-caret { color: var(--muted); font-size: 0.7rem; }
+.dropdown-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
+  margin: 0; padding: 4px; list-style: none; min-width: 100%;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12);
+  max-height: 320px; overflow-y: auto;
+}
+.dropdown-item { padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+.dropdown-item:hover { background: var(--accent-soft); }
+.dropdown-item.is-selected { color: var(--accent); font-weight: 600; }
 /* Compact, top-aligned single control (e.g. the athlete picker). */
 .controls.compact { margin-bottom: 1rem; }
 .controls.compact label { flex: 0 0 auto; }
@@ -156,6 +198,10 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
   /* Athlete picker stays small and top-aligned, not full width. */
   .controls.compact label { flex: 0 0 auto; }
   .controls.compact select { width: auto; padding: 6px 10px; }
+
+  /* Custom dropdown spans the control width on phones. */
+  .dropdown { width: 100%; }
+  .dropdown-toggle { width: 100%; min-width: 0; font-size: 16px; }
 
   .data-table th, .data-table td { padding: 6px 8px; }
 }
