@@ -25,6 +25,17 @@ body {
 .topbar h1 { margin: 0; font-size: 1.25rem; letter-spacing: 0.5px; }
 .topbar h1 .version { font-size: 0.7rem; font-weight: 400; opacity: 0.6; letter-spacing: 0; vertical-align: middle; margin-left: 0.4rem; }
 .status { color: var(--muted); font-size: 0.85rem; }
+.tabs {
+  display: flex; gap: 0.25rem;
+  padding: 0 1.5rem; border-bottom: 1px solid var(--line);
+}
+.tab {
+  background: none; border: none; color: var(--muted);
+  font: inherit; font-size: 0.9rem; cursor: pointer;
+  padding: 0.7rem 1rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab:hover { color: var(--text); }
+.tab.is-active { color: var(--text); border-bottom-color: var(--accent); }
 .status .badge {
   background: var(--accent); color: #04122b; border-radius: 99px;
   padding: 1px 8px; font-weight: 600; margin-left: 6px;
@@ -67,6 +78,7 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 @media (max-width: 640px) {
   body { font-size: 14px; }
   .topbar { flex-wrap: wrap; gap: 0.5rem; padding: 0.85rem 1rem; }
+  .tabs { padding: 0 1rem; }
   main { padding: 1rem; }
   .panel { padding: 1rem; border-radius: 10px; }
   .chart-wrap { height: 220px; }

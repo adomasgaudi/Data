@@ -12,40 +12,60 @@
       <div id="status" class="status">Loading…</div>
     </header>
 
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="leaderboards" role="tab">Leaderboards</button>
+      <button class="tab" data-tab="athlete" role="tab">Athlete</button>
+    </nav>
+
     <main>
-      <section class="controls">
-        <label>Exercise
-          <select id="exercise"></select>
-        </label>
-        <label>1RM formula
-          <select id="formula">
-            <option value="epley">Epley</option>
-            <option value="brzycki">Brzycki</option>
-          </select>
-        </label>
-        <label class="check">
-          <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
-        </label>
-        <label>PR search
-          <input type="search" id="prSearch" placeholder="filter by user or exercise…" />
-        </label>
-      </section>
+      <div id="tab-leaderboards" class="tab-panel">
+        <section class="controls">
+          <label>Exercise
+            <select id="exercise"></select>
+          </label>
+          <label>1RM formula
+            <select id="formula">
+              <option value="epley">Epley</option>
+              <option value="brzycki">Brzycki</option>
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
+          </label>
+          <label>PR search
+            <input type="search" id="prSearch" placeholder="filter by user or exercise…" />
+          </label>
+        </section>
 
-      <section class="panel">
-        <h2 id="lbTitle">Leaderboard</h2>
-        <div class="chart-wrap"><canvas id="lbChart"></canvas></div>
-        <table id="lbTable" class="data-table"></table>
-      </section>
+        <section class="panel">
+          <h2 id="lbTitle">Leaderboard</h2>
+          <div class="chart-wrap"><canvas id="lbChart"></canvas></div>
+          <table id="lbTable" class="data-table"></table>
+        </section>
 
-      <section class="panel">
-        <h2>Personal records <span class="muted" id="prCount"></span></h2>
-        <table id="prTable" class="data-table"></table>
-      </section>
+        <section class="panel">
+          <h2>Personal records <span class="muted" id="prCount"></span></h2>
+          <table id="prTable" class="data-table"></table>
+        </section>
 
-      <section class="panel" id="healthPanel" hidden>
-        <h2>Data health</h2>
-        <div id="health"></div>
-      </section>
+        <section class="panel" id="healthPanel" hidden>
+          <h2>Data health</h2>
+          <div id="health"></div>
+        </section>
+      </div>
+
+      <div id="tab-athlete" class="tab-panel" hidden>
+        <section class="controls">
+          <label>Athlete
+            <select id="athlete"></select>
+          </label>
+        </section>
+
+        <section class="panel">
+          <h2 id="athleteTitle">Exercises</h2>
+          <table id="athleteTable" class="data-table"></table>
+        </section>
+      </div>
     </main>
 
     <script type="module" src="/src/main.ts"></script>

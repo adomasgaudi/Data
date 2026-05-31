@@ -8,6 +8,7 @@ import { loadData, type LoadedData } from "./dataSource";
 import {
   distinctExercises,
   distinctUsers,
+  exerciseCountsForUser,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -37,6 +38,9 @@ const els = {
   prCount: $("prCount"),
   healthPanel: $("healthPanel"),
   health: $("health"),
+  athlete: $<HTMLSelectElement>("athlete"),
+  athleteTitle: $("athleteTitle"),
+  athleteTable: $<HTMLTableElement>("athleteTable"),
 };
 
 let data: LoadedData;
@@ -150,9 +154,32 @@ function renderPersonalRecords() {
     head + `<tbody>${rows || `<tr><td colspan="5" class="muted">No matches.</td></tr>`}</tbody>`;
 }
 
+function renderAthlete() {
+  const username = els.athlete.value;
+  const label = els.athlete.options[els.athlete.selectedIndex]?.text ?? username;
+  const counts = exerciseCountsForUser(data.records, username);
+  const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
+
+  els.athleteTitle.innerHTML =
+    `${escapeHtml(label)} — exercises by sets ` +
+    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets)</span>`;
+
+  const head = `<thead><tr><th class="rank">#</th><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
+  const rows = counts
+    .map(
+      (c, i) =>
+        `<tr><td class="rank ${i === 0 ? "rank-1" : ""}">${i + 1}</td>` +
+        `<td>${escapeHtml(c.exerciseName)}</td><td class="num">${c.count.toLocaleString()}</td></tr>`,
+    )
+    .join("");
+  els.athleteTable.innerHTML =
+    head + `<tbody>${rows || `<tr><td colspan="3" class="muted">No exercises for this athlete.</td></tr>`}</tbody>`;
+}
+
 function renderAll() {
   renderLeaderboard();
   renderPersonalRecords();
+  renderAthlete();
 }
 
 function escapeHtml(s: string): string {
@@ -172,14 +199,39 @@ async function init() {
   els.exercise.innerHTML = exercises.map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join("");
   els.formula.value = DEFAULT_FORMULA;
 
+  // Populate athlete dropdown (alphabetical by display name).
+  const users = distinctUsers(data.records);
+  els.athlete.innerHTML = users
+    .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
+    .join("");
+
   renderStatus();
   renderHealth();
   renderAll();
+  setupTabs();
 
   els.exercise.addEventListener("change", renderLeaderboard);
   els.formula.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
   els.prSearch.addEventListener("input", renderPersonalRecords);
+  els.athlete.addEventListener("change", renderAthlete);
+}
+
+/** Toggle which tab panel is visible when a tab button is clicked. */
+function setupTabs() {
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.tab;
+      for (const t of tabs) t.classList.toggle("is-active", t === tab);
+      for (const t of tabs) {
+        const panel = document.getElementById(`tab-${t.dataset.tab}`);
+        if (panel) panel.hidden = t !== tab;
+      }
+      // Chart.js needs a resize nudge if it was first drawn while hidden.
+      if (target === "leaderboards") lbChart?.resize();
+    });
+  }
 }
 
 void init();

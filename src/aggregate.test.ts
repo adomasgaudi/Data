@@ -10,6 +10,7 @@ import {
   bestSet,
   distinctExercises,
   distinctUsers,
+  exerciseCountsForUser,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -171,6 +172,13 @@ describe("distinct helpers", () => {
     expect(distinctUsers(FIXTURE)).toEqual([
       { username: "ada", user: "Ada" },
       { username: "bob", user: "Bob" },
+    ]);
+  });
+  it("counts one athlete's exercises by sets, most-performed first", () => {
+    // Ada: Bench Press x2, Squat x1; Bob's rows must be ignored.
+    expect(exerciseCountsForUser(FIXTURE, "ada")).toEqual([
+      { exerciseName: "Bench Press", count: 2 },
+      { exerciseName: "Squat", count: 1 },
     ]);
   });
 });
