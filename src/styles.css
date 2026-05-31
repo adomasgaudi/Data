@@ -159,6 +159,7 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .data-table th { color: var(--muted); font-weight: 600; cursor: default; }
 .data-table tbody tr:hover { background: var(--accent-soft); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
 .wo-date { white-space: nowrap; }
 .rest-row { color: var(--muted); }
 .wo-controls { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }

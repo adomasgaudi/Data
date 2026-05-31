@@ -88,6 +88,10 @@ const PAGE_SIZE = 20;
 
 const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString();
 
+/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header. */
+const wr = (weight: number | null, reps: number | null): string =>
+  weight === null ? "—" : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
+
 /** "2026-05-02" -> "5-02" (month without leading zero, day kept 2-digit). */
 const shortDate = (iso: string): string => {
   const [, m, d] = iso.split("-");
@@ -200,7 +204,7 @@ function renderLeaderboard() {
         const bw = ATHLETES[e.username]?.weight;
         if (!bw) return null; // can't compute a ratio without a bodyweight on file
         const ratio = e.e1rm / bw;
-        return { user: e.user, value: ratio, valueText: `${ratio.toFixed(2)}× BW`, best: `${fmt(e.weight)}×${e.reps}`, date: e.date };
+        return { user: e.user, value: ratio, valueText: `${ratio.toFixed(2)}× BW`, best: wr(e.weight, e.reps), date: e.date };
       })
       .filter((r): r is LbRow => r !== null)
       .sort((a, b) => b.value - a.value);
@@ -208,8 +212,8 @@ function renderLeaderboard() {
     rows = entries.map((e) => ({
       user: e.user,
       value: e.e1rm,
-      valueText: `${fmt(e.e1rm)} kg`,
-      best: `${fmt(e.weight)}×${e.reps}`,
+      valueText: fmt(e.e1rm),
+      best: wr(e.weight, e.reps),
       date: e.date,
     }));
   }
@@ -222,8 +226,8 @@ function renderLeaderboard() {
 }
 
 function renderLeaderboardTable(rows: LbRow[], rel: boolean) {
-  const valueHead = rel ? "Per BW" : "Est. 1RM";
-  const head = `<thead><tr><th>Athlete</th><th class="num">${valueHead}</th><th class="num">Best set</th><th class="num">Date</th></tr></thead>`;
+  const valueHead = rel ? "Per BW" : "Est. 1RM (kg)";
+  const head = `<thead><tr><th>Athlete</th><th class="num">${valueHead}</th><th class="num">Best set (kg)</th><th class="num">Date</th></tr></thead>`;
   const body = rows
     .map(
       (r, i) =>
@@ -277,13 +281,13 @@ function renderPersonalRecords() {
   if (q) prs = prs.filter((p) => p.user.toLowerCase().includes(q));
 
   els.prCount.textContent = `— ${exercise} (${prs.length})`;
-  const head = `<thead><tr><th>Athlete</th><th class="num">Top weight</th><th class="num">Best 1RM</th><th class="num">Date</th></tr></thead>`;
+  const head = `<thead><tr><th>Athlete</th><th class="num">Top weight (kg)</th><th class="num">Best 1RM (kg)</th><th class="num">Date</th></tr></thead>`;
   const rows = prs
     .map(
       (p: PersonalRecord) =>
         `<tr><td>${escapeHtml(p.user)}</td>` +
-        `<td class="num">${fmt(p.topWeight.weight)}×${p.topWeight.reps}</td>` +
-        `<td class="num">${fmt(p.bestE1rm.e1rm)} kg</td><td class="num">${p.bestE1rm.date}</td></tr>`,
+        `<td class="num">${wr(p.topWeight.weight, p.topWeight.reps)}</td>` +
+        `<td class="num">${fmt(p.bestE1rm.e1rm)}</td><td class="num">${p.bestE1rm.date}</td></tr>`,
     )
     .join("");
   els.prTable.innerHTML =
@@ -336,15 +340,15 @@ function renderRecordsPage() {
 
   els.recordsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — personal records <span class="muted">(${recs.length} exercises)</span>`;
-  const head = `<thead><tr><th>Exercise</th><th class="num">Top weight</th><th class="num">Best 1RM</th><th class="num">Date</th></tr></thead>`;
+  const head = `<thead><tr><th>Exercise</th><th class="num">Top weight (kg)</th><th class="num">Best 1RM (kg)</th><th class="num">Date</th></tr></thead>`;
   const start = recordsPage * PAGE_SIZE;
   const rows = recs
     .slice(start, start + PAGE_SIZE)
     .map(
       (p) =>
         `<tr><td>${escapeHtml(p.exerciseName)}</td>` +
-        `<td class="num">${fmt(p.topWeight.weight)}×${p.topWeight.reps}</td>` +
-        `<td class="num">${fmt(p.bestE1rm.e1rm)} kg</td><td class="num wo-date">${shortDate(p.bestE1rm.date)}</td></tr>`,
+        `<td class="num">${wr(p.topWeight.weight, p.topWeight.reps)}</td>` +
+        `<td class="num">${fmt(p.bestE1rm.e1rm)}</td><td class="num wo-date">${shortDate(p.bestE1rm.date)}</td></tr>`,
     )
     .join("");
   els.recordsTable.innerHTML =
@@ -608,8 +612,8 @@ function setsTableHtml(sets: readonly SetRecord[], opts: { showExercise?: boolea
   const dateHead = opts.showDate ? "<th>Date</th>" : "";
   const exHead = opts.showExercise ? "<th>Exercise</th>" : "";
   const head =
-    `<thead><tr>${dateHead}${exHead}<th class="num">Weight</th>` +
-    `<th class="num">Reps</th><th class="num">Est. 1RM</th><th class="num">Volume</th><th>Notes</th></tr></thead>`;
+    `<thead><tr>${dateHead}${exHead}<th class="num">Weight (kg)</th>` +
+    `<th class="num">Est. 1RM (kg)</th><th class="num">Volume</th><th>Notes</th></tr></thead>`;
   const rows = sets
     .map((s) => {
       const e1rm = estimate1RM(s.weight, s.reps, formula);
@@ -619,9 +623,8 @@ function setsTableHtml(sets: readonly SetRecord[], opts: { showExercise?: boolea
       const exCell = opts.showExercise ? `<td>${escapeHtml(s.exerciseName)}</td>` : "";
       return (
         `<tr>${dateCell}${exCell}` +
-        `<td class="num">${s.weight === null ? "—" : fmt(s.weight) + " kg"}</td>` +
-        `<td class="num">${s.reps === null ? "—" : s.reps}</td>` +
-        `<td class="num">${e1rm === null ? "—" : fmt(e1rm) + " kg"}</td>` +
+        `<td class="num">${wr(s.weight, s.reps)}</td>` +
+        `<td class="num">${e1rm === null ? "—" : fmt(e1rm)}</td>` +
         `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
         `<td class="muted">${escapeHtml(note)}</td></tr>`
       );
