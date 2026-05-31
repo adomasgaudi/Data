@@ -66,6 +66,9 @@ const els = {
   bwTitle: $("bwTitle"),
   bwTable: $<HTMLTableElement>("bwTable"),
   bwPager: $("bwPager"),
+  recordsTitle: $("recordsTitle"),
+  recordsTable: $<HTMLTableElement>("recordsTable"),
+  recordsPager: $("recordsPager"),
 };
 
 let data: LoadedData;
@@ -192,24 +195,27 @@ function renderLeaderboardChart(entries: LeaderboardEntry[]) {
 
 function renderPersonalRecords() {
   const formula = currentFormula();
+  const exercise = exerciseDropdown?.value() ?? "";
   const filtered = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
-  let prs = personalRecords(filtered, formula);
+  // Personal records for the currently selected exercise only (one row per athlete).
+  let prs = personalRecords(filtered, formula).filter((p) => p.exerciseName === exercise);
+  prs.sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
 
   const q = els.prSearch.value.trim().toLowerCase();
-  if (q) prs = prs.filter((p) => p.user.toLowerCase().includes(q) || p.exerciseName.toLowerCase().includes(q));
+  if (q) prs = prs.filter((p) => p.user.toLowerCase().includes(q));
 
-  els.prCount.textContent = `(${prs.length})`;
-  const head = `<thead><tr><th>Athlete</th><th>Exercise</th><th class="num">Top weight</th><th class="num">Best 1RM</th><th class="num">Date</th></tr></thead>`;
+  els.prCount.textContent = `— ${exercise} (${prs.length})`;
+  const head = `<thead><tr><th>Athlete</th><th class="num">Top weight</th><th class="num">Best 1RM</th><th class="num">Date</th></tr></thead>`;
   const rows = prs
     .map(
       (p: PersonalRecord) =>
-        `<tr><td>${escapeHtml(p.user)}</td><td>${escapeHtml(p.exerciseName)}</td>` +
+        `<tr><td>${escapeHtml(p.user)}</td>` +
         `<td class="num">${fmt(p.topWeight.weight)}×${p.topWeight.reps}</td>` +
         `<td class="num">${fmt(p.bestE1rm.e1rm)} kg</td><td class="num">${p.bestE1rm.date}</td></tr>`,
     )
     .join("");
   els.prTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="5" class="muted">No matches.</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="4" class="muted">No records for this exercise.</td></tr>`}</tbody>`;
 }
 
 // State for the currently shown athlete. The displayed-order arrays let the
@@ -218,19 +224,48 @@ let athleteExercises: string[] = [];
 let athleteWorkouts: WorkoutDay[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
+let recordsPage = 0;
 let bwPage = 0;
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
   exercisesPage = 0;
   workoutsPage = 0;
+  recordsPage = 0;
   athleteExercises = exerciseCountsForUser(data.records, els.athlete.value).map((c) => c.exerciseName);
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   populateProgressExercise();
   renderExercisesPage();
   renderWorkoutsPage();
+  renderRecordsPage();
   renderProgress();
+}
+
+// ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
+function renderRecordsPage() {
+  const username = els.athlete.value;
+  const recs = personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
+    currentFormula(),
+  ).sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
+
+  els.recordsTitle.innerHTML =
+    `${escapeHtml(athleteLabel())} — personal records <span class="muted">(${recs.length} exercises)</span>`;
+  const head = `<thead><tr><th>Exercise</th><th class="num">Top weight</th><th class="num">Best 1RM</th><th class="num">Date</th></tr></thead>`;
+  const start = recordsPage * PAGE_SIZE;
+  const rows = recs
+    .slice(start, start + PAGE_SIZE)
+    .map(
+      (p) =>
+        `<tr><td>${escapeHtml(p.exerciseName)}</td>` +
+        `<td class="num">${fmt(p.topWeight.weight)}×${p.topWeight.reps}</td>` +
+        `<td class="num">${fmt(p.bestE1rm.e1rm)} kg</td><td class="num wo-date">${shortDate(p.bestE1rm.date)}</td></tr>`,
+    )
+    .join("");
+  els.recordsTable.innerHTML =
+    head + `<tbody>${rows || `<tr><td colspan="4" class="muted">No records for this athlete.</td></tr>`}</tbody>`;
+  els.recordsPager.innerHTML = pagerHtml(recordsPage, recs.length);
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
@@ -632,7 +667,10 @@ async function init() {
 
   // Build the custom exercise + reps dropdowns.
   const exercises = distinctExercises(data.records);
-  exerciseDropdown = createDropdown(els.exerciseBtn, els.exerciseMenu, els.exerciseLabel, renderLeaderboard);
+  exerciseDropdown = createDropdown(els.exerciseBtn, els.exerciseMenu, els.exerciseLabel, () => {
+    renderLeaderboard();
+    renderPersonalRecords(); // PRs are scoped to the selected exercise
+  });
   exerciseDropdown.setItems(exercises.map((e) => ({ value: e, label: e })));
   exerciseDropdown.setValue(exercises[0] ?? "");
 
@@ -696,6 +734,13 @@ async function init() {
     if (p !== null) {
       bwPage = p;
       renderBwParts();
+    }
+  });
+  els.recordsPager.addEventListener("click", (e) => {
+    const p = pageFromClick(e);
+    if (p !== null) {
+      recordsPage = p;
+      renderRecordsPage();
     }
   });
 

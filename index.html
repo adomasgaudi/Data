@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.3.1</span></h1>
+      <h1>Colosseum <span class="version">v0.3.2</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -58,7 +58,7 @@
             <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
           </label>
           <label>PR search
-            <input type="search" id="prSearch" placeholder="filter by user or exercise…" />
+            <input type="search" id="prSearch" placeholder="filter by athlete…" />
           </label>
         </section>
 
@@ -97,6 +97,7 @@
         <nav class="subtabs" role="tablist">
           <button class="subtab is-active" data-subtab="workouts" role="tab">Workouts</button>
           <button class="subtab" data-subtab="exercises" role="tab">Exercises</button>
+          <button class="subtab" data-subtab="records" role="tab">Records</button>
           <button class="subtab" data-subtab="progress" role="tab">Progress</button>
         </nav>
 
@@ -113,6 +114,14 @@
             <h2 id="athleteTitle">Exercises</h2>
             <table id="athleteTable" class="data-table"></table>
             <div id="exercisesPager" class="pager"></div>
+          </section>
+        </div>
+
+        <div id="sub-records" class="subtab-panel" hidden>
+          <section class="panel">
+            <h2 id="recordsTitle">Personal records</h2>
+            <table id="recordsTable" class="data-table"></table>
+            <div id="recordsPager" class="pager"></div>
           </section>
         </div>
 
