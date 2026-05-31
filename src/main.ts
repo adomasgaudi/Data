@@ -315,6 +315,10 @@ function renderLeaderboardChart(
   const canvas = $<HTMLCanvasElement>("lbChart");
   lbChart?.destroy();
   const round = (n: number) => Math.round(n * 100) / 100;
+  // Give each athlete a fixed slice of height so bars stay thick and the y-axis
+  // names never overlap, however many athletes there are.
+  const wrap = canvas.parentElement;
+  if (wrap) wrap.style.height = `${Math.max(200, rows.length * 46 + 56)}px`;
   lbChart = new Chart(canvas, {
     type: "bar",
     data: {
@@ -325,6 +329,9 @@ function renderLeaderboardChart(
         backgroundColor: BAND_COLORS[i % BAND_COLORS.length],
         borderRadius: 3,
         stack: "reps",
+        // Thick bars: each athlete category is mostly filled by its (stacked) bar.
+        categoryPercentage: 0.82,
+        barPercentage: 0.96,
       })),
     },
     options: {
