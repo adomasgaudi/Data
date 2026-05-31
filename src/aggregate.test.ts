@@ -99,6 +99,14 @@ describe("addedWeight1RM", () => {
     const at15 = rec({ weight: 100, reps: 15 });
     expect(addedWeight1RM(capped, "epley")).toBeCloseTo(addedWeight1RM(at15, "epley")!, 6);
   });
+
+  it("excludes isometric holds (seconds-as-reps) from the 1RM", () => {
+    expect(addedWeight1RM(rec({ exerciseName: "Deadlift hold", weight: 120, reps: 16 }))).toBeNull();
+    expect(addedWeight1RM(rec({ exerciseName: "Pull-up hold", weight: 40, reps: 10 }))).toBeNull();
+    expect(addedWeight1RM(rec({ exerciseName: "Bent over row hold", weight: 110, reps: 8 }))).toBeNull();
+    // a normal deadlift still estimates fine
+    expect(addedWeight1RM(rec({ exerciseName: "Deadlift", weight: 120, reps: 5 }))!).toBeGreaterThan(120);
+  });
 });
 
 describe("athleteSummary", () => {

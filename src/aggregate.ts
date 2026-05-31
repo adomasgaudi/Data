@@ -6,6 +6,7 @@
  */
 import type { SetRecord } from "./domain";
 import { estimate1RM, MAX_1RM_REPS, type OneRepMaxFormula } from "./metrics";
+import { isIsometric } from "./profile";
 
 /** Generic "find the element maximizing a numeric key". Null-valued elements are
  * ignored. Returns null if no element yields a finite value. First max wins on
@@ -356,6 +357,7 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
  * a 1RM is never below the load lifted, addedWeight1RM is never below addedWeight.
  */
 export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
+  if (isIsometric(record.exerciseName)) return null; // holds log seconds, not reps → no 1RM
   // Cap reps so a high-rep set can't extrapolate to an absurd 1RM (see MAX_1RM_REPS).
   const reps = record.reps === null ? null : Math.min(record.reps, MAX_1RM_REPS);
   const effective1RM = estimate1RM(record.weight, reps, formula);

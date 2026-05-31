@@ -159,6 +159,23 @@ export function groupOf(exerciseName: string): { group: string; scale: number } 
   return null;
 }
 
+/**
+ * Isometric / timed exercises where the "reps" column is really seconds (holds,
+ * hangs, supports, planks, L-sits). A rep-based 1RM is meaningless for these, so
+ * they're kept out of leaderboards/PRs/progress — a `Deadlift hold 120 kg "16"`
+ * must not become a phantom 190 kg deadlift.
+ */
+export function isIsometric(exerciseName: string): boolean {
+  const n = exerciseName.toLowerCase();
+  return (
+    /\b(hold|hang|support)\b/.test(n) ||
+    n.includes("plank") ||
+    n.includes("l-sit") ||
+    n.includes("lsit") ||
+    n.includes("l sit")
+  );
+}
+
 /** The training categories shown in the "what they train" breakdown, in order. */
 export type TrainingCategory =
   | "Legs"
