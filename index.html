@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.2.0.2</span></h1>
+      <h1>Colosseum <span class="version">v0.3</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -83,6 +83,14 @@
           <label>Athlete
             <select id="athlete"></select>
           </label>
+        </section>
+
+        <section class="panel summary-panel">
+          <div class="summary-head">
+            <button id="summariseBtn" class="primary-btn" type="button">✨ Summarise</button>
+            <span class="muted">AI overview of this athlete</span>
+          </div>
+          <p id="summaryOut" class="summary-out"></p>
         </section>
 
         <nav class="subtabs" role="tablist">

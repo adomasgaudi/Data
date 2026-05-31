@@ -61,6 +61,8 @@ const els = {
   workoutsPager: $("workoutsPager"),
   progressExercise: $<HTMLSelectElement>("progressExercise"),
   progressNote: $("progressNote"),
+  summariseBtn: $<HTMLButtonElement>("summariseBtn"),
+  summaryOut: $("summaryOut"),
 };
 
 let data: LoadedData;
@@ -220,10 +222,60 @@ function renderAthlete() {
   workoutsPage = 0;
   athleteExercises = exerciseCountsForUser(data.records, els.athlete.value).map((c) => c.exerciseName);
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
+  els.summaryOut.textContent = ""; // clear last athlete's AI summary
   populateProgressExercise();
   renderExercisesPage();
   renderWorkoutsPage();
   renderProgress();
+}
+
+/** Compact, data-only block about the selected athlete for the AI to summarise. */
+function athleteContext(): string {
+  const username = els.athlete.value;
+  const p = ATHLETES[username];
+  const counts = exerciseCountsForUser(data.records, username);
+  const workouts = workoutsForUser(data.records, username);
+  const totalSets = counts.reduce((s, c) => s + c.count, 0);
+  const prs = personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: true }),
+    currentFormula(),
+  );
+  const topLifts = [...prs].sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm).slice(0, 8);
+
+  return [
+    `Athlete: ${athleteLabel()}`,
+    p
+      ? `Body: ${p.weight} kg, ${p.height} cm, ${Math.round(p.bodyFat * 100)}% body fat${p.age != null ? `, age ${p.age}` : ""}`
+      : "Body: not on file",
+    `Training: ${workouts.length} sessions, ${totalSets} sets, latest ${workouts[0]?.date ?? "n/a"}`,
+    `Most-trained: ${counts.slice(0, 6).map((c) => `${c.exerciseName} (${c.count} sets)`).join(", ") || "none"}`,
+    `Top bodyweight-adjusted est. 1RMs (${currentFormula()}): ` +
+      (topLifts.map((l) => `${l.exerciseName} ${Math.round(l.bestE1rm.e1rm)} kg`).join(", ") || "none"),
+  ].join("\n");
+}
+
+/** Ask the serverless function (Gemini) for a short summary of this athlete. */
+async function runSummary() {
+  if (location.protocol === "file:") {
+    els.summaryOut.textContent =
+      "AI summary works on the published website, not the local file. Open the deployed link.";
+    return;
+  }
+  els.summariseBtn.disabled = true;
+  els.summaryOut.textContent = "Thinking…";
+  try {
+    const res = await fetch("/api/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ context: athleteContext() }),
+    });
+    const payload = (await res.json()) as { summary?: string; error?: string };
+    els.summaryOut.textContent = res.ok ? (payload.summary ?? "No summary.") : (payload.error ?? "Failed.");
+  } catch {
+    els.summaryOut.textContent = "Couldn't reach the AI service.";
+  } finally {
+    els.summariseBtn.disabled = false;
+  }
 }
 
 function athleteLabel(): string {
@@ -582,6 +634,7 @@ async function init() {
   els.prSearch.addEventListener("input", renderPersonalRecords);
   els.athlete.addEventListener("change", renderAthlete);
   els.progressExercise.addEventListener("change", renderProgress);
+  els.summariseBtn.addEventListener("click", runSummary);
 
   // Expand/collapse rows.
   els.athleteTable.addEventListener("click", onExerciseRowClick);
