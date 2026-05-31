@@ -11,6 +11,7 @@ import {
   distinctExercises,
   distinctUsers,
   exerciseCountsForUser,
+  setsForUserExercise,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -180,5 +181,10 @@ describe("distinct helpers", () => {
       { exerciseName: "Bench Press", count: 2 },
       { exerciseName: "Squat", count: 1 },
     ]);
+  });
+  it("returns one athlete's sets for one exercise, newest first", () => {
+    const sets = setsForUserExercise(FIXTURE, "ada", "Bench Press");
+    expect(sets.map((s) => s.date)).toEqual(["2024-02-01", "2024-01-01"]);
+    expect(sets.every((s) => s.username === "ada" && s.exerciseName === "Bench Press")).toBe(true);
   });
 });

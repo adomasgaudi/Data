@@ -9,13 +9,14 @@ import {
   distinctExercises,
   distinctUsers,
   exerciseCountsForUser,
+  setsForUserExercise,
   filterRecords,
   leaderboard,
   personalRecords,
   type LeaderboardEntry,
   type PersonalRecord,
 } from "./aggregate";
-import type { OneRepMaxFormula } from "./metrics";
+import { estimate1RM, setVolume, type OneRepMaxFormula } from "./metrics";
 import { DEFAULT_FORMULA } from "./config";
 
 Chart.register(...registerables);
@@ -154,26 +155,76 @@ function renderPersonalRecords() {
     head + `<tbody>${rows || `<tr><td colspan="5" class="muted">No matches.</td></tr>`}</tbody>`;
 }
 
+// Exercise names for the currently shown athlete, in displayed row order.
+// Lets the (delegated) click handler map a clicked row back to its exercise.
+let athleteExercises: string[] = [];
+
 function renderAthlete() {
   const username = els.athlete.value;
   const label = els.athlete.options[els.athlete.selectedIndex]?.text ?? username;
   const counts = exerciseCountsForUser(data.records, username);
   const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
+  athleteExercises = counts.map((c) => c.exerciseName);
 
   els.athleteTitle.innerHTML =
     `${escapeHtml(label)} — exercises by sets ` +
-    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets)</span>`;
+    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets · tap a row for all sets)</span>`;
 
   const head = `<thead><tr><th class="rank">#</th><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const rows = counts
     .map(
       (c, i) =>
-        `<tr><td class="rank ${i === 0 ? "rank-1" : ""}">${i + 1}</td>` +
-        `<td>${escapeHtml(c.exerciseName)}</td><td class="num">${c.count.toLocaleString()}</td></tr>`,
+        `<tr class="ex-row" data-index="${i}"><td class="rank ${i === 0 ? "rank-1" : ""}">${i + 1}</td>` +
+        `<td><span class="caret">▸</span>${escapeHtml(c.exerciseName)}</td>` +
+        `<td class="num">${c.count.toLocaleString()}</td></tr>`,
     )
     .join("");
   els.athleteTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="3" class="muted">No exercises for this athlete.</td></tr>`}</tbody>`;
+}
+
+/** Expand/collapse the set-by-set detail under a clicked exercise row. */
+function onAthleteTableClick(e: MouseEvent) {
+  const row = (e.target as HTMLElement).closest("tr.ex-row") as HTMLTableRowElement | null;
+  if (!row) return;
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains("detail-row")) {
+    next.remove();
+    row.classList.remove("open");
+    return;
+  }
+  const exerciseName = athleteExercises[Number(row.dataset.index)];
+  if (exerciseName === undefined) return;
+  const detail = document.createElement("tr");
+  detail.className = "detail-row";
+  detail.innerHTML = `<td colspan="3">${setsDetailHtml(els.athlete.value, exerciseName)}</td>`;
+  row.insertAdjacentElement("afterend", detail);
+  row.classList.add("open");
+}
+
+/** Inner table: every set for this athlete+exercise with calculated values. */
+function setsDetailHtml(username: string, exerciseName: string): string {
+  const formula = currentFormula();
+  const sets = setsForUserExercise(data.records, username, exerciseName);
+  const head =
+    `<thead><tr><th>Date</th><th class="num">Set</th><th class="num">Weight</th>` +
+    `<th class="num">Reps</th><th class="num">Est. 1RM</th><th class="num">Volume</th><th>Notes</th></tr></thead>`;
+  const rows = sets
+    .map((s) => {
+      const e1rm = estimate1RM(s.weight, s.reps, formula);
+      const vol = setVolume(s.weight, s.reps);
+      const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
+      return (
+        `<tr><td>${s.date}</td><td class="num">${s.setNumber}</td>` +
+        `<td class="num">${s.weight === null ? "—" : fmt(s.weight) + " kg"}</td>` +
+        `<td class="num">${s.reps === null ? "—" : s.reps}</td>` +
+        `<td class="num">${e1rm === null ? "—" : fmt(e1rm) + " kg"}</td>` +
+        `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
+        `<td class="muted">${escapeHtml(note)}</td></tr>`
+      );
+    })
+    .join("");
+  return `<table class="data-table detail-table">${head}<tbody>${rows}</tbody></table>`;
 }
 
 function renderAll() {
@@ -215,6 +266,7 @@ async function init() {
   els.excludeDropsets.addEventListener("change", renderAll);
   els.prSearch.addEventListener("input", renderPersonalRecords);
   els.athlete.addEventListener("change", renderAthlete);
+  els.athleteTable.addEventListener("click", onAthleteTableClick);
 }
 
 /** Toggle which tab panel is visible when a tab button is clicked. */

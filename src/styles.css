@@ -64,6 +64,15 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .data-table th { color: var(--muted); font-weight: 600; cursor: default; }
 .data-table tbody tr:hover { background: rgba(255,255,255,0.03); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ex-row { cursor: pointer; }
+.ex-row:hover { background: rgba(255,255,255,0.04); }
+.caret { display: inline-block; margin-right: 0.5rem; color: var(--muted); transition: transform 0.15s; }
+.ex-row.open .caret { transform: rotate(90deg); }
+.detail-row > td { padding: 0; background: rgba(0,0,0,0.18); }
+.detail-table { min-width: 0; font-size: 0.82rem; margin: 0; }
+.detail-table th, .detail-table td { padding: 5px 10px; }
+.detail-table th { background: rgba(255,255,255,0.02); }
+.detail-table tbody tr:last-child td { border-bottom: none; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
