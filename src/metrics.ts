@@ -29,14 +29,88 @@ export function brzycki1RM(weight: number | null, reps: number | null): number |
   return (weight * 36) / (37 - reps);
 }
 
-export type OneRepMaxFormula = "epley" | "brzycki";
+/**
+ * Bench-press REPS↔%1RM curve from Nuzzo et al. (2024, Sports Medicine) — the
+ * meta-analysis of 962 reps-to-failure tests across 7,289 people. We fit a
+ * least-squares cubic to ln(reps) against a centred load t = (%1RM − 55) / 40
+ * over the study's published bench-press point estimates (R² = 0.995). Unlike
+ * the one-size-fits-all Epley/Brzycki, this is bench-specific and data-derived:
+ * people manage *fewer* reps per %1RM on bench, so it yields more conservative
+ * 1RMs. The coefficients below are precomputed from those estimates; the values
+ * they must reproduce are pinned in metrics.test.ts. The page public/reps-1rm.html
+ * visualises the same curve.
+ */
+const BENCH_LN_REPS_COEFFS = [3.189078334, -1.329509482, -0.232660599, -0.6277241766] as const;
+const benchT = (pct: number): number => (pct - 55) / 40;
+
+/** Average bench-press reps to failure at a given % of 1RM (e.g. 70 → ~13.8). */
+export function benchRepsAtPct(pct: number): number {
+  const t = benchT(pct);
+  const [a, b, c, d] = BENCH_LN_REPS_COEFFS;
+  return Math.exp(a + b * t + c * t * t + d * t * t * t);
+}
+
+/**
+ * Inverse of benchRepsAtPct: the % of 1RM that `reps` reps to failure implies on
+ * bench. The curve is monotonic, so a bounded bisection pins it down. Clamped to
+ * the data's sensible span — about one rep ⇒ 100% (a true single is your 1RM),
+ * and very high reps ⇒ the 5% floor — so it never returns a load above 100%.
+ */
+export function benchPctForReps(reps: number): number {
+  if (reps <= benchRepsAtPct(100)) return 100;
+  if (reps >= benchRepsAtPct(5)) return 5;
+  let lo = 5; // lighter load, more reps
+  let hi = 100; // heavier load, fewer reps
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (benchRepsAtPct(mid) > reps) lo = mid; // still too many reps → go heavier
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Estimated 1RM from a bench set via the Nuzzo curve: weight ÷ (%1RM/100), where
+ * %1RM comes from the rep count. A single rep is, by definition, the 1RM.
+ */
+export function nuzzo1RM(weight: number | null, reps: number | null): number | null {
+  if (weight === null || reps === null) return null;
+  if (weight <= 0 || reps <= 0) return null;
+  if (reps === 1) return weight;
+  return (weight * 100) / benchPctForReps(reps);
+}
+
+/**
+ * The load you could lift for `reps` reps on bench, given your 1RM (Nuzzo curve):
+ * 1RM × (%1RM/100). The inverse companion to nuzzo1RM.
+ */
+export function nuzzoWeightForReps(oneRepMax: number | null, reps: number | null): number | null {
+  if (oneRepMax === null || reps === null) return null;
+  if (oneRepMax <= 0 || reps <= 0) return null;
+  return (oneRepMax * benchPctForReps(reps)) / 100;
+}
+
+/**
+ * Predicted bench reps to failure at a given load, given your 1RM (Nuzzo curve):
+ * read the curve at (weight/1RM)×100. At or above the 1RM it's a single.
+ */
+export function nuzzoRepsAtWeight(weight: number | null, oneRepMax: number | null): number | null {
+  if (weight === null || oneRepMax === null) return null;
+  if (weight <= 0 || oneRepMax <= 0) return null;
+  if (weight >= oneRepMax) return 1;
+  return benchRepsAtPct((weight / oneRepMax) * 100);
+}
+
+export type OneRepMaxFormula = "epley" | "brzycki" | "nuzzo";
 
 export function estimate1RM(
   weight: number | null,
   reps: number | null,
   formula: OneRepMaxFormula = "epley",
 ): number | null {
-  return formula === "brzycki" ? brzycki1RM(weight, reps) : epley1RM(weight, reps);
+  if (formula === "brzycki") return brzycki1RM(weight, reps);
+  if (formula === "nuzzo") return nuzzo1RM(weight, reps);
+  return epley1RM(weight, reps);
 }
 
 /** Total load moved by a set: weight * reps. Null if either is missing. */

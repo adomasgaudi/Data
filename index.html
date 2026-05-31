@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.6.1</span></h1>
+      <h1>Colosseum <span class="version">v0.6.2</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -16,6 +16,7 @@
             <select id="formula">
               <option value="epley">Epley</option>
               <option value="brzycki">Brzycki</option>
+              <option value="nuzzo">Nuzzo (bench curve)</option>
             </select>
           </label>
           <label>Bodyweight source
@@ -208,8 +209,13 @@
               A single rep returns the load itself. Heavier-for-more-reps ⇒ higher estimate.</p>
             <p><strong>3. Brzycki 1RM</strong> (alternative): <code>load × 36 / (37 − reps)</code>.
               Undefined at 37+ reps, so it's blank there.</p>
-            <p><strong>4. Volume:</strong> <code>weight × reps</code> — total load moved in the set.</p>
-            <p><strong>5. Per bodyweight</strong> (the relative leaderboard): <code>1RM ÷ bodyweight</code>,
+            <p><strong>4. Nuzzo 1RM (bench curve).</strong> Instead of one fixed formula, this reads a
+              <a href="reps-1rm.html" target="_blank" rel="noopener">research curve</a> built from real
+              bench data: your reps tell us what % of 1RM the load was, then <code>1RM = load ÷ %</code>.
+              On bench people do fewer reps per %1RM, so it gives a more conservative max than Epley.
+              Pick it as the dashboard-wide formula in ⚙ Settings.</p>
+            <p><strong>5. Volume:</strong> <code>weight × reps</code> — total load moved in the set.</p>
+            <p><strong>6. Per bodyweight</strong> (the relative leaderboard): <code>1RM ÷ bodyweight</code>,
               shown as ×BW, so people of different sizes compare fairly.</p>
           </div>
         </section>

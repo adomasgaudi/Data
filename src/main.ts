@@ -22,7 +22,16 @@ import {
   type WorkoutDay,
   type ExerciseCount,
 } from "./aggregate";
-import { epley1RM, brzycki1RM, estimate1RM, setVolume, effectiveLoad, type OneRepMaxFormula } from "./metrics";
+import {
+  epley1RM,
+  brzycki1RM,
+  nuzzo1RM,
+  benchPctForReps,
+  estimate1RM,
+  setVolume,
+  effectiveLoad,
+  type OneRepMaxFormula,
+} from "./metrics";
 import type { SetRecord } from "./domain";
 import { ATHLETES, EXERCISE_BW_COEFF, DEFAULT_BW_COEFF } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
@@ -113,7 +122,8 @@ const shortDate = (iso: string): string => {
 };
 
 function currentFormula(): OneRepMaxFormula {
-  return els.formula.value === "brzycki" ? "brzycki" : "epley";
+  const v = els.formula.value;
+  return v === "brzycki" || v === "nuzzo" ? v : "epley";
 }
 
 // ---- Bodyweight coefficients: the single source of truth, editable + saved ----
@@ -872,6 +882,8 @@ function renderTest() {
   const load = effectiveLoad(weight, bw, coeff) ?? 0;
   const epley = epley1RM(load, reps);
   const brzycki = brzycki1RM(load, reps);
+  const nuzzo = nuzzo1RM(load, reps);
+  const benchPct = benchPctForReps(reps); // % of 1RM this rep count implies on bench
   const vol = setVolume(weight, reps);
   const perBw = epley !== null && bw > 0 ? epley / bw : null;
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
@@ -888,6 +900,12 @@ function renderTest() {
       reps >= 37 ? "undefined at 37+ reps" : `${f2(load)} × 36 / (37 − ${reps})`,
       brzycki === null ? "—" : `${f2(brzycki)} kg`,
     ) +
+    line(
+      "Nuzzo 1RM (bench)",
+      reps === 1 ? "a single is the 1RM" : `${f2(load)} ÷ ${f2(benchPct)}% (bench curve)`,
+      nuzzo === null ? "—" : `${f2(nuzzo)} kg`,
+    ) +
+    line("Bench: these reps ≈", `${reps} rep(s) on the bench curve`, `${f2(benchPct)}% of 1RM`) +
     line("Volume", `${f2(weight)} × ${reps}`, vol === null ? "—" : `${f2(vol)}`) +
     line("Per bodyweight", epley === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(epley)} ÷ ${f2(bw)}`, perBw === null ? "—" : `${perBw.toFixed(2)}× BW`);
 }

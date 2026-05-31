@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { epley1RM, brzycki1RM, setVolume, effectiveLoad } from "./metrics";
+import {
+  epley1RM,
+  brzycki1RM,
+  setVolume,
+  effectiveLoad,
+  benchRepsAtPct,
+  benchPctForReps,
+  nuzzo1RM,
+  nuzzoWeightForReps,
+  nuzzoRepsAtWeight,
+  estimate1RM,
+} from "./metrics";
 
 describe("epley1RM", () => {
   it("returns the weight itself for a single rep", () => {
@@ -92,5 +103,99 @@ describe("effectiveLoad", () => {
   });
   it("contributes nothing for the body part when bodyweight is unknown", () => {
     expect(effectiveLoad(20, null, 0.95)).toBeCloseTo(20, 6);
+  });
+});
+
+describe("Nuzzo bench curve", () => {
+  it("reproduces the study's bench point estimates within rounding", () => {
+    // Published bench-press means: 70% ≈ 14, 80% ≈ 9, 90% ≈ 4 (Nuzzo et al.).
+    expect(benchRepsAtPct(70)).toBeCloseTo(13.8, 1);
+    expect(benchRepsAtPct(80)).toBeCloseTo(8.3, 1);
+    expect(benchRepsAtPct(90)).toBeCloseTo(4.2, 1);
+    expect(benchRepsAtPct(50)).toBeCloseTo(28.6, 1);
+  });
+
+  it("benchRepsAtPct is monotonic: heavier load => fewer reps", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 15, max: 100 }),
+        fc.integer({ min: 15, max: 100 }),
+        (p1, p2) => {
+          const r1 = benchRepsAtPct(p1);
+          const r2 = benchRepsAtPct(p2);
+          if (p1 < p2) return r1 >= r2 - 1e-9;
+          if (p1 > p2) return r1 <= r2 + 1e-9;
+          return Math.abs(r1 - r2) < 1e-9;
+        },
+      ),
+    );
+  });
+
+  it("benchPctForReps inverts benchRepsAtPct (round-trip)", () => {
+    for (const reps of [2, 3, 5, 8, 12, 20]) {
+      const pct = benchPctForReps(reps);
+      expect(benchRepsAtPct(pct)).toBeCloseTo(reps, 3);
+    }
+  });
+
+  it("benchPctForReps never exceeds 100% and a single is the 1RM", () => {
+    expect(benchPctForReps(1)).toBe(100);
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 300 }), (r) => {
+        const pct = benchPctForReps(r);
+        return pct <= 100 && pct >= 5;
+      }),
+    );
+  });
+
+  it("nuzzo1RM returns the weight itself for a single rep", () => {
+    expect(nuzzo1RM(100, 1)).toBe(100);
+  });
+
+  it("nuzzo1RM grows with reps and never dips below the weight lifted", () => {
+    expect(nuzzo1RM(100, 5)!).toBeGreaterThan(100);
+    expect(nuzzo1RM(100, 10)!).toBeGreaterThan(nuzzo1RM(100, 5)!);
+    fc.assert(
+      fc.property(
+        fc.double({ min: 1, max: 500, noNaN: true }),
+        fc.integer({ min: 1, max: 30 }),
+        (w, r) => nuzzo1RM(w, r)! >= w - 1e-9,
+      ),
+    );
+  });
+
+  it("nuzzo1RM is more conservative than Epley on bench (fewer reps per %1RM)", () => {
+    for (const reps of [3, 5, 8, 10]) {
+      expect(nuzzo1RM(100, reps)!).toBeLessThan(epley1RM(100, reps)!);
+    }
+  });
+
+  it("nuzzoWeightForReps is the inverse of nuzzo1RM", () => {
+    // Lift X for r reps → estimate a 1RM → that 1RM should give back X at r reps.
+    for (const reps of [2, 4, 6, 10]) {
+      const oneRm = nuzzo1RM(100, reps)!;
+      expect(nuzzoWeightForReps(oneRm, reps)!).toBeCloseTo(100, 6);
+    }
+    expect(nuzzoWeightForReps(120, 1)).toBeCloseTo(120, 6); // a single is the full 1RM
+  });
+
+  it("nuzzoRepsAtWeight reads the curve back at a given load", () => {
+    // 80% of a 100 kg 1RM (80 kg) should predict ~8-9 bench reps.
+    expect(nuzzoRepsAtWeight(80, 100)!).toBeCloseTo(benchRepsAtPct(80), 6);
+    expect(nuzzoRepsAtWeight(100, 100)).toBe(1); // at the 1RM it's a single
+    expect(nuzzoRepsAtWeight(110, 100)).toBe(1); // above the 1RM, still a single
+  });
+
+  it("estimate1RM routes the 'nuzzo' formula to nuzzo1RM", () => {
+    expect(estimate1RM(100, 5, "nuzzo")).toBe(nuzzo1RM(100, 5));
+    expect(estimate1RM(100, 5, "epley")).toBe(epley1RM(100, 5));
+  });
+
+  it("is null for missing or non-positive inputs", () => {
+    expect(nuzzo1RM(null, 5)).toBeNull();
+    expect(nuzzo1RM(100, null)).toBeNull();
+    expect(nuzzo1RM(0, 5)).toBeNull();
+    expect(nuzzoWeightForReps(null, 5)).toBeNull();
+    expect(nuzzoRepsAtWeight(80, null)).toBeNull();
   });
 });
