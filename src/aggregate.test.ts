@@ -15,6 +15,7 @@ import {
   workoutsForUser,
   workoutsWithRestDays,
   weeksForUser,
+  setsByWeek,
   exerciseProgressForUser,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
@@ -212,6 +213,12 @@ describe("distinct helpers", () => {
     expect(weeks.map((w) => w.weekStart)).toEqual(["2024-02-26", "2024-01-29", "2024-01-01"]);
     expect(weeks.every((w) => w.totalSets === 1)).toBe(true);
     expect(weeks[2]!.exercises).toEqual([{ exerciseName: "Bench Press", count: 1 }]);
+  });
+  it("groups a list of sets into weeks, newest week first", () => {
+    const sets = setsForUserExercise(FIXTURE, "ada", "Bench Press"); // 2024-02-01, 2024-01-01
+    const weeks = setsByWeek(sets);
+    expect(weeks.map((w) => w.weekStart)).toEqual(["2024-01-29", "2024-01-01"]);
+    expect(weeks[0]!.sets[0]!.date).toBe("2024-02-01");
   });
   it("builds an exercise time series oldest-first with best e1RM per day", () => {
     const series = exerciseProgressForUser(FIXTURE, "ada", "Bench Press", "epley");

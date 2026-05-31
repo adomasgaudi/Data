@@ -156,6 +156,27 @@ export function setsForUserExercise(
     .sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : a.setNumber - b.setNumber));
 }
 
+export interface WeekSets {
+  weekStart: string; // ISO Monday
+  sets: SetRecord[]; // that week's sets, newest date first
+}
+
+/** Group a list of sets into weeks (Monday start), newest week first. */
+export function setsByWeek(sets: readonly SetRecord[]): WeekSets[] {
+  const byWeek = new Map<string, SetRecord[]>();
+  for (const s of sets) {
+    const wk = mondayOf(s.date);
+    const list = byWeek.get(wk);
+    if (list) list.push(s);
+    else byWeek.set(wk, [s]);
+  }
+  const out: WeekSets[] = [...byWeek].map(([weekStart, ws]) => ({
+    weekStart,
+    sets: [...ws].sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : a.setNumber - b.setNumber)),
+  }));
+  return out.sort((a, b) => (a.weekStart > b.weekStart ? -1 : a.weekStart < b.weekStart ? 1 : 0));
+}
+
 export interface WorkoutDay {
   date: string;
   totalSets: number;
@@ -218,6 +239,12 @@ const isoOf = (ms: number): string => {
   const dt = new Date(ms);
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 };
+/** ISO date of the Monday that starts the week containing `iso`. */
+const mondayOf = (iso: string): string => {
+  const dt = new Date(utcOf(iso));
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+  return isoOf(dt.getTime());
+};
 
 /**
  * The day list with the gaps filled in: every calendar date from the first to
@@ -251,11 +278,6 @@ export interface WeekGroup {
 
 /** One athlete's training grouped by week (Monday start), newest first. */
 export function weeksForUser(records: readonly SetRecord[], username: string): WeekGroup[] {
-  const mondayOf = (iso: string): string => {
-    const dt = new Date(utcOf(iso));
-    dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7)); // back to Monday
-    return isoOf(dt.getTime());
-  };
   const byWeek = new Map<string, SetRecord[]>();
   for (const r of records) {
     if (r.username !== username) continue;

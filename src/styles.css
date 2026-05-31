@@ -165,11 +165,11 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
-.ex-row, .wo-row, .wo-ex-row { cursor: pointer; }
-.ex-row:hover, .wo-row:hover, .wo-ex-row:hover { background: var(--accent-soft); }
+.ex-row, .wo-row, .wo-ex-row, .wk-row { cursor: pointer; }
+.ex-row:hover, .wo-row:hover, .wo-ex-row:hover, .wk-row:hover { background: var(--accent-soft); }
 .caret { display: inline-block; margin-right: 0.5rem; color: var(--accent); transition: transform 0.15s; }
-.ex-row.open, .wo-row.open, .wo-ex-row.open { background: var(--accent-soft); }
-.ex-row.open > td .caret, .wo-row.open > td .caret, .wo-ex-row.open > td .caret { transform: rotate(90deg); }
+.ex-row.open, .wo-row.open, .wo-ex-row.open, .wk-row.open { background: var(--accent-soft); }
+.ex-row.open > td .caret, .wo-row.open > td .caret, .wo-ex-row.open > td .caret, .wk-row.open > td .caret { transform: rotate(90deg); }
 .detail-row > td { padding: 0; background: var(--accent-soft); }
 .detail-table { min-width: 0; font-size: 0.82rem; margin: 0; }
 .detail-table th, .detail-table td { padding: 5px 10px; }

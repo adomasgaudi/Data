@@ -10,6 +10,7 @@ import {
   distinctUsers,
   exerciseCountsForUser,
   setsForUserExercise,
+  setsByWeek,
   workoutsForUser,
   workoutsWithRestDays,
   weeksForUser,
@@ -443,13 +444,44 @@ function renderExercisesPage() {
 
 /** Expand/collapse the set-by-set detail under a clicked exercise row. */
 function onExerciseRowClick(e: MouseEvent) {
-  const row = (e.target as HTMLElement).closest("tr.ex-row") as HTMLTableRowElement | null;
+  const target = e.target as HTMLElement;
+
+  // Level 2: a week inside an expanded exercise -> show that week's sets (by date).
+  const wkRow = target.closest("tr.wk-row") as HTMLTableRowElement | null;
+  if (wkRow) {
+    if (toggleCollapse(wkRow)) return;
+    const exName = athleteExercises[Number(wkRow.dataset.exidx)];
+    if (exName === undefined) return;
+    const week = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName)).find(
+      (w) => w.weekStart === wkRow.dataset.wk,
+    );
+    if (!week) return;
+    insertDetail(wkRow, 2, setsTableHtml(week.sets, { showDate: true }));
+    return;
+  }
+
+  // Level 1: an exercise -> list the weeks it was trained.
+  const row = target.closest("tr.ex-row") as HTMLTableRowElement | null;
   if (!row) return;
   if (toggleCollapse(row)) return;
-  const exerciseName = athleteExercises[Number(row.dataset.index)];
-  if (exerciseName === undefined) return;
-  const sets = setsForUserExercise(data.records, els.athlete.value, exerciseName);
-  insertDetail(row, 3, setsTableHtml(sets, false));
+  const exidx = Number(row.dataset.index);
+  const exName = athleteExercises[exidx];
+  if (exName === undefined) return;
+  insertDetail(row, 3, exerciseWeeksHtml(exName, exidx));
+}
+
+/** Inner table: weeks an exercise was trained; each expands to that week's sets. */
+function exerciseWeeksHtml(exName: string, exidx: number): string {
+  const weeks = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName));
+  const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
+  const rows = weeks
+    .map(
+      (w) =>
+        `<tr class="wk-row" data-exidx="${exidx}" data-wk="${w.weekStart}">` +
+        `<td><span class="caret">▸</span>Week of ${shortDate(w.weekStart)}</td><td class="num">${w.sets.length}</td></tr>`,
+    )
+    .join("");
+  return `<table class="data-table detail-table">${head}<tbody>${rows}</tbody></table>`;
 }
 
 // ---- Workouts page (one row per day or week, 20/page, expandable) ----
@@ -515,7 +547,7 @@ function onWorkoutRowClick(e: MouseEvent) {
     const grp = workoutGroups[Number(exRow.dataset.day)];
     const exName = grp?.exercises[Number(exRow.dataset.exidx)]?.exerciseName;
     if (!grp || exName === undefined) return;
-    insertDetail(exRow, 2, setsTableHtml(grp.sets.filter((s) => s.exerciseName === exName), false));
+    insertDetail(exRow, 2, setsTableHtml(grp.sets.filter((s) => s.exerciseName === exName), {}));
     return;
   }
 
@@ -563,20 +595,22 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
 }
 
 /** Inner table of sets with calculated values; optionally an Exercise column. */
-function setsTableHtml(sets: readonly SetRecord[], showExercise: boolean): string {
+function setsTableHtml(sets: readonly SetRecord[], opts: { showExercise?: boolean; showDate?: boolean } = {}): string {
   const formula = currentFormula();
-  const exHead = showExercise ? "<th>Exercise</th>" : "";
+  const dateHead = opts.showDate ? "<th>Date</th>" : "";
+  const exHead = opts.showExercise ? "<th>Exercise</th>" : "";
   const head =
-    `<thead><tr>${exHead}<th class="num">Set</th><th class="num">Weight</th>` +
+    `<thead><tr>${dateHead}${exHead}<th class="num">Weight</th>` +
     `<th class="num">Reps</th><th class="num">Est. 1RM</th><th class="num">Volume</th><th>Notes</th></tr></thead>`;
   const rows = sets
     .map((s) => {
       const e1rm = estimate1RM(s.weight, s.reps, formula);
       const vol = setVolume(s.weight, s.reps);
       const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
-      const exCell = showExercise ? `<td>${escapeHtml(s.exerciseName)}</td>` : "";
+      const dateCell = opts.showDate ? `<td class="wo-date">${shortDate(s.date)}</td>` : "";
+      const exCell = opts.showExercise ? `<td>${escapeHtml(s.exerciseName)}</td>` : "";
       return (
-        `<tr>${exCell}<td class="num">${s.setNumber}</td>` +
+        `<tr>${dateCell}${exCell}` +
         `<td class="num">${s.weight === null ? "—" : fmt(s.weight) + " kg"}</td>` +
         `<td class="num">${s.reps === null ? "—" : s.reps}</td>` +
         `<td class="num">${e1rm === null ? "—" : fmt(e1rm) + " kg"}</td>` +
