@@ -484,6 +484,56 @@ export function nearDuplicateExercises(records: readonly SetRecord[]): { names: 
   return out.sort((a, b) => b.names.length - a.names.length || b.sets - a.sets);
 }
 
+export interface AthleteSummary {
+  sessions: number; // distinct training days
+  sets: number; // total sets logged
+  totalVolume: number; // Σ weight × reps (kg·reps), where both are present
+  firstDate: string | null;
+  lastDate: string | null;
+  weeks: number; // span in weeks (≥ 1)
+  sessionsPerWeek: number;
+  bodyweightFirst: number | null;
+  bodyweightLast: number | null;
+}
+
+/** A compact "what this athlete has been doing" rollup over their whole log. */
+export function athleteSummary(records: readonly SetRecord[], username: string): AthleteSummary {
+  const days = new Set<string>();
+  let sets = 0;
+  let totalVolume = 0;
+  let firstDate: string | null = null;
+  let lastDate: string | null = null;
+  let bwFirst: { date: string; bw: number } | null = null;
+  let bwLast: { date: string; bw: number } | null = null;
+  for (const r of records) {
+    if (r.username !== username || r.exerciseName === "") continue;
+    sets++;
+    if (r.date) {
+      days.add(r.date);
+      if (firstDate === null || r.date < firstDate) firstDate = r.date;
+      if (lastDate === null || r.date > lastDate) lastDate = r.date;
+      if (r.bodyweight !== null) {
+        if (!bwFirst || r.date < bwFirst.date) bwFirst = { date: r.date, bw: r.bodyweight };
+        if (!bwLast || r.date > bwLast.date) bwLast = { date: r.date, bw: r.bodyweight };
+      }
+    }
+    if (r.weight !== null && r.reps !== null) totalVolume += r.weight * r.reps;
+  }
+  const spanDays = firstDate && lastDate ? (Date.parse(lastDate) - Date.parse(firstDate)) / 86_400_000 : 0;
+  const weeks = Math.max(1, spanDays / 7);
+  return {
+    sessions: days.size,
+    sets,
+    totalVolume,
+    firstDate,
+    lastDate,
+    weeks,
+    sessionsPerWeek: days.size / weeks,
+    bodyweightFirst: bwFirst?.bw ?? null,
+    bodyweightLast: bwLast?.bw ?? null,
+  };
+}
+
 /** Best lift per (user, exercise): both heaviest weight and best estimated 1RM. */
 export function personalRecords(
   records: readonly SetRecord[],

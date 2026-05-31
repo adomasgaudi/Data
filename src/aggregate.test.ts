@@ -20,6 +20,7 @@ import {
   addedWeight1RM,
   scaleToGroup,
   nearDuplicateExercises,
+  athleteSummary,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -97,6 +98,29 @@ describe("addedWeight1RM", () => {
     const capped = rec({ weight: 100, reps: 40 }); // bar-only, 40 reps
     const at15 = rec({ weight: 100, reps: 15 });
     expect(addedWeight1RM(capped, "epley")).toBeCloseTo(addedWeight1RM(at15, "epley")!, 6);
+  });
+});
+
+describe("athleteSummary", () => {
+  it("rolls up sessions, sets, volume, span and bodyweight change", () => {
+    const recs = [
+      rec({ username: "ada", date: "2024-01-01", weight: 100, reps: 5, bodyweight: 70 }), // vol 500
+      rec({ username: "ada", date: "2024-01-01", weight: 50, reps: 10, bodyweight: 70 }), // vol 500, same day
+      rec({ username: "ada", date: "2024-01-15", weight: 100, reps: 3, bodyweight: 72 }), // vol 300
+      rec({ username: "bob", date: "2024-01-10", weight: 200, reps: 1, bodyweight: 90 }), // other athlete
+    ];
+    const s = athleteSummary(recs, "ada");
+    expect(s.sessions).toBe(2);
+    expect(s.sets).toBe(3);
+    expect(s.totalVolume).toBe(1300);
+    expect(s.firstDate).toBe("2024-01-01");
+    expect(s.lastDate).toBe("2024-01-15");
+    expect(s.bodyweightFirst).toBe(70);
+    expect(s.bodyweightLast).toBe(72);
+    expect(s.sessionsPerWeek).toBeGreaterThan(0);
+  });
+  it("is empty for an unknown athlete", () => {
+    expect(athleteSummary([rec({ username: "ada" })], "nobody").sets).toBe(0);
   });
 });
 

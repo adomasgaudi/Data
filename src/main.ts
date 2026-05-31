@@ -20,6 +20,7 @@ import {
   personalRecords,
   scaleToGroup,
   nearDuplicateExercises,
+  athleteSummary,
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
@@ -75,6 +76,7 @@ const els = {
   healthClose: $<HTMLButtonElement>("healthClose"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteProfile: $("athleteProfile"),
+  athleteStats: $("athleteStats"),
   trainBreakdown: $("trainBreakdown"),
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
@@ -441,6 +443,7 @@ function renderAthlete() {
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   initCalendarMonth();
   renderAthleteProfile();
+  renderAthleteStats();
   renderTrainBreakdown();
   populateProgressExercise();
   renderExercisesPage();
@@ -501,6 +504,37 @@ const CATEGORY_COLORS: Record<TrainingCategory, string> = {
   Cardio: "#6b7280",
   Other: "#cbd5e1",
 };
+
+/** Compact "what they've been doing" stat chips for the selected athlete. */
+function renderAthleteStats() {
+  const s = athleteSummary(data.records, els.athlete.value);
+  if (s.sets === 0) {
+    els.athleteStats.innerHTML = "";
+    return;
+  }
+  const chip = (label: string, value: string) =>
+    `<span class="stat-chip"><span class="stat-val">${value}</span><span class="stat-lbl">${label}</span></span>`;
+  const months = s.weeks / 4.345;
+  const span =
+    s.firstDate && s.lastDate
+      ? `${shortDate(s.firstDate)} – ${shortDate(s.lastDate)}${months >= 1.5 ? ` (${months.toFixed(0)} mo)` : ""}`
+      : "—";
+  // Volume in tonnes (1 t = 1000 kg·reps) reads better than six-digit kg.
+  const tonnes = s.totalVolume / 1000;
+  const chips = [
+    chip("span", span),
+    chip("sessions", s.sessions.toLocaleString()),
+    chip("per week", s.sessionsPerWeek.toFixed(1)),
+    chip("sets", s.sets.toLocaleString()),
+    chip("volume", `${tonnes >= 10 ? Math.round(tonnes) : tonnes.toFixed(1)} t`),
+  ];
+  if (s.bodyweightFirst !== null && s.bodyweightLast !== null) {
+    const d = s.bodyweightLast - s.bodyweightFirst;
+    const delta = Math.abs(d) < 0.5 ? "" : ` (${d > 0 ? "+" : ""}${d.toFixed(1)})`;
+    chips.push(chip("bodyweight", `${fmt(s.bodyweightLast)} kg${delta}`));
+  }
+  els.athleteStats.innerHTML = chips.join("");
+}
 
 /** "What they train": a proportional bar of sets per muscle/movement category. */
 function renderTrainBreakdown() {

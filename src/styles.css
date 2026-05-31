@@ -93,6 +93,14 @@ body {
 .subtab.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .athlete-profile { margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
 .athlete-profile:empty { display: none; }
+.athlete-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
+.athlete-stats:empty { display: none; }
+.stat-chip {
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 12px;
+  background: var(--accent-soft); border: 1px solid var(--line); border-radius: 8px;
+}
+.stat-val { font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+.stat-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .train-breakdown { margin: 0 0 1.25rem; }
 .train-breakdown:empty { display: none; }
 .tb-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
