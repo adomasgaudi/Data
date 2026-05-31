@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.6.2</span></h1>
+      <h1>Colosseum <span class="version">v0.7.0</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -31,7 +31,7 @@
     </header>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-tab="leaderboards" role="tab">Leaderboards</button>
+      <button class="tab is-active" data-tab="leaderboards" role="tab">Colosseum</button>
       <button class="tab" data-tab="athlete" role="tab">Athlete</button>
       <button class="tab" data-tab="bwparts" role="tab">Exercises</button>
       <button class="tab" data-tab="test" role="tab">Test</button>
@@ -39,41 +39,21 @@
 
     <main>
       <div id="tab-leaderboards" class="tab-panel">
-        <section class="controls">
-          <label>Exercise
-            <div class="dropdown" id="exerciseDropdown">
-              <button type="button" class="dropdown-toggle" id="exerciseBtn" aria-haspopup="listbox" aria-expanded="false">
-                <span id="exerciseLabel">—</span><span class="dropdown-caret">▾</span>
-              </button>
-              <ul class="dropdown-menu" id="exerciseMenu" role="listbox" hidden></ul>
-            </div>
-          </label>
-          <label>Reps
-            <div class="dropdown" id="repsDropdown">
-              <button type="button" class="dropdown-toggle" id="repsBtn" aria-haspopup="listbox" aria-expanded="false">
-                <span id="repsLabel">All reps</span><span class="dropdown-caret">▾</span>
-              </button>
-              <ul class="dropdown-menu" id="repsMenu" role="listbox" hidden></ul>
-            </div>
-          </label>
-          <label>Rank by
-            <div class="dropdown" id="rankDropdown">
-              <button type="button" class="dropdown-toggle" id="rankBtn" aria-haspopup="listbox" aria-expanded="false">
-                <span id="rankLabel">Total (kg)</span><span class="dropdown-caret">▾</span>
-              </button>
-              <ul class="dropdown-menu" id="rankMenu" role="listbox" hidden></ul>
-            </div>
-          </label>
-          <label class="check">
-            <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
-          </label>
-          <label>PR search
-            <input type="search" id="prSearch" placeholder="filter by athlete…" />
-          </label>
-        </section>
+        <div class="lb-exercise-bar">
+          <select id="exercise" class="plain-select" aria-label="Exercise"></select>
+        </div>
 
         <section class="panel">
-          <h2 id="lbTitle">Leaderboard</h2>
+          <div class="lb-head">
+            <p id="lbTitle" class="lb-subtitle"></p>
+            <div class="lb-filters">
+              <select id="reps" class="subtle-select" aria-label="Rep range"></select>
+              <select id="rank" class="subtle-select" aria-label="Rank by"></select>
+              <label class="check">
+                <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
+              </label>
+            </div>
+          </div>
           <div class="chart-wrap"><canvas id="lbChart"></canvas></div>
           <table id="lbTable" class="data-table"></table>
         </section>
@@ -169,20 +149,10 @@
           </p>
           <div class="calc-picker">
             <label>Athlete
-              <div class="dropdown" id="testAthleteDropdown">
-                <button type="button" class="dropdown-toggle" id="testAthleteBtn" aria-haspopup="listbox" aria-expanded="false">
-                  <span id="testAthleteLabel">—</span><span class="dropdown-caret">▾</span>
-                </button>
-                <ul class="dropdown-menu" id="testAthleteMenu" role="listbox" hidden></ul>
-              </div>
+              <select id="testAthlete"></select>
             </label>
             <label>Exercise
-              <div class="dropdown" id="testExerciseDropdown">
-                <button type="button" class="dropdown-toggle" id="testExerciseBtn" aria-haspopup="listbox" aria-expanded="false">
-                  <span id="testExerciseLabel">—</span><span class="dropdown-caret">▾</span>
-                </button>
-                <ul class="dropdown-menu" id="testExerciseMenu" role="listbox" hidden></ul>
-              </div>
+              <select id="testExercise"></select>
             </label>
           </div>
           <p id="testPickHint" class="muted" style="margin: 0 0 1rem; font-size: 0.8rem"></p>
@@ -191,6 +161,11 @@
             <label>Reps<input id="calcReps" type="number" value="5" min="1" /></label>
             <label>Bodyweight (kg)<input id="calcBw" type="number" value="80" step="1" /></label>
             <label>BW part (coeff)<input id="calcCoeff" type="number" value="0" step="0.05" min="0" max="2" /></label>
+          </div>
+          <div class="calc-tabs" id="calcTabs" role="tablist">
+            <button type="button" class="calc-tab is-active" data-formula="epley" role="tab">Epley</button>
+            <button type="button" class="calc-tab" data-formula="brzycki" role="tab">Brzycki</button>
+            <button type="button" class="calc-tab" data-formula="nuzzo" role="tab">Nuzzo (bench)</button>
           </div>
           <div id="calcOut" class="calc-out"></div>
           <p class="calc-links">

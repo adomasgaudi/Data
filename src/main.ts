@@ -49,18 +49,11 @@ const els = {
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
-  exerciseBtn: $<HTMLButtonElement>("exerciseBtn"),
-  exerciseMenu: $<HTMLUListElement>("exerciseMenu"),
-  exerciseLabel: $("exerciseLabel"),
-  repsBtn: $<HTMLButtonElement>("repsBtn"),
-  repsMenu: $<HTMLUListElement>("repsMenu"),
-  repsLabel: $("repsLabel"),
-  rankBtn: $<HTMLButtonElement>("rankBtn"),
-  rankMenu: $<HTMLUListElement>("rankMenu"),
-  rankLabel: $("rankLabel"),
+  exercise: $<HTMLSelectElement>("exercise"),
+  reps: $<HTMLSelectElement>("reps"),
+  rank: $<HTMLSelectElement>("rank"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
-  prSearch: $<HTMLInputElement>("prSearch"),
   lbTitle: $("lbTitle"),
   lbTable: $<HTMLTableElement>("lbTable"),
   prTable: $<HTMLTableElement>("prTable"),
@@ -94,13 +87,10 @@ const els = {
   calcBw: $<HTMLInputElement>("calcBw"),
   calcCoeff: $<HTMLInputElement>("calcCoeff"),
   calcOut: $("calcOut"),
-  testAthleteBtn: $<HTMLButtonElement>("testAthleteBtn"),
-  testAthleteMenu: $<HTMLUListElement>("testAthleteMenu"),
-  testAthleteLabel: $("testAthleteLabel"),
-  testExerciseBtn: $<HTMLButtonElement>("testExerciseBtn"),
-  testExerciseMenu: $<HTMLUListElement>("testExerciseMenu"),
-  testExerciseLabel: $("testExerciseLabel"),
+  testAthlete: $<HTMLSelectElement>("testAthlete"),
+  testExercise: $<HTMLSelectElement>("testExercise"),
   testPickHint: $("testPickHint"),
+  calcTabs: $("calcTabs"),
 };
 
 let data: LoadedData;
@@ -209,10 +199,10 @@ interface LbRow {
 }
 
 function renderLeaderboard() {
-  const exercise = exerciseDropdown?.value() ?? "";
+  const exercise = els.exercise.value;
   const formula = currentFormula();
-  const rel = (rankDropdown?.value() ?? "abs") === "rel";
-  const range = REP_RANGES.find((r) => r.id === (repsDropdown?.value() ?? "all"));
+  const rel = els.rank.value === "rel";
+  const range = REP_RANGES.find((r) => r.id === els.reps.value);
   const filtered = filterRecords(computedRecords(), {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
@@ -245,7 +235,7 @@ function renderLeaderboard() {
 
   const repsNote = range && range.id !== "all" ? ` · ${range.label}` : "";
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
-  els.lbTitle.textContent = `Leaderboard — ${exercise}${repsNote} (${metricNote})`;
+  els.lbTitle.textContent = `${exercise}${repsNote} · ${metricNote}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, rel);
 }
@@ -296,14 +286,11 @@ function renderLeaderboardChart(rows: LbRow[], rel: boolean) {
 
 function renderPersonalRecords() {
   const formula = currentFormula();
-  const exercise = exerciseDropdown?.value() ?? "";
+  const exercise = els.exercise.value;
   const filtered = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   // Personal records for the currently selected exercise only (one row per athlete).
-  let prs = personalRecords(filtered, formula).filter((p) => p.exerciseName === exercise);
+  const prs = personalRecords(filtered, formula).filter((p) => p.exerciseName === exercise);
   prs.sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
-
-  const q = els.prSearch.value.trim().toLowerCase();
-  if (q) prs = prs.filter((p) => p.user.toLowerCase().includes(q));
 
   els.prCount.textContent = `— ${exercise} (${prs.length})`;
   const head = `<thead><tr><th>Athlete</th><th class="num">Top weight (kg)</th><th class="num">Best 1RM (kg)</th><th class="num">Date</th></tr></thead>`;
@@ -820,23 +807,25 @@ function onBwInputChange(e: Event) {
   renderAthlete();
 }
 
-/** Fill the Test-tab exercise dropdown with the chosen athlete's exercises. */
+/** Fill the Test-tab exercise <select> with the chosen athlete's exercises. */
 function populateTestExercises(username: string) {
-  if (!testExerciseDropdown) return;
   if (username === "") {
-    testExerciseDropdown.setItems([{ value: "", label: "— pick an athlete first —" }]);
-    testExerciseDropdown.setValue("");
+    els.testExercise.innerHTML = `<option value="">— pick an athlete first —</option>`;
     return;
   }
   const exercises = exerciseCountsForUser(data.records, username);
-  testExerciseDropdown.setItems(exercises.map((e) => ({ value: e.exerciseName, label: e.exerciseName })));
-  testExerciseDropdown.setValue(exercises[0]?.exerciseName ?? "");
+  els.testExercise.innerHTML = exercises
+    .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</option>`)
+    .join("");
+  // Default to Squat when this athlete has it, else their most-trained lift.
+  const squat = exercises.find((e) => e.exerciseName.toLowerCase() === "squat");
+  els.testExercise.value = squat?.exerciseName ?? exercises[0]?.exerciseName ?? "";
 }
 
 /** Load the picked athlete+exercise's top set (best 1RM) into the calculator inputs. */
 function prefillTestFromPick() {
-  const username = testAthleteDropdown?.value() ?? "";
-  const exName = testExerciseDropdown?.value() ?? "";
+  const username = els.testAthlete.value;
+  const exName = els.testExercise.value;
   if (username === "" || exName === "") {
     els.testPickHint.textContent = "";
     return;
@@ -861,14 +850,18 @@ function prefillTestFromPick() {
   els.calcReps.value = String(best.reps);
   els.calcBw.value = String(best.bodyweight ?? ATHLETES[username]?.weight ?? els.calcBw.value);
   els.calcCoeff.value = String(EXERCISE_BW_COEFF[exName] ?? DEFAULT_BW_COEFF);
-  const label = testAthleteDropdown?.value() ? els.testAthleteLabel.textContent : username;
+  const label = els.testAthlete.selectedOptions[0]?.textContent ?? username;
   els.testPickHint.textContent =
     `Loaded ${label}'s top ${exName}: ${best.weight}kg × ${best.reps} on ${shortDate(best.date)} ` +
     `(${fmt(bestE1rm)}kg est. 1RM). Tweak any number below.`;
   renderTest();
 }
 
-// ---- Test tab: live calculator showing each formula with the numbers ----
+// The 1RM formula shown in the Test-tab calculator (its own tab, independent of
+// the dashboard-wide setting so people can compare them side by side).
+let calcTab: OneRepMaxFormula = "epley";
+
+// ---- Test tab: live calculator showing the selected formula with the numbers ----
 function renderTest() {
   const num = (el: HTMLInputElement, fallback: number) => {
     const v = parseFloat(el.value);
@@ -880,34 +873,55 @@ function renderTest() {
   const coeff = num(els.calcCoeff, 0);
 
   const load = effectiveLoad(weight, bw, coeff) ?? 0;
-  const epley = epley1RM(load, reps);
-  const brzycki = brzycki1RM(load, reps);
-  const nuzzo = nuzzo1RM(load, reps);
-  const benchPct = benchPctForReps(reps); // % of 1RM this rep count implies on bench
+  const bwPart = load - weight; // coeff × bodyweight — the body's share of the load
   const vol = setVolume(weight, reps);
-  const perBw = epley !== null && bw > 0 ? epley / bw : null;
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
   const line = (title: string, formula: string, result: string) =>
     `<div class="calc-row"><div class="calc-label">${title}</div>` +
     `<div class="calc-formula">${formula}</div><div class="calc-result">${result}</div></div>`;
 
-  els.calcOut.innerHTML =
-    line("Effective load", `${coeff} × ${f2(bw)} + ${f2(weight)}`, `${f2(load)} kg`) +
-    line("Epley 1RM", `${f2(load)} × (1 + ${reps}/30)`, epley === null ? "—" : `${f2(epley)} kg`) +
+  // 1RM of the *effective* load for the selected formula, then peel the bodyweight
+  // share back off so the answer is the added (bar) weight — comparable to logged
+  // weights. For bar-only lifts (coeff 0) bwPart is 0 and nothing changes.
+  let effective1RM: number | null;
+  let formulaText: string;
+  if (calcTab === "brzycki") {
+    effective1RM = brzycki1RM(load, reps);
+    formulaText = reps >= 37 ? "undefined at 37+ reps" : `${f2(load)} × 36 / (37 − ${reps})`;
+  } else if (calcTab === "nuzzo") {
+    effective1RM = nuzzo1RM(load, reps);
+    formulaText = reps === 1 ? "a single is the 1RM" : `${f2(load)} ÷ ${f2(benchPctForReps(reps))}% (bench curve)`;
+  } else {
+    effective1RM = epley1RM(load, reps);
+    formulaText = `${f2(load)} × (1 + ${reps}/30)`;
+  }
+  const added1RM = effective1RM === null ? null : effective1RM - bwPart;
+  const perBw = effective1RM !== null && bw > 0 ? effective1RM / bw : null;
+
+  const rows = [line("Effective load", `${coeff} × ${f2(bw)} + ${f2(weight)}`, `${f2(load)} kg`)];
+  rows.push(line(`1RM (effective)`, formulaText, effective1RM === null ? "—" : `${f2(effective1RM)} kg`));
+  if (bwPart > 0.01) {
+    rows.push(
+      line(
+        "1RM (added weight)",
+        `${effective1RM === null ? "—" : f2(effective1RM)} − ${f2(bwPart)} bodyweight`,
+        added1RM === null ? "—" : `${f2(added1RM)} kg`,
+      ),
+    );
+  }
+  if (calcTab === "nuzzo") {
+    rows.push(line("Bench: these reps ≈", `${reps} rep(s) on the bench curve`, `${f2(benchPctForReps(reps))}% of 1RM`));
+  }
+  rows.push(line("Volume", `${f2(weight)} × ${reps}`, vol === null ? "—" : `${f2(vol)}`));
+  rows.push(
     line(
-      "Brzycki 1RM",
-      reps >= 37 ? "undefined at 37+ reps" : `${f2(load)} × 36 / (37 − ${reps})`,
-      brzycki === null ? "—" : `${f2(brzycki)} kg`,
-    ) +
-    line(
-      "Nuzzo 1RM (bench)",
-      reps === 1 ? "a single is the 1RM" : `${f2(load)} ÷ ${f2(benchPct)}% (bench curve)`,
-      nuzzo === null ? "—" : `${f2(nuzzo)} kg`,
-    ) +
-    line("Bench: these reps ≈", `${reps} rep(s) on the bench curve`, `${f2(benchPct)}% of 1RM`) +
-    line("Volume", `${f2(weight)} × ${reps}`, vol === null ? "—" : `${f2(vol)}`) +
-    line("Per bodyweight", epley === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(epley)} ÷ ${f2(bw)}`, perBw === null ? "—" : `${perBw.toFixed(2)}× BW`);
+      "Per bodyweight",
+      effective1RM === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(effective1RM)} ÷ ${f2(bw)}`,
+      perBw === null ? "—" : `${perBw.toFixed(2)}× BW`,
+    ),
+  );
+  els.calcOut.innerHTML = rows.join("");
 }
 
 function renderAll() {
@@ -921,82 +935,6 @@ function renderAll() {
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
-
-// ---- Reusable custom ("physical") dropdown ----
-interface DropdownItem {
-  value: string;
-  label: string;
-}
-interface Dropdown {
-  value: () => string;
-  setValue: (v: string) => void;
-  setItems: (items: DropdownItem[]) => void;
-}
-
-function createDropdown(
-  btn: HTMLButtonElement,
-  menu: HTMLUListElement,
-  label: HTMLElement,
-  onChange: (value: string) => void,
-): Dropdown {
-  let value = "";
-  let items: DropdownItem[] = [];
-
-  const render = () => {
-    menu.innerHTML = items
-      .map(
-        (it) =>
-          `<li role="option" class="dropdown-item${it.value === value ? " is-selected" : ""}" ` +
-          `data-value="${escapeHtml(it.value)}">${escapeHtml(it.label)}</li>`,
-      )
-      .join("");
-  };
-  const open = () => {
-    menu.hidden = false;
-    btn.setAttribute("aria-expanded", "true");
-    (menu.querySelector(".is-selected") as HTMLElement | null)?.scrollIntoView({ block: "nearest" });
-  };
-  const close = () => {
-    menu.hidden = true;
-    btn.setAttribute("aria-expanded", "false");
-  };
-  const setValue = (v: string) => {
-    value = v;
-    label.textContent = items.find((it) => it.value === v)?.label ?? v ?? "—";
-    render();
-  };
-
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (menu.hidden) open();
-    else close();
-  });
-  menu.addEventListener("click", (e) => {
-    const li = (e.target as HTMLElement).closest<HTMLElement>(".dropdown-item");
-    if (li?.dataset.value === undefined) return;
-    setValue(li.dataset.value);
-    close();
-    onChange(li.dataset.value);
-  });
-  document.addEventListener("click", (e) => {
-    if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== btn) close();
-  });
-
-  return {
-    value: () => value,
-    setValue,
-    setItems: (its) => {
-      items = its;
-      render();
-    },
-  };
-}
-
-let exerciseDropdown: Dropdown | undefined;
-let repsDropdown: Dropdown | undefined;
-let rankDropdown: Dropdown | undefined;
-let testAthleteDropdown: Dropdown | undefined;
-let testExerciseDropdown: Dropdown | undefined;
 
 /** Rep-range presets for the leaderboard filter (overlapping by design). */
 const REP_RANGES: { id: string; label: string; min?: number; max?: number }[] = [
@@ -1022,25 +960,24 @@ async function init() {
     return;
   }
 
-  // Build the custom exercise + reps dropdowns.
+  // Leaderboard exercise / reps / rank as native selects.
   const exercises = distinctExercises(data.records);
-  exerciseDropdown = createDropdown(els.exerciseBtn, els.exerciseMenu, els.exerciseLabel, () => {
+  els.exercise.innerHTML = exercises
+    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
+    .join("");
+  els.exercise.value = exercises[0] ?? "";
+  els.reps.innerHTML = REP_RANGES.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join("");
+  els.reps.value = "all";
+  els.rank.innerHTML =
+    `<option value="abs">Total (kg)</option><option value="rel">Per bodyweight</option>`;
+  els.rank.value = "abs";
+
+  els.exercise.addEventListener("change", () => {
     renderLeaderboard();
     renderPersonalRecords(); // PRs are scoped to the selected exercise
   });
-  exerciseDropdown.setItems(exercises.map((e) => ({ value: e, label: e })));
-  exerciseDropdown.setValue(exercises[0] ?? "");
-
-  repsDropdown = createDropdown(els.repsBtn, els.repsMenu, els.repsLabel, renderLeaderboard);
-  repsDropdown.setItems(REP_RANGES.map((r) => ({ value: r.id, label: r.label })));
-  repsDropdown.setValue("all");
-
-  rankDropdown = createDropdown(els.rankBtn, els.rankMenu, els.rankLabel, renderLeaderboard);
-  rankDropdown.setItems([
-    { value: "abs", label: "Total (kg)" },
-    { value: "rel", label: "Per bodyweight" },
-  ]);
-  rankDropdown.setValue("abs");
+  els.reps.addEventListener("change", renderLeaderboard);
+  els.rank.addEventListener("change", renderLeaderboard);
 
   els.formula.value = DEFAULT_FORMULA;
 
@@ -1050,22 +987,33 @@ async function init() {
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
 
-  // Test-tab pickers: choosing an athlete + exercise prefills the calculator
-  // with that athlete's top set (they can still type custom numbers afterwards).
-  testAthleteDropdown = createDropdown(els.testAthleteBtn, els.testAthleteMenu, els.testAthleteLabel, (u) => {
-    populateTestExercises(u);
+  // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
+  // calculator with that athlete's top set (custom numbers still work afterwards).
+  // Defaults to Adomas + Squat.
+  els.testAthlete.innerHTML = users
+    .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
+    .join("");
+  const adomas = users.find((u) => u.username.toLowerCase().includes("adomas") || u.user.toLowerCase().includes("adomas"));
+  els.testAthlete.value = adomas?.username ?? users[0]?.username ?? "";
+  populateTestExercises(els.testAthlete.value);
+  els.testAthlete.addEventListener("change", () => {
+    populateTestExercises(els.testAthlete.value);
     prefillTestFromPick();
   });
-  testAthleteDropdown.setItems([
-    { value: "", label: "— none (manual) —" },
-    ...users.map((u) => ({ value: u.username, label: u.user })),
-  ]);
-  testAthleteDropdown.setValue("");
+  els.testExercise.addEventListener("change", prefillTestFromPick);
 
-  testExerciseDropdown = createDropdown(els.testExerciseBtn, els.testExerciseMenu, els.testExerciseLabel, () =>
-    prefillTestFromPick(),
-  );
-  populateTestExercises("");
+  // Calculator formula tabs (Epley / Brzycki / Nuzzo) — independent of the setting.
+  els.calcTabs.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".calc-tab");
+    const f = btn?.dataset.formula;
+    if (f !== "epley" && f !== "brzycki" && f !== "nuzzo") return;
+    calcTab = f;
+    for (const t of els.calcTabs.querySelectorAll(".calc-tab"))
+      t.classList.toggle("is-active", (t as HTMLElement).dataset.formula === f);
+    renderTest();
+  });
+
+  prefillTestFromPick(); // load Adomas / Squat into the calculator on first paint
 
   renderStatus();
   renderHealth();
@@ -1086,7 +1034,6 @@ async function init() {
   els.formula.addEventListener("change", renderAll);
   els.bwSource.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
-  els.prSearch.addEventListener("input", renderPersonalRecords);
   els.athlete.addEventListener("change", renderAthlete);
   els.progressExercise.addEventListener("change", renderProgress);
   els.summariseBtn.addEventListener("click", runSummary);

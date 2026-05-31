@@ -126,29 +126,38 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 }
 .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 .controls label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
-/* Custom ("physical") dropdown — replaces the native <select> for exercises. */
-.dropdown { position: relative; }
-.dropdown-toggle {
-  display: inline-flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-  min-width: 200px; max-width: 100%;
-  background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 0.95rem; cursor: pointer;
-  text-align: left;
+/* Leaderboard exercise picker: a plain word that opens the native dropdown on click. */
+.lb-exercise-bar { margin-bottom: 0.4rem; }
+select.plain-select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  border: none; background: transparent; color: var(--text);
+  font: inherit; font-size: 1.5rem; font-weight: 700; line-height: 1.2;
+  padding: 0; max-width: 100%; cursor: pointer;
 }
-.dropdown-toggle:hover { border-color: var(--accent); }
-.dropdown-toggle[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.dropdown-toggle > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.dropdown-caret { color: var(--muted); font-size: 0.7rem; flex: 0 0 auto; }
-.dropdown-menu {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
-  margin: 0; padding: 4px; list-style: none; min-width: 100%;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12);
-  max-height: 320px; overflow-y: auto;
+select.plain-select:hover, select.plain-select:focus { color: var(--accent); outline: none; }
+/* Subtle inline selects (reps / rank by) that sit by the leaderboard. */
+select.subtle-select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  border: none; background: transparent; color: var(--muted);
+  font: inherit; font-size: 0.82rem; padding: 4px 6px; border-radius: 6px; cursor: pointer;
 }
-.dropdown-item { padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-.dropdown-item:hover { background: var(--accent-soft); }
-.dropdown-item.is-selected { color: var(--accent); font-weight: 600; }
+select.subtle-select:hover, select.subtle-select:focus {
+  color: var(--accent); background: var(--accent-soft); outline: none;
+}
+.lb-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;
+}
+.lb-subtitle { margin: 0; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.lb-filters { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+/* Calculator formula tabs (Epley / Brzycki / Nuzzo). */
+.calc-tabs { display: flex; gap: 4px; margin: 0 0 0.75rem; flex-wrap: wrap; }
+.calc-tab {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.calc-tab:hover { border-color: var(--accent); color: var(--accent); }
+.calc-tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 /* Compact, top-aligned single control (e.g. the athlete picker). */
 .controls.compact { margin-bottom: 1rem; }
 .controls.compact label { flex: 0 0 auto; }
@@ -275,8 +284,8 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
   .controls.compact label { flex: 0 0 auto; }
   .controls.compact select { width: auto; padding: 6px 10px; }
 
-  /* Exercise/reps choice stays a compact button (not a full-width input). */
-  .dropdown-toggle { min-width: 160px; max-width: 100%; font-size: 16px; }
+  /* Plain/subtle selects keep their own sizing on mobile (not full-width). */
+  select.plain-select, select.subtle-select { width: auto; }
 
   .data-table th, .data-table td { padding: 6px 8px; }
 }

@@ -15,7 +15,8 @@
       "Bash(curl -s -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\)\" -o \"C:\\\\Users\\\\adoma\\\\AppData\\\\Local\\\\Temp\\\\fig3_bench.jpg\" \"https://cdn.ncbi.nlm.nih.gov/pmc/blobs/2e4f/10933212/de882a0cfc17/40279_2023_1937_Fig3_HTML.jpg\")",
       "Read(//c/Users/adoma/AppData/Local/Temp/**)",
       "Bash(git commit -q -m '0.6.0 reps-percent-1rm-page *)",
-      "Bash(git commit -q -m '0.6.1 reps-1rm-bench-chart *)"
+      "Bash(git commit -q -m '0.6.1 reps-1rm-bench-chart *)",
+      "Bash(git commit -q -m '0.7.0 native-selects-lb-layout-calc-tabs *)"
     ]
   }
 }
