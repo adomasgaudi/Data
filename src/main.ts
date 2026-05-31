@@ -344,9 +344,11 @@ function renderWorkoutsPage() {
     .slice(start, start + PAGE_SIZE)
     .map((d, i) => {
       const abs = start + i;
-      const did = d.exercises.map((e) => `${escapeHtml(e.exerciseName)} ×${e.count}`).join(", ");
+      const did = d.exercises
+        .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
+        .join("<br>");
       return (
-        `<tr class="wo-row" data-index="${abs}"><td><span class="caret">▸</span>${shortDate(d.date)}</td>` +
+        `<tr class="wo-row" data-index="${abs}"><td class="wo-date"><span class="caret">▸</span>${shortDate(d.date)}</td>` +
         `<td>${did}</td><td class="num">${d.totalSets}</td></tr>`
       );
     })
