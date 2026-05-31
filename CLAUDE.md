@@ -24,6 +24,11 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   **C** for a normal self-contained feature/fix, written 3-segment
   (`0.0.2`). **B**/**A** for substantial/major work. Keep the longer detail
   in the commit body as before.
+- **Always keep the on-screen version in lockstep with the commit version.**
+  The `<span class="version">` next to the title in `index.html` must show
+  the same number as the commit you're about to make (e.g. commit
+  `0.0.8.1 version-sync` → header `v0.0.8.1`). Update it in the same commit,
+  then rebuild so `dist/index.html` carries it.
 
 ## Project at a glance
 
