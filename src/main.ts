@@ -63,6 +63,9 @@ const els = {
   progressNote: $("progressNote"),
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
+  bwTitle: $("bwTitle"),
+  bwTable: $<HTMLTableElement>("bwTable"),
+  bwPager: $("bwPager"),
 };
 
 let data: LoadedData;
@@ -215,6 +218,7 @@ let athleteExercises: string[] = [];
 let athleteWorkouts: WorkoutDay[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
+let bwPage = 0;
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
@@ -489,10 +493,40 @@ function renderProgress() {
   });
 }
 
+// ---- BW parts tab: every exercise and its bodyweight coefficient ----
+function renderBwParts() {
+  const counts = new Map<string, number>();
+  for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
+
+  const rows = [...counts.keys()]
+    .map((name) => ({ name, coeff: EXERCISE_BW_COEFF[name] ?? DEFAULT_BW_COEFF, count: counts.get(name)! }))
+    // Bodyweight-heavy first, then most-trained, then alphabetical.
+    .sort((a, b) => b.coeff - a.coeff || b.count - a.count || a.name.localeCompare(b.name));
+
+  const withPart = rows.filter((r) => r.coeff > 0).length;
+  els.bwTitle.innerHTML =
+    `Bodyweight parts <span class="muted">(${rows.length} exercises · ${withPart} with a bodyweight part)</span>`;
+
+  const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
+  const start = bwPage * PAGE_SIZE;
+  const body = rows
+    .slice(start, start + PAGE_SIZE)
+    .map(
+      (r) =>
+        `<tr><td>${escapeHtml(r.name)}</td>` +
+        `<td class="num ${r.coeff > 0 ? "bw-on" : "muted"}">${r.coeff}</td>` +
+        `<td class="num">${r.count.toLocaleString()}</td></tr>`,
+    )
+    .join("");
+  els.bwTable.innerHTML = head + `<tbody>${body}</tbody>`;
+  els.bwPager.innerHTML = pagerHtml(bwPage, rows.length);
+}
+
 function renderAll() {
   renderLeaderboard();
   renderPersonalRecords();
   renderAthlete();
+  renderBwParts();
 }
 
 function escapeHtml(s: string): string {
@@ -655,6 +689,13 @@ async function init() {
     if (p !== null) {
       workoutsPage = p;
       renderWorkoutsPage();
+    }
+  });
+  els.bwPager.addEventListener("click", (e) => {
+    const p = pageFromClick(e);
+    if (p !== null) {
+      bwPage = p;
+      renderBwParts();
     }
   });
 

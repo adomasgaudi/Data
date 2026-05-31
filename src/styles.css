@@ -172,6 +172,7 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .detail-table tbody tr:last-child td { border-bottom: none; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
+.bw-on { color: var(--accent); font-weight: 600; }
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 

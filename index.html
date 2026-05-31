@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.3.0.1</span></h1>
+      <h1>Colosseum <span class="version">v0.3.1</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -32,6 +32,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-tab="leaderboards" role="tab">Leaderboards</button>
       <button class="tab" data-tab="athlete" role="tab">Athlete</button>
+      <button class="tab" data-tab="bwparts" role="tab">BW parts</button>
     </nav>
 
     <main>
@@ -125,6 +126,18 @@
             <p class="muted" id="progressNote"></p>
           </section>
         </div>
+      </div>
+
+      <div id="tab-bwparts" class="tab-panel" hidden>
+        <section class="panel">
+          <h2 id="bwTitle">Bodyweight parts</h2>
+          <p class="muted" style="margin: 0 0 0.75rem">
+            Share of bodyweight each movement lifts. The 1RM uses
+            <em>part × bodyweight + added weight</em>. Unlisted exercises are 0.
+          </p>
+          <table id="bwTable" class="data-table"></table>
+          <div id="bwPager" class="pager"></div>
+        </section>
       </div>
     </main>
 
