@@ -50,7 +50,6 @@ const els = {
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
-  reps: $<HTMLSelectElement>("reps"),
   rank: $<HTMLSelectElement>("rank"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
@@ -197,6 +196,7 @@ function renderHealth() {
 
 interface LbRow {
   user: string;
+  username: string;
   value: number; // the ranked number (kg, or BW)
   valueText: string; // formatted for the table
   best: string; // "weight×reps"
@@ -210,48 +210,64 @@ function renderLeaderboard() {
   const exercise = els.exercise.value;
   const formula = currentFormula();
   const rel = els.rank.value === "rel";
-  const range = REP_RANGES.find((r) => r.id === els.reps.value);
-  const filtered = filterRecords(computedRecords(), {
+  const comp = computedRecords();
+  const filtered = filterRecords(comp, {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
-    ...(range?.min !== undefined ? { minReps: range.min } : {}),
-    ...(range?.max !== undefined ? { maxReps: range.max } : {}),
   });
   const entries = leaderboard(filtered, exercise, formula);
+  const perBw = (username: string, e1rm: number): number | null => {
+    const bw = ATHLETES[username]?.weight;
+    return bw ? e1rm / bw : null;
+  };
 
   let rows: LbRow[];
   if (rel) {
     // Bodyweight-lifted ranking: estimated 1RM divided by the athlete's bodyweight.
     rows = entries
       .map((e): LbRow | null => {
-        const bw = ATHLETES[e.username]?.weight;
-        if (!bw) return null; // can't compute a ratio without a bodyweight on file
-        const ratio = e.e1rm / bw;
-        return { user: e.user, value: ratio, valueText: `${ratio.toFixed(2)} BW`, best: wr(e.weight, e.reps), date: e.date, e1rm: e.e1rm, ratio };
+        const ratio = perBw(e.username, e.e1rm);
+        if (ratio === null) return null; // can't rank without a bodyweight on file
+        return { user: e.user, username: e.username, value: ratio, valueText: `${ratio.toFixed(2)} BW`, best: wr(e.weight, e.reps), date: e.date, e1rm: e.e1rm, ratio };
       })
       .filter((r): r is LbRow => r !== null)
       .sort((a, b) => b.value - a.value);
   } else {
-    rows = entries.map((e) => {
-      const bw = ATHLETES[e.username]?.weight;
-      return {
-        user: e.user,
-        value: e.e1rm,
-        valueText: fmt(e.e1rm),
-        best: wr(e.weight, e.reps),
-        date: e.date,
-        e1rm: e.e1rm,
-        ratio: bw ? e.e1rm / bw : null,
-      };
-    });
+    rows = entries.map((e) => ({
+      user: e.user,
+      username: e.username,
+      value: e.e1rm,
+      valueText: fmt(e.e1rm),
+      best: wr(e.weight, e.reps),
+      date: e.date,
+      e1rm: e.e1rm,
+      ratio: perBw(e.username, e.e1rm),
+    }));
   }
 
   lbRows = rows;
-  const repsNote = range && range.id !== "all" ? ` · ${range.label}` : "";
+  // Per rep-band best 1RM for each athlete, for the stacked chart (replaces the
+  // old reps filter): one segment per band, value = best (added-weight) 1RM in it.
+  const bands = REP_RANGES.filter((r) => r.id !== "all");
+  const bandData = bands.map((band) => {
+    const f = filterRecords(comp, {
+      excludeDropsets: els.excludeDropsets.checked,
+      requireWeightAndReps: true,
+      ...(band.min !== undefined ? { minReps: band.min } : {}),
+      ...(band.max !== undefined ? { maxReps: band.max } : {}),
+    });
+    const byUser = new Map<string, number>();
+    for (const e of leaderboard(f, exercise, formula)) {
+      const v = rel ? perBw(e.username, e.e1rm) : e.e1rm;
+      if (v !== null) byUser.set(e.username, v);
+    }
+    return { label: band.label, byUser };
+  });
+
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
-  els.lbTitle.textContent = `${exercise}${repsNote} · ${metricNote}`;
+  els.lbTitle.textContent = `${exercise} · ${metricNote} · best per rep band`;
   renderLeaderboardTable(rows, rel);
-  renderLeaderboardChart(rows, rel);
+  renderLeaderboardChart(rows, bandData, rel);
 }
 
 function renderLeaderboardTable(rows: LbRow[], rel: boolean) {
@@ -288,31 +304,44 @@ function onLeaderboardRowClick(e: MouseEvent) {
   insertDetail(row, 3, detail);
 }
 
-function renderLeaderboardChart(rows: LbRow[], rel: boolean) {
+// One colour per rep band (low reps → high reps), light to dark.
+const BAND_COLORS = ["#a9c0e4", "#7fa1d4", "#5681c0", "#3b66a6", "#284e86", "#1b3a5d"];
+
+function renderLeaderboardChart(
+  rows: LbRow[],
+  bandData: { label: string; byUser: Map<string, number> }[],
+  rel: boolean,
+) {
   const canvas = $<HTMLCanvasElement>("lbChart");
   lbChart?.destroy();
+  const round = (n: number) => Math.round(n * 100) / 100;
   lbChart = new Chart(canvas, {
     type: "bar",
     data: {
       labels: rows.map((r) => r.user),
-      datasets: [
-        {
-          label: rel ? "1RM per bodyweight (×BW)" : "Estimated 1RM (kg)",
-          data: rows.map((r) => Math.round(r.value * 100) / 100),
-          backgroundColor: rows.map((_, i) => (i === 0 ? "#b8902f" : "#284e86")),
-          borderRadius: 4,
-        },
-      ],
+      datasets: bandData.map((band, i) => ({
+        label: band.label,
+        data: rows.map((r) => round(band.byUser.get(r.username) ?? 0)),
+        backgroundColor: BAND_COLORS[i % BAND_COLORS.length],
+        borderRadius: 3,
+        stack: "reps",
+      })),
     },
     options: {
       indexAxis: "y",
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#6b7280", boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: (c) => `${c.dataset.label}: ${c.parsed.x} ${rel ? "BW" : "kg"}`,
+          },
+        },
+      },
       scales: {
-        x: { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
-        // autoSkip:false so every athlete label shows (not every other one).
-        y: { grid: { display: false }, ticks: { color: "#1a1a1a", autoSkip: false } },
+        x: { stacked: true, grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
+        y: { stacked: true, grid: { display: false }, ticks: { color: "#1a1a1a", autoSkip: false } },
       },
     },
   });
@@ -1094,8 +1123,6 @@ async function init() {
     .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
     .join("");
   els.exercise.value = exercises[0] ?? "";
-  els.reps.innerHTML = REP_RANGES.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join("");
-  els.reps.value = "all";
   els.rank.innerHTML =
     `<option value="abs">Total (kg)</option><option value="rel">Per bodyweight</option>`;
   els.rank.value = "abs";
@@ -1104,7 +1131,6 @@ async function init() {
     renderLeaderboard();
     renderPersonalRecords(); // PRs are scoped to the selected exercise
   });
-  els.reps.addEventListener("change", renderLeaderboard);
   els.rank.addEventListener("change", renderLeaderboard);
 
   els.formula.value = DEFAULT_FORMULA;
