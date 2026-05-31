@@ -71,6 +71,12 @@ const PAGE_SIZE = 20;
 
 const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString();
 
+/** "2026-05-02" -> "5-02" (month without leading zero, day kept 2-digit). */
+const shortDate = (iso: string): string => {
+  const [, m, d] = iso.split("-");
+  return m && d ? `${Number(m)}-${d}` : iso;
+};
+
 function currentFormula(): OneRepMaxFormula {
   return els.formula.value === "brzycki" ? "brzycki" : "epley";
 }
@@ -288,7 +294,7 @@ function renderWorkoutsPage() {
       const abs = start + i;
       const did = d.exercises.map((e) => `${escapeHtml(e.exerciseName)} ×${e.count}`).join(", ");
       return (
-        `<tr class="wo-row" data-index="${abs}"><td><span class="caret">▸</span>${d.date}</td>` +
+        `<tr class="wo-row" data-index="${abs}"><td><span class="caret">▸</span>${shortDate(d.date)}</td>` +
         `<td>${did}</td><td class="num">${d.totalSets}</td></tr>`
       );
     })
@@ -379,7 +385,7 @@ function renderProgress() {
   progressChart = new Chart(canvas, {
     type: "bar",
     data: {
-      labels: series.map((p) => p.date),
+      labels: series.map((p) => shortDate(p.date)),
       datasets: [
         {
           type: "bar",
