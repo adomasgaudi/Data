@@ -947,8 +947,11 @@ function renderTest() {
   const bw = num(els.calcBw, 0);
   const coeff = num(els.calcCoeff, 0);
 
-  const load = effectiveLoad(weight, bw, coeff) ?? 0;
-  const bwPart = load - weight; // coeff × bodyweight — the body's share of the load
+  // Named parts of the lift (the same names the code uses everywhere):
+  const addedWeight = weight; // what's on the bar (the logged weight)
+  const effLoad = effectiveLoad(weight, bw, coeff) ?? 0; // added + bodyweight share
+  const bodyweightLoad = effLoad - addedWeight; // coeff × bodyweight, the body's share
+  const isBodyweightLift = bodyweightLoad > 0.01;
   const vol = setVolume(weight, reps);
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
@@ -956,34 +959,40 @@ function renderTest() {
     `<div class="calc-row"><div class="calc-label">${title}</div>` +
     `<div class="calc-formula">${formula}</div><div class="calc-result">${result}</div></div>`;
 
-  // 1RM of the *effective* load for the selected formula, then peel the bodyweight
-  // share back off so the answer is the added (bar) weight — comparable to logged
-  // weights. For bar-only lifts (coeff 0) bwPart is 0 and nothing changes.
+  // 1RM of the effective load for the selected formula, then peel the bodyweight
+  // share back off so the answer is added (bar) weight — comparable to logged
+  // weights, and the exact number the leaderboards/PRs now use.
   let effective1RM: number | null;
   let formulaText: string;
   if (calcTab === "brzycki") {
-    effective1RM = brzycki1RM(load, reps);
-    formulaText = reps >= 37 ? "undefined at 37+ reps" : `${f2(load)} × 36 / (37 − ${reps})`;
+    effective1RM = brzycki1RM(effLoad, reps);
+    formulaText = reps >= 37 ? "undefined at 37+ reps" : `${f2(effLoad)} × 36 / (37 − ${reps})`;
   } else if (calcTab === "nuzzo") {
-    effective1RM = nuzzo1RM(load, reps);
-    formulaText = reps === 1 ? "a single is the 1RM" : `${f2(load)} ÷ ${f2(benchPctForReps(reps))}% (bench curve)`;
+    effective1RM = nuzzo1RM(effLoad, reps);
+    formulaText = reps === 1 ? "a single is the 1RM" : `${f2(effLoad)} ÷ ${f2(benchPctForReps(reps))}% (bench curve)`;
   } else {
-    effective1RM = epley1RM(load, reps);
-    formulaText = `${f2(load)} × (1 + ${reps}/30)`;
+    effective1RM = epley1RM(effLoad, reps);
+    formulaText = `${f2(effLoad)} × (1 + ${reps}/30)`;
   }
-  const added1RM = effective1RM === null ? null : effective1RM - bwPart;
-  const perBw = effective1RM !== null && bw > 0 ? effective1RM / bw : null;
+  const addedWeight1RM = effective1RM === null ? null : effective1RM - bodyweightLoad;
+  // Per-bodyweight matches the leaderboard: added-weight 1RM ÷ bodyweight.
+  const perBw = addedWeight1RM !== null && bw > 0 ? addedWeight1RM / bw : null;
 
-  const rows = [line("Effective load", `${coeff} × ${f2(bw)} + ${f2(weight)}`, `${f2(load)} kg`)];
-  rows.push(line(`1RM (effective)`, formulaText, effective1RM === null ? "—" : `${f2(effective1RM)} kg`));
-  if (bwPart > 0.01) {
+  const rows: string[] = [];
+  if (isBodyweightLift) {
+    rows.push(line("Added weight (bar)", "what you loaded", `${f2(addedWeight)} kg`));
+    rows.push(line("Bodyweight load", `${coeff} × ${f2(bw)} bodyweight`, `${f2(bodyweightLoad)} kg`));
+    rows.push(line("Effective load", `added + bodyweight = ${f2(addedWeight)} + ${f2(bodyweightLoad)}`, `${f2(effLoad)} kg`));
+    rows.push(line("Effective 1RM", formulaText, effective1RM === null ? "—" : `${f2(effective1RM)} kg`));
     rows.push(
       line(
-        "1RM (added weight)",
-        `${effective1RM === null ? "—" : f2(effective1RM)} − ${f2(bwPart)} bodyweight`,
-        added1RM === null ? "—" : `${f2(added1RM)} kg`,
+        "Added-weight 1RM",
+        `effective 1RM − bodyweight load = ${effective1RM === null ? "—" : f2(effective1RM)} − ${f2(bodyweightLoad)}`,
+        addedWeight1RM === null ? "—" : `${f2(addedWeight1RM)} kg`,
       ),
     );
+  } else {
+    rows.push(line("Estimated 1RM", formulaText, addedWeight1RM === null ? "—" : `${f2(addedWeight1RM)} kg`));
   }
   if (calcTab === "nuzzo") {
     rows.push(line("Bench: these reps ≈", `${reps} rep(s) on the bench curve`, `${f2(benchPctForReps(reps))}% of 1RM`));
@@ -992,7 +1001,7 @@ function renderTest() {
   rows.push(
     line(
       "Per bodyweight",
-      effective1RM === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(effective1RM)} ÷ ${f2(bw)}`,
+      addedWeight1RM === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(addedWeight1RM)} ÷ ${f2(bw)}`,
       perBw === null ? "—" : `${perBw.toFixed(2)}× BW`,
     ),
   );

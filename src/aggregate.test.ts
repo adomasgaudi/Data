@@ -17,6 +17,7 @@ import {
   weeksForUser,
   setsByWeek,
   exerciseProgressForUser,
+  addedWeight1RM,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
 
@@ -46,6 +47,40 @@ const FIXTURE: SetRecord[] = [
   rec({ user: "Bob", username: "bob", exerciseName: "Squat", weight: 150, reps: 3, date: "2024-01-20" }), // e1rm 165
   rec({ user: "Ada", username: "ada", exerciseName: "Squat", weight: 140, reps: 1, date: "2024-03-01" }),
 ];
+
+describe("addedWeight1RM", () => {
+  it("equals the plain 1RM for a bar-only lift (no bodyweight share)", () => {
+    // origWeight undefined ⇒ bodyweightLoad 0 ⇒ same as estimate1RM.
+    const r = rec({ weight: 100, reps: 5 });
+    expect(addedWeight1RM(r, "epley")).toBeCloseTo(epley1RM(100, 5)!, 6);
+  });
+
+  it("peels the bodyweight share back off for a bodyweight lift", () => {
+    // Squat: effective load 200 (= 60 bodyweight share + 140 bar), 3 reps.
+    // effective 1RM = 200 × (1 + 3/30) = 220; added-weight 1RM = 220 − 60 = 160.
+    const r = rec({ weight: 200, origWeight: 140, reps: 3 });
+    expect(addedWeight1RM(r, "epley")).toBeCloseTo(160, 6);
+  });
+
+  it("never falls below the added weight actually lifted", () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 1, max: 300, noNaN: true }), // added (bar) weight
+        fc.double({ min: 0, max: 120, noNaN: true }), // bodyweight share
+        fc.integer({ min: 1, max: 20 }),
+        (added, bwLoad, reps) => {
+          const r = rec({ weight: added + bwLoad, origWeight: added, reps });
+          return addedWeight1RM(r, "epley")! >= added - 1e-9;
+        },
+      ),
+    );
+  });
+
+  it("a single rep returns exactly the added weight", () => {
+    const r = rec({ weight: 200, origWeight: 140, reps: 1 });
+    expect(addedWeight1RM(r, "epley")).toBeCloseTo(140, 6);
+  });
+});
 
 describe("maxBy", () => {
   it("finds the element maximizing the selector", () => {

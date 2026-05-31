@@ -321,7 +321,7 @@ export function exerciseProgressForUser(
     .map(([date, sets]) => {
       let best: number | null = null;
       for (const s of sets) {
-        const e = estimate1RM(s.weight, s.reps, formula);
+        const e = addedWeight1RM(s, formula); // bodyweight share peeled off, like everywhere else
         if (e !== null && (best === null || e > best)) best = e;
       }
       return { date, sets: sets.length, bestE1rm: best };
@@ -340,16 +340,40 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
   return [...map].map(([username, user]) => ({ username, user })).sort((a, b) => a.user.localeCompare(b.user));
 }
 
-export interface BestSet {
-  record: SetRecord;
-  e1rm: number;
+/**
+ * Estimated 1RM of a set as ADDED (bar) weight — the load you'd put on the bar
+ * for a single, directly comparable to the weight you logged. We name each part
+ * so there's no ambiguity about what the number means:
+ *
+ *   addedWeight    – what's on the bar (origWeight; the logged weight)
+ *   bodyweightLoad – the body's share of the lift (coeff × bodyweight), already
+ *                    folded into `weight` by computedRecords for squats, pull-ups…
+ *   effectiveLoad  – addedWeight + bodyweightLoad  (= record.weight)
+ *   effective1RM   – the formula's 1RM of the effectiveLoad
+ *   addedWeight1RM – effective1RM − bodyweightLoad  ← what we report
+ *
+ * For bar-only lifts bodyweightLoad is 0, so this is just the plain 1RM. Because
+ * a 1RM is never below the load lifted, addedWeight1RM is never below addedWeight.
+ */
+export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
+  const effective1RM = estimate1RM(record.weight, record.reps, formula);
+  if (effective1RM === null) return null;
+  const effectiveLoad = record.weight ?? 0;
+  const addedWeight = record.origWeight ?? effectiveLoad;
+  const bodyweightLoad = effectiveLoad - addedWeight;
+  return effective1RM - bodyweightLoad;
 }
 
-/** The single set with the highest estimated 1RM among `records`. */
+export interface BestSet {
+  record: SetRecord;
+  e1rm: number; // added-weight 1RM (bodyweight share peeled back off)
+}
+
+/** The single set with the highest added-weight 1RM among `records`. */
 export function bestSet(records: readonly SetRecord[], formula: OneRepMaxFormula = "epley"): BestSet | null {
-  const record = maxBy(records, (r) => estimate1RM(r.weight, r.reps, formula));
+  const record = maxBy(records, (r) => addedWeight1RM(r, formula));
   if (record === null) return null;
-  const e1rm = estimate1RM(record.weight, record.reps, formula);
+  const e1rm = addedWeight1RM(record, formula);
   return e1rm === null ? null : { record, e1rm };
 }
 
