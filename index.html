@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.5.3</span></h1>
+      <h1>Colosseum <span class="version">v0.5.4</span></h1>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -33,6 +33,7 @@
       <button class="tab is-active" data-tab="leaderboards" role="tab">Leaderboards</button>
       <button class="tab" data-tab="athlete" role="tab">Athlete</button>
       <button class="tab" data-tab="bwparts" role="tab">Exercises</button>
+      <button class="tab" data-tab="test" role="tab">Test</button>
     </nav>
 
     <main>
@@ -154,6 +155,38 @@
             <p class="muted" id="progressNote"></p>
           </section>
         </div>
+      </div>
+
+      <div id="tab-test" class="tab-panel" hidden>
+        <section class="panel">
+          <h2>Calculator — see the maths</h2>
+          <p class="muted" style="margin: 0 0 1rem">
+            Change the numbers and watch each formula recompute. This is the exact code the
+            leaderboards use.
+          </p>
+          <div class="calc-inputs">
+            <label>Weight (kg)<input id="calcWeight" type="number" value="100" step="2.5" /></label>
+            <label>Reps<input id="calcReps" type="number" value="5" min="1" /></label>
+            <label>Bodyweight (kg)<input id="calcBw" type="number" value="80" step="1" /></label>
+            <label>BW part (coeff)<input id="calcCoeff" type="number" value="0" step="0.05" min="0" max="2" /></label>
+          </div>
+          <div id="calcOut" class="calc-out"></div>
+        </section>
+        <section class="panel">
+          <h2>How the numbers work</h2>
+          <div class="calc-explain">
+            <p><strong>1. Effective load.</strong> For lifts that move your body (pull-ups, squats…),
+              the load is <code>coeff × bodyweight + added weight</code>. <code>coeff</code> 0 = bar only
+              (e.g. bench); 0.95 ≈ a strict pull-up. Bench at coeff 0 just uses the weight on the bar.</p>
+            <p><strong>2. Epley 1RM</strong> (estimated one-rep max): <code>load × (1 + reps / 30)</code>.
+              A single rep returns the load itself. Heavier-for-more-reps ⇒ higher estimate.</p>
+            <p><strong>3. Brzycki 1RM</strong> (alternative): <code>load × 36 / (37 − reps)</code>.
+              Undefined at 37+ reps, so it's blank there.</p>
+            <p><strong>4. Volume:</strong> <code>weight × reps</code> — total load moved in the set.</p>
+            <p><strong>5. Per bodyweight</strong> (the relative leaderboard): <code>1RM ÷ bodyweight</code>,
+              shown as ×BW, so people of different sizes compare fairly.</p>
+          </div>
+        </section>
       </div>
 
       <div id="tab-bwparts" class="tab-panel" hidden>

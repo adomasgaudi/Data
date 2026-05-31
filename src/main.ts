@@ -22,7 +22,7 @@ import {
   type WorkoutDay,
   type ExerciseCount,
 } from "./aggregate";
-import { estimate1RM, setVolume, effectiveLoad, type OneRepMaxFormula } from "./metrics";
+import { epley1RM, brzycki1RM, estimate1RM, setVolume, effectiveLoad, type OneRepMaxFormula } from "./metrics";
 import type { SetRecord } from "./domain";
 import { ATHLETES, EXERCISE_BW_COEFF, DEFAULT_BW_COEFF } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
@@ -78,6 +78,11 @@ const els = {
   recordsTitle: $("recordsTitle"),
   recordsTable: $<HTMLTableElement>("recordsTable"),
   recordsPager: $("recordsPager"),
+  calcWeight: $<HTMLInputElement>("calcWeight"),
+  calcReps: $<HTMLInputElement>("calcReps"),
+  calcBw: $<HTMLInputElement>("calcBw"),
+  calcCoeff: $<HTMLInputElement>("calcCoeff"),
+  calcOut: $("calcOut"),
 };
 
 let data: LoadedData;
@@ -758,11 +763,46 @@ function onBwInputChange(e: Event) {
   renderAthlete();
 }
 
+// ---- Test tab: live calculator showing each formula with the numbers ----
+function renderTest() {
+  const num = (el: HTMLInputElement, fallback: number) => {
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const weight = num(els.calcWeight, 0);
+  const reps = Math.max(1, Math.round(num(els.calcReps, 1)));
+  const bw = num(els.calcBw, 0);
+  const coeff = num(els.calcCoeff, 0);
+
+  const load = effectiveLoad(weight, bw, coeff) ?? 0;
+  const epley = epley1RM(load, reps);
+  const brzycki = brzycki1RM(load, reps);
+  const vol = setVolume(weight, reps);
+  const perBw = epley !== null && bw > 0 ? epley / bw : null;
+  const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
+
+  const line = (title: string, formula: string, result: string) =>
+    `<div class="calc-row"><div class="calc-label">${title}</div>` +
+    `<div class="calc-formula">${formula}</div><div class="calc-result">${result}</div></div>`;
+
+  els.calcOut.innerHTML =
+    line("Effective load", `${coeff} × ${f2(bw)} + ${f2(weight)}`, `${f2(load)} kg`) +
+    line("Epley 1RM", `${f2(load)} × (1 + ${reps}/30)`, epley === null ? "—" : `${f2(epley)} kg`) +
+    line(
+      "Brzycki 1RM",
+      reps >= 37 ? "undefined at 37+ reps" : `${f2(load)} × 36 / (37 − ${reps})`,
+      brzycki === null ? "—" : `${f2(brzycki)} kg`,
+    ) +
+    line("Volume", `${f2(weight)} × ${reps}`, vol === null ? "—" : `${f2(vol)}`) +
+    line("Per bodyweight", epley === null || bw <= 0 ? "needs 1RM and bodyweight" : `${f2(epley)} ÷ ${f2(bw)}`, perBw === null ? "—" : `${perBw.toFixed(2)}× BW`);
+}
+
 function renderAll() {
   renderLeaderboard();
   renderPersonalRecords();
   renderAthlete();
   renderBwParts();
+  renderTest();
 }
 
 function escapeHtml(s: string): string {
@@ -961,6 +1001,8 @@ async function init() {
     }
   });
   els.bwTable.addEventListener("change", onBwInputChange);
+  for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
+    input.addEventListener("input", renderTest);
   els.recordsPager.addEventListener("click", (e) => {
     const p = pageFromClick(e);
     if (p !== null) {

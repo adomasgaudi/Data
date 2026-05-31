@@ -179,6 +179,21 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }
+.calc-inputs { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+.calc-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.calc-inputs input {
+  width: 6rem; font: inherit; font-size: 16px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+}
+.calc-inputs input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.calc-row { display: grid; grid-template-columns: 9rem 1fr auto; gap: 0.75rem; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.calc-row:last-child { border-bottom: none; }
+.calc-label { font-weight: 600; font-size: 0.9rem; }
+.calc-formula { color: var(--muted); font-size: 0.85rem; }
+.calc-result { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.calc-explain p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.5; }
+.calc-explain code { background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; font-size: 0.85em; }
+@media (max-width: 640px) { .calc-row { grid-template-columns: 1fr auto; } .calc-formula { grid-column: 1 / -1; } }
 .go-chevron { color: var(--muted); margin-left: 0.4rem; }
 .back-btn {
   background: none; border: none; color: var(--accent); cursor: pointer;
