@@ -71,6 +71,8 @@ body {
 }
 .subtab:hover { color: var(--text); }
 .subtab.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.athlete-profile { margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
+.athlete-profile:empty { display: none; }
 .summary-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .primary-btn {
   background: var(--accent); color: #fff; border: none; border-radius: 8px;

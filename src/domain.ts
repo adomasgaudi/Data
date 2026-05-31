@@ -36,6 +36,9 @@ export interface SetRecord {
   exerciseName: string;
   setNumber: number;
   weight: number | null;
+  /** When the row's weight has been replaced by a bodyweight-inclusive load for
+   * 1RM calculation, this holds the originally-logged weight for display. */
+  origWeight?: number | null;
   reps: number | null;
   notes: string;
   dropset: boolean;

@@ -357,7 +357,7 @@ export interface LeaderboardEntry {
   user: string;
   username: string;
   e1rm: number;
-  weight: number;
+  weight: number | null; // the originally-logged weight (display), not the calc load
   reps: number;
   date: string;
 }
@@ -387,7 +387,8 @@ export function leaderboard(
       user: best.record.user,
       username: best.record.username,
       e1rm: best.e1rm,
-      weight: best.record.weight,
+      // Display the originally-logged weight (added load), not the calc load.
+      weight: best.record.origWeight !== undefined ? best.record.origWeight : best.record.weight,
       reps: best.record.reps,
       date: best.record.date,
     });
@@ -400,9 +401,9 @@ export interface PersonalRecord {
   username: string;
   exerciseName: string;
   /** Heaviest single set regardless of reps. */
-  topWeight: { weight: number; reps: number; date: string };
+  topWeight: { weight: number | null; reps: number; date: string };
   /** Best estimated 1RM. */
-  bestE1rm: { e1rm: number; weight: number; reps: number; date: string };
+  bestE1rm: { e1rm: number; weight: number | null; reps: number; date: string };
 }
 
 /** Best lift per (user, exercise): both heaviest weight and best estimated 1RM. */
@@ -419,20 +420,22 @@ export function personalRecords(
     else groups.set(key, [r]);
   }
 
+  const disp = (r: SetRecord): number | null => (r.origWeight !== undefined ? r.origWeight : r.weight);
   const out: PersonalRecord[] = [];
   for (const sets of groups.values()) {
-    const heaviest = maxBy(sets, (r) => r.weight);
+    // Heaviest is by the originally-logged (added) weight, not the calc load.
+    const heaviest = maxBy(sets, disp);
     const best = bestSet(sets, formula);
-    if (!heaviest || !best || heaviest.weight === null || heaviest.reps === null) continue;
+    if (!heaviest || !best || heaviest.reps === null) continue;
     if (best.record.weight === null || best.record.reps === null) continue;
     out.push({
       user: heaviest.user,
       username: heaviest.username,
       exerciseName: heaviest.exerciseName,
-      topWeight: { weight: heaviest.weight, reps: heaviest.reps, date: heaviest.date },
+      topWeight: { weight: disp(heaviest), reps: heaviest.reps, date: heaviest.date },
       bestE1rm: {
         e1rm: best.e1rm,
-        weight: best.record.weight,
+        weight: disp(best.record),
         reps: best.record.reps,
         date: best.record.date,
       },

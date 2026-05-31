@@ -59,6 +59,7 @@ const els = {
   healthPanel: $("healthPanel"),
   health: $("health"),
   athlete: $<HTMLSelectElement>("athlete"),
+  athleteProfile: $("athleteProfile"),
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exercisesPager: $("exercisesPager"),
@@ -148,7 +149,8 @@ function computedRecords(): SetRecord[] {
     const coeff = coeffFor(r.exerciseName);
     if (coeff <= 0) return r;
     const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
-    return { ...r, weight: effectiveLoad(r.weight, bw, coeff) };
+    // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
+    return { ...r, weight: effectiveLoad(r.weight, bw, coeff), origWeight: r.weight };
   });
 }
 
@@ -328,6 +330,7 @@ function renderAthlete() {
   athleteExercises = exerciseCountsForUser(data.records, els.athlete.value).map((c) => c.exerciseName);
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
+  renderAthleteProfile();
   populateProgressExercise();
   renderExercisesPage();
   renderWorkoutsPage();
@@ -359,6 +362,18 @@ function renderRecordsPage() {
   els.recordsTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="4" class="muted">No records for this athlete.</td></tr>`}</tbody>`;
   els.recordsPager.innerHTML = pagerHtml(recordsPage, recs.length);
+}
+
+/** Profile line (weight / height / body fat / age) for the selected athlete. */
+function renderAthleteProfile() {
+  const p = ATHLETES[els.athlete.value];
+  if (!p) {
+    els.athleteProfile.textContent = "No profile on file";
+    return;
+  }
+  const parts = [`${p.weight} kg`, `${p.height} cm`, `${Math.round(p.bodyFat * 100)}% body fat`];
+  if (p.age != null) parts.push(`age ${p.age}`);
+  els.athleteProfile.textContent = parts.join("  ·  ");
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
