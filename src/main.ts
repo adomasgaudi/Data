@@ -120,16 +120,16 @@ function renderLeaderboard() {
 }
 
 function renderLeaderboardTable(entries: LeaderboardEntry[]) {
-  const head = `<thead><tr><th class="rank">#</th><th>Athlete</th><th class="num">Est. 1RM</th><th class="num">Best set</th><th class="num">Date</th></tr></thead>`;
+  const head = `<thead><tr><th>Athlete</th><th class="num">Est. 1RM</th><th class="num">Best set</th><th class="num">Date</th></tr></thead>`;
   const rows = entries
     .map(
       (e, i) =>
-        `<tr><td class="rank ${i === 0 ? "rank-1" : ""}">${i + 1}</td><td>${escapeHtml(e.user)}</td>` +
+        `<tr><td class="${i === 0 ? "rank-1" : ""}">${escapeHtml(e.user)}</td>` +
         `<td class="num">${fmt(e.e1rm)} kg</td><td class="num">${fmt(e.weight)}×${e.reps}</td><td class="num">${e.date}</td></tr>`,
     )
     .join("");
   els.lbTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="5" class="muted">No data for this exercise.</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="4" class="muted">No data for this exercise.</td></tr>`}</tbody>`;
 }
 
 function renderLeaderboardChart(entries: LeaderboardEntry[]) {

@@ -112,7 +112,8 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 }
 .dropdown-toggle:hover { border-color: var(--accent); }
 .dropdown-toggle[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.dropdown-caret { color: var(--muted); font-size: 0.7rem; }
+.dropdown-toggle > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dropdown-caret { color: var(--muted); font-size: 0.7rem; flex: 0 0 auto; }
 .dropdown-menu {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
   margin: 0; padding: 4px; list-style: none; min-width: 100%;
@@ -206,9 +207,8 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
   .controls.compact label { flex: 0 0 auto; }
   .controls.compact select { width: auto; padding: 6px 10px; }
 
-  /* Custom dropdown spans the control width on phones. */
-  .dropdown { width: 100%; }
-  .dropdown-toggle { width: 100%; min-width: 0; font-size: 16px; }
+  /* Exercise/reps choice stays a compact button (not a full-width input). */
+  .dropdown-toggle { min-width: 160px; max-width: 100%; font-size: 16px; }
 
   .data-table th, .data-table td { padding: 6px 8px; }
 }
