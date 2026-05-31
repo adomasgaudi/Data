@@ -293,6 +293,7 @@ function renderPersonalRecords() {
 // State for the currently shown athlete. The displayed-order arrays let the
 // (delegated) click handlers map a clicked row back to its data.
 let athleteExercises: string[] = [];
+let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
 let athleteWorkouts: WorkoutDay[] = [];
 
 // A row in the Workouts list: a day or a week (or an empty rest day).
@@ -314,6 +315,7 @@ function renderAthlete() {
   exercisesPage = 0;
   workoutsPage = 0;
   recordsPage = 0;
+  selectedExercise = null;
   athleteExercises = exerciseCountsForUser(data.records, els.athlete.value).map((c) => c.exerciseName);
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
@@ -416,13 +418,17 @@ function pagerHtml(page: number, total: number): string {
   );
 }
 
-// ---- Exercises page (all exercises, 20/page, expandable) ----
+// ---- Exercises page: a list that drills into one exercise (like a tab change) ----
 function renderExercisesPage() {
+  if (selectedExercise !== null) {
+    renderExerciseDetail(selectedExercise);
+    return;
+  }
   const counts = exerciseCountsForUser(data.records, els.athlete.value);
   const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
   els.athleteTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — exercises by sets ` +
-    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets · tap a row for all sets)</span>`;
+    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets · tap an exercise)</span>`;
 
   const head = `<thead><tr><th class="rank">#</th><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const start = exercisesPage * PAGE_SIZE;
@@ -432,8 +438,8 @@ function renderExercisesPage() {
       const abs = start + i;
       return (
         `<tr class="ex-row" data-index="${abs}"><td class="rank ${abs === 0 ? "rank-1" : ""}">${abs + 1}</td>` +
-        `<td><span class="caret">▸</span>${escapeHtml(c.exerciseName)}</td>` +
-        `<td class="num">${c.count.toLocaleString()}</td></tr>`
+        `<td>${escapeHtml(c.exerciseName)}</td>` +
+        `<td class="num">${c.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
       );
     })
     .join("");
@@ -442,17 +448,34 @@ function renderExercisesPage() {
   els.exercisesPager.innerHTML = pagerHtml(exercisesPage, counts.length);
 }
 
-/** Expand/collapse the set-by-set detail under a clicked exercise row. */
+/** Drill-in view for one exercise: a back link + its sets grouped by week. */
+function renderExerciseDetail(exName: string) {
+  els.athleteTitle.innerHTML =
+    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}`;
+  els.exercisesPager.innerHTML = "";
+  const weeks = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName));
+  const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
+  const rows = weeks
+    .map(
+      (w) =>
+        `<tr class="wk-row" data-wk="${w.weekStart}">` +
+        `<td><span class="caret">▸</span>Week of ${shortDate(w.weekStart)}</td><td class="num">${w.sets.length}</td></tr>`,
+    )
+    .join("");
+  els.athleteTable.innerHTML =
+    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No sets.</td></tr>`}</tbody>`;
+}
+
+/** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
 
-  // Level 2: a week inside an expanded exercise -> show that week's sets (by date).
+  // Inside the drill-in view: a week -> expand to that week's sets (by date).
   const wkRow = target.closest("tr.wk-row") as HTMLTableRowElement | null;
   if (wkRow) {
     if (toggleCollapse(wkRow)) return;
-    const exName = athleteExercises[Number(wkRow.dataset.exidx)];
-    if (exName === undefined) return;
-    const week = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName)).find(
+    if (selectedExercise === null) return;
+    const week = setsByWeek(setsForUserExercise(data.records, els.athlete.value, selectedExercise)).find(
       (w) => w.weekStart === wkRow.dataset.wk,
     );
     if (!week) return;
@@ -460,28 +483,13 @@ function onExerciseRowClick(e: MouseEvent) {
     return;
   }
 
-  // Level 1: an exercise -> list the weeks it was trained.
+  // List view: tapping an exercise switches to its detail (no inline dropdown).
   const row = target.closest("tr.ex-row") as HTMLTableRowElement | null;
   if (!row) return;
-  if (toggleCollapse(row)) return;
-  const exidx = Number(row.dataset.index);
-  const exName = athleteExercises[exidx];
+  const exName = athleteExercises[Number(row.dataset.index)];
   if (exName === undefined) return;
-  insertDetail(row, 3, exerciseWeeksHtml(exName, exidx));
-}
-
-/** Inner table: weeks an exercise was trained; each expands to that week's sets. */
-function exerciseWeeksHtml(exName: string, exidx: number): string {
-  const weeks = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName));
-  const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
-  const rows = weeks
-    .map(
-      (w) =>
-        `<tr class="wk-row" data-exidx="${exidx}" data-wk="${w.weekStart}">` +
-        `<td><span class="caret">▸</span>Week of ${shortDate(w.weekStart)}</td><td class="num">${w.sets.length}</td></tr>`,
-    )
-    .join("");
-  return `<table class="data-table detail-table">${head}<tbody>${rows}</tbody></table>`;
+  selectedExercise = exName;
+  renderExercisesPage();
 }
 
 // ---- Workouts page (one row per day or week, 20/page, expandable) ----
@@ -918,6 +926,13 @@ async function init() {
 
   // Expand/collapse rows.
   els.athleteTable.addEventListener("click", onExerciseRowClick);
+  // Back link in the exercise drill-in (lives in the title, outside the table).
+  els.athleteTitle.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".back-btn")) {
+      selectedExercise = null;
+      renderExercisesPage();
+    }
+  });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 
   // Pagination (delegated on the persistent pager containers).
