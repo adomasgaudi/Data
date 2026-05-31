@@ -44,28 +44,56 @@ bugs: `max(filter(x)) === filter-then-max`, sorting is a permutation, e1RM is
 monotonic and never below the weight lifted. During development one of these
 tests caught an arithmetic mistake in a fixture — the safety net working.
 
+## Scoring model (how a number on the board is built)
+
+The goal is honest numbers that represent what someone actually trained. Each set
+is turned into a comparable strength figure in named steps:
+
+- **Effective load** = `coeff × bodyweight + added weight`. The `coeff` is how much
+  bodyweight a movement really loads, and it is **leverage-aware** (`defaultBwCoeff`):
+  a front lever or straight-leg raise is ~0.1 (a little weight far from the pivot
+  changes everything), a pull-up 0.95, a squat 0.6, a bench 0.
+- **Effective 1RM** = the chosen formula (Epley / Brzycki / the bench-specific Nuzzo
+  curve) applied to the effective load. Reps are **capped at `MAX_1RM_REPS`** for
+  ranking so a 35-rep set can't extrapolate to a phantom max.
+- **Added-weight 1RM** = effective 1RM − the bodyweight share, so the reported max is
+  comparable to the weight you actually put on the bar. This is what the leaderboard,
+  PRs and progress charts all use.
+- **Exercise groups** (`EXERCISE_GROUPS`) fold variants into one board with a scaling
+  quotient (e.g. an RDL at 0.7 counts as a ~1.43× deadlift-equivalent).
+- **Training categories** (`exerciseCategory`) classify each lift (Legs/Chest/Back/…)
+  for the "what they train" breakdown; **progression** is a least-squares trend
+  (`linearFit`) over the 1RM history; **duplicate detection** (`nearDuplicateExercises`)
+  flags typo/plural variants of the same exercise so the data can be cleaned.
+
+All of the above are pure, unit-tested functions in `metrics.ts` / `aggregate.ts` /
+`profile.ts`.
+
 ## Project layout
 
 ```
 src/
   strengthlevel.ts   StrengthLevel fetch + flatten (port of the Apps Script)
   domain.ts          types, Zod boundary schemas, parseRows(), sanityCheck()
-  metrics.ts         epley/brzycki 1RM, volume  (pure, per-set)
-  aggregate.ts       maxBy, filter/sort, leaderboard, personalRecords (pure)
-  dataSource.ts      fetch /api/data + validate; falls back to bundled sample
-  config.ts          data-URL config (defaults to /api/data)
+  metrics.ts         1RM formulas (Epley/Brzycki/Nuzzo bench curve), volume,
+                     effectiveLoad, linearFit  (pure, per-set)
+  aggregate.ts       maxBy, filter/sort, leaderboard, personalRecords,
+                     addedWeight1RM, scaleToGroup, nearDuplicateExercises (pure)
+  profile.ts         athletes, bodyweight coeffs (defaultBwCoeff), exercise
+                     groups + scaling, exerciseCategory
+  dataSource.ts      load + validate the bundled set log (src/data/ud.csv)
+  config.ts          default 1RM formula
   main.ts            DOM glue
-  fixtures/sample.json   demo data so the site renders with zero config
   *.test.ts          unit, property, integration, and port tests
-netlify/functions/data.mts   the server-side fetcher, served at /api/data
-netlify.toml                 Netlify build config
+netlify/functions/   the server-side fetcher (when wired to live StrengthLevel)
+netlify.toml         Netlify build config
 ```
 
 ## Develop
 
 ```bash
 npm install
-npm test          # 42 tests: unit + property + integration + port
+npm test          # 90+ tests: unit + property + integration + port
 npm run typecheck
 npm run build     # -> dist/  (one self-contained index.html)
 ```
