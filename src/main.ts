@@ -89,6 +89,35 @@ function currentFormula(): OneRepMaxFormula {
   return els.formula.value === "brzycki" ? "brzycki" : "epley";
 }
 
+// ---- Bodyweight coefficients: the single source of truth, editable + saved ----
+// Starts from the profile.ts defaults; user edits are layered on top and stored
+// in the browser so they survive reloads. coeffFor() is read everywhere.
+const COEFF_STORE_KEY = "colosseum.bwCoeffs.v1";
+const coeffOverrides: Record<string, number> = loadCoeffOverrides();
+
+function loadCoeffOverrides(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(COEFF_STORE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function coeffFor(exerciseName: string): number {
+  if (Object.prototype.hasOwnProperty.call(coeffOverrides, exerciseName)) return coeffOverrides[exerciseName]!;
+  return EXERCISE_BW_COEFF[exerciseName] ?? DEFAULT_BW_COEFF;
+}
+
+function setCoeff(exerciseName: string, value: number) {
+  coeffOverrides[exerciseName] = value;
+  try {
+    localStorage.setItem(COEFF_STORE_KEY, JSON.stringify(coeffOverrides));
+  } catch {
+    /* storage may be unavailable (e.g. private mode) — edits still apply this session */
+  }
+}
+
 /**
  * Records with the bodyweight-lifted load baked into `weight`, so the existing
  * leaderboard / PR / progress maths produce bodyweight-aware estimated 1RMs.
@@ -98,7 +127,7 @@ function currentFormula(): OneRepMaxFormula {
 function computedRecords(): SetRecord[] {
   const fromTable = els.bwSource.value !== "perset";
   return data.records.map((r) => {
-    const coeff = EXERCISE_BW_COEFF[r.exerciseName] ?? DEFAULT_BW_COEFF;
+    const coeff = coeffFor(r.exerciseName);
     if (coeff <= 0) return r;
     const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
     return { ...r, weight: effectiveLoad(r.weight, bw, coeff) };
@@ -398,12 +427,40 @@ function renderWorkoutsPage() {
 }
 
 function onWorkoutRowClick(e: MouseEvent) {
-  const row = (e.target as HTMLElement).closest("tr.wo-row") as HTMLTableRowElement | null;
+  const target = e.target as HTMLElement;
+
+  // Second level: an exercise inside an expanded workout day -> show its sets.
+  const exRow = target.closest("tr.wo-ex-row") as HTMLTableRowElement | null;
+  if (exRow) {
+    if (toggleCollapse(exRow)) return;
+    const day = athleteWorkouts[Number(exRow.dataset.day)];
+    const exName = day?.exercises[Number(exRow.dataset.exidx)]?.exerciseName;
+    if (!day || exName === undefined) return;
+    insertDetail(exRow, 2, setsTableHtml(day.sets.filter((s) => s.exerciseName === exName), false));
+    return;
+  }
+
+  // First level: a workout day -> list the exercises done that day.
+  const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
   if (toggleCollapse(row)) return;
-  const day = athleteWorkouts[Number(row.dataset.index)];
+  const dayIdx = Number(row.dataset.index);
+  const day = athleteWorkouts[dayIdx];
   if (!day) return;
-  insertDetail(row, 3, setsTableHtml(day.sets, true));
+  insertDetail(row, 3, workoutDayHtml(day, dayIdx));
+}
+
+/** Inner table of the exercises done on one day; each row expands to its sets. */
+function workoutDayHtml(day: WorkoutDay, dayIdx: number): string {
+  const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
+  const rows = day.exercises
+    .map(
+      (e, i) =>
+        `<tr class="wo-ex-row" data-day="${dayIdx}" data-exidx="${i}">` +
+        `<td><span class="caret">▸</span>${escapeHtml(e.exerciseName)}</td><td class="num">${e.count}</td></tr>`,
+    )
+    .join("");
+  return `<table class="data-table detail-table">${head}<tbody>${rows}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -534,13 +591,13 @@ function renderBwParts() {
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
   const rows = [...counts.keys()]
-    .map((name) => ({ name, coeff: EXERCISE_BW_COEFF[name] ?? DEFAULT_BW_COEFF, count: counts.get(name)! }))
+    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)! }))
     // Bodyweight-heavy first, then most-trained, then alphabetical.
     .sort((a, b) => b.coeff - a.coeff || b.count - a.count || a.name.localeCompare(b.name));
 
   const withPart = rows.filter((r) => r.coeff > 0).length;
   els.bwTitle.innerHTML =
-    `Bodyweight parts <span class="muted">(${rows.length} exercises · ${withPart} with a bodyweight part)</span>`;
+    `Exercises <span class="muted">(${rows.length} · ${withPart} with a bodyweight part · edit to update all stats)</span>`;
 
   const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
   const start = bwPage * PAGE_SIZE;
@@ -549,12 +606,32 @@ function renderBwParts() {
     .map(
       (r) =>
         `<tr><td>${escapeHtml(r.name)}</td>` +
-        `<td class="num ${r.coeff > 0 ? "bw-on" : "muted"}">${r.coeff}</td>` +
+        `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
+        `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
         `<td class="num">${r.count.toLocaleString()}</td></tr>`,
     )
     .join("");
   els.bwTable.innerHTML = head + `<tbody>${body}</tbody>`;
   els.bwPager.innerHTML = pagerHtml(bwPage, rows.length);
+}
+
+/** Apply an edited bodyweight coefficient and refresh every dependent view. */
+function onBwInputChange(e: Event) {
+  const input = e.target as HTMLElement;
+  if (!input.classList.contains("bw-input")) return;
+  const el = input as HTMLInputElement;
+  const name = el.dataset.ex;
+  if (name === undefined) return;
+  let v = parseFloat(el.value);
+  if (!Number.isFinite(v)) v = 0;
+  v = Math.min(2, Math.max(0, v));
+  el.value = String(v);
+  setCoeff(name, v);
+  // Recompute everything that uses the coefficient (but not the BW table itself,
+  // so the row you're editing keeps its place and focus).
+  renderLeaderboard();
+  renderPersonalRecords();
+  renderAthlete();
 }
 
 function renderAll() {
@@ -736,6 +813,7 @@ async function init() {
       renderBwParts();
     }
   });
+  els.bwTable.addEventListener("change", onBwInputChange);
   els.recordsPager.addEventListener("click", (e) => {
     const p = pageFromClick(e);
     if (p !== null) {
