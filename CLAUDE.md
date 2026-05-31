@@ -12,6 +12,11 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   avoid jargon, and when something needs to be opened/run, give click-by-click
   steps (and a double-clickable file where possible) rather than terminal
   commands.
+- **Answer format, every time:** after the full answer, add a short
+  **Summary** of only what the owner really needs to see. Then, on its own line
+  in ALL CAPS, the single most burning thing to pay attention to, in 2–10 words.
+- **Links go at the very bottom** of the message only — never inline in the
+  middle of text.
 
 ## Project at a glance
 
