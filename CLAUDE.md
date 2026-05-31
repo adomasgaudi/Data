@@ -32,7 +32,7 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
 
 ## Project at a glance
 
-Strength-training dashboard (**SL Podium**). A static website that reads
+Strength-training dashboard (**Colosseum**). A static website that reads
 StrengthLevel data and shows leaderboards, personal records and estimated 1RMs.
 
 - Data flow: StrengthLevel → existing Apps Script → Google Sheet "UD" →

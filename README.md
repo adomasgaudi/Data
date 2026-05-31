@@ -1,4 +1,4 @@
-# SL Podium — Strength Training Dashboard
+# Colosseum — Strength Training Dashboard
 
 A website that shows StrengthLevel training data for a group of athletes:
 leaderboards, personal records, and estimated 1RMs computed across everyone's

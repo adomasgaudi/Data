@@ -1,6 +1,6 @@
 node_modules/
 dist/
-SL-Podium-dashboard.html
+Colosseum-dashboard.html
 .env
 .env.local
 *.log
