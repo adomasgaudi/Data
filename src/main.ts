@@ -33,7 +33,7 @@ import {
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
-import { ATHLETES, EXERCISE_BW_COEFF, DEFAULT_BW_COEFF } from "./profile";
+import { ATHLETES, EXERCISE_BW_COEFF, defaultBwCoeff } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 
 Chart.register(...registerables);
@@ -136,7 +136,8 @@ function loadCoeffOverrides(): Record<string, number> {
 
 function coeffFor(exerciseName: string): number {
   if (Object.prototype.hasOwnProperty.call(coeffOverrides, exerciseName)) return coeffOverrides[exerciseName]!;
-  return EXERCISE_BW_COEFF[exerciseName] ?? DEFAULT_BW_COEFF;
+  // Pinned value first, otherwise the leverage-aware heuristic (front lever ≈ 0.1…).
+  return EXERCISE_BW_COEFF[exerciseName] ?? defaultBwCoeff(exerciseName);
 }
 
 function setCoeff(exerciseName: string, value: number) {
@@ -303,8 +304,8 @@ function onLeaderboardRowClick(e: MouseEvent) {
   insertDetail(row, 3, detail);
 }
 
-// One colour per rep band (low reps → high reps), light to dark.
-const BAND_COLORS = ["#a9c0e4", "#7fa1d4", "#5681c0", "#3b66a6", "#284e86", "#1b3a5d"];
+// One colour per rep band: low reps (1–3) darkest, higher reps lighter.
+const BAND_COLORS = ["#1b3a5d", "#284e86", "#3b66a6", "#5681c0", "#7fa1d4", "#a9c0e4"];
 
 function renderLeaderboardChart(
   rows: LbRow[],
@@ -531,21 +532,20 @@ function renderExercisesPage() {
     `${escapeHtml(athleteLabel())} — exercises by sets ` +
     `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets · tap an exercise)</span>`;
 
-  const head = `<thead><tr><th class="rank">#</th><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
+  const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const start = exercisesPage * PAGE_SIZE;
   const rows = counts
     .slice(start, start + PAGE_SIZE)
     .map((c, i) => {
       const abs = start + i;
       return (
-        `<tr class="ex-row" data-index="${abs}"><td class="rank ${abs === 0 ? "rank-1" : ""}">${abs + 1}</td>` +
-        `<td>${escapeHtml(c.exerciseName)}</td>` +
+        `<tr class="ex-row" data-index="${abs}"><td class="${abs === 0 ? "rank-1" : ""}">${escapeHtml(c.exerciseName)}</td>` +
         `<td class="num">${c.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
       );
     })
     .join("");
   els.athleteTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="3" class="muted">No exercises for this athlete.</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No exercises for this athlete.</td></tr>`}</tbody>`;
   els.exercisesPager.innerHTML = pagerHtml(exercisesPage, counts.length);
 }
 
@@ -1006,7 +1006,7 @@ function prefillTestFromPick() {
   els.calcWeight.value = String(best.weight);
   els.calcReps.value = String(best.reps);
   els.calcBw.value = String(best.bodyweight ?? ATHLETES[username]?.weight ?? els.calcBw.value);
-  els.calcCoeff.value = String(EXERCISE_BW_COEFF[exName] ?? DEFAULT_BW_COEFF);
+  els.calcCoeff.value = String(coeffFor(exName));
   const label = els.testAthlete.selectedOptions[0]?.textContent ?? username;
   els.testPickHint.textContent =
     `Loaded ${label}'s top ${exName}: ${best.weight}kg × ${best.reps} on ${shortDate(best.date)} ` +

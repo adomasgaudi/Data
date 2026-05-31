@@ -23,7 +23,8 @@
       "PowerShell($pids = Get-NetTCPConnection -LocalPort 5173,5174 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if \\($pids\\) { $pids | ForEach-Object { Write-Output \"Killing PID $_\"; Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } } else { Write-Output \"No listeners on 5173/5174\" })",
       "Bash(git commit -q -m '0.8.1 calendar-jump-summary-collapse-compact-calc-lb-expand *)",
       "Bash(git commit -q -m '0.8.2 leaderboard-rep-band-stacked-histogram *)",
-      "Bash(git commit -q -m '0.8.3 histogram-grouped-not-summed-rep-bands *)"
+      "Bash(git commit -q -m '0.8.3 histogram-grouped-not-summed-rep-bands *)",
+      "Bash(git commit -q -m '0.9.0 leverage-aware-bw-coeffs-histogram-colors *)"
     ]
   }
 }
