@@ -193,6 +193,8 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }
+.calc-picker { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem; }
+.calc-picker > label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 .calc-inputs { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
 .calc-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 .calc-inputs input {

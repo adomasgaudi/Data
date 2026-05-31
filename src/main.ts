@@ -85,6 +85,13 @@ const els = {
   calcBw: $<HTMLInputElement>("calcBw"),
   calcCoeff: $<HTMLInputElement>("calcCoeff"),
   calcOut: $("calcOut"),
+  testAthleteBtn: $<HTMLButtonElement>("testAthleteBtn"),
+  testAthleteMenu: $<HTMLUListElement>("testAthleteMenu"),
+  testAthleteLabel: $("testAthleteLabel"),
+  testExerciseBtn: $<HTMLButtonElement>("testExerciseBtn"),
+  testExerciseMenu: $<HTMLUListElement>("testExerciseMenu"),
+  testExerciseLabel: $("testExerciseLabel"),
+  testPickHint: $("testPickHint"),
 };
 
 let data: LoadedData;
@@ -803,6 +810,54 @@ function onBwInputChange(e: Event) {
   renderAthlete();
 }
 
+/** Fill the Test-tab exercise dropdown with the chosen athlete's exercises. */
+function populateTestExercises(username: string) {
+  if (!testExerciseDropdown) return;
+  if (username === "") {
+    testExerciseDropdown.setItems([{ value: "", label: "— pick an athlete first —" }]);
+    testExerciseDropdown.setValue("");
+    return;
+  }
+  const exercises = exerciseCountsForUser(data.records, username);
+  testExerciseDropdown.setItems(exercises.map((e) => ({ value: e.exerciseName, label: e.exerciseName })));
+  testExerciseDropdown.setValue(exercises[0]?.exerciseName ?? "");
+}
+
+/** Load the picked athlete+exercise's top set (best 1RM) into the calculator inputs. */
+function prefillTestFromPick() {
+  const username = testAthleteDropdown?.value() ?? "";
+  const exName = testExerciseDropdown?.value() ?? "";
+  if (username === "" || exName === "") {
+    els.testPickHint.textContent = "";
+    return;
+  }
+  const formula = currentFormula();
+  const sets = setsForUserExercise(data.records, username, exName);
+  // The "top record": the set with the best estimated 1RM (matches the athlete page).
+  let best: SetRecord | null = null;
+  let bestE1rm = -Infinity;
+  for (const s of sets) {
+    const e = estimate1RM(s.weight, s.reps, formula);
+    if (e !== null && e > bestE1rm) {
+      bestE1rm = e;
+      best = s;
+    }
+  }
+  if (!best || best.weight === null || best.reps === null) {
+    els.testPickHint.textContent = "No logged sets with weight & reps for this exercise.";
+    return;
+  }
+  els.calcWeight.value = String(best.weight);
+  els.calcReps.value = String(best.reps);
+  els.calcBw.value = String(best.bodyweight ?? ATHLETES[username]?.weight ?? els.calcBw.value);
+  els.calcCoeff.value = String(EXERCISE_BW_COEFF[exName] ?? DEFAULT_BW_COEFF);
+  const label = testAthleteDropdown?.value() ? els.testAthleteLabel.textContent : username;
+  els.testPickHint.textContent =
+    `Loaded ${label}'s top ${exName}: ${best.weight}kg × ${best.reps} on ${shortDate(best.date)} ` +
+    `(${fmt(bestE1rm)}kg est. 1RM). Tweak any number below.`;
+  renderTest();
+}
+
 // ---- Test tab: live calculator showing each formula with the numbers ----
 function renderTest() {
   const num = (el: HTMLInputElement, fallback: number) => {
@@ -922,6 +977,8 @@ function createDropdown(
 let exerciseDropdown: Dropdown | undefined;
 let repsDropdown: Dropdown | undefined;
 let rankDropdown: Dropdown | undefined;
+let testAthleteDropdown: Dropdown | undefined;
+let testExerciseDropdown: Dropdown | undefined;
 
 /** Rep-range presets for the leaderboard filter (overlapping by design). */
 const REP_RANGES: { id: string; label: string; min?: number; max?: number }[] = [
@@ -974,6 +1031,23 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
+
+  // Test-tab pickers: choosing an athlete + exercise prefills the calculator
+  // with that athlete's top set (they can still type custom numbers afterwards).
+  testAthleteDropdown = createDropdown(els.testAthleteBtn, els.testAthleteMenu, els.testAthleteLabel, (u) => {
+    populateTestExercises(u);
+    prefillTestFromPick();
+  });
+  testAthleteDropdown.setItems([
+    { value: "", label: "— none (manual) —" },
+    ...users.map((u) => ({ value: u.username, label: u.user })),
+  ]);
+  testAthleteDropdown.setValue("");
+
+  testExerciseDropdown = createDropdown(els.testExerciseBtn, els.testExerciseMenu, els.testExerciseLabel, () =>
+    prefillTestFromPick(),
+  );
+  populateTestExercises("");
 
   renderStatus();
   renderHealth();
@@ -1042,7 +1116,10 @@ async function init() {
   });
   els.bwTable.addEventListener("change", onBwInputChange);
   for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
-    input.addEventListener("input", renderTest);
+    input.addEventListener("input", () => {
+      els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
+      renderTest();
+    });
   els.recordsPager.addEventListener("click", (e) => {
     const p = pageFromClick(e);
     if (p !== null) {
