@@ -1558,7 +1558,9 @@ function setupChecklists() {
 
 /** Toggle which tab panel is visible when a tab button is clicked. */
 function setupTabs() {
-  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
+  // ".guide-btn" is the top-bar Guide button (lives outside the .tabs nav but
+  // still switches to the guide panel via its data-tab).
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab, .guide-btn"));
   for (const tab of tabs) {
     tab.addEventListener("click", () => {
       const target = tab.dataset.tab;
