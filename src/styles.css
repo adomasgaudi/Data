@@ -123,6 +123,34 @@ body {
 .ex-filter { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.85rem; }
 .ex-filter[hidden] { display: none; }
 .ex-filter-lbl { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+
+/* Period filter: a custom dropdown (not a native select) so the open menu is
+   styled like the rest of the site on every OS. */
+.period-dd { position: relative; }
+.period-dd-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--text); font-size: 0.82rem; font-weight: 600;
+}
+.period-dd-summary::-webkit-details-marker { display: none; }
+.period-dd-summary:hover,
+.period-dd[open] > .period-dd-summary { border-color: var(--accent); color: var(--accent); }
+.period-dd-caret { color: var(--muted); font-size: 0.7rem; }
+.period-dd[open] .period-dd-caret { color: var(--accent); }
+.period-dd-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 100%;
+  display: flex; flex-direction: column; gap: 1px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.12);
+}
+.period-dd-opt {
+  cursor: pointer; text-align: left; white-space: nowrap;
+  padding: 7px 12px; border: none; border-radius: 6px; background: none;
+  font: inherit; font-size: 0.85rem; color: var(--text);
+}
+.period-dd-opt:hover { background: var(--accent-soft); color: var(--accent); }
+.period-dd-opt.is-active { color: var(--accent); font-weight: 700; }
 .exercise-record {
   display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0 0 1rem;
 }
@@ -300,8 +328,24 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Weekly exercise drill-in: the date is a header row above that day's sets. */
 .set-date-row > td { font-weight: 600; padding-top: 9px; border-top: 1px solid var(--line); border-bottom: none; }
 .set-date-row:first-child > td { border-top: none; }
-/* A set's notes sit on their own line under the set, not in a column. */
-.detail-table tr:has(+ .set-note-row) > td { border-bottom: none; }
+/* A set with a note: a short truncated preview + caret sits at the left of the
+   weight cell (weight stays right-aligned), and clicking the row expands the
+   full note below. The preview lets you read the gist without expanding. */
+.set-row.has-note { cursor: pointer; }
+.set-row.has-note:hover > td { background: var(--accent-soft); }
+.set-note {
+  float: left; max-width: 11ch; overflow: hidden; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 2px;
+  border: none; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 0.82em; color: var(--muted);
+}
+.set-note:hover, .set-row.is-open .set-note { color: var(--accent); }
+.set-note-cue {
+  flex: none; font-size: 0.95em; transition: transform 0.15s ease;
+}
+.set-row.is-open .set-note-cue { transform: rotate(90deg); }
+/* Drop the set row's bottom border only while its note is actually shown. */
+.detail-table tr:has(+ .set-note-row:not([hidden])) > td { border-bottom: none; }
 .set-note-row > td { padding-top: 0; padding-bottom: 6px; font-size: 0.85em; }
 .detail-row > td { padding: 0; background: var(--accent-soft); }
 .detail-table { min-width: 0; font-size: 0.82rem; margin: 0; }
@@ -329,12 +373,30 @@ select.subtle-select:hover, select.subtle-select:focus {
 .calc-explain p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.5; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
-.guide h3 {
-  margin: 1.5rem 0 0.4rem; font-size: 1rem; color: var(--accent);
-  border-top: 1px solid var(--line); padding-top: 1.1rem;
+/* Each guide topic is a collapsible <details> section. The summary is styled
+   like the old h3 heading; a caret rotates to show open/closed. */
+.guide-section { border-top: 1px solid var(--line); }
+.guide-section:first-of-type { border-top: none; }
+.guide-section[open] { padding-bottom: 0.6rem; }
+.guide-section-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0; padding: 1.1rem 0 0.4rem;
+  font-size: 1rem; font-weight: 600; color: var(--accent);
 }
-.guide h3:first-of-type { border-top: none; padding-top: 0; }
+.guide-section:first-of-type > .guide-section-summary { padding-top: 0; }
+.guide-section-summary::-webkit-details-marker { display: none; }
+.guide-section-summary:hover { color: var(--text); }
+.guide-section-caret {
+  flex: 0 0 auto; color: var(--muted); font-size: 0.8rem;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.guide-section[open] > .guide-section-summary .guide-section-caret {
+  transform: rotate(90deg); color: var(--accent);
+}
 .guide p { margin: 0 0 0.6rem; line-height: 1.6; }
+.guide-notes { margin: 0.25rem 0 0.5rem; padding-left: 1.1rem; }
+.guide-notes li { margin: 0 0 0.35rem; line-height: 1.55; font-size: 0.92rem; }
 .guide .guide-foot { margin-top: 1.75rem; font-size: 0.8rem; font-style: italic; }
 /* Training checklists inside the guide */
 .checklist { margin: 0 0 0.5rem; }
@@ -366,6 +428,25 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .checklist .task.bench span { color: var(--gold); }
 .checklist .task.bench input:checked + span { color: var(--muted); }
+/* 2-D progress grid: feet support (rows) × wall distance (columns). */
+.grid-title { margin: 1.1rem 0 0.2rem; font-size: 0.92rem; color: var(--gold); }
+.grid-check-wrap { overflow-x: auto; }
+.grid-check { border-collapse: collapse; font-size: 0.8rem; }
+.grid-check th, .grid-check td {
+  border: 1px solid var(--line); padding: 6px 9px; text-align: center;
+}
+.grid-check thead th {
+  font-size: 0.72rem; font-weight: 600; color: var(--muted);
+  background: var(--accent-soft); white-space: nowrap;
+}
+.grid-check tbody th {
+  text-align: left; font-weight: 600; color: var(--text);
+  background: var(--accent-soft); white-space: nowrap;
+}
+.grid-check .grid-corner { font-size: 0.66rem; color: var(--muted); font-weight: 500; }
+.grid-check td input {
+  width: 17px; height: 17px; margin: 0; accent-color: var(--accent); cursor: pointer;
+}
 .calc-links { margin: 1rem 0 0; }
 .link-btn {
   display: inline-block; background: var(--accent); color: #fff; text-decoration: none;

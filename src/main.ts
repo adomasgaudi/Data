@@ -40,6 +40,7 @@ import {
   ATHLETES,
   EXERCISE_BW_COEFF,
   defaultBwCoeff,
+  realPullupWeight,
   EXERCISE_GROUPS,
   exerciseCategory,
   TRAINING_CATEGORIES,
@@ -81,7 +82,7 @@ const els = {
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
   exerciseFilter: $("exerciseFilter"),
-  exerciseRange: $<HTMLSelectElement>("exerciseRange"),
+  exerciseRange: $<HTMLDetailsElement>("exerciseRange"),
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutCalendar: $("workoutCalendar"),
@@ -185,10 +186,18 @@ function computedRecords(): SetRecord[] {
   const fromTable = els.bwSource.value !== "perset";
   return data.records.map((r) => {
     const coeff = coeffFor(r.exerciseName);
-    if (coeff <= 0) return r;
+    // Assisted pull-ups: the logged weight is the machine dial value, which over-
+    // reads ~2x. Use the halved real assistance for all strength maths, but keep
+    // the logged value as origWeight so the displayed set still tells you what to
+    // set on the machine.
+    const realAdded = realPullupWeight(r.exerciseName, r.weight);
+    if (coeff <= 0) {
+      if (realAdded === r.weight) return r;
+      return { ...r, weight: realAdded, origWeight: r.weight };
+    }
     const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
     // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-    return { ...r, weight: effectiveLoad(r.weight, bw, coeff), origWeight: r.weight };
+    return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
   });
 }
 
@@ -642,14 +651,71 @@ function pagerHtml(page: number, total: number): string {
   );
 }
 
+/** Period options for the exercises list. `days` of 0 means "all time"; every
+ * other entry is a rolling window counted back from today. Single source of
+ * truth for both the dropdown menu and the cutoff/label helpers below. */
+const EXERCISE_PERIODS: { days: number; label: string }[] = [
+  { days: 0, label: "All time" },
+  { days: 7, label: "Last 7 days" },
+  { days: 14, label: "Last 2 weeks" },
+  { days: 30, label: "Last month" },
+  { days: 90, label: "Last 3 months" },
+  { days: 180, label: "Last 6 months" },
+  { days: 365, label: "Last year" },
+  { days: 730, label: "Last 2 years" },
+];
+
+/** Currently-selected period, in days (0 = all time). */
+let exerciseRangeDays = 0;
+
 /** Cutoff ISO date for the chosen period (e.g. last 90 days), or null for all
  * time. Anchored to today so "last month" means recent calendar time. */
 function exerciseRangeCutoff(): string | null {
-  const days = Number(els.exerciseRange.value) || 0;
-  if (days <= 0) return null;
+  if (exerciseRangeDays <= 0) return null;
   const d = new Date();
-  d.setDate(d.getDate() - days);
+  d.setDate(d.getDate() - exerciseRangeDays);
   return d.toISOString().slice(0, 10);
+}
+
+/** Human label for the active period, e.g. "Last 3 months". */
+function exerciseRangeLabel(): string {
+  return EXERCISE_PERIODS.find((p) => p.days === exerciseRangeDays)?.label ?? "All time";
+}
+
+/** Build the custom Period dropdown's options and wire selection. Picking an
+ * option updates the value label, closes the menu, and re-renders the list. */
+function setupExerciseRange(): void {
+  const menu = els.exerciseRange.querySelector<HTMLElement>(".period-dd-menu")!;
+  const valueEl = els.exerciseRange.querySelector<HTMLElement>(".period-dd-value")!;
+  const paint = () => {
+    valueEl.textContent = exerciseRangeLabel();
+    for (const o of menu.querySelectorAll<HTMLElement>(".period-dd-opt"))
+      o.classList.toggle("is-active", o.dataset.days === String(exerciseRangeDays));
+  };
+  menu.innerHTML = EXERCISE_PERIODS.map(
+    (p) =>
+      `<button type="button" class="period-dd-opt" role="option" data-days="${p.days}">` +
+      `${escapeHtml(p.label)}</button>`,
+  ).join("");
+  paint();
+
+  menu.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".period-dd-opt");
+    if (!btn) return;
+    exerciseRangeDays = Number(btn.dataset.days) || 0;
+    els.exerciseRange.open = false; // close the dropdown after a pick
+    paint();
+    exercisesPage = 0;
+    selectedExercise = null;
+    renderExercisesPage();
+  });
+
+  // Close when clicking anywhere outside the dropdown (native <details> stays
+  // open otherwise).
+  document.addEventListener("click", (e) => {
+    if (els.exerciseRange.open && !els.exerciseRange.contains(e.target as Node))
+      els.exerciseRange.open = false;
+  });
 }
 
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
@@ -666,9 +732,7 @@ function renderExercisesPage() {
   const counts = exerciseCountsForUser(scoped, els.athlete.value);
   exercisesView = counts.map((c) => c.exerciseName);
   const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
-  const periodNote = cutoff
-    ? ` ${els.exerciseRange.options[els.exerciseRange.selectedIndex]!.text.toLowerCase()}`
-    : "";
+  const periodNote = cutoff ? ` ${exerciseRangeLabel().toLowerCase()}` : "";
   els.athleteTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — exercises by sets ` +
     `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets${periodNote} · tap an exercise)</span>`;
@@ -735,6 +799,7 @@ function renderExerciseRecord(exName: string) {
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // Inside the drill-in view: a week -> expand to that week's sets (by date).
   const wkRow = target.closest("tr.wk-row") as HTMLTableRowElement | null;
@@ -901,6 +966,7 @@ function renderWorkoutsPage() {
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // Second level: an exercise inside an expanded group -> show its sets.
   const exRow = target.closest("tr.wo-ex-row") as HTMLTableRowElement | null;
@@ -959,27 +1025,56 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
 // Compact header for the sets tables: weight / est. 1RM / volume, all in kg.
 // AI-NOTE: setRowsHtml/SETS_HEAD are shared by BOTH the Workouts day→exercise
 // sets table and the Exercises weekly drill-in. The compact W/1RM/Vol headers
-// and the notes-as-sub-row layout therefore apply to both views; change here
-// and you change both.
+// and the collapsible-note layout therefore apply to both views; change here
+// and you change both. The note toggle is handled by toggleSetNote(), wired
+// into onWorkoutRowClick and onExerciseRowClick.
 const SETS_HEAD =
   `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th></tr></thead>`;
 
+/** How many characters of a note to show inline before truncating with "…". */
+const NOTE_PREVIEW_LEN = 8;
+
 /**
- * One set as table rows: the W/1RM/Vol line, plus a sub-line for its notes
- * (and dropset flag) when present — notes sit under the set, not in a column.
+ * One set as table rows: the W/1RM/Vol line. When the set has a note (or is a
+ * dropset) a short truncated preview of it sits on the left of the weight cell
+ * with a caret; clicking the row expands a sub-row with the full note. The
+ * preview lets you tell a throwaway remark from a real exercise change at a
+ * glance. Notes belong to their own set, so they are never merged across sets.
  */
 function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
   const e1rm = estimate1RM(s.weight, s.reps, formula);
   const vol = setVolume(s.weight, s.reps);
   const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
+  let preview = "";
+  if (note) {
+    const short = note.length > NOTE_PREVIEW_LEN ? `${note.slice(0, NOTE_PREVIEW_LEN)}…` : note;
+    preview =
+      `<button type="button" class="set-note" title="${escapeHtml(note)}">` +
+      `${escapeHtml(short)}<span class="set-note-cue">›</span></button>`;
+  }
   const main =
-    `<tr><td class="num">${wr(s.weight, s.reps)}</td>` +
+    `<tr${note ? ' class="set-row has-note"' : ""}>` +
+    `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rm === null ? "—" : fmt(e1rm)}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td></tr>`;
   const noteRow = note
-    ? `<tr class="set-note-row"><td colspan="3" class="muted">${escapeHtml(note)}</td></tr>`
+    ? `<tr class="set-note-row" hidden><td colspan="3" class="muted">${escapeHtml(note)}</td></tr>`
     : "";
   return main + noteRow;
+}
+
+/** Click on a set row that has a note: expand/collapse the hidden note row that
+ * follows it. Returns true if the click was on such a row (so the caller stops).
+ * Shared by the Workouts and Exercises sets tables. */
+function toggleSetNote(target: HTMLElement): boolean {
+  const row = target.closest<HTMLElement>("tr.set-row.has-note");
+  if (!row) return false;
+  const noteRow = row.nextElementSibling;
+  if (noteRow?.classList.contains("set-note-row")) {
+    const hidden = noteRow.toggleAttribute("hidden");
+    row.classList.toggle("is-open", !hidden);
+  }
+  return true;
 }
 
 /** Inner table of sets with calculated values (all from the same day). */
@@ -1251,7 +1346,7 @@ function prefillTestFromPick() {
 
 // The 1RM formula shown in the Test-tab calculator (its own tab, independent of
 // the dashboard-wide setting so people can compare them side by side).
-let calcTab: OneRepMaxFormula = "epley";
+let calcTab: OneRepMaxFormula = DEFAULT_FORMULA;
 
 // ---- Test tab: live calculator showing the selected formula with the numbers ----
 function renderTest() {
@@ -1481,12 +1576,9 @@ async function init() {
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 
-  // Period filter for the exercises list (last month / 3 months / year / all).
-  els.exerciseRange.addEventListener("change", () => {
-    exercisesPage = 0;
-    selectedExercise = null;
-    renderExercisesPage();
-  });
+  // Period filter for the exercises list — a custom dropdown (not a native
+  // select) so the menu looks the same on every OS.
+  setupExerciseRange();
 
   // Pagination (delegated on the persistent pager containers).
   els.exercisesPager.addEventListener("click", (e) => {

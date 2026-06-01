@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.13.2</span></h1>
+      <h1>Colosseum <span class="version">v0.13.6</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -17,7 +17,7 @@
             <select id="formula">
               <option value="epley">Epley</option>
               <option value="brzycki">Brzycki</option>
-              <option value="nuzzo">Nuzzo (bench curve)</option>
+              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
             </select>
           </label>
           <label>Bodyweight source
@@ -109,13 +109,14 @@
           <section class="panel">
             <h2 id="athleteTitle">Exercises</h2>
             <div id="exerciseFilter" class="ex-filter">
-              <label class="ex-filter-lbl" for="exerciseRange">Period</label>
-              <select id="exerciseRange" class="plain-select">
-                <option value="0">All time</option>
-                <option value="30">Last month</option>
-                <option value="90">Last 3 months</option>
-                <option value="365">Last year</option>
-              </select>
+              <span class="ex-filter-lbl">Period</span>
+              <details id="exerciseRange" class="period-dd" data-days="0">
+                <summary class="period-dd-summary">
+                  <span class="period-dd-value">All time</span>
+                  <span class="period-dd-caret">▾</span>
+                </summary>
+                <div class="period-dd-menu" role="listbox"></div>
+              </details>
             </div>
             <div id="exerciseRecord" class="exercise-record" hidden></div>
             <table id="athleteTable" class="data-table"></table>
@@ -177,9 +178,9 @@
             <label>BW part (coeff)<input id="calcCoeff" type="number" value="0" step="0.05" min="0" max="2" /></label>
           </div>
           <div class="calc-tabs" id="calcTabs" role="tablist">
-            <button type="button" class="calc-tab is-active" data-formula="epley" role="tab">Epley</button>
+            <button type="button" class="calc-tab" data-formula="epley" role="tab">Epley</button>
             <button type="button" class="calc-tab" data-formula="brzycki" role="tab">Brzycki</button>
-            <button type="button" class="calc-tab" data-formula="nuzzo" role="tab">Nuzzo (bench)</button>
+            <button type="button" class="calc-tab is-active" data-formula="nuzzo" role="tab">Nuzzo (bench)</button>
           </div>
           <div id="calcOut" class="calc-out"></div>
           <p class="calc-links">
@@ -230,7 +231,8 @@
             lift twice a week and beat one number every week. Your ticks are saved on this device.
           </p>
 
-          <h3>A 5-month plan you can tick off — Squat &amp; Deadlift</h3>
+          <details class="guide-section">
+          <summary class="guide-section-summary"><span class="guide-section-caret">▸</span>A 5-month plan you can tick off — Squat &amp; Deadlift</summary>
           <p class="muted" style="margin: 0 0 0.9rem">
             The benchmarks are written as multiples of your <strong>bodyweight (BW)</strong>, so they
             fit any starting point — a 70&nbsp;kg lifter squatting "1.0× BW" means 70&nbsp;kg. Don't
@@ -279,7 +281,10 @@
             <label class="task bench"><input type="checkbox" data-key="sq-m5-bench-dl"><span><strong>Benchmark:</strong> New deadlift 1RM PR beating Month 1</span></label>
           </div>
 
-          <h3>Bodyweight &amp; accessory benchmarks — tick them as you hit them</h3>
+          </details>
+
+          <details class="guide-section">
+          <summary class="guide-section-summary"><span class="guide-section-caret">▸</span>Bodyweight &amp; accessory benchmarks — tick them as you hit them</summary>
           <p class="muted" style="margin: 0 0 0.9rem">
             Train these alongside the big lifts, twice a week. Each list runs easy → strong, so just
             climb the rungs. Press numbers are multiples of bodyweight; the rest are plain reps or
@@ -316,6 +321,225 @@
             <label class="task"><input type="checkbox" data-key="acc-abs-3"><span>10 hanging knee raises</span></label>
             <label class="task bench"><input type="checkbox" data-key="acc-abs-4"><span>10 hanging straight-leg raises</span></label>
           </div>
+
+          <!-- AI-NOTE: Handstand guide is being dictated by the owner (the coach) progression by
+               progression and is INCOMPLETE — more tracks/phases are still coming. Do not "finish"
+               or invent handstand programming; only encode what the owner actually says. A couple of
+               phrasings came from voice dictation and are flagged inline with (confirm) — leave them
+               until the owner confirms. Pattern is the generic data-checklist block, so no JS needed. -->
+          </details>
+
+          <details class="guide-section">
+          <summary class="guide-section-summary"><span class="guide-section-caret">▸</span>Handstand</summary>
+
+          <div class="checklist" data-checklist="handstand">
+            <div class="checklist-head">
+              <span class="checklist-progress" data-progress>0 / 0 done</span>
+              <button type="button" class="checklist-reset" data-reset>Reset all</button>
+            </div>
+
+            <h4>Phase 1 — Neck conditioning (≈4 weeks)</h4>
+            <label class="task bench"><input type="checkbox" data-key="hs-neck-goal"><span><strong>Goal:</strong> four weeks of steady pressure on the neck before any real headstand work — <em>skip only if you already have upside-down experience</em></span></label>
+            <label class="task"><input type="checkbox" data-key="hs-neck-how"><span>How: between the ladder and the wall — head down near the wall, feet on the rungs — work a slow motion for ~20 reps, moving your feet a rung higher each session</span></label>
+
+            <!-- AI-NOTE: Headstand track detail still to be dictated; tripod headstand is the milestone it builds toward. -->
+            <h4>Headstand track</h4>
+            <label class="task bench"><input type="checkbox" data-key="hs-head-tripod"><span><strong>Benchmark:</strong> tripod headstand (weight on head and both hands), moving your legs in and out from the wall under control</span></label>
+
+            <h4>Handstand track — back-to-wall</h4>
+            <label class="task"><input type="checkbox" data-key="hs-hand-1"><span>Trained alongside the headstand — separate skill</span></label>
+            <label class="task"><input type="checkbox" data-key="hs-hand-2"><span>Two wall styles: <strong>back-to-wall</strong> (start here) vs front-to-wall</span></label>
+            <label class="task"><input type="checkbox" data-key="hs-hand-3"><span>Shoulders pressed against a hip-thrust box for support</span></label>
+            <label class="task"><input type="checkbox" data-key="hs-hand-4"><span>Legs up and over to touch the wall (confirm)</span></label>
+            <label class="task"><input type="checkbox" data-key="hs-hand-5"><span>Holding the wall (legs on wall, shoulders on the box): lift the shoulders off the box — harder</span></label>
+
+          </div>
+
+          <h4 class="grid-title">Back-to-wall progress grid</h4>
+          <p class="muted" style="margin: 0 0 0.5rem; font-size: 0.82rem">
+            Easiest is top-left (feet high at 60 cm, hips at the wall); hardest is bottom-right
+            (feet low at 10 cm, back flat against the wall). Tick each combination as you clear it.
+          </p>
+          <!-- AI-NOTE: feet rows are the heights the owner named (60→10 cm). Grid checkboxes persist
+               via the generic data-checklist engine; keep row keys + aria-labels in sync. -->
+          <div class="checklist" data-checklist="handstand-grid">
+            <div class="checklist-head">
+              <span class="checklist-progress" data-progress>0 / 0 done</span>
+              <button type="button" class="checklist-reset" data-reset>Reset all</button>
+            </div>
+            <div class="grid-check-wrap">
+              <table class="grid-check">
+                <thead>
+                  <tr>
+                    <th class="grid-corner">Feet ↓ / Wall →</th>
+                    <th>Box at wall</th>
+                    <th>30 cm</th>
+                    <th>15 cm</th>
+                    <th>7 cm</th>
+                    <th>Wall (0)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th>60 cm</th>
+                    <td><input type="checkbox" data-key="hs-g-60-box" aria-label="60 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-60-30" aria-label="60 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-60-15" aria-label="60 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-60-7" aria-label="60 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-60-0" aria-label="60 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>50 cm</th>
+                    <td><input type="checkbox" data-key="hs-g-50-box" aria-label="50 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-50-30" aria-label="50 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-50-15" aria-label="50 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-50-7" aria-label="50 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-50-0" aria-label="50 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>40 cm</th>
+                    <td><input type="checkbox" data-key="hs-g-40-box" aria-label="40 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-40-30" aria-label="40 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-40-15" aria-label="40 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-40-7" aria-label="40 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-40-0" aria-label="40 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>30 cm</th>
+                    <td><input type="checkbox" data-key="hs-g-30-box" aria-label="30 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-30-30" aria-label="30 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-30-15" aria-label="30 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-30-7" aria-label="30 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-30-0" aria-label="30 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>20 cm</th>
+                    <td><input type="checkbox" data-key="hs-g-20-box" aria-label="20 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-20-30" aria-label="20 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-20-15" aria-label="20 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-20-7" aria-label="20 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-20-0" aria-label="20 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>10 cm</th>
+                    <td><input type="checkbox" data-key="hs-g-10-box" aria-label="10 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-10-30" aria-label="10 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-10-15" aria-label="10 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-10-7" aria-label="10 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-10-0" aria-label="10 cm feet, back against wall"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          </details>
+
+          <!-- AI-NOTE: Real client case note (anonymised as "Client X"). Details are partial —
+               the assist method is unknown and tagged (confirm). Don't invent the missing detail. -->
+          <details class="guide-section">
+          <summary class="guide-section-summary"><span class="guide-section-caret">▸</span>Case note — Client X (neck injury → handstands)</summary>
+          <ul class="guide-notes">
+            <li>Headstands → neck injury</li>
+            <li>Switched to handstands</li>
+            <li>Handstands with wall assistance (method to confirm)</li>
+          </ul>
+
+          <!-- AI-NOTE: Hip-hinge plan is evidence-informed (constraint-led approach + external focus
+               of attention; "load as a positive constraint"). Grounded in her real deadlift data
+               (BW 56, heavy "liftless/3 cm" floor pulls). Keep cues external; do not soften the plan. -->
+          <h4>Hip hinge — stop the rounding</h4>
+          <ul class="guide-notes">
+            <li>Pattern: rounds the back unless the load is heavy; fast / momentum-driven; struggles with slow control.</li>
+            <li>Plan: keep the heavy "can't-cheat" pulls, add self-correcting constraints + external cues, cap range to neutral.</li>
+          </ul>
+          <div class="checklist" data-checklist="clientx-hinge">
+            <div class="checklist-head">
+              <span class="checklist-progress" data-progress>0 / 0 done</span>
+              <button type="button" class="checklist-reset" data-reset>Reset all</button>
+            </div>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-1"><span>Keep the heavy floor pulls she can't cheat ("liftless / 3 cm") — load forces the brace</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-2"><span>Dowel hinge: head, upper back and sacrum all stay touching the dowel</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-3"><span>Wall hinge: hips tap the wall; step out a little each week</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-4"><span>Face-the-wall squat to kill the rounding</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-5"><span>External cues only ("hips back to the wall", "drag the bar up your legs") — never "straighten your back"</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-6"><span>Stop at the hamstring stretch / where neutral holds; add range only after (or block / rack pulls, lower over time)</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-7"><span>Add slow tempo + pauses only inside these constraints (control vs momentum)</span></label>
+            <label class="task"><input type="checkbox" data-key="cx-hinge-8"><span>Film each set; score the rep quality (she already logs points)</span></label>
+          </div>
+
+          <h4 class="grid-title">Her back-to-wall progress grid</h4>
+          <div class="checklist" data-checklist="clientx-grid">
+            <div class="checklist-head">
+              <span class="checklist-progress" data-progress>0 / 0 done</span>
+              <button type="button" class="checklist-reset" data-reset>Reset all</button>
+            </div>
+            <div class="grid-check-wrap">
+              <table class="grid-check">
+                <thead>
+                  <tr>
+                    <th class="grid-corner">Feet ↓ / Wall →</th>
+                    <th>Box at wall</th>
+                    <th>30 cm</th>
+                    <th>15 cm</th>
+                    <th>7 cm</th>
+                    <th>Wall (0)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th>60 cm</th>
+                    <td><input type="checkbox" data-key="cx-g-60-box" aria-label="60 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-60-30" aria-label="60 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-60-15" aria-label="60 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-60-7" aria-label="60 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-60-0" aria-label="60 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>50 cm</th>
+                    <td><input type="checkbox" data-key="cx-g-50-box" aria-label="50 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-50-30" aria-label="50 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-50-15" aria-label="50 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-50-7" aria-label="50 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-50-0" aria-label="50 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>40 cm</th>
+                    <td><input type="checkbox" data-key="cx-g-40-box" aria-label="40 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-40-30" aria-label="40 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-40-15" aria-label="40 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-40-7" aria-label="40 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-40-0" aria-label="40 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>30 cm</th>
+                    <td><input type="checkbox" data-key="cx-g-30-box" aria-label="30 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-30-30" aria-label="30 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-30-15" aria-label="30 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-30-7" aria-label="30 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-30-0" aria-label="30 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>20 cm</th>
+                    <td><input type="checkbox" data-key="cx-g-20-box" aria-label="20 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-20-30" aria-label="20 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-20-15" aria-label="20 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-20-7" aria-label="20 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-20-0" aria-label="20 cm feet, back against wall"></td>
+                  </tr>
+                  <tr>
+                    <th>10 cm</th>
+                    <td><input type="checkbox" data-key="cx-g-10-box" aria-label="10 cm feet, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-10-30" aria-label="10 cm feet, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-10-15" aria-label="10 cm feet, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-10-7" aria-label="10 cm feet, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-10-0" aria-label="10 cm feet, back against wall"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          </details>
 
           <p class="guide-foot muted">
             This is general education, not medical or coaching advice. If you have an injury or

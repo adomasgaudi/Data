@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultBwCoeff, exerciseCategory } from "./profile";
+import { defaultBwCoeff, exerciseCategory, isAssistablePullup, realPullupWeight } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -75,5 +75,33 @@ describe("exerciseCategory", () => {
   it("falls back to Other for the noise", () => {
     expect(exerciseCategory("Cold shower")).toBe("Mobility");
     expect(exerciseCategory("KG - track food")).toBe("Other");
+  });
+});
+
+describe("realPullupWeight", () => {
+  it("identifies bar pull-up / chin-up movements (not pulldowns)", () => {
+    expect(isAssistablePullup("Pull Ups")).toBe(true);
+    expect(isAssistablePullup("Assisted Pull-up")).toBe(true);
+    expect(isAssistablePullup("Pullup")).toBe(true);
+    expect(isAssistablePullup("Chin Up")).toBe(true);
+    expect(isAssistablePullup("Lat Pulldown")).toBe(false);
+    expect(isAssistablePullup("Pullover")).toBe(false);
+    expect(isAssistablePullup("Bench Press")).toBe(false);
+  });
+
+  it("halves a negative (machine-assisted) pull-up weight", () => {
+    expect(realPullupWeight("Pull Ups", -30)).toBe(-15);
+    expect(realPullupWeight("Assisted Chin Ups", -20)).toBe(-10);
+  });
+
+  it("leaves positive added weight and zero untouched", () => {
+    expect(realPullupWeight("Pull Ups", 15)).toBe(15);
+    expect(realPullupWeight("Pull Ups", 0)).toBe(0);
+    expect(realPullupWeight("Pull Ups", null)).toBe(null);
+  });
+
+  it("does not touch other exercises, even when negative", () => {
+    expect(realPullupWeight("Lat Pulldown", -30)).toBe(-30);
+    expect(realPullupWeight("Assisted Dip", -40)).toBe(-40);
   });
 });

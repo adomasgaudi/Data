@@ -57,6 +57,27 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
 /** Exercises with no match contribute no bodyweight (treated as pure load). */
 export const DEFAULT_BW_COEFF = 0;
 
+/** True for bar pull-up / chin-up movements, where a *negative* logged weight
+ * means assistance from a machine (not added load). Excludes pulldowns, pull
+ * overs and other cable "pull" work, which are always loaded positively. */
+export function isAssistablePullup(exerciseName: string): boolean {
+  return /pull[\s-]?ups?|chin[\s-]?ups?/.test(exerciseName.toLowerCase());
+}
+
+/**
+ * Real assistance weight for a pull-up set. Assisted reps are done on a machine
+ * whose counterweight dial reads about twice the help it actually gives, so a
+ * negative logged weight is halved (machine −30 kg ≈ −15 kg of real assistance).
+ * Positive added weight, zero, null, and non-pull-up movements pass through
+ * unchanged. The original logged value is kept elsewhere for display, so the
+ * lifter still knows what to set on the machine.
+ */
+export function realPullupWeight(exerciseName: string, weight: number | null): number | null {
+  if (weight === null || weight >= 0) return weight;
+  if (!isAssistablePullup(exerciseName)) return weight;
+  return weight / 2;
+}
+
 /**
  * Groups of closely-related lifts that should share one leaderboard. Each member
  * carries a scaling quotient = the fraction of the GROUP's reference lift you can
