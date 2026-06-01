@@ -122,6 +122,31 @@ export function estimate1RM(
 }
 
 /**
+ * Inverse of estimate1RM: the load you could lift for `reps` reps given a 1RM,
+ * under the chosen formula. Turns an athlete's estimated max into target working
+ * weights (their 5RM / 10RM / 15RM). A single rep is, by definition, the 1RM.
+ * Returns null on missing or non-positive inputs.
+ *   Epley:   1RM = w(1 + r/30)   → w = 1RM / (1 + r/30)
+ *   Brzycki: 1RM = w·36/(37 − r) → w = 1RM·(37 − r)/36   (null at r ≥ 37)
+ *   Nuzzo:   bench %1RM curve     → nuzzoWeightForReps
+ */
+export function weightForReps(
+  oneRepMax: number | null,
+  reps: number | null,
+  formula: OneRepMaxFormula = "epley",
+): number | null {
+  if (oneRepMax === null || reps === null) return null;
+  if (oneRepMax <= 0 || reps <= 0) return null;
+  if (reps === 1) return oneRepMax;
+  if (formula === "nuzzo") return nuzzoWeightForReps(oneRepMax, reps);
+  if (formula === "brzycki") {
+    if (reps >= 37) return null;
+    return (oneRepMax * (37 - reps)) / 36;
+  }
+  return oneRepMax / (1 + reps / 30);
+}
+
+/**
  * Ordinary least-squares line through points: returns slope and intercept, or
  * null if there are fewer than two points or all x are equal. Used to read a
  * progression rate (kg per day) off an athlete's estimated-1RM history.

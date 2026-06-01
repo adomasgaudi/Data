@@ -23,6 +23,7 @@ import {
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
+  type ExerciseDayPoint,
 } from "./aggregate";
 import {
   epley1RM,
@@ -30,6 +31,7 @@ import {
   nuzzo1RM,
   benchPctForReps,
   estimate1RM,
+  weightForReps,
   setVolume,
   effectiveLoad,
   linearFit,
@@ -81,6 +83,9 @@ const els = {
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
+  exerciseTargets: $("exerciseTargets"),
+  exerciseProgress: $("exerciseProgress"),
+  exerciseProgressNote: $("exerciseProgressNote"),
   exerciseFilter: $("exerciseFilter"),
   exerciseRange: $<HTMLDetailsElement>("exerciseRange"),
   exercisesPager: $("exercisesPager"),
@@ -114,6 +119,7 @@ const els = {
 let data: LoadedData;
 let lbChart: Chart | null = null;
 let progressChart: Chart | null = null;
+let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
 
 const PAGE_SIZE = 20;
 
@@ -374,29 +380,35 @@ function renderLeaderboardChart(
   const canvas = $<HTMLCanvasElement>("lbChart");
   lbChart?.destroy();
   const round = (n: number) => Math.round(n * 100) / 100;
-  // Each athlete gets enough height for its group of band-bars (one per band),
-  // so bars stay readable and the y-axis names never overlap.
+  // Each athlete gets one horizontal track; the rep bands appear as coloured
+  // dots along it (one dot per band, placed at that band's theoretical 1RM).
   const wrap = canvas.parentElement;
-  if (wrap) wrap.style.height = `${Math.max(220, rows.length * 74 + 56)}px`;
+  if (wrap) wrap.style.height = `${Math.max(220, rows.length * 48 + 64)}px`;
   lbChart = new Chart(canvas, {
-    type: "bar",
+    type: "scatter",
     data: {
-      labels: rows.map((r) => r.user),
       datasets: bandData.map((band, i) => ({
         label: `${band.label} reps`,
-        data: rows.map((r) => round(band.byUser.get(r.username) ?? 0)),
+        // One {x: 1RM, y: athlete} dot per athlete that has a record in this
+        // band; bands with no record simply get no dot (no zero placeholder).
+        // Cast: a scatter point's y is typed numeric, but on a category axis
+        // Chart.js matches the athlete name string at runtime.
+        data: rows.flatMap((r) => {
+          const v = band.byUser.get(r.username);
+          return v === undefined ? [] : [{ x: round(v), y: r.user } as unknown as { x: number; y: number }];
+        }),
         backgroundColor: BAND_COLORS[i % BAND_COLORS.length],
-        borderRadius: 2,
-        categoryPercentage: 0.86,
-        barPercentage: 0.96,
+        borderColor: BAND_COLORS[i % BAND_COLORS.length],
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        showLine: false,
       })),
     },
     options: {
-      indexAxis: "y",
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom", labels: { color: "#6b7280", boxWidth: 12 } },
+        legend: { position: "bottom", labels: { color: "#6b7280", boxWidth: 12, usePointStyle: true } },
         tooltip: {
           callbacks: {
             label: (c) => `${c.dataset.label}: ${c.parsed.x} ${rel ? "BW" : "kg"}`,
@@ -404,9 +416,15 @@ function renderLeaderboardChart(
         },
       },
       scales: {
-        // Grouped (not stacked) so each band shows its own 1RM, not the sum.
-        x: { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
-        y: { grid: { display: false }, ticks: { color: "#1a1a1a", autoSkip: false } },
+        x: { beginAtZero: true, grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
+        // Athletes as discrete tracks; `offset` keeps dots off the top/bottom edge.
+        y: {
+          type: "category",
+          labels: rows.map((r) => r.user),
+          offset: true,
+          grid: { display: false },
+          ticks: { color: "#1a1a1a", autoSkip: false },
+        },
       },
     },
   });
@@ -727,6 +745,10 @@ function renderExercisesPage() {
   }
   els.exerciseFilter.hidden = false;
   els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
+  els.exerciseTargets.hidden = true; // rep-max targets are a drill-in control too
+  els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in
+  exerciseChart?.destroy();
+  exerciseChart = null;
   const cutoff = exerciseRangeCutoff();
   const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
   const counts = exerciseCountsForUser(scoped, els.athlete.value);
@@ -760,8 +782,15 @@ function renderExerciseDetail(exName: string) {
   els.athleteTitle.innerHTML =
     `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}`;
   els.exercisesPager.innerHTML = "";
-  renderExerciseRecord(exName);
-  const weeks = setsByWeek(setsForUserExercise(data.records, els.athlete.value, exName));
+  const username = els.athlete.value;
+  const pr = personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
+    currentFormula(),
+  ).find((p) => p.exerciseName === exName);
+  renderExerciseRecord(pr);
+  renderExerciseTargets(pr);
+  renderExerciseProgressChart(exName);
+  const weeks = setsByWeek(setsForUserExercise(data.records, username, exName));
   const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
   const rows = weeks
     .map(
@@ -775,12 +804,7 @@ function renderExerciseDetail(exName: string) {
 }
 
 /** Top-record card shown above the weeks list when an exercise is drilled into. */
-function renderExerciseRecord(exName: string) {
-  const username = els.athlete.value;
-  const pr = personalRecords(
-    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
-    currentFormula(),
-  ).find((p) => p.exerciseName === exName);
+function renderExerciseRecord(pr: PersonalRecord | undefined) {
   if (!pr) {
     els.exerciseRecord.hidden = true;
     els.exerciseRecord.innerHTML = "";
@@ -794,6 +818,50 @@ function renderExerciseRecord(exName: string) {
     `<div class="record-item"><span class="record-label">Top weight</span>` +
     `<span class="record-value">${wr(pr.topWeight.weight, pr.topWeight.reps)} kg</span>` +
     `<span class="record-meta">${shortDate(pr.topWeight.date)}</span></div>`;
+}
+
+/** Reps for which we show a target working weight under the record card. */
+const TARGET_REPS = [5, 10, 15] as const;
+
+/**
+ * Rep-max targets derived from the athlete's best estimated 1RM: the load they
+ * should be able to lift for 5, 10 and 15 reps under the active formula. These
+ * are added-weight (bar) numbers, matching how "Best 1RM" is shown above.
+ */
+function renderExerciseTargets(pr: PersonalRecord | undefined) {
+  const oneRm = pr?.bestE1rm.e1rm ?? null;
+  if (oneRm === null || oneRm <= 0) {
+    els.exerciseTargets.hidden = true;
+    els.exerciseTargets.innerHTML = "";
+    return;
+  }
+  const formula = currentFormula();
+  const chips = TARGET_REPS.map((reps) => {
+    const w = weightForReps(oneRm, reps, formula);
+    return (
+      `<div class="target-chip"><span class="target-reps">${reps}RM</span>` +
+      `<span class="target-weight">${w === null ? "—" : `${fmt(w)} kg`}</span></div>`
+    );
+  }).join("");
+  els.exerciseTargets.hidden = false;
+  els.exerciseTargets.innerHTML =
+    `<div class="target-lead muted">Estimated working weights (×${TARGET_REPS.join(", ×")} reps)</div>` +
+    `<div class="target-chips">${chips}</div>`;
+}
+
+/** Per-exercise progress graph shown inside the drill-in (same shape as the Progress tab). */
+function renderExerciseProgressChart(exName: string) {
+  exerciseChart?.destroy();
+  exerciseChart = null;
+  const series = exerciseProgressForUser(computedRecords(), els.athlete.value, exName, currentFormula());
+  if (series.length === 0) {
+    els.exerciseProgress.hidden = true;
+    els.exerciseProgressNote.textContent = "";
+    return;
+  }
+  els.exerciseProgress.hidden = false;
+  els.exerciseProgressNote.textContent = progressSummaryNote(series);
+  exerciseChart = drawProgressChart($<HTMLCanvasElement>("exerciseProgressChart"), series);
 }
 
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
@@ -1123,10 +1191,13 @@ function renderProgress() {
     return;
   }
   const series = exerciseProgressForUser(computedRecords(), els.athlete.value, exercise, currentFormula());
+  els.progressNote.textContent = progressSummaryNote(series);
+  progressChart = drawProgressChart($<HTMLCanvasElement>("progressChart"), series);
+}
 
-  // Progression: fit a line to the estimated-1RM history to read a kg/week rate.
+/** Best / latest / trend summary line for an exercise's day-by-day 1RM series. */
+function progressSummaryNote(series: ExerciseDayPoint[]): string {
   const pts = series.filter((p) => p.bestE1rm !== null);
-  let trendData: (number | null)[] = series.map(() => null);
   let trendNote = "";
   if (pts.length >= 2) {
     const t0 = Date.parse(pts[0]!.date);
@@ -1136,7 +1207,6 @@ function renderProgress() {
       const perWeek = fit.slope * 7;
       const arrow = perWeek > 0.05 ? "▲" : perWeek < -0.05 ? "▼" : "▪";
       trendNote = ` · trend ${arrow} ${perWeek >= 0 ? "+" : ""}${perWeek.toFixed(1)} kg/week`;
-      trendData = series.map((p) => Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10);
     }
   }
   const best = pts.reduce((m, p) => (p.bestE1rm! > m.v ? { v: p.bestE1rm!, date: p.date } : m), { v: -Infinity, date: "" });
@@ -1144,10 +1214,28 @@ function renderProgress() {
   const summary = best.v > -Infinity
     ? `Best ${fmt(best.v)} kg (${shortDate(best.date)}) · latest ${fmt(latest!.bestE1rm!)} kg${trendNote}`
     : "No estimable 1RM yet";
-  els.progressNote.textContent = `${summary} · ${series.length} session(s). Bars = sets/day, gold = best 1RM, dashed = trend.`;
+  return `${summary} · ${series.length} session(s). Bars = sets/day, gold = best 1RM, dashed = trend.`;
+}
 
-  const canvas = $<HTMLCanvasElement>("progressChart");
-  progressChart = new Chart(canvas, {
+/**
+ * Draw the sets-per-day bars + best-1RM line + fitted trend for one exercise's
+ * series onto a canvas, returning the Chart handle (caller owns destroying it).
+ * Shared by the Progress sub-page and the per-exercise drill-in graph.
+ */
+function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]): Chart {
+  // Progression: fit a line to the estimated-1RM history to read a kg/week rate.
+  const pts = series.filter((p) => p.bestE1rm !== null);
+  let trendData: (number | null)[] = series.map(() => null);
+  if (pts.length >= 2) {
+    const t0 = Date.parse(pts[0]!.date);
+    const day = (d: string) => (Date.parse(d) - t0) / 86_400_000;
+    const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
+    if (fit) {
+      trendData = series.map((p) => Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10);
+    }
+  }
+
+  return new Chart(canvas, {
     type: "bar",
     data: {
       labels: series.map((p) => shortDate(p.date)),

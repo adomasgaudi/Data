@@ -11,6 +11,7 @@ import {
   nuzzoWeightForReps,
   nuzzoRepsAtWeight,
   estimate1RM,
+  weightForReps,
   linearFit,
 } from "./metrics";
 
@@ -220,5 +221,35 @@ describe("Nuzzo bench curve", () => {
     expect(nuzzo1RM(0, 5)).toBeNull();
     expect(nuzzoWeightForReps(null, 5)).toBeNull();
     expect(nuzzoRepsAtWeight(80, null)).toBeNull();
+  });
+});
+
+describe("weightForReps", () => {
+  it("inverts Epley: a single is the 1RM, more reps means lighter", () => {
+    expect(weightForReps(100, 1, "epley")).toBe(100);
+    // Epley 1RM of 100 kg → 5RM is 100 / (1 + 5/30) = 85.714…
+    expect(weightForReps(100, 5, "epley")!).toBeCloseTo(100 / (1 + 5 / 30), 6);
+    expect(weightForReps(100, 10, "epley")!).toBeCloseTo(75, 6);
+  });
+
+  it("round-trips against estimate1RM for Epley and Brzycki", () => {
+    for (const formula of ["epley", "brzycki"] as const) {
+      for (const reps of [2, 5, 8, 12, 15]) {
+        const w = weightForReps(120, reps, formula)!;
+        expect(estimate1RM(w, reps, formula)!).toBeCloseTo(120, 6);
+      }
+    }
+  });
+
+  it("matches the Nuzzo weight curve for the nuzzo formula", () => {
+    expect(weightForReps(100, 5, "nuzzo")).toBe(nuzzoWeightForReps(100, 5));
+  });
+
+  it("is null for missing, non-positive, or out-of-range inputs", () => {
+    expect(weightForReps(null, 5)).toBeNull();
+    expect(weightForReps(100, null)).toBeNull();
+    expect(weightForReps(0, 5)).toBeNull();
+    expect(weightForReps(100, 0)).toBeNull();
+    expect(weightForReps(100, 37, "brzycki")).toBeNull(); // Brzycki undefined at 37 reps
   });
 });

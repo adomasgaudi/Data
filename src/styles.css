@@ -163,6 +163,21 @@ body {
 .record-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .record-value { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
 .record-meta { font-size: 0.78rem; color: var(--muted); }
+/* Rep-max targets (5RM/10RM/15RM) derived from the best 1RM, under the record card. */
+.exercise-targets { margin: 0 0 1rem; }
+.exercise-targets[hidden] { display: none; }
+.target-lead { font-size: 0.78rem; margin-bottom: 0.4rem; }
+.target-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.target-chip {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; min-width: 84px;
+}
+.target-reps { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+.target-weight { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+/* Per-exercise progress graph inside the drill-in. */
+.exercise-progress { margin: 0 0 1rem; }
+.exercise-progress[hidden] { display: none; }
 /* Collapsible "AI summary (coming soon)" block at the bottom of the Athlete tab. */
 .ai-soon { margin-top: 1.5rem; }
 .ai-soon > summary {

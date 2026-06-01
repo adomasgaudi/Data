@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.13.6</span></h1>
+      <h1>Colosseum <span class="version">v0.14.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -119,6 +119,11 @@
               </details>
             </div>
             <div id="exerciseRecord" class="exercise-record" hidden></div>
+            <div id="exerciseTargets" class="exercise-targets" hidden></div>
+            <div id="exerciseProgress" class="exercise-progress" hidden>
+              <div class="chart-wrap"><canvas id="exerciseProgressChart"></canvas></div>
+              <p class="muted" id="exerciseProgressNote"></p>
+            </div>
             <table id="athleteTable" class="data-table"></table>
             <div id="exercisesPager" class="pager"></div>
           </section>
