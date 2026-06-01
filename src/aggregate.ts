@@ -555,16 +555,32 @@ export function nearDuplicateExercises(records: readonly SetRecord[]): { names: 
 }
 
 /**
- * Exact-name aliases the normaliser can't catch on its own because they differ
- * by a meaningful-looking number. Confirmed by the owner as the same lift: the
- * source app forces a brand-new "custom exercise" when its settings change, so
- * "Stairs 4" is just "Stairs" tracked with different settings. Left = raw logged
- * name, right = the name to fold it into. Numbered variants NOT listed here
- * (e.g. "Low wall climb 1–4", "Leg 130/140/155") stay distinct on purpose,
- * because their numbers really do mark different exercises.
+ * OWNER-CONFIRMED exact-name aliases: each entry folds one logged exercise into
+ * another because the owner has explicitly said they are the same lift. This is
+ * the ONLY place where genuinely different logged names (not mere typos) may be
+ * combined — it is deliberately NOT the scaling-group mechanism, which fabricates
+ * cross-exercise comparisons and is kept out of the leaderboard by default.
+ *
+ * Rules for adding here (see the "exercise merging rules" guidance):
+ *   • Only near-identical lifts, and only after the owner confirms each one.
+ *   • Every alias is surfaced in the Exercises tab so the merge is visible.
+ *   • Left = raw logged name (exact, after trim), right = the name to fold into.
+ *
+ * Numbered/variant names NOT listed here (e.g. "Smith Machine Bulgarian Split
+ * Squat", "One Arm Pull Ups", "Leg 130/140/155") stay distinct on purpose.
+ *
+ * AI-NOTE: do not add merges here without explicit owner sign-off — silent
+ * exercise merges inflate/confuse the leaderboards. Confirmed so far:
+ *   - Stairs 4 → Stairs (source app renames on settings change)
+ *   - Chin Ups → Pull Ups (owner-confirmed same lift; 2026-06-01)
+ *   - Smith Machine Squat → Squat (owner-confirmed same lift; 2026-06-01)
  */
 const EXERCISE_NAME_ALIASES: Record<string, string> = {
   "Stairs 4": "Stairs",
+  "Chin Ups": "Pull Ups",
+  "Chin up": "Pull Ups",
+  "Chin ups": "Pull Ups",
+  "Smith Machine Squat": "Squat",
 };
 
 /**

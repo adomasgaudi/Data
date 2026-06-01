@@ -80,6 +80,7 @@ const els = {
   axisReset: $<HTMLButtonElement>("axisReset"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
+  groupToggle: $<HTMLInputElement>("groupToggle"),
   lbTitle: $("lbTitle"),
   lbTable: $<HTMLTableElement>("lbTable"),
   prTable: $<HTMLTableElement>("prTable"),
@@ -90,6 +91,7 @@ const els = {
   healthPage: $("healthPage"),
   healthClose: $<HTMLButtonElement>("healthClose"),
   athlete: $<HTMLSelectElement>("athlete"),
+  athleteChips: $("athleteChips"),
   athleteProfile: $("athleteProfile"),
   athleteStats: $("athleteStats"),
   trainBreakdown: $("trainBreakdown"),
@@ -119,6 +121,7 @@ const els = {
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
   bwGroups: $("bwGroups"),
+  mergeList: $("mergeList"),
   recordsTitle: $("recordsTitle"),
   recordsTable: $<HTMLTableElement>("recordsTable"),
   recordsPager: $("recordsPager"),
@@ -270,10 +273,47 @@ function computedRecords(): SetRecord[] {
   });
 }
 
-/** If the leaderboard selection is a group, fold its members in (scaled); else as-is. */
+/**
+ * Fill the Colosseum exercise picker. By DEFAULT (toggle off) it lists only pure
+ * exercises — every distinct logged lift, on its own, no scaling. When the owner
+ * ticks the grouped/scaled toggle, the scaled GROUP names are prepended (and the
+ * member lifts stay listed too, so you can still pick the pure version).
+ * Re-runnable: keeps the current selection if it still exists, else picks the
+ * first option. Call it on load and whenever the toggle flips.
+ *
+ * AI-NOTE: groups are intentionally hidden by default — see selectionRecords.
+ */
+function populateExercisePicker(): void {
+  const prev = els.exercise.value;
+  const exercises = distinctExercises(data.records); // pure lifts, most-logged first
+  const groupsWithData = els.groupToggle.checked
+    ? EXERCISE_GROUPS.filter((g) => exercises.some((e) => g.members[e] !== undefined)).map((g) => g.name)
+    : [];
+  const options = [...groupsWithData, ...exercises];
+  els.exercise.innerHTML = options
+    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
+    .join("");
+  els.exercise.value = options.includes(prev) ? prev : (options[0] ?? "");
+}
+
+/**
+ * If the leaderboard selection is a group, fold its members in (scaled); else as-is.
+ *
+ * AI-NOTE: group scaling is OFF by default. It fabricates a cross-exercise
+ * comparison (e.g. a single-leg RDL ÷0.35 looks like a much bigger deadlift), so
+ * groups only appear — and only scale — when the owner ticks the "grouped/scaled
+ * estimates" toggle. With the toggle off, group names aren't even offered in the
+ * picker (see populateExercisePicker), so this returns records unchanged.
+ */
 function selectionRecords(records: SetRecord[], selection: string): SetRecord[] {
+  if (!els.groupToggle.checked) return records; // pure exercises only
   const grp = EXERCISE_GROUPS.find((g) => g.name === selection);
   return grp ? scaleToGroup(records, grp.name, grp.members) : records;
+}
+
+/** True when the current selection is a scaled exercise group (not a pure lift). */
+function selectionIsGroup(selection: string): boolean {
+  return els.groupToggle.checked && EXERCISE_GROUPS.some((g) => g.name === selection);
 }
 
 function renderStatus() {
@@ -406,7 +446,10 @@ function renderLeaderboard() {
   });
 
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
-  els.lbTitle.textContent = `${exercise} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
+  // Groups are scaled cross-exercise estimates — label them clearly so a grouped
+  // number is never mistaken for a real single-exercise lift.
+  const groupNote = selectionIsGroup(exercise) ? " · ⚠ scaled estimate (group)" : "";
+  els.lbTitle.textContent = `${exercise} · ${metricNote} · best per rep band${groupNote}${coliseumFilterNote()}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, bandData, rel);
 }
@@ -579,8 +622,30 @@ const collapsedExCats = new Set<string>();
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
 
+/** Build the custom athlete chip row from the (hidden) select's options. */
+function buildAthleteChips() {
+  els.athleteChips.innerHTML = [...els.athlete.options]
+    .map(
+      (o) =>
+        `<button type="button" class="athlete-chip" role="radio" data-username="${escapeHtml(o.value)}">${escapeHtml(o.text)}</button>`,
+    )
+    .join("");
+  syncAthleteChips();
+}
+
+/** Mark the chip matching the selected athlete active (chips mirror the select). */
+function syncAthleteChips() {
+  const active = els.athlete.value;
+  for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
+    const on = btn.dataset.username === active;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+  }
+}
+
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
+  syncAthleteChips();
   exercisesPage = 0;
   workoutsPage = 0;
   recordsPage = 0;
@@ -916,12 +981,10 @@ function renderExercisesPage() {
   // Weekly-sets numbers are absolute (their own time windows), so they read the
   // full log, not the period-scoped subset shown in the list.
   const today = todayIso();
-  const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
-  const periodNote = cutoff ? ` ${exerciseRangeLabel().toLowerCase()}` : "";
-  const sortNote = exerciseSort === "category" ? "by category" : "by sets";
-  els.athleteTitle.innerHTML =
-    `${escapeHtml(athleteLabel())} — exercises ${sortNote} ` +
-    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets${periodNote} · tap an exercise)</span>`;
+  // List view: no title. The athlete chips above already name the athlete, and
+  // the Period/Sort controls + the list itself are all that's needed here. The
+  // #athleteTitle element is reused as the back-link only inside the drill-in.
+  els.athleteTitle.innerHTML = "";
 
   const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const start = exercisesPage * PAGE_SIZE;
@@ -1458,6 +1521,11 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
   const xMin = Math.min(...times) - pad;
   const xMax = Math.max(...times) + pad;
 
+  // Keep the sets bars short: cap the sets axis well above the busiest week so the
+  // tallest bar only reaches ~45% of the height, leaving the 1RM line room above.
+  const maxSets = Math.max(1, ...series.map((p) => p.sets));
+  const setsAxisMax = Math.ceil(maxSets * 2.2);
+
   return new Chart(canvas, {
     type: "bar",
     data: {
@@ -1533,8 +1601,10 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
             maxRotation: 0,
             autoSkip: true,
             // Sit the date labels inside the plot so they steal no edge space.
+            // mirror flips them above the bottom axis; a positive padding lifts
+            // them clear of the canvas edge so they're not clipped at the bottom.
             mirror: true,
-            padding: -18,
+            padding: 8,
             z: 2,
             callback: (value) => tsLabel(Number(value)),
           },
@@ -1542,6 +1612,7 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
         ySets: {
           position: "left",
           beginAtZero: true,
+          max: setsAxisMax, // headroom so the sets bars stay short
           grid: { color: "#ececec" },
           // mirror: labels hang inside the plot area, off the left axis line.
           ticks: { color: "#6b7280", precision: 0, mirror: true, padding: 4, z: 2 },
@@ -1556,8 +1627,30 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
   });
 }
 
+// ---- Exercises tab: which spellings were merged into one lift ----
+// Documents every combine (per the owner's rule that merges must be visible),
+// newest list straight from the canonicaliser. Empty state when nothing merged.
+function renderMergeList() {
+  const merges = data.merges;
+  if (!merges.length) {
+    els.mergeList.innerHTML = `<p class="muted">No exercises needed combining — every lift is logged under one name.</p>`;
+    return;
+  }
+  const head = `<thead><tr><th>Shown as</th><th>Combined from</th><th class="num">Sets</th></tr></thead>`;
+  const body = merges
+    .map(
+      (m) =>
+        `<tr><td>${escapeHtml(m.canonical)}</td>` +
+        `<td>${m.variants.map((v) => escapeHtml(v)).join(", ")}</td>` +
+        `<td class="num">${m.sets.toLocaleString()}</td></tr>`,
+    )
+    .join("");
+  els.mergeList.innerHTML = `<table class="data-table">${head}<tbody>${body}</tbody></table>`;
+}
+
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
 function renderBwParts() {
+  renderMergeList();
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
@@ -1802,18 +1895,10 @@ async function init() {
     return;
   }
 
-  // Leaderboard exercise picker: groups (that have data) first, then any
-  // ungrouped exercises. Selecting a group folds in its members (scaled).
-  const exercises = distinctExercises(data.records);
-  const memberNames = new Set<string>();
-  for (const g of EXERCISE_GROUPS) for (const m of Object.keys(g.members)) memberNames.add(m);
-  const groupsWithData = EXERCISE_GROUPS.filter((g) => exercises.some((e) => g.members[e] !== undefined)).map((g) => g.name);
-  const ungrouped = exercises.filter((e) => !memberNames.has(e));
-  const exerciseOptions = [...groupsWithData, ...ungrouped];
-  els.exercise.innerHTML = exerciseOptions
-    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
-    .join("");
-  els.exercise.value = exerciseOptions[0] ?? "";
+  // Build the leaderboard exercise picker (see populateExercisePicker). By
+  // default it lists PURE exercises only; the grouped/scaled estimates appear
+  // only when the owner ticks the toggle.
+  populateExercisePicker();
   els.rank.innerHTML =
     `<option value="abs">Total (kg)</option><option value="rel">Per bodyweight</option>`;
   els.rank.value = "abs";
@@ -1823,6 +1908,14 @@ async function init() {
     renderPersonalRecords(); // PRs are scoped to the selected exercise
   });
   els.rank.addEventListener("change", renderLeaderboard);
+
+  // Grouped/scaled estimates toggle: rebuild the picker (adds/removes group
+  // names) and re-render. Off by default, so the Colosseum shows pure lifts.
+  els.groupToggle.addEventListener("change", () => {
+    populateExercisePicker();
+    renderLeaderboard();
+    renderPersonalRecords();
+  });
 
   // Coliseum comparison filters: re-render both the chart and the PR table, which
   // share the sex/bodyweight filter. The axis inputs only affect the chart, but
@@ -1852,6 +1945,7 @@ async function init() {
   // Default to Džuljeta for now, when present.
   const dzuljeta = users.find((u) => u.username.toLowerCase().includes("dzuljeta") || u.user.toLowerCase().includes("džuljeta"));
   if (dzuljeta) els.athlete.value = dzuljeta.username;
+  buildAthleteChips(); // custom chip row mirrors the hidden <select>
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).
@@ -1912,6 +2006,13 @@ async function init() {
   els.bwSource.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
   els.athlete.addEventListener("change", renderAthlete);
+  // Clicking a custom chip drives the hidden <select> (single source of truth).
+  els.athleteChips.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
+    if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
+    els.athlete.value = btn.dataset.username;
+    renderAthlete();
+  });
   els.workoutCalendar.addEventListener("click", (e) => {
     const nav = (e.target as HTMLElement).closest<HTMLElement>(".cal-nav");
     if (nav?.dataset.cal === "prev") return shiftCalendar(-1);

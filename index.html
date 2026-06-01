@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.16.2</span></h1>
+      <h1>Colosseum <span class="version">v0.18.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -73,6 +73,9 @@
               <label class="check">
                 <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
               </label>
+              <label class="check" title="Off by default. When on, related lifts (e.g. all deadlift variants) are scaled into one combined leaderboard. These are rough cross-exercise ESTIMATES, not real single-lift numbers.">
+                <input type="checkbox" id="groupToggle" /> Group similar lifts (scaled estimate)
+              </label>
             </div>
           </div>
           <div class="chart-wrap"><canvas id="lbChart"></canvas></div>
@@ -87,14 +90,21 @@
       </div>
 
       <div id="tab-athlete" class="tab-panel" hidden>
-        <section class="controls compact">
-          <label>Athlete
-            <select id="athlete"></select>
-          </label>
-        </section>
-        <p id="athleteProfile" class="athlete-profile"></p>
-        <div id="athleteStats" class="athlete-stats"></div>
-        <div id="trainBreakdown" class="train-breakdown"></div>
+        <!-- Custom athlete picker (HTML/CSS chips). The hidden <select> keeps the
+             selected username as the single source of truth the rest of the app
+             reads via els.athlete.value. AI-NOTE: keep chips + select in sync via
+             syncAthleteChips(); a chip click sets the select and fires change. -->
+        <div id="athleteChips" class="athlete-chips" role="radiogroup" aria-label="Athlete"></div>
+        <select id="athlete" class="athlete-select-hidden" aria-hidden="true" tabindex="-1"></select>
+
+        <details id="athleteDetails" class="athlete-details">
+          <summary class="athlete-details-summary">Stats &amp; training mix <span class="ad-caret">▾</span></summary>
+          <div class="athlete-details-body">
+            <p id="athleteProfile" class="athlete-profile"></p>
+            <div id="athleteStats" class="athlete-stats"></div>
+            <div id="trainBreakdown" class="train-breakdown"></div>
+          </div>
+        </details>
 
         <nav class="subtabs" role="tablist">
           <button class="subtab is-active" data-subtab="workouts" role="tab">Workouts</button>
@@ -247,6 +257,16 @@
       </div>
 
       <div id="tab-bwparts" class="tab-panel" hidden>
+        <section class="panel">
+          <h2>Merged exercises</h2>
+          <p class="muted" style="margin: 0 0 0.75rem">
+            Different spellings of the same lift are combined so one exercise isn't split
+            across the dashboard. Combining two genuinely different names (e.g. Chin Ups →
+            Pull Ups) is only ever done when confirmed as the same lift. Every combine is
+            listed here; the original logged name is kept on each set.
+          </p>
+          <div id="mergeList" class="merge-list"></div>
+        </section>
         <section class="panel">
           <h2 id="bwTitle">Bodyweight parts</h2>
           <p class="muted" style="margin: 0 0 0.75rem">

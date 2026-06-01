@@ -203,6 +203,39 @@ describe("canonicalizeExerciseNames", () => {
     expect(records.every((r) => r.exerciseName === "Stairs")).toBe(true);
     expect(records.find((r) => r.originalExerciseName === "Stairs 4")).toBeTruthy();
   });
+
+  it("folds owner-confirmed Chin Ups → Pull Ups (and its spellings)", () => {
+    const recs = [
+      ...Array.from({ length: 5 }, () => rec({ exerciseName: "Pull Ups" })),
+      rec({ exerciseName: "Chin Ups" }),
+      rec({ exerciseName: "Chin up" }),
+      rec({ exerciseName: "Chin ups" }),
+      rec({ exerciseName: "One Arm Pull Ups" }), // a DIFFERENT lift — must stay separate
+    ];
+    const { records, merges } = canonicalizeExerciseNames(recs);
+    // Pull Ups is most-logged, so every chin variant folds into it.
+    expect(records.filter((r) => r.exerciseName === "Pull Ups")).toHaveLength(8);
+    // The distinct one-arm variant is untouched.
+    expect(records.some((r) => r.exerciseName === "One Arm Pull Ups" && !r.originalExerciseName)).toBe(true);
+    const m = merges.find((x) => x.canonical === "Pull Ups");
+    expect(m?.variants).toEqual(expect.arrayContaining(["Chin Ups", "Chin up", "Chin ups"]));
+    expect(m?.variants).not.toContain("One Arm Pull Ups");
+  });
+
+  it("folds owner-confirmed Smith Machine Squat → Squat, but not look-alike squats", () => {
+    const recs = [
+      ...Array.from({ length: 5 }, () => rec({ exerciseName: "Squat" })),
+      rec({ exerciseName: "Smith Machine Squat" }),
+      rec({ exerciseName: "Smith Machine Bulgarian Split Squat" }), // different lift — stays
+      rec({ exerciseName: "Front Squat" }), // different lift — stays
+    ];
+    const { records, merges } = canonicalizeExerciseNames(recs);
+    expect(records.filter((r) => r.exerciseName === "Squat")).toHaveLength(6);
+    expect(records.some((r) => r.exerciseName === "Smith Machine Bulgarian Split Squat")).toBe(true);
+    expect(records.some((r) => r.exerciseName === "Front Squat")).toBe(true);
+    const m = merges.find((x) => x.canonical === "Squat");
+    expect(m?.variants).toEqual(["Smith Machine Squat"]);
+  });
 });
 
 describe("scaleToGroup", () => {

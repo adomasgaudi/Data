@@ -34,6 +34,19 @@
     ]
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "'{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"PREFER POPUP QUESTIONS: The user rarely reads plain text. Whenever you would ask a question, request clarification, offer options, or seek a decision, you MUST use the AskUserQuestion tool (the multiple-choice popup) instead of asking in prose. Put the real choices as the options. Only ask in plain text if a popup genuinely cannot represent the question.\"}}'",
+            "timeout": 10,
+            "statusMessage": "Reminding to use popup questions"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
