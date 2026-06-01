@@ -94,8 +94,7 @@ const els = {
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
-  bwTable: $<HTMLTableElement>("bwTable"),
-  bwPager: $("bwPager"),
+  bwGroups: $("bwGroups"),
   recordsTitle: $("recordsTitle"),
   recordsTable: $<HTMLTableElement>("recordsTable"),
   recordsPager: $("recordsPager"),
@@ -430,7 +429,9 @@ let workoutGroups: WorkoutGroup[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
 let recordsPage = 0;
-let bwPage = 0;
+// Which exercise categories are expanded in the Exercises tab. null = first paint
+// (open them all); a Set afterwards = the user's remembered open/closed choices.
+let bwOpenCats: Set<string> | null = null;
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
@@ -1071,28 +1072,61 @@ function renderBwParts() {
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
   const rows = [...counts.keys()]
-    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)! }))
-    // Bodyweight-heavy first, then most-trained, then alphabetical.
+    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)!, cat: exerciseCategory(name) }))
+    // Bodyweight-heavy first, then most-trained, then alphabetical (inside each group).
     .sort((a, b) => b.coeff - a.coeff || b.count - a.count || a.name.localeCompare(b.name));
 
   const withPart = rows.filter((r) => r.coeff > 0).length;
   els.bwTitle.innerHTML =
     `Exercises <span class="muted">(${rows.length} · ${withPart} with a bodyweight part · edit to update all stats)</span>`;
 
+  // Group the exercises by training category so similar lifts share a dropdown.
+  const byCat = new Map<TrainingCategory, typeof rows>();
+  for (const r of rows) {
+    const list = byCat.get(r.cat) ?? [];
+    list.push(r);
+    byCat.set(r.cat, list);
+  }
+
+  // Remember which categories the user has opened, so editing/re-rendering keeps
+  // them as they were. On the very first paint nothing is remembered, so we open
+  // every category (the data is visible by default; collapse what you don't need).
+  const firstPaint = bwOpenCats === null;
+  if (!firstPaint) {
+    bwOpenCats = new Set<string>();
+    for (const d of els.bwGroups.querySelectorAll<HTMLDetailsElement>("details.bw-cat"))
+      if (d.open && d.dataset.cat) bwOpenCats.add(d.dataset.cat);
+  }
+  const open = (cat: string) => firstPaint || bwOpenCats!.has(cat);
+
   const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
-  const start = bwPage * PAGE_SIZE;
-  const body = rows
-    .slice(start, start + PAGE_SIZE)
-    .map(
-      (r) =>
-        `<tr><td>${escapeHtml(r.name)}</td>` +
-        `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
-        `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
-        `<td class="num">${r.count.toLocaleString()}</td></tr>`,
-    )
+  els.bwGroups.innerHTML = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
+    .map((cat) => {
+      const list = byCat.get(cat)!;
+      const catWithPart = list.filter((r) => r.coeff > 0).length;
+      const body = list
+        .map(
+          (r) =>
+            `<tr><td>${escapeHtml(r.name)}</td>` +
+            `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
+            `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
+            `<td class="num">${r.count.toLocaleString()}</td></tr>`,
+        )
+        .join("");
+      const partNote = catWithPart > 0 ? ` · ${catWithPart} with a BW part` : "";
+      return (
+        `<details class="bw-cat" data-cat="${escapeHtml(cat)}"${open(cat) ? " open" : ""}>` +
+        `<summary class="bw-cat-summary">` +
+        `<span class="bw-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
+        `<span class="bw-cat-name">${escapeHtml(cat)}</span>` +
+        `<span class="bw-cat-meta muted">${list.length} exercise${list.length === 1 ? "" : "s"}${partNote}</span>` +
+        `</summary>` +
+        `<table class="data-table">${head}<tbody>${body}</tbody></table>` +
+        `</details>`
+      );
+    })
     .join("");
-  els.bwTable.innerHTML = head + `<tbody>${body}</tbody>`;
-  els.bwPager.innerHTML = pagerHtml(bwPage, rows.length);
+  bwOpenCats = bwOpenCats ?? new Set<string>();
 }
 
 /** Apply an edited bodyweight coefficient and refresh every dependent view. */
@@ -1340,6 +1374,7 @@ async function init() {
   renderHealth();
   renderAll();
   setupTabs();
+  setupChecklists();
 
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
@@ -1410,14 +1445,7 @@ async function init() {
       renderWorkoutsPage();
     }
   });
-  els.bwPager.addEventListener("click", (e) => {
-    const p = pageFromClick(e);
-    if (p !== null) {
-      bwPage = p;
-      renderBwParts();
-    }
-  });
-  els.bwTable.addEventListener("change", onBwInputChange);
+  els.bwGroups.addEventListener("change", onBwInputChange);
   for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
     input.addEventListener("input", () => {
       els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
@@ -1439,6 +1467,61 @@ function pageFromClick(e: MouseEvent): number | null {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button.page-btn");
   if (!btn || btn.disabled) return null;
   return Number(btn.dataset.page);
+}
+
+/**
+ * Wire up the Guide's training checklists: restore ticked boxes from this
+ * device's localStorage, save on every change, keep the "x / y done" count
+ * fresh and let the Reset button clear a list. Each box has a stable data-key.
+ */
+function setupChecklists() {
+  const lists = Array.from(document.querySelectorAll<HTMLElement>("[data-checklist]"));
+  for (const list of lists) {
+    const storeKey = `colosseum.checklist.${list.dataset.checklist}`;
+    const boxes = Array.from(
+      list.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-key]'),
+    );
+    const progress = list.querySelector<HTMLElement>("[data-progress]");
+    const resetBtn = list.querySelector<HTMLButtonElement>("[data-reset]");
+
+    let saved: Record<string, boolean> = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(storeKey) ?? "{}");
+    } catch {
+      saved = {};
+    }
+
+    const updateProgress = () => {
+      if (!progress) return;
+      const done = boxes.filter((b) => b.checked).length;
+      progress.textContent = `${done} / ${boxes.length} done`;
+    };
+
+    const save = () => {
+      const state: Record<string, boolean> = {};
+      for (const b of boxes) if (b.checked) state[b.dataset.key!] = true;
+      try {
+        localStorage.setItem(storeKey, JSON.stringify(state));
+      } catch {
+        // Storage may be full or blocked (private mode); ticks just won't persist.
+      }
+    };
+
+    for (const b of boxes) {
+      b.checked = saved[b.dataset.key!] === true;
+      b.addEventListener("change", () => {
+        save();
+        updateProgress();
+      });
+    }
+    updateProgress();
+
+    resetBtn?.addEventListener("click", () => {
+      for (const b of boxes) b.checked = false;
+      save();
+      updateProgress();
+    });
+  }
 }
 
 /** Toggle which tab panel is visible when a tab button is clicked. */

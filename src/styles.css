@@ -314,6 +314,36 @@ select.subtle-select:hover, select.subtle-select:focus {
 .guide h3:first-of-type { border-top: none; padding-top: 0; }
 .guide p { margin: 0 0 0.6rem; line-height: 1.6; }
 .guide .guide-foot { margin-top: 1.75rem; font-size: 0.8rem; font-style: italic; }
+/* Training checklists inside the guide */
+.checklist { margin: 0 0 0.5rem; }
+.checklist h4 {
+  margin: 1.1rem 0 0.5rem; font-size: 0.92rem; color: var(--gold);
+  letter-spacing: 0.01em;
+}
+.checklist-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; margin-bottom: 0.25rem;
+}
+.checklist-progress { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.checklist-reset {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 6px; padding: 3px 9px; font-size: 0.78rem; cursor: pointer;
+}
+.checklist-reset:hover { color: var(--accent); border-color: var(--accent); }
+.checklist .task {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.3rem 0; line-height: 1.45; cursor: pointer;
+}
+.checklist .task input {
+  margin-top: 0.18rem; width: 16px; height: 16px; flex: 0 0 auto;
+  accent-color: var(--accent); cursor: pointer;
+}
+.checklist .task span { font-size: 0.92rem; }
+.checklist .task input:checked + span {
+  color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line);
+}
+.checklist .task.bench span { color: var(--gold); }
+.checklist .task.bench input:checked + span { color: var(--muted); }
 .calc-links { margin: 1rem 0 0; }
 .link-btn {
   display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
@@ -333,6 +363,29 @@ select.subtle-select:hover, select.subtle-select:focus {
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
 }
 .bw-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
+.bw-groups { display: flex; flex-direction: column; gap: 6px; }
+.bw-cat { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.bw-cat-summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.6rem;
+  padding: 10px 12px; font-size: 0.92rem; font-weight: 600; user-select: none;
+}
+.bw-cat-summary::-webkit-details-marker { display: none; }
+.bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
+.bw-cat[open] > .bw-cat-summary::after { content: "▾"; }
+.bw-cat[open] > .bw-cat-summary { border-bottom: 1px solid var(--line); }
+.bw-cat-summary:hover { background: var(--accent-soft); }
+.bw-cat-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.bw-cat-name { letter-spacing: 0.01em; }
+.bw-cat-meta { font-weight: 500; font-size: 0.8rem; }
+.bw-cat .data-table { min-width: 0; }
+/* AI-NOTE (Claude): Exercises tab must NOT scroll sideways — long exercise
+   names should wrap. min-width:0 above + overflow-wrap below do this together.
+   Please keep both if you restructure this table. */
+.bw-cat .data-table td, .bw-cat .data-table th { overflow-wrap: anywhere; }
+.bw-cat .data-table tbody tr:last-child td { border-bottom: none; }
+
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }

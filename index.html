@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.12.2</span></h1>
+      <h1>Colosseum <span class="version">v0.13.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -208,82 +208,106 @@
           <p class="muted" style="margin: 0 0 0.75rem">
             Share of bodyweight each movement lifts. The 1RM uses
             <em>part × bodyweight + added weight</em>. Unlisted exercises are 0.
+            Exercises are grouped — click a category to open or close it.
           </p>
-          <table id="bwTable" class="data-table"></table>
-          <div id="bwPager" class="pager"></div>
+          <div id="bwGroups" class="bw-groups"></div>
         </section>
       </div>
 
       <div id="tab-guide" class="tab-panel" hidden>
         <section class="panel guide">
-          <h2>How to get stronger — the short version</h2>
+          <h2>Training plan &amp; benchmarks</h2>
           <p class="muted" style="margin: 0 0 1.25rem">
-            You don't need a complicated program. Strength comes from a few simple things done
-            consistently for months. Here's the whole picture, plain and honest.
+            A simple 5-month plan you can tick off, plus bodyweight benchmarks to chase. Train each
+            lift twice a week and beat one number every week. Your ticks are saved on this device.
           </p>
 
-          <h3>1. Progressive overload — the one rule that matters</h3>
-          <p>
-            Muscles get stronger when you ask them to do <strong>a little more than last time</strong>:
-            one more rep, a touch more weight, one more set, or cleaner technique. If the work never
-            gets harder, you stop adapting. Each week, try to beat one number from the week before.
-            Log your sets here so you can actually see it happening on the
-            <strong>Athlete → Progress</strong> graph.
+          <h3>A 5-month plan you can tick off — Squat &amp; Deadlift</h3>
+          <p class="muted" style="margin: 0 0 0.9rem">
+            The benchmarks are written as multiples of your <strong>bodyweight (BW)</strong>, so they
+            fit any starting point — a 70&nbsp;kg lifter squatting "1.0× BW" means 70&nbsp;kg. Don't
+            chase the number if your form breaks; a clean lighter rep wins.
           </p>
 
-          <h3>2. Pick a weight by how many reps it allows</h3>
-          <p>
-            Most growth and strength happens training in the <strong>5–12 rep</strong> range, stopping
-            <strong>1–3 reps short of failure</strong> (you should believe you had a couple more in the
-            tank). Heavier (≈1–5 reps) builds raw strength; lighter (12–20) builds endurance and is
-            easier on the joints. As a rough guide, ~80% of your 1RM is about 8 reps, ~70% about 14.
-            The <strong>Test</strong> tab turns any weight × reps into an estimated 1RM, and the
-            <a href="reps-1rm.html" target="_blank" rel="noopener">bench reps-at-%1RM page</a> shows the
-            real research behind those numbers.
+          <div class="checklist" data-checklist="training">
+            <div class="checklist-head">
+              <span class="checklist-progress" data-progress>0 / 0 done</span>
+              <button type="button" class="checklist-reset" data-reset>Reset all</button>
+            </div>
+
+            <h4>Month 1 — Foundation &amp; technique</h4>
+            <label class="task"><input type="checkbox" data-key="sq-m1-a"><span>Squat &amp; deadlift on 2 separate days every week</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m1-b"><span>Keep reps in the 8–12 range, stopping 2–3 reps short of failure</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m1-c"><span>Groove full-depth squats and a flat-back deadlift</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m1-bench-sq"><span><strong>Benchmark:</strong> Squat 1.0× BW for 5 clean reps</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m1-bench-dl"><span><strong>Benchmark:</strong> Deadlift 1.25× BW for 5 clean reps</span></label>
+
+            <h4>Month 2 — Build the volume</h4>
+            <label class="task"><input type="checkbox" data-key="sq-m2-a"><span>Add a set per lift (work toward 10–16 hard sets each per week)</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m2-b"><span>Beat one number — weight or reps — every single week</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m2-c"><span>Rest 2–3 minutes between heavy sets</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m2-bench-sq"><span><strong>Benchmark:</strong> Squat 1.2× BW for 3 reps</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m2-bench-dl"><span><strong>Benchmark:</strong> Deadlift 1.5× BW for 3 reps</span></label>
+
+            <h4>Month 3 — Add load (strength block)</h4>
+            <label class="task"><input type="checkbox" data-key="sq-m3-a"><span>Shift main sets to the 5–8 rep range</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m3-b"><span>Do 2–3 ramp-up sets before your heavy top set</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m3-c"><span>Take a lighter "deload" week if a lift stalls 2 weeks running</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m3-bench-sq"><span><strong>Benchmark:</strong> Squat 1.4× BW for 3 reps</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m3-bench-dl"><span><strong>Benchmark:</strong> Deadlift 1.75× BW for 2 reps</span></label>
+
+            <h4>Month 4 — Push the top end</h4>
+            <label class="task"><input type="checkbox" data-key="sq-m4-a"><span>Heavy triples/doubles on lift one, lighter back-off sets after</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m4-b"><span>Lock in 7–9 h sleep and 1.6–2.2 g protein per kg of bodyweight</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m4-c"><span>Use the <strong>Test</strong> tab to estimate your 1RM this month</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m4-bench-sq"><span><strong>Benchmark:</strong> Estimated squat 1RM ≈ 1.5× BW</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m4-bench-dl"><span><strong>Benchmark:</strong> Estimated deadlift 1RM ≈ 2.0× BW</span></label>
+
+            <h4>Month 5 — Test &amp; consolidate</h4>
+            <label class="task"><input type="checkbox" data-key="sq-m5-a"><span>Take one light deload week before you test</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m5-b"><span>Work up to a heavy single with good form on each lift</span></label>
+            <label class="task"><input type="checkbox" data-key="sq-m5-c"><span>Log the new 1RM and check the <strong>Athlete → Progress</strong> graph</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m5-bench-sq"><span><strong>Benchmark:</strong> New squat 1RM PR beating Month 1</span></label>
+            <label class="task bench"><input type="checkbox" data-key="sq-m5-bench-dl"><span><strong>Benchmark:</strong> New deadlift 1RM PR beating Month 1</span></label>
+          </div>
+
+          <h3>Bodyweight &amp; accessory benchmarks — tick them as you hit them</h3>
+          <p class="muted" style="margin: 0 0 0.9rem">
+            Train these alongside the big lifts, twice a week. Each list runs easy → strong, so just
+            climb the rungs. Press numbers are multiples of bodyweight; the rest are plain reps or
+            seconds.
           </p>
 
-          <h3>3. Hit each muscle about twice a week</h3>
-          <p>
-            Training a muscle <strong>2× per week</strong> beats once a week for most people — more
-            chances to practise and grow. A simple split: upper/lower twice each, or full-body three
-            times. Aim for roughly <strong>10–20 hard sets per muscle per week</strong> total, built up
-            gradually.
-          </p>
+          <div class="checklist" data-checklist="accessory">
+            <div class="checklist-head">
+              <span class="checklist-progress" data-progress>0 / 0 done</span>
+              <button type="button" class="checklist-reset" data-reset>Reset all</button>
+            </div>
 
-          <h3>4. Technique and full range of motion first</h3>
-          <p>
-            A clean rep through a <strong>full range of motion</strong> builds more muscle and protects
-            your joints. Don't trade form for a bigger number — a heavier weight you half-rep is worse
-            than a lighter one you control. Master the movement, then add load.
-          </p>
+            <h4>Pull-ups (dead-hang, chin over bar)</h4>
+            <label class="task"><input type="checkbox" data-key="acc-pull-1"><span>1 clean pull-up</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-pull-2"><span>5 in a row</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-pull-3"><span>10 in a row</span></label>
+            <label class="task bench"><input type="checkbox" data-key="acc-pull-4"><span>15 in a row, or 10 with +10&nbsp;kg added</span></label>
 
-          <h3>5. Rest enough between sets</h3>
-          <p>
-            For heavy compound lifts, rest <strong>2–3 minutes</strong> between sets so the next set is
-            actually hard for the muscle, not your lungs. For smaller isolation work, 60–90 seconds is
-            plenty. Rushing your rest just lightens the effective load.
-          </p>
+            <h4>Push-ups (chest to fist, full lockout)</h4>
+            <label class="task"><input type="checkbox" data-key="acc-push-1"><span>10 clean push-ups</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-push-2"><span>25 in a row</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-push-3"><span>40 in a row</span></label>
+            <label class="task bench"><input type="checkbox" data-key="acc-push-4"><span>50+ in a row</span></label>
 
-          <h3>6. Recovery is when you grow</h3>
-          <p>
-            Training is the stimulus; <strong>sleep, food and rest are the adaptation</strong>. Get
-            <strong>7–9 hours of sleep</strong>, eat enough total food, and aim for roughly
-            <strong>1.6–2.2 g of protein per kg of bodyweight</strong> daily. Take at least a day or two
-            off heavy lifting each week. If a lift stalls for weeks, you're often under-recovered, not
-            under-trained.
-          </p>
+            <h4>Overhead shoulder press (standing, strict)</h4>
+            <label class="task"><input type="checkbox" data-key="acc-ohp-1"><span>0.4× BW for 5 reps</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-ohp-2"><span>0.55× BW for 5 reps</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-ohp-3"><span>0.65× BW for 3 reps</span></label>
+            <label class="task bench"><input type="checkbox" data-key="acc-ohp-4"><span>0.75× BW for a single (1RM)</span></label>
 
-          <h3>7. Warm up briefly, then work</h3>
-          <p>
-            A few minutes of light movement plus 2–3 ramp-up sets on your first big lift is enough. You
-            don't need to exhaust yourself warming up — just wake the pattern up and protect the joint.
-          </p>
-
-          <h3>8. Be patient and consistent</h3>
-          <p>
-            Strength is a multi-year project. Months of <strong>showing up and adding a little</strong>
-            beat any perfect program done for three weeks. Track it, trust the trend, and keep going.
-          </p>
+            <h4>Abs &amp; core</h4>
+            <label class="task"><input type="checkbox" data-key="acc-abs-1"><span>30-second hard plank</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-abs-2"><span>60-second plank</span></label>
+            <label class="task"><input type="checkbox" data-key="acc-abs-3"><span>10 hanging knee raises</span></label>
+            <label class="task bench"><input type="checkbox" data-key="acc-abs-4"><span>10 hanging straight-leg raises</span></label>
+          </div>
 
           <p class="guide-foot muted">
             This is general education, not medical or coaching advice. If you have an injury or
