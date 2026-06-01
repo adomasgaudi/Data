@@ -297,6 +297,12 @@ select.subtle-select:hover, select.subtle-select:focus {
 .caret { display: inline-block; margin-right: 0.5rem; color: var(--accent); transition: transform 0.15s; }
 .ex-row.open, .wo-row.open, .wo-ex-row.open, .wk-row.open { background: var(--accent-soft); }
 .ex-row.open > td .caret, .wo-row.open > td .caret, .wo-ex-row.open > td .caret, .wk-row.open > td .caret { transform: rotate(90deg); }
+/* Weekly exercise drill-in: the date is a header row above that day's sets. */
+.set-date-row > td { font-weight: 600; padding-top: 9px; border-top: 1px solid var(--line); border-bottom: none; }
+.set-date-row:first-child > td { border-top: none; }
+/* A set's notes sit on their own line under the set, not in a column. */
+.detail-table tr:has(+ .set-note-row) > td { border-bottom: none; }
+.set-note-row > td { padding-top: 0; padding-bottom: 6px; font-size: 0.85em; }
 .detail-row > td { padding: 0; background: var(--accent-soft); }
 .detail-table { min-width: 0; font-size: 0.82rem; margin: 0; }
 .detail-table th, .detail-table td { padding: 5px 10px; }

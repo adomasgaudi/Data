@@ -745,7 +745,7 @@ function onExerciseRowClick(e: MouseEvent) {
       (w) => w.weekStart === wkRow.dataset.wk,
     );
     if (!week) return;
-    insertDetail(wkRow, 2, setsTableHtml(week.sets, { showDate: true }));
+    insertDetail(wkRow, 2, setsByDateTableHtml(week.sets));
     return;
   }
 
@@ -909,7 +909,7 @@ function onWorkoutRowClick(e: MouseEvent) {
     const grp = workoutGroups[Number(exRow.dataset.day)];
     const exName = grp?.exercises[Number(exRow.dataset.exidx)]?.exerciseName;
     if (!grp || exName === undefined) return;
-    insertDetail(exRow, 2, setsTableHtml(grp.sets.filter((s) => s.exerciseName === exName), {}));
+    insertDetail(exRow, 2, setsTableHtml(grp.sets.filter((s) => s.exerciseName === exName)));
     return;
   }
 
@@ -923,9 +923,9 @@ function onWorkoutRowClick(e: MouseEvent) {
   insertDetail(row, 2, workoutGroupHtml(grp, idx));
 }
 
-/** Inner table of the exercises in one group; each row expands to its sets. */
+/** Inner table of the exercises in one group; each row expands to its sets.
+ * No header row — the columns (exercise, set count) are self-evident here. */
 function workoutGroupHtml(group: WorkoutGroup, idx: number): string {
-  const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const rows = group.exercises
     .map(
       (e, i) =>
@@ -933,7 +933,7 @@ function workoutGroupHtml(group: WorkoutGroup, idx: number): string {
         `<td><span class="caret">▸</span>${escapeHtml(e.exerciseName)}</td><td class="num">${e.count}</td></tr>`,
     )
     .join("");
-  return `<table class="data-table detail-table">${head}<tbody>${rows}</tbody></table>`;
+  return `<table class="data-table detail-table"><tbody>${rows}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -956,31 +956,57 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
   row.classList.add("open");
 }
 
-/** Inner table of sets with calculated values; optionally an Exercise column. */
-function setsTableHtml(sets: readonly SetRecord[], opts: { showExercise?: boolean; showDate?: boolean } = {}): string {
+// Compact header for the sets tables: weight / est. 1RM / volume, all in kg.
+// AI-NOTE: setRowsHtml/SETS_HEAD are shared by BOTH the Workouts day→exercise
+// sets table and the Exercises weekly drill-in. The compact W/1RM/Vol headers
+// and the notes-as-sub-row layout therefore apply to both views; change here
+// and you change both.
+const SETS_HEAD =
+  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th></tr></thead>`;
+
+/**
+ * One set as table rows: the W/1RM/Vol line, plus a sub-line for its notes
+ * (and dropset flag) when present — notes sit under the set, not in a column.
+ */
+function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
+  const e1rm = estimate1RM(s.weight, s.reps, formula);
+  const vol = setVolume(s.weight, s.reps);
+  const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
+  const main =
+    `<tr><td class="num">${wr(s.weight, s.reps)}</td>` +
+    `<td class="num">${e1rm === null ? "—" : fmt(e1rm)}</td>` +
+    `<td class="num">${vol === null ? "—" : fmt(vol)}</td></tr>`;
+  const noteRow = note
+    ? `<tr class="set-note-row"><td colspan="3" class="muted">${escapeHtml(note)}</td></tr>`
+    : "";
+  return main + noteRow;
+}
+
+/** Inner table of sets with calculated values (all from the same day). */
+function setsTableHtml(sets: readonly SetRecord[]): string {
   const formula = currentFormula();
-  const dateHead = opts.showDate ? "<th>Date</th>" : "";
-  const exHead = opts.showExercise ? "<th>Exercise</th>" : "";
-  const head =
-    `<thead><tr>${dateHead}${exHead}<th class="num">Weight (kg)</th>` +
-    `<th class="num">Est. 1RM (kg)</th><th class="num">Volume</th><th>Notes</th></tr></thead>`;
-  const rows = sets
-    .map((s) => {
-      const e1rm = estimate1RM(s.weight, s.reps, formula);
-      const vol = setVolume(s.weight, s.reps);
-      const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
-      const dateCell = opts.showDate ? `<td class="wo-date">${shortDate(s.date)}</td>` : "";
-      const exCell = opts.showExercise ? `<td>${escapeHtml(s.exerciseName)}</td>` : "";
-      return (
-        `<tr>${dateCell}${exCell}` +
-        `<td class="num">${wr(s.weight, s.reps)}</td>` +
-        `<td class="num">${e1rm === null ? "—" : fmt(e1rm)}</td>` +
-        `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
-        `<td class="muted">${escapeHtml(note)}</td></tr>`
-      );
-    })
-    .join("");
-  return `<table class="data-table detail-table">${head}<tbody>${rows}</tbody></table>`;
+  const rows = sets.map((s) => setRowsHtml(s, formula)).join("");
+  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${rows}</tbody></table>`;
+}
+
+/**
+ * Sets spanning several days (one week of one exercise), grouped by day. Each
+ * day is a header row above that day's sets, so the date sits "up top" instead
+ * of repeating in its own column — matching the Workouts view.
+ */
+function setsByDateTableHtml(sets: readonly SetRecord[]): string {
+  const formula = currentFormula();
+  const byDate = new Map<string, SetRecord[]>();
+  for (const s of sets) {
+    const g = byDate.get(s.date);
+    if (g) g.push(s);
+    else byDate.set(s.date, [s]);
+  }
+  const body = Array.from(byDate, ([date, daySets]) => {
+    const header = `<tr class="set-date-row"><td colspan="3" class="wo-date">${shortDate(date)}</td></tr>`;
+    return header + daySets.map((s) => setRowsHtml(s, formula)).join("");
+  }).join("");
+  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
 }
 
 // ---- Progress page (time graph: sets per day + best estimated 1RM) ----
