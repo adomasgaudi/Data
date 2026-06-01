@@ -430,9 +430,9 @@ function renderLeaderboardChart(
   const round = (n: number) => Math.round(n * 100) / 100;
   // Each athlete gets one horizontal track; the rep bands appear as coloured
   // dots along it (one dot per band, placed at that band's theoretical 1RM).
-  // ~30 px per athlete keeps the now-compact dot rows close together.
+  // ~22 px per athlete keeps the compact dot rows close together.
   const wrap = canvas.parentElement;
-  if (wrap) wrap.style.height = `${Math.max(200, rows.length * 30 + 56)}px`;
+  if (wrap) wrap.style.height = `${Math.max(160, rows.length * 22 + 48)}px`;
 
   // Manual x-axis (weight) range from the From/To inputs; either end can be left
   // blank for auto, and the min may be negative (e.g. a body-weight-adjusted lift
@@ -458,8 +458,8 @@ function renderLeaderboardChart(
         }),
         backgroundColor: BAND_COLORS[i % BAND_COLORS.length],
         borderColor: BAND_COLORS[i % BAND_COLORS.length],
-        pointRadius: 6,
-        pointHoverRadius: 8,
+        pointRadius: 3.5,
+        pointHoverRadius: 6,
         showLine: false,
       })),
     },
