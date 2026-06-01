@@ -859,7 +859,7 @@ function jumpToWorkoutDate(iso: string) {
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
   if (!row || !grp) return;
-  insertDetail(row, 3, workoutGroupHtml(grp, idx)); // expand it like a tap would
+  insertDetail(row, 2, workoutGroupHtml(grp, idx)); // expand it like a tap would
   row.scrollIntoView({ behavior: "smooth", block: "center" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
@@ -874,26 +874,28 @@ function renderWorkoutsPage() {
     `${escapeHtml(athleteLabel())} — workouts ` +
     `<span class="muted">(${active} ${byWeek ? "weeks" : "sessions"} · tap to expand)</span>`;
 
-  const head = `<thead><tr><th>${byWeek ? "Week" : "Date"}</th><th>Did</th><th class="num">Sets</th></tr></thead>`;
+  const head = `<thead><tr><th>${byWeek ? "Week" : "Session"}</th><th class="num">Sets</th></tr></thead>`;
   const start = workoutsPage * PAGE_SIZE;
   const rows = workoutGroups
     .slice(start, start + PAGE_SIZE)
     .map((g, i) => {
       if (g.rest) {
-        return `<tr class="rest-row"><td class="wo-date">${g.label}</td><td>rest</td><td class="num">0</td></tr>`;
+        return `<tr class="rest-row"><td><span class="wo-date">${g.label}</span> rest</td><td class="num">0</td></tr>`;
       }
       const abs = start + i;
       const did = g.exercises
         .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
         .join("<br>");
       return (
-        `<tr class="wo-row" data-index="${abs}"><td class="wo-date"><span class="caret">▸</span>${g.label}</td>` +
-        `<td>${did}</td><td class="num">${g.totalSets}</td></tr>`
+        `<tr class="wo-row" data-index="${abs}"><td>` +
+        `<div class="wo-date"><span class="caret">▸</span>${g.label}</div>` +
+        `<div class="wo-did">${did}</div></td>` +
+        `<td class="num">${g.totalSets}</td></tr>`
       );
     })
     .join("");
   els.workoutsTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="3" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = pagerHtml(workoutsPage, workoutGroups.length);
 }
 
@@ -918,7 +920,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   const idx = Number(row.dataset.index);
   const grp = workoutGroups[idx];
   if (!grp) return;
-  insertDetail(row, 3, workoutGroupHtml(grp, idx));
+  insertDetail(row, 2, workoutGroupHtml(grp, idx));
 }
 
 /** Inner table of the exercises in one group; each row expands to its sets. */
