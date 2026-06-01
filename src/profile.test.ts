@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultBwCoeff, exerciseCategory, isAssistablePullup, realPullupWeight } from "./profile";
+import { bodyComposition, defaultBwCoeff, exerciseCategory, isAssistablePullup, realPullupWeight } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -52,6 +52,31 @@ describe("defaultBwCoeff", () => {
     expect(defaultBwCoeff("Sled Leg Press")).toBe(0);
     expect(defaultBwCoeff("Cold shower")).toBe(0);
     expect(defaultBwCoeff("Stretch split")).toBe(0);
+  });
+});
+
+describe("bodyComposition (FFMI / nFFMI)", () => {
+  it("computes lean mass, FFMI and the height-normalised nFFMI", () => {
+    // 80 kg, 180 cm, 20% fat → lean 64 kg, height 1.8 m → FFMI = 64 / 3.24.
+    const c = bodyComposition({ height: 180, weight: 80, bodyFat: 0.2 })!;
+    expect(c).not.toBeNull();
+    expect(c.leanMass).toBeCloseTo(64, 6);
+    expect(c.ffmi).toBeCloseTo(64 / (1.8 * 1.8), 4);
+    // At exactly 1.8 m the normalisation term is 0, so nFFMI === FFMI.
+    expect(c.nffmi).toBeCloseTo(c.ffmi, 6);
+  });
+
+  it("adds the +6.1×(1.8−h) term so shorter lifters are scaled up", () => {
+    const short = bodyComposition({ height: 160, weight: 60, bodyFat: 0.2 })!;
+    expect(short.nffmi).toBeCloseTo(short.ffmi + 6.1 * (1.8 - 1.6), 6);
+    expect(short.nffmi).toBeGreaterThan(short.ffmi);
+  });
+
+  it("returns null for impossible inputs", () => {
+    expect(bodyComposition({ height: 0, weight: 80, bodyFat: 0.2 })).toBeNull();
+    expect(bodyComposition({ height: 180, weight: 0, bodyFat: 0.2 })).toBeNull();
+    expect(bodyComposition({ height: 180, weight: 80, bodyFat: 1 })).toBeNull();
+    expect(bodyComposition({ height: 180, weight: 80, bodyFat: -0.1 })).toBeNull();
   });
 });
 

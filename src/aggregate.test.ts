@@ -16,7 +16,9 @@ import {
   workoutsWithRestDays,
   weeksForUser,
   setsByWeek,
+  weeklySetStats,
   exerciseProgressForUser,
+  exerciseProgressByWeek,
   addedWeight1RM,
   scaleToGroup,
   nearDuplicateExercises,
@@ -407,5 +409,54 @@ describe("distinct helpers", () => {
     expect(series.map((p) => p.date)).toEqual(["2024-01-01", "2024-02-01"]);
     expect(series[0]).toEqual({ date: "2024-01-01", sets: 1, bestE1rm: 100 }); // 100x1
     expect(series[1]!.bestE1rm).toBeCloseTo(105, 6); // 90x5 → Epley 105
+  });
+  it("rolls the daily series up into Monday-start weeks, oldest first", () => {
+    // ada's two bench dates fall in different weeks, so they stay separate.
+    const series = exerciseProgressByWeek(FIXTURE, "ada", "Bench Press", "epley");
+    expect(series.map((p) => p.date)).toEqual(["2024-01-01", "2024-01-29"]); // the two Mondays
+    expect(series[0]).toEqual({ date: "2024-01-01", sets: 1, bestE1rm: 100 });
+    expect(series[1]!.bestE1rm).toBeCloseTo(105, 6);
+  });
+  it("sums all of a week's sets and keeps that week's best e1RM", () => {
+    // Three bench days inside one Mon–Sun week (2024-01-01 .. 2024-01-07).
+    const sets: SetRecord[] = [
+      rec({ username: "ada", exerciseName: "Bench Press", weight: 80, reps: 1, date: "2024-01-01" }), // 80
+      rec({ username: "ada", exerciseName: "Bench Press", weight: 100, reps: 1, date: "2024-01-03", setNumber: 2 }), // 100 (best)
+      rec({ username: "ada", exerciseName: "Bench Press", weight: 90, reps: 1, date: "2024-01-07", setNumber: 3 }), // 90
+    ];
+    const series = exerciseProgressByWeek(sets, "ada", "Bench Press", "epley");
+    expect(series).toEqual([{ date: "2024-01-01", sets: 3, bestE1rm: 100 }]);
+  });
+});
+
+describe("weeklySetStats", () => {
+  // 9 sets in one March week (the peak) + 4 sets in the week of "today".
+  const TODAY = "2026-06-01";
+  const SETS: SetRecord[] = [
+    ...Array.from({ length: 9 }, (_, i) => rec({ date: "2026-03-10", setNumber: i + 1 })),
+    ...Array.from({ length: 4 }, (_, i) => rec({ date: TODAY, setNumber: i + 1 })),
+  ];
+
+  it("returns all zeros for an empty log", () => {
+    expect(weeklySetStats([], TODAY)).toEqual({
+      peakPerWeek: 0,
+      thisWeek: 0,
+      monthAvgPerWeek: 0,
+      threeMonthAvgPerWeek: 0,
+    });
+  });
+
+  it("finds the busiest week and counts the current week", () => {
+    const s = weeklySetStats(SETS, TODAY);
+    expect(s.peakPerWeek).toBe(9); // the March week
+    expect(s.thisWeek).toBe(4); // the four sets dated today
+  });
+
+  it("averages sets per week over the trailing 30 / 90 day windows", () => {
+    const s = weeklySetStats(SETS, TODAY);
+    // 30-day window only catches the 4 recent sets: 4 ÷ (30/7) ≈ 0.9.
+    expect(s.monthAvgPerWeek).toBeCloseTo(0.9, 6);
+    // 90-day window catches all 13 sets: 13 ÷ (90/7) ≈ 1.0.
+    expect(s.threeMonthAvgPerWeek).toBeCloseTo(1.0, 6);
   });
 });

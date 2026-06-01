@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.15.0.1</span></h1>
+      <h1>Colosseum <span class="version">v0.16.2</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -135,11 +135,20 @@
                 </summary>
                 <div class="period-dd-menu" role="listbox"></div>
               </details>
+              <span class="ex-filter-lbl">Sort</span>
+              <div id="exerciseSort" class="ex-sort" role="group" aria-label="Sort exercises">
+                <button type="button" class="ex-sort-btn is-active" data-sort="sets">By sets</button>
+                <button type="button" class="ex-sort-btn" data-sort="category">By category</button>
+              </div>
             </div>
             <div id="exerciseRecord" class="exercise-record" hidden></div>
+            <div id="exerciseWeekly" class="wk-stats" hidden></div>
             <div id="exerciseTargets" class="exercise-targets" hidden></div>
             <div id="exerciseProgress" class="exercise-progress" hidden>
-              <div class="chart-wrap"><canvas id="exerciseProgressChart"></canvas></div>
+              <div class="chart-wrap chart-wrap--big">
+                <button type="button" class="chart-center" id="exerciseProgressCenter" title="Center on data" aria-label="Center on data">⌖ Center</button>
+                <canvas id="exerciseProgressChart"></canvas>
+              </div>
               <p class="muted" id="exerciseProgressNote"></p>
             </div>
             <table id="athleteTable" class="data-table"></table>
@@ -161,7 +170,10 @@
             <label class="inline-label">Exercise
               <select id="progressExercise"></select>
             </label>
-            <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
+            <div class="chart-wrap chart-wrap--big">
+              <button type="button" class="chart-center" id="progressCenter" title="Center on data" aria-label="Center on data">⌖ Center</button>
+              <canvas id="progressChart"></canvas>
+            </div>
             <p class="muted" id="progressNote"></p>
           </section>
         </div>
@@ -404,6 +416,14 @@
                 </thead>
                 <tbody>
                   <tr>
+                    <th>Ladder</th>
+                    <td><input type="checkbox" data-key="hs-g-ladder-box" aria-label="feet on a ladder, box at wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-ladder-30" aria-label="feet on a ladder, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-ladder-15" aria-label="feet on a ladder, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-ladder-7" aria-label="feet on a ladder, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="hs-g-ladder-0" aria-label="feet on a ladder, back against wall"></td>
+                  </tr>
+                  <tr>
                     <th>60 cm</th>
                     <td><input type="checkbox" data-key="hs-g-60-box" aria-label="60 cm feet, box at wall"></td>
                     <td><input type="checkbox" data-key="hs-g-60-30" aria-label="60 cm feet, 30 cm from wall"></td>
@@ -486,6 +506,7 @@
             <li>Finger curls: <strong>20 kg × 20 reps</strong></li>
             <li>Push-ups: pretty strong — count unknown (get a max-rep number). (confirm)</li>
             <li>Box headstands: can <em>barely lower the legs</em> — the slow lowering (eccentric) is the current limit. Note: this is a headstand, so mind the neck + the blood-pressure caution above.</li>
+            <li><strong>Back-to-wall handstand — current level:</strong> ladder + box at <strong>15 cm</strong> from the wall, doing <strong>shoulder taps to the box for ~10 reps</strong> (this is the Ladder rung of her grid below).</li>
           </ul>
 
           <h4>What she wants to train</h4>
@@ -522,6 +543,19 @@
             <li>Glute medius: Hip Abduction (side-lying / cable / banded) — the abduction counterpart to the adductor work</li>
             <li>Core slow: Lying Leg Raise, Decline Sit-Up (controlled tempo)</li>
             <li>If time: Pull-ups (working goal)</li>
+          </ul>
+
+          <!-- AI-NOTE: dictated session notes (2026-06-01). "Always prepare supersets" is a STANDING
+               instruction from the coach — set up the superset pairings for every session before she
+               arrives. Heavy rows: form breaks (too fast → bad form), same fast/momentum pattern as
+               her hinge. The row HOLD (isometric) looked ok. Adductor machine: 20 kg is too heavy as a
+               WARM-UP weight — start lighter. Don't invent numbers beyond what was said. -->
+          <h4>Session notes &amp; coaching cues (latest)</h4>
+          <ul class="guide-notes">
+            <li><strong>Always prepare supersets for her.</strong> Have the superset pairings set up before the session.</li>
+            <li><strong>Heavy rows — form breaks down:</strong> moves too fast, form goes bad. Slow it down / drop the weight to hold form (same fast-momentum habit as the hinge).</li>
+            <li><strong>Row hold:</strong> the isometric hold looks ok.</li>
+            <li><strong>Adductor machine:</strong> 20 kg is a bit too much as a <em>warm-up</em> weight — start lighter.</li>
           </ul>
 
           <!-- AI-NOTE: Hip-hinge plan is evidence-informed (constraint-led approach + external focus
@@ -566,6 +600,14 @@
                   </tr>
                 </thead>
                 <tbody>
+                  <tr>
+                    <th>Ladder</th>
+                    <td><input type="checkbox" data-key="cx-g-ladder-box" aria-label="feet on a ladder, box at wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-ladder-30" aria-label="feet on a ladder, 30 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-ladder-15" aria-label="feet on a ladder, 15 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-ladder-7" aria-label="feet on a ladder, 7 cm from wall"></td>
+                    <td><input type="checkbox" data-key="cx-g-ladder-0" aria-label="feet on a ladder, back against wall"></td>
+                  </tr>
                   <tr>
                     <th>60 cm</th>
                     <td><input type="checkbox" data-key="cx-g-60-box" aria-label="60 cm feet, box at wall"></td>

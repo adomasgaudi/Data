@@ -4,6 +4,8 @@
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
 import { Chart, registerables } from "chart.js";
+import zoomPlugin from "chartjs-plugin-zoom";
+import Hammer from "hammerjs";
 import { loadData, type LoadedData } from "./dataSource";
 import {
   distinctExercises,
@@ -11,10 +13,11 @@ import {
   exerciseCountsForUser,
   setsForUserExercise,
   setsByWeek,
+  weeklySetStats,
   workoutsForUser,
   workoutsWithRestDays,
   weeksForUser,
-  exerciseProgressForUser,
+  exerciseProgressByWeek,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -41,6 +44,7 @@ import type { SetRecord } from "./domain";
 import {
   ATHLETES,
   EXERCISE_BW_COEFF,
+  bodyComposition,
   defaultBwCoeff,
   realPullupWeight,
   EXERCISE_GROUPS,
@@ -50,7 +54,10 @@ import {
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 
-Chart.register(...registerables);
+// chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
+// phones; make it available before the plugin registers.
+(globalThis as unknown as { Hammer?: unknown }).Hammer ??= Hammer;
+Chart.register(...registerables, zoomPlugin);
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -89,11 +96,14 @@ const els = {
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
+  exerciseWeekly: $("exerciseWeekly"),
   exerciseTargets: $("exerciseTargets"),
   exerciseProgress: $("exerciseProgress"),
   exerciseProgressNote: $("exerciseProgressNote"),
+  exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exerciseFilter: $("exerciseFilter"),
   exerciseRange: $<HTMLDetailsElement>("exerciseRange"),
+  exerciseSort: $("exerciseSort"),
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutCalendar: $("workoutCalendar"),
@@ -104,6 +114,7 @@ const els = {
   restToggleLabel: $("restToggleLabel"),
   progressExercise: $<HTMLSelectElement>("progressExercise"),
   progressNote: $("progressNote"),
+  progressCenter: $<HTMLButtonElement>("progressCenter"),
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
@@ -135,11 +146,19 @@ const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString();
 const wr = (weight: number | null, reps: number | null): string =>
   weight === null ? "—" : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
 
-/** "2026-05-02" -> "5-02" (month without leading zero, day kept 2-digit). */
+/** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
+const MONTH_ABBR = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 const shortDate = (iso: string): string => {
   const [, m, d] = iso.split("-");
-  return m && d ? `${Number(m)}-${d}` : iso;
+  const mon = MONTH_ABBR[Number(m) - 1];
+  return mon && d ? `${mon} ${Number(d)}` : iso;
 };
+
+/** Today as an ISO YYYY-MM-DD string — the reference point for "this week" and
+ * the trailing-window sets-per-week averages. */
+const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 /** Elapsed training time from first to last logged date, in the unit that reads
  * cleanest at that scale: days under 2 weeks, weeks under ~2 months, months
@@ -264,9 +283,18 @@ function renderStatus() {
 
   let html = `${data.records.length.toLocaleString()} sets · ${users} athletes`;
   if (latest) html += ` · latest ${latest}`;
-  if (data.issues.length) html += ` <span class="badge warn">${data.issues.length} parse issues</span>`;
-  if (data.warnings.length) html += ` <span class="badge warn">${data.warnings.length} sanity warnings</span>`;
+  // The badges open the Data-health page (which lists each issue/warning).
+  if (data.issues.length)
+    html += ` <button type="button" class="badge warn badge-link">${data.issues.length} parse issues</button>`;
+  if (data.warnings.length)
+    html += ` <button type="button" class="badge warn badge-link">${data.warnings.length} sanity warnings</button>`;
   els.status.innerHTML = html;
+}
+
+/** Open the data-health overlay (from Settings or the status-bar badges). */
+function openHealth() {
+  setSettingsOpen(false);
+  els.healthPage.hidden = false;
 }
 
 function renderHealth() {
@@ -417,8 +445,10 @@ function onLeaderboardRowClick(e: MouseEvent) {
   insertDetail(row, 3, detail);
 }
 
-// One colour per rep band: low reps (1–3) darkest, higher reps lighter.
-const BAND_COLORS = ["#1b3a5d", "#284e86", "#3b66a6", "#5681c0", "#7fa1d4", "#a9c0e4"];
+// Blue-and-gold band scale, ordered low reps → high reps: the 1–3 band is
+// gold (the heaviest, headline lifts), the 4–6 band is a blue/gold blend, and
+// the higher-rep bands run blue fading toward grey. Legible on white.
+const BAND_COLORS = ["#b8902f", "#7d7a52", "#284e86", "#5a7299", "#8b97a8", "#aab0b8"];
 
 function renderLeaderboardChart(
   rows: LbRow[],
@@ -538,6 +568,13 @@ let workoutGroups: WorkoutGroup[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
 let recordsPage = 0;
+// How the Exercises list is ordered: "sets" = flat, most-trained first;
+// "category" = grouped by muscle/movement category (categories ordered by total
+// sets), and within each category still by sets.
+let exerciseSort: "sets" | "category" = "sets";
+// In category mode, which category headers the user has collapsed (their
+// exercise rows are hidden until tapped open again).
+const collapsedExCats = new Set<string>();
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
@@ -589,16 +626,31 @@ function renderRecordsPage() {
   els.recordsPager.innerHTML = pagerHtml(recordsPage, recs.length);
 }
 
-/** Profile line (weight / height / body fat / age) for the selected athlete. */
+/** Profile line for the selected athlete: a lead nFFMI badge (computed from
+ * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
   const p = ATHLETES[els.athlete.value];
   if (!p) {
     els.athleteProfile.textContent = "No profile on file";
     return;
   }
-  const parts = [`${p.weight} kg`, `${p.height} cm`, `${Math.round(p.bodyFat * 100)}% body fat`];
-  if (p.age != null) parts.push(`age ${p.age}`);
-  els.athleteProfile.textContent = parts.join("  ·  ");
+  const specs = [`${p.weight} kg`, `${p.height} cm`, `${Math.round(p.bodyFat * 100)}% body fat`];
+  if (p.age != null) specs.push(`age ${p.age}`);
+  const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
+
+  const comp = bodyComposition(p);
+  if (!comp) {
+    els.athleteProfile.innerHTML = specLine;
+    return;
+  }
+  // nFFMI = lean-mass index normalised to 1.8 m. Lead with it; show the lean
+  // mass it implies in the tooltip so the number is traceable to the specs.
+  const badge =
+    `<span class="nffmi-badge" title="Normalised fat-free mass index — lean mass ` +
+    `${comp.leanMass.toFixed(1)} kg ÷ height², scaled to 1.8 m. ~22 trained, ~25 natural ceiling.">` +
+    `<span class="nffmi-val">${comp.nffmi.toFixed(1)}</span>` +
+    `<span class="nffmi-lbl">nFFMI</span></span>`;
+  els.athleteProfile.innerHTML = badge + specLine;
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).
@@ -798,6 +850,47 @@ function setupExerciseRange(): void {
   });
 }
 
+/** Wire the By-sets / By-category sort toggle for the exercises list. Picking a
+ * mode updates {@link exerciseSort}, resets paging, and re-renders. */
+function setupExerciseSort(): void {
+  els.exerciseSort.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".ex-sort-btn");
+    if (!btn) return;
+    const mode = btn.dataset.sort === "category" ? "category" : "sets";
+    if (mode === exerciseSort) return;
+    exerciseSort = mode;
+    for (const b of els.exerciseSort.querySelectorAll<HTMLElement>(".ex-sort-btn"))
+      b.classList.toggle("is-active", b.dataset.sort === mode);
+    exercisesPage = 0;
+    selectedExercise = null;
+    renderExercisesPage();
+  });
+}
+
+/**
+ * Re-order an exercise-count list for the active {@link exerciseSort}. In
+ * "sets" mode the input order (most-trained first) is kept as-is. In "category"
+ * mode exercises are bucketed by {@link exerciseCategory}, the categories are
+ * ordered by their combined set count (busiest category first), and within each
+ * category the most-trained exercise stays on top. Input order is preserved
+ * within buckets, so the per-category sort matches the incoming sets order.
+ */
+function orderedExerciseCounts(counts: ExerciseCount[]): ExerciseCount[] {
+  if (exerciseSort !== "category") return counts;
+  const buckets = new Map<TrainingCategory, ExerciseCount[]>();
+  for (const c of counts) {
+    const cat = exerciseCategory(c.exerciseName);
+    (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push(c);
+  }
+  return [...buckets.values()]
+    .sort((a, b) => sumCounts(b) - sumCounts(a))
+    .flat();
+}
+
+function sumCounts(items: ExerciseCount[]): number {
+  return items.reduce((s, c) => s + c.count, 0);
+}
+
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
 function renderExercisesPage() {
   if (selectedExercise !== null) {
@@ -807,30 +900,64 @@ function renderExercisesPage() {
   }
   els.exerciseFilter.hidden = false;
   els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
+  els.exerciseWeekly.hidden = true; // sets-per-week chips are a drill-in detail too
   els.exerciseTargets.hidden = true; // rep-max targets are a drill-in control too
   els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in
   exerciseChart?.destroy();
   exerciseChart = null;
   const cutoff = exerciseRangeCutoff();
   const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
-  const counts = exerciseCountsForUser(scoped, els.athlete.value);
+  // Build the display order. "sets" keeps exerciseCountsForUser's most-trained
+  // order; "category" clusters exercises by category (categories ordered by
+  // their total sets), still most-trained first inside each category.
+  const username = els.athlete.value;
+  const counts = orderedExerciseCounts(exerciseCountsForUser(scoped, username));
   exercisesView = counts.map((c) => c.exerciseName);
+  // Weekly-sets numbers are absolute (their own time windows), so they read the
+  // full log, not the period-scoped subset shown in the list.
+  const today = todayIso();
   const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
   const periodNote = cutoff ? ` ${exerciseRangeLabel().toLowerCase()}` : "";
+  const sortNote = exerciseSort === "category" ? "by category" : "by sets";
   els.athleteTitle.innerHTML =
-    `${escapeHtml(athleteLabel())} — exercises by sets ` +
+    `${escapeHtml(athleteLabel())} — exercises ${sortNote} ` +
     `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets${periodNote} · tap an exercise)</span>`;
 
   const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const start = exercisesPage * PAGE_SIZE;
+  // When grouping, emit a category sub-header row whenever the category changes.
+  // Track the previous page's last category so a header isn't dropped at a page
+  // boundary. Sub-header rows carry no data-index, so click mapping is unaffected.
+  const prevName = start > 0 ? counts[start - 1]?.exerciseName : undefined;
+  let prevCat =
+    exerciseSort === "category" && prevName !== undefined ? exerciseCategory(prevName) : null;
+  const exRowHtml = (c: ExerciseCount, abs: number, rankCls: string) => {
+    const wk = weeklySetStats(setsForUserExercise(data.records, username, c.exerciseName), today);
+    // Compact "this week / peak" sets-per-week, e.g. 0/7.
+    const sub = `<div class="ex-wk muted">${wk.thisWeek}/${wk.peakPerWeek}</div>`;
+    return (
+      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(c.exerciseName)}${sub}</td>` +
+      `<td class="num">${c.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
+    );
+  };
   const rows = counts
     .slice(start, start + PAGE_SIZE)
     .map((c, i) => {
       const abs = start + i;
-      return (
-        `<tr class="ex-row" data-index="${abs}"><td class="${abs === 0 ? "rank-1" : ""}">${escapeHtml(c.exerciseName)}</td>` +
-        `<td class="num">${c.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
-      );
+      if (exerciseSort !== "category") return exRowHtml(c, abs, abs === 0 ? "rank-1" : "");
+      // Category mode: emit a collapsible sub-header when the category changes;
+      // an exercise under a collapsed category is skipped (its abs is unchanged,
+      // so the click→exercise mapping still lines up when reopened).
+      const cat = exerciseCategory(c.exerciseName);
+      let header = "";
+      if (cat !== prevCat) {
+        const collapsed = collapsedExCats.has(cat);
+        header =
+          `<tr class="ex-cat-row${collapsed ? " is-collapsed" : ""}" data-cat="${escapeHtml(cat)}">` +
+          `<td colspan="2"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
+        prevCat = cat;
+      }
+      return header + (collapsedExCats.has(cat) ? "" : exRowHtml(c, abs, ""));
     })
     .join("");
   els.athleteTable.innerHTML =
@@ -850,6 +977,7 @@ function renderExerciseDetail(exName: string) {
     currentFormula(),
   ).find((p) => p.exerciseName === exName);
   renderExerciseRecord(pr);
+  renderExerciseWeekly(exName);
   renderExerciseTargets(pr);
   renderExerciseProgressChart(exName);
   const weeks = setsByWeek(setsForUserExercise(data.records, username, exName));
@@ -863,6 +991,23 @@ function renderExerciseDetail(exName: string) {
     .join("");
   els.athleteTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No sets.</td></tr>`}</tbody>`;
+}
+
+/** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
+ * week so far, and the trailing 1-month / 3-month average sets per week. */
+function renderExerciseWeekly(exName: string) {
+  const stats = weeklySetStats(setsForUserExercise(data.records, els.athlete.value, exName), todayIso());
+  const chip = (label: string, value: string) =>
+    `<div class="wk-chip"><span class="wk-val">${value}</span><span class="wk-lbl">${label}</span></div>`;
+  els.exerciseWeekly.hidden = false;
+  els.exerciseWeekly.innerHTML =
+    `<div class="wk-lead muted">Sets per week</div>` +
+    `<div class="wk-chips">` +
+    chip("peak", String(stats.peakPerWeek)) +
+    chip("this week", String(stats.thisWeek)) +
+    chip("1-mo avg", stats.monthAvgPerWeek.toFixed(1)) +
+    chip("3-mo avg", stats.threeMonthAvgPerWeek.toFixed(1)) +
+    `</div>`;
 }
 
 /** Top-record card shown above the weeks list when an exercise is drilled into. */
@@ -915,7 +1060,7 @@ function renderExerciseTargets(pr: PersonalRecord | undefined) {
 function renderExerciseProgressChart(exName: string) {
   exerciseChart?.destroy();
   exerciseChart = null;
-  const series = exerciseProgressForUser(computedRecords(), els.athlete.value, exName, currentFormula());
+  const series = exerciseProgressByWeek(computedRecords(), els.athlete.value, exName, currentFormula());
   if (series.length === 0) {
     els.exerciseProgress.hidden = true;
     els.exerciseProgressNote.textContent = "";
@@ -930,6 +1075,16 @@ function renderExerciseProgressChart(exName: string) {
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+
+  // Category mode: tapping a category header collapses/expands its exercises.
+  const catRow = target.closest("tr.ex-cat-row") as HTMLTableRowElement | null;
+  if (catRow) {
+    const cat = catRow.dataset.cat ?? "";
+    if (collapsedExCats.has(cat)) collapsedExCats.delete(cat);
+    else collapsedExCats.add(cat);
+    renderExercisesPage();
+    return;
+  }
 
   // Inside the drill-in view: a week -> expand to that week's sets (by date).
   const wkRow = target.closest("tr.wk-row") as HTMLTableRowElement | null;
@@ -1054,7 +1209,7 @@ function jumpToWorkoutDate(iso: string) {
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
   if (!row || !grp) return;
-  insertDetail(row, 2, workoutGroupHtml(grp, idx)); // expand it like a tap would
+  insertDetail(row, 2, workoutGroupHtml(grp)); // expand it like a tap would
   row.scrollIntoView({ behavior: "smooth", block: "center" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
@@ -1098,38 +1253,33 @@ function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
-  // Second level: an exercise inside an expanded group -> show its sets.
-  const exRow = target.closest("tr.wo-ex-row") as HTMLTableRowElement | null;
-  if (exRow) {
-    if (toggleCollapse(exRow)) return;
-    const grp = workoutGroups[Number(exRow.dataset.day)];
-    const exName = grp?.exercises[Number(exRow.dataset.exidx)]?.exerciseName;
-    if (!grp || exName === undefined) return;
-    insertDetail(exRow, 2, setsTableHtml(grp.sets.filter((s) => s.exerciseName === exName)));
-    return;
-  }
-
-  // First level: a day/week -> list the exercises done in it.
+  // A day/week -> expand straight to every exercise with all its sets.
   const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
   if (toggleCollapse(row)) return;
-  const idx = Number(row.dataset.index);
-  const grp = workoutGroups[idx];
+  const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
-  insertDetail(row, 2, workoutGroupHtml(grp, idx));
+  insertDetail(row, 2, workoutGroupHtml(grp));
 }
 
-/** Inner table of the exercises in one group; each row expands to its sets.
- * No header row — the columns (exercise, set count) are self-evident here. */
-function workoutGroupHtml(group: WorkoutGroup, idx: number): string {
-  const rows = group.exercises
-    .map(
-      (e, i) =>
-        `<tr class="wo-ex-row" data-day="${idx}" data-exidx="${i}">` +
-        `<td><span class="caret">▸</span>${escapeHtml(e.exerciseName)}</td><td class="num">${e.count}</td></tr>`,
-    )
+/** Inner table for one expanded day/week: every exercise as a sub-header row
+ * followed immediately by all its sets (W / 1RM / Vol) — fully expanded, no
+ * second tap needed. A set with a note still toggles its own note row. */
+function workoutGroupHtml(group: WorkoutGroup): string {
+  const formula = currentFormula();
+  const body = group.exercises
+    .map((e) => {
+      const header =
+        `<tr class="set-ex-row"><td colspan="3" class="wo-exname">` +
+        `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span></td></tr>`;
+      const sets = group.sets
+        .filter((s) => s.exerciseName === e.exerciseName)
+        .map((s) => setRowsHtml(s, formula))
+        .join("");
+      return header + sets;
+    })
     .join("");
-  return `<table class="data-table detail-table"><tbody>${rows}</tbody></table>`;
+  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -1207,13 +1357,6 @@ function toggleSetNote(target: HTMLElement): boolean {
   return true;
 }
 
-/** Inner table of sets with calculated values (all from the same day). */
-function setsTableHtml(sets: readonly SetRecord[]): string {
-  const formula = currentFormula();
-  const rows = sets.map((s) => setRowsHtml(s, formula)).join("");
-  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${rows}</tbody></table>`;
-}
-
 /**
  * Sets spanning several days (one week of one exercise), grouped by day. Each
  * day is a header row above that day's sets, so the date sits "up top" instead
@@ -1252,7 +1395,7 @@ function renderProgress() {
     els.progressNote.textContent = "No exercises to chart for this athlete.";
     return;
   }
-  const series = exerciseProgressForUser(computedRecords(), els.athlete.value, exercise, currentFormula());
+  const series = exerciseProgressByWeek(computedRecords(), els.athlete.value, exercise, currentFormula());
   els.progressNote.textContent = progressSummaryNote(series);
   progressChart = drawProgressChart($<HTMLCanvasElement>("progressChart"), series);
 }
@@ -1276,7 +1419,7 @@ function progressSummaryNote(series: ExerciseDayPoint[]): string {
   const summary = best.v > -Infinity
     ? `Best ${fmt(best.v)} kg (${shortDate(best.date)}) · latest ${fmt(latest!.bestE1rm!)} kg${trendNote}`
     : "No estimable 1RM yet";
-  return `${summary} · ${series.length} session(s). Bars = sets/day, gold = best 1RM, dashed = trend.`;
+  return `${summary} · ${series.length} week(s). Bars = sets/week, gold = best 1RM, dashed = trend.`;
 }
 
 /**
@@ -1284,37 +1427,55 @@ function progressSummaryNote(series: ExerciseDayPoint[]): string {
  * series onto a canvas, returning the Chart handle (caller owns destroying it).
  * Shared by the Progress sub-page and the per-exercise drill-in graph.
  */
+/** Format a millisecond timestamp back to the "Apr 16" short-date label. */
+function tsLabel(ts: number): string {
+  return shortDate(new Date(ts).toISOString().slice(0, 10));
+}
+
 function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]): Chart {
+  // X is a real time axis (milliseconds), so dates sit at their true spacing —
+  // a 2-month gap looks like a gap, not the same step as consecutive sessions.
+  const ts = (d: string) => Date.parse(d);
   // Progression: fit a line to the estimated-1RM history to read a kg/week rate.
   const pts = series.filter((p) => p.bestE1rm !== null);
-  let trendData: (number | null)[] = series.map(() => null);
+  let trendData: { x: number; y: number }[] = [];
   if (pts.length >= 2) {
-    const t0 = Date.parse(pts[0]!.date);
-    const day = (d: string) => (Date.parse(d) - t0) / 86_400_000;
+    const t0 = ts(pts[0]!.date);
+    const day = (d: string) => (ts(d) - t0) / 86_400_000;
     const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
     if (fit) {
-      trendData = series.map((p) => Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10);
+      // Two endpoints are enough for a straight line on a numeric axis.
+      trendData = [pts[0]!, pts[pts.length - 1]!].map((p) => ({
+        x: ts(p.date),
+        y: Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10,
+      }));
     }
   }
+
+  // A little horizontal breathing room so edge bars aren't clipped.
+  const times = series.map((p) => ts(p.date));
+  const pad = 2 * 86_400_000;
+  const xMin = Math.min(...times) - pad;
+  const xMax = Math.max(...times) + pad;
 
   return new Chart(canvas, {
     type: "bar",
     data: {
-      labels: series.map((p) => shortDate(p.date)),
       datasets: [
         {
           type: "bar",
-          label: "Sets",
-          data: series.map((p) => p.sets),
+          label: "Sets/week",
+          data: series.map((p) => ({ x: ts(p.date), y: p.sets })),
           yAxisID: "ySets",
           backgroundColor: "#284e86",
           borderRadius: 3,
+          maxBarThickness: 22,
           order: 2,
         },
         {
           type: "line",
           label: "Est. 1RM (kg)",
-          data: series.map((p) => (p.bestE1rm === null ? null : Math.round(p.bestE1rm * 10) / 10)),
+          data: series.map((p) => ({ x: ts(p.date), y: p.bestE1rm === null ? null : Math.round(p.bestE1rm * 10) / 10 })),
           yAxisID: "y1rm",
           borderColor: "#b8902f",
           backgroundColor: "#b8902f",
@@ -1342,21 +1503,53 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
-      plugins: { legend: { display: true, labels: { color: "#1a1a1a" } } },
+      // Legend + axis titles are dropped on purpose: the note line below the
+      // chart already says what each colour is, so every pixel goes to the plot.
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const x = items[0]?.parsed.x;
+              return x == null ? "" : `Week of ${tsLabel(x)}`;
+            },
+          },
+        },
+        // Drag / wheel / pinch to roam the plot freely in any direction; the
+        // "Center" button (wired in setup) calls resetZoom() to snap back to data.
+        zoom: {
+          pan: { enabled: true, mode: "xy" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "xy" },
+        },
+      },
       scales: {
-        x: { grid: { color: "#ececec" }, ticks: { color: "#6b7280", maxRotation: 0, autoSkip: true } },
+        x: {
+          type: "linear",
+          min: xMin,
+          max: xMax,
+          grid: { color: "#ececec" },
+          ticks: {
+            color: "#6b7280",
+            maxRotation: 0,
+            autoSkip: true,
+            // Sit the date labels inside the plot so they steal no edge space.
+            mirror: true,
+            padding: -18,
+            z: 2,
+            callback: (value) => tsLabel(Number(value)),
+          },
+        },
         ySets: {
           position: "left",
           beginAtZero: true,
-          title: { display: true, text: "Sets", color: "#6b7280" },
           grid: { color: "#ececec" },
-          ticks: { color: "#6b7280", precision: 0 },
+          // mirror: labels hang inside the plot area, off the left axis line.
+          ticks: { color: "#6b7280", precision: 0, mirror: true, padding: 4, z: 2 },
         },
         y1rm: {
           position: "right",
-          title: { display: true, text: "Est. 1RM (kg)", color: "#6b7280" },
           grid: { display: false },
-          ticks: { color: "#6b7280" },
+          ticks: { color: "#6b7280", mirror: true, padding: 4, z: 2 },
         },
       },
     },
@@ -1546,13 +1739,17 @@ function renderTest() {
   if (isBodyweightLift) {
     rows.push(line("BW load", eq(`${coeff} × ${f2(bw)}`, `${f2(bodyweightLoad)} kg`)));
     rows.push(line("Effective", eq(`${f2(addedWeight)} + ${f2(bodyweightLoad)}`, `${f2(effLoad)} kg`)));
+  }
+  // Nuzzo divides the load by the %1RM that this many reps represents, so derive
+  // that % FIRST — the 1RM line below reads "load ÷ that %", in logical order.
+  if (calcTab === "nuzzo") {
+    rows.push(line("Bench %1RM", `${reps} reps ≈ ${res(`${f2(benchPctForReps(reps))}%`)}`));
+  }
+  if (isBodyweightLift) {
     rows.push(line("Effective 1RM", eq(formulaText, kg(effective1RM))));
     rows.push(line("Added 1RM", eq(`${effective1RM === null ? "—" : f2(effective1RM)} − ${f2(bodyweightLoad)}`, kg(addedWeight1RM))));
   } else {
     rows.push(line("Est. 1RM", eq(formulaText, kg(addedWeight1RM))));
-  }
-  if (calcTab === "nuzzo") {
-    rows.push(line("Bench %1RM", `${reps} reps ≈ ${res(`${f2(benchPctForReps(reps))}%`)}`));
   }
   rows.push(line("Volume", eq(`${f2(weight)} × ${reps}`, vol === null ? null : f2(vol))));
   rows.push(
@@ -1652,9 +1849,9 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
-  // Default to Marija for now, when present.
-  const marija = users.find((u) => u.username.toLowerCase().includes("marija") || u.user.toLowerCase().includes("marija"));
-  if (marija) els.athlete.value = marija.username;
+  // Default to Džuljeta for now, when present.
+  const dzuljeta = users.find((u) => u.username.toLowerCase().includes("dzuljeta") || u.user.toLowerCase().includes("džuljeta"));
+  if (dzuljeta) els.athlete.value = dzuljeta.username;
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).
@@ -1701,10 +1898,11 @@ async function init() {
       setSettingsOpen(false);
   });
 
-  // Data health lives on its own overlay page, opened from Settings.
-  els.healthBtn.addEventListener("click", () => {
-    setSettingsOpen(false);
-    els.healthPage.hidden = false;
+  // Data health lives on its own overlay page, opened from Settings or by
+  // tapping a parse-issues / sanity-warnings badge in the status bar.
+  els.healthBtn.addEventListener("click", openHealth);
+  els.status.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".badge-link")) openHealth();
   });
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
@@ -1722,6 +1920,9 @@ async function init() {
     if (cell?.dataset.date) jumpToWorkoutDate(cell.dataset.date);
   });
   els.progressExercise.addEventListener("change", renderProgress);
+  // "Center on data" snaps each progress chart's pan/zoom back to the data fit.
+  els.progressCenter.addEventListener("click", () => progressChart?.resetZoom());
+  els.exerciseProgressCenter.addEventListener("click", () => exerciseChart?.resetZoom());
   els.summariseBtn.addEventListener("click", runSummary);
   els.workoutView.addEventListener("change", () => {
     workoutsPage = 0;
@@ -1747,6 +1948,7 @@ async function init() {
   // Period filter for the exercises list — a custom dropdown (not a native
   // select) so the menu looks the same on every OS.
   setupExerciseRange();
+  setupExerciseSort();
 
   // Pagination (delegated on the persistent pager containers).
   els.exercisesPager.addEventListener("click", (e) => {

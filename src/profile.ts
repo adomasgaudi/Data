@@ -43,6 +43,30 @@ export const ATHLETES: Record<string, AthleteProfile> = {
   monika: { height: 165, weight: 52, bodyFat: 0.2, age: 29, sex: "f" }, // Monika
 };
 
+/**
+ * Body-composition metrics derived from an athlete's profile.
+ *
+ * FFMI (fat-free mass index) is like BMI but on lean mass only:
+ *   lean kg = weight × (1 − bodyFat); FFMI = lean kg ÷ height(m)².
+ * nFFMI ("normalised") adjusts FFMI to a 1.8 m reference height so tall and
+ * short lifters compare fairly — the standard +6.1 × (1.8 − height_m) term.
+ * As a rough read: ~18 untrained, ~20–22 trained, ~25 is near the natural
+ * ceiling, >25 suggests exceptional genetics or assistance.
+ *
+ * Returns null if the inputs can't yield a real number (non-positive height,
+ * or a body-fat fraction outside 0–1).
+ */
+export function bodyComposition(
+  p: Pick<AthleteProfile, "height" | "weight" | "bodyFat">,
+): { leanMass: number; ffmi: number; nffmi: number } | null {
+  const heightM = p.height / 100;
+  if (!(heightM > 0) || !(p.weight > 0) || p.bodyFat < 0 || p.bodyFat >= 1) return null;
+  const leanMass = p.weight * (1 - p.bodyFat);
+  const ffmi = leanMass / (heightM * heightM);
+  const nffmi = ffmi + 6.1 * (1.8 - heightM);
+  return { leanMass, ffmi, nffmi };
+}
+
 /** Fraction of bodyweight a movement lifts. Exact match on the data's exercise name. */
 export const EXERCISE_BW_COEFF: Record<string, number> = {
   Squat: 0.6,

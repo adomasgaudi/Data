@@ -178,6 +178,44 @@ export function setsByWeek(sets: readonly SetRecord[]): WeekSets[] {
   return out.sort((a, b) => (a.weekStart > b.weekStart ? -1 : a.weekStart < b.weekStart ? 1 : 0));
 }
 
+export interface WeeklySetStats {
+  peakPerWeek: number; // busiest single (Monday-start) week, ever
+  thisWeek: number; // sets in the week that contains `todayIso`
+  monthAvgPerWeek: number; // avg sets/week over the trailing 30 days
+  threeMonthAvgPerWeek: number; // avg sets/week over the trailing 90 days
+}
+
+/**
+ * Sets-per-week stats for one exercise's set log, measured against `todayIso`.
+ * The trailing averages divide the sets falling inside the window by the number
+ * of weeks the window spans (30 days ≈ 4.3 weeks, 90 ≈ 12.9), so they read as a
+ * true per-week rate and are rounded to one decimal. An empty log is all zeros.
+ */
+export function weeklySetStats(sets: readonly SetRecord[], todayIso: string): WeeklySetStats {
+  if (sets.length === 0)
+    return { peakPerWeek: 0, thisWeek: 0, monthAvgPerWeek: 0, threeMonthAvgPerWeek: 0 };
+
+  const perWeek = new Map<string, number>();
+  for (const s of sets) {
+    const wk = mondayOf(s.date);
+    perWeek.set(wk, (perWeek.get(wk) ?? 0) + 1);
+  }
+  const peakPerWeek = Math.max(...perWeek.values());
+  const thisWeek = perWeek.get(mondayOf(todayIso)) ?? 0;
+
+  const today = utcOf(todayIso);
+  const windowAvg = (days: number): number => {
+    const from = today - (days - 1) * MS_PER_DAY;
+    let n = 0;
+    for (const s of sets) {
+      const t = utcOf(s.date);
+      if (t >= from && t <= today) n++;
+    }
+    return Math.round((n / (days / 7)) * 10) / 10;
+  };
+  return { peakPerWeek, thisWeek, monthAvgPerWeek: windowAvg(30), threeMonthAvgPerWeek: windowAvg(90) };
+}
+
 export interface WorkoutDay {
   date: string;
   totalSets: number;
@@ -327,6 +365,36 @@ export function exerciseProgressForUser(
       }
       return { date, sets: sets.length, bestE1rm: best };
     })
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+/**
+ * Weekly roll-up of {@link exerciseProgressForUser}, oldest week first. Each
+ * point is one Monday-start week: `date` is that Monday, `sets` is the week's
+ * TOTAL sets (every day in the week summed), and `bestE1rm` is the best
+ * estimated 1RM reached anywhere in the week. The progress graph plots these so
+ * the bars read as sets/week rather than sets/day.
+ */
+export function exerciseProgressByWeek(
+  records: readonly SetRecord[],
+  username: string,
+  exerciseName: string,
+  formula: OneRepMaxFormula = "epley",
+): ExerciseDayPoint[] {
+  const daily = exerciseProgressForUser(records, username, exerciseName, formula);
+  const byWeek = new Map<string, { sets: number; bestE1rm: number | null }>();
+  for (const p of daily) {
+    const wk = mondayOf(p.date);
+    const cur = byWeek.get(wk);
+    if (cur) {
+      cur.sets += p.sets;
+      if (p.bestE1rm !== null && (cur.bestE1rm === null || p.bestE1rm > cur.bestE1rm)) cur.bestE1rm = p.bestE1rm;
+    } else {
+      byWeek.set(wk, { sets: p.sets, bestE1rm: p.bestE1rm });
+    }
+  }
+  return [...byWeek]
+    .map(([date, v]) => ({ date, sets: v.sets, bestE1rm: v.bestE1rm }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 

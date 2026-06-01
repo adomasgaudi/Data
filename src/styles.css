@@ -99,8 +99,15 @@ body {
 }
 .subtab:hover { color: var(--text); }
 .subtab.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
-.athlete-profile { margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
+.athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
 .athlete-profile:empty { display: none; }
+.profile-specs { color: var(--text); }
+.nffmi-badge {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 12px;
+  background: var(--accent); color: #fff; border-radius: 8px; cursor: help;
+}
+.nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
+.nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
 .athlete-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .athlete-stats:empty { display: none; }
 .stat-chip {
@@ -120,9 +127,26 @@ body {
   padding: 0 5px; overflow: hidden; text-overflow: ellipsis;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
-.ex-filter { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.85rem; }
+.ex-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.85rem; }
 .ex-filter[hidden] { display: none; }
 .ex-filter-lbl { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+.ex-sort { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.ex-sort-btn {
+  padding: 6px 12px; font-size: 0.8rem; font-weight: 600; color: var(--muted);
+  background: var(--card); border: 0; cursor: pointer;
+}
+.ex-sort-btn + .ex-sort-btn { border-left: 1px solid var(--line); }
+.ex-sort-btn:hover { color: var(--text); }
+.ex-sort-btn.is-active { color: #fff; background: var(--accent); }
+.ex-cat-row { cursor: pointer; }
+.ex-cat-row td {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); background: var(--accent-soft); padding-top: 8px; padding-bottom: 8px;
+}
+.ex-cat-row:hover td { color: var(--text); }
+/* Caret points right when collapsed, down when the category is open. */
+.ex-cat-row .caret { transition: transform 0.12s ease; }
+.ex-cat-row:not(.is-collapsed) .caret { transform: rotate(90deg); }
 
 /* Period filter: a custom dropdown (not a native select) so the open menu is
    styled like the rest of the site on every OS. */
@@ -175,6 +199,20 @@ body {
 }
 .target-reps { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .target-weight { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+/* Sets-per-week chips inside the exercise drill-in. */
+.wk-stats { margin: 0 0 1rem; }
+.wk-stats[hidden] { display: none; }
+.wk-lead { font-size: 0.78rem; margin-bottom: 0.4rem; }
+.wk-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.wk-chip {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; min-width: 70px;
+}
+.wk-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.wk-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+/* Compact peak/this-week line under each exercise name in the list. */
+.ex-wk { font-size: 0.72rem; font-weight: 500; margin-top: 2px; }
 /* Per-exercise progress graph inside the drill-in. */
 .exercise-progress { margin: 0 0 1rem; }
 .exercise-progress[hidden] { display: none; }
@@ -219,6 +257,11 @@ body {
   padding: 1px 8px; font-weight: 600; margin-left: 6px;
 }
 .status .warn { background: var(--gold); color: #fff; }
+/* Badges that open the data-health page: look and behave like a tappable chip. */
+.status .badge-link {
+  border: 0; font: inherit; cursor: pointer; line-height: inherit;
+}
+.status .badge-link:hover { filter: brightness(1.08); text-decoration: underline; }
 main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
 .appfoot {
   max-width: 980px; margin: 0 auto; padding: 0.5rem 1.5rem 2rem;
@@ -337,6 +380,32 @@ select.subtle-select:hover, select.subtle-select:focus {
 .panel h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
 .muted { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
 .chart-wrap { position: relative; height: 260px; margin-bottom: 1rem; }
+/* Progress graphs get maximum real-estate: full panel width, tall canvas, and
+   a floating "Center" button that snaps the pan/zoom back onto the data. */
+.chart-wrap--big {
+  height: 70vh;
+  /* Cancel the panel's padding so the plot runs the full width of the card. */
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  touch-action: none; /* let the zoom plugin own touch gestures (pan/pinch) */
+}
+.chart-center {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 3;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent, #284e86);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line, #e3e3e3);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(20, 24, 38, 0.12);
+}
+.chart-center:hover { background: #fff; }
+.chart-center:active { transform: translateY(1px); }
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .data-table th, .data-table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .data-table th { color: var(--muted); font-weight: 600; cursor: default; }
@@ -347,6 +416,10 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* In the workouts list the date sits as a small header above that entry's exercises. */
 .wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
 .wo-did { line-height: 1.5; }
+/* Once a day is expanded its exercises appear below as their own expandable
+   rows, so the inline summary up here would just be a duplicate — hide it. */
+.wo-row.open .wo-did { display: none; }
+.wo-row.open .wo-date { margin-bottom: 0; }
 .rest-row { color: var(--muted); }
 .wo-controls { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
@@ -360,6 +433,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Weekly exercise drill-in: the date is a header row above that day's sets. */
 .set-date-row > td { font-weight: 600; padding-top: 9px; border-top: 1px solid var(--line); border-bottom: none; }
 .set-date-row:first-child > td { border-top: none; }
+/* Expanded workout day: each exercise is a header row above its own sets. */
+.set-ex-row > td { font-weight: 600; padding-top: 9px; border-top: 1px solid var(--line); border-bottom: none; }
+.set-ex-row:first-child > td { border-top: none; }
 /* A set with a note: a short truncated preview + caret sits at the left of the
    weight cell (weight stays right-aligned), and clicking the row expands the
    full note below. The preview lets you read the gist without expanding. */
@@ -539,6 +615,13 @@ select.subtle-select:hover, select.subtle-select:focus {
   .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the fixed bottom nav */
   .panel { padding: 1rem; border-radius: 10px; }
   .chart-wrap { height: 220px; }
+  /* Phone: fill the screen. dvh tracks the real viewport (browser chrome in/out);
+     subtract the fixed bottom nav + a little breathing room. Edge-to-edge width. */
+  .chart-wrap--big {
+    height: calc(100dvh - 8.5rem);
+    margin-left: -1rem;
+    margin-right: -1rem;
+  }
 
   /* Main navigation becomes an app-style fixed bottom bar. */
   .tabs {
