@@ -486,6 +486,91 @@ export function nearDuplicateExercises(records: readonly SetRecord[]): { names: 
   return out.sort((a, b) => b.names.length - a.names.length || b.sets - a.sets);
 }
 
+/**
+ * Exact-name aliases the normaliser can't catch on its own because they differ
+ * by a meaningful-looking number. Confirmed by the owner as the same lift: the
+ * source app forces a brand-new "custom exercise" when its settings change, so
+ * "Stairs 4" is just "Stairs" tracked with different settings. Left = raw logged
+ * name, right = the name to fold it into. Numbered variants NOT listed here
+ * (e.g. "Low wall climb 1–4", "Leg 130/140/155") stay distinct on purpose,
+ * because their numbers really do mark different exercises.
+ */
+const EXERCISE_NAME_ALIASES: Record<string, string> = {
+  "Stairs 4": "Stairs",
+};
+
+/**
+ * Conservative "same exercise, just spelled differently" key. Folds together
+ * casing, surrounding/duplicate whitespace, punctuation, a leading enumerator
+ * ("1 TRX…"), and trailing plural/typo s — but keeps interior digits
+ * significant, so "Leg 130" and "Leg 140" stay apart. Applied after the alias
+ * table above.
+ */
+export function sameExerciseKey(name: string): string {
+  const aliased = EXERCISE_NAME_ALIASES[name.trim()] ?? name;
+  return aliased
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ") // punctuation/dashes → space
+    .trim()
+    .replace(/^\d+\s+/, "") // drop a leading "1 " style enumerator
+    .replace(/\s+/g, " ")
+    .replace(/s+$/, ""); // strip trailing plural / doubled-s typo
+}
+
+export interface ExerciseMerge {
+  /** The spelling kept as the display name (the most-logged one). */
+  canonical: string;
+  /** Other raw spellings folded into the canonical name. */
+  variants: string[];
+  /** Total sets across all spellings in the cluster. */
+  sets: number;
+}
+
+/**
+ * Fold variant spellings of the same exercise into one canonical display name
+ * (the most-frequently-logged spelling) so leaderboards, PRs and counts don't
+ * split one lift across several near-identical names. Records keep their raw
+ * name in `originalExerciseName`, so nothing about the source data is lost.
+ * Returns the rewritten records plus a report of which spellings were merged
+ * (clusters with more than one spelling), for the Data Health view.
+ */
+export function canonicalizeExerciseNames(records: readonly SetRecord[]): {
+  records: SetRecord[];
+  merges: ExerciseMerge[];
+} {
+  const clusters = new Map<string, Map<string, number>>(); // key → rawName → set count
+  for (const r of records) {
+    if (!r.exerciseName) continue;
+    const k = sameExerciseKey(r.exerciseName);
+    if (!k) continue;
+    let byName = clusters.get(k);
+    if (!byName) clusters.set(k, (byName = new Map()));
+    byName.set(r.exerciseName, (byName.get(r.exerciseName) ?? 0) + 1);
+  }
+  const canonical = new Map<string, string>(); // rawName → display name
+  const merges: ExerciseMerge[] = [];
+  for (const byName of clusters.values()) {
+    // Most-logged spelling wins; ties broken alphabetically for determinism.
+    const sorted = [...byName.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+    const display = sorted[0]![0];
+    for (const [name] of sorted) canonical.set(name, display);
+    if (sorted.length > 1)
+      merges.push({
+        canonical: display,
+        variants: sorted.map(([n]) => n).filter((n) => n !== display),
+        sets: sorted.reduce((sum, [, c]) => sum + c, 0),
+      });
+  }
+  const out = records.map((r) => {
+    const display = canonical.get(r.exerciseName);
+    return display && display !== r.exerciseName
+      ? { ...r, exerciseName: display, originalExerciseName: r.exerciseName }
+      : r;
+  });
+  merges.sort((a, b) => b.variants.length - a.variants.length || b.sets - a.sets);
+  return { records: out, merges };
+}
+
 export interface AthleteSummary {
   sessions: number; // distinct training days
   sets: number; // total sets logged

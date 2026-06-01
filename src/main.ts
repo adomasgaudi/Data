@@ -19,7 +19,6 @@ import {
   leaderboard,
   personalRecords,
   scaleToGroup,
-  nearDuplicateExercises,
   athleteSummary,
   type PersonalRecord,
   type WorkoutDay,
@@ -81,6 +80,8 @@ const els = {
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
+  exerciseFilter: $("exerciseFilter"),
+  exerciseRange: $<HTMLSelectElement>("exerciseRange"),
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutCalendar: $("workoutCalendar"),
@@ -125,6 +126,18 @@ const wr = (weight: number | null, reps: number | null): string =>
 const shortDate = (iso: string): string => {
   const [, m, d] = iso.split("-");
   return m && d ? `${Number(m)}-${d}` : iso;
+};
+
+/** Elapsed training time from first to last logged date, in the unit that reads
+ * cleanest at that scale: days under 2 weeks, weeks under ~2 months, months
+ * under 2 years, otherwise years. */
+const trainingDuration = (firstIso: string, lastIso: string): string => {
+  const days = Math.max(0, Math.round((Date.parse(lastIso) - Date.parse(firstIso)) / 86_400_000));
+  const unit = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
+  if (days < 14) return unit(days, "day");
+  if (days < 60) return unit(Math.round(days / 7), "week");
+  if (days < 730) return unit(Math.round(days / 30.44), "month");
+  return `${(days / 365.25).toFixed(1)} years`;
 };
 
 function currentFormula(): OneRepMaxFormula {
@@ -198,9 +211,9 @@ function renderStatus() {
 }
 
 function renderHealth() {
-  const dupes = nearDuplicateExercises(data.records);
+  const merges = data.merges;
   const total = data.issues.length + data.warnings.length;
-  els.healthBadge.textContent = total === 0 && dupes.length === 0 ? "✓ clear" : `⚠ ${total + dupes.length}`;
+  els.healthBadge.textContent = total === 0 ? "✓ clear" : `⚠ ${total}`;
 
   const lines: string[] = [];
   for (const issue of data.issues.slice(0, 50))
@@ -210,15 +223,18 @@ function renderHealth() {
       `<div class="health-item warn">${escapeHtml(w.record.user)} — ${escapeHtml(w.record.exerciseName)}: ${w.field} = ${w.value} (out of plausible range)</div>`,
     );
 
-  // Possible duplicate exercise names — the biggest threat to "perfect data".
-  if (dupes.length) {
-    lines.push(`<h3 class="health-section">Possible duplicate exercises (${dupes.length})</h3>`);
+  // Exercise names auto-merged in the app (variant spellings of one lift). The
+  // original names are kept on the data; this just shows what was folded.
+  if (merges.length) {
+    lines.push(`<h3 class="health-section">Exercise names auto-merged (${merges.length})</h3>`);
     lines.push(
-      `<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">These names look like the same lift spelled differently. Merge them in the source sheet for cleaner stats.</p>`,
+      `<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">Variant spellings of the same lift are combined automatically for cleaner stats, so re-imports stay tidy without editing the source. Original names are preserved.</p>`,
     );
-    for (const d of dupes.slice(0, 40))
+    for (const m of merges.slice(0, 40))
       lines.push(
-        `<div class="health-item dup">${d.names.map((n) => escapeHtml(n)).join(" <span class='muted'>≈</span> ")} <span class="muted">(${d.sets} sets)</span></div>`,
+        `<div class="health-item dup"><strong>${escapeHtml(m.canonical)}</strong> <span class="muted">←</span> ${m.variants
+          .map((n) => escapeHtml(n))
+          .join(", ")} <span class="muted">(${m.sets} sets)</span></div>`,
       );
   }
 
@@ -413,6 +429,10 @@ function renderPersonalRecords() {
 // State for the currently shown athlete. The displayed-order arrays let the
 // (delegated) click handlers map a clicked row back to its data.
 let athleteExercises: string[] = [];
+// Exercises shown in the (date-filtered) list, in display order — what the
+// row click handler maps an index back to (differs from athleteExercises when
+// a period filter is active).
+let exercisesView: string[] = [];
 let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
 let athleteWorkouts: WorkoutDay[] = [];
 
@@ -515,25 +535,10 @@ function renderAthleteStats() {
   }
   const chip = (label: string, value: string) =>
     `<span class="stat-chip"><span class="stat-val">${value}</span><span class="stat-lbl">${label}</span></span>`;
-  const months = s.weeks / 4.345;
-  const span =
-    s.firstDate && s.lastDate
-      ? `${shortDate(s.firstDate)} – ${shortDate(s.lastDate)}${months >= 1.5 ? ` (${months.toFixed(0)} mo)` : ""}`
-      : "—";
-  // Volume in tonnes (1 t = 1000 kg·reps) reads better than six-digit kg.
-  const tonnes = s.totalVolume / 1000;
   const chips = [
-    chip("span", span),
-    chip("sessions", s.sessions.toLocaleString()),
+    chip("training", s.firstDate && s.lastDate ? trainingDuration(s.firstDate, s.lastDate) : "—"),
     chip("per week", s.sessionsPerWeek.toFixed(1)),
-    chip("sets", s.sets.toLocaleString()),
-    chip("volume", `${tonnes >= 10 ? Math.round(tonnes) : tonnes.toFixed(1)} t`),
   ];
-  if (s.bodyweightFirst !== null && s.bodyweightLast !== null) {
-    const d = s.bodyweightLast - s.bodyweightFirst;
-    const delta = Math.abs(d) < 0.5 ? "" : ` (${d > 0 ? "+" : ""}${d.toFixed(1)})`;
-    chips.push(chip("bodyweight", `${fmt(s.bodyweightLast)} kg${delta}`));
-  }
   els.athleteStats.innerHTML = chips.join("");
 }
 
@@ -553,22 +558,22 @@ function renderTrainBreakdown() {
   }
   const cats = TRAINING_CATEGORIES.filter((c) => byCat.get(c));
   const pct = (c: TrainingCategory) => (byCat.get(c)! / total) * 100;
+  // Labels live on the bar itself (no separate legend). Only segments wide
+  // enough to fit text are labelled; the rest still show their share on hover.
   const bar = cats
-    .map(
-      (c) =>
-        `<span class="tb-seg" style="width:${pct(c).toFixed(2)}%;background:${CATEGORY_COLORS[c]}" ` +
-        `title="${c}: ${byCat.get(c)} sets (${pct(c).toFixed(0)}%)"></span>`,
-    )
-    .join("");
-  const legend = cats
-    .map(
-      (c) =>
-        `<span class="tb-leg"><span class="tb-dot" style="background:${CATEGORY_COLORS[c]}"></span>${c} ${pct(c).toFixed(0)}%</span>`,
-    )
+    .map((c) => {
+      const p = pct(c);
+      const label = p >= 11 ? `${c} ${p.toFixed(0)}%` : p >= 6 ? `${p.toFixed(0)}%` : "";
+      return (
+        `<span class="tb-seg" style="flex:${p.toFixed(2)};background:${CATEGORY_COLORS[c]}" ` +
+        `title="${c}: ${byCat.get(c)} sets (${p.toFixed(0)}%)">` +
+        `${label ? `<span class="tb-seg-lbl">${escapeHtml(label)}</span>` : ""}</span>`
+      );
+    })
     .join("");
   els.trainBreakdown.innerHTML =
     `<div class="tb-title muted">What ${escapeHtml(athleteLabel())} trains <span class="tb-sub">(${total.toLocaleString()} sets)</span></div>` +
-    `<div class="tb-bar">${bar}</div><div class="tb-legend">${legend}</div>`;
+    `<div class="tb-bar">${bar}</div>`;
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
@@ -637,18 +642,36 @@ function pagerHtml(page: number, total: number): string {
   );
 }
 
+/** Cutoff ISO date for the chosen period (e.g. last 90 days), or null for all
+ * time. Anchored to today so "last month" means recent calendar time. */
+function exerciseRangeCutoff(): string | null {
+  const days = Number(els.exerciseRange.value) || 0;
+  if (days <= 0) return null;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
 function renderExercisesPage() {
   if (selectedExercise !== null) {
+    els.exerciseFilter.hidden = true; // period filter is a list-view control only
     renderExerciseDetail(selectedExercise);
     return;
   }
+  els.exerciseFilter.hidden = false;
   els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
-  const counts = exerciseCountsForUser(data.records, els.athlete.value);
+  const cutoff = exerciseRangeCutoff();
+  const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
+  const counts = exerciseCountsForUser(scoped, els.athlete.value);
+  exercisesView = counts.map((c) => c.exerciseName);
   const totalSets = counts.reduce((sum, c) => sum + c.count, 0);
+  const periodNote = cutoff
+    ? ` ${els.exerciseRange.options[els.exerciseRange.selectedIndex]!.text.toLowerCase()}`
+    : "";
   els.athleteTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — exercises by sets ` +
-    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets · tap an exercise)</span>`;
+    `<span class="muted">(${counts.length} exercises · ${totalSets.toLocaleString()} sets${periodNote} · tap an exercise)</span>`;
 
   const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
   const start = exercisesPage * PAGE_SIZE;
@@ -663,7 +686,8 @@ function renderExercisesPage() {
     })
     .join("");
   els.athleteTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No exercises for this athlete.</td></tr>`}</tbody>`;
+    head +
+    `<tbody>${rows || `<tr><td colspan="2" class="muted">No exercises trained in this period.</td></tr>`}</tbody>`;
   els.exercisesPager.innerHTML = pagerHtml(exercisesPage, counts.length);
 }
 
@@ -728,7 +752,7 @@ function onExerciseRowClick(e: MouseEvent) {
   // List view: tapping an exercise switches to its detail (no inline dropdown).
   const row = target.closest("tr.ex-row") as HTMLTableRowElement | null;
   if (!row) return;
-  const exName = athleteExercises[Number(row.dataset.index)];
+  const exName = exercisesView[Number(row.dataset.index)];
   if (exName === undefined) return;
   selectedExercise = exName;
   renderExercisesPage();
@@ -1073,8 +1097,8 @@ function renderBwParts() {
 
   const rows = [...counts.keys()]
     .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)!, cat: exerciseCategory(name) }))
-    // Bodyweight-heavy first, then most-trained, then alphabetical (inside each group).
-    .sort((a, b) => b.coeff - a.coeff || b.count - a.count || a.name.localeCompare(b.name));
+    // Most-trained first (by set count), then alphabetical - kept inside each category.
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   const withPart = rows.filter((r) => r.coeff > 0).length;
   els.bwTitle.innerHTML =
@@ -1089,15 +1113,15 @@ function renderBwParts() {
   }
 
   // Remember which categories the user has opened, so editing/re-rendering keeps
-  // them as they were. On the very first paint nothing is remembered, so we open
-  // every category (the data is visible by default; collapse what you don't need).
-  const firstPaint = bwOpenCats === null;
-  if (!firstPaint) {
+  // them as they were. Categories start collapsed by default (empty set on first
+  // paint); afterwards we read the live open/closed state back out of the DOM.
+  if (bwOpenCats === null) bwOpenCats = new Set<string>();
+  else {
     bwOpenCats = new Set<string>();
     for (const d of els.bwGroups.querySelectorAll<HTMLDetailsElement>("details.bw-cat"))
       if (d.open && d.dataset.cat) bwOpenCats.add(d.dataset.cat);
   }
-  const open = (cat: string) => firstPaint || bwOpenCats!.has(cat);
+  const open = (cat: string) => bwOpenCats!.has(cat);
 
   const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
   els.bwGroups.innerHTML = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
@@ -1126,7 +1150,6 @@ function renderBwParts() {
       );
     })
     .join("");
-  bwOpenCats = bwOpenCats ?? new Set<string>();
 }
 
 /** Apply an edited bodyweight coefficient and refresh every dependent view. */
@@ -1429,6 +1452,13 @@ async function init() {
     }
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
+
+  // Period filter for the exercises list (last month / 3 months / year / all).
+  els.exerciseRange.addEventListener("change", () => {
+    exercisesPage = 0;
+    selectedExercise = null;
+    renderExercisesPage();
+  });
 
   // Pagination (delegated on the persistent pager containers).
   els.exercisesPager.addEventListener("click", (e) => {

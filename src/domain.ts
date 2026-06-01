@@ -34,6 +34,10 @@ export interface SetRecord {
   date: string;
   bodyweight: number | null;
   exerciseName: string;
+  /** The originally-logged name before same-exercise canonicalisation merged
+   * variant spellings. Only set when the displayed name differs from the raw
+   * one, so the original data is never lost. */
+  originalExerciseName?: string;
   setNumber: number;
   weight: number | null;
   /** When the row's weight has been replaced by a bodyweight-inclusive load for

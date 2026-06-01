@@ -20,6 +20,8 @@ import {
   addedWeight1RM,
   scaleToGroup,
   nearDuplicateExercises,
+  canonicalizeExerciseNames,
+  sameExerciseKey,
   athleteSummary,
 } from "./aggregate";
 import { epley1RM } from "./metrics";
@@ -147,6 +149,57 @@ describe("nearDuplicateExercises", () => {
     expect(abc?.names).toEqual(expect.arrayContaining(["Ab curl", "Ab curls", "Ab Curls"]));
     expect(dupes.some((d) => d.names.includes("Stairs") && d.names.includes("Stairss"))).toBe(true);
     expect(dupes.some((d) => d.names.includes("Bench Press"))).toBe(false);
+  });
+});
+
+describe("sameExerciseKey", () => {
+  it("folds casing, whitespace, punctuation, leading enumerator and trailing s", () => {
+    expect(sameExerciseKey("Ab curls")).toBe(sameExerciseKey("Ab curl"));
+    expect(sameExerciseKey("Ab Curls")).toBe(sameExerciseKey("Ab curl"));
+    expect(sameExerciseKey("L-SIT")).toBe(sameExerciseKey("L sit"));
+    expect(sameExerciseKey("Plate Lifts ")).toBe(sameExerciseKey("Plate lifts"));
+    expect(sameExerciseKey("1 TRX hams curl")).toBe(sameExerciseKey("TRX hams curl"));
+    expect(sameExerciseKey("Stairss")).toBe(sameExerciseKey("Stairs"));
+  });
+
+  it("keeps meaningful numbers distinct, but folds the Stairs 4 alias", () => {
+    expect(sameExerciseKey("Leg 130")).not.toBe(sameExerciseKey("Leg 140"));
+    expect(sameExerciseKey("Low wall climb 1")).not.toBe(sameExerciseKey("Low wall climb 2"));
+    expect(sameExerciseKey("Stairs 4")).toBe(sameExerciseKey("Stairs")); // explicit alias
+  });
+});
+
+describe("canonicalizeExerciseNames", () => {
+  it("renames variants to the most-logged spelling and keeps the original", () => {
+    const recs = [
+      rec({ exerciseName: "Ab curls" }),
+      rec({ exerciseName: "Ab curls" }),
+      rec({ exerciseName: "Ab curl" }),
+      rec({ exerciseName: "Leg 130" }),
+      rec({ exerciseName: "Leg 140" }),
+    ];
+    const { records, merges } = canonicalizeExerciseNames(recs);
+    // "Ab curls" is the most frequent spelling, so it becomes canonical.
+    expect(records.filter((r) => r.exerciseName === "Ab curls")).toHaveLength(3);
+    const renamed = records.find((r) => r.originalExerciseName === "Ab curl");
+    expect(renamed?.exerciseName).toBe("Ab curls");
+    // Distinct leg machine settings are left untouched.
+    expect(records.some((r) => r.exerciseName === "Leg 130" && !r.originalExerciseName)).toBe(true);
+    expect(records.some((r) => r.exerciseName === "Leg 140")).toBe(true);
+    const abMerge = merges.find((m) => m.canonical === "Ab curls");
+    expect(abMerge?.variants).toEqual(["Ab curl"]);
+    expect(merges.some((m) => m.canonical.startsWith("Leg"))).toBe(false);
+  });
+
+  it("folds the Stairs 4 alias into Stairs", () => {
+    const recs = [
+      rec({ exerciseName: "Stairs" }),
+      rec({ exerciseName: "Stairs" }),
+      rec({ exerciseName: "Stairs 4" }),
+    ];
+    const { records } = canonicalizeExerciseNames(recs);
+    expect(records.every((r) => r.exerciseName === "Stairs")).toBe(true);
+    expect(records.find((r) => r.originalExerciseName === "Stairs 4")).toBeTruthy();
   });
 });
 

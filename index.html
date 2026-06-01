@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.13.0</span></h1>
+      <h1>Colosseum <span class="version">v0.13.0.1</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -109,6 +109,15 @@
         <div id="sub-exercises" class="subtab-panel" hidden>
           <section class="panel">
             <h2 id="athleteTitle">Exercises</h2>
+            <div id="exerciseFilter" class="ex-filter">
+              <label class="ex-filter-lbl" for="exerciseRange">Period</label>
+              <select id="exerciseRange" class="plain-select">
+                <option value="0">All time</option>
+                <option value="30">Last month</option>
+                <option value="90">Last 3 months</option>
+                <option value="365">Last year</option>
+              </select>
+            </div>
             <div id="exerciseRecord" class="exercise-record" hidden></div>
             <table id="athleteTable" class="data-table"></table>
             <div id="exercisesPager" class="pager"></div>
