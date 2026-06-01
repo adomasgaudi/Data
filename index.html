@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.14.0</span></h1>
+      <h1>Colosseum <span class="version">v0.15.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -52,6 +52,24 @@
             <p id="lbTitle" class="lb-subtitle"></p>
             <div class="lb-filters">
               <select id="rank" class="subtle-select" aria-label="Rank by"></select>
+              <select id="sexFilter" class="subtle-select" aria-label="Filter by sex">
+                <option value="all">Everyone</option>
+                <option value="m">Men only</option>
+                <option value="f">Women only</option>
+              </select>
+              <span class="filter-group" title="Only show athletes whose bodyweight is in this range (kg)">
+                <span class="filter-lbl">BW kg</span>
+                <input type="number" id="bwMin" class="mini-input" placeholder="min" aria-label="Minimum bodyweight" />
+                <span class="filter-dash">–</span>
+                <input type="number" id="bwMax" class="mini-input" placeholder="max" aria-label="Maximum bodyweight" />
+              </span>
+              <span class="filter-group" title="Zoom the chart's weight axis. Leave blank for auto; negatives allowed">
+                <span class="filter-lbl">Axis</span>
+                <input type="number" id="axisMin" class="mini-input" placeholder="auto" aria-label="Axis from" />
+                <span class="filter-dash">–</span>
+                <input type="number" id="axisMax" class="mini-input" placeholder="auto" aria-label="Axis to" />
+                <button type="button" id="axisReset" class="mini-btn">Auto</button>
+              </span>
               <label class="check">
                 <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
               </label>
@@ -440,14 +458,37 @@
 
           </details>
 
-          <!-- AI-NOTE: Real client case note (anonymised as "Client X"). Details are partial —
-               the assist method is unknown and tagged (confirm). Don't invent the missing detail. -->
+          <!-- AI-NOTE: Real client case note for Maria (owner chose to use her real name). Some
+               details are partial — assist method unknown, tagged (confirm). Don't invent detail. -->
           <details class="guide-section">
-          <summary class="guide-section-summary"><span class="guide-section-caret">▸</span>Case note — Client X (neck injury → handstands)</summary>
+          <summary class="guide-section-summary"><span class="guide-section-caret">▸</span>Case note — Maria (neck injury → handstands)</summary>
           <ul class="guide-notes">
             <li>Headstands → neck injury</li>
             <li>Switched to handstands</li>
             <li>Handstands with wall assistance (method to confirm)</li>
+          </ul>
+
+          <!-- AI-NOTE: Maria trains ~once a week, sometimes once per 2 weeks — ONE session only;
+               everything goes in that day. Built from movements in her data. Grip + traps are trained
+               THROUGH the handstands (owner's rationale: load a tight muscle to release it); the
+               handstands also load the wrists. Adductor issue still unknown → (confirm). -->
+          <h4>Weekly plan — one session (everything in one day)</h4>
+          <ul class="guide-notes">
+            <li><strong>Frequency:</strong> ~once a week, sometimes once per 2 weeks — so one full session has to cover it all.</li>
+            <li><strong>Goals:</strong> hip hinge · handstands · keep lower back + adductors healthy · improve pull-ups (if time) · grip + traps.</li>
+            <li><strong>Grip &amp; traps:</strong> trained through the handstands — loading the tight traps to release them, and the wrists carry the grip. No separate work needed.</li>
+            <li><strong>Adductor issue:</strong> nature to confirm (confirm).</li>
+            <li><strong>Every set:</strong> external cues only · stop at neutral, no rounding · film + score.</li>
+          </ul>
+          <p style="margin: 0.5rem 0 0.1rem; font-weight: 600;">The session — do it all</p>
+          <ul class="guide-notes">
+            <li>Warm-up: dowel hinge + wall hinge</li>
+            <li>Handstands: back-to-wall grid + lift shoulders off box (covers traps + wrists / grip)</li>
+            <li>Hinge: heavy floor deadlift she can't cheat (anchor), then Single-Leg RDL / RDL with dowel — slow + pause</li>
+            <li>Lower back: Roman Chair Side Bend</li>
+            <li>Adductors: Hip Adduction (full range) + Cable Hip Adduction</li>
+            <li>Core slow: Lying Leg Raise, Decline Sit-Up (controlled tempo)</li>
+            <li>If time: Pull-ups (working goal)</li>
           </ul>
 
           <!-- AI-NOTE: Hip-hinge plan is evidence-informed (constraint-led approach + external focus

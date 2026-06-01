@@ -265,6 +265,23 @@ select.subtle-select:hover, select.subtle-select:focus {
 .lb-detail-item .muted { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; }
 .lb-detail-item strong { font-size: 0.95rem; color: var(--accent); }
 .lb-filters { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+/* Compact inline filter groups (bodyweight range, chart-axis range). */
+.filter-group {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; background: var(--bg);
+}
+.filter-lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 600; }
+.filter-dash { color: var(--muted); }
+.mini-input {
+  width: 3.4rem; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  font: inherit; font-size: 0.82rem; padding: 3px 6px; border-radius: 6px; text-align: right;
+}
+.mini-input:focus { outline: none; border-color: var(--accent); color: var(--accent); }
+.mini-btn {
+  border: 1px solid var(--line); background: none; color: var(--muted);
+  font: inherit; font-size: 0.76rem; padding: 3px 8px; border-radius: 6px; cursor: pointer;
+}
+.mini-btn:hover { color: var(--accent); border-color: var(--accent); }
 /* Calculator formula tabs (Epley / Brzycki / Nuzzo). */
 .calc-tabs { display: flex; gap: 4px; margin: 0 0 0.75rem; flex-wrap: wrap; }
 .calc-tab {

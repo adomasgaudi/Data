@@ -13,29 +13,34 @@ export interface AthleteProfile {
   weight: number; // kg
   bodyFat: number; // fraction 0..1
   age: number | null;
+  sex: "m" | "f"; // used by the Coliseum "men only / women only" filter
 }
 
+// AI-NOTE: the `sex` values below were inferred from the (mostly Lithuanian)
+// first names — male names end -as/-us/-is, female -a/-ė — not from any logged
+// field. They drive the men/women comparison filter. If any is wrong, just fix
+// the single letter here and everything downstream updates.
 /** Keyed by StrengthLevel username (the key used in the set log). */
 export const ATHLETES: Record<string, AthleteProfile> = {
-  mantasp: { height: 200, weight: 128, bodyFat: 0.38, age: 15 },
-  johannesschut: { height: 190, weight: 85, bodyFat: 0.22, age: 35 },
-  andriusp: { height: 185, weight: 111, bodyFat: 0.35, age: 40 },
-  adomasgaudi: { height: 180, weight: 97, bodyFat: 0.25, age: 29 },
-  bebras: { height: 175, weight: 70, bodyFat: 0.15, age: 15 }, // Laurynas
-  natali: { height: 174, weight: 74, bodyFat: 0.35, age: 50 }, // Natalija
-  agne_ram: { height: 174, weight: 63, bodyFat: 0.25, age: 31 },
-  marijasenkus: { height: 172, weight: 56, bodyFat: 0.2, age: 38 },
-  indre_ju: { height: 167, weight: 67, bodyFat: 0.28, age: 40 },
-  simona: { height: 168, weight: 74, bodyFat: 0.3, age: 39 },
-  sandrakri: { height: 168, weight: 72, bodyFat: 0.3, age: 35 },
-  dzuljeta: { height: 167, weight: 55, bodyFat: 0.2, age: 32 },
-  andromeda94: { height: 160, weight: 44, bodyFat: 0.2, age: 31 }, // Kristina
-  henrikas: { height: 182, weight: 113, bodyFat: 0.35, age: null },
-  karolisb: { height: 173, weight: 71, bodyFat: 0.18, age: 23 },
-  "t.urba": { height: 180, weight: 82, bodyFat: 0.18, age: 30 }, // Tomas
-  simonasputrius: { height: 200, weight: 128, bodyFat: 0.35, age: 19 },
-  brigita_r: { height: 160, weight: 55, bodyFat: 0.2, age: 30 },
-  monika: { height: 165, weight: 52, bodyFat: 0.2, age: 29 },
+  mantasp: { height: 200, weight: 128, bodyFat: 0.38, age: 15, sex: "m" },
+  johannesschut: { height: 190, weight: 85, bodyFat: 0.22, age: 35, sex: "m" },
+  andriusp: { height: 185, weight: 111, bodyFat: 0.35, age: 40, sex: "m" },
+  adomasgaudi: { height: 180, weight: 97, bodyFat: 0.25, age: 29, sex: "m" },
+  bebras: { height: 175, weight: 70, bodyFat: 0.15, age: 15, sex: "m" }, // Laurynas
+  natali: { height: 174, weight: 74, bodyFat: 0.35, age: 50, sex: "f" }, // Natalija
+  agne_ram: { height: 174, weight: 63, bodyFat: 0.25, age: 31, sex: "f" }, // Agnė
+  marijasenkus: { height: 172, weight: 56, bodyFat: 0.2, age: 38, sex: "f" }, // Marija
+  indre_ju: { height: 167, weight: 67, bodyFat: 0.28, age: 40, sex: "f" }, // Indrė
+  simona: { height: 168, weight: 74, bodyFat: 0.3, age: 39, sex: "f" },
+  sandrakri: { height: 168, weight: 72, bodyFat: 0.3, age: 35, sex: "f" }, // Sandra
+  dzuljeta: { height: 167, weight: 55, bodyFat: 0.2, age: 32, sex: "f" }, // Džuljeta
+  andromeda94: { height: 160, weight: 44, bodyFat: 0.2, age: 31, sex: "f" }, // Kristina
+  henrikas: { height: 182, weight: 113, bodyFat: 0.35, age: null, sex: "m" },
+  karolisb: { height: 173, weight: 71, bodyFat: 0.18, age: 23, sex: "m" }, // Karolis
+  "t.urba": { height: 180, weight: 82, bodyFat: 0.18, age: 30, sex: "m" }, // Tomas
+  simonasputrius: { height: 200, weight: 128, bodyFat: 0.35, age: 19, sex: "m" }, // Simonas
+  brigita_r: { height: 160, weight: 55, bodyFat: 0.2, age: 30, sex: "f" }, // Brigita
+  monika: { height: 165, weight: 52, bodyFat: 0.2, age: 29, sex: "f" }, // Monika
 };
 
 /** Fraction of bodyweight a movement lifts. Exact match on the data's exercise name. */

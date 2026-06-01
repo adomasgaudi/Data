@@ -65,6 +65,12 @@ const els = {
   bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
   rank: $<HTMLSelectElement>("rank"),
+  sexFilter: $<HTMLSelectElement>("sexFilter"),
+  bwMin: $<HTMLInputElement>("bwMin"),
+  bwMax: $<HTMLInputElement>("bwMax"),
+  axisMin: $<HTMLInputElement>("axisMin"),
+  axisMax: $<HTMLInputElement>("axisMax"),
+  axisReset: $<HTMLButtonElement>("axisReset"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
   lbTitle: $("lbTitle"),
@@ -150,6 +156,44 @@ const trainingDuration = (firstIso: string, lastIso: string): string => {
 function currentFormula(): OneRepMaxFormula {
   const v = els.formula.value;
   return v === "brzycki" || v === "nuzzo" ? v : "epley";
+}
+
+/** Read a number input, returning null when empty or unparseable (negatives kept). */
+function numInput(el: HTMLInputElement): number | null {
+  const v = parseFloat(el.value);
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Coliseum athlete filter: keep an athlete only if they match the chosen sex
+ * (Everyone / Men / Women) and fall inside the bodyweight range, when set. An
+ * athlete with no profile is dropped as soon as any of these filters is active,
+ * since we can't confirm they match.
+ */
+function athletePassesColiseum(username: string): boolean {
+  const sex = els.sexFilter.value; // "all" | "m" | "f"
+  const bwMin = numInput(els.bwMin);
+  const bwMax = numInput(els.bwMax);
+  if (sex === "all" && bwMin === null && bwMax === null) return true;
+  const p = ATHLETES[username];
+  if (!p) return false; // a filter is active but we have nothing to match on
+  if (sex !== "all" && p.sex !== sex) return false;
+  if (bwMin !== null && p.weight < bwMin) return false;
+  if (bwMax !== null && p.weight > bwMax) return false;
+  return true;
+}
+
+/** Short human label for the active Coliseum filters, for the subtitle (or ""). */
+function coliseumFilterNote(): string {
+  const parts: string[] = [];
+  if (els.sexFilter.value === "m") parts.push("men only");
+  else if (els.sexFilter.value === "f") parts.push("women only");
+  const bwMin = numInput(els.bwMin);
+  const bwMax = numInput(els.bwMax);
+  if (bwMin !== null || bwMax !== null) {
+    parts.push(`${bwMin ?? "…"}–${bwMax ?? "…"} kg`);
+  }
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
 
 // ---- Bodyweight coefficients: the single source of truth, editable + saved ----
@@ -311,6 +355,10 @@ function renderLeaderboard() {
     }));
   }
 
+  // Sex / bodyweight filter: keep only the athletes being compared. The chart
+  // and table both iterate `rows`, so trimming here is all that's needed.
+  rows = rows.filter((r) => athletePassesColiseum(r.username));
+
   lbRows = rows;
   // Per rep-band best 1RM for each athlete (grouped bars, NOT summed): each band's
   // value is the theoretical 1RM from sets whose reps fall only in that band.
@@ -330,7 +378,7 @@ function renderLeaderboard() {
   });
 
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
-  els.lbTitle.textContent = `${exercise} · ${metricNote} · best per rep band`;
+  els.lbTitle.textContent = `${exercise} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, bandData, rel);
 }
@@ -382,8 +430,19 @@ function renderLeaderboardChart(
   const round = (n: number) => Math.round(n * 100) / 100;
   // Each athlete gets one horizontal track; the rep bands appear as coloured
   // dots along it (one dot per band, placed at that band's theoretical 1RM).
+  // ~30 px per athlete keeps the now-compact dot rows close together.
   const wrap = canvas.parentElement;
-  if (wrap) wrap.style.height = `${Math.max(220, rows.length * 48 + 64)}px`;
+  if (wrap) wrap.style.height = `${Math.max(200, rows.length * 30 + 56)}px`;
+
+  // Manual x-axis (weight) range from the From/To inputs; either end can be left
+  // blank for auto, and the min may be negative (e.g. a body-weight-adjusted lift
+  // that nets out below zero). With no min set we keep the old start-at-zero.
+  const xMin = numInput(els.axisMin);
+  const xMax = numInput(els.axisMax);
+  const xScale: Record<string, unknown> = { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } };
+  if (xMin !== null) xScale.min = xMin;
+  else xScale.beginAtZero = true;
+  if (xMax !== null) xScale.max = xMax;
   lbChart = new Chart(canvas, {
     type: "scatter",
     data: {
@@ -416,7 +475,7 @@ function renderLeaderboardChart(
         },
       },
       scales: {
-        x: { beginAtZero: true, grid: { color: "#ececec" }, ticks: { color: "#6b7280" } },
+        x: xScale,
         // Athletes as discrete tracks; `offset` keeps dots off the top/bottom edge.
         y: {
           type: "category",
@@ -435,8 +494,11 @@ function renderPersonalRecords() {
   const exercise = els.exercise.value;
   const base = selectionRecords(computedRecords(), exercise);
   const filtered = filterRecords(base, { excludeDropsets: els.excludeDropsets.checked });
-  // Personal records for the currently selected exercise/group only (one row per athlete).
-  const prs = personalRecords(filtered, formula).filter((p) => p.exerciseName === exercise);
+  // Personal records for the currently selected exercise/group only (one row per
+  // athlete), honouring the same sex/bodyweight comparison filter as the chart.
+  const prs = personalRecords(filtered, formula)
+    .filter((p) => p.exerciseName === exercise)
+    .filter((p) => athletePassesColiseum(p.username));
   prs.sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
 
   els.prCount.textContent = `— ${exercise} (${prs.length})`;
@@ -1564,6 +1626,24 @@ async function init() {
     renderPersonalRecords(); // PRs are scoped to the selected exercise
   });
   els.rank.addEventListener("change", renderLeaderboard);
+
+  // Coliseum comparison filters: re-render both the chart and the PR table, which
+  // share the sex/bodyweight filter. The axis inputs only affect the chart, but
+  // re-running the whole leaderboard is cheap and keeps the wiring simple.
+  const refreshColiseum = () => {
+    renderLeaderboard();
+    renderPersonalRecords();
+  };
+  els.sexFilter.addEventListener("change", refreshColiseum);
+  els.bwMin.addEventListener("input", refreshColiseum);
+  els.bwMax.addEventListener("input", refreshColiseum);
+  els.axisMin.addEventListener("input", renderLeaderboard);
+  els.axisMax.addEventListener("input", renderLeaderboard);
+  els.axisReset.addEventListener("click", () => {
+    els.axisMin.value = "";
+    els.axisMax.value = "";
+    renderLeaderboard();
+  });
 
   els.formula.value = DEFAULT_FORMULA;
 
