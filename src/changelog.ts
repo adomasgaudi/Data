@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.9",
+    title: "graph-advanced-variant",
+    sp: 2,
+    note: "Add an ‘advanced’ graph (wider, x/y values inside the plot); keep the demo as the safe fallback.",
+    details: [
+      "Other → ‘Graph (advanced)’: same free-pan/zoom SVG engine, but a wider plot with the axis values drawn inside (white halo for legibility).",
+      "Other → ‘Graph demo (safe)’ is unchanged and marked as the stable fallback to use if the advanced one misbehaves.",
+    ],
+  },
+  {
     version: "b.1.12.8",
     title: "demo-free-pan",
     sp: 1,

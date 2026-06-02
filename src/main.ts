@@ -8,6 +8,7 @@ import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
 import { calendarGridlines, MS_DAY } from "./chartAxis";
 import { mountGraphDemo } from "./graphDemo";
+import { mountGraphAdvanced } from "./graphAdvanced";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -4518,6 +4519,10 @@ function switchTopTab(name: string) {
   if (name === "graphdemo") {
     const box = document.getElementById("graphDemoBox");
     if (box) mountGraphDemo(box);
+  }
+  if (name === "graphadv") {
+    const box = document.getElementById("graphAdvBox");
+    if (box) mountGraphAdvanced(box);
   }
   updateBottomNav();
 }
