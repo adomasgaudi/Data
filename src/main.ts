@@ -3286,9 +3286,15 @@ async function init() {
 
   prefillTestFromPick(); // load Adomas / Squat into the calculator on first paint
 
-  // Version label + history come from the single CHANGELOG source.
-  const verEl = document.querySelector(".version");
-  if (verEl) verEl.textContent = CURRENT_VERSION;
+  // Version label + history come from the single CHANGELOG source. The tag is
+  // clickable — it opens the Version history page.
+  const verEl = document.querySelector<HTMLElement>(".version");
+  if (verEl) {
+    verEl.textContent = CURRENT_VERSION;
+    verEl.title = "Version history";
+    verEl.style.cursor = "pointer";
+    verEl.addEventListener("click", openChangelog);
+  }
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 

@@ -21,6 +21,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.5.4",
+    title: "clickable-version-tag",
+    sp: 1,
+    note: "The version tag opens Version history; first live auto-deploy test.",
+    details: [
+      "Tap the version number in the header to open the Version history page.",
+      "Used to confirm GitHub Pages auto-deploy: push → refresh → see the change.",
+    ],
+  },
+  {
     version: "b.1.5.3",
     title: "smooth-graph-gridlines",
     sp: 1,
