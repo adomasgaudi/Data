@@ -345,6 +345,16 @@ const EXACT_CODE_OVERRIDES: Record<string, string> = {
   hipthrust: "HT",
   dips: "Dip", // owner prefers the short word over a code
   dip: "Dip",
+  pullups: "Pull",
+  pullup: "Pull",
+  pushups: "PU",
+  pushup: "PU",
+  romanchairsidebend: "rcSB",
+  onearmdumbbellpreachercurl: "dPCurl",
+  machinecalfraise: "mCR",
+  hipabduction: "H-ABD",
+  hipadduction: "H-ADD",
+  declinesitup: "dSU",
 };
 
 // Movement cores (UPPERCASE), matched on the longest phrase first so "bench
@@ -372,6 +382,11 @@ const MOVEMENT_CORES: { match: string; core: string }[] = [
   { match: "squat", core: "SQ" },
   { match: "dips", core: "DIP" },
   { match: "dip", core: "DIP" },
+  { match: "situps", core: "SU" },
+  { match: "situp", core: "SU" },
+  { match: "calfraise", core: "CR" },
+  { match: "sidebend", core: "SB" },
+  { match: "preachercurl", core: "PCurl" },
   { match: "curl", core: "CRL" },
 ];
 

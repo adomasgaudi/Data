@@ -24,6 +24,13 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.7.2.2",
+    title: "more-exercise-codes",
+    sp: 1,
+    note: "More custom codes + pattern coverage (Pull, PU, dSU, mCR, rcSB, H-ABD…).",
+    details: ["Owner-chosen codes plus new cores (sit up→SU, calf raise→CR, side bend→SB) so similar lifts follow the same pattern."],
+  },
+  {
     version: "b.1.7.2.1",
     title: "exercise-code-overrides",
     sp: 1,
