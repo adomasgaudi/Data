@@ -594,6 +594,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Expanded workout day: each exercise is a header row above its own sets. */
 .set-ex-row > td { font-weight: 600; padding-top: 9px; border-top: 1px solid var(--line); border-bottom: none; }
 .set-ex-row:first-child > td { border-top: none; }
+/* The exercise name in an expanded workout day links to its drill-in detail. */
+.wo-exlink { color: var(--accent); cursor: pointer; }
+.wo-exlink:hover { text-decoration: underline; }
 /* A set with a note: a short truncated preview + caret sits at the left of the
    weight cell (weight stays right-aligned), and clicking the row expands the
    full note below. The preview lets you read the gist without expanding. */

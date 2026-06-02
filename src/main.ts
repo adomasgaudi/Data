@@ -1727,6 +1727,20 @@ function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
+  // An exercise name in an expanded day -> jump to that exercise's drill-in on
+  // the Exercises sub-tab (the SAME detail view the Exercises list opens, so
+  // both routes land in one place).
+  const exLink = target.closest(".wo-exlink") as HTMLElement | null;
+  if (exLink) {
+    const exName = exLink.dataset.exname;
+    if (exName) {
+      showSubtab("exercises");
+      selectedExercise = exName;
+      renderExercisesPage();
+    }
+    return;
+  }
+
   // A day/week -> expand straight to every exercise with all its sets.
   const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
@@ -1745,7 +1759,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
     .map((e) => {
       const header =
         `<tr class="set-ex-row"><td colspan="3" class="wo-exname">` +
-        `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span></td></tr>`;
+        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span> <span class="muted">${e.count}</span></td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
         .map((s) => setRowsHtml(s, formula))
