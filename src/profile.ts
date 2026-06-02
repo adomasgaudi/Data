@@ -140,17 +140,14 @@ export const EXERCISE_GROUPS: ExerciseGroup[] = [
     },
   },
   {
-    name: "Deadlift",
+    // "Deadlift pattern" deliberately combines ONLY the conventional Deadlift and
+    // the Romanian Deadlift for now (owner will expand it carefully later). Every
+    // other deadlift variant stays its own separate exercise. Distinct name from
+    // the "Deadlift" exercise; only appears when the grouped/scaled toggle is on.
+    name: "Deadlift pattern",
     members: {
       Deadlift: 1,
-      "Sumo Deadlift": 1.0,
       "Romanian Deadlift": 0.7,
-      "Stiff Leg Deadlift": 0.7,
-      "Deficit Romanian Deadlift": 0.65,
-      "Hex Bar Deadlift": 1.05,
-      "Box deadlift": 0.95,
-      "Jefferson Deadlift": 0.85,
-      "Single Leg Romanian Deadlift": 0.35,
     },
   },
   {
