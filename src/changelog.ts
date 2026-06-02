@@ -38,6 +38,13 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.6",
+    title: "svg-test-curve",
+    sp: 2,
+    note: "Move the Test-tab weight↔reps curve onto the SVG engine. Only the leaderboard bar chart is left on Chart.js.",
+    details: ["The reps→bar-weight curve + your-set marker now render on the engine (linear x, tap for values)."],
+  },
+  {
     version: "b.1.13.5",
     title: "svg-drillin-charts",
     sp: 5,

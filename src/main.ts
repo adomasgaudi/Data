@@ -8,7 +8,7 @@ import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
 import { mountGraphDemo } from "./graphDemo";
 import { mountGraphAdvanced } from "./graphAdvanced";
-import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig } from "./svgChart";
+import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { mountSvgChartLab } from "./svgChartLab";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -205,7 +205,7 @@ const els = {
 let data: LoadedData;
 let lbChart: Chart | null = null;
 let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
-let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
+let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let cmpLabSvg: SvgChart | null = null; // "Compare (lab)" test page (lab engine variant)
 let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
@@ -2996,67 +2996,32 @@ function renderCalcCurve(
   curAdded: number,
   formula: OneRepMaxFormula,
 ) {
-  const canvas = document.getElementById("calcCurveChart") as HTMLCanvasElement | null;
-  if (!canvas) return;
-  calcCurveChart?.destroy();
-  calcCurveChart = null;
+  const box = document.getElementById("calcCurveChart");
+  if (!box) return;
 
   // 1RM of the effective load at the current reps, then read the curve back out.
   const eff1rm = estimate1RM(effLoad, Math.min(curReps, MAX_1RM_REPS), formula);
   if (eff1rm === null || eff1rm <= 0) {
     els.calcCurveNote.textContent = "Enter a weight and reps to see the weight↔reps curve.";
+    if (calcCurveSvg) calcCurveSvg.update({ series: [] });
     return;
   }
   const maxReps = 15;
-  const labels: string[] = [];
-  const barWeights: (number | null)[] = [];
+  const curvePts: SvgPoint[] = [];
   for (let reps = 1; reps <= maxReps; reps++) {
-    labels.push(String(reps));
     const effW = weightForReps(eff1rm, reps, formula);
-    // Show the bar weight (peel the constant bodyweight share back off).
-    barWeights.push(effW === null ? null : Math.round((effW - bodyweightLoad) * 10) / 10);
+    if (effW !== null) curvePts.push({ x: reps, y: Math.round((effW - bodyweightLoad) * 10) / 10 });
   }
-  // Highlight the user's current (reps, bar weight) point.
-  const pointData = labels.map((_, i) => (i + 1 === Math.min(curReps, maxReps) ? Math.round(curAdded * 10) / 10 : null));
-
-  calcCurveChart = new Chart(canvas, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Predicted bar weight",
-          data: barWeights,
-          borderColor: "#284e86",
-          backgroundColor: "rgba(40,78,134,0.08)",
-          fill: true,
-          tension: 0.25,
-          pointRadius: 2,
-        },
-        {
-          label: "Your set",
-          data: pointData,
-          borderColor: "#b8902f",
-          backgroundColor: "#b8902f",
-          pointRadius: 6,
-          pointHoverRadius: 7,
-          showLine: false,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { title: (items) => `${items[0]?.label} reps`, label: (it) => `${it.formattedValue} kg` } },
-      },
-      scales: {
-        x: { title: { display: true, text: "reps" }, grid: { color: "#d4d9e2" } },
-        y: { title: { display: true, text: "bar weight (kg)" }, grid: { color: "#d4d9e2" } },
-      },
-    },
-  });
+  const series: SvgSeries[] = [
+    { name: "Predicted bar weight", color: "#284e86", type: "line", points: curvePts },
+    { name: "Your set", color: "#b8902f", type: "line", points: [{ x: Math.min(curReps, maxReps), y: Math.round(curAdded * 10) / 10 }] },
+  ];
+  const config: SvgChartConfig = {
+    series, xKind: "linear", yBeginAtZero: true, yUnit: "kg", insideLabels: true, interactive: false, height: 260,
+    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} reps`,
+  };
+  if (!calcCurveSvg) calcCurveSvg = mountSvgChart(box, config);
+  else calcCurveSvg.update(config);
   els.calcCurveNote.textContent =
     `Weight you could lift at each rep count for this ${formula} 1RM (gold dot = the set you typed).`;
 }
