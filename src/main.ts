@@ -6,10 +6,9 @@
 import { Chart, registerables } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
-import { calendarGridlines } from "./chartAxis";
 import { mountGraphDemo } from "./graphDemo";
 import { mountGraphAdvanced } from "./graphAdvanced";
-import { mountSvgChart, type SvgChart, type SvgSeries } from "./svgChart";
+import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig } from "./svgChart";
 import { mountSvgChartLab } from "./svgChartLab";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -205,7 +204,7 @@ const els = {
 
 let data: LoadedData;
 let lbChart: Chart | null = null;
-let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
+let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
 let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let cmpLabSvg: SvgChart | null = null; // "Compare (lab)" test page (lab engine variant)
@@ -1646,9 +1645,7 @@ function renderExercisesPage() {
   els.exerciseTopSets.hidden = true;
   els.exerciseWeekly.hidden = true;
   els.exerciseTargets.hidden = true;
-  els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in
-  exerciseChart?.destroy();
-  exerciseChart = null;
+  els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in (SVG engine stays mounted, just hidden)
   const cutoff = exerciseRangeCutoff();
   const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
   const username = els.athlete.value;
@@ -2064,126 +2061,62 @@ function ecalcRemoveRow(index: number) {
   ecalcRenderRows();
 }
 
-/** Per-exercise progress graph shown inside the drill-in (same shape as the Progress tab). */
+/** Per-exercise progress graph in the drill-in, on the SVG engine: "1RM trend"
+ * = weekly-sets bars (left axis) + est-1RM line + trend line (right axis); or
+ * "per-set range" = one weight→1RM bar per set. */
 function renderExerciseProgressChart(exName: string) {
-  exerciseChart?.destroy();
-  exerciseChart = null;
-  // Use the SAME records the Records card/table use — honour "Exclude dropsets"
-  // — so the chart's 1RM matches them (an unfiltered feed counted dropset sets
-  // the rest of the app drops, inflating the diagram's 1RM).
+  const box = document.getElementById("exerciseProgressChart");
+  if (!box) return;
+  // Same records the Records card/table use (honour "Exclude dropsets").
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   const formula = currentFormula();
-  const canvas = $<HTMLCanvasElement>("exerciseProgressChart");
+  const username = els.athlete.value;
+  const ts = (d: string) => Date.parse(d);
+  const mount = (config: SvgChartConfig) => {
+    if (!exerciseSvg) exerciseSvg = mountSvgChart(box, config);
+    else exerciseSvg.update(config);
+  };
 
   if (exProgressView === "perset") {
-    const sets = recs.filter((r) => r.username === els.athlete.value && r.exerciseName === exName);
-    const chart = drawSetRangeChart(canvas, sets, formula);
-    if (!chart) {
-      els.exerciseProgress.hidden = true;
-      els.exerciseProgressNote.textContent = "";
-      return;
-    }
+    const points = recs
+      .filter((r) => r.username === username && r.exerciseName === exName)
+      .map((s) => {
+        const e1rm = addedWeight1RM(s, formula);
+        if (e1rm === null) return null;
+        const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+        return { x: ts(s.date), lo: added, hi: e1rm, meta: `×${s.reps ?? 0}` };
+      })
+      .filter((p): p is { x: number; lo: number; hi: number; meta: string } => p !== null);
+    if (points.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
     els.exerciseProgress.hidden = false;
-    exerciseChart = chart;
+    mount({ series: [{ name: exName, color: "#284e86", type: "range", points }], xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 });
     els.exerciseProgressNote.textContent =
       "One bar per set (every set of every session), spanning that set's weight (bottom) to its own estimated 1RM (top).";
     return;
   }
 
-  const series = exerciseProgressByWeek(recs, els.athlete.value, exName, formula);
-  if (series.length === 0) {
-    els.exerciseProgress.hidden = true;
-    els.exerciseProgressNote.textContent = "";
-    return;
-  }
+  const series = exerciseProgressByWeek(recs, username, exName, formula);
+  if (series.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
   els.exerciseProgress.hidden = false;
+
+  // Trend line fit on the est-1RM history (right axis).
+  const pts = series.filter((p) => p.bestE1rm !== null);
+  let trendPts: { x: number; y: number }[] = [];
+  if (pts.length >= 2) {
+    const t0 = ts(pts[0]!.date);
+    const day = (d: string) => (ts(d) - t0) / 86_400_000;
+    const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
+    if (fit) trendPts = [pts[0]!, pts[pts.length - 1]!].map((p) => ({ x: ts(p.date), y: Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10 }));
+  }
+  const svgSeries: SvgSeries[] = [
+    { name: "Sets/week", color: "#284e86", type: "bars", axis: "left", points: series.map((p) => ({ x: ts(p.date), y: p.sets })) },
+    { name: "Est. 1RM (kg)", color: "#b8902f", type: "line", axis: "right", points: pts.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 })) },
+  ];
+  if (trendPts.length) svgSeries.push({ name: "Trend", color: "#c0603a", type: "line", axis: "right", noLegend: true, points: trendPts });
   els.exerciseProgressNote.textContent = progressSummaryNote(series);
-  exerciseChart = drawProgressChart(canvas, series);
+  mount({ series: svgSeries, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true, yUnit: "sets", rightUnit: "kg", insideLabels: true, panMode: "x", height: 300 });
 }
 
-/** Per-set view: one floating bar PER SET, each spanning that single set's weight
- * lifted → that same set's estimated (added-weight) 1RM. Every set of every
- * session gets its own column (a categorical x-axis sorted by date then set
- * number), so same-day sets don't overlap into one mixed bar. Null if no usable
- * sets. */
-function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[], formula: OneRepMaxFormula): Chart | null {
-  const r1 = (n: number) => Math.round(n * 10) / 10;
-  // Oldest first, and within a day by set number, so columns read left→right in
-  // the order the sets were performed.
-  const ordered = [...sets].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber,
-  );
-  const pts = ordered
-    .map((s) => {
-      const e1rm = addedWeight1RM(s, formula);
-      if (e1rm === null) return null;
-      // low and high are BOTH from this one set — its bar weight and its own 1RM.
-      const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-      return { date: s.date, low: r1(added), high: r1(e1rm), reps: s.reps ?? 0 };
-    })
-    .filter((p): p is { date: string; low: number; high: number; reps: number } => p !== null);
-  if (pts.length === 0) return null;
-
-  // One label per column; only print the date on the first set of each day so the
-  // axis isn't a wall of repeated dates.
-  let lastDate = "";
-  const labels = pts.map((p) => {
-    const show = p.date !== lastDate;
-    lastDate = p.date;
-    return show ? shortDate(p.date) : "";
-  });
-
-  return new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Weight → 1RM",
-          // Floating bars: y is a [low, high] tuple at runtime (cast for Chart.js types).
-          data: pts.map((p) => [p.low, p.high]) as unknown as number[],
-          backgroundColor: "#284e86",
-          borderSkipped: false,
-          maxBarThickness: 14,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: "nearest", intersect: true },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: (items) => {
-              const p = pts[items[0]?.dataIndex ?? -1];
-              return p ? shortDate(p.date) : "";
-            },
-            label: (item) => {
-              const p = pts[item.dataIndex];
-              return p ? `${fmt(p.low)} kg × ${p.reps} → ${fmt(p.high)} kg 1RM` : "";
-            },
-          },
-        },
-        zoom: {
-          pan: { enabled: true, mode: "x" },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
-        },
-      },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: { color: "#6b7280", maxRotation: 0, autoSkip: true },
-        },
-        y: {
-          grid: { color: "#d4d9e2" },
-          ticks: { color: "#6b7280", mirror: true, padding: 4 },
-        },
-      },
-    },
-  });
-}
 
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
 function onExerciseRowClick(e: MouseEvent) {
@@ -2816,175 +2749,7 @@ function progressSummaryNote(series: ExerciseDayPoint[]): string {
   return `${summary} · ${series.length} week(s). Bars = sets/week, gold = best 1RM, dashed = trend.`;
 }
 
-/**
- * Draw the sets-per-day bars + best-1RM line + fitted trend for one exercise's
- * series onto a canvas, returning the Chart handle (caller owns destroying it).
- * Shared by the Progress sub-page and the per-exercise drill-in graph.
- */
-/** Format a millisecond timestamp back to the "Apr 16" short-date label. */
-function tsLabel(ts: number): string {
-  return shortDate(new Date(ts).toISOString().slice(0, 10));
-}
 
-/** Shared x time-axis options (reverted to the pre-regression mechanism): grid-
- * lines are drawn natively by Chart.js at calendar-boundary ticks computed ONCE
- * from the data range — never recomputed mid-pan, so no jitter. `mirrored` tucks
- * labels inside the plot (progress chart). */
-function timeXAxis(min: number, max: number, mirrored = false) {
-  // Guard against empty data (min/max would be ±Infinity → breaks the scale):
-  // only pin the range when both bounds are finite, else let Chart.js auto-range.
-  const haveRange = Number.isFinite(min) && Number.isFinite(max) && max > min;
-  // Compute the calendar boundary ticks a single time, up front.
-  const gridTicks = haveRange ? calendarGridlines(min, max) : [];
-  return {
-    type: "linear" as const,
-    ...(haveRange ? { min, max } : {}),
-    grid: { color: "#d4d9e2", drawTicks: false },
-    // Pin the axis's horizontal padding so the plot area (and the y-axis) can't
-    // shift sideways as the edge date-labels change while panning.
-    afterFit: (scale: { paddingLeft: number; paddingRight: number }) => {
-      scale.paddingLeft = 0;
-      scale.paddingRight = 0;
-    },
-    // Fixed ticks (week/month boundaries) — independent of the zoom view, so the
-    // axis never recomputes mid-pan. Chart.js clips to the visible range itself.
-    afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
-      if (gridTicks.length >= 2) axis.ticks = gridTicks.map((value) => ({ value }));
-    },
-    ticks: {
-      color: "#6b7280",
-      maxRotation: 0,
-      autoSkip: true, // thins labels by available width; keeps the in-view ones
-      includeBounds: false,
-      ...(mirrored ? { mirror: true, padding: 8, z: 2 } : {}),
-      callback: (value: string | number) => tsLabel(Number(value)),
-    },
-  };
-}
-
-function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]): Chart {
-  // X is a real time axis (milliseconds), so dates sit at their true spacing —
-  // a 2-month gap looks like a gap, not the same step as consecutive sessions.
-  const ts = (d: string) => Date.parse(d);
-  // Progression: fit a line to the estimated-1RM history to read a kg/week rate.
-  const pts = series.filter((p) => p.bestE1rm !== null);
-  let trendData: { x: number; y: number }[] = [];
-  if (pts.length >= 2) {
-    const t0 = ts(pts[0]!.date);
-    const day = (d: string) => (ts(d) - t0) / 86_400_000;
-    const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
-    if (fit) {
-      // Two endpoints are enough for a straight line on a numeric axis.
-      trendData = [pts[0]!, pts[pts.length - 1]!].map((p) => ({
-        x: ts(p.date),
-        y: Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10,
-      }));
-    }
-  }
-
-  // A little horizontal breathing room so edge bars aren't clipped.
-  const times = series.map((p) => ts(p.date));
-  const pad = 2 * 86_400_000;
-  const xMin = Math.min(...times) - pad;
-  const xMax = Math.max(...times) + pad;
-
-  // Keep the sets bars short: cap the sets axis well above the busiest week so the
-  // tallest bar only reaches ~45% of the height, leaving the 1RM line room above.
-  const maxSets = Math.max(1, ...series.map((p) => p.sets));
-  const setsAxisMax = Math.ceil(maxSets * 2.2);
-
-  return new Chart(canvas, {
-    type: "bar",
-    data: {
-      datasets: [
-        {
-          type: "bar",
-          label: "Sets/week",
-          data: series.map((p) => ({ x: ts(p.date), y: p.sets })),
-          yAxisID: "ySets",
-          backgroundColor: "#284e86",
-          borderRadius: 3,
-          maxBarThickness: 22,
-          order: 2,
-        },
-        {
-          type: "line",
-          label: "Est. 1RM (kg)",
-          data: series.map((p) => ({ x: ts(p.date), y: p.bestE1rm === null ? null : Math.round(p.bestE1rm * 10) / 10 })),
-          yAxisID: "y1rm",
-          borderColor: "#b8902f",
-          backgroundColor: "#b8902f",
-          tension: 0.25,
-          spanGaps: true,
-          pointRadius: 3,
-          order: 1,
-        },
-        {
-          type: "line",
-          label: "Trend",
-          data: trendData,
-          yAxisID: "y1rm",
-          borderColor: "#c0603a",
-          borderDash: [6, 4],
-          borderWidth: 1.5,
-          pointRadius: 0,
-          spanGaps: true,
-          tension: 0,
-          order: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      // intersect:true → the tooltip only shows when you're directly on a bar/
-      // point, so tapping empty space dismisses it (it no longer sticks open and
-      // obscures the plot).
-      interaction: { mode: "nearest", intersect: true },
-      // Legend + axis titles are dropped on purpose: the note line below the
-      // chart already says what each colour is, so every pixel goes to the plot.
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: (items) => {
-              const x = items[0]?.parsed.x;
-              return x == null ? "" : `Week of ${tsLabel(x)}`;
-            },
-          },
-        },
-        // Pan / wheel / pinch along TIME only (x). The y-axes stay put so the
-        // 1RM and sets scales — and their gridlines — never drift while you
-        // scroll; only the time window you're looking at changes. The "Center"
-        // button (wired in setup) calls resetZoom() to snap back to the data.
-        zoom: {
-          pan: { enabled: true, mode: "x" },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
-        },
-      },
-      scales: {
-        // Vertical gridlines only on week/month boundaries; labels tucked inside.
-        x: timeXAxis(xMin, xMax, true),
-        ySets: {
-          position: "left",
-          beginAtZero: true,
-          max: setsAxisMax, // headroom so the sets bars stay short
-          grid: { color: "#d4d9e2" },
-          // mirror: labels hang inside the plot area, off the left axis line.
-          ticks: { color: "#6b7280", precision: 0, mirror: true, padding: 4, z: 2 },
-        },
-        y1rm: {
-          position: "right",
-          // Anchor at zero so the trend isn't auto-zoomed into a tight band
-          // (which exaggerates small week-to-week changes).
-          beginAtZero: true,
-          grid: { display: false },
-          ticks: { color: "#6b7280", mirror: true, padding: 4, z: 2 },
-        },
-      },
-    },
-  });
-}
 
 // ---- Exercises tab: which spellings were merged into one lift ----
 // Documents every combine (per the owner's rule that merges must be visible),
@@ -3540,7 +3305,9 @@ async function init() {
       }
   });
   // "Center on data" snaps the drill-in chart's pan/zoom back to the data fit.
-  els.exerciseProgressCenter.addEventListener("click", () => exerciseChart?.resetZoom());
+  els.exerciseProgressCenter.addEventListener("click", () => {
+    if (selectedExercise) renderExerciseProgressChart(selectedExercise); // re-render resets the view
+  });
   // Toggle the drill-in chart between the 1RM trend and the per-set weight→1RM range.
   els.exProgressView.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>(".cal-mode-btn");

@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.5",
+    title: "svg-drillin-charts",
+    sp: 5,
+    note: "Move the exercise drill-in graphs (1RM trend + per-set range) onto the SVG engine; drop the old Chart.js chart code.",
+    details: [
+      "1RM trend = weekly-sets bars (left axis) + est-1RM line + trend line (right axis); per-set range = one weight→1RM bar per set. Both pan/zoom + tap like the rest.",
+      "Removed the dead drawProgressChart / drawSetRangeChart / timeXAxis Chart.js code now that nothing uses it.",
+    ],
+  },
+  {
     version: "b.1.13.4",
     title: "compare-picker-redesign",
     sp: 3,
