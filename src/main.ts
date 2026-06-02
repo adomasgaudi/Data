@@ -129,6 +129,7 @@ const els = {
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
+  exRepMaxBar: $("exRepMaxBar"),
   repMaxInput: $<HTMLInputElement>("repMaxInput"),
   exSearchBar: $("exSearchBar"),
   exerciseCompare: $("exerciseCompare"),
@@ -894,7 +895,7 @@ let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
-let exerciseSort: "sets" | "category" | "tier" = "sets";
+let exerciseSort: "sets" | "category" | "tier" = "category";
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
@@ -908,9 +909,10 @@ let exerciseShowNotTrained = false;
 // When false (default), 3rd-tier exercises (cardio / mobility / warm-ups — not
 // really strength) are folded out of the list; the toggle reveals them.
 let exerciseShowThird = false;
-// In category mode, which category headers the user has collapsed (their
-// exercise rows are hidden until tapped open again).
-const collapsedExCats = new Set<string>();
+// In category mode, which category headers are EXPANDED (tapped open). Empty by
+// default, so every category starts collapsed — the list opens as a tidy set of
+// category headers you tap to open.
+const expandedExCats = new Set<string>();
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
@@ -1616,6 +1618,7 @@ function renderExercisesPage() {
     els.exerciseFilter.hidden = true;
     els.exSearchBar.hidden = true;
     els.exerciseCompare.hidden = true;
+    els.exRepMaxBar.hidden = true;
     renderExerciseDetail(selectedExercise);
     return;
   }
@@ -1624,6 +1627,7 @@ function renderExercisesPage() {
   const onCompare = exercisesTab === "compare";
   els.exFiltersBtn.hidden = onCompare; // filters/search only apply to the list
   els.exSearchBar.hidden = onCompare;
+  els.exRepMaxBar.hidden = onCompare; // rep-max only applies to the list table
   els.exerciseFilter.hidden = true; // the kebab menu starts closed
   els.exerciseCompare.hidden = !onCompare;
   els.athleteTable.hidden = onCompare;
@@ -1762,13 +1766,13 @@ function renderExercisesPage() {
       const cat = it._cat ?? exerciseCategory(it.exerciseName);
       let header = "";
       if (cat !== prevCat) {
-        const collapsed = collapsedExCats.has(cat);
+        const collapsed = !expandedExCats.has(cat);
         header =
           `<tr class="ex-cat-row${collapsed ? " is-collapsed" : ""}" data-cat="${escapeHtml(cat)}">` +
           `<td colspan="${colspan}"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
         prevCat = cat;
       }
-      return header + (collapsedExCats.has(cat) ? "" : rowHtml(it, abs, ""));
+      return header + (expandedExCats.has(cat) ? rowHtml(it, abs, "") : "");
     })
     .join("");
   const emptyMsg = q
@@ -2127,8 +2131,8 @@ function onExerciseRowClick(e: MouseEvent) {
   const catRow = target.closest("tr.ex-cat-row") as HTMLTableRowElement | null;
   if (catRow) {
     const cat = catRow.dataset.cat ?? "";
-    if (collapsedExCats.has(cat)) collapsedExCats.delete(cat);
-    else collapsedExCats.add(cat);
+    if (expandedExCats.has(cat)) expandedExCats.delete(cat);
+    else expandedExCats.add(cat);
     renderExercisesPage();
     return;
   }

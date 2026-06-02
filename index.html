@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.13.10</span></h1>
+      <h1>Colosseum <span class="version">b.1.13.11</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
@@ -187,17 +187,22 @@
                   </details>
                   <span class="ex-filter-lbl">Sort</span>
                   <div id="exerciseSort" class="ex-sort" role="group" aria-label="Sort exercises">
-                    <button type="button" class="ex-sort-btn is-active" data-sort="sets">By sets</button>
+                    <button type="button" class="ex-sort-btn" data-sort="sets">By sets</button>
                     <button type="button" class="ex-sort-btn" data-sort="tier">By tier</button>
-                    <button type="button" class="ex-sort-btn" data-sort="category">By category</button>
+                    <button type="button" class="ex-sort-btn is-active" data-sort="category">By category</button>
                   </div>
                   <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
                   <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
-                  <label class="ex-repmax-edit">Rep-max (reps)
-                    <input id="repMaxInput" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" aria-label="Rep-max reps" />
-                  </label>
                 </div>
               </div>
+            </div>
+            <!-- Rep-max reps control lives in the main view (not the kebab) so the
+                 rep-max column's basis is right there with the list. -->
+            <div id="exRepMaxBar" class="ex-repmax-bar">
+              <label class="ex-repmax-edit">Rep-max
+                <input id="repMaxInput" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" aria-label="Rep-max reps" />
+                <span class="muted">reps → working weight</span>
+              </label>
             </div>
             <!-- Compare several exercises' 1RM trend on one graph — the 'Compare
                  graph' tab. Tick the exercises to overlay; each becomes a line. -->

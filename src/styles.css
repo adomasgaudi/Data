@@ -913,6 +913,12 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 #athleteTable th.num, #athleteTable td.num { white-space: nowrap; }
 .ex-repmax-edit { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+/* Rep-max control as a visible bar above the List & stats table (not the kebab). */
+.ex-repmax-bar { margin: 0.1rem 0 0.6rem; }
+.ex-repmax-bar[hidden] { display: none; }
+.ex-repmax-bar .ex-repmax-edit { flex-direction: row; align-items: center; gap: 0.5rem; }
+.ex-repmax-bar .ex-repmax-edit input { width: 4.5rem; }
+.ex-repmax-bar .ex-repmax-edit .muted { font-weight: 400; }
 .ex-repmax-edit input {
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 9px; font-size: 0.9rem; font-weight: 400; width: 9rem;

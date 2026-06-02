@@ -40,13 +40,14 @@ export const CHANGELOG: Release[] = [
   {
     version: "b.1.10–b.1.20",
     title: "svg-charts-and-app-polish",
-    sp: 84,
+    sp: 86,
     note: "The b.1.10–b.1.20 run (current): the in-house SVG chart engine + Chart.js removal, dark mode, Group/Stats views, effort-SP, and lots of polish. New releases land here.",
     details: [
       "Charts rebuilt from scratch on an SVG engine (pan/pinch-zoom, tooltips, themed) — every chart migrated and Chart.js dropped.",
       "Dark mode; Group + Stats views; effort-SP dropdown; alone-tags; multi-category buckets; compare-picker redesign; List/Workouts tweaks.",
     ],
     children: [
+      { version: "b.1.13.11", sp: 2, note: "List & stats defaults to By-category (collapsed); rep-max moved to a visible bar." },
       { version: "b.1.13.10", sp: 1, note: "Merge version history into b.1.6–b.1.9 and b.1.10–b.1.20 dropdowns." },
       { version: "b.1.13.9", sp: 2, note: "Per-axis pinch test (X-only / Y-only) in Graph (advanced)." },
       { version: "b.1.13.8", sp: 5, note: "Leaderboard → SVG; Chart.js removed entirely (~84 KB lighter)." },
