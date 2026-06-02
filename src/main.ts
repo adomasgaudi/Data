@@ -2697,10 +2697,12 @@ function dataNum(n: number | null | undefined): string {
   return String(Math.round(n * 100) / 100);
 }
 
-/** One display row plus the user/exercise it belongs to, so the structured
- * Athlete/Exercise dropdowns can filter without guessing column positions. */
+/** One display row. `user`/`date`/`exercise` are the group key (shown once in a
+ * header above their rows, not repeated per row); `cells` holds the remaining
+ * per-set columns with those three already removed. */
 interface DataRow {
   user: string;
+  date: string;
   exercise: string; // canonical (processed) or raw (original) exercise name
   cells: string[];
 }
@@ -2717,25 +2719,32 @@ function rawToCanonicalExercise(): Map<string, string> {
   return m;
 }
 
+// The three columns lifted into the group header rather than repeated per row.
+const DATA_GROUP_COLS = new Set(["user", "date", "exercise_name"]);
+
 /** Build the header + rows for whichever table is active. Username and set_number
- * are intentionally omitted (the owner doesn't need them). */
+ * are omitted entirely; user/date/exercise_name are pulled out as the group key,
+ * so `header`/`cells` contain only the remaining per-set columns. */
 function dataRows(): { header: string[]; rows: DataRow[] } {
   if (dataView === "original") {
     const raw = parseCsvRows(data.rawCsv);
     const rawHeader = raw[0] ?? [];
-    // Drop the username and set_number columns from the original CSV too.
+    // Drop username/set_number, and split out the grouped columns.
     const dropIdx = new Set(
       rawHeader.flatMap((h, i) => (h === "username" || h === "set_number" ? [i] : [])),
     );
     const userIdx = rawHeader.indexOf("user");
+    const dateIdx = rawHeader.indexOf("date");
     const exIdx = rawHeader.indexOf("exercise_name");
-    const keep = (row: string[]) => row.filter((_, i) => !dropIdx.has(i));
+    const keep = (row: string[]) =>
+      row.filter((_, i) => !dropIdx.has(i) && !DATA_GROUP_COLS.has(rawHeader[i] ?? ""));
     const header = keep(rawHeader);
     const toCanon = rawToCanonicalExercise();
     const rows = raw.slice(1).map((row) => {
       const rawEx = exIdx >= 0 ? (row[exIdx] ?? "") : "";
       return {
         user: userIdx >= 0 ? (row[userIdx] ?? "") : "",
+        date: dateIdx >= 0 ? (row[dateIdx] ?? "") : "",
         // Match on the canonical name so the dropdown catches merged spellings.
         exercise: toCanon.get(rawEx) ?? rawEx,
         cells: keep(row),
@@ -2747,17 +2756,17 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
   // (added) weight AND the bodyweight-inclusive load used for the 1RM, plus the
   // raw exercise name when canonicalisation renamed it — so changes are visible.
   const header = [
-    "user", "date", "bodyweight", "exercise_name",
-    "raw_exercise_name", "weight", "weight_for_1RM", "reps",
+    "bodyweight", "raw_exercise_name", "weight", "weight_for_1RM", "reps",
     "notes", "dropset", "percentile",
   ];
   const rows = computedRecords().map((r) => {
     const added = r.origWeight !== undefined ? r.origWeight : r.weight;
     return {
       user: r.user,
+      date: r.date,
       exercise: r.exerciseName,
       cells: [
-        r.user, r.date, dataNum(r.bodyweight), r.exerciseName,
+        dataNum(r.bodyweight),
         r.originalExerciseName && r.originalExerciseName !== r.exerciseName ? r.originalExerciseName : "",
         dataNum(added), dataNum(r.weight), dataNum(r.reps),
         r.notes, r.dropset ? "TRUE" : "", dataNum(r.percentile),
@@ -2785,14 +2794,32 @@ function renderDataTab() {
   const start = dataPage * DATA_PAGE_SIZE;
   const pageRows = filtered.slice(start, start + DATA_PAGE_SIZE);
 
+  // Group consecutive rows by (user, date, exercise): emit the key once as a
+  // banner row, then its data rows below. prevKey starts null so the first row
+  // of every page always re-prints its banner (groups can span page breaks).
+  const cols = header.length;
+  let prevKey: string | null = null;
+  const bodyParts: string[] = [];
+  for (const row of pageRows) {
+    const key = `${row.user} ${row.date} ${row.exercise}`;
+    if (key !== prevKey) {
+      bodyParts.push(
+        `<tr class="data-group"><td colspan="${cols}">` +
+          `<span class="dg-user">${escapeHtml(row.user)}</span>` +
+          `<span class="dg-sep">·</span><span class="dg-ex">${escapeHtml(row.exercise)}</span>` +
+          `<span class="dg-sep">·</span><span class="dg-date">${escapeHtml(row.date)}</span>` +
+          `</td></tr>`,
+      );
+      prevKey = key;
+    }
+    bodyParts.push(`<tr>${row.cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`);
+  }
+
   const thead = `<thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>`;
-  const tbody = pageRows
-    .map((row) => `<tr>${row.cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
-    .join("");
   const active = exPick || userPick || q;
   const count = `<p class="muted" style="margin:0 0 0.6rem">${total.toLocaleString()} rows${active ? " (filtered)" : ""}</p>`;
   els.dataTableWrap.innerHTML =
-    count + `<table class="data-table data-raw-table">${thead}<tbody>${tbody}</tbody></table>`;
+    count + `<table class="data-table data-raw-table">${thead}<tbody>${bodyParts.join("")}</tbody></table>`;
   els.dataPager.innerHTML = pagerHtml(dataPage, total, DATA_PAGE_SIZE);
 }
 

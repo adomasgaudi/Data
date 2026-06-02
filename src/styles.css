@@ -637,6 +637,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .data-raw-table { font-size: 0.8rem; white-space: nowrap; }
 .data-raw-table th, .data-raw-table td { padding: 4px 9px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .data-raw-table tbody tr:nth-child(even) { background: var(--accent-soft); }
+/* Group banner: user · exercise · date shown once above its set rows. */
+.data-raw-table tr.data-group { background: var(--accent) !important; }
+.data-raw-table tr.data-group td { color: #fff; font-weight: 600; padding: 5px 9px; position: sticky; left: 0; }
+.dg-sep { opacity: 0.55; margin: 0 0.5rem; }
+.dg-date { font-weight: 400; opacity: 0.85; }
 /* A set with a note: a short truncated preview + caret sits at the left of the
    weight cell (weight stays right-aligned), and clicking the row expands the
    full note below. The preview lets you read the gist without expanding. */
