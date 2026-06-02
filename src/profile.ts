@@ -276,6 +276,77 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
 }
 
 /**
+ * The category headers used by the Exercises "By category" sort and the Group
+ * view's Categories mode. Unlike {@link exerciseCategory} (one PRIMARY bucket
+ * for the muscle map / training-mix bar, where a set must count once), this is a
+ * MULTI-membership scheme: one lift can land under several headers — a deadlift
+ * is Legs, Back AND Core, and also sits in the Deadlift pattern and both leg
+ * sub-splits. Movement-pattern and leg-split buckets are added on top of the
+ * muscle groups so the owner can slice the list however they think about it.
+ */
+export const LIST_CATEGORIES: string[] = [
+  "Squat pattern",
+  "Deadlift pattern",
+  "Deadlift accessory",
+  "Legs (all)",
+  "Legs (quads/glutes/hams)",
+  "Chest",
+  "Back",
+  "Shoulders",
+  "Arms",
+  "Core",
+  "Skill",
+  "Mobility",
+  "Cardio",
+  "Other",
+];
+
+/** Every {@link LIST_CATEGORIES} bucket an exercise belongs to (one or more). */
+export function exerciseCategories(exerciseName: string): string[] {
+  const n = exerciseName.toLowerCase();
+  const has = (...k: string[]) => k.some((s) => n.includes(s));
+  const cats: string[] = [];
+  const add = (c: string) => {
+    if (!cats.includes(c)) cats.push(c);
+  };
+
+  // Non-strength buckets first (same precedence as exerciseCategory) — when one
+  // hits, it's the only sensible bucket, so return early.
+  if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
+    return ["Mobility"];
+  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
+    return ["Cardio"];
+  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross"))
+    return [n.includes("push") ? "Shoulders" : "Skill"];
+
+  // Movement patterns (a squat/deadlift can belong to a pattern AND muscle groups).
+  if (n.includes("squat")) add("Squat pattern");
+  if (has("deadlift", "rdl", "romanian deadlift")) add("Deadlift pattern");
+  // Posterior-chain work that supports the deadlift (not the main lift itself).
+  if (has("back extension", "hyperextension", "reverse hyper", "good morning", "glute ham", "ghr", "hip thrust", "rack pull", "snatch grip deadlift", "deficit deadlift", "block pull", "romanian deadlift", "rdl", "nordic"))
+    add("Deadlift accessory");
+
+  // Leg splits: broad (everything leg-ish) vs the big three quads/glutes/hams.
+  const legBroad = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell");
+  if (legBroad) add("Legs (all)");
+  const legBig = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "nordic", "wall sit");
+  if (legBig) add("Legs (quads/glutes/hams)");
+
+  // Muscle groups — independent keyword sets, so big compounds match several.
+  if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up")) add("Chest");
+  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "deadlift", "shrug", "rack pull", "good morning"))
+    add("Back");
+  if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military press", "behind the neck", "arnold", "shrug", "delt", "handstand push"))
+    add("Shoulders");
+  if (has("curl", "tricep", "triceps", "pushdown", "preacher", "hammer", "wrist", "forearm", "finger", "skull", "jm press", "kickback")) add("Arms");
+  if (has("crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "knee raise", "knee tuck", "woodchop", "pallof", "rollout", "twist", "leg pull", "bicycle", "mountain climber", "flag", "vacuum", "deadlift", "good morning"))
+    add("Core");
+
+  if (cats.length === 0) add("Other");
+  return cats;
+}
+
+/**
  * Importance tier of an exercise — the owner's core compound lifts ("main") vs
  * everything else ("second"). This is a curated list, NOT keyword logic, so close
  * variants the owner didn't name (e.g. Front Squat, Incline Bench) stay "second".

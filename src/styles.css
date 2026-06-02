@@ -154,7 +154,8 @@ main { padding-bottom: 5rem; }
 .other-ico { width: 1.6rem; text-align: center; font-size: 1.15rem; flex: none; }
 
 /* Group view: one card per movement pattern / muscle group. */
-.groups-controls { margin: 0 0 1rem; }
+.groups-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; margin: 0 0 1rem; }
+.groups-controls .inline-label { margin-bottom: 0; }
 .groups-body {
   display: grid; gap: 0.9rem;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

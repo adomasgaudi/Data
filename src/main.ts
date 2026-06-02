@@ -53,6 +53,8 @@ import {
   realPullupWeight,
   EXERCISE_GROUPS,
   exerciseCategory,
+  exerciseCategories,
+  LIST_CATEGORIES,
   exerciseCode,
   exerciseCodesFor,
   exerciseTier,
@@ -186,6 +188,7 @@ const els = {
   dataUser: $<HTMLSelectElement>("dataUser"),
   otherSheet: $("otherSheet"),
   groupsAthlete: $<HTMLSelectElement>("groupsAthlete"),
+  groupsMode: $("groupsMode"),
   groupsBody: $("groupsBody"),
 };
 
@@ -1289,21 +1292,27 @@ function setupExerciseSearch(): void {
  * category the most-trained exercise stays on top. Input order is preserved
  * within buckets, so the per-category sort matches the incoming sets order.
  */
-function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): T[] {
+function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): (T & { _cat?: string })[] {
   if (exerciseSort === "tier") {
     // Tier mode is just most-trained-first; the tier headers are emitted during
     // render as the set count crosses each threshold.
     return [...counts].sort((a, b) => b.count - a.count);
   }
   if (exerciseSort !== "category") return counts;
-  const buckets = new Map<TrainingCategory, T[]>();
-  for (const c of counts) {
-    const cat = exerciseCategory(c.exerciseName);
-    (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push(c);
-  }
-  return [...buckets.values()]
-    .sort((a, b) => sumCounts(b) - sumCounts(a))
-    .flat();
+  // Multi-membership: a lift is repeated once under EACH category it belongs to
+  // (deadlift shows under Legs, Back and Core). Each copy carries `_cat` so the
+  // render emits the right header and the click→exercise map still lines up.
+  const buckets = new Map<string, (T & { _cat?: string })[]>();
+  for (const c of counts)
+    for (const cat of exerciseCategories(c.exerciseName))
+      (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push({ ...c, _cat: cat });
+  // Busiest category first; within LIST_CATEGORIES order for ties.
+  return [...buckets.entries()]
+    .sort((a, b) =>
+      sumCounts(b[1]) - sumCounts(a[1]) ||
+      LIST_CATEGORIES.indexOf(a[0]) - LIST_CATEGORIES.indexOf(b[0]),
+    )
+    .flatMap(([, items]) => items);
 }
 
 /** Frequency tiers by how many times an exercise has been logged (set count),
@@ -1635,7 +1644,7 @@ function renderExercisesPage() {
   // Track the previous page's last category so a header isn't dropped at a page
   // boundary. Sub-header rows carry no data-index, so click mapping is unaffected.
   const prevItem = start > 0 ? ordered[start - 1] : undefined;
-  let prevCat = exerciseSort === "category" && prevItem ? exerciseCategory(prevItem.exerciseName) : null;
+  let prevCat = exerciseSort === "category" && prevItem ? (prevItem._cat ?? null) : null;
   // Tier mode: track the previous row's tier so a header is emitted when it
   // changes (and not dropped at a page boundary).
   let prevTier =
@@ -1673,8 +1682,9 @@ function renderExercisesPage() {
       if (exerciseSort !== "category") return rowHtml(it, abs, abs === 0 && it.trained ? "rank-1" : "");
       // Category mode: emit a collapsible sub-header when the category changes;
       // a row under a collapsed category is skipped (its abs is unchanged, so the
-      // click→exercise mapping still lines up when reopened).
-      const cat = exerciseCategory(it.exerciseName);
+      // click→exercise mapping still lines up when reopened). `_cat` is the bucket
+      // this copy was placed in (a lift can appear under several categories).
+      const cat = it._cat ?? exerciseCategory(it.exerciseName);
       let header = "";
       if (cat !== prevCat) {
         const collapsed = collapsedExCats.has(cat);
@@ -4086,13 +4096,16 @@ function groupCard(name: string, memberCount: number, bodyHtml: string): string 
   );
 }
 
-/** Render the Group view: each EXERCISE_GROUP (Squat pattern, Bench Press, …)
- * shown for one athlete (best 1RM per member lift) or for everyone (a mini
- * leaderboard of the best estimated 1RM across the group's member lifts). */
+let groupsMode: "patterns" | "categories" = "patterns";
+
+/** Render the Group view: each movement pattern (EXERCISE_GROUPS) or category
+ * (LIST_CATEGORIES, multi-membership) shown for one athlete (best 1RM per member
+ * lift) or for everyone (a mini leaderboard across the group's member lifts). */
 function renderGroupsView() {
   const formula = currentFormula();
   const recs = computedRecords();
-  const present = new Set(distinctExercises(data.records));
+  const present = distinctExercises(data.records); // most-trained first
+  const presentSet = new Set(present);
 
   // Athlete picker: "Everyone" + each athlete; keep the current selection.
   const users = distinctUsers(data.records);
@@ -4103,11 +4116,23 @@ function renderGroupsView() {
   els.groupsAthlete.value = prev || "";
   const who = els.groupsAthlete.value;
 
+  // Each "source" is a named bucket with its member lifts present in the data.
+  const sources: { name: string; members: string[] }[] =
+    groupsMode === "patterns"
+      ? EXERCISE_GROUPS.map((g) => ({
+          name: g.name,
+          members: Object.keys(g.members).filter((m) => presentSet.has(m)),
+        }))
+      : LIST_CATEGORIES.map((cat) => ({
+          name: cat,
+          members: present.filter((e) => exerciseCategories(e).includes(cat)),
+        }));
+
   const base = filterRecords(recs, { excludeDropsets: els.excludeDropsets.checked });
   const cards: string[] = [];
 
-  for (const g of EXERCISE_GROUPS) {
-    const members = Object.keys(g.members).filter((m) => present.has(m));
+  for (const g of sources) {
+    const members = g.members;
     if (members.length === 0) continue;
 
     if (who) {
@@ -4175,6 +4200,16 @@ function renderGroupsView() {
 
 function setupGroupsView() {
   els.groupsAthlete.addEventListener("change", renderGroupsView);
+  els.groupsMode.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".ex-sort-btn");
+    const mode = btn?.dataset.mode;
+    if (mode !== "patterns" && mode !== "categories") return;
+    if (mode === groupsMode) return;
+    groupsMode = mode;
+    for (const b of els.groupsMode.querySelectorAll<HTMLElement>(".ex-sort-btn"))
+      b.classList.toggle("is-active", b.dataset.mode === mode);
+    renderGroupsView();
+  });
   renderGroupsView(); // populate the athlete picker before first open
 }
 

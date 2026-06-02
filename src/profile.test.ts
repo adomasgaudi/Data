@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBwCoeff, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, realPullupWeight } from "./profile";
+import { bodyComposition, defaultBwCoeff, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, LIST_CATEGORIES, realPullupWeight } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -164,6 +164,42 @@ describe("exerciseCategory", () => {
   it("falls back to Other for the noise", () => {
     expect(exerciseCategory("Cold shower")).toBe("Mobility");
     expect(exerciseCategory("KG - track food")).toBe("Other");
+  });
+});
+
+describe("exerciseCategories (multi-membership)", () => {
+  it("puts a deadlift in Legs, Back and Core (and its pattern + leg splits)", () => {
+    const c = exerciseCategories("Deadlift");
+    expect(c).toContain("Legs (all)");
+    expect(c).toContain("Legs (quads/glutes/hams)");
+    expect(c).toContain("Back");
+    expect(c).toContain("Core");
+    expect(c).toContain("Deadlift pattern");
+  });
+  it("groups squat variants under the Squat pattern + leg splits", () => {
+    expect(exerciseCategories("Front Squat")).toContain("Squat pattern");
+    expect(exerciseCategories("Front Squat")).toContain("Legs (quads/glutes/hams)");
+    expect(exerciseCategories("Hack Squat")).toContain("Squat pattern");
+  });
+  it("treats RDL / back extension / good morning as Deadlift accessory", () => {
+    expect(exerciseCategories("Romanian Deadlift")).toContain("Deadlift accessory");
+    expect(exerciseCategories("Back Extension")).toContain("Deadlift accessory");
+    expect(exerciseCategories("Good Morning")).toContain("Deadlift accessory");
+  });
+  it("keeps calves out of the narrow quads/glutes/hams split but in Legs (all)", () => {
+    const calf = exerciseCategories("Standing Calf Raise");
+    expect(calf).toContain("Legs (all)");
+    expect(calf).not.toContain("Legs (quads/glutes/hams)");
+  });
+  it("returns a single non-strength bucket for cardio/mobility/skill", () => {
+    expect(exerciseCategories("Bike machine Cardio")).toEqual(["Cardio"]);
+    expect(exerciseCategories("Stretch split")).toEqual(["Mobility"]);
+    expect(exerciseCategories("Handstand")).toEqual(["Skill"]);
+  });
+  it("only ever returns names from LIST_CATEGORIES, and Other for noise", () => {
+    for (const name of ["Deadlift", "Bench Press", "Standing Calf Raise", "Plank"])
+      for (const cat of exerciseCategories(name)) expect(LIST_CATEGORIES).toContain(cat);
+    expect(exerciseCategories("KG - track food")).toEqual(["Other"]);
   });
 });
 

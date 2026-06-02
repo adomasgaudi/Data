@@ -24,6 +24,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.9.0",
+    title: "multi-category-buckets",
+    sp: 5,
+    note: "Richer ‘By category’: pattern + leg-split buckets, and lifts counted in every category they fit.",
+    details: [
+      "New buckets: Squat pattern, Deadlift pattern, Deadlift accessory, Legs (all) vs Legs (quads/glutes/hams).",
+      "Multi-membership — a deadlift now shows under Legs, Back AND Core (repeated under each), so categories are complete.",
+      "Group view gains a Movement patterns / Categories switch using the same buckets.",
+    ],
+  },
+  {
     version: "b.1.8.0",
     title: "other-nav-group-view",
     sp: 5,
@@ -175,13 +186,13 @@ export const COMPONENTS: Component[] = [
   { name: "Leaderboard", version: "b1.0" },
   { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
   { name: "Workouts", version: "b1.2" }, // bumped: today outlined in year heatmap
-  { name: "Exercises", version: "b1.2" }, // bumped: codes + editable rep-max columns
+  { name: "Exercises", version: "b1.3" }, // bumped: multi-category By-category sort
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },
   { name: "Add", version: "b1.1" }, // bumped: export/import backup
   { name: "Navigation", version: "b1.0" }, // bottom nav + Other sheet
-  { name: "Groups", version: "b1.0" }, // movement-pattern / muscle-group view
+  { name: "Groups", version: "b1.1" }, // patterns / categories mode switch
 ];
 
 /** Sum of all story points shipped (grouped entries already total their children). */
