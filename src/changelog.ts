@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.10.3",
+    title: "progress-graph-x-only",
+    sp: 1,
+    note: "Fix the per-exercise progress graph drifting vertically when you scroll.",
+    details: [
+      "The progress graph panned in both directions, so scrolling dragged the 1RM/sets axes (and their gridlines) sideways.",
+      "Now it pans along time only, like every other graph — the y-axes and background lines stay put.",
+    ],
+  },
+  {
     version: "b.1.10.2",
     title: "list-best-set",
     sp: 2,

@@ -2937,11 +2937,13 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
             },
           },
         },
-        // Drag / wheel / pinch to roam the plot freely in any direction; the
-        // "Center" button (wired in setup) calls resetZoom() to snap back to data.
+        // Pan / wheel / pinch along TIME only (x). The y-axes stay put so the
+        // 1RM and sets scales — and their gridlines — never drift while you
+        // scroll; only the time window you're looking at changes. The "Center"
+        // button (wired in setup) calls resetZoom() to snap back to the data.
         zoom: {
-          pan: { enabled: true, mode: "xy" },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "xy" },
+          pan: { enabled: true, mode: "x" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
         },
       },
       scales: {
