@@ -275,6 +275,44 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
 }
 
 /**
+ * Importance tier of an exercise — the owner's core compound lifts ("main") vs
+ * everything else ("second"). This is a curated list, NOT keyword logic, so close
+ * variants the owner didn't name (e.g. Front Squat, Incline Bench) stay "second".
+ * Matching is on a normalised name (lowercased, punctuation/spacing stripped) so
+ * "Pull-Ups" / "Pull Ups" / "Pullups" all resolve to the same lift.
+ *
+ * AI-NOTE: created on request to tag main vs second lifts; not yet wired into any
+ * view. Edit MAIN_EXERCISES (canonical names) to change the set.
+ */
+export type ExerciseTier = "main" | "second";
+
+const normalizeExerciseName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const MAIN_EXERCISES = new Set(
+  [
+    "Squat",
+    "Deadlift",
+    "Smith Machine Squat", "Smith Squat",
+    "Romanian Deadlift", "RDL",
+    "Bench Press",
+    "Dumbbell Bench Press",
+    "Shoulder Press",
+    "Dumbbell Shoulder Press",
+    "Push Ups", "Push Up",
+    "Pull Ups", "Pull Up",
+    "Chin Ups", "Chin Up",
+    "Lat Pulldown", "Lat Pulldowns",
+  ].map(normalizeExerciseName),
+);
+
+/** "main" for the owner's core compound lifts (squat, deadlift, smith squat, RDL,
+ * bench, DB bench, shoulder press, DB shoulder press, push-ups, pull-ups,
+ * chin-ups, lat pulldown), "second" for everything else. */
+export function exerciseTier(exerciseName: string): ExerciseTier {
+  return MAIN_EXERCISES.has(normalizeExerciseName(exerciseName)) ? "main" : "second";
+}
+
+/**
  * Leverage-aware default for how much bodyweight an exercise effectively loads,
  * used for any exercise not pinned in EXERCISE_BW_COEFF. This is deliberately NOT
  * a naive "fraction of bodyweight": for high-leverage holds (front lever, planche,

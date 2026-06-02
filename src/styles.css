@@ -169,6 +169,17 @@ body {
 .ex-sort-btn + .ex-sort-btn { border-left: 1px solid var(--line); }
 .ex-sort-btn:hover { color: var(--text); }
 .ex-sort-btn.is-active { color: #fff; background: var(--accent); }
+/* Search box spans the filter row so it sits on its own line above the controls. */
+.ex-search {
+  flex: 1 0 100%; font: inherit; font-size: 0.9rem; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px;
+}
+.ex-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ex-nottrained { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; color: var(--muted); font-weight: 600; cursor: pointer; }
+/* Exercises the athlete has never trained: greyed, italic, not tappable. */
+.ex-missing-row td { color: var(--muted); font-style: italic; }
+.ex-missing-row .ex-wk { font-style: normal; font-size: 0.72rem; }
 .ex-cat-row { cursor: pointer; }
 .ex-cat-row td {
   font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;

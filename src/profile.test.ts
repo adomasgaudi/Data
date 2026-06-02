@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBwCoeff, exerciseCategory, isAssistablePullup, realPullupWeight } from "./profile";
+import { bodyComposition, defaultBwCoeff, exerciseCategory, exerciseTier, isAssistablePullup, realPullupWeight } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -52,6 +52,25 @@ describe("defaultBwCoeff", () => {
     expect(defaultBwCoeff("Sled Leg Press")).toBe(0);
     expect(defaultBwCoeff("Cold shower")).toBe(0);
     expect(defaultBwCoeff("Stretch split")).toBe(0);
+  });
+});
+
+describe("exerciseTier (main / second)", () => {
+  it("tags the owner's core compound lifts as main, across spelling variants", () => {
+    for (const name of [
+      "Squat", "Deadlift", "Smith Machine Squat", "Romanian Deadlift", "RDL",
+      "Bench Press", "Dumbbell Bench Press", "Shoulder Press", "Dumbbell Shoulder Press",
+      "Push Ups", "Push-Up", "Pull Ups", "Pullup", "Chin Ups", "Lat Pulldown",
+    ])
+      expect(exerciseTier(name)).toBe("main");
+  });
+
+  it("leaves un-named variants and everything else as second", () => {
+    for (const name of [
+      "Front Squat", "Hack Squat", "Incline Bench Press", "Seated Shoulder Press",
+      "Lat Pullover", "Bicep Curl", "Leg Press", "Plank", "Handstand",
+    ])
+      expect(exerciseTier(name)).toBe("second");
   });
 });
 

@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.18.0.1</span></h1>
+      <h1>Colosseum <span class="version">v0.18.1</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -137,6 +137,7 @@
           <section class="panel">
             <h2 id="athleteTitle">Exercises</h2>
             <div id="exerciseFilter" class="ex-filter">
+              <input id="exerciseSearch" class="ex-search" type="search" placeholder="Search exercises…" aria-label="Search exercises" />
               <span class="ex-filter-lbl">Period</span>
               <details id="exerciseRange" class="period-dd" data-days="0">
                 <summary class="period-dd-summary">
@@ -150,6 +151,7 @@
                 <button type="button" class="ex-sort-btn is-active" data-sort="sets">By sets</button>
                 <button type="button" class="ex-sort-btn" data-sort="category">By category</button>
               </div>
+              <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
             </div>
             <div id="exerciseRecord" class="exercise-record" hidden></div>
             <div id="exerciseWeekly" class="wk-stats" hidden></div>

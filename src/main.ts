@@ -104,6 +104,8 @@ const els = {
   exerciseProgressNote: $("exerciseProgressNote"),
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exerciseFilter: $("exerciseFilter"),
+  exerciseSearch: $<HTMLInputElement>("exerciseSearch"),
+  exerciseNotTrained: $<HTMLInputElement>("exerciseNotTrained"),
   exerciseRange: $<HTMLDetailsElement>("exerciseRange"),
   exerciseSort: $("exerciseSort"),
   exercisesPager: $("exercisesPager"),
@@ -615,6 +617,11 @@ let recordsPage = 0;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
 let exerciseSort: "sets" | "category" = "sets";
+// Live search filter for the exercises list (substring on the exercise name).
+let exerciseSearch = "";
+// When true, append exercises this athlete has never logged (greyed) so gaps
+// in their training are visible instead of being an empty search result.
+let exerciseShowNotTrained = false;
 // In category mode, which category headers the user has collapsed (their
 // exercise rows are hidden until tapped open again).
 const collapsedExCats = new Set<string>();
@@ -932,6 +939,23 @@ function setupExerciseSort(): void {
   });
 }
 
+/** Wire the exercises search box and the "Show not-trained" toggle. Both reset
+ * paging and re-render the list. */
+function setupExerciseSearch(): void {
+  els.exerciseSearch.addEventListener("input", () => {
+    exerciseSearch = els.exerciseSearch.value;
+    exercisesPage = 0;
+    selectedExercise = null;
+    renderExercisesPage();
+  });
+  els.exerciseNotTrained.addEventListener("change", () => {
+    exerciseShowNotTrained = els.exerciseNotTrained.checked;
+    exercisesPage = 0;
+    selectedExercise = null;
+    renderExercisesPage();
+  });
+}
+
 /**
  * Re-order an exercise-count list for the active {@link exerciseSort}. In
  * "sets" mode the input order (most-trained first) is kept as-is. In "category"
@@ -940,9 +964,9 @@ function setupExerciseSort(): void {
  * category the most-trained exercise stays on top. Input order is preserved
  * within buckets, so the per-category sort matches the incoming sets order.
  */
-function orderedExerciseCounts(counts: ExerciseCount[]): ExerciseCount[] {
+function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): T[] {
   if (exerciseSort !== "category") return counts;
-  const buckets = new Map<TrainingCategory, ExerciseCount[]>();
+  const buckets = new Map<TrainingCategory, T[]>();
   for (const c of counts) {
     const cat = exerciseCategory(c.exerciseName);
     (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push(c);
@@ -952,7 +976,7 @@ function orderedExerciseCounts(counts: ExerciseCount[]): ExerciseCount[] {
     .flat();
 }
 
-function sumCounts(items: ExerciseCount[]): number {
+function sumCounts(items: readonly ExerciseCount[]): number {
   return items.reduce((s, c) => s + c.count, 0);
 }
 
@@ -972,18 +996,32 @@ function renderExercisesPage() {
   exerciseChart = null;
   const cutoff = exerciseRangeCutoff();
   const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
-  // Build the display order. "sets" keeps exerciseCountsForUser's most-trained
-  // order; "category" clusters exercises by category (categories ordered by
-  // their total sets), still most-trained first inside each category.
   const username = els.athlete.value;
-  const counts = orderedExerciseCounts(exerciseCountsForUser(scoped, username));
-  exercisesView = counts.map((c) => c.exerciseName);
   // Weekly-sets numbers are absolute (their own time windows), so they read the
   // full log, not the period-scoped subset shown in the list.
   const today = todayIso();
-  // List view: no title. The athlete chips above already name the athlete, and
-  // the Period/Sort controls + the list itself are all that's needed here. The
-  // #athleteTitle element is reused as the back-link only inside the drill-in.
+
+  // The displayed list: the athlete's trained exercises, plus — when "Show
+  // not-trained" is on — every other exercise in the whole dataset that this
+  // athlete has never logged, marked so the gaps are obvious instead of being
+  // an empty search result.
+  type ExItem = ExerciseCount & { trained: boolean };
+  let items: ExItem[] = exerciseCountsForUser(scoped, username).map((c) => ({ ...c, trained: true }));
+  if (exerciseShowNotTrained) {
+    const trainedEver = new Set(exerciseCountsForUser(data.records, username).map((c) => c.exerciseName));
+    for (const name of distinctExercises(data.records))
+      if (!trainedEver.has(name)) items.push({ exerciseName: name, count: 0, trained: false });
+  }
+  // Search filter (case-insensitive substring on the exercise name).
+  const q = exerciseSearch.trim().toLowerCase();
+  if (q) items = items.filter((it) => it.exerciseName.toLowerCase().includes(q));
+
+  // "sets" keeps the most-trained order; "category" clusters by category. Either
+  // way not-trained items (count 0) sort to the bottom of their group.
+  const ordered = orderedExerciseCounts(items);
+  exercisesView = ordered.map((it) => it.exerciseName);
+
+  // List view: no title. The athlete chips above already name the athlete.
   els.athleteTitle.innerHTML = "";
 
   const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
@@ -991,27 +1029,31 @@ function renderExercisesPage() {
   // When grouping, emit a category sub-header row whenever the category changes.
   // Track the previous page's last category so a header isn't dropped at a page
   // boundary. Sub-header rows carry no data-index, so click mapping is unaffected.
-  const prevName = start > 0 ? counts[start - 1]?.exerciseName : undefined;
-  let prevCat =
-    exerciseSort === "category" && prevName !== undefined ? exerciseCategory(prevName) : null;
-  const exRowHtml = (c: ExerciseCount, abs: number, rankCls: string) => {
-    const wk = weeklySetStats(setsForUserExercise(data.records, username, c.exerciseName), today);
-    // Compact "this week / peak" sets-per-week, e.g. 0/7.
-    const sub = `<div class="ex-wk muted">${wk.thisWeek}/${wk.peakPerWeek}</div>`;
+  const prevItem = start > 0 ? ordered[start - 1] : undefined;
+  let prevCat = exerciseSort === "category" && prevItem ? exerciseCategory(prevItem.exerciseName) : null;
+  const rowHtml = (it: ExItem, abs: number, rankCls: string) => {
+    // Not-trained rows are greyed, non-clickable (no `ex-row` class / data-index).
+    if (!it.trained)
+      return (
+        `<tr class="ex-missing-row"><td>${escapeHtml(it.exerciseName)}` +
+        `<div class="ex-wk">not trained</div></td><td class="num">—</td></tr>`
+      );
+    const wk = weeklySetStats(setsForUserExercise(data.records, username, it.exerciseName), today);
+    const sub = `<div class="ex-wk muted">${wk.thisWeek}/${wk.peakPerWeek}</div>`; // this week / peak
     return (
-      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(c.exerciseName)}${sub}</td>` +
-      `<td class="num">${c.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
+      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(it.exerciseName)}${sub}</td>` +
+      `<td class="num">${it.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
     );
   };
-  const rows = counts
+  const rows = ordered
     .slice(start, start + PAGE_SIZE)
-    .map((c, i) => {
+    .map((it, i) => {
       const abs = start + i;
-      if (exerciseSort !== "category") return exRowHtml(c, abs, abs === 0 ? "rank-1" : "");
+      if (exerciseSort !== "category") return rowHtml(it, abs, abs === 0 && it.trained ? "rank-1" : "");
       // Category mode: emit a collapsible sub-header when the category changes;
-      // an exercise under a collapsed category is skipped (its abs is unchanged,
-      // so the click→exercise mapping still lines up when reopened).
-      const cat = exerciseCategory(c.exerciseName);
+      // a row under a collapsed category is skipped (its abs is unchanged, so the
+      // click→exercise mapping still lines up when reopened).
+      const cat = exerciseCategory(it.exerciseName);
       let header = "";
       if (cat !== prevCat) {
         const collapsed = collapsedExCats.has(cat);
@@ -1020,13 +1062,15 @@ function renderExercisesPage() {
           `<td colspan="2"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
         prevCat = cat;
       }
-      return header + (collapsedExCats.has(cat) ? "" : exRowHtml(c, abs, ""));
+      return header + (collapsedExCats.has(cat) ? "" : rowHtml(it, abs, ""));
     })
     .join("");
+  const emptyMsg = q
+    ? `No exercises match “${escapeHtml(exerciseSearch.trim())}”.`
+    : "No exercises trained in this period.";
   els.athleteTable.innerHTML =
-    head +
-    `<tbody>${rows || `<tr><td colspan="2" class="muted">No exercises trained in this period.</td></tr>`}</tbody>`;
-  els.exercisesPager.innerHTML = pagerHtml(exercisesPage, counts.length);
+    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">${emptyMsg}</td></tr>`}</tbody>`;
+  els.exercisesPager.innerHTML = pagerHtml(exercisesPage, ordered.length);
 }
 
 /** Drill-in view for one exercise: a back link + its sets grouped by week. */
@@ -2050,6 +2094,7 @@ async function init() {
   // select) so the menu looks the same on every OS.
   setupExerciseRange();
   setupExerciseSort();
+  setupExerciseSearch();
 
   // Pagination (delegated on the persistent pager containers).
   els.exercisesPager.addEventListener("click", (e) => {
