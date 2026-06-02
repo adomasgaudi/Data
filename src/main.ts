@@ -383,6 +383,42 @@ function selectionIsGroup(selection: string): boolean {
   return els.groupToggle.checked && EXERCISE_GROUPS.some((g) => g.name === selection);
 }
 
+// ---- "Where this name came from" indicator, shared by every view -------------
+// Two kinds of combine carry an origin note:
+//   • merged spellings  — e.g. "Pull Ups" was also logged as "Chin Ups"
+//   • scaling groups    — e.g. "Squat pattern" combines Squat, Front Squat, …
+// exerciseOrigin() returns the source names for either, so the same "(also: …)"
+// badge can be shown wherever an exercise name appears.
+let mergeVariantsCache: Map<string, string[]> | null = null;
+
+/** canonical display name → the other raw spellings folded into it (from merges). */
+function mergeVariantsFor(name: string): string[] {
+  if (!mergeVariantsCache) {
+    mergeVariantsCache = new Map();
+    for (const m of data.merges) mergeVariantsCache.set(m.canonical, m.variants);
+  }
+  return mergeVariantsCache.get(name) ?? [];
+}
+
+/** The source names behind an exercise/group name, or [] if it's a plain lift.
+ * For a scaling group it's the member lifts; for a merged name it's the other
+ * spellings. */
+function exerciseOrigin(name: string): string[] {
+  const group = EXERCISE_GROUPS.find((g) => g.name === name);
+  if (group) return Object.keys(group.members);
+  return mergeVariantsFor(name);
+}
+
+/** Inline "(also: A, B)" badge for a name, or "" when there's nothing to note.
+ * `plain` returns un-escaped text (for chart labels / titles); default is HTML. */
+function originBadge(name: string, plain = false): string {
+  const origin = exerciseOrigin(name).filter((n) => n !== name);
+  if (origin.length === 0) return "";
+  const list = origin.join(", ");
+  if (plain) return ` (also: ${list})`;
+  return ` <span class="origin-note" title="Combined from: ${escapeHtml(list)}">(also: ${escapeHtml(list)})</span>`;
+}
+
 function renderStatus() {
   const users = distinctUsers(data.records).length;
   let latest: string | null = null;
@@ -516,7 +552,7 @@ function renderLeaderboard() {
   // Groups are scaled cross-exercise estimates — label them clearly so a grouped
   // number is never mistaken for a real single-exercise lift.
   const groupNote = selectionIsGroup(exercise) ? " · ⚠ scaled estimate (group)" : "";
-  els.lbTitle.textContent = `${exercise} · ${metricNote} · best per rep band${groupNote}${coliseumFilterNote()}`;
+  els.lbTitle.textContent = `${exercise}${originBadge(exercise, true)} · ${metricNote} · best per rep band${groupNote}${coliseumFilterNote()}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, bandData, rel);
 }
@@ -775,7 +811,7 @@ function renderRecordsPage() {
       return (
         `<tr class="rec-row" data-index="${start + i}" title="${escapeHtml(p.exerciseName)}">` +
         `<td><span class="ex-code">${escapeHtml(codes.get(p.exerciseName) ?? exerciseCode(p.exerciseName))}</span> <span class="go-chevron">›</span>` +
-        `<div class="ex-fullname muted">${escapeHtml(p.exerciseName)}</div></td>` +
+        `<div class="ex-fullname muted">${escapeHtml(p.exerciseName)}${originBadge(p.exerciseName)}</div></td>` +
         `<td class="num">${rm(e1rm, 1)}</td><td class="num">${rm(e1rm, 5)}</td>` +
         `<td class="num">${rm(e1rm, 10)}</td><td class="num">${rm(e1rm, 15)}</td></tr>`
       );
@@ -1139,7 +1175,7 @@ function renderExercisesPage() {
     const wk = weeklySetStats(setsForUserExercise(data.records, username, it.exerciseName), today);
     const sub = `<div class="ex-wk muted">${wk.thisWeek}/${wk.peakPerWeek}</div>`; // this week / peak
     return (
-      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(it.exerciseName)}${sub}</td>` +
+      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(it.exerciseName)}${originBadge(it.exerciseName)}${sub}</td>` +
       `<td class="num">${it.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
     );
   };
@@ -1181,7 +1217,7 @@ function renderExerciseDetail(exName: string) {
       ? `<span class="ex-bwpart">Bodyweight part: ${Math.round(coeff * 100)}%</span>`
       : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
   els.athleteTitle.innerHTML =
-    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)} ${bwPart}`;
+    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}${originBadge(exName)} ${bwPart}`;
   els.exercisesPager.innerHTML = "";
   const username = els.athlete.value;
   const pr = personalRecords(
@@ -1858,7 +1894,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
     .map((e) => {
       const header =
         `<tr class="set-ex-row"><td colspan="3" class="wo-exname">` +
-        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span> <span class="muted">${e.count}</span></td></tr>`;
+        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span></td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
         .map((s) => setRowsHtml(s, formula))

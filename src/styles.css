@@ -619,6 +619,9 @@ select.subtle-select:hover, select.subtle-select:focus {
   background: var(--accent-soft); border-radius: 999px; padding: 2px 9px;
 }
 .ex-bwpart--none { color: var(--muted); background: var(--gold-soft); }
+/* "(also: …)" note shown next to a merged exercise name or a scaling-group name,
+   so the original/source names are visible in every view. */
+.origin-note { font-size: 0.82em; font-weight: 400; color: var(--muted); font-style: italic; }
 /* Data tab: wide raw/processed tables scroll horizontally; cells stay compact. */
 .data-views { display: flex; gap: 0.5rem; }
 /* Pill toggle for the Data tab's Processed/Original views (own class so the

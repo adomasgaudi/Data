@@ -123,7 +123,11 @@ export interface ExerciseGroup {
 
 export const EXERCISE_GROUPS: ExerciseGroup[] = [
   {
-    name: "Squat",
+    // "Squat pattern" is the combined/scaled board for all squat variants. It is
+    // a distinct name from the "Squat" exercise on purpose — Squat and Smith
+    // Machine Squat stay as their own pure lifts; this only merges them when the
+    // grouped/scaled toggle is on.
+    name: "Squat pattern",
     members: {
       Squat: 1,
       "Smith Machine Squat": 0.95,

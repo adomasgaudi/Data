@@ -222,7 +222,7 @@ describe("canonicalizeExerciseNames", () => {
     expect(m?.variants).not.toContain("One Arm Pull Ups");
   });
 
-  it("folds owner-confirmed Smith Machine Squat → Squat, but not look-alike squats", () => {
+  it("keeps Smith Machine Squat separate from Squat (combined only in the group)", () => {
     const recs = [
       ...Array.from({ length: 5 }, () => rec({ exerciseName: "Squat" })),
       rec({ exerciseName: "Smith Machine Squat" }),
@@ -230,11 +230,12 @@ describe("canonicalizeExerciseNames", () => {
       rec({ exerciseName: "Front Squat" }), // different lift — stays
     ];
     const { records, merges } = canonicalizeExerciseNames(recs);
-    expect(records.filter((r) => r.exerciseName === "Squat")).toHaveLength(6);
+    // Smith Machine Squat is NOT folded into Squat at the data level.
+    expect(records.filter((r) => r.exerciseName === "Squat")).toHaveLength(5);
+    expect(records.some((r) => r.exerciseName === "Smith Machine Squat")).toBe(true);
     expect(records.some((r) => r.exerciseName === "Smith Machine Bulgarian Split Squat")).toBe(true);
     expect(records.some((r) => r.exerciseName === "Front Squat")).toBe(true);
-    const m = merges.find((x) => x.canonical === "Squat");
-    expect(m?.variants).toEqual(["Smith Machine Squat"]);
+    expect(merges.some((x) => x.canonical === "Squat")).toBe(false);
   });
 });
 
