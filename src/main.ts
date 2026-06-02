@@ -1523,6 +1523,7 @@ function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[]
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // Category mode: tapping a category header collapses/expands its exercises.
@@ -1822,6 +1823,7 @@ function renderWorkoutsPage() {
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // An exercise name in an expanded day -> jump to that exercise's drill-in on
@@ -1900,11 +1902,37 @@ const SETS_HEAD =
 const NOTE_PREVIEW_LEN = 8;
 
 /**
- * One set as table rows: the W/1RM/Vol line. When the set has a note (or is a
- * dropset) a short truncated preview of it sits on the left of the weight cell
- * with a caret; clicking the row expands a sub-row with the full note. The
- * preview lets you tell a throwaway remark from a real exercise change at a
- * glance. Notes belong to their own set, so they are never merged across sets.
+ * Plain-text explanation of how a set's estimated 1RM was produced, with the
+ * actual weight and reps plugged in. Mirrors the formulas in metrics.ts so the
+ * reveal under the 1RM cell always matches the number shown. The Workouts table
+ * feeds raw logged weight (no bodyweight share), so this reads straight off the
+ * logged weight/reps.
+ */
+function oneRmFormulaText(s: SetRecord, formula: OneRepMaxFormula): string {
+  const w = s.weight;
+  const r = s.reps;
+  if (w === null || r === null || w <= 0 || r <= 0) return "Needs a weight and reps to estimate a 1RM.";
+  const e1rm = estimate1RM(w, r, formula);
+  const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
+  const result = e1rm === null ? "—" : `${f2(e1rm)} kg`;
+  if (r === 1) return `${formula}: a single rep is the 1RM → ${f2(w)} kg.`;
+  if (formula === "brzycki") {
+    if (r >= 37) return "Brzycki is undefined at 37+ reps.";
+    return `Brzycki: weight × 36 / (37 − reps) = ${f2(w)} × 36 / (37 − ${r}) = ${result}.`;
+  }
+  if (formula === "nuzzo") {
+    const pct = benchPctForReps(r);
+    return `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so weight ÷ that % = ${f2(w)} ÷ ${f2(pct)}% = ${result}.`;
+  }
+  return `Epley: weight × (1 + reps/30) = ${f2(w)} × (1 + ${r}/30) = ${result}.`;
+}
+
+/**
+ * One set as table rows: the W/1RM/Vol line. The 1RM cell is a button — tapping
+ * it expands a sub-row showing the exact formula and numbers used. When the set
+ * has a note (or is a dropset) a short truncated preview sits on the left of the
+ * weight cell with a caret; tapping the row expands the full note. Both reveals
+ * are independent sub-rows, so a set can show either or both.
  */
 function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
   const e1rm = estimate1RM(s.weight, s.reps, formula);
@@ -1917,15 +1945,23 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
       `<button type="button" class="set-note" title="${escapeHtml(note)}">` +
       `${escapeHtml(short)}<span class="set-note-cue">›</span></button>`;
   }
+  const e1rmCell =
+    e1rm === null
+      ? "—"
+      : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
     `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
-    `<td class="num">${e1rm === null ? "—" : fmt(e1rm)}</td>` +
+    `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td></tr>`;
   const noteRow = note
     ? `<tr class="set-note-row" hidden><td colspan="3" class="muted">${escapeHtml(note)}</td></tr>`
     : "";
-  return main + noteRow;
+  const formulaRow =
+    e1rm === null
+      ? ""
+      : `<tr class="e1rm-formula-row" hidden><td colspan="3" class="muted">${escapeHtml(oneRmFormulaText(s, formula))}</td></tr>`;
+  return main + noteRow + formulaRow;
 }
 
 /** Click on a set row that has a note: expand/collapse the hidden note row that
@@ -1938,6 +1974,26 @@ function toggleSetNote(target: HTMLElement): boolean {
   if (noteRow?.classList.contains("set-note-row")) {
     const hidden = noteRow.toggleAttribute("hidden");
     row.classList.toggle("is-open", !hidden);
+  }
+  return true;
+}
+
+/** Click on a 1RM cell button: expand/collapse the formula sub-row for that set.
+ * The formula row follows the set row (after the optional note row), so scan
+ * forward to it. Returns true if the click was on a 1RM button. Shared by the
+ * Workouts and Exercises sets tables. */
+function toggleE1rmFormula(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".e1rm-btn");
+  if (!btn) return false;
+  let sib = btn.closest("tr")?.nextElementSibling ?? null;
+  while (sib && !sib.classList.contains("e1rm-formula-row")) {
+    // Stop if we hit the next set's row rather than this set's formula row.
+    if (sib.classList.contains("set-row") || sib.querySelector(".e1rm-btn")) break;
+    sib = sib.nextElementSibling;
+  }
+  if (sib?.classList.contains("e1rm-formula-row")) {
+    sib.toggleAttribute("hidden");
+    btn.classList.toggle("is-open");
   }
   return true;
 }

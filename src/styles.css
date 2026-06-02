@@ -654,6 +654,14 @@ select.subtle-select:hover, select.subtle-select:focus {
   font: inherit; font-size: 0.82em; color: var(--muted);
 }
 .set-note:hover, .set-row.is-open .set-note { color: var(--accent); }
+/* Tappable 1RM cell: reveals the formula sub-row. Looks like the number, hints
+   it's clickable with a dotted underline. */
+.e1rm-btn {
+  border: none; background: none; padding: 0; cursor: pointer; font: inherit;
+  color: inherit; border-bottom: 1px dotted var(--muted);
+}
+.e1rm-btn:hover, .e1rm-btn.is-open { color: var(--accent); border-bottom-color: var(--accent); }
+.e1rm-formula-row td { font-size: 0.82em; line-height: 1.4; padding: 4px 9px; }
 .set-note-cue {
   flex: none; font-size: 0.95em; transition: transform 0.15s ease;
 }
