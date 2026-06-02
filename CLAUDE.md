@@ -41,9 +41,14 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   finished — NOT for every small fix.** Routine fixes, tweaks and follow-up
   adjustments bump the **patch** (`b.1.x.1`, `b.1.x.2`, …); reserve the major
   (`b.x`) for big/breaking work. When unsure, prefer the patch. The single source
-  of truth is `CURRENT_VERSION`/`CHANGELOG` in `src/changelog.ts` — add a new top
-  entry there each release; the on-screen `<span class="version">` is set from it
-  at runtime.
+  of truth is `CURRENT_VERSION`/`CHANGELOG` in `src/changelog.ts`. **Releases are
+  NOT separate top-level rows — each new version is prepended as the first child
+  of the current range group** (right now the **`b.1.10–b.1.20`** group): add the
+  child `{ version, sp, note }` at the top of its `children[]` and bump its group
+  `sp` total. `CURRENT_VERSION` reads that first child, so the on-screen
+  `<span class="version">` follows automatically. Past ranges (`b.1.6–b.1.9`,
+  `b.1.0–b.1.5`, the eras) stay folded the same way. Start a new range group only
+  once `b.1.20` is reached.
 - **Always keep the on-screen version in lockstep with the commit version.** The
   static `<span class="version">` in `index.html` and the top `CHANGELOG` entry
   must both show the version you're committing; update both in the same commit,
