@@ -244,6 +244,9 @@ main { padding-bottom: 5rem; }
 .svgc-frame { stroke: var(--chart-axis); fill: none; }
 .svgc-axislabel { fill: var(--chart-label); }
 .svgc-halo { fill: var(--chart-label); stroke: var(--chart-halo); stroke-width: 3; paint-order: stroke; }
+/* Leaderboard dot-plot (dedicated SVG renderer). */
+.lb-chart { width: 100%; }
+.lb-svg .lb-rank1 { fill: var(--gold); font-weight: 700; }
 .svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); max-height: 4.5rem; overflow-y: auto; }
 .svgc-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .svgc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }

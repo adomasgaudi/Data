@@ -3,9 +3,7 @@
  * call the pure compute functions, and paint the DOM. No business logic lives
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
-import { Chart, registerables } from "chart.js";
-import zoomPlugin from "chartjs-plugin-zoom";
-import Hammer from "hammerjs";
+import { niceTicks } from "./chartAxis";
 import { mountGraphDemo } from "./graphDemo";
 import { mountGraphAdvanced } from "./graphAdvanced";
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
@@ -67,11 +65,6 @@ import {
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, fibSp } from "./changelog";
-
-// chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
-// phones; make it available before the plugin registers.
-(globalThis as unknown as { Hammer?: unknown }).Hammer ??= Hammer;
-Chart.register(...registerables, zoomPlugin);
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -204,7 +197,6 @@ const els = {
 };
 
 let data: LoadedData;
-let lbChart: Chart | null = null;
 let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
@@ -217,18 +209,13 @@ let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight
 
 const PAGE_SIZE = 50; // List & stats page size
 
-/** Read a themed CSS variable (so the leaderboard's Chart.js colours follow the
- * light/dark theme like the SVG charts do). */
-const cssVar = (name: string, fallback: string) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-
-/** Flip the light/dark theme, remember it, and refresh the one Chart.js chart. */
+/** Flip the light/dark theme and remember it. The charts re-theme automatically
+ * (their structural colours are CSS-variable-backed classes), so no re-render. */
 function setTheme(dark: boolean) {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   try { localStorage.setItem("colosseum.theme", dark ? "dark" : "light"); } catch { /* ignore */ }
   els.themeBtn.textContent = dark ? "☀" : "🌙";
   els.themeBtn.title = dark ? "Switch to light mode" : "Switch to dark mode";
-  if (data) renderLeaderboard(); // Chart.js colours are set in JS, so re-render
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
@@ -792,76 +779,70 @@ function onLeaderboardRowClick(e: MouseEvent) {
 // the higher-rep bands run blue fading toward grey. Legible on white.
 const BAND_COLORS = ["#b8902f", "#7d7a52", "#284e86", "#5a7299", "#8b97a8", "#aab0b8"];
 
+/** Leaderboard dot-plot, drawn as a themed SVG (no Chart.js): each athlete is a
+ * horizontal track, with one coloured dot per rep band at that band's est 1RM. */
 function renderLeaderboardChart(
   rows: LbRow[],
   bandData: { label: string; byUser: Map<string, number> }[],
   rel: boolean,
 ) {
-  const canvas = $<HTMLCanvasElement>("lbChart");
-  lbChart?.destroy();
+  const box = document.getElementById("lbChart");
+  if (!box) return;
+  if (rows.length === 0) { box.innerHTML = `<p class="muted">No data for this exercise.</p>`; return; }
   const round = (n: number) => Math.round(n * 100) / 100;
-  // Each athlete gets one horizontal track; the rep bands appear as coloured
-  // dots along it (one dot per band, placed at that band's theoretical 1RM).
-  // ~22 px per athlete keeps the compact dot rows close together.
-  const wrap = canvas.parentElement;
-  if (wrap) wrap.style.height = `${Math.max(160, rows.length * 22 + 48)}px`;
+  const clip = (s: string) => (s.length > 15 ? s.slice(0, 14) + "…" : s);
 
-  // Manual x-axis (weight) range from the From/To inputs; either end can be left
-  // blank for auto, and the min may be negative (e.g. a body-weight-adjusted lift
-  // that nets out below zero). With no min set we keep the old start-at-zero.
-  const xMin = numInput(els.axisMin);
-  const xMax = numInput(els.axisMax);
-  const gridC = cssVar("--chart-grid", "#d4d9e2");
-  const labelC = cssVar("--chart-label", "#6b7280");
-  const textC = cssVar("--text", "#1a1a1a");
-  const xScale: Record<string, unknown> = { grid: { color: gridC }, ticks: { color: labelC } };
-  if (xMin !== null) xScale.min = xMin;
-  else xScale.beginAtZero = true;
-  if (xMax !== null) xScale.max = xMax;
-  lbChart = new Chart(canvas, {
-    type: "scatter",
-    data: {
-      datasets: bandData.map((band, i) => ({
-        label: `${band.label} reps`,
-        // One {x: 1RM, y: athlete} dot per athlete that has a record in this
-        // band; bands with no record simply get no dot (no zero placeholder).
-        // Cast: a scatter point's y is typed numeric, but on a category axis
-        // Chart.js matches the athlete name string at runtime.
-        data: rows.flatMap((r) => {
-          const v = band.byUser.get(r.username);
-          return v === undefined ? [] : [{ x: round(v), y: r.user } as unknown as { x: number; y: number }];
-        }),
-        backgroundColor: BAND_COLORS[i % BAND_COLORS.length],
-        borderColor: BAND_COLORS[i % BAND_COLORS.length],
-        pointRadius: 3.5,
-        pointHoverRadius: 6,
-        showLine: false,
-      })),
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: "bottom", labels: { color: labelC, boxWidth: 12, usePointStyle: true } },
-        tooltip: {
-          callbacks: {
-            label: (c) => `${c.dataset.label}: ${c.parsed.x} ${rel ? "BW" : "kg"}`,
-          },
-        },
-      },
-      scales: {
-        x: xScale,
-        // Athletes as discrete tracks; `offset` keeps dots off the top/bottom edge.
-        y: {
-          type: "category",
-          labels: rows.map((r) => r.user),
-          offset: true,
-          grid: { display: false },
-          ticks: { color: textC, autoSkip: false },
-        },
-      },
-    },
+  // X (weight) range: From/To inputs override; else span the data (from 0).
+  let dataMin = Infinity, dataMax = -Infinity;
+  for (const band of bandData) for (const v of band.byUser.values()) { if (v < dataMin) dataMin = v; if (v > dataMax) dataMax = v; }
+  if (!Number.isFinite(dataMin)) { dataMin = 0; dataMax = 1; }
+  const xMinIn = numInput(els.axisMin);
+  const xMaxIn = numInput(els.axisMax);
+  const xMin = xMinIn !== null ? xMinIn : Math.min(0, dataMin);
+  const xMax = xMaxIn !== null ? xMaxIn : (dataMax * 1.04 || 1);
+
+  const W = Math.max(280, Math.round(box.clientWidth || 320));
+  const rowH = 24;
+  const M = { l: 96, r: 14, t: 8, b: 26 };
+  const plotW = W - M.l - M.r;
+  const plotH = rows.length * rowH;
+  const H = M.t + plotH + M.b;
+  const xPix = (v: number) => M.l + ((v - xMin) / (xMax - xMin || 1)) * plotW;
+  const rowY = (i: number) => M.t + i * rowH + rowH / 2;
+
+  let grid = "";
+  let xLabels = "";
+  for (const t of niceTicks(xMin, xMax, 6)) {
+    const px = xPix(t);
+    if (px < M.l - 0.5 || px > W - M.r + 0.5) continue;
+    grid += `<line class="svgc-grid" x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${M.t + plotH}" stroke-width="1"/>`;
+    xLabels += `<text class="svgc-axislabel" x="${px.toFixed(1)}" y="${H - M.b + 16}" text-anchor="middle" font-size="11">${fmt(t)}</text>`;
+  }
+
+  let body = "";
+  let names = "";
+  rows.forEach((r, i) => {
+    const y = rowY(i);
+    body += `<line class="svgc-grid" x1="${M.l}" y1="${y.toFixed(1)}" x2="${W - M.r}" y2="${y.toFixed(1)}" stroke-width="1" opacity="0.45"/>`;
+    names += `<text class="svgc-axislabel${i === 0 ? " lb-rank1" : ""}" x="${M.l - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11">${escapeHtml(clip(r.user))}</text>`;
+    bandData.forEach((band, bi) => {
+      const v = band.byUser.get(r.username);
+      if (v === undefined) return;
+      const color = BAND_COLORS[bi % BAND_COLORS.length];
+      body += `<circle cx="${xPix(v).toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${color}" stroke="var(--panel)" stroke-width="1">` +
+        `<title>${escapeHtml(r.user)} · ${escapeHtml(band.label)} reps: ${round(v)} ${rel ? "BW" : "kg"}</title></circle>`;
+    });
   });
+
+  const legend = bandData
+    .map((band, bi) => `<span class="svgc-key"><span class="svgc-dot" style="background:${BAND_COLORS[bi % BAND_COLORS.length]}"></span>${escapeHtml(band.label)} reps</span>`)
+    .join("");
+
+  box.innerHTML =
+    `<div class="svgc-legend">${legend}</div>` +
+    `<svg class="svgc-svg lb-svg" width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Leaderboard">` +
+    grid + body + names + xLabels +
+    `</svg>`;
 }
 
 function renderPersonalRecords() {
@@ -4172,7 +4153,7 @@ function switchTopTab(name: string) {
   for (const panel of document.querySelectorAll<HTMLElement>(".tab-panel"))
     panel.hidden = panel.id !== `tab-${name}`;
   // Chart.js needs a resize nudge if it was first drawn while hidden.
-  if (name === "leaderboards") lbChart?.resize();
+  if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "graphdemo") {

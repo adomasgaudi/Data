@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.8",
+    title: "leaderboard-svg-drop-chartjs",
+    sp: 5,
+    note: "Last chart migrated: the Leaderboard is now a from-scratch SVG dot-plot — and Chart.js is removed entirely.",
+    details: [
+      "Leaderboard drawn as a themed SVG (athletes as rows, a coloured dot per rep band); From/To still set the weight axis.",
+      "Every graph now runs on the in-house SVG engine, so Chart.js, chartjs-plugin-zoom and hammerjs are dropped — the build is ~84 KB (gzip) lighter.",
+    ],
+  },
+  {
     version: "b.1.13.7",
     title: "dark-mode",
     sp: 5,
@@ -344,7 +354,7 @@ export interface Component {
 export const COMPONENTS: Component[] = [
   { name: "Exercises", sp: 34 }, // drill-ins, categories, tiers, merges, codes, rep-max, best-sets, compare
   { name: "Athlete", sp: 22 }, // per-athlete pages, chips, muscle map, momentum, training mix
-  { name: "Graphs", sp: 21 }, // compare/per-set graphs, gridlines, smooth pan/zoom, curves
+  { name: "Graphs", sp: 30 }, // full from-scratch SVG engine; every chart migrated off Chart.js
   { name: "Workouts", sp: 20 }, // day/week list, rest days, year heatmap, sets-over-time, "with me" tags
   { name: "Data", sp: 12 }, // raw+processed CSV tab, every computed variable, search
   { name: "Leaderboard", sp: 11 }, // boards, rank/sex/BW/axis filters, pattern-lift toggle
