@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.34.0</span></h1>
+      <h1>Colosseum <span class="version">v0.35.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -104,6 +104,11 @@
             <p id="athleteProfile" class="athlete-profile"></p>
             <div id="athleteStats" class="athlete-stats"></div>
             <div id="trainBreakdown" class="train-breakdown"></div>
+            <!-- Front/back muscle map shaded by how much each region is trained. -->
+            <details id="muscleMap" class="muscle-map">
+              <summary class="muscle-map-summary">Muscle map <span class="mm-caret">▾</span></summary>
+              <div id="muscleMapBody" class="muscle-map-body"></div>
+            </details>
           </div>
         </details>
 

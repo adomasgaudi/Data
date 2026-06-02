@@ -102,6 +102,7 @@ const els = {
   athleteProfile: $("athleteProfile"),
   athleteStats: $("athleteStats"),
   trainBreakdown: $("trainBreakdown"),
+  muscleMapBody: $("muscleMapBody"),
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
@@ -785,6 +786,7 @@ function renderAthlete() {
   renderAthleteProfile();
   renderAthleteStats();
   renderTrainBreakdown();
+  renderMuscleMap();
   renderExercisesPage();
   renderWorkoutCalendar();
   renderWorkoutsPage();
@@ -926,6 +928,86 @@ function renderTrainBreakdown() {
   els.trainBreakdown.innerHTML =
     `<div class="tb-title muted">What ${escapeHtml(athleteLabel())} trains <span class="tb-sub">(${total.toLocaleString()} sets)</span></div>` +
     `<div class="tb-bar">${bar}</div>`;
+}
+
+/**
+ * Front/back muscle map: simplified body silhouettes whose regions are shaded by
+ * how much the athlete trains the matching category (by set share). Each region
+ * maps to a TrainingCategory; intensity = that category's share of all sets, so
+ * the most-trained muscles glow strongest. Hover a region for its set count.
+ */
+function renderMuscleMap() {
+  const counts = exerciseCountsForUser(data.records, els.athlete.value);
+  const byCat = new Map<TrainingCategory, number>();
+  let total = 0;
+  for (const c of counts) {
+    const cat = exerciseCategory(c.exerciseName);
+    byCat.set(cat, (byCat.get(cat) ?? 0) + c.count);
+    total += c.count;
+  }
+  if (total === 0) {
+    els.muscleMapBody.innerHTML = `<p class="muted">No training data yet.</p>`;
+    return;
+  }
+  const peak = Math.max(...byCat.values());
+  // Opacity scales with this region's sets vs the busiest region (0.12..1).
+  const fillFor = (cat: TrainingCategory): string => {
+    const n = byCat.get(cat) ?? 0;
+    if (n === 0) return `fill:#e7e6e1`; // untrained → light grey
+    const op = 0.15 + 0.85 * (n / peak);
+    return `fill:${CATEGORY_COLORS[cat]};fill-opacity:${op.toFixed(2)}`;
+  };
+  const title = (label: string, cat: TrainingCategory): string => {
+    const n = byCat.get(cat) ?? 0;
+    const p = total ? Math.round((n / total) * 100) : 0;
+    return `${label}: ${n} sets (${p}%)`;
+  };
+  // A region = one or more SVG shapes sharing a category's fill + tooltip.
+  const reg = (cat: TrainingCategory, label: string, shapes: string) =>
+    `<g style="${fillFor(cat)}"><title>${escapeHtml(title(label, cat))}</title>${shapes}</g>`;
+
+  // --- FRONT view (chest, abs, biceps, quads, front delts) ---
+  const front =
+    `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Front muscle map">` +
+    // head + neck (neutral)
+    `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
+    reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
+    reg("Chest", "Chest", `<path d="M44 38 H76 Q80 54 60 58 Q40 54 44 38 Z"/>`) +
+    reg("Arms", "Arms (biceps)", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
+    reg("Core", "Core (abs)", `<rect x="48" y="60" width="24" height="34" rx="4"/>`) +
+    reg("Legs", "Legs (quads)", `<rect x="46" y="98" width="12" height="54" rx="5"/><rect x="62" y="98" width="12" height="54" rx="5"/>`) +
+    `<g fill="#d9d7d0"><rect x="47" y="154" width="10" height="40" rx="4"/><rect x="63" y="154" width="10" height="40" rx="4"/></g>` +
+    `</svg>`;
+
+  // --- BACK view (upper back/lats, rear delts, triceps, glutes, hamstrings) ---
+  const back =
+    `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Back muscle map">` +
+    `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
+    reg("Shoulders", "Rear shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
+    reg("Back", "Back (lats/traps)", `<path d="M44 38 H76 L74 74 Q60 82 46 74 Z"/>`) +
+    reg("Arms", "Arms (triceps)", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
+    reg("Legs", "Glutes", `<path d="M47 92 Q60 86 73 92 Q74 104 60 104 Q46 104 47 92 Z"/>`) +
+    reg("Legs", "Legs (hamstrings)", `<rect x="46" y="106" width="12" height="48" rx="5"/><rect x="62" y="106" width="12" height="48" rx="5"/>`) +
+    `<g fill="#d9d7d0"><rect x="47" y="156" width="10" height="38" rx="4"/><rect x="63" y="156" width="10" height="38" rx="4"/></g>` +
+    `</svg>`;
+
+  // Small legend: the categories that map onto the body, busiest first.
+  const mapped: TrainingCategory[] = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core"];
+  const legend = mapped
+    .filter((c) => byCat.get(c))
+    .sort((a, b) => (byCat.get(b) ?? 0) - (byCat.get(a) ?? 0))
+    .map(
+      (c) =>
+        `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[c]}"></span>` +
+        `${c} <span class="muted">${byCat.get(c)}</span></span>`,
+    )
+    .join("");
+
+  els.muscleMapBody.innerHTML =
+    `<div class="mm-views"><figure><figcaption class="muted">Front</figcaption>${front}</figure>` +
+    `<figure><figcaption class="muted">Back</figcaption>${back}</figure></div>` +
+    `<div class="mm-legend">${legend}</div>` +
+    `<p class="muted mm-note">Shaded by how much each muscle group is trained (set share). Hover a region for counts.</p>`;
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */

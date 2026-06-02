@@ -641,6 +641,26 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .compare-chip:hover { color: var(--text); }
 .compare-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* Athlete muscle map (front/back SVG silhouettes shaded by training share). */
+.muscle-map { margin: 0.75rem 0 0; }
+.muscle-map-summary {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+}
+.muscle-map-summary::-webkit-details-marker { display: none; }
+.muscle-map-summary:hover, .muscle-map[open] > .muscle-map-summary { color: var(--accent); }
+.mm-caret { font-size: 0.7rem; transition: transform 0.15s; }
+.muscle-map[open] .mm-caret { transform: rotate(180deg); color: var(--accent); }
+.muscle-map-body { margin-top: 0.75rem; }
+.mm-views { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; }
+.mm-views figure { margin: 0; text-align: center; }
+.mm-views figcaption { font-size: 0.72rem; margin-bottom: 0.25rem; }
+.body-svg { width: 110px; height: auto; }
+.body-svg g[style] { transition: fill-opacity 0.2s; cursor: default; }
+.mm-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; justify-content: center; margin: 0.75rem 0 0; font-size: 0.78rem; }
+.mm-leg { display: inline-flex; align-items: center; gap: 0.3rem; }
+.mm-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.mm-note { font-size: 0.72rem; text-align: center; margin: 0.5rem 0 0; }
 /* Data tab: wide raw/processed tables scroll horizontally; cells stay compact. */
 .data-views { display: flex; gap: 0.5rem; }
 /* Pill toggle for the Data tab's Processed/Original views (own class so the
