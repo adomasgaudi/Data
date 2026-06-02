@@ -2169,9 +2169,10 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
       days++;
       totalSets += sets;
     }
-    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
+    const isToday = iso === todayIso();
+    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
     );
   }
 

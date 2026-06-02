@@ -26,7 +26,7 @@ export const CHANGELOG: Release[] = [
   {
     version: "b.1.6",
     title: "navigation-and-version-tracking",
-    sp: 8,
+    sp: 9,
     note: "Bottom nav bar, Exercises redesign, grouped version history, per-section chips.",
     details: [
       "Athlete tabs became a bottom nav bar; the Records tab was removed.",
@@ -34,6 +34,7 @@ export const CHANGELOG: Release[] = [
       "Per-section version chips under the title (and listed in this page).",
     ],
     children: [
+      { version: "b.1.6.4", sp: 1, note: "Workouts year heatmap outlines today's cell." },
       { version: "b.1.6.3", sp: 3, note: "Exercises redesign: Compare-graph/List tabs, kebab filters, floating search, records-style list; b.1.0–b.1.5 grouped." },
       { version: "b.1.6.2", sp: 1, note: "Removed the Records tab; section versions also listed in Settings." },
       { version: "b.1.6.1", sp: 1, note: "Per-section version chips under the title." },
@@ -146,7 +147,7 @@ export interface Component {
 export const COMPONENTS: Component[] = [
   { name: "Leaderboard", version: "b1.0" },
   { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
-  { name: "Workouts", version: "b1.1" }, // bumped: sets-over-time graph (b.1.5)
+  { name: "Workouts", version: "b1.2" }, // bumped: today outlined in year heatmap
   { name: "Exercises", version: "b1.1" }, // bumped: tabs + kebab filters + floating search + records-style list
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
