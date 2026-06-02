@@ -1447,7 +1447,7 @@ function renderCompareChart() {
         data: bars as unknown as { x: number; y: number }[],
         backgroundColor: color,
         borderSkipped: false,
-        barThickness: 16,
+        barThickness: 4,
         minBarLength: 2,
       };
     });

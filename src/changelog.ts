@@ -21,6 +21,13 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.3.2.1",
+    title: "compare-perset-thinner",
+    sp: 1,
+    note: "Per-set compare bars thinned to a quarter (16 → 4 px).",
+    details: ["Bar thickness reduced 75% after the previous bump made them too thick."],
+  },
+  {
     version: "b.1.3.2",
     title: "compare-perset-thicker-scroll",
     sp: 1,
