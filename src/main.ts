@@ -205,7 +205,7 @@ const compareSelected = new Set<string>(); // exercises ticked for the overlay g
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50; // List & stats page size
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
 // when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
@@ -1198,8 +1198,9 @@ const EXERCISE_PERIODS: { days: number; label: string }[] = [
   { days: 730, label: "Last 2 years" },
 ];
 
-/** Currently-selected period, in days (0 = all time). */
-let exerciseRangeDays = 0;
+/** Currently-selected period, in days (0 = all time). Defaults to the last 3
+ * months so the List & stats view opens on recent strength, not all-time. */
+let exerciseRangeDays = 90;
 
 /** Cutoff ISO date for the chosen period (e.g. last 90 days), or null for all
  * time. Anchored to today so "last month" means recent calendar time. */
@@ -2255,6 +2256,13 @@ function dataYears(trained: Map<string, number>): number[] {
 function yearGridHtml(year: number, counts: Map<string, number>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
+  // The week-column where each month (Feb..Dec) begins, so a divider line can be
+  // drawn down the LEFT of that whole column — never splitting a week mid-way.
+  const monthStartCols = new Set<number>();
+  for (let m = 1; m < 12; m++) {
+    const doyStart = Math.round((Date.UTC(year, m, 1) - Date.UTC(year, 0, 1)) / 86_400_000);
+    monthStartCols.add(Math.floor((startDow + doyStart) / 7) + 1);
+  }
   const cells: string[] = [];
   for (let i = 0; i < startDow; i++) cells.push(`<div class="hm-cell empty"></div>`);
   let days = 0;
@@ -2268,9 +2276,11 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
       totalSets += sets;
     }
     const isToday = iso === todayIso();
+    const col = Math.floor((startDow + doy) / 7) + 1; // 1-based grid column (week)
+    const mStart = monthStartCols.has(col) ? " hm-mstart" : "";
     const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${mStart}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
     );
   }
 

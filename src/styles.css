@@ -696,6 +696,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hm-cell.lvl-4 { background: var(--accent); }
 .hm-cell[data-date] { cursor: pointer; }
 .hm-cell[data-date]:hover { outline: 2px solid var(--gold); outline-offset: -1px; }
+/* Month divider: a line down the LEFT of the whole week-column where a new month
+   begins (drawn in the 3px gap so it never splits a week and adds no layout). */
+.hm-cell.hm-mstart { position: relative; }
+.hm-cell.hm-mstart::before {
+  content: ""; position: absolute; left: -3px; top: -2px;
+  width: 2px; height: calc(100% + 5px);
+  background: var(--muted); border-radius: 1px; pointer-events: none; z-index: 1;
+}
 /* Today's cell is outlined in gold so it's easy to find in the year grid. */
 .hm-cell.is-today { box-shadow: 0 0 0 2px var(--gold); }
 .hm-legend { display: flex; align-items: center; gap: 3px; font-size: 0.72rem; margin-top: 0.2rem; }

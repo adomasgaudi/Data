@@ -38,6 +38,17 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.10.4",
+    title: "month-lines-list-defaults",
+    sp: 2,
+    note: "Year heatmap gets month divider lines; List & stats defaults to last 3 months, 50 per page.",
+    details: [
+      "A faint line runs down the left of each week-column where a new month starts — whole weeks, never split mid-way.",
+      "List & stats now opens on ‘Last 3 months’ instead of all time.",
+      "List & stats shows 50 exercises per page instead of 20.",
+    ],
+  },
+  {
     version: "b.1.10.3",
     title: "progress-graph-x-only",
     sp: 1,
