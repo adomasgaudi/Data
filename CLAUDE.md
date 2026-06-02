@@ -47,6 +47,11 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   static `<span class="version">` in `index.html` and the top `CHANGELOG` entry
   must both show the version you're committing; update both in the same commit,
   then rebuild so `dist/index.html` carries it.
+- **Per-section versions:** `COMPONENTS` in `src/changelog.ts` lists a `bMAJOR.MINOR`
+  version per app section (Leaderboard, Athlete, Workouts, Exercises, Data, Graphs,
+  Calculator, Records), shown as chips under the title. Whenever a change touches a
+  section, **bump that component's minor** (e.g. Graphs `b1.2` → `b1.3`) in the same
+  commit. A change spanning several sections bumps each one it touches.
 
 ## Project at a glance
 

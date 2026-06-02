@@ -60,7 +60,7 @@ import {
   type TrainingCategory,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, TOTAL_SP } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, TOTAL_SP, COMPONENTS } from "./changelog";
 
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
@@ -3314,6 +3314,15 @@ async function init() {
   }
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
+
+  // Per-section version chips under the title (Graphs b1.2, Workouts b1.1, …).
+  const cv = document.getElementById("componentVersions");
+  if (cv) {
+    cv.innerHTML = COMPONENTS.map(
+      (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
+        `<span class="cv-ver">${escapeHtml(c.version)}</span></span>`,
+    ).join("");
+  }
 
   renderStatus();
   renderHealth();

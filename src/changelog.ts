@@ -24,6 +24,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.6.1",
+    title: "per-section-version-chips",
+    sp: 1,
+    note: "Per-section version chips under the title.",
+    details: [
+      "Each app section (Graphs, Workouts, Data, Athlete…) now shows its own bMAJOR.MINOR version under the title.",
+      "These bump independently whenever that section is updated.",
+    ],
+  },
+  {
     version: "b.1.6.0",
     title: "bottom-nav-and-changelog-groups",
     sp: 3,
@@ -172,6 +182,27 @@ export const CHANGELOG: Release[] = [
  * entry is a grouped minor, that's its first (newest) child, not the group name. */
 const TOP = CHANGELOG[0]!;
 export const CURRENT_VERSION = TOP.children?.length ? TOP.children[0]!.version : TOP.version;
+
+/**
+ * Per-section versions shown as chips under the title. Each part of the app
+ * carries its own `bMAJOR.MINOR` version; bump the relevant one whenever that
+ * section changes (minor for a feature/fix, e.g. b1.0 → b1.1). Keep this list in
+ * step with the work — it's the at-a-glance "what's been touched" tracker.
+ */
+export interface Component {
+  name: string;
+  version: string;
+}
+export const COMPONENTS: Component[] = [
+  { name: "Leaderboard", version: "b1.0" },
+  { name: "Athlete", version: "b1.1" }, // bumped: bottom nav bar (b.1.6.0)
+  { name: "Workouts", version: "b1.1" }, // bumped: sets-over-time graph (b.1.5)
+  { name: "Exercises", version: "b1.0" },
+  { name: "Data", version: "b1.0" },
+  { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
+  { name: "Calculator", version: "b1.0" },
+  { name: "Records", version: "b1.0" },
+];
 
 /** Sum of all story points shipped (grouped entries already total their children). */
 export const TOTAL_SP = CHANGELOG.reduce((s, r) => s + r.sp, 0);

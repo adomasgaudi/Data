@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.6.0</span></h1>
+      <h1>Colosseum <span class="version">b.1.6.1</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -36,6 +36,9 @@
         </div>
       </div>
     </header>
+
+    <!-- Per-section version chips, populated from COMPONENTS in changelog.ts. -->
+    <div id="componentVersions" class="component-versions"></div>
 
     <nav class="tabs" role="tablist">
       <button class="tab" data-tab="leaderboards" role="tab">Colosseum</button>
