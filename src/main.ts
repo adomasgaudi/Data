@@ -509,8 +509,9 @@ function openChangelog() {
  * is an expandable row: version + SP + one-line note collapsed; bullet details
  * when opened. */
 function renderChangelog() {
-  // Count actual released versions (a grouped minor counts its sub-versions).
-  const releaseCount = CHANGELOG.reduce((n, r) => n + (r.children?.length ?? 1), 0);
+  // Count actual released versions (a grouped minor counts its sub-versions;
+  // planned "soon" entries aren't shipped yet, so they don't count).
+  const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
   const header = `<p class="cl-summary muted">${releaseCount} releases · ${TOTAL_SP} story points shipped</p>`;
   // Per-section versions (same data as the chips under the title).
   const sections =
@@ -535,13 +536,17 @@ function renderChangelog() {
           .join("") +
         `</div>`
       : "";
+    // Planned entries show a "soon" tag instead of an SP chip.
+    const spOrTag = r.soon
+      ? `<span class="cl-soon">soon</span>`
+      : `<span class="cl-sp" title="${r.sp} story points">SP ${r.sp}</span>`;
     return (
-      `<details class="cl-row">` +
+      `<details class="cl-row${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
       `<span class="cl-ver">${escapeHtml(r.version)}</span>` +
       `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span>` +
       `<span class="cl-note">${escapeHtml(r.note)}</span></span>` +
-      `<span class="cl-sp" title="${r.sp} story points">SP ${r.sp}</span>` +
+      spOrTag +
       `<span class="cl-caret">▾</span>` +
       `</summary>` +
       `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>` +

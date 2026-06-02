@@ -20,9 +20,33 @@ export interface Release {
   details: string[];
   /** Sub-versions folded under this one; expands into a dropdown list. */
   children?: { version: string; sp: number; note: string }[];
+  /** Planned/not-yet-built: shown at the top with a "soon" tag, excluded from
+   * the shipped release count, the SP total and the on-screen version. */
+  soon?: boolean;
 }
 
 export const CHANGELOG: Release[] = [
+  {
+    version: "next",
+    title: "github-auto-save",
+    sp: 0,
+    soon: true,
+    note: "Coming soon: added sets save to GitHub automatically — no Export/Import needed.",
+    details: [
+      "Hand-logged sets will sync to the repo so they're there on any phone or browser.",
+      "Pending a safe way to authorise writes (the site is public): paste-a-token in the browser, or a small private helper.",
+    ],
+  },
+  {
+    version: "b.1.9.2",
+    title: "soon-tag",
+    sp: 1,
+    note: "Version history can flag planned work with a ‘soon’ tag.",
+    details: [
+      "GitHub auto-save of added sets is logged at the top as ‘soon’ until it's built.",
+      "Planned entries don't count toward the shipped release/SP totals or the on-screen version.",
+    ],
+  },
   {
     version: "b.1.9.1",
     title: "best-sets-3mo",
@@ -179,7 +203,7 @@ export const CHANGELOG: Release[] = [
 
 /** The on-screen version: always the latest actual sub-version. When the newest
  * entry is a grouped minor, that's its first (newest) child, not the group name. */
-const TOP = CHANGELOG[0]!;
+const TOP = CHANGELOG.find((r) => !r.soon)!;
 export const CURRENT_VERSION = TOP.children?.length ? TOP.children[0]!.version : TOP.version;
 
 /**
@@ -205,5 +229,6 @@ export const COMPONENTS: Component[] = [
   { name: "Groups", version: "b1.1" }, // patterns / categories mode switch
 ];
 
-/** Sum of all story points shipped (grouped entries already total their children). */
-export const TOTAL_SP = CHANGELOG.reduce((s, r) => s + r.sp, 0);
+/** Sum of all story points shipped (grouped entries already total their
+ * children; planned "soon" entries don't count). */
+export const TOTAL_SP = CHANGELOG.reduce((s, r) => s + (r.soon ? 0 : r.sp), 0);
