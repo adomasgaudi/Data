@@ -19,11 +19,12 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   middle of text.
 - **Commit message names start with a version** then a 1–2 word kebab
   explainer, e.g. `0.0.2 athlete-pages`. Versioning is SemVer plus a 4th
-  "tweak" digit: `A.B.C.D` = major.minor.patch.tweak. Bump **D** for tiny
-  edits (text, colour, one-liner) and write it 4-segment (`0.0.1.1`); bump
-  **C** for a normal self-contained feature/fix, written 3-segment
-  (`0.0.2`). **B**/**A** for substantial/major work. Keep the longer detail
-  in the commit body as before.
+  "tweak" digit: `A.B.C.D` = major.minor.patch.tweak. **Default to a small
+  bump — most changes are a patch (C, `0.0.1`); smaller ones (text, colour,
+  one-liner) are a tweak (D, `0.0.0.1`).** Reserve **B** (minor) for genuinely
+  substantial new features and **A** for major/breaking work — do NOT bump the
+  minor for an ordinary feature or fix. When unsure, prefer the smaller bump.
+  Keep the longer detail in the commit body as before.
 - **Always keep the on-screen version in lockstep with the commit version.**
   The `<span class="version">` next to the title in `index.html` must show
   the same number as the commit you're about to make (e.g. commit

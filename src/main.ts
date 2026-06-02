@@ -2132,9 +2132,14 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
   const bodyLoad = effLoad - added;
   const hasBody = bodyLoad > 0.01;
-  const cappedReps = Math.min(r, MAX_1RM_REPS);
-  const capNote = cappedReps !== r ? ` (reps capped at ${MAX_1RM_REPS})` : "";
-  const eff1rm = estimate1RM(effLoad, cappedReps, formula);
+  // Above the cap there is no reliable 1RM — say so, show "—", don't estimate.
+  if (r > MAX_1RM_REPS) {
+    return (
+      (hasBody ? `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg. ` : "") +
+      `${r} reps is above the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable, so no 1RM is shown (—).`
+    );
+  }
+  const eff1rm = estimate1RM(effLoad, r, formula);
   const added1rm = addedWeight1RM(c, formula);
   const addedTxt = added1rm === null ? "—" : `${f2(added1rm)} kg`;
 
@@ -2144,22 +2149,22 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
       `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg.`,
     );
   }
-  if (cappedReps === 1) {
+  if (r === 1) {
     parts.push(`${formula}: a single is the 1RM → ${f2(effLoad)} kg.`);
   } else if (formula === "brzycki") {
     parts.push(
       r >= 37
         ? "Brzycki is undefined at 37+ reps."
-        : `Brzycki: load × 36 / (37 − reps) = ${f2(effLoad)} × 36 / (37 − ${cappedReps})${capNote} = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+        : `Brzycki: load × 36 / (37 − reps) = ${f2(effLoad)} × 36 / (37 − ${r}) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
     );
   } else if (formula === "nuzzo") {
-    const pct = benchPctForReps(cappedReps);
+    const pct = benchPctForReps(r);
     parts.push(
-      `Nuzzo bench curve: ${cappedReps} reps${capNote} ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(effLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+      `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(effLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
     );
   } else {
     parts.push(
-      `Epley: load × (1 + reps/30) = ${f2(effLoad)} × (1 + ${cappedReps}/30)${capNote} = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+      `Epley: load × (1 + reps/30) = ${f2(effLoad)} × (1 + ${r}/30) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
     );
   }
   if (hasBody && eff1rm !== null) {
@@ -3177,6 +3182,7 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
     const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)
     const cappedReps = r.reps === null ? null : Math.min(r.reps, MAX_1RM_REPS);
+    const overCap = r.reps !== null && r.reps > MAX_1RM_REPS;
     return {
       user: r.user,
       date: r.date,
@@ -3191,9 +3197,11 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
         dataNum(effLoad),
         dataNum(r.reps),
         cappedReps !== r.reps ? dataNum(cappedReps) : "",
-        dataNum(epley1RM(effLoad, cappedReps)),
-        dataNum(brzycki1RM(effLoad, cappedReps)),
-        dataNum(nuzzo1RM(effLoad, cappedReps)),
+        // Above the rep cap there's no reliable 1RM — blank the formula columns
+        // (matches addedWeight1RM, which returns "—" past the cap).
+        overCap ? "" : dataNum(epley1RM(effLoad, r.reps)),
+        overCap ? "" : dataNum(brzycki1RM(effLoad, r.reps)),
+        overCap ? "" : dataNum(nuzzo1RM(effLoad, r.reps)),
         dataNum(addedWeight1RM(r, currentFormula())),
         dataNum(setVolume(logged, r.reps)),
         r.dropset ? "TRUE" : "",

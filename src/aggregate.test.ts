@@ -74,7 +74,7 @@ describe("addedWeight1RM", () => {
       fc.property(
         fc.double({ min: 1, max: 300, noNaN: true }), // added (bar) weight
         fc.double({ min: 0, max: 120, noNaN: true }), // bodyweight share
-        fc.integer({ min: 1, max: 20 }),
+        fc.integer({ min: 1, max: 15 }), // within the rep cap (above it there's no 1RM)
         (added, bwLoad, reps) => {
           const r = rec({ weight: added + bwLoad, origWeight: added, reps });
           return addedWeight1RM(r, "epley")! >= added - 1e-9;
@@ -88,20 +88,15 @@ describe("addedWeight1RM", () => {
     expect(addedWeight1RM(r, "epley")).toBeCloseTo(140, 6);
   });
 
-  it("subtracts the whole body load on a bodyweight-only set (origWeight null)", () => {
-    // 30 bodyweight squats: effective load 72 (all body), no added weight logged.
-    // Body load (72) must be peeled off, and reps are capped at 15, so the answer
-    // is a modest "could add ~36 kg" — not a ~190 kg phantom max.
-    const r = rec({ weight: 72, origWeight: null, reps: 30 });
-    const got = addedWeight1RM(r, "epley")!;
-    expect(got).toBeCloseTo(72 * (1 + 15 / 30) - 72, 6); // = 36
-    expect(got).toBeLessThan(60);
+  it("returns a value at the cap but null just above it (no clamped estimate)", () => {
+    // Exactly at the cap (15) still estimates; above it there's no reliable 1RM.
+    expect(addedWeight1RM(rec({ weight: 100, reps: 15 }), "epley")).not.toBeNull();
+    expect(addedWeight1RM(rec({ weight: 72, origWeight: null, reps: 30 }), "epley")).toBeNull();
   });
 
-  it("caps reps so a huge-rep set can't inflate the 1RM", () => {
-    const capped = rec({ weight: 100, reps: 40 }); // bar-only, 40 reps
-    const at15 = rec({ weight: 100, reps: 15 });
-    expect(addedWeight1RM(capped, "epley")).toBeCloseTo(addedWeight1RM(at15, "epley")!, 6);
+  it("yields NO 1RM above the rep cap (null, not a clamped value)", () => {
+    expect(addedWeight1RM(rec({ weight: 100, reps: 40 }), "epley")).toBeNull();
+    expect(addedWeight1RM(rec({ weight: 100, reps: 16 }), "nuzzo")).toBeNull();
   });
 
   it("excludes isometric holds (seconds-as-reps) from the 1RM", () => {

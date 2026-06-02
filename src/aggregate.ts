@@ -426,9 +426,10 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
  */
 export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
   if (isIsometric(record.exerciseName)) return null; // holds log seconds, not reps → no 1RM
-  // Cap reps so a high-rep set can't extrapolate to an absurd 1RM (see MAX_1RM_REPS).
-  const reps = record.reps === null ? null : Math.min(record.reps, MAX_1RM_REPS);
-  const effective1RM = estimate1RM(record.weight, reps, formula);
+  // Above the cap, a rep→1RM estimate is guesswork, so we report NO value (null)
+  // rather than a clamped one — the set simply doesn't yield a 1RM, everywhere.
+  if (record.reps !== null && record.reps > MAX_1RM_REPS) return null;
+  const effective1RM = estimate1RM(record.weight, record.reps, formula);
   if (effective1RM === null) return null;
   const effectiveLoad = record.weight ?? 0;
   // origWeight is undefined only for bar-only lifts (no bodyweight folded in) → the
