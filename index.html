@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.4.0</span></h1>
+      <h1>Colosseum <span class="version">b.1.5.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -125,6 +125,15 @@
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel">
             <h2 id="workoutsTitle">Workouts</h2>
+            <details id="workoutSets" class="workout-sets">
+              <summary class="workout-sets-summary">Sets over time <span class="ws-caret">▾</span></summary>
+              <div class="workout-sets-body">
+                <div class="chart-wrap chart-wrap--big">
+                  <canvas id="workoutSetsChart"></canvas>
+                </div>
+                <p class="muted" id="workoutSetsNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
+              </div>
+            </details>
             <div id="workoutCalendar" class="wo-calendar"></div>
             <div class="wo-controls">
               <label class="inline-label">View

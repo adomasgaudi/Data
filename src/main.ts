@@ -140,6 +140,7 @@ const els = {
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutCalendar: $("workoutCalendar"),
+  workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutView: $<HTMLSelectElement>("workoutView"),
@@ -176,6 +177,7 @@ let lbChart: Chart | null = null;
 let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
 let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
 let compareChart: Chart | null = null; // Exercises list multi-exercise overlay
+let workoutSetsChart: Chart | null = null; // Workouts view: all sets over time
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
@@ -837,6 +839,7 @@ function renderAthlete() {
   renderMuscleMap();
   renderExercisesPage();
   renderWorkoutCalendar();
+  renderWorkoutSetsChart();
   renderWorkoutsPage();
   renderRecordsPage();
 }
@@ -2271,6 +2274,98 @@ function jumpToWorkoutDate(iso: string) {
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
 }
 
+/**
+ * Workouts view "Sets over time": every logged set across ALL the athlete's
+ * exercises as a weight → own-1RM bar on the calendar time axis, coloured per
+ * exercise. The athlete's top exercises get distinct colours; the long tail is
+ * lumped into a grey "Other" so the legend stays readable. Same per-set range
+ * idea as the compare graph, but mixing every exercise. Collapsed by default.
+ */
+function renderWorkoutSetsChart() {
+  workoutSetsChart?.destroy();
+  workoutSetsChart = null;
+  const canvas = document.getElementById("workoutSetsChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+
+  const username = els.athlete.value;
+  const formula = currentFormula();
+  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked, requireWeightAndReps: true });
+  const mine = recs.filter((r) => r.username === username);
+  if (mine.length === 0) {
+    els.workoutSetsNote.textContent = "No sets with a usable 1RM yet.";
+    return;
+  }
+
+  // Colour the athlete's 9 most-trained exercises; everything else is "Other".
+  const ranked = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const named = new Map<string, string>(); // exercise -> colour
+  ranked.slice(0, COMPARE_COLORS.length - 1).forEach((name, i) => named.set(name, COMPARE_COLORS[i]!));
+  const OTHER = "#9aa3b2";
+
+  const ts = (d: string) => Date.parse(d);
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  // One dataset per colour group, so the legend has one entry each.
+  const groups = new Map<string, { color: string; bars: { x: number; y: [number, number]; reps: number; ex: string }[] }>();
+  let tMin = Infinity, tMax = -Infinity;
+  for (const s of mine) {
+    const e1rm = addedWeight1RM(s, formula);
+    if (e1rm === null) continue;
+    const label = named.has(s.exerciseName) ? s.exerciseName : "Other";
+    const color = named.get(s.exerciseName) ?? OTHER;
+    const g = groups.get(label) ?? groups.set(label, { color, bars: [] }).get(label)!;
+    const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+    const x = ts(s.date);
+    if (x < tMin) tMin = x;
+    if (x > tMax) tMax = x;
+    g.bars.push({ x, y: [r1(added), r1(e1rm)], reps: s.reps ?? 0, ex: s.exerciseName });
+  }
+
+  // Named groups in popularity order, then Other last.
+  const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
+  const datasets = order.map((label) => {
+    const g = groups.get(label)!;
+    return {
+      label,
+      data: g.bars as unknown as { x: number; y: number }[],
+      backgroundColor: g.color,
+      borderSkipped: false,
+      barThickness: 4,
+      minBarLength: 2,
+    };
+  });
+
+  workoutSetsChart = new Chart(canvas, {
+    type: "bar",
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => tsLabel(Number(items[0]?.parsed.x)),
+            label: (it) => {
+              const raw = it.raw as { y: [number, number]; reps: number; ex: string };
+              return `${raw.ex}: ${fmt(raw.y[0])} kg × ${raw.reps} → ${fmt(raw.y[1])} kg 1RM`;
+            },
+          },
+        },
+        zoom: {
+          pan: { enabled: true, mode: "x" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
+        },
+      },
+      scales: {
+        x: timeXAxis(tMin - MS_DAY, tMax + MS_DAY),
+        y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#ececec" } },
+      },
+    },
+  });
+  els.workoutSetsNote.textContent =
+    `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel/pinch to zoom.`;
+}
+
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const byWeek = els.workoutView.value === "week";
@@ -2601,23 +2696,32 @@ function timeAxisGridTicks(min: number, max: number): number[] {
   return out;
 }
 
-/** Shared x time-axis options: gridlines only on week/month boundaries, labels
- * on those same ticks. `mirrored` tucks labels inside the plot (progress chart). */
+/** Shared x time-axis options: gridlines on week/month boundaries, recomputed
+ * from the CURRENTLY VISIBLE range so panning/zooming stays correct and labels
+ * never pile up. Falls back to Chart.js's own ticks at extreme zoom. `mirrored`
+ * tucks labels inside the plot (progress chart). */
 function timeXAxis(min: number, max: number, mirrored = false) {
-  const ticks = timeAxisGridTicks(min, max);
+  // Guard against empty data (min/max would be ±Infinity → breaks the scale):
+  // only pin the range when both bounds are finite, else let Chart.js auto-range.
+  const haveRange = Number.isFinite(min) && Number.isFinite(max) && max > min;
   return {
     type: "linear" as const,
-    min,
-    max,
-    border: { display: true, color: "#ececec" },
+    ...(haveRange ? { min, max } : {}),
     grid: { color: "#ececec", drawTicks: false },
-    afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
-      if (ticks.length) axis.ticks = ticks.map((value) => ({ value }));
+    // axis.min/max reflect the live pan/zoom view; derive boundary ticks from it.
+    afterBuildTicks: (axis: { min: number; max: number; ticks: { value: number }[] }) => {
+      const lo = Number.isFinite(axis.min) ? axis.min : min;
+      const hi = Number.isFinite(axis.max) ? axis.max : max;
+      const t = timeAxisGridTicks(lo, hi);
+      // Only take over when it yields a sane number of gridlines; otherwise leave
+      // Chart.js's auto ticks (prevents overlap/breakage at extreme zoom-out/in).
+      if (t.length >= 2 && t.length <= 18) axis.ticks = t.map((value) => ({ value }));
     },
     ticks: {
       color: "#6b7280",
       maxRotation: 0,
-      autoSkip: false,
+      autoSkip: true,
+      maxTicksLimit: 12,
       includeBounds: false,
       ...(mirrored ? { mirror: true, padding: 8, z: 2 } : {}),
       callback: (value: string | number) => tsLabel(Number(value)),

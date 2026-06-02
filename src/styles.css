@@ -658,6 +658,16 @@ select.subtle-select:hover, select.subtle-select:focus {
    so the original/source names are visible in every view. */
 .origin-note { font-size: 0.82em; font-weight: 400; color: var(--muted); font-style: italic; }
 /* Exercises-list "compare on one graph" tool. */
+/* Workouts view "Sets over time" collapsible graph. */
+.workout-sets { margin: 0 0 1rem; }
+.workout-sets-summary {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+}
+.workout-sets-summary::-webkit-details-marker { display: none; }
+.workout-sets-summary:hover, .workout-sets[open] > .workout-sets-summary { color: var(--accent); }
+.workout-sets[open] .ws-caret { transform: rotate(180deg); color: var(--accent); }
+.workout-sets-body { margin-top: 0.75rem; }
 .exercise-compare { margin: 0 0 1rem; }
 .exercise-compare[hidden] { display: none; }
 .exercise-compare-summary {

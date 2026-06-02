@@ -21,6 +21,18 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.5.0",
+    title: "workout-sets-graph-and-gridline-fix",
+    sp: 3,
+    note: "Workouts 'Sets over time' graph + fix for broken chart scrolling.",
+    details: [
+      "Workouts view: a collapsible 'Sets over time' graph — every set as a weight → own-1RM bar, coloured per exercise (top lifts named, the rest grouped as 'Other').",
+      "Fix (regression from b.1.4.0): calendar gridlines broke pan/zoom and overlapped labels.",
+      "Gridline ticks now recompute from the visible range, cap their count, and fall back to auto ticks at extreme zoom.",
+      "Charts with no usable data no longer break the axis (finite-range guard).",
+    ],
+  },
+  {
     version: "b.1.4.0",
     title: "calendar-gridlines",
     sp: 3,
