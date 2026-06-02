@@ -21,6 +21,13 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.5.1",
+    title: "compare-trend-scroll",
+    sp: 1,
+    note: "1RM trend compare graph can pan/zoom again.",
+    details: ["The trend view was missing the zoom plugin config the other graphs have; added drag-to-pan and wheel/pinch-zoom."],
+  },
+  {
     version: "b.1.5.0",
     title: "workout-sets-graph-and-gridline-fix",
     sp: 3,

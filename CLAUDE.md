@@ -35,11 +35,14 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   `DATA` data tab, `CHART` graphs/diagrams, `CALC` calculators, `LIFT`
   exercise/group/merge logic, `ATH` athlete view, `WO` workouts, `META`
   process/versioning. Coin a new 2–5 letter category when none fits.
-- **Version scheme is `b.MAJOR.MINOR.PATCH`** (reset at `b.1.0.0`). Bump the
-  **minor** (`b.1.x`) for a normal update, the **patch** (`b.1.0.x`) for a small
-  one; major (`b.x`) only for big/breaking work. The single source of truth is
-  `CURRENT_VERSION`/`CHANGELOG` in `src/changelog.ts` — add a new top entry there
-  each release; the on-screen `<span class="version">` is set from it at runtime.
+- **Version scheme is `b.MAJOR.MINOR.PATCH`** (reset at `b.1.0.0`). **Only bump
+  the minor (`b.1.x`) when a meaningful batch of work / a real feature is
+  finished — NOT for every small fix.** Routine fixes, tweaks and follow-up
+  adjustments bump the **patch** (`b.1.x.1`, `b.1.x.2`, …); reserve the major
+  (`b.x`) for big/breaking work. When unsure, prefer the patch. The single source
+  of truth is `CURRENT_VERSION`/`CHANGELOG` in `src/changelog.ts` — add a new top
+  entry there each release; the on-screen `<span class="version">` is set from it
+  at runtime.
 - **Always keep the on-screen version in lockstep with the commit version.** The
   static `<span class="version">` in `index.html` and the top `CHANGELOG` entry
   must both show the version you're committing; update both in the same commit,

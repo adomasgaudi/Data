@@ -1521,6 +1521,10 @@ function renderCompareChart() {
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: { title: (items) => tsLabel(Number(items[0]?.parsed.x)), label: (it) => `${it.dataset.label}: ${it.formattedValue} kg` } },
+        zoom: {
+          pan: { enabled: true, mode: "x" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
+        },
       },
       scales: {
         x: timeXAxis(trMin - MS_DAY, trMax + MS_DAY),
@@ -1528,7 +1532,7 @@ function renderCompareChart() {
       },
     },
   });
-  els.compareNote.textContent = `Estimated 1RM (${formula}) over time for the ticked exercises.`;
+  els.compareNote.textContent = `Estimated 1RM (${formula}) over time for the ticked exercises. Drag to pan · wheel/pinch to zoom.`;
 }
 
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
