@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.32.0</span></h1>
+      <h1>Colosseum <span class="version">v0.33.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -253,6 +253,10 @@
             <button type="button" class="calc-tab is-active" data-formula="nuzzo" role="tab">Nuzzo (bench)</button>
           </div>
           <div id="calcOut" class="calc-out"></div>
+          <div class="chart-wrap chart-wrap--big">
+            <canvas id="calcCurveChart"></canvas>
+          </div>
+          <p class="muted" id="calcCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
           <p class="calc-links">
             <a class="link-btn" href="reps-1rm.html" target="_blank" rel="noopener">
               📊 Bench reps at % of 1RM — research data

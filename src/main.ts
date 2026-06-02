@@ -145,6 +145,7 @@ const els = {
   calcBw: $<HTMLInputElement>("calcBw"),
   calcCoeff: $<HTMLInputElement>("calcCoeff"),
   calcOut: $("calcOut"),
+  calcCurveNote: $("calcCurveNote"),
   testAthlete: $<HTMLSelectElement>("testAthlete"),
   testExercise: $<HTMLSelectElement>("testExercise"),
   testPickHint: $("testPickHint"),
@@ -159,6 +160,7 @@ const els = {
 let data: LoadedData;
 let lbChart: Chart | null = null;
 let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
+let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
 const PAGE_SIZE = 20;
@@ -2488,6 +2490,85 @@ function renderTest() {
     ),
   );
   els.calcOut.innerHTML = rows.join("");
+  renderCalcCurve(effLoad, bodyweightLoad, reps, addedWeight, calcTab);
+}
+
+/**
+ * Test-tab diagram: weight (y) vs reps (x). For the current set's effective 1RM,
+ * plot the BAR weight you'd be predicted to lift across 1..15 reps under the
+ * selected formula (effective weightForReps minus the bodyweight share), and
+ * mark the set you typed. Shows how the formula trades weight for reps.
+ */
+function renderCalcCurve(
+  effLoad: number,
+  bodyweightLoad: number,
+  curReps: number,
+  curAdded: number,
+  formula: OneRepMaxFormula,
+) {
+  const canvas = document.getElementById("calcCurveChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+  calcCurveChart?.destroy();
+  calcCurveChart = null;
+
+  // 1RM of the effective load at the current reps, then read the curve back out.
+  const eff1rm = estimate1RM(effLoad, Math.min(curReps, MAX_1RM_REPS), formula);
+  if (eff1rm === null || eff1rm <= 0) {
+    els.calcCurveNote.textContent = "Enter a weight and reps to see the weight↔reps curve.";
+    return;
+  }
+  const maxReps = 15;
+  const labels: string[] = [];
+  const barWeights: (number | null)[] = [];
+  for (let reps = 1; reps <= maxReps; reps++) {
+    labels.push(String(reps));
+    const effW = weightForReps(eff1rm, reps, formula);
+    // Show the bar weight (peel the constant bodyweight share back off).
+    barWeights.push(effW === null ? null : Math.round((effW - bodyweightLoad) * 10) / 10);
+  }
+  // Highlight the user's current (reps, bar weight) point.
+  const pointData = labels.map((_, i) => (i + 1 === Math.min(curReps, maxReps) ? Math.round(curAdded * 10) / 10 : null));
+
+  calcCurveChart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Predicted bar weight",
+          data: barWeights,
+          borderColor: "#284e86",
+          backgroundColor: "rgba(40,78,134,0.08)",
+          fill: true,
+          tension: 0.25,
+          pointRadius: 2,
+        },
+        {
+          label: "Your set",
+          data: pointData,
+          borderColor: "#b8902f",
+          backgroundColor: "#b8902f",
+          pointRadius: 6,
+          pointHoverRadius: 7,
+          showLine: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { title: (items) => `${items[0]?.label} reps`, label: (it) => `${it.formattedValue} kg` } },
+      },
+      scales: {
+        x: { title: { display: true, text: "reps" }, grid: { color: "#ececec" } },
+        y: { title: { display: true, text: "bar weight (kg)" }, grid: { color: "#ececec" } },
+      },
+    },
+  });
+  els.calcCurveNote.textContent =
+    `Weight you could lift at each rep count for this ${formula} 1RM (gold dot = the set you typed).`;
 }
 
 function renderAll() {
