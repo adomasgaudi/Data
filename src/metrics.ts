@@ -103,9 +103,10 @@ export function nuzzoRepsAtWeight(weight: number | null, oneRepMax: number | nul
 
 /**
  * Above this many reps, every rep→1RM formula is guesswork (Epley/Brzycki were
- * fit on low-rep sets), so a 35-rep set would extrapolate to an absurd 1RM. For
- * ranking we cap the reps fed to the formula here — the set still counts, but it
- * can't masquerade as a huge max. Not applied to the teaching calculator.
+ * fit on low-rep sets), so a 35-rep set would extrapolate to an absurd 1RM.
+ * Sets above this many reps yield NO 1RM at all (addedWeight1RM returns null) —
+ * we report "—" rather than a clamped value, so a high-rep set never masquerades
+ * as a max anywhere. The Test-tab teaching calculator is exempt (explores freely).
  */
 export const MAX_1RM_REPS = 15;
 
