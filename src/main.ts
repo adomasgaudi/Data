@@ -932,35 +932,37 @@ function renderTrainBreakdown() {
 
 /**
  * Front/back muscle map: simplified body silhouettes whose regions are shaded by
- * how much the athlete trains the matching category (by set share). Each region
- * maps to a TrainingCategory; intensity = that category's share of all sets, so
- * the most-trained muscles glow strongest. Hover a region for its set count.
+ * how STRONG the athlete is in the matching category — their best StrengthLevel
+ * strength percentile (0..100, vs the population) among that category's lifts.
+ * So a darker muscle means "stronger here", not "trained more". Untrained or
+ * unscored regions show light grey. Hover a region for the percentile.
  */
 function renderMuscleMap() {
-  const counts = exerciseCountsForUser(data.records, els.athlete.value);
+  // Best strength percentile per category for this athlete (percentile is 0..1
+  // in the data; ×100 for display). Falls back to grey where there's no score.
+  const username = els.athlete.value;
   const byCat = new Map<TrainingCategory, number>();
-  let total = 0;
-  for (const c of counts) {
-    const cat = exerciseCategory(c.exerciseName);
-    byCat.set(cat, (byCat.get(cat) ?? 0) + c.count);
-    total += c.count;
+  for (const r of data.records) {
+    if (r.username !== username || r.percentile === null) continue;
+    const cat = exerciseCategory(r.exerciseName);
+    const cur = byCat.get(cat);
+    if (cur === undefined || r.percentile > cur) byCat.set(cat, r.percentile);
   }
-  if (total === 0) {
-    els.muscleMapBody.innerHTML = `<p class="muted">No training data yet.</p>`;
+  if (byCat.size === 0) {
+    els.muscleMapBody.innerHTML = `<p class="muted">No strength scores yet for this athlete.</p>`;
     return;
   }
-  const peak = Math.max(...byCat.values());
-  // Opacity scales with this region's sets vs the busiest region (0.12..1).
+  // Opacity scales with the strength percentile itself (0..1 → 0.15..1), so the
+  // shade reads as an absolute strength level, comparable across muscles.
   const fillFor = (cat: TrainingCategory): string => {
-    const n = byCat.get(cat) ?? 0;
-    if (n === 0) return `fill:#e7e6e1`; // untrained → light grey
-    const op = 0.15 + 0.85 * (n / peak);
+    const pct = byCat.get(cat);
+    if (pct === undefined) return `fill:#e7e6e1`; // no strength score → light grey
+    const op = 0.15 + 0.85 * Math.max(0, Math.min(1, pct));
     return `fill:${CATEGORY_COLORS[cat]};fill-opacity:${op.toFixed(2)}`;
   };
   const title = (label: string, cat: TrainingCategory): string => {
-    const n = byCat.get(cat) ?? 0;
-    const p = total ? Math.round((n / total) * 100) : 0;
-    return `${label}: ${n} sets (${p}%)`;
+    const pct = byCat.get(cat);
+    return pct === undefined ? `${label}: no strength score` : `${label}: ${Math.round(pct * 100)}th percentile strength`;
   };
   // A region = one or more SVG shapes sharing a category's fill + tooltip.
   const reg = (cat: TrainingCategory, label: string, shapes: string) =>
@@ -991,15 +993,15 @@ function renderMuscleMap() {
     `<g fill="#d9d7d0"><rect x="47" y="156" width="10" height="38" rx="4"/><rect x="63" y="156" width="10" height="38" rx="4"/></g>` +
     `</svg>`;
 
-  // Small legend: the categories that map onto the body, busiest first.
+  // Legend: the mapped categories, strongest first, with their percentile.
   const mapped: TrainingCategory[] = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core"];
   const legend = mapped
-    .filter((c) => byCat.get(c))
+    .filter((c) => byCat.get(c) !== undefined)
     .sort((a, b) => (byCat.get(b) ?? 0) - (byCat.get(a) ?? 0))
     .map(
       (c) =>
         `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[c]}"></span>` +
-        `${c} <span class="muted">${byCat.get(c)}</span></span>`,
+        `${c} <span class="muted">${Math.round((byCat.get(c) ?? 0) * 100)}%</span></span>`,
     )
     .join("");
 
@@ -1007,7 +1009,7 @@ function renderMuscleMap() {
     `<div class="mm-views"><figure><figcaption class="muted">Front</figcaption>${front}</figure>` +
     `<figure><figcaption class="muted">Back</figcaption>${back}</figure></div>` +
     `<div class="mm-legend">${legend}</div>` +
-    `<p class="muted mm-note">Shaded by how much each muscle group is trained (set share). Hover a region for counts.</p>`;
+    `<p class="muted mm-note">Shaded by strength — best StrengthLevel percentile per muscle group (darker = stronger). Hover a region for its score.</p>`;
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
