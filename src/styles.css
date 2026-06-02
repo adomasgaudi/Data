@@ -94,10 +94,10 @@ body {
   border-radius: 8px; width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
 }
 .overlay-close:hover { border-color: var(--accent); color: var(--accent); }
-.tabs {
-  display: flex; gap: 0.25rem;
-  padding: 0 1.5rem; border-bottom: 1px solid var(--line);
-}
+/* The old top tab bar is retired in favour of the app-style bottom nav. The
+   buttons stay in the DOM (they're the is-active source of truth switchTopTab
+   reads/sets) but are never shown. */
+.tabs { display: none; }
 .tab {
   background: none; border: none; color: var(--muted);
   font: inherit; font-size: 0.9rem; cursor: pointer;
@@ -105,8 +105,8 @@ body {
 }
 .tab:hover { color: var(--text); }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-/* Athlete sub-navigation as a fixed bottom nav bar (Workouts / Exercises /
-   Records). It lives inside #tab-athlete, so it only shows on the Athlete tab. */
+/* App-style fixed bottom nav (Workouts / Exercises / Other) — the primary
+   navigation for the whole app. */
 .subtabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   display: flex; margin: 0;
@@ -124,8 +124,58 @@ body {
 .subtab-ico { width: 22px; height: 22px; flex: none; }
 .subtab:hover { color: var(--text); }
 .subtab.is-active { color: var(--accent); border-top-color: var(--accent); background: var(--accent-soft); }
-/* Clearance so the athlete content isn't hidden behind the fixed bar. */
-#tab-athlete { padding-bottom: 5rem; }
+/* Clearance so no panel's content hides behind the fixed bottom nav. */
+main { padding-bottom: 5rem; }
+
+/* "Other" bottom-sheet: a dimmed backdrop + a card of secondary views that
+   slides up from above the bottom nav. */
+.other-sheet { position: fixed; inset: 0; z-index: 60; }
+.other-sheet[hidden] { display: none; }
+.other-sheet-backdrop { position: absolute; inset: 0; background: rgba(20, 24, 38, 0.38); }
+.other-sheet-card {
+  position: absolute; left: 0; right: 0;
+  bottom: calc(3.6rem + env(safe-area-inset-bottom, 0px));
+  background: var(--panel); border-top: 1px solid var(--line);
+  border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px rgba(20, 24, 38, 0.18);
+  padding: 0.4rem 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 2px;
+  max-width: 720px; margin: 0 auto;
+}
+.other-sheet-grip {
+  width: 38px; height: 4px; border-radius: 2px; background: var(--line);
+  margin: 6px auto 8px;
+}
+.other-item {
+  display: flex; align-items: center; gap: 0.7rem;
+  background: none; border: none; border-radius: 8px;
+  color: var(--text); font: inherit; font-size: 1rem; text-align: left;
+  padding: 0.7rem 0.8rem; cursor: pointer;
+}
+.other-item:hover { background: var(--accent-soft); }
+.other-ico { width: 1.6rem; text-align: center; font-size: 1.15rem; flex: none; }
+
+/* Group view: one card per movement pattern / muscle group. */
+.groups-controls { margin: 0 0 1rem; }
+.groups-body {
+  display: grid; gap: 0.9rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+.gv-card {
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 0.8rem 0.9rem; background: var(--panel);
+}
+.gv-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.gv-card-head h3 { margin: 0; font-size: 1rem; }
+.gv-count { font-size: 0.75rem; white-space: nowrap; }
+.gv-head-num { display: flex; align-items: baseline; gap: 0.35rem; margin: 0.35rem 0 0.5rem; }
+.gv-big { font-size: 1.7rem; font-weight: 700; color: var(--accent); line-height: 1; }
+.gv-unit { font-size: 0.78rem; color: var(--muted); }
+.gv-table { margin: 0; }
+.gv-table td { padding: 0.3rem 0.4rem; vertical-align: baseline; }
+.gv-table .ex-code { font-weight: 600; }
+.gv-sub { display: block; font-size: 0.72rem; line-height: 1.1; }
+.gv-raw { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+.gv-rank { color: var(--muted); width: 1.4rem; }
+.gv-empty { margin: 0.4rem 0 0; font-size: 0.85rem; }
 /* Custom athlete picker: rounded pill chips (the native <select> is hidden and
    only holds state). */
 .athlete-select-hidden { display: none; }

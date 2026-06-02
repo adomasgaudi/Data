@@ -24,49 +24,30 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
-    version: "b.1.7.2.2",
-    title: "more-exercise-codes",
-    sp: 1,
-    note: "More custom codes + pattern coverage (Pull, PU, dSU, mCR, rcSB, H-ABD…).",
-    details: ["Owner-chosen codes plus new cores (sit up→SU, calf raise→CR, side bend→SB) so similar lifts follow the same pattern."],
-  },
-  {
-    version: "b.1.7.2.1",
-    title: "exercise-code-overrides",
-    sp: 1,
-    note: "Custom codes: Back Extension → BE, Hip Thrust → HT, Dips → Dip.",
-    details: ["Owner-chosen short codes for a few exercises in the list."],
-  },
-  {
-    version: "b.1.7.2",
-    title: "add-export-import-backup",
-    sp: 2,
-    note: "Back up / move your hand-logged sets with Export & Import.",
+    version: "b.1.8.0",
+    title: "other-nav-group-view",
+    sp: 5,
+    note: "App-style bottom nav: Workouts | Exercises | Other — plus a new Group view.",
     details: [
-      "Export downloads your added sets as a backup file; Import loads them on another browser/phone.",
-      "Local storage is per-device — Export/Import (or send me the file to bake in) keeps them safe.",
+      "The bottom bar is now the whole app's navigation; the old top tab row is gone.",
+      "‘Other’ opens a sheet holding Colosseum, Add, Data, Test, Merges/body parts, Guide and the new Group view.",
+      "Group view: each movement pattern / muscle group with the best estimated 1RM — per athlete (best lift in each) or everyone (a mini leaderboard).",
     ],
   },
   {
-    version: "b.1.7.1",
-    title: "exercises-list-codes-repmax",
-    sp: 2,
-    note: "Exercises list: 3-letter codes, no ugly wrapping, editable rep-max columns.",
+    version: "b.1.7",
+    title: "add-tab-and-exercise-list",
+    sp: 9,
+    note: "Hand-logged ‘Add’ tab with export/import, and the codes/rep-max exercises list.",
     details: [
-      "List shows 3-letter exercise codes (full name on a muted subline); columns no longer wrap.",
-      "Rep-max columns are editable — type the rep counts (e.g. 1, 3, 5) and the table updates.",
-      "Rep-max basis follows the period filter, so 'Last 3 months' shows recent strength.",
+      "New ‘Add’ tab: log sets by hand, merged into every view; manage/delete them in a list.",
+      "Export/Import backs up and moves your added sets between browser/phone.",
+      "Exercises list shows 3-letter codes with editable rep-max columns; many owner-chosen codes.",
     ],
-  },
-  {
-    version: "b.1.7.0",
-    title: "add-sets-by-hand",
-    sp: 3,
-    note: "New 'Add' tab to log sets by hand, merged with the StrengthLevel data.",
-    details: [
-      "Pick an athlete, type/choose an exercise, enter weight + reps + date.",
-      "Saved on your device and merged into every view (leaderboards, records, graphs, Data tab).",
-      "Manage/delete your hand-logged sets in a list on the same tab.",
+    children: [
+      { version: "b.1.7.2", sp: 4, note: "Export/Import backup + custom exercise codes (BE, HT, Dip, Pull, PU, dSU, mCR, rcSB, H-ABD…)." },
+      { version: "b.1.7.1", sp: 2, note: "Exercises list: 3-letter codes, no wrapping, editable rep-max columns." },
+      { version: "b.1.7.0", sp: 3, note: "New ‘Add’ tab to log sets by hand, merged with the StrengthLevel data." },
     ],
   },
   {
@@ -199,6 +180,8 @@ export const COMPONENTS: Component[] = [
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },
   { name: "Add", version: "b1.1" }, // bumped: export/import backup
+  { name: "Navigation", version: "b1.0" }, // bottom nav + Other sheet
+  { name: "Groups", version: "b1.0" }, // movement-pattern / muscle-group view
 ];
 
 /** Sum of all story points shipped (grouped entries already total their children). */

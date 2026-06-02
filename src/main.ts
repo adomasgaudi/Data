@@ -184,6 +184,9 @@ const els = {
   dataSearch: $<HTMLInputElement>("dataSearch"),
   dataExercise: $<HTMLSelectElement>("dataExercise"),
   dataUser: $<HTMLSelectElement>("dataUser"),
+  otherSheet: $("otherSheet"),
+  groupsAthlete: $<HTMLSelectElement>("groupsAthlete"),
+  groupsBody: $("groupsBody"),
 };
 
 let data: LoadedData;
@@ -3358,6 +3361,7 @@ async function init() {
   setupDataTab();
   renderDataTab();
   setupAddTab();
+  setupGroupsView();
   setupChecklists();
 
   // Settings popover (holds the 1RM formula).
@@ -3584,7 +3588,7 @@ async function init() {
       renderTest();
     });
 
-  setupSubtabs();
+  setupBottomNav();
 
   // Replace every native <select> with a custom HTML/CSS dropdown. Done last, so
   // each select already has its options and current value. (#athlete stays hidden
@@ -3594,7 +3598,7 @@ async function init() {
   for (const sel of [
     els.formula, els.bwSource, els.rank, els.sexFilter,
     els.workoutView, els.workoutsPageSize, els.testAthlete, els.testExercise,
-    els.dataUser,
+    els.dataUser, els.groupsAthlete,
   ])
     enhanceSelect(sel);
 }
@@ -4070,22 +4074,132 @@ function setupChecklists() {
 }
 
 /** Toggle which tab panel is visible when a tab button is clicked. */
+// ---- Group view: movement patterns / muscle groups across athletes ----------
+
+/** One collapsible-free card per group, with a small heading + a count chip. */
+function groupCard(name: string, memberCount: number, bodyHtml: string): string {
+  return (
+    `<div class="gv-card"><div class="gv-card-head">` +
+    `<h3>${escapeHtml(name)}</h3>` +
+    `<span class="muted gv-count">${memberCount} lift${memberCount === 1 ? "" : "s"}</span>` +
+    `</div>${bodyHtml}</div>`
+  );
+}
+
+/** Render the Group view: each EXERCISE_GROUP (Squat pattern, Bench Press, …)
+ * shown for one athlete (best 1RM per member lift) or for everyone (a mini
+ * leaderboard of the best estimated 1RM across the group's member lifts). */
+function renderGroupsView() {
+  const formula = currentFormula();
+  const recs = computedRecords();
+  const present = new Set(distinctExercises(data.records));
+
+  // Athlete picker: "Everyone" + each athlete; keep the current selection.
+  const users = distinctUsers(data.records);
+  const prev = els.groupsAthlete.value;
+  els.groupsAthlete.innerHTML =
+    `<option value="">Everyone</option>` +
+    users.map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`).join("");
+  els.groupsAthlete.value = prev || "";
+  const who = els.groupsAthlete.value;
+
+  const base = filterRecords(recs, { excludeDropsets: els.excludeDropsets.checked });
+  const cards: string[] = [];
+
+  for (const g of EXERCISE_GROUPS) {
+    const members = Object.keys(g.members).filter((m) => present.has(m));
+    if (members.length === 0) continue;
+
+    if (who) {
+      // One athlete: best estimated 1RM per member lift, biggest as the headline.
+      const prs = personalRecords(
+        filterRecords(recs, { usernames: [who], excludeDropsets: els.excludeDropsets.checked }),
+        formula,
+      );
+      const byEx = new Map(prs.map((p) => [p.exerciseName, p]));
+      const rows = members
+        .map((m) => byEx.get(m))
+        .filter((p): p is PersonalRecord => p !== undefined)
+        .sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
+      if (rows.length === 0) {
+        cards.push(groupCard(g.name, members.length, `<p class="muted gv-empty">Not trained yet.</p>`));
+        continue;
+      }
+      const best = rows[0]!.bestE1rm;
+      const body =
+        `<div class="gv-head-num"><span class="gv-big">${fmt(best.e1rm)}</span><span class="gv-unit">kg est. 1RM</span></div>` +
+        `<table class="data-table gv-table"><tbody>` +
+        rows
+          .map((p) => {
+            const w = p.bestE1rm.weight;
+            return (
+              `<tr><td><span class="ex-code">${escapeHtml(exerciseCode(p.exerciseName))}</span>` +
+              `<span class="gv-sub muted">${escapeHtml(p.exerciseName)}</span></td>` +
+              `<td class="num">${fmt(p.bestE1rm.e1rm)}</td>` +
+              `<td class="num gv-raw">${w === null ? "—" : fmt(w)}×${p.bestE1rm.reps}</td></tr>`
+            );
+          })
+          .join("") +
+        `</tbody></table>`;
+      cards.push(groupCard(g.name, members.length, body));
+    } else {
+      // Everyone: best e1rm per athlete across the group's member lifts, ranked.
+      const byUser = new Map<string, { user: string; e1rm: number; ex: string }>();
+      for (const m of members) {
+        for (const e of leaderboard(base, m, formula)) {
+          const cur = byUser.get(e.username);
+          if (!cur || e.e1rm > cur.e1rm) byUser.set(e.username, { user: e.user, e1rm: e.e1rm, ex: m });
+        }
+      }
+      const ranked = [...byUser.values()].sort((a, b) => b.e1rm - a.e1rm).slice(0, 8);
+      const body =
+        ranked.length === 0
+          ? `<p class="muted gv-empty">Not trained yet.</p>`
+          : `<table class="data-table gv-table"><tbody>` +
+            ranked
+              .map(
+                (r, i) =>
+                  `<tr><td class="gv-rank">${i + 1}</td>` +
+                  `<td>${escapeHtml(r.user)}<span class="gv-sub muted">${escapeHtml(exerciseCode(r.ex))}</span></td>` +
+                  `<td class="num">${fmt(r.e1rm)}</td></tr>`,
+              )
+              .join("") +
+            `</tbody></table>`;
+      cards.push(groupCard(g.name, members.length, body));
+    }
+  }
+
+  els.groupsBody.innerHTML =
+    cards.join("") || `<p class="muted">No grouped lifts in the data yet.</p>`;
+}
+
+function setupGroupsView() {
+  els.groupsAthlete.addEventListener("change", renderGroupsView);
+  renderGroupsView(); // populate the athlete picker before first open
+}
+
+/**
+ * Switch the visible top-level panel (leaderboards, athlete, groups, add, …).
+ * The old top `.tabs` bar is hidden (CSS) in favour of the bottom nav, but its
+ * buttons stay in the DOM as the is-active source of truth; this drives both.
+ */
+function switchTopTab(name: string) {
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab, .guide-btn"));
+  for (const t of tabs) t.classList.toggle("is-active", t.dataset.tab === name);
+  // Panels aren't all backed by a .tab button (e.g. #tab-groups), so toggle by id.
+  for (const panel of document.querySelectorAll<HTMLElement>(".tab-panel"))
+    panel.hidden = panel.id !== `tab-${name}`;
+  // Chart.js needs a resize nudge if it was first drawn while hidden.
+  if (name === "leaderboards") lbChart?.resize();
+  if (name === "groups") renderGroupsView();
+  updateBottomNav();
+}
+
 function setupTabs() {
   // ".guide-btn" is the top-bar Guide button (lives outside the .tabs nav but
   // still switches to the guide panel via its data-tab).
-  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab, .guide-btn"));
-  for (const tab of tabs) {
-    tab.addEventListener("click", () => {
-      const target = tab.dataset.tab;
-      for (const t of tabs) t.classList.toggle("is-active", t === tab);
-      for (const t of tabs) {
-        const panel = document.getElementById(`tab-${t.dataset.tab}`);
-        if (panel) panel.hidden = t !== tab;
-      }
-      // Chart.js needs a resize nudge if it was first drawn while hidden.
-      if (target === "leaderboards") lbChart?.resize();
-    });
-  }
+  for (const tab of document.querySelectorAll<HTMLButtonElement>(".tab, .guide-btn"))
+    tab.addEventListener("click", () => switchTopTab(tab.dataset.tab ?? ""));
 }
 
 /**
@@ -4152,21 +4266,66 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   sel.addEventListener("change", sync);
 }
 
-/** Switch the active Athlete sub-tab (Workouts / Exercises / Records) and show
- * its panel. Exposed so other views (e.g. a Records row) can jump to a sub-tab. */
+/** Show one of the Athlete sub-views (Workouts / Exercises). Decoupled from the
+ * nav buttons so it works whether called from the bottom nav or from code (e.g.
+ * a list row jumping to Exercises). Does NOT switch the top tab — callers that
+ * need the Athlete panel visible should switchTopTab("athlete") first. */
 function showSubtab(name: string) {
-  const subtabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".subtab"));
-  for (const s of subtabs) s.classList.toggle("is-active", s.dataset.subtab === name);
-  for (const s of subtabs) {
-    const panel = document.getElementById(`sub-${s.dataset.subtab}`);
-    if (panel) panel.hidden = s.dataset.subtab !== name;
+  for (const n of ["workouts", "exercises"]) {
+    const panel = document.getElementById(`sub-${n}`);
+    if (panel) panel.hidden = n !== name;
+  }
+  updateBottomNav();
+}
+
+/** Light up the right bottom-nav item: Workouts/Exercises when the Athlete tab
+ * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
+function updateBottomNav() {
+  const athleteOpen = document.getElementById("tab-athlete")?.hidden === false;
+  const activeSub = !athleteOpen
+    ? null
+    : document.getElementById("sub-exercises")?.hidden === false
+      ? "exercises"
+      : "workouts";
+  for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
+    const nav = b.dataset.nav;
+    const active = nav === "other" ? !athleteOpen : athleteOpen && nav === activeSub;
+    b.classList.toggle("is-active", active);
   }
 }
 
-/** Sub-navigation inside the Athlete tab (Workouts / Exercises / Records). */
-function setupSubtabs() {
-  for (const sub of document.querySelectorAll<HTMLButtonElement>(".subtab"))
-    sub.addEventListener("click", () => showSubtab(sub.dataset.subtab ?? ""));
+function setOtherSheetOpen(open: boolean) {
+  els.otherSheet.hidden = !open;
+  document.body.classList.toggle("sheet-open", open);
+}
+
+/** Bottom nav (Workouts | Exercises | Other) + the "Other" sheet of secondary
+ * views. Workouts/Exercises drive the Athlete sub-views; Other opens the sheet,
+ * whose items jump to their top-tab panel. */
+function setupBottomNav() {
+  for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
+    b.addEventListener("click", () => {
+      const nav = b.dataset.nav;
+      if (nav === "other") {
+        setOtherSheetOpen(els.otherSheet.hidden);
+        return;
+      }
+      setOtherSheetOpen(false);
+      switchTopTab("athlete");
+      showSubtab(nav ?? "workouts");
+    });
+  }
+  // Sheet items each open a top-tab panel and close the sheet.
+  for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
+    item.addEventListener("click", () => {
+      setOtherSheetOpen(false);
+      switchTopTab(item.dataset.tab ?? "");
+    });
+  }
+  // Tapping the backdrop (or anything marked data-other-close) dismisses it.
+  els.otherSheet.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("[data-other-close]")) setOtherSheetOpen(false);
+  });
 }
 
 void init();

@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.7.2.2</span></h1>
+      <h1>Colosseum <span class="version">b.1.8.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -119,17 +119,6 @@
             </details>
           </div>
         </details>
-
-        <nav class="subtabs" role="tablist">
-          <button class="subtab is-active" data-subtab="workouts" role="tab">
-            <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>
-            <span>Workouts</span>
-          </button>
-          <button class="subtab" data-subtab="exercises" role="tab">
-            <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8v8M9.5 6.5v11M14.5 6.5v11M17.5 8v8M9.5 12h5M4 10.5v3M20 10.5v3"/></svg>
-            <span>Exercises</span>
-          </button>
-        </nav>
 
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel">
@@ -848,7 +837,59 @@
           <table id="addTable" class="data-table"></table>
         </section>
       </div>
+
+      <div id="tab-groups" class="tab-panel" hidden>
+        <section class="panel">
+          <div class="groups-head">
+            <h2>Group view</h2>
+            <p class="muted" style="margin: 0.25rem 0 0">
+              Movement patterns &amp; muscle groups, each combining several lifts. Shows the
+              best estimated 1RM per group for the chosen athlete (or everyone).
+            </p>
+          </div>
+          <div class="groups-controls">
+            <label class="inline-label">Athlete
+              <select id="groupsAthlete"></select>
+            </label>
+          </div>
+          <div id="groupsBody" class="groups-body"></div>
+        </section>
+      </div>
     </main>
+
+    <!-- App-style bottom navigation. Workouts/Exercises drive the Athlete
+         sub-views; "Other" opens a sheet holding the remaining views. The old
+         top .tabs nav is hidden (CSS) — this is now the primary navigation. -->
+    <nav class="subtabs" role="tablist">
+      <button class="subtab is-active" data-nav="workouts" role="tab">
+        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>
+        <span>Workouts</span>
+      </button>
+      <button class="subtab" data-nav="exercises" role="tab">
+        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8v8M9.5 6.5v11M14.5 6.5v11M17.5 8v8M9.5 12h5M4 10.5v3M20 10.5v3"/></svg>
+        <span>Exercises</span>
+      </button>
+      <button class="subtab" data-nav="other" role="tab">
+        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        <span>Other</span>
+      </button>
+    </nav>
+
+    <!-- "Other" bottom-sheet: the umbrella of secondary views. Each item jumps
+         to its top-tab panel (data-tab) and closes the sheet. -->
+    <div id="otherSheet" class="other-sheet" hidden>
+      <div class="other-sheet-backdrop" data-other-close></div>
+      <div class="other-sheet-card" role="menu" aria-label="Other views">
+        <div class="other-sheet-grip"></div>
+        <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
+        <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">👥</span> Group view</button>
+        <button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
+        <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Merges &amp; body parts</button>
+        <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
+        <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
+        <button class="other-item" data-tab="guide" role="menuitem"><span class="other-ico">📖</span> Guide</button>
+      </div>
+    </div>
 
     <footer class="appfoot">
       <div id="status" class="status">Loading…</div>
