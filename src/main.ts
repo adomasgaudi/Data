@@ -1647,7 +1647,7 @@ function renderCompareChart() {
       },
       scales: {
         x: timeXAxis(trMin - MS_DAY, trMax + MS_DAY),
-        y: { title: { display: true, text: "est. 1RM (kg)" }, grid: { color: "#d4d9e2" } },
+        y: { title: { display: true, text: "est. 1RM (kg)" }, beginAtZero: true, grid: { color: "#d4d9e2" } },
       },
     },
   });
@@ -3063,6 +3063,9 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
         },
         y1rm: {
           position: "right",
+          // Anchor at zero so the trend isn't auto-zoomed into a tight band
+          // (which exaggerates small week-to-week changes).
+          beginAtZero: true,
           grid: { display: false },
           ticks: { color: "#6b7280", mirror: true, padding: 4, z: 2 },
         },

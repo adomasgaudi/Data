@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.7",
+    title: "demo-scroll-and-1rm-zerobase",
+    sp: 2,
+    note: "Demo graph now pans/zooms; 1RM-trend graphs anchor at zero instead of auto-zooming.",
+    details: [
+      "Graph demo: starts zoomed-in (room to pan) and the drag is driven from window listeners, so scrolling/zooming actually works.",
+      "1RM trend (drill-in + compare) now begins at zero, so small week-to-week changes aren't exaggerated by a tight auto-scale.",
+    ],
+  },
+  {
     version: "b.1.12.6",
     title: "axis-pin-and-graph-demo",
     sp: 3,

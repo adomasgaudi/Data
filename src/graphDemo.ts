@@ -60,11 +60,12 @@ export function mountGraphDemo(container: HTMLElement): void {
   const yMin = 0;
   const yMax = Math.max(20, Math.ceil(Math.max(...allY) / 20) * 20);
 
-  // Mutable x-view (what pan/zoom change). Y is fixed.
-  let xMin = dataMin;
-  let xMax = dataMax;
+  // Mutable x-view (what pan/zoom change). Y is fixed. Start zoomed-in to the
+  // most recent ~12 weeks so there's room to pan/scroll right away.
   const minSpan = 3 * WEEK; // tightest zoom-in
   const fullSpan = dataMax - dataMin;
+  let xMax = dataMax;
+  let xMin = Math.max(dataMin, dataMax - 12 * WEEK);
 
   // Fixed geometry — the whole point: axes never move.
   const H = 360;
@@ -146,11 +147,10 @@ export function mountGraphDemo(container: HTMLElement): void {
 
   if (container.dataset.gdWired !== "1") {
     container.dataset.gdWired = "1";
-    container.addEventListener("pointerdown", (e) => {
-      drag = { x: e.clientX, xMin, xMax };
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    });
-    container.addEventListener("pointermove", (e) => {
+
+    // Drag to pan. Listeners live on `window` for the duration of a drag, so they
+    // keep firing even though draw() replaces the SVG on every frame.
+    const onMove = (e: PointerEvent) => {
       if (!drag) return;
       const W = widthOf();
       const plotW = W - M.l - M.r;
@@ -159,18 +159,27 @@ export function mountGraphDemo(container: HTMLElement): void {
       xMax = drag.xMax - dt;
       clampView();
       draw();
+    };
+    const onUp = () => {
+      drag = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    container.addEventListener("pointerdown", (e) => {
+      drag = { x: e.clientX, xMin, xMax };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      e.preventDefault();
     });
-    const endDrag = () => { drag = null; };
-    container.addEventListener("pointerup", endDrag);
-    container.addEventListener("pointercancel", endDrag);
-    container.addEventListener("pointerleave", endDrag);
+
+    // Wheel / trackpad / pinch to zoom around the cursor.
     container.addEventListener(
       "wheel",
       (e) => {
         e.preventDefault();
         const focus = tFromClientX(e.clientX) ?? (xMin + xMax) / 2;
         const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-        let span = Math.min(Math.max((xMax - xMin) * factor, minSpan), fullSpan);
+        const span = Math.min(Math.max((xMax - xMin) * factor, minSpan), fullSpan);
         const leftFrac = (focus - xMin) / (xMax - xMin);
         xMin = focus - leftFrac * span;
         xMax = xMin + span;
