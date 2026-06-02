@@ -38,6 +38,13 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.3",
+    title: "workout-dow-letter",
+    sp: 1,
+    note: "Workouts list shows the weekday letter (M T W Th F Sa Su) on each session.",
+    details: ["Each day-view session now reads e.g. ‘Sa May 2’ so the day of week is clear at a glance."],
+  },
+  {
     version: "b.1.12.2",
     title: "graph-gridlines-fixed",
     sp: 3,

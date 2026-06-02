@@ -278,6 +278,13 @@ const shortDate = (iso: string): string => {
   return mon && d ? `${mon} ${Number(d)}` : iso;
 };
 
+/** One/two-letter weekday for an ISO day: M T W Th F Sa Su (UTC, to match keys). */
+const DOW_ABBR = ["Su", "M", "T", "W", "Th", "F", "Sa"]; // index = getUTCDay()
+const dowLetter = (iso: string): string => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? "" : (DOW_ABBR[new Date(t).getUTCDay()] ?? "");
+};
+
 /**
  * ISO-8601 week number (1–53) for a "YYYY-MM-DD" date: weeks start Monday and
  * week 1 is the one containing the year's first Thursday. Matches the app's
@@ -2310,7 +2317,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
   return days
     .map((d) => ({
-      label: shortDate(d.date),
+      label: `${dowLetter(d.date)} ${shortDate(d.date)}`,
       date: d.date,
       totalSets: d.totalSets,
       exercises: d.exercises,
