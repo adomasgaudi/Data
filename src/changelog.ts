@@ -24,6 +24,13 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.7.2.1",
+    title: "exercise-code-overrides",
+    sp: 1,
+    note: "Custom codes: Back Extension → BE, Hip Thrust → HT, Dips → Dip.",
+    details: ["Owner-chosen short codes for a few exercises in the list."],
+  },
+  {
     version: "b.1.7.2",
     title: "add-export-import-backup",
     sp: 2,

@@ -341,6 +341,10 @@ export function exerciseTier(exerciseName: string): ExerciseTier {
 // Exact, owner-named codes that bypass the prefix+core derivation entirely.
 const EXACT_CODE_OVERRIDES: Record<string, string> = {
   sumodeadlift: "S-DL", // explicit exception: uppercase S + dash
+  backextension: "BE",
+  hipthrust: "HT",
+  dips: "Dip", // owner prefers the short word over a code
+  dip: "Dip",
 };
 
 // Movement cores (UPPERCASE), matched on the longest phrase first so "bench
