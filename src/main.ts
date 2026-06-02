@@ -488,9 +488,24 @@ function openChangelog() {
  * is an expandable row: version + SP + one-line note collapsed; bullet details
  * when opened. */
 function renderChangelog() {
-  const header = `<p class="cl-summary muted">${CHANGELOG.length} releases · ${TOTAL_SP} story points shipped</p>`;
-  const rows = CHANGELOG.map(
-    (r) =>
+  // Count actual released versions (a grouped minor counts its sub-versions).
+  const releaseCount = CHANGELOG.reduce((n, r) => n + (r.children?.length ?? 1), 0);
+  const header = `<p class="cl-summary muted">${releaseCount} releases · ${TOTAL_SP} story points shipped</p>`;
+  const rows = CHANGELOG.map((r) => {
+    // Grouped minor: list each folded patch under the bullets.
+    const children = r.children?.length
+      ? `<div class="cl-children">` +
+        r.children
+          .map(
+            (c) =>
+              `<div class="cl-child"><span class="cl-cver">${escapeHtml(c.version)}</span>` +
+              `<span class="cl-cnote">${escapeHtml(c.note)}</span>` +
+              `<span class="cl-csp">SP ${c.sp}</span></div>`,
+          )
+          .join("") +
+        `</div>`
+      : "";
+    return (
       `<details class="cl-row">` +
       `<summary class="cl-sum">` +
       `<span class="cl-ver">${escapeHtml(r.version)}</span>` +
@@ -500,8 +515,10 @@ function renderChangelog() {
       `<span class="cl-caret">▾</span>` +
       `</summary>` +
       `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>` +
-      `</details>`,
-  ).join("");
+      children +
+      `</details>`
+    );
+  }).join("");
   els.changelog.innerHTML = header + rows;
 }
 

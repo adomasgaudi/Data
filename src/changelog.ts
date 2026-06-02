@@ -17,57 +17,29 @@ export interface Release {
   note: string;
   /** Bullet points of what changed, shown when the row is expanded. */
   details: string[];
+  /** Patch releases folded under this one (a minor that groups its patches).
+   * When present, the row expands into a dropdown listing each sub-version and
+   * `sp` is the sum of theirs. */
+  children?: { version: string; sp: number; note: string }[];
 }
 
 export const CHANGELOG: Release[] = [
   {
-    version: "b.1.5.4",
-    title: "clickable-version-tag",
-    sp: 1,
-    note: "The version tag opens Version history; first live auto-deploy test.",
+    version: "b.1.5",
+    title: "graphs-and-live-hosting",
+    sp: 7,
+    note: "Workouts sets-over-time graph, smoother charts, and live hosting.",
     details: [
-      "Tap the version number in the header to open the Version history page.",
-      "Used to confirm GitHub Pages auto-deploy: push → refresh → see the change.",
+      "New Workouts 'Sets over time' graph: every set as a weight → own-1RM bar, coloured per exercise.",
+      "All time-axis graphs pan/zoom smoothly; calendar gridlines are fixed to the data.",
+      "Set up GitHub Pages auto-deploy — refresh the live URL instead of downloading a file.",
     ],
-  },
-  {
-    version: "b.1.5.3",
-    title: "smooth-graph-gridlines",
-    sp: 1,
-    note: "Fix jerky graphs — gridlines fixed to the data, not the zoom view.",
-    details: [
-      "Calendar gridlines are now computed once from the data range, not recomputed every pan/zoom frame.",
-      "Panning/zooming is smooth and only the user changes the view; Chart.js just clips + thins labels.",
-      "Applies to all time-axis graphs (progress, both compare views, workout sets).",
-    ],
-  },
-  {
-    version: "b.1.5.2",
-    title: "sets-graph-height-and-autodeploy",
-    sp: 1,
-    note: "Sets-over-time graph 30% shorter; auto-deploy workflow added.",
-    details: [
-      "Workouts 'Sets over time' graph height reduced 30% (70vh → 49vh).",
-      "Added a GitHub Pages deploy workflow so pushes publish a live URL to refresh.",
-    ],
-  },
-  {
-    version: "b.1.5.1",
-    title: "compare-trend-scroll",
-    sp: 1,
-    note: "1RM trend compare graph can pan/zoom again.",
-    details: ["The trend view was missing the zoom plugin config the other graphs have; added drag-to-pan and wheel/pinch-zoom."],
-  },
-  {
-    version: "b.1.5.0",
-    title: "workout-sets-graph-and-gridline-fix",
-    sp: 3,
-    note: "Workouts 'Sets over time' graph + fix for broken chart scrolling.",
-    details: [
-      "Workouts view: a collapsible 'Sets over time' graph — every set as a weight → own-1RM bar, coloured per exercise (top lifts named, the rest grouped as 'Other').",
-      "Fix (regression from b.1.4.0): calendar gridlines broke pan/zoom and overlapped labels.",
-      "Gridline ticks now recompute from the visible range, cap their count, and fall back to auto ticks at extreme zoom.",
-      "Charts with no usable data no longer break the axis (finite-range guard).",
+    children: [
+      { version: "b.1.5.4", sp: 1, note: "Header version tag opens Version history (live-deploy test)." },
+      { version: "b.1.5.3", sp: 1, note: "Graphs no longer jerky — gridlines fixed to the data, not the zoom view." },
+      { version: "b.1.5.2", sp: 1, note: "Sets-over-time graph 30% shorter; GitHub Pages auto-deploy added." },
+      { version: "b.1.5.1", sp: 1, note: "1RM trend compare graph pans/zooms again." },
+      { version: "b.1.5.0", sp: 3, note: "Workouts 'Sets over time' graph + fix for the broken/jerky graphs." },
     ],
   },
   {
