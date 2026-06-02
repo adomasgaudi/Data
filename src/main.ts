@@ -2700,32 +2700,30 @@ function timeAxisGridTicks(min: number, max: number): number[] {
   return out;
 }
 
-/** Shared x time-axis options: gridlines on week/month boundaries, recomputed
- * from the CURRENTLY VISIBLE range so panning/zooming stays correct and labels
- * never pile up. Falls back to Chart.js's own ticks at extreme zoom. `mirrored`
- * tucks labels inside the plot (progress chart). */
+/** Shared x time-axis options: gridlines on week/month boundaries computed ONCE
+ * from the data range — NOT from the live zoom view — so panning/zooming is
+ * smooth (no per-frame relayout) and only the user changes the view. Chart.js
+ * draws just the ticks inside the current range and autoSkip thins them if dense.
+ * `mirrored` tucks labels inside the plot (progress chart). */
 function timeXAxis(min: number, max: number, mirrored = false) {
   // Guard against empty data (min/max would be ±Infinity → breaks the scale):
   // only pin the range when both bounds are finite, else let Chart.js auto-range.
   const haveRange = Number.isFinite(min) && Number.isFinite(max) && max > min;
+  // Compute the calendar boundary ticks a single time, up front.
+  const gridTicks = haveRange ? timeAxisGridTicks(min, max) : [];
   return {
     type: "linear" as const,
     ...(haveRange ? { min, max } : {}),
     grid: { color: "#ececec", drawTicks: false },
-    // axis.min/max reflect the live pan/zoom view; derive boundary ticks from it.
-    afterBuildTicks: (axis: { min: number; max: number; ticks: { value: number }[] }) => {
-      const lo = Number.isFinite(axis.min) ? axis.min : min;
-      const hi = Number.isFinite(axis.max) ? axis.max : max;
-      const t = timeAxisGridTicks(lo, hi);
-      // Only take over when it yields a sane number of gridlines; otherwise leave
-      // Chart.js's auto ticks (prevents overlap/breakage at extreme zoom-out/in).
-      if (t.length >= 2 && t.length <= 18) axis.ticks = t.map((value) => ({ value }));
+    // Fixed ticks (week/month boundaries) — independent of the zoom view, so the
+    // axis never recomputes mid-pan. Chart.js clips to the visible range itself.
+    afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
+      if (gridTicks.length >= 2) axis.ticks = gridTicks.map((value) => ({ value }));
     },
     ticks: {
       color: "#6b7280",
       maxRotation: 0,
-      autoSkip: true,
-      maxTicksLimit: 12,
+      autoSkip: true, // thins labels by available width; keeps the in-view ones
       includeBounds: false,
       ...(mirrored ? { mirror: true, padding: 8, z: 2 } : {}),
       callback: (value: string | number) => tsLabel(Number(value)),

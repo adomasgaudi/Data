@@ -21,6 +21,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.5.3",
+    title: "smooth-graph-gridlines",
+    sp: 1,
+    note: "Fix jerky graphs — gridlines fixed to the data, not the zoom view.",
+    details: [
+      "Calendar gridlines are now computed once from the data range, not recomputed every pan/zoom frame.",
+      "Panning/zooming is smooth and only the user changes the view; Chart.js just clips + thins labels.",
+      "Applies to all time-axis graphs (progress, both compare views, workout sets).",
+    ],
+  },
+  {
     version: "b.1.5.2",
     title: "sets-graph-height-and-autodeploy",
     sp: 1,
