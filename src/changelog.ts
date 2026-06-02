@@ -21,6 +21,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.3.2",
+    title: "compare-perset-thicker-scroll",
+    sp: 1,
+    note: "Compare per-set bars thicker and pan/zoom scrollable.",
+    details: [
+      "Per-set range bars in the compare graph are noticeably thicker.",
+      "Added drag-to-pan and wheel/pinch-to-zoom (x), like the other graphs.",
+    ],
+  },
+  {
     version: "b.1.3.1",
     title: "changelog-expandable-sp",
     sp: 1,

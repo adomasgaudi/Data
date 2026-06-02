@@ -1447,7 +1447,8 @@ function renderCompareChart() {
         data: bars as unknown as { x: number; y: number }[],
         backgroundColor: color,
         borderSkipped: false,
-        maxBarThickness: 9,
+        barThickness: 16,
+        minBarLength: 2,
       };
     });
     compareChart = new Chart(canvas, {
@@ -1467,6 +1468,11 @@ function renderCompareChart() {
               },
             },
           },
+          // Scroll/zoom like the other graphs: drag to pan, wheel/pinch to zoom (x).
+          zoom: {
+            pan: { enabled: true, mode: "x" },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
+          },
         },
         scales: {
           x: { type: "linear", grid: { color: "#ececec" }, ticks: { callback: (v) => tsLabel(Number(v)), maxRotation: 0, autoSkip: true } },
@@ -1475,7 +1481,7 @@ function renderCompareChart() {
       },
     });
     els.compareNote.textContent =
-      `Every set's weight → its own estimated 1RM (${formula}), one bar per set, coloured per exercise.`;
+      `Every set's weight → its own estimated 1RM (${formula}), one bar per set, coloured per exercise. Drag to pan · wheel/pinch to zoom.`;
     return;
   }
 
