@@ -2081,20 +2081,33 @@ function renderExerciseProgressChart(exName: string) {
   };
 
   if (exProgressView === "perset") {
-    const points = recs
+    // One bar PER SET, each its own column (chronological) so warmups and the top
+    // set never merge into a single "range of weights". Bottom = that set's
+    // weight, top = that same set's own estimated 1RM. X is a sequential index;
+    // the labels/tooltip map it back to the set's date.
+    const sets = recs
       .filter((r) => r.username === username && r.exerciseName === exName)
-      .map((s) => {
-        const e1rm = addedWeight1RM(s, formula);
-        if (e1rm === null) return null;
-        const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-        return { x: ts(s.date), lo: added, hi: e1rm, meta: `×${s.reps ?? 0}` };
-      })
-      .filter((p): p is { x: number; lo: number; hi: number; meta: string } => p !== null);
+      .slice()
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
+    const points: SvgPoint[] = [];
+    const dateByIdx: string[] = [];
+    for (const s of sets) {
+      const e1rm = addedWeight1RM(s, formula);
+      if (e1rm === null) continue;
+      const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+      points.push({ x: points.length, lo: added, hi: e1rm, meta: `${fmt(added)}×${s.reps ?? 0} → ${fmt(e1rm)} 1RM` });
+      dateByIdx.push(s.date);
+    }
     if (points.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
     els.exerciseProgress.hidden = false;
-    mount({ series: [{ name: exName, color: "#284e86", type: "range", points }], xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 });
+    const dateAt = (v: number) => { const d = dateByIdx[Math.round(v)]; return d ? shortDate(d) : ""; };
+    mount({
+      series: [{ name: exName, color: "#284e86", type: "range", points }],
+      xKind: "linear", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
+      formatX: dateAt, formatTipX: dateAt,
+    });
     els.exerciseProgressNote.textContent =
-      "One bar per set (every set of every session), spanning that set's weight (bottom) to its own estimated 1RM (top).";
+      "One bar = one set (oldest → newest): the bottom is that set's weight, the top is that same set's estimated 1RM. Warmups and top sets are separate bars — not a merged range.";
     return;
   }
 
