@@ -1624,12 +1624,12 @@ function renderExercisesPage() {
   // recent strength). Rep counts are editable (repMaxCols).
   const formula = currentFormula();
   const prBasis = cutoff ? computedRecords().filter((r) => r.date && r.date >= cutoff) : computedRecords();
-  const prByEx = new Map<string, number>();
+  const prByEx = new Map<string, PersonalRecord>();
   for (const p of personalRecords(
     filterRecords(prBasis, { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     formula,
   ))
-    prByEx.set(p.exerciseName, p.bestE1rm.e1rm);
+    prByEx.set(p.exerciseName, p);
   const rm = (oneRm: number, reps: number): string => {
     const w = reps === 1 ? oneRm : weightForReps(oneRm, reps, formula);
     return w === null ? "—" : fmt(w);
@@ -1639,10 +1639,16 @@ function renderExercisesPage() {
   const codes = exerciseCodesFor(ordered.map((it) => it.exerciseName));
   const nCols = repMaxCols.length;
   const rmCells = (name: string): string => {
-    const pr = prByEx.get(name);
+    const oneRm = prByEx.get(name)?.bestE1rm.e1rm;
     return repMaxCols
-      .map((reps) => `<td class="num">${pr === undefined ? "—" : rm(pr, reps)}</td>`)
+      .map((reps) => `<td class="num">${oneRm === undefined ? "—" : rm(oneRm, reps)}</td>`)
       .join("");
+  };
+  // The actual best set behind that 1RM (real weight×reps), over the same period
+  // — so the list shows genuine lifts next to the computed rep-max.
+  const bestSetCell = (name: string): string => {
+    const pr = prByEx.get(name);
+    return `<td class="num ex-bestset">${pr ? wr(pr.bestE1rm.weight, pr.bestE1rm.reps) : "—"}</td>`;
   };
   const exCell = (name: string): string =>
     `<span class="ex-code">${escapeHtml(codes.get(name) ?? exerciseCode(name))}</span>` +
@@ -1651,8 +1657,9 @@ function renderExercisesPage() {
   const head =
     `<thead><tr><th>Exercise</th>` +
     repMaxCols.map((n) => `<th class="num">${n === 1 ? "1RM" : `${n}RM`}</th>`).join("") +
+    `<th class="num">Best set</th>` +
     `</tr></thead>`;
-  const colspan = nCols + 1;
+  const colspan = nCols + 2;
   const start = exercisesPage * PAGE_SIZE;
   // When grouping, emit a category sub-header row whenever the category changes.
   // Track the previous page's last category so a header isn't dropped at a page
@@ -1663,7 +1670,7 @@ function renderExercisesPage() {
   // changes (and not dropped at a page boundary).
   let prevTier =
     exerciseSort === "tier" && prevItem ? (frequencyTier(prevItem.count)?.tier ?? null) : null;
-  const emptyCells = repMaxCols.map(() => `<td class="num">—</td>`).join("");
+  const emptyCells = repMaxCols.map(() => `<td class="num">—</td>`).join("") + `<td class="num">—</td>`;
   const rowHtml = (it: ExItem, abs: number, rankCls: string) => {
     // Not-trained rows are greyed, non-clickable (no `ex-row` class / data-index).
     if (!it.trained)
@@ -1673,7 +1680,7 @@ function renderExercisesPage() {
       );
     return (
       `<tr class="ex-row" data-index="${abs}"><td class="ex-name-cell ${rankCls}">` +
-      `${exCell(it.exerciseName)} <span class="go-chevron">›</span></td>${rmCells(it.exerciseName)}</tr>`
+      `${exCell(it.exerciseName)} <span class="go-chevron">›</span></td>${rmCells(it.exerciseName)}${bestSetCell(it.exerciseName)}</tr>`
     );
   };
   const rows = ordered

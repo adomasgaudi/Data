@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.10.2",
+    title: "list-best-set",
+    sp: 2,
+    note: "List & stats gains a ‘Best set’ column — the real top weight×reps behind each lift's 1RM.",
+    details: [
+      "Next to the computed rep-max, each exercise row shows its actual best set (weight × reps) over the same period.",
+      "Tap the row to open the drill-in for the full 5 best sets of the last 3 months.",
+    ],
+  },
+  {
     version: "b.1.10.1",
     title: "effort-sp-chips",
     sp: 5,
