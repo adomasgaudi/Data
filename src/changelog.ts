@@ -24,6 +24,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.7.2",
+    title: "add-export-import-backup",
+    sp: 2,
+    note: "Back up / move your hand-logged sets with Export & Import.",
+    details: [
+      "Export downloads your added sets as a backup file; Import loads them on another browser/phone.",
+      "Local storage is per-device — Export/Import (or send me the file to bake in) keeps them safe.",
+    ],
+  },
+  {
     version: "b.1.7.1",
     title: "exercises-list-codes-repmax",
     sp: 2,
@@ -174,7 +184,7 @@ export const COMPONENTS: Component[] = [
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },
-  { name: "Add", version: "b1.0" },
+  { name: "Add", version: "b1.1" }, // bumped: export/import backup
 ];
 
 /** Sum of all story points shipped (grouped entries already total their children). */

@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.7.1</span></h1>
+      <h1>Colosseum <span class="version">b.1.7.2</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -833,7 +833,18 @@
           <p id="addHint" class="muted" style="margin: 0.5rem 0 0; font-size: 0.85rem"></p>
         </section>
         <section class="panel">
-          <h2>Your added sets <span class="muted" id="addCount"></span></h2>
+          <div class="add-saved-head">
+            <h2>Your added sets <span class="muted" id="addCount"></span></h2>
+            <div class="add-io">
+              <button type="button" id="addExport" class="settings-link">⬇ Export (backup)</button>
+              <button type="button" id="addImport" class="settings-link">⬆ Import</button>
+              <input type="file" id="addImportFile" accept="application/json,.json" hidden />
+            </div>
+          </div>
+          <p class="muted" style="margin: 0 0 0.75rem; font-size: 0.82rem">
+            Saved on this device. To keep them when you switch browser or phone, <strong>Export</strong> a
+            backup and <strong>Import</strong> it there — or send me the file and I'll bake it into the app for good.
+          </p>
           <table id="addTable" class="data-table"></table>
         </section>
       </div>

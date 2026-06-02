@@ -161,6 +161,9 @@ const els = {
   addHint: $("addHint"),
   addCount: $("addCount"),
   addTable: $<HTMLTableElement>("addTable"),
+  addExport: $<HTMLButtonElement>("addExport"),
+  addImport: $<HTMLButtonElement>("addImport"),
+  addImportFile: $<HTMLInputElement>("addImportFile"),
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
@@ -3957,9 +3960,53 @@ function onAddSubmit() {
   renderDataTab();
 }
 
+/** Download the hand-logged sets as a JSON backup (portable across devices). */
+function exportManual() {
+  const blob = new Blob([JSON.stringify(manualEntries, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `colosseum-added-sets-${todayIso()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Merge an imported backup into the on-device sets (dedupe by id). */
+async function importManual(file: File) {
+  try {
+    const arr = JSON.parse(await file.text()) as ManualEntry[];
+    if (!Array.isArray(arr)) throw new Error("not a backup file");
+    const byId = new Map(manualEntries.map((m) => [m.id, m]));
+    let added = 0;
+    for (const m of arr)
+      if (m && typeof m.id === "string" && typeof m.username === "string" && typeof m.exerciseName === "string") {
+        if (!byId.has(m.id)) added++;
+        byId.set(m.id, m);
+      }
+    manualEntries = [...byId.values()];
+    saveManual();
+    mergeManualSets();
+    renderAddTab();
+    renderAll();
+    renderDataTab();
+    els.addHint.textContent = `Imported — ${added} new set${added === 1 ? "" : "s"} added (${manualEntries.length} total).`;
+  } catch (err) {
+    els.addHint.textContent = `Couldn't read that file: ${String(err)}`;
+  }
+}
+
 function setupAddTab() {
   renderAddTab();
   els.addSubmit.addEventListener("click", onAddSubmit);
+  els.addExport.addEventListener("click", exportManual);
+  els.addImport.addEventListener("click", () => els.addImportFile.click());
+  els.addImportFile.addEventListener("change", () => {
+    const file = els.addImportFile.files?.[0];
+    if (file) void importManual(file);
+    els.addImportFile.value = ""; // allow re-importing the same file
+  });
   els.addTable.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".manual-del");
     if (!btn?.dataset.id) return;
