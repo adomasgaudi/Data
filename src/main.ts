@@ -151,6 +151,8 @@ const els = {
   dataTableWrap: $("dataTableWrap"),
   dataPager: $("dataPager"),
   dataSearch: $<HTMLInputElement>("dataSearch"),
+  dataExercise: $<HTMLSelectElement>("dataExercise"),
+  dataUser: $<HTMLSelectElement>("dataUser"),
 };
 
 let data: LoadedData;
@@ -2695,36 +2697,87 @@ function dataNum(n: number | null | undefined): string {
   return String(Math.round(n * 100) / 100);
 }
 
-/** Build the rows (header + body arrays) for whichever data view is active. */
-function dataRows(): { header: string[]; body: string[][] } {
+/** One display row plus the user/exercise it belongs to, so the structured
+ * Athlete/Exercise dropdowns can filter without guessing column positions. */
+interface DataRow {
+  user: string;
+  exercise: string; // canonical (processed) or raw (original) exercise name
+  cells: string[];
+}
+
+/** Raw exercise name → canonical (merged) name, so the Exercise dropdown — which
+ * lists canonical names — can also filter the original CSV's raw spellings. */
+function rawToCanonicalExercise(): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const r of data.records) {
+    if (r.originalExerciseName && r.originalExerciseName !== r.exerciseName) {
+      m.set(r.originalExerciseName, r.exerciseName);
+    }
+  }
+  return m;
+}
+
+/** Build the header + rows for whichever table is active. Username and set_number
+ * are intentionally omitted (the owner doesn't need them). */
+function dataRows(): { header: string[]; rows: DataRow[] } {
   if (dataView === "original") {
-    const rows = parseCsvRows(data.rawCsv);
-    return { header: rows[0] ?? [], body: rows.slice(1) };
+    const raw = parseCsvRows(data.rawCsv);
+    const rawHeader = raw[0] ?? [];
+    // Drop the username and set_number columns from the original CSV too.
+    const dropIdx = new Set(
+      rawHeader.flatMap((h, i) => (h === "username" || h === "set_number" ? [i] : [])),
+    );
+    const userIdx = rawHeader.indexOf("user");
+    const exIdx = rawHeader.indexOf("exercise_name");
+    const keep = (row: string[]) => row.filter((_, i) => !dropIdx.has(i));
+    const header = keep(rawHeader);
+    const toCanon = rawToCanonicalExercise();
+    const rows = raw.slice(1).map((row) => {
+      const rawEx = exIdx >= 0 ? (row[exIdx] ?? "") : "";
+      return {
+        user: userIdx >= 0 ? (row[userIdx] ?? "") : "",
+        // Match on the canonical name so the dropdown catches merged spellings.
+        exercise: toCanon.get(rawEx) ?? rawEx,
+        cells: keep(row),
+      };
+    });
+    return { header, rows };
   }
   // Processed: the records every number is computed from. We show the displayed
   // (added) weight AND the bodyweight-inclusive load used for the 1RM, plus the
   // raw exercise name when canonicalisation renamed it — so changes are visible.
   const header = [
-    "user", "username", "date", "bodyweight", "exercise_name",
-    "raw_exercise_name", "set_number", "weight", "weight_for_1RM", "reps",
+    "user", "date", "bodyweight", "exercise_name",
+    "raw_exercise_name", "weight", "weight_for_1RM", "reps",
     "notes", "dropset", "percentile",
   ];
-  const body = computedRecords().map((r) => {
+  const rows = computedRecords().map((r) => {
     const added = r.origWeight !== undefined ? r.origWeight : r.weight;
-    return [
-      r.user, r.username, r.date, dataNum(r.bodyweight), r.exerciseName,
-      r.originalExerciseName && r.originalExerciseName !== r.exerciseName ? r.originalExerciseName : "",
-      String(r.setNumber), dataNum(added), dataNum(r.weight), dataNum(r.reps),
-      r.notes, r.dropset ? "TRUE" : "", dataNum(r.percentile),
-    ];
+    return {
+      user: r.user,
+      exercise: r.exerciseName,
+      cells: [
+        r.user, r.date, dataNum(r.bodyweight), r.exerciseName,
+        r.originalExerciseName && r.originalExerciseName !== r.exerciseName ? r.originalExerciseName : "",
+        dataNum(added), dataNum(r.weight), dataNum(r.reps),
+        r.notes, r.dropset ? "TRUE" : "", dataNum(r.percentile),
+      ],
+    };
   });
-  return { header, body };
+  return { header, rows };
 }
 
 function renderDataTab() {
-  const { header, body } = dataRows();
+  const { header, rows } = dataRows();
+  const exPick = els.dataExercise.value;
+  const userPick = els.dataUser.value;
   const q = dataSearch.trim().toLowerCase();
-  const filtered = q ? body.filter((row) => row.some((c) => c.toLowerCase().includes(q))) : body;
+  const filtered = rows.filter((row) => {
+    if (userPick && row.user !== userPick) return false;
+    if (exPick && row.exercise !== exPick) return false;
+    if (q && !row.cells.some((c) => c.toLowerCase().includes(q))) return false;
+    return true;
+  });
 
   const total = filtered.length;
   const maxPage = Math.max(0, Math.ceil(total / DATA_PAGE_SIZE) - 1);
@@ -2734,26 +2787,51 @@ function renderDataTab() {
 
   const thead = `<thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>`;
   const tbody = pageRows
-    .map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
+    .map((row) => `<tr>${row.cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
     .join("");
-  const count = `<p class="muted" style="margin:0 0 0.6rem">${total.toLocaleString()} rows${q ? " (filtered)" : ""}</p>`;
+  const active = exPick || userPick || q;
+  const count = `<p class="muted" style="margin:0 0 0.6rem">${total.toLocaleString()} rows${active ? " (filtered)" : ""}</p>`;
   els.dataTableWrap.innerHTML =
     count + `<table class="data-table data-raw-table">${thead}<tbody>${tbody}</tbody></table>`;
   els.dataPager.innerHTML = pagerHtml(dataPage, total, DATA_PAGE_SIZE);
 }
 
+/** Fill the Data-tab Exercise and Athlete dropdowns from the loaded records. */
+function populateDataFilters() {
+  const exercises = distinctExercises(data.records);
+  els.dataExercise.innerHTML =
+    `<option value="">All exercises</option>` +
+    exercises.map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join("");
+  // Value is the display name ("Adomas") because that's the `user` column both
+  // the processed records and the original CSV carry — so one dropdown filters
+  // both tables consistently.
+  const users = distinctUsers(data.records);
+  els.dataUser.innerHTML =
+    `<option value="">All athletes</option>` +
+    users.map((u) => `<option value="${escapeHtml(u.user)}">${escapeHtml(u.user)}</option>`).join("");
+}
+
 function setupDataTab() {
-  document.querySelectorAll<HTMLButtonElement>("[data-dataview]").forEach((btn) => {
+  populateDataFilters();
+  document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = btn.dataset.dataview === "original" ? "original" : "processed";
       if (v === dataView) return;
       dataView = v;
       dataPage = 0;
-      document.querySelectorAll<HTMLButtonElement>("[data-dataview]").forEach((b) =>
+      document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((b) =>
         b.classList.toggle("is-active", b === btn),
       );
       renderDataTab();
     });
+  });
+  els.dataExercise.addEventListener("change", () => {
+    dataPage = 0;
+    renderDataTab();
+  });
+  els.dataUser.addEventListener("change", () => {
+    dataPage = 0;
+    renderDataTab();
   });
   els.dataSearch.addEventListener("input", () => {
     dataSearch = els.dataSearch.value;

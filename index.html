@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.26.0</span></h1>
+      <h1>Colosseum <span class="version">v0.27.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -724,10 +724,18 @@
             load used for 1RM. Compare them to spot any mistake.
           </p>
           <div class="data-views" role="group" aria-label="Which table to show">
-            <button type="button" class="subtab is-active" data-dataview="processed">Processed</button>
-            <button type="button" class="subtab" data-dataview="original">Original CSV</button>
+            <button type="button" class="data-viewbtn is-active" data-dataview="processed">Processed</button>
+            <button type="button" class="data-viewbtn" data-dataview="original">Original CSV</button>
           </div>
-          <input id="dataSearch" class="ex-search" type="search" placeholder="Filter rows (any column)…" aria-label="Filter data rows" style="margin: 0.9rem 0;" />
+          <div class="data-filters">
+            <label class="inline-label">Exercise
+              <select id="dataExercise"><option value="">All exercises</option></select>
+            </label>
+            <label class="inline-label">Athlete
+              <select id="dataUser"><option value="">All athletes</option></select>
+            </label>
+            <input id="dataSearch" class="ex-search" type="search" placeholder="Filter any column…" aria-label="Filter data rows" />
+          </div>
           <div id="dataTableWrap" class="data-table-wrap"></div>
           <div id="dataPager" class="pager"></div>
         </section>
