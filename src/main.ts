@@ -191,6 +191,8 @@ const els = {
   groupsAthlete: $<HTMLSelectElement>("groupsAthlete"),
   groupsMode: $("groupsMode"),
   groupsBody: $("groupsBody"),
+  teamChips: $("teamChips"),
+  teamBody: $("teamBody"),
 };
 
 let data: LoadedData;
@@ -837,7 +839,7 @@ let exerciseSort: "sets" | "category" | "tier" = "sets";
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
 // off the best 1RM in the selected period). The owner can change the rep counts.
-let repMaxCols: number[] = [1, 5, 10, 15];
+let repMaxCols: number[] = [1];
 // Live search filter for the exercises list (substring on the exercise name).
 let exerciseSearch = "";
 // When true, append exercises this athlete has never logged (greyed) so gaps
@@ -3419,6 +3421,7 @@ async function init() {
   renderDataTab();
   setupAddTab();
   setupGroupsView();
+  setupTeamView();
   setupChecklists();
 
   // Settings popover (holds the 1RM formula).
@@ -3574,13 +3577,11 @@ async function init() {
     e.stopPropagation();
     els.exerciseFilter.hidden = !els.exerciseFilter.hidden;
   });
-  // Editable rep-max columns: parse the typed reps (e.g. "1, 3, 5") and re-render.
+  // Single editable rep-max: type the rep count (e.g. 1, 3, 5) and the one
+  // column recalculates the working weight for that many reps.
   els.repMaxInput.addEventListener("input", () => {
-    const nums = els.repMaxInput.value
-      .split(/[,\s]+/)
-      .map((s) => Math.round(Number(s)))
-      .filter((n) => Number.isFinite(n) && n >= 1 && n <= 30);
-    repMaxCols = nums.length ? [...new Set(nums)].slice(0, 8) : [1];
+    const n = Math.round(Number(els.repMaxInput.value));
+    repMaxCols = Number.isFinite(n) && n >= 1 && n <= 30 ? [n] : [1];
     if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
   });
   document.addEventListener("click", (e) => {
@@ -4260,6 +4261,93 @@ function setupGroupsView() {
   renderGroupsView(); // populate the athlete picker before first open
 }
 
+// ---- Group view: train two+ people together, levels + workouts side by side --
+
+/** Who's in the current training session (usernames). Seeded with the first two
+ * athletes the first time the view opens; the user toggles people in/out. */
+const teamSelected = new Set<string>();
+
+/** One athlete's column: bodyweight + cadence, their top lifts (the "level"),
+ * and their last few workouts. */
+function teamColumn(u: { user: string; username: string }, recs: SetRecord[], formula: OneRepMaxFormula): string {
+  const summary = athleteSummary(data.records, u.username);
+  const prs = personalRecords(
+    filterRecords(recs, { usernames: [u.username], excludeDropsets: els.excludeDropsets.checked }),
+    formula,
+  )
+    .sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm)
+    .slice(0, 6);
+  const codes = exerciseCodesFor(prs.map((p) => p.exerciseName));
+  const levelRows =
+    prs
+      .map(
+        (p) =>
+          `<tr><td><span class="ex-code">${escapeHtml(codes.get(p.exerciseName) ?? exerciseCode(p.exerciseName))}</span>` +
+          `<span class="gv-sub muted">${escapeHtml(p.exerciseName)}</span></td>` +
+          `<td class="num">${fmt(p.bestE1rm.e1rm)}</td></tr>`,
+      )
+      .join("") || `<tr><td class="muted">No lifts yet.</td><td></td></tr>`;
+
+  const days = workoutsForUser(data.records, u.username).slice(0, 4);
+  const workouts =
+    days
+      .map((d) => {
+        const exs = d.exercises.map((e) => exerciseCode(e.exerciseName)).join(" · ");
+        return (
+          `<div class="team-wo"><div class="team-wo-date">${shortDate(d.date)} <span class="muted">· ${d.totalSets} sets</span></div>` +
+          `<div class="team-wo-exs muted">${escapeHtml(exs)}</div></div>`
+        );
+      })
+      .join("") || `<p class="muted">No workouts.</p>`;
+
+  const bw = summary.bodyweightLast;
+  return (
+    `<div class="team-col">` +
+    `<div class="team-col-head"><h3>${escapeHtml(u.user)}</h3>` +
+    `${bw !== null ? `<span class="muted team-bw">${fmt(bw)} kg</span>` : ""}</div>` +
+    `<div class="team-stat muted">${summary.sessionsPerWeek.toFixed(1)} sessions/wk · ${summary.sets} sets</div>` +
+    `<div class="team-sec-lbl">Top lifts · est 1RM</div>` +
+    `<table class="data-table team-table"><tbody>${levelRows}</tbody></table>` +
+    `<div class="team-sec-lbl">Latest workouts</div>${workouts}` +
+    `</div>`
+  );
+}
+
+/** Render the multi-person Group view: a column per selected athlete. */
+function renderTeamView() {
+  const users = distinctUsers(data.records);
+  if (teamSelected.size === 0) for (const u of users.slice(0, 2)) teamSelected.add(u.username);
+  for (const name of [...teamSelected]) if (!users.some((x) => x.username === name)) teamSelected.delete(name);
+
+  els.teamChips.innerHTML = users
+    .map(
+      (u) =>
+        `<button type="button" class="team-chip${teamSelected.has(u.username) ? " is-active" : ""}" ` +
+        `data-username="${escapeHtml(u.username)}">${escapeHtml(u.user)}</button>`,
+    )
+    .join("");
+
+  const picks = users.filter((u) => teamSelected.has(u.username));
+  if (picks.length === 0) {
+    els.teamBody.innerHTML = `<p class="muted">Pick at least one person above.</p>`;
+    return;
+  }
+  const formula = currentFormula();
+  const recs = computedRecords();
+  els.teamBody.innerHTML = picks.map((u) => teamColumn(u, recs, formula)).join("");
+}
+
+function setupTeamView() {
+  els.teamChips.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".team-chip");
+    const name = btn?.dataset.username;
+    if (!name) return;
+    if (teamSelected.has(name)) teamSelected.delete(name);
+    else teamSelected.add(name);
+    renderTeamView();
+  });
+}
+
 /**
  * Switch the visible top-level panel (leaderboards, athlete, groups, add, …).
  * The old top `.tabs` bar is hidden (CSS) in favour of the bottom nav, but its
@@ -4274,6 +4362,7 @@ function switchTopTab(name: string) {
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") lbChart?.resize();
   if (name === "groups") renderGroupsView();
+  if (name === "team") renderTeamView();
   updateBottomNav();
 }
 

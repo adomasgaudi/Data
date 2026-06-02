@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.9.2</span></h1>
+      <h1>Colosseum <span class="version">b.1.10.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -182,8 +182,8 @@
                   </div>
                   <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
                   <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
-                  <label class="ex-repmax-edit">Rep-max columns
-                    <input id="repMaxInput" type="text" value="1, 5, 10, 15" aria-label="Rep-max columns" />
+                  <label class="ex-repmax-edit">Rep-max (reps)
+                    <input id="repMaxInput" type="number" min="1" max="30" step="1" value="1" inputmode="numeric" aria-label="Rep-max reps" />
                   </label>
                 </div>
               </div>
@@ -842,7 +842,7 @@
       <div id="tab-groups" class="tab-panel" hidden>
         <section class="panel">
           <div class="groups-head">
-            <h2>Group view</h2>
+            <h2>Stats view</h2>
             <p class="muted" style="margin: 0.25rem 0 0">
               Movement patterns &amp; muscle groups, each combining several lifts. Shows the
               best estimated 1RM per group for the chosen athlete (or everyone).
@@ -858,6 +858,20 @@
             </div>
           </div>
           <div id="groupsBody" class="groups-body"></div>
+        </section>
+      </div>
+
+      <div id="tab-team" class="tab-panel" hidden>
+        <section class="panel">
+          <div class="groups-head">
+            <h2>Group view</h2>
+            <p class="muted" style="margin: 0.25rem 0 0">
+              Train two (or more) people together: pick who's in, then see each one's level and
+              latest workouts side by side.
+            </p>
+          </div>
+          <div id="teamChips" class="team-chips" role="group" aria-label="People in this session"></div>
+          <div id="teamBody" class="team-body"></div>
         </section>
       </div>
     </main>
@@ -887,7 +901,8 @@
       <div class="other-sheet-card" role="menu" aria-label="Other views">
         <div class="other-sheet-grip"></div>
         <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
-        <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">👥</span> Group view</button>
+        <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
+        <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
         <button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
         <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Merges &amp; body parts</button>
         <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>

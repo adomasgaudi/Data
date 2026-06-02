@@ -38,34 +38,30 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
-    version: "b.1.9.2",
-    title: "soon-tag",
-    sp: 1,
-    note: "Version history can flag planned work with a ‘soon’ tag.",
-    details: [
-      "GitHub auto-save of added sets is logged at the top as ‘soon’ until it's built.",
-      "Planned entries don't count toward the shipped release/SP totals or the on-screen version.",
-    ],
-  },
-  {
-    version: "b.1.9.1",
-    title: "best-sets-3mo",
-    sp: 2,
-    note: "Drill into a lift to see your 5 best sets (real weight×reps) from the last 3 months.",
-    details: [
-      "Under the Best 1RM card, a 'Best sets · last 3 months' list shows the actual top sets by estimated 1RM.",
-      "These are real logged sets (weight × reps + when), not the computed rep-max columns in the list.",
-    ],
-  },
-  {
-    version: "b.1.9.0",
-    title: "multi-category-buckets",
+    version: "b.1.10.0",
+    title: "training-group-view",
     sp: 5,
-    note: "Richer ‘By category’: pattern + leg-split buckets, and lifts counted in every category they fit.",
+    note: "New Group view to train two+ people together; old one renamed to Stats; single editable rep-max.",
     details: [
-      "New buckets: Squat pattern, Deadlift pattern, Deadlift accessory, Legs (all) vs Legs (quads/glutes/hams).",
-      "Multi-membership — a deadlift now shows under Legs, Back AND Core (repeated under each), so categories are complete.",
-      "Group view gains a Movement patterns / Categories switch using the same buckets.",
+      "Group view: pick the people in the session and see each one's level (top lifts) and latest workouts side by side.",
+      "The previous pattern/category view is renamed ‘Stats view’.",
+      "Exercises list/stats: one rep-max column you set the rep count for, instead of fixed 1/5/10/15RM.",
+    ],
+  },
+  {
+    version: "b.1.9",
+    title: "categories-best-sets-soon",
+    sp: 8,
+    note: "Multi-category buckets, real best-sets in the drill-in, and a ‘soon’ tag for planned work.",
+    details: [
+      "‘By category’ gains pattern + leg-split buckets and multi-membership (a deadlift is Legs, Back AND Core).",
+      "Drill-in shows your 5 best sets (real weight×reps) from the last 3 months.",
+      "Version history can flag planned-but-unbuilt work with a ‘soon’ tag.",
+    ],
+    children: [
+      { version: "b.1.9.2", sp: 1, note: "Version history ‘soon’ tag for planned work (GitHub auto-save queued)." },
+      { version: "b.1.9.1", sp: 2, note: "Drill-in: 5 best sets (real weight×reps) from the last 3 months." },
+      { version: "b.1.9.0", sp: 5, note: "Multi-category ‘By category’: pattern + leg-split buckets, lifts under every category they fit." },
     ],
   },
   {
@@ -220,13 +216,14 @@ export const COMPONENTS: Component[] = [
   { name: "Leaderboard", version: "b1.0" },
   { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
   { name: "Workouts", version: "b1.2" }, // bumped: today outlined in year heatmap
-  { name: "Exercises", version: "b1.4" }, // bumped: best-sets (last 3 months) in the drill-in
+  { name: "Exercises", version: "b1.5" }, // bumped: single editable rep-max column
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },
   { name: "Add", version: "b1.1" }, // bumped: export/import backup
   { name: "Navigation", version: "b1.0" }, // bottom nav + Other sheet
-  { name: "Groups", version: "b1.1" }, // patterns / categories mode switch
+  { name: "Stats", version: "b1.2" }, // renamed from Groups: patterns / categories cards
+  { name: "Group", version: "b1.0" }, // train people together: levels + workouts side by side
 ];
 
 /** Sum of all story points shipped (grouped entries already total their
