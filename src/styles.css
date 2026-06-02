@@ -698,6 +698,21 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* 3-letter exercise code (used where space is tight, e.g. the Records table). */
 .ex-code { font-weight: 700; letter-spacing: 0.05em; }
 .ex-fullname { font-size: 0.7rem; font-weight: 400; margin-top: 1px; }
+/* Exercises list: code on top, full name as a muted ellipsised subline; the
+   rep-max columns stay on one line so nothing wraps. */
+.ex-name-cell { white-space: nowrap; }
+.ex-name-cell .ex-code { display: inline; }
+.ex-name-sub {
+  display: block; font-size: 0.7rem; font-weight: 400; margin-top: 1px;
+  max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#athleteTable th.num, #athleteTable td.num { white-space: nowrap; }
+.ex-repmax-edit { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+.ex-repmax-edit input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 9px; font-size: 0.9rem; font-weight: 400; width: 9rem;
+}
+.ex-repmax-edit input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* Records table: keep the RM column headers/numbers on one line (don't wrap
    "1RM" → "1R / M"); let a long exercise name ellipsize instead of squeezing
    those columns. */

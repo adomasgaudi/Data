@@ -24,6 +24,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.7.1",
+    title: "exercises-list-codes-repmax",
+    sp: 2,
+    note: "Exercises list: 3-letter codes, no ugly wrapping, editable rep-max columns.",
+    details: [
+      "List shows 3-letter exercise codes (full name on a muted subline); columns no longer wrap.",
+      "Rep-max columns are editable — type the rep counts (e.g. 1, 3, 5) and the table updates.",
+      "Rep-max basis follows the period filter, so 'Last 3 months' shows recent strength.",
+    ],
+  },
+  {
     version: "b.1.7.0",
     title: "add-sets-by-hand",
     sp: 3,
@@ -159,7 +170,7 @@ export const COMPONENTS: Component[] = [
   { name: "Leaderboard", version: "b1.0" },
   { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
   { name: "Workouts", version: "b1.2" }, // bumped: today outlined in year heatmap
-  { name: "Exercises", version: "b1.1" }, // bumped: tabs + kebab filters + floating search + records-style list
+  { name: "Exercises", version: "b1.2" }, // bumped: codes + editable rep-max columns
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },

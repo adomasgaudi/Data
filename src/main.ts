@@ -53,6 +53,8 @@ import {
   realPullupWeight,
   EXERCISE_GROUPS,
   exerciseCategory,
+  exerciseCode,
+  exerciseCodesFor,
   exerciseTier,
   TRAINING_CATEGORIES,
   type TrainingCategory,
@@ -126,6 +128,7 @@ const els = {
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
+  repMaxInput: $<HTMLInputElement>("repMaxInput"),
   exSearchBar: $("exSearchBar"),
   exerciseCompare: $("exerciseCompare"),
   compareChips: $("compareChips"),
@@ -817,6 +820,9 @@ let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
 let exerciseSort: "sets" | "category" | "tier" = "sets";
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
+// Editable rep-max columns for the List & stats tab (the working weight for N reps
+// off the best 1RM in the selected period). The owner can change the rep counts.
+let repMaxCols: number[] = [1, 5, 10, 15];
 // Live search filter for the exercises list (substring on the exercise name).
 let exerciseSearch = "";
 // When true, append exercises this athlete has never logged (greyed) so gaps
@@ -1557,9 +1563,6 @@ function renderExercisesPage() {
   const cutoff = exerciseRangeCutoff();
   const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
   const username = els.athlete.value;
-  // Weekly-sets numbers are absolute (their own time windows), so they read the
-  // full log, not the period-scoped subset shown in the list.
-  const today = todayIso();
 
   // The displayed list: the athlete's trained exercises, plus — when "Show
   // not-trained" is on — every other exercise in the whole dataset that this
@@ -1587,12 +1590,14 @@ function renderExercisesPage() {
   // List view: no title. The athlete chips above already name the athlete.
   els.athleteTitle.innerHTML = "";
 
-  // Records-style rep-max columns: each exercise's best 1RM, and the working
-  // weights for 5/10/15 reps off it. Built from the athlete's PRs.
+  // Records-style rep-max columns: the working weight for each chosen rep count
+  // off the exercise's best 1RM in the SELECTED PERIOD (so "Last 3 months" shows
+  // recent strength). Rep counts are editable (repMaxCols).
   const formula = currentFormula();
+  const prBasis = cutoff ? computedRecords().filter((r) => r.date && r.date >= cutoff) : computedRecords();
   const prByEx = new Map<string, number>();
   for (const p of personalRecords(
-    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
+    filterRecords(prBasis, { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     formula,
   ))
     prByEx.set(p.exerciseName, p.bestE1rm.e1rm);
@@ -1600,15 +1605,25 @@ function renderExercisesPage() {
     const w = reps === 1 ? oneRm : weightForReps(oneRm, reps, formula);
     return w === null ? "—" : fmt(w);
   };
+  // 3-letter codes (unique across this athlete's whole list) keep rows from
+  // wrapping; the full name sits on a muted, ellipsised subline.
+  const codes = exerciseCodesFor(ordered.map((it) => it.exerciseName));
+  const nCols = repMaxCols.length;
   const rmCells = (name: string): string => {
     const pr = prByEx.get(name);
-    if (pr === undefined) return `<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>`;
-    return `<td class="num">${rm(pr, 1)}</td><td class="num">${rm(pr, 5)}</td><td class="num">${rm(pr, 10)}</td><td class="num">${rm(pr, 15)}</td>`;
+    return repMaxCols
+      .map((reps) => `<td class="num">${pr === undefined ? "—" : rm(pr, reps)}</td>`)
+      .join("");
   };
+  const exCell = (name: string): string =>
+    `<span class="ex-code">${escapeHtml(codes.get(name) ?? exerciseCode(name))}</span>` +
+    `<span class="ex-name-sub muted">${escapeHtml(name)}${originBadge(name)}</span>`;
 
   const head =
-    `<thead><tr><th>Exercise</th><th class="num">1RM</th><th class="num">5RM</th>` +
-    `<th class="num">10RM</th><th class="num">15RM</th></tr></thead>`;
+    `<thead><tr><th>Exercise</th>` +
+    repMaxCols.map((n) => `<th class="num">${n === 1 ? "1RM" : `${n}RM`}</th>`).join("") +
+    `</tr></thead>`;
+  const colspan = nCols + 1;
   const start = exercisesPage * PAGE_SIZE;
   // When grouping, emit a category sub-header row whenever the category changes.
   // Track the previous page's last category so a header isn't dropped at a page
@@ -1619,21 +1634,17 @@ function renderExercisesPage() {
   // changes (and not dropped at a page boundary).
   let prevTier =
     exerciseSort === "tier" && prevItem ? (frequencyTier(prevItem.count)?.tier ?? null) : null;
+  const emptyCells = repMaxCols.map(() => `<td class="num">—</td>`).join("");
   const rowHtml = (it: ExItem, abs: number, rankCls: string) => {
     // Not-trained rows are greyed, non-clickable (no `ex-row` class / data-index).
     if (!it.trained)
       return (
-        `<tr class="ex-missing-row"><td>${escapeHtml(it.exerciseName)}` +
-        `<div class="ex-wk">not trained</div></td>` +
-        `<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`
+        `<tr class="ex-missing-row"><td class="ex-name-cell">${exCell(it.exerciseName)}` +
+        `<div class="ex-wk">not trained</div></td>${emptyCells}</tr>`
       );
-    const wk = weeklySetStats(setsForUserExercise(data.records, username, it.exerciseName), today);
-    // Subline: this-week / peak sets, plus the total set count — keeps the list's
-    // training-frequency info while the columns show strength (records-style).
-    const sub = `<div class="ex-wk muted">${it.count.toLocaleString()} sets · ${wk.thisWeek}/${wk.peakPerWeek} wk</div>`;
     return (
-      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(it.exerciseName)}${originBadge(it.exerciseName)}` +
-      ` <span class="go-chevron">›</span>${sub}</td>${rmCells(it.exerciseName)}</tr>`
+      `<tr class="ex-row" data-index="${abs}"><td class="ex-name-cell ${rankCls}">` +
+      `${exCell(it.exerciseName)} <span class="go-chevron">›</span></td>${rmCells(it.exerciseName)}</tr>`
     );
   };
   const rows = ordered
@@ -1647,7 +1658,7 @@ function renderExercisesPage() {
         let header = "";
         if (tier !== prevTier) {
           header = ft
-            ? `<tr class="ex-tier-row"><td colspan="5"><span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
+            ? `<tr class="ex-tier-row"><td colspan="${colspan}"><span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
             : "";
           prevTier = tier;
         }
@@ -1663,7 +1674,7 @@ function renderExercisesPage() {
         const collapsed = collapsedExCats.has(cat);
         header =
           `<tr class="ex-cat-row${collapsed ? " is-collapsed" : ""}" data-cat="${escapeHtml(cat)}">` +
-          `<td colspan="5"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
+          `<td colspan="${colspan}"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
         prevCat = cat;
       }
       return header + (collapsedExCats.has(cat) ? "" : rowHtml(it, abs, ""));
@@ -1673,7 +1684,7 @@ function renderExercisesPage() {
     ? `No exercises match “${escapeHtml(exerciseSearch.trim())}”.`
     : "No exercises trained in this period.";
   els.athleteTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="5" class="muted">${emptyMsg}</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="${colspan}" class="muted">${emptyMsg}</td></tr>`}</tbody>`;
   els.exercisesPager.innerHTML = pagerHtml(exercisesPage, ordered.length);
 }
 
@@ -3498,6 +3509,15 @@ async function init() {
   els.exFiltersBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     els.exerciseFilter.hidden = !els.exerciseFilter.hidden;
+  });
+  // Editable rep-max columns: parse the typed reps (e.g. "1, 3, 5") and re-render.
+  els.repMaxInput.addEventListener("input", () => {
+    const nums = els.repMaxInput.value
+      .split(/[,\s]+/)
+      .map((s) => Math.round(Number(s)))
+      .filter((n) => Number.isFinite(n) && n >= 1 && n <= 30);
+    repMaxCols = nums.length ? [...new Set(nums)].slice(0, 8) : [1];
+    if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
   });
   document.addEventListener("click", (e) => {
     if (!els.exerciseFilter.hidden && !els.exerciseFilter.contains(e.target as Node) && e.target !== els.exFiltersBtn)
