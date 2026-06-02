@@ -128,6 +128,9 @@ const els = {
   exerciseFilter: $("exerciseFilter"),
   exerciseCompare: $<HTMLDetailsElement>("exerciseCompare"),
   compareChips: $("compareChips"),
+  compareCats: $("compareCats"),
+  compareTiers: $("compareTiers"),
+  compareClear: $<HTMLButtonElement>("compareClear"),
   compareNote: $("compareNote"),
   exerciseSearch: $<HTMLInputElement>("exerciseSearch"),
   exerciseNotTrained: $<HTMLInputElement>("exerciseNotTrained"),
@@ -1317,17 +1320,42 @@ const COMPARE_COLORS = [
 ];
 
 /**
- * Exercises-list "compare on one graph" tool: chips to tick the athlete's
- * exercises (most-trained first), and an overlaid estimated-1RM trend line per
- * ticked exercise. Defaults to the athlete's top two exercises the first time.
+ * Exercises-list "compare on one graph" tool: quick-pick rows to add a whole
+ * category or frequency-tier of exercises at once, individual chips to fine-tune,
+ * and an overlaid estimated-1RM trend line per selected exercise. Defaults to the
+ * athlete's top two exercises the first time.
  */
 function renderCompareSection() {
   const username = els.athlete.value;
-  const exercises = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const counts = exerciseCountsForUser(data.records, username);
+  const exercises = counts.map((c) => c.exerciseName);
 
   // Drop any previous picks that this athlete doesn't have; seed with top 2.
   for (const name of [...compareSelected]) if (!exercises.includes(name)) compareSelected.delete(name);
   if (compareSelected.size === 0) for (const name of exercises.slice(0, 2)) compareSelected.add(name);
+
+  // Category quick-picks: only categories this athlete actually trains, most-
+  // trained first. A button toggles every exercise in that category at once.
+  const catSets = new Map<TrainingCategory, number>();
+  for (const c of counts) catSets.set(exerciseCategory(c.exerciseName), (catSets.get(exerciseCategory(c.exerciseName)) ?? 0) + c.count);
+  const cats = TRAINING_CATEGORIES.filter((c) => catSets.has(c)).sort((a, b) => (catSets.get(b) ?? 0) - (catSets.get(a) ?? 0));
+  els.compareCats.innerHTML = cats
+    .map((c) => {
+      const members = exercises.filter((e) => exerciseCategory(e) === c);
+      const on = members.length > 0 && members.every((e) => compareSelected.has(e));
+      return `<button type="button" class="compare-group${on ? " is-active" : ""}" data-cat="${escapeHtml(c)}" ` +
+        `style="--gc:${CATEGORY_COLORS[c]}">${escapeHtml(c)}</button>`;
+    })
+    .join("");
+
+  // Tier quick-picks: S/A/B/C/D by how often each exercise is logged.
+  els.compareTiers.innerHTML = FREQ_TIERS.map((t) => {
+    const members = counts.filter((c) => (frequencyTier(c.count)?.tier ?? null) === t.tier).map((c) => c.exerciseName);
+    if (members.length === 0) return "";
+    const on = members.every((e) => compareSelected.has(e));
+    return `<button type="button" class="compare-group tier-pick${on ? " is-active" : ""}" data-tier="${t.tier}" ` +
+      `title="${escapeHtml(t.label)}"><span class="tier-badge tier-${t.tier}">${t.tier}</span> ${members.length}</button>`;
+  }).join("");
 
   els.compareChips.innerHTML = exercises
     .map(
@@ -1338,6 +1366,35 @@ function renderCompareSection() {
     .join("");
 
   renderCompareChart();
+}
+
+/** Toggle every exercise in a category in/out of the compare selection. If they're
+ * all already in, remove them; otherwise add the missing ones. Re-renders chips. */
+function compareToggleCategory(cat: string) {
+  const username = els.athlete.value;
+  const members = exerciseCountsForUser(data.records, username)
+    .map((c) => c.exerciseName)
+    .filter((e) => exerciseCategory(e) === cat);
+  const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
+  for (const e of members) {
+    if (allOn) compareSelected.delete(e);
+    else compareSelected.add(e);
+  }
+  renderCompareSection();
+}
+
+/** Toggle every exercise in a frequency tier in/out of the compare selection. */
+function compareToggleTier(tier: string) {
+  const username = els.athlete.value;
+  const members = exerciseCountsForUser(data.records, username)
+    .filter((c) => (frequencyTier(c.count)?.tier ?? null) === tier)
+    .map((c) => c.exerciseName);
+  const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
+  for (const e of members) {
+    if (allOn) compareSelected.delete(e);
+    else compareSelected.add(e);
+  }
+  renderCompareSection();
 }
 
 /** Draw the overlay: one estimated-1RM line per ticked exercise, on a time axis. */
@@ -3177,6 +3234,19 @@ async function init() {
     else compareSelected.add(name);
     chip.classList.toggle("is-active");
     renderCompareChart();
+  });
+  // Category / tier quick-picks add or remove a whole group at once.
+  els.compareCats.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".compare-group");
+    if (btn?.dataset.cat) compareToggleCategory(btn.dataset.cat);
+  });
+  els.compareTiers.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".compare-group");
+    if (btn?.dataset.tier) compareToggleTier(btn.dataset.tier);
+  });
+  els.compareClear.addEventListener("click", () => {
+    compareSelected.clear();
+    renderCompareSection();
   });
 
   // Pagination (delegated on the persistent pager containers).

@@ -668,6 +668,27 @@ select.subtle-select:hover, select.subtle-select:focus {
 .exercise-compare-summary:hover, .exercise-compare[open] > .exercise-compare-summary { color: var(--accent); }
 .exercise-compare[open] .ec-caret { transform: rotate(180deg); color: var(--accent); }
 .exercise-compare-body { margin-top: 0.75rem; }
+/* Quick-pick rows: add a whole category or tier of exercises at once. */
+.compare-quick {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+  margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--line);
+}
+.compare-quick-lbl { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+.compare-quick-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.compare-group {
+  background: none; border: 1px solid var(--line); color: var(--text);
+  font: inherit; font-size: 0.78rem; cursor: pointer;
+  padding: 0.25rem 0.6rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.3rem;
+}
+.compare-group:hover { border-color: var(--gc, var(--accent)); }
+.compare-group.is-active { background: var(--gc, var(--accent)); color: #fff; border-color: var(--gc, var(--accent)); font-weight: 600; }
+.compare-group.is-active .tier-badge { box-shadow: 0 0 0 1.5px rgba(255,255,255,0.7); }
+.tier-pick { padding: 0.2rem 0.5rem; }
+.compare-clear {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  font: inherit; font-size: 0.75rem; cursor: pointer; padding: 0.25rem 0.6rem; border-radius: 8px; margin-left: auto;
+}
+.compare-clear:hover { color: var(--danger); border-color: var(--danger); }
 .compare-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; }
 .compare-chip {
   background: none; border: 1px solid var(--line); color: var(--muted);
