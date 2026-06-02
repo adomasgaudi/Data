@@ -1,13 +1,12 @@
 /**
  * Stand-alone graph DEMO — a from-scratch SVG time-series chart with NO Chart.js
- * and no shared rendering code with the rest of the app. It exists so we can test
- * a clean replacement for the charting tech in isolation.
+ * and no shared rendering code with the rest of the app. A clean test bed for a
+ * replacement charting engine.
  *
- * Why SVG by hand: the axes are drawn at FIXED pixel coordinates (a fixed plot
- * rectangle), so panning/zooming only changes the x→pixel mapping inside a
- * clipped area — the axes and the "sides" can never shift, which is the bug the
- * Chart.js graphs keep hitting. Pan = drag; zoom = wheel/pinch; both clamp to the
- * data range so you can't drift into empty space.
+ * The plot rectangle (and therefore the axis frame) is at FIXED pixel
+ * coordinates, so the chrome never shifts. Inside it you can pan FREELY in any
+ * direction (drag) and zoom (wheel/pinch) with NO limits — both axes' label
+ * values follow the view. Series are clipped to the plot rect.
  */
 import { calendarGridlines } from "./chartAxis";
 
@@ -43,42 +42,45 @@ function demoSeries(): Series[] {
   ];
 }
 
-const escapeAttr = (s: string) => s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] ?? c));
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const fmtDate = (t: number) => {
   const d = new Date(t);
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 };
+const escapeAttr = (s: string) => s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] ?? c));
+
+/** "Nice" round y-axis tick values across [min, max]. */
+function niceTicks(min: number, max: number, target: number): number[] {
+  const span = max - min;
+  if (!(span > 0)) return [min];
+  const raw = span / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  return out;
+}
 
 /** Mount (or re-mount) the demo chart into `container`. Idempotent. */
 export function mountGraphDemo(container: HTMLElement): void {
   const series = demoSeries();
   const allT = series.flatMap((s) => s.pts.map((p) => p.t));
   const allY = series.flatMap((s) => s.pts.map((p) => p.y));
-  const dataMin = Math.min(...allT);
-  const dataMax = Math.max(...allT);
-  const yMin = 0;
-  const yMax = Math.max(20, Math.ceil(Math.max(...allY) / 20) * 20);
+  const dataMinT = Math.min(...allT);
+  const dataMaxT = Math.max(...allT);
+  const dataMaxY = Math.max(...allY);
 
-  // Mutable x-view (what pan/zoom change). Y is fixed. Start zoomed-in to the
-  // most recent ~12 weeks so there's room to pan/scroll right away.
-  const minSpan = 3 * WEEK; // tightest zoom-in
-  const fullSpan = dataMax - dataMin;
-  let xMax = dataMax;
-  let xMin = Math.max(dataMin, dataMax - 12 * WEEK);
+  // Mutable view — pan/zoom change all four edges, with NO limits.
+  let xMin = dataMinT;
+  let xMax = dataMaxT;
+  let yMin = 0;
+  let yMax = Math.ceil((dataMaxY * 1.15) / 10) * 10;
 
-  // Fixed geometry — the whole point: axes never move.
+  // Fixed geometry — the axis frame never moves.
   const H = 360;
   const M = { l: 46, r: 14, t: 30, b: 26 };
   const widthOf = () => Math.max(280, Math.round(container.clientWidth || 340));
-
-  /** Clamp the [xMin,xMax] view to the data range, keeping its width. */
-  function clampView() {
-    const span = Math.min(Math.max(xMax - xMin, minSpan), fullSpan);
-    if (xMin < dataMin) { xMin = dataMin; xMax = dataMin + span; }
-    if (xMax > dataMax) { xMax = dataMax; xMin = dataMax - span; }
-    if (xMax - xMin !== span) xMax = xMin + span;
-  }
 
   function draw() {
     const W = widthOf();
@@ -87,45 +89,41 @@ export function mountGraphDemo(container: HTMLElement): void {
     const xPix = (t: number) => M.l + ((t - xMin) / (xMax - xMin)) * plotW;
     const yPix = (y: number) => M.t + (1 - (y - yMin) / (yMax - yMin)) * plotH;
 
-    // Horizontal gridlines + y labels at fixed steps (fixed pixels → never move).
-    const ySteps = 6;
+    // Horizontal gridlines + y labels at nice round values within the view.
     let yGrid = "";
     let yLabels = "";
-    for (let i = 0; i <= ySteps; i++) {
-      const v = yMin + ((yMax - yMin) * i) / ySteps;
+    for (const v of niceTicks(yMin, yMax, 6)) {
       const py = yPix(v);
-      yGrid += `<line x1="${M.l}" y1="${py}" x2="${W - M.r}" y2="${py}" stroke="#d4d9e2" stroke-width="1"/>`;
-      yLabels += `<text x="${M.l - 6}" y="${py + 4}" text-anchor="end" font-size="11" fill="#6b7280">${Math.round(v)}</text>`;
+      if (py < M.t - 0.5 || py > H - M.b + 0.5) continue;
+      yGrid += `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${W - M.r}" y2="${py.toFixed(1)}" stroke="#d4d9e2" stroke-width="1"/>`;
+      yLabels += `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#6b7280">${Math.round(v)}</text>`;
     }
 
-    // Vertical calendar gridlines + x labels for the CURRENT view (clipped to plot).
+    // Vertical calendar gridlines + x labels for the current view.
     let xGrid = "";
     let xLabels = "";
     for (const t of calendarGridlines(xMin, xMax)) {
       const px = xPix(t);
       if (px < M.l - 0.5 || px > W - M.r + 0.5) continue;
-      xGrid += `<line x1="${px}" y1="${M.t}" x2="${px}" y2="${H - M.b}" stroke="#d4d9e2" stroke-width="1"/>`;
-      xLabels += `<text x="${px}" y="${H - M.b + 16}" text-anchor="middle" font-size="11" fill="#6b7280">${fmtDate(t)}</text>`;
+      xGrid += `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${H - M.b}" stroke="#d4d9e2" stroke-width="1"/>`;
+      xLabels += `<text x="${px.toFixed(1)}" y="${H - M.b + 16}" text-anchor="middle" font-size="11" fill="#6b7280">${fmtDate(t)}</text>`;
     }
 
-    // Series polylines (clipped to the plot rect so they can't spill onto the axes).
+    // Series polylines + points (clipped to the plot rect).
     let lines = "";
     let legend = "";
-    series.forEach((s) => {
-      const pinView = s.pts.filter((p) => p.t >= xMin - WEEK && p.t <= xMax + WEEK);
-      const d = pinView.map((p) => `${xPix(p.t).toFixed(1)},${yPix(p.y).toFixed(1)}`).join(" ");
+    for (const s of series) {
+      const d = s.pts.map((p) => `${xPix(p.t).toFixed(1)},${yPix(p.y).toFixed(1)}`).join(" ");
       lines += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2" />`;
-      for (const p of pinView) lines += `<circle cx="${xPix(p.t).toFixed(1)}" cy="${yPix(p.y).toFixed(1)}" r="2.5" fill="${s.color}" />`;
+      for (const p of s.pts) lines += `<circle cx="${xPix(p.t).toFixed(1)}" cy="${yPix(p.y).toFixed(1)}" r="2.5" fill="${s.color}" />`;
       legend += `<span class="gd-key"><span class="gd-dot" style="background:${s.color}"></span>${escapeAttr(s.name)}</span>`;
-    });
+    }
 
     container.innerHTML =
-      `<div class="gd-legend">${legend}</div>` +
+      `<div class="gd-legend">${legend}<button type="button" class="gd-reset">Reset</button></div>` +
       `<svg class="gd-svg" width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="demo chart">` +
       `<defs><clipPath id="gd-clip"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath></defs>` +
-      yGrid +
-      `<g clip-path="url(#gd-clip)">${xGrid}${lines}</g>` +
-      // Axis frame (fixed)
+      `<g clip-path="url(#gd-clip)">${yGrid}${xGrid}${lines}</g>` +
       `<line x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${H - M.b}" stroke="#9aa3b2" stroke-width="1"/>` +
       `<line x1="${M.l}" y1="${H - M.b}" x2="${W - M.r}" y2="${H - M.b}" stroke="#9aa3b2" stroke-width="1"/>` +
       yLabels +
@@ -133,31 +131,25 @@ export function mountGraphDemo(container: HTMLElement): void {
       `</svg>`;
   }
 
-  // ---- interactions (attached once to the persistent container) ----
-  let drag: { x: number; xMin: number; xMax: number } | null = null;
-  const tFromClientX = (clientX: number) => {
-    const svg = container.querySelector("svg");
-    if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    const W = widthOf();
-    const plotW = W - M.l - M.r;
-    const px = ((clientX - rect.left) / rect.width) * W;
-    return xMin + ((px - M.l) / plotW) * (xMax - xMin);
-  };
+  // ---- interactions: free 2-D pan (drag) + zoom (wheel), no limits ----
+  let drag: { x: number; y: number; xMin: number; xMax: number; yMin: number; yMax: number } | null = null;
 
   if (container.dataset.gdWired !== "1") {
     container.dataset.gdWired = "1";
 
-    // Drag to pan. Listeners live on `window` for the duration of a drag, so they
-    // keep firing even though draw() replaces the SVG on every frame.
     const onMove = (e: PointerEvent) => {
       if (!drag) return;
       const W = widthOf();
       const plotW = W - M.l - M.r;
-      const dt = ((e.clientX - drag.x) / plotW) * (drag.xMax - drag.xMin);
-      xMin = drag.xMin - dt;
-      xMax = drag.xMax - dt;
-      clampView();
+      const plotH = H - M.t - M.b;
+      const dx = ((e.clientX - drag.x) / plotW) * (drag.xMax - drag.xMin);
+      const dy = ((e.clientY - drag.y) / plotH) * (drag.yMax - drag.yMin);
+      // Content follows the cursor: drag right → shift x left; drag down → show
+      // higher values (y range moves up). No clamping — pan is unlimited.
+      xMin = drag.xMin - dx;
+      xMax = drag.xMax - dx;
+      yMin = drag.yMin + dy;
+      yMax = drag.yMax + dy;
       draw();
     };
     const onUp = () => {
@@ -166,28 +158,42 @@ export function mountGraphDemo(container: HTMLElement): void {
       window.removeEventListener("pointerup", onUp);
     };
     container.addEventListener("pointerdown", (e) => {
-      drag = { x: e.clientX, xMin, xMax };
+      if ((e.target as HTMLElement).closest(".gd-reset")) return; // let the button click
+      drag = { x: e.clientX, y: e.clientY, xMin, xMax, yMin, yMax };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
       e.preventDefault();
     });
 
-    // Wheel / trackpad / pinch to zoom around the cursor.
+    // Wheel zooms BOTH axes around the cursor (free, unlimited).
     container.addEventListener(
       "wheel",
       (e) => {
         e.preventDefault();
-        const focus = tFromClientX(e.clientX) ?? (xMin + xMax) / 2;
-        const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-        const span = Math.min(Math.max((xMax - xMin) * factor, minSpan), fullSpan);
-        const leftFrac = (focus - xMin) / (xMax - xMin);
-        xMin = focus - leftFrac * span;
-        xMax = xMin + span;
-        clampView();
+        const svg = container.querySelector("svg");
+        if (!svg) return;
+        const rect = svg.getBoundingClientRect();
+        const W = widthOf();
+        const plotW = W - M.l - M.r;
+        const plotH = H - M.t - M.b;
+        const fx = xMin + (((e.clientX - rect.left) / rect.width) * W - M.l) / plotW * (xMax - xMin);
+        const fy = yMin + (1 - (((e.clientY - rect.top) / rect.height) * H - M.t) / plotH) * (yMax - yMin);
+        const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+        xMin = fx - (fx - xMin) * k;
+        xMax = fx + (xMax - fx) * k;
+        yMin = fy - (fy - yMin) * k;
+        yMax = fy + (yMax - fy) * k;
         draw();
       },
       { passive: false },
     );
+
+    container.addEventListener("click", (e) => {
+      if (!(e.target as HTMLElement).closest(".gd-reset")) return;
+      xMin = dataMinT; xMax = dataMaxT; yMin = 0; yMax = Math.ceil((dataMaxY * 1.15) / 10) * 10;
+      draw();
+    });
+
     window.addEventListener("resize", () => { if (container.isConnected) draw(); });
   }
 

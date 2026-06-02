@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.8",
+    title: "demo-free-pan",
+    sp: 1,
+    note: "Demo graph now pans freely in all directions and zooms both axes, with no limits.",
+    details: [
+      "Drag pans in any direction (x and y); wheel/pinch zooms both axes around the cursor; nothing is clamped.",
+      "Y-axis labels follow the view; a Reset button snaps back to the data. Axis frame still fixed so the chrome never shifts.",
+    ],
+  },
+  {
     version: "b.1.12.7",
     title: "demo-scroll-and-1rm-zerobase",
     sp: 2,
