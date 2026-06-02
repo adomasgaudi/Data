@@ -18,6 +18,7 @@ import {
   workoutsWithRestDays,
   weeksForUser,
   exerciseProgressByWeek,
+  addedWeight1RM,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -35,6 +36,7 @@ import {
   benchPctForReps,
   estimate1RM,
   weightForReps,
+  repsForWeight,
   setVolume,
   effectiveLoad,
   linearFit,
@@ -49,6 +51,9 @@ import {
   realPullupWeight,
   EXERCISE_GROUPS,
   exerciseCategory,
+  exerciseCode,
+  exerciseCodesFor,
+  exerciseTier,
   TRAINING_CATEGORIES,
   type TrainingCategory,
 } from "./profile";
@@ -100,12 +105,20 @@ const els = {
   exerciseRecord: $("exerciseRecord"),
   exerciseWeekly: $("exerciseWeekly"),
   exerciseTargets: $("exerciseTargets"),
+  exerciseStats: $<HTMLDetailsElement>("exerciseStats"),
+  exerciseCalc: $("exerciseCalc"),
+  ecalcBasis: $("ecalcBasis"),
+  ecalcWeight: $<HTMLInputElement>("ecalcWeight"),
+  ecalcReps: $<HTMLInputElement>("ecalcReps"),
+  ecalcNote: $("ecalcNote"),
   exerciseProgress: $("exerciseProgress"),
   exerciseProgressNote: $("exerciseProgressNote"),
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
+  exProgressView: $("exProgressView"),
   exerciseFilter: $("exerciseFilter"),
   exerciseSearch: $<HTMLInputElement>("exerciseSearch"),
   exerciseNotTrained: $<HTMLInputElement>("exerciseNotTrained"),
+  exerciseShowThird: $<HTMLInputElement>("exerciseShowThird"),
   exerciseRange: $<HTMLDetailsElement>("exerciseRange"),
   exerciseSort: $("exerciseSort"),
   exercisesPager: $("exercisesPager"),
@@ -114,11 +127,9 @@ const els = {
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutView: $<HTMLSelectElement>("workoutView"),
+  workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
-  progressExercise: $<HTMLSelectElement>("progressExercise"),
-  progressNote: $("progressNote"),
-  progressCenter: $<HTMLButtonElement>("progressCenter"),
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
@@ -140,12 +151,21 @@ const els = {
 
 let data: LoadedData;
 let lbChart: Chart | null = null;
-let progressChart: Chart | null = null;
 let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
+let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
 const PAGE_SIZE = 20;
 
-const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString();
+// Display a number at no more than 3 significant figures: 2 by default, but 3
+// when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
+// a kg / volume / 1RM number is shown.
+const fmt = (n: number): string => {
+  if (!Number.isFinite(n) || n === 0) return "0";
+  const abs = Math.abs(n);
+  const lead = Math.floor(abs / 10 ** Math.floor(Math.log10(abs))); // first significant digit, 1–9
+  const sf = lead <= 3 ? 3 : 2;
+  return Number(n.toPrecision(sf)).toLocaleString();
+};
 
 /** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header. */
 const wr = (weight: number | null, reps: number | null): string =>
@@ -159,6 +179,25 @@ const shortDate = (iso: string): string => {
   const [, m, d] = iso.split("-");
   const mon = MONTH_ABBR[Number(m) - 1];
   return mon && d ? `${mon} ${Number(d)}` : iso;
+};
+
+/**
+ * ISO-8601 week number (1–53) for a "YYYY-MM-DD" date: weeks start Monday and
+ * week 1 is the one containing the year's first Thursday. Matches the app's
+ * Monday-start weeks, so an exercise's weekly rows can be labelled "Week 15"
+ * instead of a date. Returns 0 only on an unparseable input.
+ */
+const isoWeekNumber = (iso: string): number => {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return 0;
+  // Shift to the Thursday of this week, then count weeks from Jan 1.
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = (date.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  date.setUTCDate(date.getUTCDate() - day + 3); // move to Thursday
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
+  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 86_400_000));
 };
 
 /** Today as an ISO YYYY-MM-DD string — the reference point for "this week" and
@@ -592,11 +631,12 @@ function renderPersonalRecords() {
 
 // State for the currently shown athlete. The displayed-order arrays let the
 // (delegated) click handlers map a clicked row back to its data.
-let athleteExercises: string[] = [];
 // Exercises shown in the (date-filtered) list, in display order — what the
-// row click handler maps an index back to (differs from athleteExercises when
-// a period filter is active).
+// exercises row click handler maps an index back to.
 let exercisesView: string[] = [];
+// Exercises shown in the Records sub-page, in display order — what a Records row
+// click maps back to so it can jump to that exercise's drill-in.
+let recordsView: string[] = [];
 let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
 let athleteWorkouts: WorkoutDay[] = [];
 
@@ -612,6 +652,7 @@ interface WorkoutGroup {
 let workoutGroups: WorkoutGroup[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
+let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
 let recordsPage = 0;
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -622,6 +663,9 @@ let exerciseSearch = "";
 // When true, append exercises this athlete has never logged (greyed) so gaps
 // in their training are visible instead of being an empty search result.
 let exerciseShowNotTrained = false;
+// When false (default), 3rd-tier exercises (cardio / mobility / warm-ups — not
+// really strength) are folded out of the list; the toggle reveals them.
+let exerciseShowThird = false;
 // In category mode, which category headers the user has collapsed (their
 // exercise rows are hidden until tapped open again).
 const collapsedExCats = new Set<string>();
@@ -657,19 +701,16 @@ function renderAthlete() {
   workoutsPage = 0;
   recordsPage = 0;
   selectedExercise = null;
-  athleteExercises = exerciseCountsForUser(data.records, els.athlete.value).map((c) => c.exerciseName);
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
-  initCalendarMonth();
+  initHeatYear();
   renderAthleteProfile();
   renderAthleteStats();
   renderTrainBreakdown();
-  populateProgressExercise();
   renderExercisesPage();
   renderWorkoutCalendar();
   renderWorkoutsPage();
   renderRecordsPage();
-  renderProgress();
 }
 
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
@@ -681,20 +722,40 @@ function renderRecordsPage() {
   ).sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
 
   els.recordsTitle.innerHTML =
-    `${escapeHtml(athleteLabel())} — personal records <span class="muted">(${recs.length} exercises)</span>`;
-  const head = `<thead><tr><th>Exercise</th><th class="num">Top weight (kg)</th><th class="num">Best 1RM (kg)</th><th class="num">Date</th></tr></thead>`;
+    `${escapeHtml(athleteLabel())} — personal records ` +
+    `<span class="muted">(${recs.length} exercises · est. working weights, kg · short codes · tap to open)</span>`;
+  // Codes are made unique across this athlete's whole record set (all pages), so
+  // the suffix on a collision doesn't shift as you page through.
+  const codes = exerciseCodesFor(recs.map((p) => p.exerciseName));
+  const formula = currentFormula();
+  // Estimated working weight for N reps off the best 1RM (— if undefined).
+  const rm = (oneRm: number, reps: number) => {
+    const w = reps === 1 ? oneRm : weightForReps(oneRm, reps, formula);
+    return w === null ? "—" : fmt(w);
+  };
+  const head =
+    `<thead><tr><th>Exercise</th><th class="num">1RM</th><th class="num">5RM</th>` +
+    `<th class="num">10RM</th><th class="num">15RM</th></tr></thead>`;
+  // recordsView maps a clicked row back to its exercise name (for the drill-in jump).
+  recordsView = recs.map((p) => p.exerciseName);
   const start = recordsPage * PAGE_SIZE;
   const rows = recs
     .slice(start, start + PAGE_SIZE)
-    .map(
-      (p) =>
-        `<tr><td>${escapeHtml(p.exerciseName)}</td>` +
-        `<td class="num">${wr(p.topWeight.weight, p.topWeight.reps)}</td>` +
-        `<td class="num">${fmt(p.bestE1rm.e1rm)}</td><td class="num wo-date">${shortDate(p.bestE1rm.date)}</td></tr>`,
-    )
+    .map((p, i) => {
+      const e1rm = p.bestE1rm.e1rm;
+      // Cramped (5 columns), so the exercise is shown as its 3-letter code with
+      // the full name in the tooltip and a small subline so it stays readable.
+      return (
+        `<tr class="rec-row" data-index="${start + i}" title="${escapeHtml(p.exerciseName)}">` +
+        `<td><span class="ex-code">${escapeHtml(codes.get(p.exerciseName) ?? exerciseCode(p.exerciseName))}</span> <span class="go-chevron">›</span>` +
+        `<div class="ex-fullname muted">${escapeHtml(p.exerciseName)}</div></td>` +
+        `<td class="num">${rm(e1rm, 1)}</td><td class="num">${rm(e1rm, 5)}</td>` +
+        `<td class="num">${rm(e1rm, 10)}</td><td class="num">${rm(e1rm, 15)}</td></tr>`
+      );
+    })
     .join("");
   els.recordsTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="4" class="muted">No records for this athlete.</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="5" class="muted">No records for this athlete.</td></tr>`}</tbody>`;
   els.recordsPager.innerHTML = pagerHtml(recordsPage, recs.length);
 }
 
@@ -842,12 +903,13 @@ function athleteLabel(): string {
   return els.athlete.options[els.athlete.selectedIndex]?.text ?? els.athlete.value;
 }
 
-/** Prev / range / Next controls for a paginated list. */
-function pagerHtml(page: number, total: number): string {
-  if (total <= PAGE_SIZE) return "";
-  const pages = Math.ceil(total / PAGE_SIZE);
-  const from = page * PAGE_SIZE + 1;
-  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+/** Prev / range / Next controls for a paginated list. `size` defaults to the
+ * app-wide PAGE_SIZE but callers (e.g. the workouts list) can pass their own. */
+function pagerHtml(page: number, total: number, size: number = PAGE_SIZE): string {
+  if (total <= size) return "";
+  const pages = Math.ceil(total / size);
+  const from = page * size + 1;
+  const to = Math.min(total, (page + 1) * size);
   return (
     `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
     `<span class="muted">${from}–${to} of ${total}</span>` +
@@ -954,6 +1016,12 @@ function setupExerciseSearch(): void {
     selectedExercise = null;
     renderExercisesPage();
   });
+  els.exerciseShowThird.addEventListener("change", () => {
+    exerciseShowThird = els.exerciseShowThird.checked;
+    exercisesPage = 0;
+    selectedExercise = null;
+    renderExercisesPage();
+  });
 }
 
 /**
@@ -1012,6 +1080,9 @@ function renderExercisesPage() {
     for (const name of distinctExercises(data.records))
       if (!trainedEver.has(name)) items.push({ exerciseName: name, count: 0, trained: false });
   }
+  // Fold out 3rd-tier (cardio / mobility / warm-up) exercises unless the toggle
+  // is on — they're not really strength, so they just clutter the list.
+  if (!exerciseShowThird) items = items.filter((it) => exerciseTier(it.exerciseName) !== "third");
   // Search filter (case-insensitive substring on the exercise name).
   const q = exerciseSearch.trim().toLowerCase();
   if (q) items = items.filter((it) => it.exerciseName.toLowerCase().includes(q));
@@ -1083,17 +1154,26 @@ function renderExerciseDetail(exName: string) {
     filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     currentFormula(),
   ).find((p) => p.exerciseName === exName);
+  // Stats start collapsed on every drill-in (the <details> persists across
+  // exercises, so reset it). renderExerciseWeekly always fills the chips, so the
+  // dropdown always has content to show.
+  els.exerciseStats.open = false;
   renderExerciseRecord(pr);
   renderExerciseWeekly(exName);
   renderExerciseTargets(pr);
+  renderExerciseCalc(pr);
   renderExerciseProgressChart(exName);
   const weeks = setsByWeek(setsForUserExercise(data.records, username, exName));
   const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
+  // Label each row by its ISO week-of-year number (e.g. "Week 15"), with the
+  // start date kept as a muted hint so the number can still be placed in time.
   const rows = weeks
     .map(
       (w) =>
         `<tr class="wk-row" data-wk="${w.weekStart}">` +
-        `<td><span class="caret">▸</span>Week of ${shortDate(w.weekStart)}</td><td class="num">${w.sets.length}</td></tr>`,
+        `<td><span class="caret">▸</span>Week ${isoWeekNumber(w.weekStart)} ` +
+        `<span class="muted wk-date-hint">${shortDate(w.weekStart)}</span></td>` +
+        `<td class="num">${w.sets.length}</td></tr>`,
     )
     .join("");
   els.athleteTable.innerHTML =
@@ -1163,11 +1243,105 @@ function renderExerciseTargets(pr: PersonalRecord | undefined) {
     `<div class="target-chips">${chips}</div>`;
 }
 
+// Anchor 1RM the drill-in calculator converts against (the athlete's best for
+// the open exercise). null when the exercise has no usable record → calc hidden.
+let ecalcOneRm: number | null = null;
+
+/**
+ * Set up the two-way reps↔weight calculator for the drilled-in exercise. The
+ * athlete's best estimated 1RM is the anchor: type a weight and it shows the
+ * reps they should manage at it; type reps and it shows the weight. Conversions
+ * run in added-weight space off the added 1RM — the SAME basis as the target
+ * chips above — so the numbers line up (e.g. the 5RM chip equals typing "5").
+ * Seeded with the actual top set (its weight & reps) so it opens on real data.
+ */
+function renderExerciseCalc(pr: PersonalRecord | undefined) {
+  ecalcOneRm = pr?.bestE1rm.e1rm ?? null;
+  if (ecalcOneRm === null || ecalcOneRm <= 0) {
+    els.exerciseCalc.hidden = true;
+    return;
+  }
+  els.exerciseCalc.hidden = false;
+  els.ecalcBasis.textContent = `· anchored on ${fmt(ecalcOneRm)} kg best 1RM`;
+  // Seed from the record set; fall back to the 1RM @ 1 rep if reps/weight absent.
+  const seedW = pr!.bestE1rm.weight;
+  const seedR = pr!.bestE1rm.reps;
+  els.ecalcWeight.value = String(seedW ?? Math.round(ecalcOneRm * 10) / 10);
+  els.ecalcReps.value = String(seedR ?? 1);
+  ecalcUpdateNote();
+}
+
+/** Round reps for display: whole numbers, never below 0, "—" if not finite. */
+function ecalcFmtReps(r: number | null): string {
+  if (r === null || !Number.isFinite(r)) return "—";
+  return String(Math.max(0, Math.round(r)));
+}
+
+/** Refresh the explanatory note under the calculator inputs. */
+function ecalcUpdateNote() {
+  if (ecalcOneRm === null) return;
+  els.ecalcNote.textContent =
+    `Estimates use the ${currentFormula()} formula. Lighter weight → more reps; ` +
+    `at or above the best 1RM it's a single (or less).`;
+}
+
+/**
+ * Recompute the OTHER field when one is edited. `source` is the field the user
+ * just typed in, so we never overwrite what they're typing (the two inputs would
+ * otherwise fight). Out-of-range values are shown raw, not clamped, per the
+ * owner's choice — a weight above the 1RM yields fractional/zero reps.
+ */
+function onExerciseCalcInput(source: "weight" | "reps") {
+  if (ecalcOneRm === null) return;
+  const formula = currentFormula();
+  if (source === "weight") {
+    const w = parseFloat(els.ecalcWeight.value);
+    if (!Number.isFinite(w) || w <= 0) {
+      els.ecalcReps.value = "";
+      return;
+    }
+    const reps = repsForWeight(ecalcOneRm, w, formula);
+    els.ecalcReps.value = ecalcFmtReps(reps);
+  } else {
+    const r = Math.round(parseFloat(els.ecalcReps.value));
+    if (!Number.isFinite(r) || r < 1) {
+      els.ecalcWeight.value = "";
+      return;
+    }
+    // reps === 1 is exactly the 1RM (weightForReps special-cases it).
+    const w = weightForReps(ecalcOneRm, r, formula);
+    els.ecalcWeight.value = w === null ? "" : String(Math.round(w * 10) / 10);
+  }
+  ecalcUpdateNote();
+}
+
 /** Per-exercise progress graph shown inside the drill-in (same shape as the Progress tab). */
 function renderExerciseProgressChart(exName: string) {
   exerciseChart?.destroy();
   exerciseChart = null;
-  const series = exerciseProgressByWeek(computedRecords(), els.athlete.value, exName, currentFormula());
+  // Use the SAME records the Records card/table use — honour "Exclude dropsets"
+  // — so the chart's 1RM matches them (an unfiltered feed counted dropset sets
+  // the rest of the app drops, inflating the diagram's 1RM).
+  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
+  const formula = currentFormula();
+  const canvas = $<HTMLCanvasElement>("exerciseProgressChart");
+
+  if (exProgressView === "perset") {
+    const sets = recs.filter((r) => r.username === els.athlete.value && r.exerciseName === exName);
+    const chart = drawSetRangeChart(canvas, sets, formula);
+    if (!chart) {
+      els.exerciseProgress.hidden = true;
+      els.exerciseProgressNote.textContent = "";
+      return;
+    }
+    els.exerciseProgress.hidden = false;
+    exerciseChart = chart;
+    els.exerciseProgressNote.textContent =
+      "Each bar spans the weight used (bottom) up to that set's estimated 1RM (top), per set over time.";
+    return;
+  }
+
+  const series = exerciseProgressByWeek(recs, els.athlete.value, exName, formula);
   if (series.length === 0) {
     els.exerciseProgress.hidden = true;
     els.exerciseProgressNote.textContent = "";
@@ -1175,7 +1349,78 @@ function renderExerciseProgressChart(exName: string) {
   }
   els.exerciseProgress.hidden = false;
   els.exerciseProgressNote.textContent = progressSummaryNote(series);
-  exerciseChart = drawProgressChart($<HTMLCanvasElement>("exerciseProgressChart"), series);
+  exerciseChart = drawProgressChart(canvas, series);
+}
+
+/** Per-set view: one floating bar per set, from the weight used up to that set's
+ * estimated (added-weight) 1RM, on a real time x-axis. Null if no usable sets. */
+function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[], formula: OneRepMaxFormula): Chart | null {
+  const ts = (d: string) => Date.parse(d);
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const pts = sets
+    .map((s) => {
+      const e1rm = addedWeight1RM(s, formula);
+      if (e1rm === null) return null;
+      const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+      return { x: ts(s.date), low: r1(added), high: r1(e1rm), reps: s.reps ?? 0 };
+    })
+    .filter((p): p is { x: number; low: number; high: number; reps: number } => p !== null);
+  if (pts.length === 0) return null;
+
+  const times = pts.map((p) => p.x);
+  const pad = 2 * 86_400_000;
+  return new Chart(canvas, {
+    type: "bar",
+    data: {
+      datasets: [
+        {
+          label: "Weight → 1RM",
+          // Floating bars: y is a [low, high] tuple at runtime (cast for Chart.js types).
+          data: pts.map((p) => ({ x: p.x, y: [p.low, p.high] })) as unknown as { x: number; y: number }[],
+          backgroundColor: "#284e86",
+          borderSkipped: false,
+          maxBarThickness: 10,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "nearest", intersect: true },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const p = pts[items[0]?.dataIndex ?? -1];
+              return p ? tsLabel(p.x) : "";
+            },
+            label: (item) => {
+              const p = pts[item.dataIndex];
+              return p ? `${fmt(p.low)} kg × ${p.reps} → ${fmt(p.high)} kg 1RM` : "";
+            },
+          },
+        },
+        zoom: {
+          pan: { enabled: true, mode: "xy" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "xy" },
+        },
+      },
+      scales: {
+        x: {
+          type: "linear",
+          min: Math.min(...times) - pad,
+          max: Math.max(...times) + pad,
+          grid: { color: "#ececec" },
+          ticks: { color: "#6b7280", maxRotation: 0, autoSkip: true, mirror: true, padding: 8, callback: (v) => tsLabel(Number(v)) },
+        },
+        y: {
+          grid: { color: "#ececec" },
+          ticks: { color: "#6b7280", mirror: true, padding: 4 },
+        },
+      },
+    },
+  });
 }
 
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
@@ -1238,72 +1483,192 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   }));
 }
 
-// ---- Workouts calendar: a month grid with training days marked ----
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-let calYear = 2026;
-let calMonth = 0; // 0-based
+// ---- Workouts overview: a per-year heatmap of training days ----
+let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
+let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
+let heatFilter = "all"; // "all" | "cat:<Category>" | "ex:<Exercise>"
 
-/** Map of this athlete's training dates (ISO) → sets that day. */
+/** Map of this athlete's training dates (ISO) → total sets that day (unfiltered).
+ * Used for the list of years; colouring uses {@link filteredDayCounts}. */
 function trainingDays(): Map<string, number> {
   const m = new Map<string, number>();
   for (const d of athleteWorkouts) if (d.totalSets > 0) m.set(d.date, d.totalSets);
   return m;
 }
 
-/** Open the calendar on the athlete's most recent training month. */
-function initCalendarMonth() {
+/** Sets on a day that match the active {@link heatFilter} (all / one category /
+ * one exercise). */
+function dayMatchCount(d: WorkoutDay): number {
+  if (heatFilter.startsWith("cat:")) {
+    const cat = heatFilter.slice(4);
+    return d.exercises.reduce((s, e) => (exerciseCategory(e.exerciseName) === cat ? s + e.count : s), 0);
+  }
+  if (heatFilter.startsWith("ex:")) {
+    const ex = heatFilter.slice(3);
+    return d.exercises.reduce((s, e) => (e.exerciseName === ex ? s + e.count : s), 0);
+  }
+  return d.totalSets;
+}
+
+/** Training dates → matching set count, honouring the heatmap filter. */
+function filteredDayCounts(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const d of athleteWorkouts) {
+    const c = dayMatchCount(d);
+    if (c > 0) m.set(d.date, c);
+  }
+  return m;
+}
+
+/** Open the heatmap on the athlete's most recent training year, filter cleared
+ * (a previous athlete's exercise filter won't apply to the new one). */
+function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
-  const parts = latest?.split("-");
-  if (parts && parts.length >= 2) {
-    calYear = Number(parts[0]);
-    calMonth = Number(parts[1]) - 1;
-  }
+  const y = Number(latest?.slice(0, 4));
+  if (Number.isFinite(y)) heatYear = y;
+  heatFilter = "all";
 }
 
-function shiftCalendar(delta: number) {
-  calMonth += delta;
-  if (calMonth < 0) {
-    calMonth = 11;
-    calYear -= 1;
-  } else if (calMonth > 11) {
-    calMonth = 0;
-    calYear += 1;
-  }
-  renderWorkoutCalendar();
+/** Intensity bucket (0–4) for a day's set count, GitHub-contribution style. */
+function heatLevel(sets: number): number {
+  if (sets <= 0) return 0;
+  if (sets <= 3) return 1;
+  if (sets <= 7) return 2;
+  if (sets <= 12) return 3;
+  return 4;
 }
 
-function renderWorkoutCalendar() {
-  const trained = trainingDays();
-  const startDow = (new Date(calYear, calMonth, 1).getDay() + 6) % 7; // Monday-first
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    .map((d) => `<div class="cal-dow">${d}</div>`)
-    .join("");
+/** The years (descending) that have any training, for the ‹ › year nav. */
+function dataYears(trained: Map<string, number>): number[] {
+  const years = [...new Set([...trained.keys()].map((d) => Number(d.slice(0, 4))))].sort((a, b) => b - a);
+  return years.length ? years : [heatYear];
+}
 
+/** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
+ * rows) — weeks are never broken mid-column — with month labels along the top
+ * aligned to the week each month begins. `counts` is the filtered day→sets map. */
+function yearGridHtml(year: number, counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+  const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+  const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
   const cells: string[] = [];
-  for (let i = 0; i < startDow; i++) cells.push(`<div class="cal-cell empty"></div>`);
-  let monthCount = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const iso = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const sets = trained.get(iso);
-    if (sets) monthCount++;
+  for (let i = 0; i < startDow; i++) cells.push(`<div class="hm-cell empty"></div>`);
+  let days = 0;
+  let totalSets = 0;
+  for (let doy = 0; doy < daysInYear; doy++) {
+    const d = new Date(year, 0, 1 + doy);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const sets = counts.get(iso) ?? 0;
+    if (sets) {
+      days++;
+      totalSets += sets;
+    }
+    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
     cells.push(
-      `<div class="cal-cell${sets ? " trained" : ""}"${sets ? ` data-date="${iso}" title="${sets} sets — tap to jump"` : ""}>` +
-        `<span class="cal-day">${day}</span>${sets ? `<span class="cal-sets">${sets}</span>` : ""}</div>`,
+      `<div class="hm-cell lvl-${heatLevel(sets)}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
     );
   }
 
+  // Month labels: place each at the week-column where its 1st falls.
+  const numWeeks = Math.ceil((startDow + daysInYear) / 7);
+  const labels = Array.from({ length: 12 }, (_, m) => {
+    const doyStart = Math.round((Date.UTC(year, m, 1) - Date.UTC(year, 0, 1)) / 86_400_000);
+    const col = Math.floor((startDow + doyStart) / 7) + 1; // 1-based grid column
+    return `<span class="hm-mlabel" style="grid-column-start:${col}">${MONTH_ABBR[m]}</span>`;
+  }).join("");
+
+  const html =
+    `<div class="hm-year"><div class="hm-cal">` +
+    `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels}</div>` +
+    `<div class="hm-grid">${cells.join("")}</div>` +
+    `</div></div>`;
+  return { html, days, totalSets };
+}
+
+/** Single-year / All-years toggle. */
+function heatScopeToggle(): string {
+  const btn = (s: "single" | "all", label: string) =>
+    `<button type="button" class="cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}">${label}</button>`;
+  return `<div class="cal-mode">${btn("single", "Single year")}${btn("all", "All years")}</div>`;
+}
+
+/** Human label for the active heatmap filter value. */
+function heatFilterLabel(): string {
+  if (heatFilter.startsWith("cat:")) return heatFilter.slice(4);
+  if (heatFilter.startsWith("ex:")) return heatFilter.slice(3);
+  return "All exercises";
+}
+
+/** Filter as a custom dropdown (no native <select>): all exercises, one training
+ * category, or one exercise. Lives inside the re-rendered calendar HTML, so it's
+ * handled by delegation in the workoutCalendar click handler (data-heatval). */
+function heatFilterSelect(): string {
+  const exs = exerciseCountsForUser(data.records, els.athlete.value); // most-trained first
+  const cats = TRAINING_CATEGORIES.filter((c) => exs.some((e) => exerciseCategory(e.exerciseName) === c));
+  const opt = (val: string, label: string) =>
+    `<button type="button" class="xdd-opt${heatFilter === val ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${escapeHtml(label)}</button>`;
+  const menu =
+    opt("all", "All exercises") +
+    (cats.length ? `<div class="xdd-group">Categories</div>${cats.map((c) => opt(`cat:${c}`, c)).join("")}` : "") +
+    (exs.length
+      ? `<div class="xdd-group">Exercises</div>${exs.map((e) => opt(`ex:${e.exerciseName}`, e.exerciseName)).join("")}`
+      : "");
+  return (
+    `<div class="xdd xdd-heat">` +
+    `<button type="button" class="xdd-btn">${escapeHtml(heatFilterLabel())}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
+    `</div>`
+  );
+}
+
+/** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
+ * years stacked; filterable to one category or exercise. Tap a day to jump. */
+function renderWorkoutCalendar() {
+  const years = dataYears(trainingDays()); // year list from ALL training (filter-independent)
+  if (!years.includes(heatYear)) heatYear = years[0]!;
+  const counts = filteredDayCounts(); // colouring honours the filter
+  const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}</div>`;
+  const legend =
+    `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1"></span>` +
+    `<span class="hm-cell lvl-2"></span><span class="hm-cell lvl-3"></span><span class="hm-cell lvl-4"></span> More</div>`;
+  const count = (g: { days: number; totalSets: number }) =>
+    `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
+
+  if (heatScope === "all") {
+    const blocks = years
+      .map((y) => {
+        const g = yearGridHtml(y, counts);
+        return `<div class="hm-block"><div class="cal-head"><strong>${y}</strong>${count(g)}</div>${g.html}</div>`;
+      })
+      .join("");
+    els.workoutCalendar.innerHTML = controls + blocks + legend;
+    return;
+  }
+
+  const g = yearGridHtml(heatYear, counts);
+  const idx = years.indexOf(heatYear);
+  const olderExists = idx < years.length - 1; // a smaller (older) year exists
+  const newerExists = idx > 0; // a larger (newer) year exists
   els.workoutCalendar.innerHTML =
+    controls +
     `<div class="cal-head">` +
-    `<button type="button" class="cal-nav" data-cal="prev" aria-label="Previous month">‹</button>` +
-    `<strong>${MONTH_NAMES[calMonth]} ${calYear}</strong>` +
-    `<button type="button" class="cal-nav" data-cal="next" aria-label="Next month">›</button>` +
-    `<span class="cal-count muted">${monthCount} training day${monthCount === 1 ? "" : "s"}</span>` +
+    `<button type="button" class="cal-nav" data-heat="prev" aria-label="Previous year"${olderExists ? "" : " disabled"}>‹</button>` +
+    `<strong>${heatYear}</strong>` +
+    `<button type="button" class="cal-nav" data-heat="next" aria-label="Next year"${newerExists ? "" : " disabled"}>›</button>` +
+    count(g) +
     `</div>` +
-    `<div class="cal-grid">${dow}${cells.join("")}</div>`;
+    g.html +
+    legend;
+}
+
+/** Step the heatmap to an adjacent year that has data (‹ older / › newer). */
+function shiftHeatYear(delta: number) {
+  const years = dataYears(trainingDays()); // descending
+  const idx = years.indexOf(heatYear);
+  const next = years[idx - delta]; // -1 = older (later in list), +1 = newer
+  if (next !== undefined) {
+    heatYear = next;
+    renderWorkoutCalendar();
+  }
 }
 
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
@@ -1311,7 +1676,7 @@ function jumpToWorkoutDate(iso: string) {
   if (els.workoutView.value !== "day") els.workoutView.value = "day"; // calendar is per-day
   const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
-  workoutsPage = Math.floor(idx / PAGE_SIZE);
+  workoutsPage = Math.floor(idx / workoutsPageSize);
   renderWorkoutsPage();
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
@@ -1332,12 +1697,14 @@ function renderWorkoutsPage() {
     `<span class="muted">(${active} ${byWeek ? "weeks" : "sessions"} · tap to expand)</span>`;
 
   const head = `<thead><tr><th>${byWeek ? "Week" : "Session"}</th><th class="num">Sets</th></tr></thead>`;
-  const start = workoutsPage * PAGE_SIZE;
+  const start = workoutsPage * workoutsPageSize;
   const rows = workoutGroups
-    .slice(start, start + PAGE_SIZE)
+    .slice(start, start + workoutsPageSize)
     .map((g, i) => {
       if (g.rest) {
-        return `<tr class="rest-row"><td><span class="wo-date">${g.label}</span> rest</td><td class="num">0</td></tr>`;
+        // A rest day is just a thin sliver with a separating line — count the
+        // lines between sessions to see how many days passed, no text needed.
+        return `<tr class="rest-row" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
       }
       const abs = start + i;
       const did = g.exercises
@@ -1353,7 +1720,7 @@ function renderWorkoutsPage() {
     .join("");
   els.workoutsTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
-  els.workoutsPager.innerHTML = pagerHtml(workoutsPage, workoutGroups.length);
+  els.workoutsPager.innerHTML = pagerHtml(workoutsPage, workoutGroups.length, workoutsPageSize);
 }
 
 function onWorkoutRowClick(e: MouseEvent) {
@@ -1484,30 +1851,8 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
 }
 
-// ---- Progress page (time graph: sets per day + best estimated 1RM) ----
-function populateProgressExercise() {
-  const prev = els.progressExercise.value;
-  els.progressExercise.innerHTML = athleteExercises
-    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
-    .join("");
-  // Keep the previous pick if this athlete also has it; else default to first.
-  if (athleteExercises.includes(prev)) els.progressExercise.value = prev;
-}
-
-function renderProgress() {
-  const exercise = els.progressExercise.value;
-  progressChart?.destroy();
-  progressChart = null;
-  if (!exercise) {
-    els.progressNote.textContent = "No exercises to chart for this athlete.";
-    return;
-  }
-  const series = exerciseProgressByWeek(computedRecords(), els.athlete.value, exercise, currentFormula());
-  els.progressNote.textContent = progressSummaryNote(series);
-  progressChart = drawProgressChart($<HTMLCanvasElement>("progressChart"), series);
-}
-
-/** Best / latest / trend summary line for an exercise's day-by-day 1RM series. */
+/** Best / latest / trend summary line for an exercise's day-by-day 1RM series.
+ * Shown under the per-exercise drill-in chart. */
 function progressSummaryNote(series: ExerciseDayPoint[]): string {
   const pts = series.filter((p) => p.bestE1rm !== null);
   let trendNote = "";
@@ -1614,7 +1959,10 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
+      // intersect:true → the tooltip only shows when you're directly on a bar/
+      // point, so tapping empty space dismisses it (it no longer sticks open and
+      // obscures the plot).
+      interaction: { mode: "nearest", intersect: true },
       // Legend + axis titles are dropped on purpose: the note line below the
       // chart already says what each colour is, so every pixel goes to the plot.
       plugins: {
@@ -1986,9 +2334,10 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
-  // Default to Džuljeta for now, when present.
-  const dzuljeta = users.find((u) => u.username.toLowerCase().includes("dzuljeta") || u.user.toLowerCase().includes("džuljeta"));
-  if (dzuljeta) els.athlete.value = dzuljeta.username;
+  // Default to Simona when present. Exact username match so we don't pick the
+  // unrelated "Simonas" (simonasputrius).
+  const simona = users.find((u) => u.username.toLowerCase() === "simona");
+  if (simona) els.athlete.value = simona.username;
   buildAthleteChips(); // custom chip row mirrors the hidden <select>
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
@@ -2058,18 +2407,60 @@ async function init() {
     renderAthlete();
   });
   els.workoutCalendar.addEventListener("click", (e) => {
-    const nav = (e.target as HTMLElement).closest<HTMLElement>(".cal-nav");
-    if (nav?.dataset.cal === "prev") return shiftCalendar(-1);
-    if (nav?.dataset.cal === "next") return shiftCalendar(1);
-    const cell = (e.target as HTMLElement).closest<HTMLElement>(".cal-cell.trained");
+    const target = e.target as HTMLElement;
+    // Custom filter dropdown: toggle its menu, or pick an option.
+    if (target.closest(".xdd-heat .xdd-btn")) {
+      const dd = target.closest<HTMLElement>(".xdd-heat")!;
+      const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
+      const opening = menu.hasAttribute("hidden");
+      menu.toggleAttribute("hidden", !opening);
+      dd.classList.toggle("open", opening);
+      return;
+    }
+    const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt");
+    if (heatOpt?.dataset.heatval !== undefined) {
+      heatFilter = heatOpt.dataset.heatval;
+      return renderWorkoutCalendar();
+    }
+    const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
+    if (scopeBtn?.dataset.heatScope) {
+      heatScope = scopeBtn.dataset.heatScope === "all" ? "all" : "single";
+      return renderWorkoutCalendar();
+    }
+    const nav = target.closest<HTMLElement>(".cal-nav");
+    if (nav?.dataset.heat === "prev") return shiftHeatYear(-1); // older year
+    if (nav?.dataset.heat === "next") return shiftHeatYear(1); // newer year
+    // Tapping a trained day in the heatmap jumps to it in the list below.
+    const cell = target.closest<HTMLElement>(".hm-cell[data-date]");
     if (cell?.dataset.date) jumpToWorkoutDate(cell.dataset.date);
   });
-  els.progressExercise.addEventListener("change", renderProgress);
-  // "Center on data" snaps each progress chart's pan/zoom back to the data fit.
-  els.progressCenter.addEventListener("click", () => progressChart?.resetZoom());
+  // Close the heatmap filter menu on any click outside it.
+  document.addEventListener("click", (e) => {
+    for (const dd of document.querySelectorAll<HTMLElement>(".xdd-heat.open"))
+      if (!dd.contains(e.target as Node)) {
+        dd.classList.remove("open");
+        dd.querySelector<HTMLElement>(".xdd-menu")?.setAttribute("hidden", "");
+      }
+  });
+  // "Center on data" snaps the drill-in chart's pan/zoom back to the data fit.
   els.exerciseProgressCenter.addEventListener("click", () => exerciseChart?.resetZoom());
+  // Toggle the drill-in chart between the 1RM trend and the per-set weight→1RM range.
+  els.exProgressView.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".cal-mode-btn");
+    const view = btn?.dataset.exview;
+    if (view !== "trend" && view !== "perset") return;
+    exProgressView = view;
+    for (const b of els.exProgressView.querySelectorAll<HTMLElement>(".cal-mode-btn"))
+      b.classList.toggle("is-active", b.dataset.exview === view);
+    if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
+  });
   els.summariseBtn.addEventListener("click", runSummary);
   els.workoutView.addEventListener("change", () => {
+    workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.workoutsPageSize.addEventListener("change", () => {
+    workoutsPageSize = Number(els.workoutsPageSize.value) === 50 ? 50 : 20;
     workoutsPage = 0;
     renderWorkoutsPage();
   });
@@ -2089,6 +2480,22 @@ async function init() {
     }
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
+
+  // Two-way reps↔weight calculator in the exercise drill-in: each field updates
+  // the other as you type. Source = the field being edited, so they don't fight.
+  els.ecalcWeight.addEventListener("input", () => onExerciseCalcInput("weight"));
+  els.ecalcReps.addEventListener("input", () => onExerciseCalcInput("reps"));
+
+  // A Records row jumps to that exercise's drill-in on the Exercises sub-tab.
+  els.recordsTable.addEventListener("click", (e) => {
+    const row = (e.target as HTMLElement).closest("tr.rec-row") as HTMLTableRowElement | null;
+    if (!row) return;
+    const exName = recordsView[Number(row.dataset.index)];
+    if (exName === undefined) return;
+    showSubtab("exercises");
+    selectedExercise = exName;
+    renderExercisesPage();
+  });
 
   // Period filter for the exercises list — a custom dropdown (not a native
   // select) so the menu looks the same on every OS.
@@ -2126,6 +2533,16 @@ async function init() {
   });
 
   setupSubtabs();
+
+  // Replace every native <select> with a custom HTML/CSS dropdown. Done last, so
+  // each select already has its options and current value. (#athlete stays hidden
+  // behind its chip row; #exerciseRange is already a custom dropdown.)
+  enhanceSelect(els.exercise, { wide: true });
+  for (const sel of [
+    els.formula, els.bwSource, els.rank, els.sexFilter,
+    els.workoutView, els.workoutsPageSize, els.testAthlete, els.testExercise,
+  ])
+    enhanceSelect(sel);
 }
 
 /** Read the target page index from a pager button click, or null. */
@@ -2205,25 +2622,89 @@ function setupTabs() {
       }
       // Chart.js needs a resize nudge if it was first drawn while hidden.
       if (target === "leaderboards") lbChart?.resize();
-      if (target === "athlete") progressChart?.resize();
     });
   }
 }
 
-/** Sub-navigation inside the Athlete tab (Workouts / Exercises / Progress). */
-function setupSubtabs() {
-  const subtabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".subtab"));
-  for (const sub of subtabs) {
-    sub.addEventListener("click", () => {
-      const target = sub.dataset.subtab;
-      for (const s of subtabs) s.classList.toggle("is-active", s === sub);
-      for (const s of subtabs) {
-        const panel = document.getElementById(`sub-${s.dataset.subtab}`);
-        if (panel) panel.hidden = s !== sub;
+/**
+ * Replace a native <select> with a custom HTML/CSS dropdown (no OS chrome). The
+ * native select is hidden but kept as the source of truth, so all existing
+ * population (innerHTML of <option>s), `.value` reads and "change" listeners
+ * keep working untouched. A MutationObserver re-syncs the custom UI whenever the
+ * options are repopulated; selecting an option sets `.value` and fires "change".
+ */
+function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
+  sel.classList.add("dd-native");
+  const dd = document.createElement("div");
+  dd.className = "xdd" + (opts.wide ? " xdd-wide" : "");
+  sel.insertAdjacentElement("afterend", dd);
+
+  const optHtml = (o: HTMLOptionElement) =>
+    `<button type="button" class="xdd-opt${o.value === sel.value ? " is-active" : ""}" data-val="${escapeHtml(o.value)}" role="option">${escapeHtml(o.textContent ?? "")}</button>`;
+
+  const sync = () => {
+    let menu = "";
+    for (const node of Array.from(sel.children)) {
+      if (node instanceof HTMLOptGroupElement) {
+        menu += `<div class="xdd-group">${escapeHtml(node.label)}</div>`;
+        for (const o of Array.from(node.children)) if (o instanceof HTMLOptionElement) menu += optHtml(o);
+      } else if (node instanceof HTMLOptionElement) {
+        menu += optHtml(node);
       }
-      if (target === "progress") progressChart?.resize();
-    });
+    }
+    const wasOpen = dd.classList.contains("open");
+    dd.innerHTML =
+      `<button type="button" class="xdd-btn">${escapeHtml(sel.selectedOptions[0]?.textContent ?? "")}<span class="xdd-caret">▾</span></button>` +
+      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${menu}</div>`;
+  };
+  sync();
+
+  const close = () => {
+    dd.classList.remove("open");
+    dd.querySelector<HTMLElement>(".xdd-menu")?.setAttribute("hidden", "");
+  };
+  dd.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest(".xdd-btn")) {
+      const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
+      const opening = menu.hasAttribute("hidden");
+      menu.toggleAttribute("hidden", !opening);
+      dd.classList.toggle("open", opening);
+      return;
+    }
+    const opt = t.closest<HTMLElement>(".xdd-opt");
+    if (opt?.dataset.val !== undefined) {
+      if (sel.value !== opt.dataset.val) {
+        sel.value = opt.dataset.val;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      close();
+      sync();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!dd.contains(e.target as Node)) close();
+  });
+  // Repopulating the select (new <option>s) or a code-driven change re-syncs.
+  new MutationObserver(() => sync()).observe(sel, { childList: true, subtree: true });
+  sel.addEventListener("change", sync);
+}
+
+/** Switch the active Athlete sub-tab (Workouts / Exercises / Records) and show
+ * its panel. Exposed so other views (e.g. a Records row) can jump to a sub-tab. */
+function showSubtab(name: string) {
+  const subtabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".subtab"));
+  for (const s of subtabs) s.classList.toggle("is-active", s.dataset.subtab === name);
+  for (const s of subtabs) {
+    const panel = document.getElementById(`sub-${s.dataset.subtab}`);
+    if (panel) panel.hidden = s.dataset.subtab !== name;
   }
+}
+
+/** Sub-navigation inside the Athlete tab (Workouts / Exercises / Records). */
+function setupSubtabs() {
+  for (const sub of document.querySelectorAll<HTMLButtonElement>(".subtab"))
+    sub.addEventListener("click", () => showSubtab(sub.dataset.subtab ?? ""));
 }
 
 void init();

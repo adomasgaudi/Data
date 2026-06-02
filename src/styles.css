@@ -217,6 +217,37 @@ body {
 }
 .period-dd-opt:hover { background: var(--accent-soft); color: var(--accent); }
 .period-dd-opt.is-active { color: var(--accent); font-weight: 700; }
+
+/* Generic custom dropdown (replaces native <select> everywhere). A hidden native
+   <select> stays as the source of truth; .xdd mirrors it. Built by enhanceSelect.
+   .xdd-wide is used for the big leaderboard exercise picker. */
+.dd-native { display: none !important; }
+.xdd { position: relative; display: inline-block; vertical-align: middle; }
+.xdd-btn {
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+  width: 100%; padding: 6px 11px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600;
+}
+.xdd-btn:hover, .xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
+.xdd-caret { color: var(--muted); font-size: 0.7rem; }
+.xdd.open .xdd-caret { color: var(--accent); }
+.xdd-wide .xdd-btn { font-size: 1rem; padding: 8px 12px; }
+.xdd-menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; min-width: 100%;
+  max-height: 60vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 1px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.12);
+}
+.xdd-menu[hidden] { display: none; }
+.xdd-group { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; padding: 6px 10px 2px; }
+.xdd-opt {
+  cursor: pointer; text-align: left; white-space: nowrap;
+  padding: 7px 12px; border: none; border-radius: 6px; background: none;
+  font: inherit; font-size: 0.85rem; color: var(--text);
+}
+.xdd-opt:hover { background: var(--accent-soft); color: var(--accent); }
+.xdd-opt.is-active { color: var(--accent); font-weight: 700; }
 .exercise-record {
   display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0 0 1rem;
 }
@@ -229,6 +260,19 @@ body {
 .record-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .record-value { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
 .record-meta { font-size: 0.78rem; color: var(--muted); }
+/* Collapsible "Stats" wrapper around the exercise drill-in readouts. Mirrors the
+   athlete-level .athlete-details so the two dropdowns look the same. */
+.exercise-stats { margin: 0 0 1rem; }
+.exercise-stats-summary {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+}
+.exercise-stats-summary::-webkit-details-marker { display: none; }
+.exercise-stats-summary:hover,
+.exercise-stats[open] > .exercise-stats-summary { color: var(--accent); }
+.es-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; }
+.exercise-stats[open] .es-caret { transform: rotate(180deg); color: var(--accent); }
+.exercise-stats-body { margin-top: 0.85rem; }
 /* Rep-max targets (5RM/10RM/15RM) derived from the best 1RM, under the record card. */
 .exercise-targets { margin: 0 0 1rem; }
 .exercise-targets[hidden] { display: none; }
@@ -241,6 +285,27 @@ body {
 }
 .target-reps { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .target-weight { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+/* Two-way reps↔weight calculator inside the exercise drill-in. */
+.exercise-calc { margin: 0 0 1rem; }
+.exercise-calc[hidden] { display: none; }
+.ecalc-lead { font-size: 0.78rem; margin-bottom: 0.4rem; }
+.ecalc-row { display: flex; align-items: flex-end; gap: 0.6rem; flex-wrap: wrap; }
+.ecalc-field {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); font-weight: 600;
+}
+.ecalc-input-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.ecalc-input {
+  width: 5.5rem; font-size: 1.05rem; font-weight: 700; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 10px; text-align: right;
+}
+.ecalc-unit { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.ecalc-swap { font-size: 1.1rem; color: var(--muted); padding-bottom: 8px; }
+.ecalc-note { font-size: 0.72rem; margin: 0.45rem 0 0; }
+/* Muted start-date hint next to the ISO week number in the exercise weeks list. */
+.wk-date-hint { font-size: 0.78rem; font-weight: 400; }
 /* Sets-per-week chips inside the exercise drill-in. */
 .wk-stats { margin: 0 0 1rem; }
 .wk-stats[hidden] { display: none; }
@@ -377,6 +442,41 @@ select.subtle-select:hover, select.subtle-select:focus {
 .calc-tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 /* Workouts calendar */
 .wo-calendar { margin: 0 0 1.25rem; }
+/* Year-view controls: single/all toggle + the exercise/category filter. */
+.heat-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin-bottom: 0.7rem; }
+.cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.cal-mode-btn { padding: 5px 14px; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
+.cal-mode-btn:hover { color: var(--text); }
+.cal-mode-btn.is-active { color: #fff; background: var(--accent); }
+.heat-filter {
+  font: inherit; font-size: 0.82rem; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; max-width: 60vw;
+}
+.heat-filter:focus { outline: none; border-color: var(--accent); }
+/* Year heatmap (GitHub-contribution style): one continuous grid of weeks (never
+   broken mid-week), with month labels along the top aligned to each month's
+   first week. --hm-col is the per-week column pitch (cell + gap). */
+.hm-cal { --hm-col: 18px; display: inline-block; } /* matches .hm-grid cell width; gap adds the rest */
+.hm-year { overflow-x: auto; padding-bottom: 6px; margin: 0 0 0.4rem; }
+.hm-months { display: grid; gap: 3px; margin-bottom: 4px; }
+.hm-mlabel { font-size: 0.72rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.hm-grid {
+  display: grid; grid-template-rows: repeat(7, 18px); grid-auto-flow: column; grid-auto-columns: 18px;
+  gap: 3px;
+}
+.hm-block + .hm-block { margin-top: 1rem; } /* stacked years in "All years" mode */
+.hm-cell { width: 18px; height: 18px; border-radius: 3px; background: var(--line); }
+.hm-cell.empty { background: transparent; }
+.hm-cell.lvl-0 { background: var(--line); }
+.hm-cell.lvl-1 { background: rgba(40, 78, 134, 0.30); }
+.hm-cell.lvl-2 { background: rgba(40, 78, 134, 0.55); }
+.hm-cell.lvl-3 { background: rgba(40, 78, 134, 0.78); }
+.hm-cell.lvl-4 { background: var(--accent); }
+.hm-cell[data-date] { cursor: pointer; }
+.hm-cell[data-date]:hover { outline: 2px solid var(--gold); outline-offset: -1px; }
+.hm-legend { display: flex; align-items: center; gap: 3px; font-size: 0.72rem; margin-top: 0.2rem; }
+.hm-legend .hm-cell { width: 12px; height: 12px; cursor: default; }
 .cal-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
 .cal-head strong { font-size: 0.95rem; min-width: 9.5rem; text-align: center; }
 .cal-nav {
@@ -465,13 +565,26 @@ select.subtle-select:hover, select.subtle-select:focus {
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }
 .wo-row.open .wo-date { margin-bottom: 0; }
-.rest-row { color: var(--muted); }
+/* A rest day in the Show-rest-days view: a thin sliver, no text — each line is
+   one empty day, so you can see at a glance how many days passed between
+   sessions. Hover/tap shows the date via the row's title. */
+.rest-row td { height: 3px; padding: 0; border-bottom: 1px solid var(--line); background: var(--accent-soft); }
+.rest-row:hover td { background: var(--accent); }
+/* 3-letter exercise code (used where space is tight, e.g. the Records table). */
+.ex-code { font-weight: 700; letter-spacing: 0.05em; }
+.ex-fullname { font-size: 0.7rem; font-weight: 400; margin-top: 1px; }
+/* Records table: keep the RM column headers/numbers on one line (don't wrap
+   "1RM" → "1R / M"); let a long exercise name ellipsize instead of squeezing
+   those columns. */
+#recordsTable th, #recordsTable td.num { white-space: nowrap; }
+#recordsTable td:first-child { width: 100%; } /* exercise column takes the slack */
+.rec-row .ex-fullname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48vw; }
 .wo-controls { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
-.ex-row, .wo-row, .wo-ex-row, .wk-row { cursor: pointer; }
-.ex-row:hover, .wo-row:hover, .wo-ex-row:hover, .wk-row:hover { background: var(--accent-soft); }
+.ex-row, .wo-row, .wo-ex-row, .wk-row, .rec-row { cursor: pointer; }
+.ex-row:hover, .wo-row:hover, .wo-ex-row:hover, .wk-row:hover, .rec-row:hover { background: var(--accent-soft); }
 .caret { display: inline-block; margin-right: 0.5rem; color: var(--accent); transition: transform 0.15s; }
 .ex-row.open, .wo-row.open, .wo-ex-row.open, .wk-row.open { background: var(--accent-soft); }
 .ex-row.open > td .caret, .wo-row.open > td .caret, .wo-ex-row.open > td .caret, .wk-row.open > td .caret { transform: rotate(90deg); }

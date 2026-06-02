@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBwCoeff, exerciseCategory, exerciseTier, isAssistablePullup, realPullupWeight } from "./profile";
+import { bodyComposition, defaultBwCoeff, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, realPullupWeight } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -65,12 +65,57 @@ describe("exerciseTier (main / second)", () => {
       expect(exerciseTier(name)).toBe("main");
   });
 
-  it("leaves un-named variants and everything else as second", () => {
+  it("leaves accessory/isolation strength work as second", () => {
     for (const name of [
       "Front Squat", "Hack Squat", "Incline Bench Press", "Seated Shoulder Press",
-      "Lat Pullover", "Bicep Curl", "Leg Press", "Plank", "Handstand",
+      "Lat Pullover", "Bicep Curl", "Leg Press", "Plank",
     ])
       expect(exerciseTier(name)).toBe("second");
+  });
+
+  it("puts non-strength work (cardio, mobility, warm-ups) in the third tier", () => {
+    for (const name of ["Treadmill Run", "Assault Bike", "Ski Erg", "Sled Push"])
+      expect(exerciseTier(name)).toBe("third"); // cardio / calorie / conditioning
+    for (const name of ["Hamstring Stretch", "Ankle Mobility", "Pancake Stretch"])
+      expect(exerciseTier(name)).toBe("third"); // mobility
+    expect(exerciseTier("Warm-up Cycle")).toBe("third");
+  });
+});
+
+describe("exerciseCode (uppercase core + lowercase modifier prefix)", () => {
+  it("gives bare movement cores in uppercase", () => {
+    expect(exerciseCode("Squat")).toBe("SQ");
+    expect(exerciseCode("Deadlift")).toBe("DL");
+    expect(exerciseCode("Bench Press")).toBe("BP");
+    expect(exerciseCode("Chest Press")).toBe("CP");
+    expect(exerciseCode("Romanian Deadlift")).toBe("RDL");
+  });
+
+  it("prefixes the equipment/variant in lowercase", () => {
+    expect(exerciseCode("Dumbbell Bench Press")).toBe("dBP"); // d = dumbbell
+    expect(exerciseCode("Front Squat")).toBe("fSQ"); // f = front
+    expect(exerciseCode("Hex Bar Deadlift")).toBe("hDL"); // h = hex bar
+  });
+
+  it("honours the owner's explicit sumo exception", () => {
+    expect(exerciseCode("Sumo Deadlift")).toBe("S-DL");
+  });
+
+  it("uses the single-dumbbell prefix and stacks where it makes sense", () => {
+    // "Single Dumbbell Cossack Squat": sd prefix + SQ core.
+    expect(exerciseCode("Single Dumbbell Cossack Squat")).toBe("sdSQ");
+  });
+
+  it("falls back to initials when there is no recognised movement core", () => {
+    expect(exerciseCode("Cable Crossover")).toBe("CCA"); // C + C, pad 'a' from Cable
+  });
+
+  it("makes a set of codes unique with a numeric suffix on collision", () => {
+    // Two distinct names that derive the same base code get 'X', 'X2', …
+    const codes = exerciseCodesFor(["Bench Press", "Barbell Bench Press"]);
+    const vals = [...codes.values()];
+    expect(new Set(vals).size).toBe(vals.length); // all unique
+    expect(codes.get("Bench Press")).toBe("BP");
   });
 });
 

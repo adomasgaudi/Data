@@ -254,7 +254,7 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
 
   if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
     return "Mobility";
-  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege"))
+  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
     return "Cardio";
   if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross", "pancake"))
     return n.includes("push") ? "Shoulders" : "Skill"; // handstand PUSH-up trains shoulders
@@ -284,7 +284,7 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
  * AI-NOTE: created on request to tag main vs second lifts; not yet wired into any
  * view. Edit MAIN_EXERCISES (canonical names) to change the set.
  */
-export type ExerciseTier = "main" | "second";
+export type ExerciseTier = "main" | "second" | "third";
 
 const normalizeExerciseName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -305,11 +305,150 @@ const MAIN_EXERCISES = new Set(
   ].map(normalizeExerciseName),
 );
 
-/** "main" for the owner's core compound lifts (squat, deadlift, smith squat, RDL,
- * bench, DB bench, shoulder press, DB shoulder press, push-ups, pull-ups,
- * chin-ups, lat pulldown), "second" for everything else. */
+/**
+ * Three importance tiers:
+ *  - "main": the owner's core compound lifts (the MAIN_EXERCISES list).
+ *  - "third": NOT really strength training — cardio, calorie/conditioning work,
+ *    mobility/stretches, and warm-ups (so they can be folded away).
+ *  - "second": everything else (accessory & isolation strength work).
+ */
 export function exerciseTier(exerciseName: string): ExerciseTier {
-  return MAIN_EXERCISES.has(normalizeExerciseName(exerciseName)) ? "main" : "second";
+  if (MAIN_EXERCISES.has(normalizeExerciseName(exerciseName))) return "main";
+  const cat = exerciseCategory(exerciseName);
+  if (cat === "Cardio" || cat === "Mobility") return "third";
+  if (/\bwarm[\s-]?up/.test(exerciseName.toLowerCase())) return "third";
+  return "second";
+}
+
+/**
+ * A short exercise code for cramped spots (chart ticks, tight tables) where the
+ * full name won't fit. The owner's scheme: an UPPERCASE movement core (SQ, DL,
+ * BP, CP, SP…) with one or more LOWERCASE modifier prefixes glued on for the
+ * equipment/variant (d = dumbbell, f = front, h = hex bar, i = incline, …). So
+ * a dumbbell bench press reads "dBP", a front squat "fSQ", a hex-bar deadlift
+ * "hDL". Sumo deadlift is the owner's explicit exception: "S-DL".
+ *
+ * Anything without a recognised core falls back to a deterministic initials
+ * derivation so new exercises still get a code without being hardcoded. Codes
+ * are paired with the full name in a title/tooltip, but exerciseCodesFor() makes
+ * the displayed set unique (a rare collision gets a numeric suffix).
+ *
+ * AI-NOTE: codes are owner-specified. Edit MOVEMENT_CORES / MODIFIER_PREFIXES /
+ * EXACT_CODE_OVERRIDES below to tune; keep prefixes lowercase, cores uppercase.
+ */
+
+// Exact, owner-named codes that bypass the prefix+core derivation entirely.
+const EXACT_CODE_OVERRIDES: Record<string, string> = {
+  sumodeadlift: "S-DL", // explicit exception: uppercase S + dash
+};
+
+// Movement cores (UPPERCASE), matched on the longest phrase first so "bench
+// press" wins over a bare "bench". Keys are normalised (lowercased, stripped).
+const MOVEMENT_CORES: { match: string; core: string }[] = [
+  { match: "romaniandeadlift", core: "RDL" },
+  { match: "deadlift", core: "DL" },
+  { match: "benchpress", core: "BP" },
+  { match: "chestpress", core: "CP" },
+  { match: "shoulderpress", core: "SP" },
+  { match: "overheadpress", core: "OHP" },
+  { match: "latpulldown", core: "LPD" },
+  { match: "pulldown", core: "PD" },
+  { match: "bentoverrow", core: "BOR" },
+  { match: "row", core: "ROW" },
+  { match: "pushups", core: "PU" },
+  { match: "pushup", core: "PU" },
+  { match: "pullups", core: "PL" },
+  { match: "pullup", core: "PL" },
+  { match: "chinups", core: "CH" },
+  { match: "chinup", core: "CH" },
+  { match: "legpress", core: "LP" },
+  { match: "legcurl", core: "LC" },
+  { match: "legextension", core: "LE" },
+  { match: "squat", core: "SQ" },
+  { match: "dips", core: "DIP" },
+  { match: "dip", core: "DIP" },
+  { match: "curl", core: "CRL" },
+];
+
+// Variant/equipment prefixes (lowercase), checked longest-first so "single
+// dumbbell" beats "single"/"dumbbell". Each contributes a lowercase letter or
+// two; multiple can stack (e.g. an incline dumbbell press → "idBP").
+const MODIFIER_PREFIXES: { match: string; prefix: string }[] = [
+  { match: "singledumbbell", prefix: "sd" },
+  { match: "singleleg", prefix: "sl" },
+  { match: "dumbbell", prefix: "d" },
+  { match: "smithmachine", prefix: "sm" },
+  { match: "hexbar", prefix: "h" },
+  { match: "hex", prefix: "h" },
+  { match: "front", prefix: "f" },
+  { match: "incline", prefix: "i" },
+  { match: "decline", prefix: "e" },
+  { match: "seated", prefix: "s" },
+  { match: "standing", prefix: "t" },
+  { match: "overhead", prefix: "o" },
+  { match: "barbell", prefix: "b" },
+  { match: "cable", prefix: "c" },
+  { match: "machine", prefix: "m" },
+  { match: "belt", prefix: "b" },
+  { match: "hack", prefix: "h" },
+  { match: "sumo", prefix: "s" },
+  { match: "box", prefix: "x" },
+];
+
+/** Old-style initials fallback for names with no recognised movement core. */
+function deriveInitials(name: string): string {
+  const words = name.toUpperCase().replace(/[^A-Z ]/g, " ").split(/\s+/).filter(Boolean);
+  let code = words.map((w) => w[0]).join("").slice(0, 3); // word initials, capped at 3
+  const first = words[0] ?? "";
+  for (let i = 1; i < first.length && code.length < 3; i++) code += first[i]; // pad from word 1
+  while (code.length < 3) code += "X"; // ultra-short names (rare)
+  return code.slice(0, 3);
+}
+
+/**
+ * Build the code for one exercise: lowercase modifier prefix(es) + UPPERCASE
+ * movement core. Falls back to initials when no core is recognised. Not
+ * guaranteed unique on its own — exerciseCodesFor() resolves collisions.
+ */
+export function exerciseCode(exerciseName: string): string {
+  const norm = normalizeExerciseName(exerciseName);
+  const exact = EXACT_CODE_OVERRIDES[norm];
+  if (exact) return exact;
+
+  const coreEntry = MOVEMENT_CORES.find((c) => norm.includes(c.match));
+  if (!coreEntry) return deriveInitials(exerciseName);
+
+  // Collect modifier prefixes that appear BEFORE the core word, longest match
+  // first, skipping ones whose letters are already covered, so order in the name
+  // is roughly preserved (e.g. "incline dumbbell" → "id").
+  let prefix = "";
+  let remaining = norm.slice(0, norm.indexOf(coreEntry.match));
+  for (const m of MODIFIER_PREFIXES) {
+    if (remaining.includes(m.match)) {
+      prefix += m.prefix;
+      remaining = remaining.replace(m.match, "");
+    }
+  }
+  return prefix + coreEntry.core;
+}
+
+/**
+ * Codes for a set of exercise names, made UNIQUE: when two distinct names would
+ * share a code, later ones get a numeric suffix ("dBP", "dBP2", "dBP3") so each
+ * row in a table reads distinctly. Order in determines suffix order, so pass the
+ * names in their display order for stable codes. Returns a name→code map.
+ */
+export function exerciseCodesFor(names: Iterable<string>): Map<string, string> {
+  const out = new Map<string, string>();
+  const used = new Map<string, number>(); // base code → how many times seen
+  for (const name of names) {
+    if (out.has(name)) continue; // same name → same code, only assign once
+    const base = exerciseCode(name);
+    const seen = used.get(base) ?? 0;
+    used.set(base, seen + 1);
+    out.set(name, seen === 0 ? base : `${base}${seen + 1}`);
+  }
+  return out;
 }
 
 /**

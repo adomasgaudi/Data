@@ -12,6 +12,7 @@ import {
   nuzzoRepsAtWeight,
   estimate1RM,
   weightForReps,
+  repsForWeight,
   linearFit,
 } from "./metrics";
 
@@ -251,5 +252,37 @@ describe("weightForReps", () => {
     expect(weightForReps(0, 5)).toBeNull();
     expect(weightForReps(100, 0)).toBeNull();
     expect(weightForReps(100, 37, "brzycki")).toBeNull(); // Brzycki undefined at 37 reps
+  });
+});
+
+describe("repsForWeight", () => {
+  it("is the round-trip inverse of weightForReps for all formulas", () => {
+    for (const formula of ["epley", "brzycki", "nuzzo"] as const) {
+      for (const reps of [2, 5, 8, 12, 15]) {
+        const w = weightForReps(120, reps, formula)!;
+        expect(repsForWeight(120, w, formula)!).toBeCloseTo(reps, 4);
+      }
+    }
+  });
+
+  it("counts more reps as the load drops below the 1RM (Epley)", () => {
+    // Epley's continuous inverse: r = 30·(1RM/w − 1). At the 1RM that is 0 extra
+    // reps (the discrete 1RM is the r=1 special case in weightForReps), and it
+    // climbs smoothly as the load lightens.
+    expect(repsForWeight(100, 100, "epley")!).toBeCloseTo(0, 6); // at max
+    expect(repsForWeight(100, 75, "epley")!).toBeCloseTo(10, 6); // 30·(100/75−1)=10
+    expect(repsForWeight(100, 60, "epley")!).toBeCloseTo(20, 6); // 30·(100/60−1)=20
+  });
+
+  it("does NOT clamp: a load above the 1RM goes below 1 rep", () => {
+    // Owner chose raw estimates over clamping, so over-max loads read < 1 rep.
+    expect(repsForWeight(100, 110, "epley")!).toBeLessThan(1);
+  });
+
+  it("is null only for missing or non-positive inputs", () => {
+    expect(repsForWeight(null, 80)).toBeNull();
+    expect(repsForWeight(100, null)).toBeNull();
+    expect(repsForWeight(0, 80)).toBeNull();
+    expect(repsForWeight(100, 0)).toBeNull();
   });
 });

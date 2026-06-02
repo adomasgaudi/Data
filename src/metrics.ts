@@ -147,6 +147,29 @@ export function weightForReps(
 }
 
 /**
+ * Inverse of weightForReps in the other direction: given a 1RM and a working
+ * load, how many reps should that load allow under the chosen formula. The
+ * companion to weightForReps for a two-way calculator (weight → reps).
+ * Intentionally does NOT clamp — a load at/above the 1RM yields ≤ 1 rep, a load
+ * above it can go fractional/negative, so callers see the raw curve. Returns
+ * null only when inputs are missing or non-positive (genuinely undefined).
+ *   Epley:   1RM = w(1 + r/30)   → r = 30·(1RM/w − 1)
+ *   Brzycki: 1RM = w·36/(37 − r) → r = 37 − 36·w/1RM
+ *   Nuzzo:   bench %1RM curve     → nuzzoRepsAtWeight
+ */
+export function repsForWeight(
+  oneRepMax: number | null,
+  weight: number | null,
+  formula: OneRepMaxFormula = "epley",
+): number | null {
+  if (oneRepMax === null || weight === null) return null;
+  if (oneRepMax <= 0 || weight <= 0) return null;
+  if (formula === "nuzzo") return nuzzoRepsAtWeight(weight, oneRepMax);
+  if (formula === "brzycki") return 37 - (36 * weight) / oneRepMax;
+  return 30 * (oneRepMax / weight - 1); // epley
+}
+
+/**
  * Ordinary least-squares line through points: returns slope and intercept, or
  * null if there are fewer than two points or all x are equal. Used to read a
  * progression rate (kg per day) off an athlete's estimated-1RM history.

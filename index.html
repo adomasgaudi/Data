@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.18.1</span></h1>
+      <h1>Colosseum <span class="version">v0.23.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -110,7 +110,6 @@
           <button class="subtab is-active" data-subtab="workouts" role="tab">Workouts</button>
           <button class="subtab" data-subtab="exercises" role="tab">Exercises</button>
           <button class="subtab" data-subtab="records" role="tab">Records</button>
-          <button class="subtab" data-subtab="progress" role="tab">Progress</button>
         </nav>
 
         <div id="sub-workouts" class="subtab-panel">
@@ -122,6 +121,12 @@
                 <select id="workoutView">
                   <option value="day">By day</option>
                   <option value="week">By week</option>
+                </select>
+              </label>
+              <label class="inline-label">Per page
+                <select id="workoutsPageSize">
+                  <option value="20">20</option>
+                  <option value="50">50</option>
                 </select>
               </label>
               <label class="check" id="restToggleLabel">
@@ -152,11 +157,49 @@
                 <button type="button" class="ex-sort-btn" data-sort="category">By category</button>
               </div>
               <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
+              <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
             </div>
-            <div id="exerciseRecord" class="exercise-record" hidden></div>
-            <div id="exerciseWeekly" class="wk-stats" hidden></div>
-            <div id="exerciseTargets" class="exercise-targets" hidden></div>
+            <!-- Exercise stat readouts (record, sets-per-week, rep-max targets)
+                 tucked into a collapsible so the drill-in stays short. Starts
+                 closed; renderers below still fill the inner divs as before.
+                 AI-NOTE: #exerciseStats wraps the readouts only — the calculator
+                 and progress graph deliberately live outside it (always shown). -->
+            <details id="exerciseStats" class="exercise-stats">
+              <summary class="exercise-stats-summary">Stats <span class="es-caret">▾</span></summary>
+              <div class="exercise-stats-body">
+                <div id="exerciseRecord" class="exercise-record" hidden></div>
+                <div id="exerciseWeekly" class="wk-stats" hidden></div>
+                <div id="exerciseTargets" class="exercise-targets" hidden></div>
+              </div>
+            </details>
+            <!-- Two-way reps↔weight calculator, anchored on this athlete's best
+                 1RM for the drilled-in exercise. Type a weight → get the reps
+                 they should manage; type reps → get the weight. AI-NOTE: both
+                 inputs drive each other via repsForWeight / weightForReps; the
+                 last-edited field is the source so they don't fight. -->
+            <div id="exerciseCalc" class="exercise-calc" hidden>
+              <div class="ecalc-lead muted">Reps ↔ weight calculator <span id="ecalcBasis"></span></div>
+              <div class="ecalc-row">
+                <label class="ecalc-field">Weight
+                  <span class="ecalc-input-wrap">
+                    <input type="number" id="ecalcWeight" class="ecalc-input" step="0.5" inputmode="decimal" aria-label="Weight in kg" />
+                    <span class="ecalc-unit">kg</span>
+                  </span>
+                </label>
+                <span class="ecalc-swap">↔</span>
+                <label class="ecalc-field">Reps
+                  <span class="ecalc-input-wrap">
+                    <input type="number" id="ecalcReps" class="ecalc-input" step="1" min="1" inputmode="numeric" aria-label="Reps" />
+                  </span>
+                </label>
+              </div>
+              <p class="ecalc-note muted" id="ecalcNote"></p>
+            </div>
             <div id="exerciseProgress" class="exercise-progress" hidden>
+              <div id="exProgressView" class="cal-mode" role="group" aria-label="Chart view">
+                <button type="button" class="cal-mode-btn is-active" data-exview="trend">1RM trend</button>
+                <button type="button" class="cal-mode-btn" data-exview="perset">Per-set range</button>
+              </div>
               <div class="chart-wrap chart-wrap--big">
                 <button type="button" class="chart-center" id="exerciseProgressCenter" title="Center on data" aria-label="Center on data">⌖ Center</button>
                 <canvas id="exerciseProgressChart"></canvas>
@@ -173,20 +216,6 @@
             <h2 id="recordsTitle">Personal records</h2>
             <table id="recordsTable" class="data-table"></table>
             <div id="recordsPager" class="pager"></div>
-          </section>
-        </div>
-
-        <div id="sub-progress" class="subtab-panel" hidden>
-          <section class="panel">
-            <h2 id="progressTitle">Progress over time</h2>
-            <label class="inline-label">Exercise
-              <select id="progressExercise"></select>
-            </label>
-            <div class="chart-wrap chart-wrap--big">
-              <button type="button" class="chart-center" id="progressCenter" title="Center on data" aria-label="Center on data">⌖ Center</button>
-              <canvas id="progressChart"></canvas>
-            </div>
-            <p class="muted" id="progressNote"></p>
           </section>
         </div>
 
