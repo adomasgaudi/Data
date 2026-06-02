@@ -2728,9 +2728,11 @@ async function init() {
   // each select already has its options and current value. (#athlete stays hidden
   // behind its chip row; #exerciseRange is already a custom dropdown.)
   enhanceSelect(els.exercise, { wide: true });
+  enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
     els.formula, els.bwSource, els.rank, els.sexFilter,
     els.workoutView, els.workoutsPageSize, els.testAthlete, els.testExercise,
+    els.dataUser,
   ])
     enhanceSelect(sel);
 }
