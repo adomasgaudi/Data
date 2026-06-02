@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.23.0</span></h1>
+      <h1>Colosseum <span class="version">v0.23.0.1</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -35,14 +35,14 @@
     </header>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-tab="leaderboards" role="tab">Colosseum</button>
-      <button class="tab" data-tab="athlete" role="tab">Athlete</button>
+      <button class="tab" data-tab="leaderboards" role="tab">Colosseum</button>
+      <button class="tab is-active" data-tab="athlete" role="tab">Athlete</button>
       <button class="tab" data-tab="bwparts" role="tab">Exercises</button>
       <button class="tab" data-tab="test" role="tab">Test</button>
     </nav>
 
     <main>
-      <div id="tab-leaderboards" class="tab-panel">
+      <div id="tab-leaderboards" class="tab-panel" hidden>
         <div class="lb-exercise-bar">
           <select id="exercise" class="plain-select" aria-label="Exercise"></select>
         </div>
@@ -89,7 +89,7 @@
 
       </div>
 
-      <div id="tab-athlete" class="tab-panel" hidden>
+      <div id="tab-athlete" class="tab-panel">
         <!-- Custom athlete picker (HTML/CSS chips). The hidden <select> keeps the
              selected username as the single source of truth the rest of the app
              reads via els.athlete.value. AI-NOTE: keep chips + select in sync via
