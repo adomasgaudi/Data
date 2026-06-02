@@ -177,6 +177,7 @@ let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
 let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
 let compareChart: Chart | null = null; // Exercises list multi-exercise overlay
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
+let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
 const PAGE_SIZE = 20;
@@ -1409,11 +1410,64 @@ function renderCompareChart() {
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   const picks = [...compareSelected];
   if (picks.length === 0) {
-    els.compareNote.textContent = "Tick one or more exercises above to overlay their 1RM trends.";
+    els.compareNote.textContent = "Tick one or more exercises above to overlay them.";
     return;
   }
 
   const ts = (d: string) => Date.parse(d);
+
+  if (compareView === "perset") {
+    // Per-set range: one floating bar per set (weight → that set's own 1RM),
+    // colour-coded per exercise, all on a shared time axis.
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    const datasets = picks.map((name, i) => {
+      const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
+      const sets = recs.filter((r) => r.username === username && r.exerciseName === name);
+      const bars = sets
+        .map((s) => {
+          const e1rm = addedWeight1RM(s, formula);
+          if (e1rm === null) return null;
+          const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+          return { x: ts(s.date), y: [r1(added), r1(e1rm)] as [number, number], reps: s.reps ?? 0 };
+        })
+        .filter((b): b is { x: number; y: [number, number]; reps: number } => b !== null);
+      return {
+        label: name,
+        data: bars as unknown as { x: number; y: number }[],
+        backgroundColor: color,
+        borderSkipped: false,
+        maxBarThickness: 9,
+      };
+    });
+    compareChart = new Chart(canvas, {
+      type: "bar",
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              title: (items) => tsLabel(Number(items[0]?.parsed.x)),
+              label: (it) => {
+                const raw = it.raw as { y: [number, number]; reps: number };
+                return `${it.dataset.label}: ${fmt(raw.y[0])} kg × ${raw.reps} → ${fmt(raw.y[1])} kg 1RM`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { type: "linear", grid: { color: "#ececec" }, ticks: { callback: (v) => tsLabel(Number(v)), maxRotation: 0, autoSkip: true } },
+          y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#ececec" } },
+        },
+      },
+    });
+    els.compareNote.textContent =
+      `Every set's weight → its own estimated 1RM (${formula}), one bar per set, coloured per exercise.`;
+    return;
+  }
+
   const datasets = picks.map((name, i) => {
     const series = exerciseProgressByWeek(recs, username, name, formula).filter((p) => p.bestE1rm !== null);
     const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
@@ -3247,6 +3301,17 @@ async function init() {
   els.compareClear.addEventListener("click", () => {
     compareSelected.clear();
     renderCompareSection();
+  });
+  // Trend ↔ per-set-range view toggle for the compare graph.
+  document.getElementById("compareView")?.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-compareview]");
+    if (!btn) return;
+    const v = btn.dataset.compareview === "perset" ? "perset" : "trend";
+    if (v === compareView) return;
+    compareView = v;
+    for (const b of document.querySelectorAll<HTMLButtonElement>("#compareView [data-compareview]"))
+      b.classList.toggle("is-active", b === btn);
+    renderCompareChart();
   });
 
   // Pagination (delegated on the persistent pager containers).

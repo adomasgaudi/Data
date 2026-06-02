@@ -16,6 +16,7 @@ export interface Release {
 }
 
 export const CHANGELOG: Release[] = [
+  { version: "b.1.3.0", title: "compare-per-set-range", note: "Compare graph: a 'Per-set range' view showing every set's weight → its own 1RM as bars, colour-coded per exercise (toggle with '1RM trend')." },
   { version: "b.1.2.0", title: "compare-tier-category-picks", note: "Compare graph: quick-pick whole categories (Legs, Chest…) or frequency tiers (S/A/B/C/D) to overlay at once, plus a Clear button." },
   { version: "b.1.1.0", title: "per-set-range-all-sets", note: "Per-set range graph now shows every set as its own bar, each spanning that same set's weight → its own 1RM (no mixing across sets)." },
   { version: "b.1.0.0", title: "version-history-page", note: "Added this Version history page; reset versioning to the b.x scheme." },

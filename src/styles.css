@@ -690,6 +690,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .compare-clear:hover { color: var(--danger); border-color: var(--danger); }
 .compare-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; }
+#compareView { margin-bottom: 0.6rem; }
 .compare-chip {
   background: none; border: 1px solid var(--line); color: var(--muted);
   font: inherit; font-size: 0.8rem; cursor: pointer;
