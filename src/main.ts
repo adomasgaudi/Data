@@ -62,7 +62,7 @@ import {
   type TrainingCategory,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, COMPONENTS } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, fibSp } from "./changelog";
 
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
@@ -156,6 +156,7 @@ const els = {
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
+  withMeOnly: $<HTMLInputElement>("withMeOnly"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
   addExerciseList: $("addExerciseList"),
@@ -394,6 +395,31 @@ function saveTeamPicks(usernames: string[]) {
   }
 }
 
+// ---- "Done with me" workout tags: per (athlete, day), remembered across reloads.
+const WITHME_STORE_KEY = "colosseum.withMe.v1";
+let withMeTags = new Set<string>();
+
+/** Stable tag key for a workout: the athlete + the session's ISO day. */
+const withMeKey = (date: string): string => `${els.athlete.value}|${date}`;
+
+function loadWithMe() {
+  try {
+    const raw = localStorage.getItem(WITHME_STORE_KEY);
+    const arr = raw ? JSON.parse(raw) : null;
+    withMeTags = new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    withMeTags = new Set();
+  }
+}
+
+function saveWithMe() {
+  try {
+    localStorage.setItem(WITHME_STORE_KEY, JSON.stringify([...withMeTags]));
+  } catch {
+    /* storage may be unavailable — tags still apply this session */
+  }
+}
+
 /**
  * Records with the bodyweight-lifted load baked into `weight`, so the existing
  * leaderboard / PR / progress maths produce bodyweight-aware estimated 1RMs.
@@ -540,14 +566,14 @@ function renderChangelog() {
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
-  const header = `<p class="cl-summary muted">${releaseCount} releases · whole site graded <strong>SP ${WEBSITE_SP}</strong></p>`;
-  // Effort per part — the SP spent on each section (same chips as under the title).
+  const header = `<p class="cl-summary muted">${releaseCount} releases · whole site <strong>${WEBSITE_EXACT_SP} SP</strong> (≈ ${WEBSITE_SP} on the Fibonacci scale)</p>`;
+  // Effort per part — exact SP and the Fibonacci grade it snaps to.
   const sections =
-    `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per part (story points)</div>` +
+    `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per part — exact SP (≈ Fibonacci)</div>` +
     `<div class="cl-sections-row">` +
     COMPONENTS.map(
       (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
-        `<span class="cv-ver">SP ${c.sp}</span></span>`,
+        `<span class="cv-ver">${c.sp}<span class="cv-fib">≈${fibSp(c.sp)}</span></span></span>`,
     ).join("") +
     `</div></div>`;
   const rows = CHANGELOG.map((r) => {
@@ -2219,25 +2245,32 @@ function onExerciseRowClick(e: MouseEvent) {
 
 // ---- Workouts page (one row per day or week, 20/page, expandable) ----
 function buildWorkoutGroups(): WorkoutGroup[] {
+  // "Only with me" keeps just the sessions the user tagged as done with them.
+  const onlyMine = els.withMeOnly.checked;
+  const keep = (g: WorkoutGroup) => !onlyMine || (!g.rest && withMeTags.has(withMeKey(g.date)));
   if (els.workoutView.value === "week") {
-    return weeksForUser(data.records, els.athlete.value).map((w) => ({
-      label: `Week of ${shortDate(w.weekStart)}`,
-      date: w.weekStart,
-      totalSets: w.totalSets,
-      exercises: w.exercises,
-      sets: w.sets,
-      rest: false,
-    }));
+    return weeksForUser(data.records, els.athlete.value)
+      .map((w) => ({
+        label: `Week of ${shortDate(w.weekStart)}`,
+        date: w.weekStart,
+        totalSets: w.totalSets,
+        exercises: w.exercises,
+        sets: w.sets,
+        rest: false,
+      }))
+      .filter(keep);
   }
   const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
-  return days.map((d) => ({
-    label: shortDate(d.date),
-    date: d.date,
-    totalSets: d.totalSets,
-    exercises: d.exercises,
-    sets: d.sets,
-    rest: d.totalSets === 0,
-  }));
+  return days
+    .map((d) => ({
+      label: shortDate(d.date),
+      date: d.date,
+      totalSets: d.totalSets,
+      exercises: d.exercises,
+      sets: d.sets,
+      rest: d.totalSets === 0,
+    }))
+    .filter(keep);
 }
 
 // ---- Workouts overview: a per-year heatmap of training days ----
@@ -2562,9 +2595,13 @@ function renderWorkoutsPage() {
       const did = g.exercises
         .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
         .join("<br>");
+      const tagged = withMeTags.has(withMeKey(g.date));
+      const tagBtn =
+        `<button type="button" class="wo-withme${tagged ? " is-on" : ""}" data-withme="${escapeHtml(g.date)}" ` +
+        `title="${tagged ? "Done with me — tap to untag" : "Tag as done with me"}">+me</button>`;
       return (
         `<tr class="wo-row" data-index="${abs}"><td>` +
-        `<div class="wo-date"><span class="caret">▸</span>${g.label}</div>` +
+        `<div class="wo-date"><span class="caret">▸</span>${g.label}${tagBtn}</div>` +
         `<div class="wo-did">${did}</div></td>` +
         `<td class="num">${g.totalSets}</td></tr>`
       );
@@ -2577,6 +2614,17 @@ function renderWorkoutsPage() {
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  // "+me" tag toggle — tag/untag this session as done with the user, then re-render
+  // (so the chip + any active "Only with me" filter update). Doesn't expand the row.
+  const tagBtn = target.closest<HTMLButtonElement>(".wo-withme");
+  if (tagBtn?.dataset.withme) {
+    const key = withMeKey(tagBtn.dataset.withme);
+    if (withMeTags.has(key)) withMeTags.delete(key);
+    else withMeTags.add(key);
+    saveWithMe();
+    renderWorkoutsPage();
+    return;
+  }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
@@ -3372,6 +3420,7 @@ async function init() {
   // Fold in any hand-logged sets saved on this device (the Add tab).
   csvRecordCount = data.records.length;
   mergeManualSets();
+  loadWithMe(); // "done with me" workout tags saved on this device
 
   // Build the leaderboard exercise picker (see populateExercisePicker). By
   // default it lists PURE exercises only; the grouped/scaled estimates appear
@@ -3472,17 +3521,22 @@ async function init() {
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 
-  // Per-section effort chips under the title — the SP spent on each part
-  // (Exercises SP 30, Athlete SP 20, …), plus the whole-site grade.
+  // Per-part effort under the title, in a dropdown. Each chip carries the EXACT
+  // story points and the Fibonacci grade (≈) it snaps to; the summary shows the
+  // whole-site exact total and its grade.
+  const effortSummary = document.getElementById("effortSummary");
+  if (effortSummary)
+    effortSummary.innerHTML =
+      `<span class="effort-lbl">Effort</span>` +
+      `<span class="effort-total">${WEBSITE_EXACT_SP} SP <span class="effort-fib">≈ ${WEBSITE_SP}</span></span>` +
+      `<span class="effort-caret">▾</span>`;
   const cv = document.getElementById("componentVersions");
   if (cv) {
-    cv.innerHTML =
-      COMPONENTS.map(
-        (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
-          `<span class="cv-ver">SP ${c.sp}</span></span>`,
-      ).join("") +
-      `<span class="cv-chip cv-chip--total"><span class="cv-name">Whole site</span>` +
-      `<span class="cv-ver">SP ${WEBSITE_SP}</span></span>`;
+    cv.innerHTML = COMPONENTS.map(
+      (c) =>
+        `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
+        `<span class="cv-ver">${c.sp}<span class="cv-fib">≈${fibSp(c.sp)}</span></span></span>`,
+    ).join("");
   }
 
   renderStatus();
@@ -3591,6 +3645,10 @@ async function init() {
     renderWorkoutsPage();
   });
   els.restToggle.addEventListener("change", () => {
+    workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.withMeOnly.addEventListener("change", () => {
     workoutsPage = 0;
     renderWorkoutsPage();
   });

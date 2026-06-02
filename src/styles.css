@@ -32,10 +32,23 @@ body {
 .topbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.3px; }
 .topbar h1 .version { font-size: 0.7rem; font-weight: 500; color: var(--gold); letter-spacing: 0; vertical-align: middle; margin-left: 0.4rem; }
 /* Per-section version chips under the title (Graphs b1.2, Workouts b1.1, …). */
+/* Effort (SP) dropdown under the title — collapsed by default. */
+.effort-panel { border-bottom: 1px solid var(--line); }
+.effort-summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.45rem 1.5rem; font-size: 0.75rem; color: var(--muted);
+}
+.effort-summary::-webkit-details-marker { display: none; }
+.effort-lbl { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.effort-total { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.effort-fib { color: var(--gold); font-weight: 700; margin-left: 0.15rem; }
+.effort-caret { margin-left: auto; transition: transform 0.15s; }
+.effort-panel[open] .effort-caret { transform: rotate(180deg); }
 .component-versions {
   display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem;
-  padding: 0.5rem 1.5rem 0.6rem; border-bottom: 1px solid var(--line);
+  padding: 0.2rem 1.5rem 0.7rem;
 }
+.cv-fib { color: var(--gold); font-weight: 700; margin-left: 0.25rem; font-size: 0.92em; }
 .cv-chip {
   display: inline-flex; align-items: baseline; gap: 0.3rem;
   font-size: 0.68rem; padding: 2px 7px; border-radius: 999px;
@@ -805,6 +818,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* In the workouts list the date sits as a small header above that entry's exercises. */
 .wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
 .wo-did { line-height: 1.5; }
+/* "+me" tag toggle on each session — faint until tagged, accent when on. */
+.wo-withme {
+  margin-left: 0.5rem; font: inherit; font-size: 0.68rem; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
+}
+.wo-withme:hover { border-color: var(--accent); color: var(--accent); }
+.wo-withme.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }

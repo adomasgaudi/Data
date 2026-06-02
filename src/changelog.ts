@@ -38,6 +38,17 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.0",
+    title: "with-me-tags-effort-sp",
+    sp: 5,
+    note: "Tag workouts as ‘done with me’ and filter to them; effort SP moves to a dropdown showing exact + Fibonacci values.",
+    details: [
+      "Each session has a ‘+me’ tag — turn on ‘Only with me’ to see just those workouts (saved on this device).",
+      "Per-part effort is now a dropdown under the title; each part shows its exact SP and the Fibonacci grade (≈) it snaps to.",
+      "The whole-site grade shows both too — exact total and its 10/20/30… Fibonacci rank.",
+    ],
+  },
+  {
     version: "b.1.11.0",
     title: "compare-group-list-polish",
     sp: 5,
@@ -221,33 +232,41 @@ export const CHANGELOG: Release[] = [
 const TOP = CHANGELOG.find((r) => !r.soon)!;
 export const CURRENT_VERSION = TOP.children?.length ? TOP.children[0]!.version : TOP.version;
 
+/** The modified-Fibonacci SP scale — the only allowed grades, no in-between. */
+export const SP_SCALE = [1, 2, 3, 5, 10, 20, 30, 50, 100] as const;
+
+/** Snap an exact story-point count to the nearest value on {@link SP_SCALE}
+ * (so a fib-SP is only ever 10, 20, 30, … never an in-between number). */
+export function fibSp(n: number): number {
+  let best = SP_SCALE[0] as number;
+  for (const v of SP_SCALE) if (Math.abs(v - n) < Math.abs(best - n)) best = v;
+  return best;
+}
+
 /**
- * Per-section EFFORT shown as chips under the title — the story points spent on
- * each part of the app, graded by reading the whole history (not a sum of the
- * release log; it's a holistic estimate of how much went into that section).
- *
- * SP scale is the modified Fibonacci with NO in-between values:
- *   1, 2, 3, 5, 10, 20, 30, 50, 100.
- * Re-grade a part (up a step on the scale) when it has grown materially.
+ * Per-section EFFORT shown under the title — the EXACT story points spent on each
+ * part (estimated by reading the whole history). Each part also carries a
+ * Fibonacci grade ({@link fibSp}) so it reads both precisely and on the scale.
  */
 export interface Component {
   name: string;
+  /** Exact story points spent on this part. */
   sp: number;
 }
 export const COMPONENTS: Component[] = [
-  { name: "Exercises", sp: 30 }, // drill-ins, categories, tiers, merges, codes, rep-max, best-sets, compare
-  { name: "Athlete", sp: 20 }, // per-athlete pages, chips, muscle map, momentum, training mix
-  { name: "Workouts", sp: 20 }, // day/week list, rest days, year heatmap, sets-over-time
-  { name: "Graphs", sp: 20 }, // compare/per-set graphs, gridlines, smooth pan/zoom, curves
-  { name: "Leaderboard", sp: 10 }, // boards, rank/sex/BW/axis filters, pattern-lift toggle
-  { name: "Data", sp: 10 }, // raw+processed CSV tab, every computed variable, search
-  { name: "Calculator", sp: 5 }, // multi-row reps↔weight calc + Test-tab curve
-  { name: "Add", sp: 5 }, // hand-log sets, merge, export/import
+  { name: "Exercises", sp: 34 }, // drill-ins, categories, tiers, merges, codes, rep-max, best-sets, compare
+  { name: "Athlete", sp: 22 }, // per-athlete pages, chips, muscle map, momentum, training mix
+  { name: "Graphs", sp: 21 }, // compare/per-set graphs, gridlines, smooth pan/zoom, curves
+  { name: "Workouts", sp: 20 }, // day/week list, rest days, year heatmap, sets-over-time, "with me" tags
+  { name: "Data", sp: 12 }, // raw+processed CSV tab, every computed variable, search
+  { name: "Leaderboard", sp: 11 }, // boards, rank/sex/BW/axis filters, pattern-lift toggle
+  { name: "Group", sp: 9 }, // train people together: combined comparison table, remembered picks
+  { name: "Add", sp: 7 }, // hand-log sets, merge, export/import
+  { name: "Calculator", sp: 6 }, // multi-row reps↔weight calc + Test-tab curve
+  { name: "Stats", sp: 6 }, // pattern / category cards (was Groups)
   { name: "Navigation", sp: 5 }, // bottom nav + Other sheet
-  { name: "Stats", sp: 5 }, // pattern / category cards (was Groups)
-  { name: "Group", sp: 5 }, // train people together: levels + workouts side by side
 ];
 
-/** A single holistic grade for the WHOLE site, on the same modified-Fibonacci
- * scale — top of the scale, an epic-sized build. */
-export const WEBSITE_SP = 100;
+/** Whole-site EXACT story points (sum of every part) and its Fibonacci grade. */
+export const WEBSITE_EXACT_SP = COMPONENTS.reduce((s, c) => s + c.sp, 0);
+export const WEBSITE_SP = fibSp(WEBSITE_EXACT_SP);
