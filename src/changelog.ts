@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.9",
+    title: "per-axis-stretch-test",
+    sp: 2,
+    note: "Test per-axis stretching in the ‘Graph (advanced)’ page: pinch sideways for X only, up/down for Y only.",
+    details: [
+      "Two-finger pinch is now decomposed by finger orientation — horizontal spread scales X, vertical spread scales Y, diagonal does both. Desktop: Shift+wheel = X only, Alt+wheel = Y only.",
+      "Isolated in Other → ‘Graph (advanced)’ first; if it feels right it gets ported to all charts.",
+    ],
+  },
+  {
     version: "b.1.13.8",
     title: "leaderboard-svg-drop-chartjs",
     sp: 5,

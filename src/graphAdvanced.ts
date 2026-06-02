@@ -128,34 +128,93 @@ export function mountGraphAdvanced(container: HTMLElement): void {
       `</svg>`;
   }
 
-  let drag: { x: number; y: number; xMin: number; xMax: number; yMin: number; yMax: number } | null = null;
+  // ---- interactions: 1 finger pans; 2 fingers pinch with PER-AXIS stretch ----
+  // The pinch is decomposed by finger orientation: the horizontal spread between
+  // the fingers drives the X scale and the vertical spread drives Y. So spread
+  // them sideways to stretch only X, up/down to stretch only Y, diagonally for
+  // both. Wheel still zooms both; drag pans.
+  function dataAt(clientX: number, clientY: number) {
+    const svg = container.querySelector("svg");
+    const rect = svg ? svg.getBoundingClientRect() : container.getBoundingClientRect();
+    const W = widthOf();
+    const plotW = W - M.l - M.r;
+    const plotH = H - M.t - M.b;
+    const lx = ((clientX - rect.left) / rect.width) * W;
+    const ly = ((clientY - rect.top) / rect.height) * H;
+    return { x: xMin + ((lx - M.l) / plotW) * (xMax - xMin), y: yMin + (1 - (ly - M.t) / plotH) * (yMax - yMin) };
+  }
+
+  const pts = new Map<number, { x: number; y: number }>();
+  let pan: { x: number; y: number; xMin: number; xMax: number; yMin: number; yMax: number } | null = null;
+  let pinch: { hx: number; vy: number; mx: number; my: number } | null = null;
+  const SPREAD = 26; // min finger spread (px) on an axis before that axis stretches
 
   if (container.dataset.gdaWired !== "1") {
     container.dataset.gdaWired = "1";
 
     const onMove = (e: PointerEvent) => {
-      if (!drag) return;
-      const W = widthOf();
-      const plotW = W - M.l - M.r;
-      const plotH = H - M.t - M.b;
-      const dx = ((e.clientX - drag.x) / plotW) * (drag.xMax - drag.xMin);
-      const dy = ((e.clientY - drag.y) / plotH) * (drag.yMax - drag.yMin);
-      xMin = drag.xMin - dx;
-      xMax = drag.xMax - dx;
-      yMin = drag.yMin + dy;
-      yMax = drag.yMax + dy;
-      draw();
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const all = [...pts.values()];
+      if (all.length >= 2 && pinch) {
+        const [a, b] = all;
+        const hx = Math.abs(a!.x - b!.x);
+        const vy = Math.abs(a!.y - b!.y);
+        const mx = (a!.x + b!.x) / 2;
+        const my = (a!.y + b!.y) / 2;
+        const W = widthOf();
+        const plotW = W - M.l - M.r;
+        const plotH = H - M.t - M.b;
+        // pan by the midpoint movement
+        const ddx = ((mx - pinch.mx) / plotW) * (xMax - xMin);
+        const ddy = ((my - pinch.my) / plotH) * (yMax - yMin);
+        xMin -= ddx; xMax -= ddx; yMin += ddy; yMax += ddy;
+        // per-axis scale about the midpoint, gated by the spread on that axis
+        const f = dataAt(mx, my);
+        const kx = pinch.hx > SPREAD && hx > 4 ? pinch.hx / hx : 1;
+        const ky = pinch.vy > SPREAD && vy > 4 ? pinch.vy / vy : 1;
+        xMin = f.x - (f.x - xMin) * kx; xMax = f.x + (xMax - f.x) * kx;
+        yMin = f.y - (f.y - yMin) * ky; yMax = f.y + (yMax - f.y) * ky;
+        pinch = { hx, vy, mx, my };
+        draw();
+      } else if (pan) {
+        const W = widthOf();
+        const plotW = W - M.l - M.r;
+        const plotH = H - M.t - M.b;
+        const dx = ((e.clientX - pan.x) / plotW) * (pan.xMax - pan.xMin);
+        const dy = ((e.clientY - pan.y) / plotH) * (pan.yMax - pan.yMin);
+        xMin = pan.xMin - dx; xMax = pan.xMax - dx; yMin = pan.yMin + dy; yMax = pan.yMax + dy;
+        draw();
+      }
     };
-    const onUp = () => {
-      drag = null;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
+    const onUp = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      if (pts.size === 1) {
+        const p = [...pts.values()][0]!;
+        pan = { x: p.x, y: p.y, xMin, xMax, yMin, yMax };
+      } else if (pts.size === 0) {
+        pan = null;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      }
     };
     container.addEventListener("pointerdown", (e) => {
       if ((e.target as HTMLElement).closest(".gd-reset")) return;
-      drag = { x: e.clientX, y: e.clientY, xMin, xMax, yMin, yMax };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
+      if (pts.size === 0) {
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+      }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        pinch = { hx: Math.abs(a!.x - b!.x), vy: Math.abs(a!.y - b!.y), mx: (a!.x + b!.x) / 2, my: (a!.y + b!.y) / 2 };
+        pan = null;
+      } else {
+        pan = { x: e.clientX, y: e.clientY, xMin, xMax, yMin, yMax };
+      }
       e.preventDefault();
     });
 
@@ -163,19 +222,13 @@ export function mountGraphAdvanced(container: HTMLElement): void {
       "wheel",
       (e) => {
         e.preventDefault();
-        const svg = container.querySelector("svg");
-        if (!svg) return;
-        const rect = svg.getBoundingClientRect();
-        const W = widthOf();
-        const plotW = W - M.l - M.r;
-        const plotH = H - M.t - M.b;
-        const fx = xMin + (((e.clientX - rect.left) / rect.width) * W - M.l) / plotW * (xMax - xMin);
-        const fy = yMin + (1 - (((e.clientY - rect.top) / rect.height) * H - M.t) / plotH) * (yMax - yMin);
+        const f = dataAt(e.clientX, e.clientY);
+        // Shift-wheel = X only, Alt-wheel = Y only, plain = both (desktop testing).
         const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-        xMin = fx - (fx - xMin) * k;
-        xMax = fx + (xMax - fx) * k;
-        yMin = fy - (fy - yMin) * k;
-        yMax = fy + (yMax - fy) * k;
+        const kx = e.altKey ? 1 : k;
+        const ky = e.shiftKey ? 1 : k;
+        xMin = f.x - (f.x - xMin) * kx; xMax = f.x + (xMax - f.x) * kx;
+        yMin = f.y - (f.y - yMin) * ky; yMax = f.y + (yMax - f.y) * ky;
         draw();
       },
       { passive: false },
