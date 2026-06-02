@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.25.0</span></h1>
+      <h1>Colosseum <span class="version">v0.26.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -173,29 +173,22 @@
                 <div id="exerciseTargets" class="exercise-targets" hidden></div>
               </div>
             </details>
-            <!-- Two-way reps↔weight calculator, anchored on this athlete's best
-                 1RM for the drilled-in exercise. Type a weight → get the reps
-                 they should manage; type reps → get the weight. AI-NOTE: both
-                 inputs drive each other via repsForWeight / weightForReps; the
-                 last-edited field is the source so they don't fight. -->
-            <div id="exerciseCalc" class="exercise-calc" hidden>
-              <div class="ecalc-lead muted">Reps ↔ weight calculator <span id="ecalcBasis"></span></div>
-              <div class="ecalc-row">
-                <label class="ecalc-field">Weight
-                  <span class="ecalc-input-wrap">
-                    <input type="number" id="ecalcWeight" class="ecalc-input" step="0.5" inputmode="decimal" aria-label="Weight in kg" />
-                    <span class="ecalc-unit">kg</span>
-                  </span>
-                </label>
-                <span class="ecalc-swap">↔</span>
-                <label class="ecalc-field">Reps
-                  <span class="ecalc-input-wrap">
-                    <input type="number" id="ecalcReps" class="ecalc-input" step="1" min="1" inputmode="numeric" aria-label="Reps" />
-                  </span>
-                </label>
+            <!-- Reps↔weight calculator as a collapsible multi-row table. Each row
+                 is an independent weight↔reps pair: edit the weight cell and that
+                 row's reps recompute; edit the reps cell and the weight recomputes.
+                 AI-NOTE: rows are rendered by renderExerciseCalc(); edits handled
+                 by onExerciseCalcInput() via repsForWeight / weightForReps. -->
+            <details id="exerciseCalc" class="exercise-calc" hidden>
+              <summary class="exercise-calc-summary">Calculator <span class="ec-caret">▾</span><span id="ecalcBasis" class="muted"></span></summary>
+              <div class="exercise-calc-body">
+                <table class="data-table ecalc-table">
+                  <thead><tr><th>Weight (kg)</th><th>Reps</th><th></th></tr></thead>
+                  <tbody id="ecalcRows"></tbody>
+                </table>
+                <button type="button" id="ecalcAddRow" class="ecalc-addrow">+ Add row</button>
+                <p class="ecalc-note muted" id="ecalcNote"></p>
               </div>
-              <p class="ecalc-note muted" id="ecalcNote"></p>
-            </div>
+            </details>
             <div id="exerciseProgress" class="exercise-progress" hidden>
               <div id="exProgressView" class="cal-mode" role="group" aria-label="Chart view">
                 <button type="button" class="cal-mode-btn is-active" data-exview="trend">1RM trend</button>

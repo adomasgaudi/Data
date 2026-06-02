@@ -285,25 +285,40 @@ body {
 }
 .target-reps { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .target-weight { font-size: 1.05rem; font-weight: 700; color: var(--text); }
-/* Two-way reps↔weight calculator inside the exercise drill-in. */
+/* Collapsible reps↔weight calculator (a multi-row editable table) in the drill-in. */
 .exercise-calc { margin: 0 0 1rem; }
 .exercise-calc[hidden] { display: none; }
-.ecalc-lead { font-size: 0.78rem; margin-bottom: 0.4rem; }
-.ecalc-row { display: flex; align-items: flex-end; gap: 0.6rem; flex-wrap: wrap; }
-.ecalc-field {
-  display: flex; flex-direction: column; gap: 4px;
-  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--muted); font-weight: 600;
+.exercise-calc-summary {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
 }
-.ecalc-input-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.exercise-calc-summary::-webkit-details-marker { display: none; }
+.exercise-calc-summary:hover,
+.exercise-calc[open] > .exercise-calc-summary { color: var(--accent); }
+.ec-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; }
+.exercise-calc[open] .ec-caret { transform: rotate(180deg); color: var(--accent); }
+.exercise-calc-body { margin-top: 0.75rem; max-width: 360px; }
+.ecalc-table { width: 100%; }
+.ecalc-table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.ecalc-table td { padding: 4px 6px; }
 .ecalc-input {
-  width: 5.5rem; font-size: 1.05rem; font-weight: 700; color: var(--text);
+  width: 100%; font-size: 0.95rem; font-weight: 600; color: var(--text);
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: 8px; padding: 6px 10px; text-align: right;
+  border-radius: 7px; padding: 6px 9px; text-align: right;
 }
-.ecalc-unit { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
-.ecalc-swap { font-size: 1.1rem; color: var(--muted); padding-bottom: 8px; }
-.ecalc-note { font-size: 0.72rem; margin: 0.45rem 0 0; }
+.ecalc-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ecalc-del {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 1.1rem; line-height: 1; padding: 0 4px; border-radius: 6px;
+}
+.ecalc-del:hover { color: #c0392b; }
+.ecalc-addrow {
+  margin-top: 0.5rem; background: var(--accent-soft); border: 1px solid var(--line);
+  color: var(--accent); font: inherit; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; border-radius: 8px; padding: 6px 12px;
+}
+.ecalc-addrow:hover { border-color: var(--accent); }
+.ecalc-note { font-size: 0.72rem; margin: 0.55rem 0 0; }
 /* Muted start-date hint next to the ISO week number in the exercise weeks list. */
 .wk-date-hint { font-size: 0.78rem; font-weight: 400; }
 /* Sets-per-week chips inside the exercise drill-in. */

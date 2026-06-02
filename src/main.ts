@@ -107,10 +107,10 @@ const els = {
   exerciseWeekly: $("exerciseWeekly"),
   exerciseTargets: $("exerciseTargets"),
   exerciseStats: $<HTMLDetailsElement>("exerciseStats"),
-  exerciseCalc: $("exerciseCalc"),
+  exerciseCalc: $<HTMLDetailsElement>("exerciseCalc"),
   ecalcBasis: $("ecalcBasis"),
-  ecalcWeight: $<HTMLInputElement>("ecalcWeight"),
-  ecalcReps: $<HTMLInputElement>("ecalcReps"),
+  ecalcRows: $<HTMLTableSectionElement>("ecalcRows"),
+  ecalcAddRow: $<HTMLButtonElement>("ecalcAddRow"),
   ecalcNote: $("ecalcNote"),
   exerciseProgress: $("exerciseProgress"),
   exerciseProgressNote: $("exerciseProgressNote"),
@@ -1284,13 +1284,21 @@ function renderExerciseTargets(pr: PersonalRecord | undefined) {
 // the open exercise). null when the exercise has no usable record → calc hidden.
 let ecalcOneRm: number | null = null;
 
+// The calculator's editable rows. Each is an independent weight↔reps pair; the
+// cell the user last edited drives the other. Seeded with a spread of reps so it
+// opens as a useful table (1, 3, 5, 8, 10, 12 reps) rather than a single cell.
+interface EcalcRow {
+  weight: number | null;
+  reps: number | null;
+}
+const ECALC_SEED_REPS = [1, 3, 5, 8, 10, 12] as const;
+let ecalcRowsState: EcalcRow[] = [];
+
 /**
- * Set up the two-way reps↔weight calculator for the drilled-in exercise. The
- * athlete's best estimated 1RM is the anchor: type a weight and it shows the
- * reps they should manage at it; type reps and it shows the weight. Conversions
- * run in added-weight space off the added 1RM — the SAME basis as the target
- * chips above — so the numbers line up (e.g. the 5RM chip equals typing "5").
- * Seeded with the actual top set (its weight & reps) so it opens on real data.
+ * Build the reps↔weight calculator table for the drilled-in exercise. The
+ * athlete's best estimated 1RM is the anchor; each row converts in added-weight
+ * space off the added 1RM — the SAME basis as the target chips — so the numbers
+ * line up. Seeded with one row per ECALC_SEED_REPS so it's a table from the off.
  */
 function renderExerciseCalc(pr: PersonalRecord | undefined) {
   ecalcOneRm = pr?.bestE1rm.e1rm ?? null;
@@ -1299,57 +1307,106 @@ function renderExerciseCalc(pr: PersonalRecord | undefined) {
     return;
   }
   els.exerciseCalc.hidden = false;
-  els.ecalcBasis.textContent = `· anchored on ${fmt(ecalcOneRm)} kg best 1RM`;
-  // Seed from the record set; fall back to the 1RM @ 1 rep if reps/weight absent.
-  const seedW = pr!.bestE1rm.weight;
-  const seedR = pr!.bestE1rm.reps;
-  els.ecalcWeight.value = String(seedW ?? Math.round(ecalcOneRm * 10) / 10);
-  els.ecalcReps.value = String(seedR ?? 1);
+  els.exerciseCalc.open = false; // collapsed by default on every drill-in
+  els.ecalcBasis.textContent = ` · anchored on ${fmt(ecalcOneRm)} kg best 1RM`;
+  const formula = currentFormula();
+  // Seed each row from a rep count → its predicted weight off the 1RM.
+  ecalcRowsState = ECALC_SEED_REPS.map((reps) => ({
+    reps,
+    weight: weightForReps(ecalcOneRm!, reps, formula),
+  }));
+  ecalcRenderRows();
   ecalcUpdateNote();
 }
 
-/** Round reps for display: whole numbers, never below 0, "—" if not finite. */
+/** Round reps for display: whole numbers, never below 0, "" if not finite. */
 function ecalcFmtReps(r: number | null): string {
-  if (r === null || !Number.isFinite(r)) return "—";
+  if (r === null || !Number.isFinite(r)) return "";
   return String(Math.max(0, Math.round(r)));
 }
 
-/** Refresh the explanatory note under the calculator inputs. */
+/** Round a weight for display: 1 dp, "" if not finite. */
+function ecalcFmtWeight(w: number | null): string {
+  if (w === null || !Number.isFinite(w)) return "";
+  return String(Math.round(w * 10) / 10);
+}
+
+/** Paint the current calculator rows into the table body. */
+function ecalcRenderRows() {
+  els.ecalcRows.innerHTML = ecalcRowsState
+    .map(
+      (row, i) =>
+        `<tr class="ecalc-row" data-index="${i}">` +
+        `<td><input type="number" class="ecalc-input ecalc-cell-weight" step="0.5" inputmode="decimal" ` +
+        `value="${ecalcFmtWeight(row.weight)}" aria-label="Weight in kg" /></td>` +
+        `<td><input type="number" class="ecalc-input ecalc-cell-reps" step="1" min="1" inputmode="numeric" ` +
+        `value="${ecalcFmtReps(row.reps)}" aria-label="Reps" /></td>` +
+        `<td class="num"><button type="button" class="ecalc-del" aria-label="Remove row" title="Remove row">×</button></td></tr>`,
+    )
+    .join("");
+}
+
+/** Refresh the explanatory note under the calculator table. */
 function ecalcUpdateNote() {
   if (ecalcOneRm === null) return;
   els.ecalcNote.textContent =
-    `Estimates use the ${currentFormula()} formula. Lighter weight → more reps; ` +
-    `at or above the best 1RM it's a single (or less).`;
+    `Estimates use the ${currentFormula()} formula. Edit any cell: change a weight ` +
+    `to get its reps, or reps to get the weight. Lighter weight → more reps.`;
 }
 
 /**
- * Recompute the OTHER field when one is edited. `source` is the field the user
- * just typed in, so we never overwrite what they're typing (the two inputs would
- * otherwise fight). Out-of-range values are shown raw, not clamped, per the
- * owner's choice — a weight above the 1RM yields fractional/zero reps.
+ * Recompute the partner cell in ONE row when the user edits a cell. `source` is
+ * the cell just typed in, so we never overwrite what they're typing. Out-of-range
+ * values are shown raw, not clamped — a weight above the 1RM yields ~0 reps.
  */
-function onExerciseCalcInput(source: "weight" | "reps") {
+function onExerciseCalcInput(index: number, source: "weight" | "reps") {
   if (ecalcOneRm === null) return;
+  const tr = els.ecalcRows.querySelector<HTMLTableRowElement>(`tr[data-index="${index}"]`);
+  const row = ecalcRowsState[index];
+  if (!tr || !row) return;
   const formula = currentFormula();
+  const weightInput = tr.querySelector<HTMLInputElement>(".ecalc-cell-weight")!;
+  const repsInput = tr.querySelector<HTMLInputElement>(".ecalc-cell-reps")!;
+
   if (source === "weight") {
-    const w = parseFloat(els.ecalcWeight.value);
+    const w = parseFloat(weightInput.value);
     if (!Number.isFinite(w) || w <= 0) {
-      els.ecalcReps.value = "";
+      row.weight = null;
+      row.reps = null;
+      repsInput.value = "";
       return;
     }
-    const reps = repsForWeight(ecalcOneRm, w, formula);
-    els.ecalcReps.value = ecalcFmtReps(reps);
+    row.weight = w;
+    row.reps = repsForWeight(ecalcOneRm, w, formula);
+    repsInput.value = ecalcFmtReps(row.reps);
   } else {
-    const r = Math.round(parseFloat(els.ecalcReps.value));
+    const r = Math.round(parseFloat(repsInput.value));
     if (!Number.isFinite(r) || r < 1) {
-      els.ecalcWeight.value = "";
+      row.weight = null;
+      row.reps = null;
+      weightInput.value = "";
       return;
     }
-    // reps === 1 is exactly the 1RM (weightForReps special-cases it).
-    const w = weightForReps(ecalcOneRm, r, formula);
-    els.ecalcWeight.value = w === null ? "" : String(Math.round(w * 10) / 10);
+    row.reps = r;
+    row.weight = weightForReps(ecalcOneRm, r, formula); // reps===1 ⇒ the 1RM
+    weightInput.value = ecalcFmtWeight(row.weight);
   }
-  ecalcUpdateNote();
+}
+
+/** Add a blank editable row to the calculator. */
+function ecalcAddRow() {
+  ecalcRowsState.push({ weight: null, reps: null });
+  ecalcRenderRows();
+  // Focus the new row's weight cell for immediate typing.
+  const last = els.ecalcRows.querySelector<HTMLTableRowElement>("tr.ecalc-row:last-child");
+  last?.querySelector<HTMLInputElement>(".ecalc-cell-weight")?.focus();
+}
+
+/** Remove a calculator row by index. */
+function ecalcRemoveRow(index: number) {
+  if (index < 0 || index >= ecalcRowsState.length) return;
+  ecalcRowsState.splice(index, 1);
+  ecalcRenderRows();
 }
 
 /** Per-exercise progress graph shown inside the drill-in (same shape as the Progress tab). */
@@ -2540,10 +2597,25 @@ async function init() {
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 
-  // Two-way reps↔weight calculator in the exercise drill-in: each field updates
-  // the other as you type. Source = the field being edited, so they don't fight.
-  els.ecalcWeight.addEventListener("input", () => onExerciseCalcInput("weight"));
-  els.ecalcReps.addEventListener("input", () => onExerciseCalcInput("reps"));
+  // Reps↔weight calculator table in the exercise drill-in: editing a weight or
+  // reps cell recomputes the other cell IN THAT ROW (delegated so it works for
+  // rows added later). The source cell is the one being typed, so they don't fight.
+  els.ecalcRows.addEventListener("input", (e) => {
+    const target = e.target as HTMLElement;
+    const tr = target.closest<HTMLTableRowElement>("tr.ecalc-row");
+    if (!tr) return;
+    const index = Number(tr.dataset.index);
+    if (target.classList.contains("ecalc-cell-weight")) onExerciseCalcInput(index, "weight");
+    else if (target.classList.contains("ecalc-cell-reps")) onExerciseCalcInput(index, "reps");
+  });
+  // Delete-row buttons (delegated). Re-render reindexes the remaining rows.
+  els.ecalcRows.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ecalc-del");
+    if (!btn) return;
+    const tr = btn.closest<HTMLTableRowElement>("tr.ecalc-row");
+    if (tr) ecalcRemoveRow(Number(tr.dataset.index));
+  });
+  els.ecalcAddRow.addEventListener("click", ecalcAddRow);
 
   // A Records row jumps to that exercise's drill-in on the Exercises sub-tab.
   els.recordsTable.addEventListener("click", (e) => {
