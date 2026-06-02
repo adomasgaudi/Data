@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.24.0</span></h1>
+      <h1>Colosseum <span class="version">v0.25.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -39,6 +39,7 @@
       <button class="tab is-active" data-tab="athlete" role="tab">Athlete</button>
       <button class="tab" data-tab="bwparts" role="tab">Exercises</button>
       <button class="tab" data-tab="test" role="tab">Test</button>
+      <button class="tab" data-tab="data" role="tab">Data</button>
     </nav>
 
     <main>
@@ -717,6 +718,25 @@
             This is general education, not medical or coaching advice. If you have an injury or
             condition, check with a professional before starting.
           </p>
+        </section>
+      </div>
+
+      <div id="tab-data" class="tab-panel" hidden>
+        <section class="panel">
+          <h2>Data — raw vs processed</h2>
+          <p class="muted" id="dataIntro" style="margin: 0 0 1rem">
+            See exactly what the dashboard reads. <strong>Original</strong> is the CSV as exported,
+            untouched. <strong>Processed</strong> is the table every number is computed from — after
+            merging duplicate exercise names and turning logged weight into the bodyweight-inclusive
+            load used for 1RM. Compare them to spot any mistake.
+          </p>
+          <div class="data-views" role="group" aria-label="Which table to show">
+            <button type="button" class="subtab is-active" data-dataview="processed">Processed</button>
+            <button type="button" class="subtab" data-dataview="original">Original CSV</button>
+          </div>
+          <input id="dataSearch" class="ex-search" type="search" placeholder="Filter rows (any column)…" aria-label="Filter data rows" style="margin: 0.9rem 0;" />
+          <div id="dataTableWrap" class="data-table-wrap"></div>
+          <div id="dataPager" class="pager"></div>
         </section>
       </div>
     </main>

@@ -597,6 +597,19 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* The exercise name in an expanded workout day links to its drill-in detail. */
 .wo-exlink { color: var(--accent); cursor: pointer; }
 .wo-exlink:hover { text-decoration: underline; }
+/* Bodyweight-part badge at the top of the single-exercise detail view. */
+.ex-bwpart {
+  display: inline-block; margin-left: 0.5rem; vertical-align: middle;
+  font-size: 0.72rem; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border-radius: 999px; padding: 2px 9px;
+}
+.ex-bwpart--none { color: var(--muted); background: var(--gold-soft); }
+/* Data tab: wide raw/processed tables scroll horizontally; cells stay compact. */
+.data-views { display: flex; gap: 0.5rem; }
+.data-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.data-raw-table { font-size: 0.8rem; white-space: nowrap; }
+.data-raw-table th, .data-raw-table td { padding: 4px 9px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.data-raw-table tbody tr:nth-child(even) { background: var(--accent-soft); }
 /* A set with a note: a short truncated preview + caret sits at the left of the
    weight cell (weight stays right-aligned), and clicking the row expands the
    full note below. The preview lets you read the gist without expanding. */

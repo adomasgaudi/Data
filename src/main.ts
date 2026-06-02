@@ -7,6 +7,7 @@ import { Chart, registerables } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
 import { loadData, type LoadedData } from "./dataSource";
+import { parseCsvRows } from "./csv";
 import {
   distinctExercises,
   distinctUsers,
@@ -147,6 +148,9 @@ const els = {
   testExercise: $<HTMLSelectElement>("testExercise"),
   testPickHint: $("testPickHint"),
   calcTabs: $("calcTabs"),
+  dataTableWrap: $("dataTableWrap"),
+  dataPager: $("dataPager"),
+  dataSearch: $<HTMLInputElement>("dataSearch"),
 };
 
 let data: LoadedData;
@@ -286,6 +290,25 @@ function setCoeff(exerciseName: string, value: number) {
     localStorage.setItem(COEFF_STORE_KEY, JSON.stringify(coeffOverrides));
   } catch {
     /* storage may be unavailable (e.g. private mode) — edits still apply this session */
+  }
+}
+
+// ---- Last picked athlete: remembered across reloads ----
+const ATHLETE_STORE_KEY = "colosseum.lastAthlete.v1";
+
+function loadLastAthlete(): string | null {
+  try {
+    return localStorage.getItem(ATHLETE_STORE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLastAthlete(username: string) {
+  try {
+    localStorage.setItem(ATHLETE_STORE_KEY, username);
+  } catch {
+    /* storage may be unavailable — selection still applies this session */
   }
 }
 
@@ -696,6 +719,7 @@ function syncAthleteChips() {
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
+  saveLastAthlete(els.athlete.value); // remember across reloads
   syncAthleteChips();
   exercisesPage = 0;
   workoutsPage = 0;
@@ -1146,8 +1170,15 @@ function renderExercisesPage() {
 
 /** Drill-in view for one exercise: a back link + its sets grouped by week. */
 function renderExerciseDetail(exName: string) {
+  // Bodyweight part = how much of the athlete's bodyweight this lift loads
+  // (the coefficient). Shown at the very top so it's clear before any numbers.
+  const coeff = coeffFor(exName);
+  const bwPart =
+    coeff > 0
+      ? `<span class="ex-bwpart">Bodyweight part: ${Math.round(coeff * 100)}%</span>`
+      : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
   els.athleteTitle.innerHTML =
-    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}`;
+    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)} ${bwPart}`;
   els.exercisesPager.innerHTML = "";
   const username = els.athlete.value;
   const pr = personalRecords(
@@ -1165,19 +1196,25 @@ function renderExerciseDetail(exName: string) {
   renderExerciseProgressChart(exName);
   const weeks = setsByWeek(setsForUserExercise(data.records, username, exName));
   const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
-  // Label each row by its ISO week-of-year number (e.g. "Week 15"), with the
-  // start date kept as a muted hint so the number can still be placed in time.
+  // Label each row by its ISO week-of-year number (e.g. "w15"), with the start
+  // date kept as a muted hint so the number can still be placed in time.
   const rows = weeks
     .map(
       (w) =>
         `<tr class="wk-row" data-wk="${w.weekStart}">` +
-        `<td><span class="caret">▸</span>Week ${isoWeekNumber(w.weekStart)} ` +
+        `<td><span class="caret">▸</span>w${isoWeekNumber(w.weekStart)} ` +
         `<span class="muted wk-date-hint">${shortDate(w.weekStart)}</span></td>` +
         `<td class="num">${w.sets.length}</td></tr>`,
     )
     .join("");
   els.athleteTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No sets.</td></tr>`}</tbody>`;
+
+  // Expand the first (most recent) week by default, so the newest sets show
+  // without a tap. Same mechanism a manual click on the week row uses.
+  const firstWeek = weeks[0];
+  const firstRow = els.athleteTable.querySelector<HTMLTableRowElement>("tr.wk-row");
+  if (firstWeek && firstRow) insertDetail(firstRow, 2, setsByDateTableHtml(firstWeek.sets));
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -2348,10 +2385,16 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
-  // Default to Simona when present. Exact username match so we don't pick the
-  // unrelated "Simonas" (simonasputrius).
-  const simona = users.find((u) => u.username.toLowerCase() === "simona");
-  if (simona) els.athlete.value = simona.username;
+  // Pick the athlete to show on load: the one remembered from last visit if it's
+  // still in the data, otherwise default to Indre.
+  const remembered = loadLastAthlete();
+  const rememberedUser = remembered ? users.find((u) => u.username === remembered) : undefined;
+  if (rememberedUser) {
+    els.athlete.value = rememberedUser.username;
+  } else {
+    const indre = users.find((u) => u.username.toLowerCase() === "indre_ju");
+    if (indre) els.athlete.value = indre.username;
+  }
   buildAthleteChips(); // custom chip row mirrors the hidden <select>
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
@@ -2386,6 +2429,8 @@ async function init() {
   renderHealth();
   renderAll();
   setupTabs();
+  setupDataTab();
+  renderDataTab();
   setupChecklists();
 
   // Settings popover (holds the 1RM formula).
@@ -2564,6 +2609,92 @@ function pageFromClick(e: MouseEvent): number | null {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button.page-btn");
   if (!btn || btn.disabled) return null;
   return Number(btn.dataset.page);
+}
+
+// ---- Data tab: see the original CSV and the processed table side by side ----
+const DATA_PAGE_SIZE = 100;
+let dataView: "processed" | "original" = "processed";
+let dataPage = 0;
+let dataSearch = "";
+
+/** A number for display: rounded to 2 dp, trailing zeros trimmed; "" for null. */
+function dataNum(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "";
+  return String(Math.round(n * 100) / 100);
+}
+
+/** Build the rows (header + body arrays) for whichever data view is active. */
+function dataRows(): { header: string[]; body: string[][] } {
+  if (dataView === "original") {
+    const rows = parseCsvRows(data.rawCsv);
+    return { header: rows[0] ?? [], body: rows.slice(1) };
+  }
+  // Processed: the records every number is computed from. We show the displayed
+  // (added) weight AND the bodyweight-inclusive load used for the 1RM, plus the
+  // raw exercise name when canonicalisation renamed it — so changes are visible.
+  const header = [
+    "user", "username", "date", "bodyweight", "exercise_name",
+    "raw_exercise_name", "set_number", "weight", "weight_for_1RM", "reps",
+    "notes", "dropset", "percentile",
+  ];
+  const body = computedRecords().map((r) => {
+    const added = r.origWeight !== undefined ? r.origWeight : r.weight;
+    return [
+      r.user, r.username, r.date, dataNum(r.bodyweight), r.exerciseName,
+      r.originalExerciseName && r.originalExerciseName !== r.exerciseName ? r.originalExerciseName : "",
+      String(r.setNumber), dataNum(added), dataNum(r.weight), dataNum(r.reps),
+      r.notes, r.dropset ? "TRUE" : "", dataNum(r.percentile),
+    ];
+  });
+  return { header, body };
+}
+
+function renderDataTab() {
+  const { header, body } = dataRows();
+  const q = dataSearch.trim().toLowerCase();
+  const filtered = q ? body.filter((row) => row.some((c) => c.toLowerCase().includes(q))) : body;
+
+  const total = filtered.length;
+  const maxPage = Math.max(0, Math.ceil(total / DATA_PAGE_SIZE) - 1);
+  if (dataPage > maxPage) dataPage = maxPage;
+  const start = dataPage * DATA_PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + DATA_PAGE_SIZE);
+
+  const thead = `<thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>`;
+  const tbody = pageRows
+    .map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`)
+    .join("");
+  const count = `<p class="muted" style="margin:0 0 0.6rem">${total.toLocaleString()} rows${q ? " (filtered)" : ""}</p>`;
+  els.dataTableWrap.innerHTML =
+    count + `<table class="data-table data-raw-table">${thead}<tbody>${tbody}</tbody></table>`;
+  els.dataPager.innerHTML = pagerHtml(dataPage, total, DATA_PAGE_SIZE);
+}
+
+function setupDataTab() {
+  document.querySelectorAll<HTMLButtonElement>("[data-dataview]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const v = btn.dataset.dataview === "original" ? "original" : "processed";
+      if (v === dataView) return;
+      dataView = v;
+      dataPage = 0;
+      document.querySelectorAll<HTMLButtonElement>("[data-dataview]").forEach((b) =>
+        b.classList.toggle("is-active", b === btn),
+      );
+      renderDataTab();
+    });
+  });
+  els.dataSearch.addEventListener("input", () => {
+    dataSearch = els.dataSearch.value;
+    dataPage = 0;
+    renderDataTab();
+  });
+  els.dataPager.addEventListener("click", (e) => {
+    const p = pageFromClick(e);
+    if (p !== null) {
+      dataPage = p;
+      renderDataTab();
+    }
+  });
 }
 
 /**

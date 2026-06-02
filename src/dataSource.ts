@@ -16,6 +16,8 @@ export interface LoadedData extends ParseResult {
   warnings: SanityWarning[];
   /** Variant exercise spellings that were folded into one canonical name. */
   merges: ExerciseMerge[];
+  /** The raw CSV text exactly as bundled, for the "Data" inspection tab. */
+  rawCsv: string;
 }
 
 export async function loadData(): Promise<LoadedData> {
@@ -26,5 +28,5 @@ export async function loadData(): Promise<LoadedData> {
   // same variants back. Raw names are preserved on each record.
   const { records, merges } = canonicalizeExerciseNames(parsed.records);
   // Sanity-check the canonicalised records so warnings reference displayed names.
-  return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records) };
+  return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records), rawCsv: csvText };
 }

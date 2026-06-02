@@ -713,7 +713,7 @@ export function personalRecords(
   const groups = new Map<string, SetRecord[]>();
   for (const r of records) {
     if (r.weight === null || r.reps === null || r.exerciseName === "" || r.username === "") continue;
-    const key = `${r.username} ${r.exerciseName}`;
+    const key = `${r.username} ${r.exerciseName}`;
     const arr = groups.get(key);
     if (arr) arr.push(r);
     else groups.set(key, [r]);
