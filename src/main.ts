@@ -148,6 +148,16 @@ const els = {
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
+  addAthlete: $<HTMLSelectElement>("addAthlete"),
+  addExercise: $<HTMLInputElement>("addExercise"),
+  addExerciseList: $("addExerciseList"),
+  addWeight: $<HTMLInputElement>("addWeight"),
+  addReps: $<HTMLInputElement>("addReps"),
+  addDate: $<HTMLInputElement>("addDate"),
+  addSubmit: $<HTMLButtonElement>("addSubmit"),
+  addHint: $("addHint"),
+  addCount: $("addCount"),
+  addTable: $<HTMLTableElement>("addTable"),
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
@@ -3215,6 +3225,9 @@ async function init() {
     els.status.innerHTML = `<span class="badge warn">Failed to load data</span> ${escapeHtml(String(err))}`;
     return;
   }
+  // Fold in any hand-logged sets saved on this device (the Add tab).
+  csvRecordCount = data.records.length;
+  mergeManualSets();
 
   // Build the leaderboard exercise picker (see populateExercisePicker). By
   // default it lists PURE exercises only; the grouped/scaled estimates appear
@@ -3330,6 +3343,7 @@ async function init() {
   setupTabs();
   setupDataTab();
   renderDataTab();
+  setupAddTab();
   setupChecklists();
 
   // Settings popover (holds the 1RM formula).
@@ -3802,6 +3816,142 @@ function setupDataTab() {
  * device's localStorage, save on every change, keep the "x / y done" count
  * fresh and let the Reset button clear a list. Each box has a stable data-key.
  */
+// ---- Add tab: hand-logged sets, saved on-device and merged with the CSV data --
+interface ManualEntry {
+  id: string;
+  user: string;
+  username: string;
+  date: string;
+  exerciseName: string;
+  weight: number | null;
+  reps: number | null;
+}
+const MANUAL_KEY = "colosseum.manualSets.v1";
+let manualEntries: ManualEntry[] = loadManual();
+
+function loadManual(): ManualEntry[] {
+  try {
+    const raw = localStorage.getItem(MANUAL_KEY);
+    return raw ? (JSON.parse(raw) as ManualEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveManual() {
+  try {
+    localStorage.setItem(MANUAL_KEY, JSON.stringify(manualEntries));
+  } catch {
+    /* storage unavailable (private mode) — entries still apply this session */
+  }
+}
+
+/** Turn a stored entry into a SetRecord matching the CSV shape, so every view
+ * treats it identically. Bodyweight comes from the athlete profile table. */
+function manualToRecord(m: ManualEntry): SetRecord {
+  return {
+    user: m.user,
+    username: m.username,
+    date: m.date,
+    bodyweight: ATHLETES[m.username]?.weight ?? null,
+    exerciseName: m.exerciseName,
+    setNumber: 1,
+    weight: m.weight,
+    reps: m.reps,
+    notes: "",
+    dropset: false,
+    percentile: null,
+  };
+}
+
+/** Append the hand-logged sets to the loaded dataset (called once after load and
+ * after any add/delete, by rebuilding from data.csvRecords + manual). */
+let csvRecordCount = 0; // how many of data.records came from the CSV (the prefix)
+function mergeManualSets() {
+  // Keep the first csvRecordCount records (the CSV) and re-append manual ones.
+  data.records.length = csvRecordCount;
+  for (const m of manualEntries) data.records.push(manualToRecord(m));
+}
+
+/** Populate the Add form's athlete dropdown + exercise suggestions and the table. */
+function renderAddTab() {
+  const users = distinctUsers(data.records);
+  const prev = els.addAthlete.value;
+  els.addAthlete.innerHTML = users
+    .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
+    .join("");
+  if (prev) els.addAthlete.value = prev;
+  els.addExerciseList.innerHTML = distinctExercises(data.records)
+    .map((e) => `<option value="${escapeHtml(e)}"></option>`)
+    .join("");
+  if (!els.addDate.value) els.addDate.value = todayIso();
+
+  // Recently-added list (newest first), each with a delete button.
+  const rows = [...manualEntries]
+    .reverse()
+    .map(
+      (m) =>
+        `<tr><td>${escapeHtml(m.user)}</td><td>${escapeHtml(m.exerciseName)}</td>` +
+        `<td class="num">${m.weight ?? "—"}${m.reps != null ? `×${m.reps}` : ""}</td>` +
+        `<td class="num">${escapeHtml(m.date)}</td>` +
+        `<td class="num"><button type="button" class="manual-del" data-id="${escapeHtml(m.id)}" aria-label="Delete">×</button></td></tr>`,
+    )
+    .join("");
+  els.addCount.textContent = manualEntries.length ? `(${manualEntries.length})` : "";
+  els.addTable.innerHTML = manualEntries.length
+    ? `<thead><tr><th>Athlete</th><th>Exercise</th><th class="num">Set</th><th class="num">Date</th><th></th></tr></thead><tbody>${rows}</tbody>`
+    : `<tbody><tr><td class="muted">No hand-logged sets yet.</td></tr></tbody>`;
+}
+
+function onAddSubmit() {
+  const username = els.addAthlete.value;
+  const user = els.addAthlete.selectedOptions[0]?.textContent ?? username;
+  const exerciseName = els.addExercise.value.trim();
+  const weight = parseFloat(els.addWeight.value);
+  const reps = Math.round(parseFloat(els.addReps.value));
+  const date = els.addDate.value || todayIso();
+  if (!username || !exerciseName) {
+    els.addHint.textContent = "Pick an athlete and enter an exercise.";
+    return;
+  }
+  if (!Number.isFinite(reps) || reps < 1) {
+    els.addHint.textContent = "Enter the reps (1 or more).";
+    return;
+  }
+  manualEntries.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    user,
+    username,
+    date,
+    exerciseName,
+    weight: Number.isFinite(weight) ? weight : null,
+    reps,
+  });
+  saveManual();
+  mergeManualSets();
+  els.addWeight.value = "";
+  els.addReps.value = "";
+  els.addExercise.value = "";
+  els.addHint.textContent = `Added ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}.`;
+  renderAddTab();
+  renderAll(); // every view now includes the new set
+  renderDataTab();
+}
+
+function setupAddTab() {
+  renderAddTab();
+  els.addSubmit.addEventListener("click", onAddSubmit);
+  els.addTable.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".manual-del");
+    if (!btn?.dataset.id) return;
+    manualEntries = manualEntries.filter((m) => m.id !== btn.dataset.id);
+    saveManual();
+    mergeManualSets();
+    renderAddTab();
+    renderAll();
+    renderDataTab();
+  });
+}
+
 function setupChecklists() {
   const lists = Array.from(document.querySelectorAll<HTMLElement>("[data-checklist]"));
   for (const list of lists) {

@@ -24,6 +24,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.7.0",
+    title: "add-sets-by-hand",
+    sp: 3,
+    note: "New 'Add' tab to log sets by hand, merged with the StrengthLevel data.",
+    details: [
+      "Pick an athlete, type/choose an exercise, enter weight + reps + date.",
+      "Saved on your device and merged into every view (leaderboards, records, graphs, Data tab).",
+      "Manage/delete your hand-logged sets in a list on the same tab.",
+    ],
+  },
+  {
     version: "b.1.6",
     title: "navigation-and-version-tracking",
     sp: 9,
@@ -152,6 +163,7 @@ export const COMPONENTS: Component[] = [
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },
+  { name: "Add", version: "b1.0" },
 ];
 
 /** Sum of all story points shipped (grouped entries already total their children). */
