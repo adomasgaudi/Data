@@ -1769,7 +1769,7 @@ function renderExerciseProgressChart(exName: string) {
     els.exerciseProgress.hidden = false;
     exerciseChart = chart;
     els.exerciseProgressNote.textContent =
-      "Each bar spans the weight used (bottom) up to that set's estimated 1RM (top), per set over time.";
+      "One bar per set (every set of every session), spanning that set's weight (bottom) to its own estimated 1RM (top).";
     return;
   }
 
@@ -1784,34 +1784,50 @@ function renderExerciseProgressChart(exName: string) {
   exerciseChart = drawProgressChart(canvas, series);
 }
 
-/** Per-set view: one floating bar per set, from the weight used up to that set's
- * estimated (added-weight) 1RM, on a real time x-axis. Null if no usable sets. */
+/** Per-set view: one floating bar PER SET, each spanning that single set's weight
+ * lifted → that same set's estimated (added-weight) 1RM. Every set of every
+ * session gets its own column (a categorical x-axis sorted by date then set
+ * number), so same-day sets don't overlap into one mixed bar. Null if no usable
+ * sets. */
 function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[], formula: OneRepMaxFormula): Chart | null {
-  const ts = (d: string) => Date.parse(d);
   const r1 = (n: number) => Math.round(n * 10) / 10;
-  const pts = sets
+  // Oldest first, and within a day by set number, so columns read left→right in
+  // the order the sets were performed.
+  const ordered = [...sets].sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber,
+  );
+  const pts = ordered
     .map((s) => {
       const e1rm = addedWeight1RM(s, formula);
       if (e1rm === null) return null;
+      // low and high are BOTH from this one set — its bar weight and its own 1RM.
       const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-      return { x: ts(s.date), low: r1(added), high: r1(e1rm), reps: s.reps ?? 0 };
+      return { date: s.date, low: r1(added), high: r1(e1rm), reps: s.reps ?? 0 };
     })
-    .filter((p): p is { x: number; low: number; high: number; reps: number } => p !== null);
+    .filter((p): p is { date: string; low: number; high: number; reps: number } => p !== null);
   if (pts.length === 0) return null;
 
-  const times = pts.map((p) => p.x);
-  const pad = 2 * 86_400_000;
+  // One label per column; only print the date on the first set of each day so the
+  // axis isn't a wall of repeated dates.
+  let lastDate = "";
+  const labels = pts.map((p) => {
+    const show = p.date !== lastDate;
+    lastDate = p.date;
+    return show ? shortDate(p.date) : "";
+  });
+
   return new Chart(canvas, {
     type: "bar",
     data: {
+      labels,
       datasets: [
         {
           label: "Weight → 1RM",
           // Floating bars: y is a [low, high] tuple at runtime (cast for Chart.js types).
-          data: pts.map((p) => ({ x: p.x, y: [p.low, p.high] })) as unknown as { x: number; y: number }[],
+          data: pts.map((p) => [p.low, p.high]) as unknown as number[],
           backgroundColor: "#284e86",
           borderSkipped: false,
-          maxBarThickness: 10,
+          maxBarThickness: 14,
         },
       ],
     },
@@ -1825,7 +1841,7 @@ function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[]
           callbacks: {
             title: (items) => {
               const p = pts[items[0]?.dataIndex ?? -1];
-              return p ? tsLabel(p.x) : "";
+              return p ? shortDate(p.date) : "";
             },
             label: (item) => {
               const p = pts[item.dataIndex];
@@ -1834,17 +1850,14 @@ function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[]
           },
         },
         zoom: {
-          pan: { enabled: true, mode: "xy" },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "xy" },
+          pan: { enabled: true, mode: "x" },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
         },
       },
       scales: {
         x: {
-          type: "linear",
-          min: Math.min(...times) - pad,
-          max: Math.max(...times) + pad,
-          grid: { color: "#ececec" },
-          ticks: { color: "#6b7280", maxRotation: 0, autoSkip: true, mirror: true, padding: 8, callback: (v) => tsLabel(Number(v)) },
+          grid: { display: false },
+          ticks: { color: "#6b7280", maxRotation: 0, autoSkip: true },
         },
         y: {
           grid: { color: "#ececec" },

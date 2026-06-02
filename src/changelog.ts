@@ -16,6 +16,7 @@ export interface Release {
 }
 
 export const CHANGELOG: Release[] = [
+  { version: "b.1.1.0", title: "per-set-range-all-sets", note: "Per-set range graph now shows every set as its own bar, each spanning that same set's weight → its own 1RM (no mixing across sets)." },
   { version: "b.1.0.0", title: "version-history-page", note: "Added this Version history page; reset versioning to the b.x scheme." },
   { version: "0.36.1", title: "momentum-row", note: "Athlete view: 'Momentum' chips showing ±kg/week trend for the biggest-moving lifts." },
   { version: "0.36.0", title: "consistency-fixes", note: "Design/logic audit fixes: undefined CSS var, off-theme colour, and unified number formatting." },
