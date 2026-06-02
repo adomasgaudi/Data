@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.5",
+    title: "revert-graph-gridlines",
+    sp: 2,
+    note: "Revert the graph gridlines to the earlier, known-good mechanism (no experimental canvas plugin).",
+    details: [
+      "Removed the custom gridline plugin added this session; Chart.js draws the vertical lines natively again at calendar-boundary ticks computed once from the data range.",
+      "Kept the genuinely-good fixes: visible gridline colour and time-only panning (so the y-axis can't drift).",
+    ],
+  },
+  {
     version: "b.1.12.4",
     title: "gridline-plugin-optin",
     sp: 2,

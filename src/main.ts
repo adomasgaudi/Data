@@ -3,7 +3,7 @@
  * call the pure compute functions, and paint the DOM. No business logic lives
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
-import { Chart, registerables, type ChartType, type Plugin } from "chart.js";
+import { Chart, registerables } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
 import { calendarGridlines, MS_DAY } from "./chartAxis";
@@ -68,47 +68,7 @@ import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, f
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
 (globalThis as unknown as { Hammer?: unknown }).Hammer ??= Hammer;
-
-// Per-chart opt-in for the calendar gridline plugin, via the standard plugin
-// options channel: `plugins: { calendarGrid: { on: true } }`.
-declare module "chart.js" {
-  interface PluginOptionsByType<TType extends ChartType> {
-    calendarGrid?: { on?: boolean };
-  }
-}
-
-/**
- * Vertical calendar gridlines for the time charts. Drawn on the canvas every
- * frame from the LIVE visible x-range (scale.min..max), so they stay put while
- * panning, slide with the data, and stay sensibly dense at any zoom — without
- * touching the axis ticks (which would force a relayout and the old jitter).
- * Opt-in per chart via the plugin options (`options` arg is the resolved
- * `plugins.calendarGrid`, guaranteed present by Chart.js).
- */
-const calendarGridPlugin: Plugin<ChartType, { on?: boolean }> = {
-  id: "calendarGrid",
-  defaults: { on: false },
-  beforeDatasetsDraw(chart, _args, options) {
-    if (!options?.on) return;
-    const x = chart.scales.x;
-    if (!x || typeof x.min !== "number" || typeof x.max !== "number") return;
-    const { ctx, chartArea } = chart;
-    ctx.save();
-    ctx.strokeStyle = "#d4d9e2";
-    ctx.lineWidth = 1;
-    for (const t of calendarGridlines(x.min, x.max)) {
-      const px = Math.round(x.getPixelForValue(t)) + 0.5; // crisp 1px line
-      if (px < chartArea.left || px > chartArea.right) continue;
-      ctx.beginPath();
-      ctx.moveTo(px, chartArea.top);
-      ctx.lineTo(px, chartArea.bottom);
-      ctx.stroke();
-    }
-    ctx.restore();
-  },
-};
-
-Chart.register(...registerables, zoomPlugin, calendarGridPlugin);
+Chart.register(...registerables, zoomPlugin);
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -1633,7 +1593,6 @@ function renderCompareChart() {
               },
             },
           },
-          calendarGrid: { on: true },
           // Scroll/zoom like the other graphs: drag to pan, wheel/pinch to zoom (x).
           zoom: {
             pan: { enabled: true, mode: "x" },
@@ -1680,7 +1639,6 @@ function renderCompareChart() {
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: { title: (items) => tsLabel(Number(items[0]?.parsed.x)), label: (it) => `${it.dataset.label}: ${it.formattedValue} kg` } },
-        calendarGrid: { on: true },
         zoom: {
           pan: { enabled: true, mode: "x" },
           zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
@@ -2955,25 +2913,24 @@ function tsLabel(ts: number): string {
   return shortDate(new Date(ts).toISOString().slice(0, 10));
 }
 
-/** Shared x time-axis options. The vertical gridlines are drawn by
- * {@link calendarGridPlugin} (from the live range, so they're smooth and always
- * visible); here we only set stable LABEL ticks at calendar boundaries computed
- * ONCE from the data range, so panning/zooming never recomputes the axis (the
- * old jitter). `mirrored` tucks labels inside the plot (progress chart). */
+/** Shared x time-axis options (reverted to the pre-regression mechanism): grid-
+ * lines are drawn natively by Chart.js at calendar-boundary ticks computed ONCE
+ * from the data range — never recomputed mid-pan, so no jitter. `mirrored` tucks
+ * labels inside the plot (progress chart). */
 function timeXAxis(min: number, max: number, mirrored = false) {
   // Guard against empty data (min/max would be ±Infinity → breaks the scale):
   // only pin the range when both bounds are finite, else let Chart.js auto-range.
   const haveRange = Number.isFinite(min) && Number.isFinite(max) && max > min;
-  // Compute the calendar boundary label positions a single time, up front.
-  const labelTicks = haveRange ? calendarGridlines(min, max) : [];
+  // Compute the calendar boundary ticks a single time, up front.
+  const gridTicks = haveRange ? calendarGridlines(min, max) : [];
   return {
     type: "linear" as const,
     ...(haveRange ? { min, max } : {}),
-    grid: { display: false }, // vertical lines come from calendarGridPlugin
-    // Fixed label ticks — independent of the zoom view, so the axis never
-    // recomputes mid-pan. Chart.js clips labels to the visible range itself.
+    grid: { color: "#d4d9e2", drawTicks: false },
+    // Fixed ticks (week/month boundaries) — independent of the zoom view, so the
+    // axis never recomputes mid-pan. Chart.js clips to the visible range itself.
     afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
-      if (labelTicks.length >= 2) axis.ticks = labelTicks.map((value) => ({ value }));
+      if (gridTicks.length >= 2) axis.ticks = gridTicks.map((value) => ({ value }));
     },
     ticks: {
       color: "#6b7280",
@@ -3069,7 +3026,6 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
       // chart already says what each colour is, so every pixel goes to the plot.
       plugins: {
         legend: { display: false },
-        calendarGrid: { on: true },
         tooltip: {
           callbacks: {
             title: (items) => {
