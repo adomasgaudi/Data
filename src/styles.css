@@ -189,6 +189,21 @@ body {
 /* Caret points right when collapsed, down when the category is open. */
 .ex-cat-row .caret { transition: transform 0.12s ease; }
 .ex-cat-row:not(.is-collapsed) .caret { transform: rotate(90deg); }
+/* Frequency-tier banner rows (By tier sort) with an S/A/B/C/D badge. */
+.ex-tier-row td {
+  font-size: 0.74rem; font-weight: 600; color: var(--text);
+  background: var(--accent-soft); padding-top: 9px; padding-bottom: 9px;
+}
+.tier-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem; border-radius: 6px; margin-right: 0.5rem;
+  font-weight: 800; color: #fff; font-size: 0.8rem;
+}
+.tier-S { background: #b8902f; }
+.tier-A { background: #284e86; }
+.tier-B { background: #2e7d52; }
+.tier-C { background: #6c4ab0; }
+.tier-D { background: #6b7280; }
 
 /* Period filter: a custom dropdown (not a native select) so the open menu is
    styled like the rest of the site on every OS. */
@@ -641,6 +656,8 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .compare-chip:hover { color: var(--text); }
 .compare-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* The compare-overlay graph is 30% shorter than the default big chart (70vh). */
+.exercise-compare .chart-wrap--big { height: 49vh; }
 /* Athlete muscle map (front/back SVG silhouettes shaded by training share). */
 .muscle-map { margin: 0.75rem 0 0; }
 .muscle-map-summary {

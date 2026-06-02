@@ -735,7 +735,7 @@ let recordsPage = 0;
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
-let exerciseSort: "sets" | "category" = "sets";
+let exerciseSort: "sets" | "category" | "tier" = "sets";
 // Live search filter for the exercises list (substring on the exercise name).
 let exerciseSearch = "";
 // When true, append exercises this athlete has never logged (greyed) so gaps
@@ -1152,7 +1152,8 @@ function setupExerciseSort(): void {
   els.exerciseSort.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>(".ex-sort-btn");
     if (!btn) return;
-    const mode = btn.dataset.sort === "category" ? "category" : "sets";
+    const d = btn.dataset.sort;
+    const mode = d === "category" ? "category" : d === "tier" ? "tier" : "sets";
     if (mode === exerciseSort) return;
     exerciseSort = mode;
     for (const b of els.exerciseSort.querySelectorAll<HTMLElement>(".ex-sort-btn"))
@@ -1195,6 +1196,11 @@ function setupExerciseSearch(): void {
  * within buckets, so the per-category sort matches the incoming sets order.
  */
 function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): T[] {
+  if (exerciseSort === "tier") {
+    // Tier mode is just most-trained-first; the tier headers are emitted during
+    // render as the set count crosses each threshold.
+    return [...counts].sort((a, b) => b.count - a.count);
+  }
   if (exerciseSort !== "category") return counts;
   const buckets = new Map<TrainingCategory, T[]>();
   for (const c of counts) {
@@ -1204,6 +1210,22 @@ function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): T[] {
   return [...buckets.values()]
     .sort((a, b) => sumCounts(b) - sumCounts(a))
     .flat();
+}
+
+/** Frequency tiers by how many times an exercise has been logged (set count),
+ * like a tier list: S = a staple, down to D = barely touched. Thresholds are
+ * set-count cutoffs; an untrained (count 0) exercise has no tier. */
+const FREQ_TIERS: { tier: string; min: number; label: string }[] = [
+  { tier: "S", min: 25, label: "S · staples (25+ sets)" },
+  { tier: "A", min: 15, label: "A · regulars (15–24)" },
+  { tier: "B", min: 8, label: "B · occasional (8–14)" },
+  { tier: "C", min: 3, label: "C · rare (3–7)" },
+  { tier: "D", min: 1, label: "D · tried once or twice (1–2)" },
+];
+
+function frequencyTier(count: number): { tier: string; label: string } | null {
+  for (const t of FREQ_TIERS) if (count >= t.min) return { tier: t.tier, label: t.label };
+  return null;
 }
 
 function sumCounts(items: readonly ExerciseCount[]): number {
@@ -1346,6 +1368,10 @@ function renderExercisesPage() {
   // boundary. Sub-header rows carry no data-index, so click mapping is unaffected.
   const prevItem = start > 0 ? ordered[start - 1] : undefined;
   let prevCat = exerciseSort === "category" && prevItem ? exerciseCategory(prevItem.exerciseName) : null;
+  // Tier mode: track the previous row's tier so a header is emitted when it
+  // changes (and not dropped at a page boundary).
+  let prevTier =
+    exerciseSort === "tier" && prevItem ? (frequencyTier(prevItem.count)?.tier ?? null) : null;
   const rowHtml = (it: ExItem, abs: number, rankCls: string) => {
     // Not-trained rows are greyed, non-clickable (no `ex-row` class / data-index).
     if (!it.trained)
@@ -1364,6 +1390,19 @@ function renderExercisesPage() {
     .slice(start, start + PAGE_SIZE)
     .map((it, i) => {
       const abs = start + i;
+      if (exerciseSort === "tier") {
+        // Emit a tier banner when the frequency tier changes going down the list.
+        const ft = frequencyTier(it.count);
+        const tier = ft?.tier ?? null;
+        let header = "";
+        if (tier !== prevTier) {
+          header = ft
+            ? `<tr class="ex-tier-row"><td colspan="2"><span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
+            : "";
+          prevTier = tier;
+        }
+        return header + rowHtml(it, abs, "");
+      }
       if (exerciseSort !== "category") return rowHtml(it, abs, abs === 0 && it.trained ? "rank-1" : "");
       // Category mode: emit a collapsible sub-header when the category changes;
       // a row under a collapsed category is skipped (its abs is unchanged, so the

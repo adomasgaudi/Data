@@ -25,6 +25,16 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   substantial new features and **A** for major/breaking work — do NOT bump the
   minor for an ordinary feature or fix. When unsure, prefer the smaller bump.
   Keep the longer detail in the commit body as before.
+- **Give every task a code + size.** Each task the owner gives gets a code:
+  a 2–5 letter **category** + a number (e.g. `EXR-3`, `DATA-1`, `CHART-2`), plus
+  a Scrum **story-point** estimate (`SP:1/2/3/5/8`, Fibonacci — 1 trivial,
+  8 large). Put `CODE (SP:n)` at the **start of the commit subject, before the
+  version**, e.g. `EXR-3 (SP:3) 0.36.0 tier-list`, and lead the chat reply with
+  the same `CODE (SP:n)`. Recorded in commit + chat only (no separate file).
+  Reuse a category for related areas — current ones: `EXR` exercises view,
+  `DATA` data tab, `CHART` graphs/diagrams, `CALC` calculators, `LIFT`
+  exercise/group/merge logic, `ATH` athlete view, `WO` workouts, `META`
+  process/versioning. Coin a new 2–5 letter category when none fits.
 - **Always keep the on-screen version in lockstep with the commit version.**
   The `<span class="version">` next to the title in `index.html` must show
   the same number as the commit you're about to make (e.g. commit
