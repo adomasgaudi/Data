@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.7",
+    title: "dark-mode",
+    sp: 5,
+    note: "Dark mode — a 🌙 toggle in the header; remembered per device, and the charts follow the theme too.",
+    details: [
+      "Tap the moon in the top bar to switch to a deep-slate dark theme (sun to switch back); the choice is saved and applied before paint, so no flash.",
+      "Charts are themed: the SVG engine's gridlines/axes/labels use CSS variables, and the leaderboard's colours follow suit. Lapis + ochre accents are kept readable in both.",
+    ],
+  },
+  {
     version: "b.1.13.6",
     title: "svg-test-curve",
     sp: 2,

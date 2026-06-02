@@ -82,6 +82,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
+  themeBtn: $<HTMLButtonElement>("themeBtn"),
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -215,6 +216,20 @@ let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set wei
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
 const PAGE_SIZE = 50; // List & stats page size
+
+/** Read a themed CSS variable (so the leaderboard's Chart.js colours follow the
+ * light/dark theme like the SVG charts do). */
+const cssVar = (name: string, fallback: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+
+/** Flip the light/dark theme, remember it, and refresh the one Chart.js chart. */
+function setTheme(dark: boolean) {
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  try { localStorage.setItem("colosseum.theme", dark ? "dark" : "light"); } catch { /* ignore */ }
+  els.themeBtn.textContent = dark ? "☀" : "🌙";
+  els.themeBtn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  if (data) renderLeaderboard(); // Chart.js colours are set in JS, so re-render
+}
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
 // when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
@@ -796,7 +811,10 @@ function renderLeaderboardChart(
   // that nets out below zero). With no min set we keep the old start-at-zero.
   const xMin = numInput(els.axisMin);
   const xMax = numInput(els.axisMax);
-  const xScale: Record<string, unknown> = { grid: { color: "#d4d9e2" }, ticks: { color: "#6b7280" } };
+  const gridC = cssVar("--chart-grid", "#d4d9e2");
+  const labelC = cssVar("--chart-label", "#6b7280");
+  const textC = cssVar("--text", "#1a1a1a");
+  const xScale: Record<string, unknown> = { grid: { color: gridC }, ticks: { color: labelC } };
   if (xMin !== null) xScale.min = xMin;
   else xScale.beginAtZero = true;
   if (xMax !== null) xScale.max = xMax;
@@ -824,7 +842,7 @@ function renderLeaderboardChart(
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom", labels: { color: "#6b7280", boxWidth: 12, usePointStyle: true } },
+        legend: { position: "bottom", labels: { color: labelC, boxWidth: 12, usePointStyle: true } },
         tooltip: {
           callbacks: {
             label: (c) => `${c.dataset.label}: ${c.parsed.x} ${rel ? "BW" : "kg"}`,
@@ -839,7 +857,7 @@ function renderLeaderboardChart(
           labels: rows.map((r) => r.user),
           offset: true,
           grid: { display: false },
-          ticks: { color: "#1a1a1a", autoSkip: false },
+          ticks: { color: textC, autoSkip: false },
         },
       },
     },
@@ -3196,6 +3214,12 @@ async function init() {
   setupGroupsView();
   setupTeamView();
   setupChecklists();
+
+  // Dark / light theme toggle (the saved theme is already applied in <head>).
+  els.themeBtn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀" : "🌙";
+  els.themeBtn.addEventListener("click", () =>
+    setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
+  );
 
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {

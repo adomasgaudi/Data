@@ -133,7 +133,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   }
 
   const halo = (x: string, y: string, anchor: string, text: string) =>
-    `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="11" fill="#4b5563" stroke="#fff" stroke-width="3" style="paint-order:stroke">${esc(text)}</text>`;
+    `<text class="svgc-halo" x="${x}" y="${y}" text-anchor="${anchor}" font-size="11">${esc(text)}</text>`;
 
   function draw() {
     const W = widthOf();
@@ -151,10 +151,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     for (const v of niceTicks(view.yMin, view.yMax, 6)) {
       const py = yL(v);
       if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
-      grid += `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${W - M.r}" y2="${py.toFixed(1)}" stroke="#d4d9e2" stroke-width="1"/>`;
+      grid += `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${W - M.r}" y2="${py.toFixed(1)}" class="svgc-grid" stroke-width="1"/>`;
       yLabels += inside()
         ? halo((M.l + 4).toString(), (py - 3).toFixed(1), "start", String(Math.round(v)))
-        : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#6b7280">${Math.round(v)}</text>`;
+        : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" class="svgc-axislabel" font-size="11">${Math.round(v)}</text>`;
     }
     // right-axis labels (no gridlines, to avoid a double grid)
     if (hasRight()) {
@@ -163,7 +163,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
         yLabels += inside()
           ? halo((W - M.r - 4).toString(), (py - 3).toFixed(1), "end", String(Math.round(v)))
-          : `<text x="${W - M.r + 6}" y="${(py + 4).toFixed(1)}" text-anchor="start" font-size="11" fill="#6b7280">${Math.round(v)}</text>`;
+          : `<text x="${W - M.r + 6}" y="${(py + 4).toFixed(1)}" text-anchor="start" class="svgc-axislabel" font-size="11">${Math.round(v)}</text>`;
       }
     }
 
@@ -174,12 +174,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     for (const t of xticks) {
       const px = xPix(t);
       if (px < M.l - 0.5 || px > W - M.r + 0.5) continue;
-      grid += `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${h - M.b}" stroke="#d4d9e2" stroke-width="1"/>`;
+      grid += `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
       if (px - lastLabelPx < 42) continue; // thin crowded labels (gridlines stay)
       lastLabelPx = px;
       xLabels += inside()
         ? halo(px.toFixed(1), (h - M.b - 5).toFixed(1), "middle", fmtX(t))
-        : `<text x="${px.toFixed(1)}" y="${(h - M.b + 16).toFixed(1)}" text-anchor="middle" font-size="11" fill="#6b7280">${fmtX(t)}</text>`;
+        : `<text x="${px.toFixed(1)}" y="${(h - M.b + 16).toFixed(1)}" text-anchor="middle" class="svgc-axislabel" font-size="11">${fmtX(t)}</text>`;
     }
 
     // series
@@ -212,9 +212,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     }
 
     const frame = inside()
-      ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" stroke="#9aa3b2" stroke-width="1"/>`
-      : `<line x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${h - M.b}" stroke="#9aa3b2" stroke-width="1"/>` +
-        `<line x1="${M.l}" y1="${h - M.b}" x2="${W - M.r}" y2="${h - M.b}" stroke="#9aa3b2" stroke-width="1"/>`;
+      ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" class="svgc-frame" stroke-width="1"/>`
+      : `<line x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${h - M.b}" class="svgc-frame" stroke-width="1"/>` +
+        `<line x1="${M.l}" y1="${h - M.b}" x2="${W - M.r}" y2="${h - M.b}" class="svgc-frame" stroke-width="1"/>`;
 
     legendEl.innerHTML = legend;
     noteEl.textContent = cfg.note ?? "";

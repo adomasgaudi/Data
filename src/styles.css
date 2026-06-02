@@ -12,6 +12,30 @@
   --gold-soft: rgba(184, 144, 47, 0.12);
   /* Muted terracotta for destructive actions — sits in the same warm palette. */
   --danger: #a23b3b;
+  /* Chart structural colours (gridlines / axis / labels / label halo), themed so
+     the SVG charts follow light/dark. Series colours stay fixed (data colours). */
+  --chart-grid: #d4d9e2;
+  --chart-axis: #9aa3b2;
+  --chart-label: #6b7280;
+  --chart-halo: #ffffff;
+}
+/* Dark theme — set on <html data-theme="dark">. A deep slate that keeps the
+   lapis + ochre accents readable. */
+:root[data-theme="dark"] {
+  --bg: #14181f;
+  --panel: #1b212b;
+  --line: #2b3340;
+  --text: #e6e9ee;
+  --muted: #9aa3b2;
+  --accent: #6f9be0;
+  --accent-soft: rgba(111, 155, 224, 0.14);
+  --gold: #d8ad54;
+  --gold-soft: rgba(216, 173, 84, 0.16);
+  --danger: #d9776f;
+  --chart-grid: #2b3340;
+  --chart-axis: #3c4757;
+  --chart-label: #aeb6c2;
+  --chart-halo: #1b212b;
 }
 * { box-sizing: border-box; }
 body {
@@ -215,6 +239,11 @@ main { padding-bottom: 5rem; }
 /* touch-action MUST be on the SVG too — it's the actual touch target, so a phone
    would otherwise scroll the page instead of letting the chart pan/zoom. */
 .svgc-svg { display: block; touch-action: none; }
+/* Themed chart structural elements (so charts follow light/dark). */
+.svgc-grid { stroke: var(--chart-grid); }
+.svgc-frame { stroke: var(--chart-axis); fill: none; }
+.svgc-axislabel { fill: var(--chart-label); }
+.svgc-halo { fill: var(--chart-label); stroke: var(--chart-halo); stroke-width: 3; paint-order: stroke; }
 .svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); max-height: 4.5rem; overflow-y: auto; }
 .svgc-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .svgc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
