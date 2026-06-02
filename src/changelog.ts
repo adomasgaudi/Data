@@ -38,6 +38,17 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.2",
+    title: "graph-gridlines-fixed",
+    sp: 3,
+    note: "Properly fix the graph background lines — visible at any zoom, steady while scrolling.",
+    details: [
+      "Vertical month/week gridlines are now drawn on the canvas from the live view, so they show at every zoom level and slide smoothly with the data (no more vanishing or jitter).",
+      "All graph gridlines darkened so they're actually visible.",
+      "Gridline maths pulled into a tested module (src/chartAxis.ts) with unit tests.",
+    ],
+  },
+  {
     version: "b.1.12.1",
     title: "compare-cats-alone-tag",
     sp: 2,

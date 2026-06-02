@@ -3,9 +3,10 @@
  * call the pure compute functions, and paint the DOM. No business logic lives
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
-import { Chart, registerables } from "chart.js";
+import { Chart, registerables, type ChartType, type Plugin } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
+import { calendarGridlines, MS_DAY } from "./chartAxis";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -67,7 +68,37 @@ import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, f
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
 (globalThis as unknown as { Hammer?: unknown }).Hammer ??= Hammer;
-Chart.register(...registerables, zoomPlugin);
+
+/**
+ * Vertical calendar gridlines for the time charts. Drawn on the canvas every
+ * frame from the LIVE visible x-range (scale.min..max), so they stay put while
+ * panning, slide with the data, and stay sensibly dense at any zoom — without
+ * touching the axis ticks (which would force a relayout and the old jitter).
+ * Targets only the axes built by {@link timeXAxis}, marked with `_calendar`.
+ */
+const calendarGridPlugin: Plugin<ChartType> = {
+  id: "calendarGrid",
+  beforeDatasetsDraw(chart) {
+    const x = chart.scales.x;
+    if (!x || !(x.options as { _calendar?: boolean })._calendar) return;
+    if (typeof x.min !== "number" || typeof x.max !== "number") return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.strokeStyle = "#d4d9e2";
+    ctx.lineWidth = 1;
+    for (const t of calendarGridlines(x.min, x.max)) {
+      const px = Math.round(x.getPixelForValue(t)) + 0.5; // crisp 1px line
+      if (px < chartArea.left || px > chartArea.right) continue;
+      ctx.beginPath();
+      ctx.moveTo(px, chartArea.top);
+      ctx.lineTo(px, chartArea.bottom);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+};
+
+Chart.register(...registerables, zoomPlugin, calendarGridPlugin);
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -786,7 +817,7 @@ function renderLeaderboardChart(
   // that nets out below zero). With no min set we keep the old start-at-zero.
   const xMin = numInput(els.axisMin);
   const xMax = numInput(els.axisMax);
-  const xScale: Record<string, unknown> = { grid: { color: "#ececec" }, ticks: { color: "#6b7280" } };
+  const xScale: Record<string, unknown> = { grid: { color: "#d4d9e2" }, ticks: { color: "#6b7280" } };
   if (xMin !== null) xScale.min = xMin;
   else xScale.beginAtZero = true;
   if (xMax !== null) xScale.max = xMax;
@@ -1593,7 +1624,7 @@ function renderCompareChart() {
         },
         scales: {
           x: timeXAxis(psMin - MS_DAY, psMax + MS_DAY),
-          y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#ececec" } },
+          y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#d4d9e2" } },
         },
       },
     });
@@ -1638,7 +1669,7 @@ function renderCompareChart() {
       },
       scales: {
         x: timeXAxis(trMin - MS_DAY, trMax + MS_DAY),
-        y: { title: { display: true, text: "est. 1RM (kg)" }, grid: { color: "#ececec" } },
+        y: { title: { display: true, text: "est. 1RM (kg)" }, grid: { color: "#d4d9e2" } },
       },
     },
   });
@@ -2213,7 +2244,7 @@ function drawSetRangeChart(canvas: HTMLCanvasElement, sets: readonly SetRecord[]
           ticks: { color: "#6b7280", maxRotation: 0, autoSkip: true },
         },
         y: {
-          grid: { color: "#ececec" },
+          grid: { color: "#d4d9e2" },
           ticks: { color: "#6b7280", mirror: true, padding: 4 },
         },
       },
@@ -2580,7 +2611,7 @@ function renderWorkoutSetsChart() {
       },
       scales: {
         x: timeXAxis(tMin - MS_DAY, tMax + MS_DAY),
-        y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#ececec" } },
+        y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#d4d9e2" } },
       },
     },
   });
@@ -2905,53 +2936,26 @@ function tsLabel(ts: number): string {
   return shortDate(new Date(ts).toISOString().slice(0, 10));
 }
 
-const MS_DAY = 86_400_000;
-
-/**
- * Tick timestamps at clean calendar boundaries spanning [min, max]: Mondays when
- * the range is short (≤ ~16 weeks), otherwise the 1st of each month. Used so the
- * vertical gridlines land only on meaningful points (week/month starts) instead
- * of arbitrary axis positions. UTC throughout to match the ISO date keys.
- */
-function timeAxisGridTicks(min: number, max: number): number[] {
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
-  const byMonth = max - min > 16 * 7 * MS_DAY;
-  const out: number[] = [];
-  const d = new Date(min);
-  if (byMonth) {
-    // First of the month at or after `min`.
-    let cur = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-    if (cur < min) cur = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
-    for (let t = cur; t <= max; t = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth() + 1, 1)) out.push(t);
-  } else {
-    // Monday at or after `min` (getUTCDay: 0=Sun..6=Sat).
-    const day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-    const dow = new Date(day0).getUTCDay();
-    const toMonday = (8 - (dow === 0 ? 7 : dow)) % 7; // days forward to next Monday
-    for (let t = day0 + toMonday * MS_DAY; t <= max; t += 7 * MS_DAY) out.push(t);
-  }
-  return out;
-}
-
-/** Shared x time-axis options: gridlines on week/month boundaries computed ONCE
- * from the data range — NOT from the live zoom view — so panning/zooming is
- * smooth (no per-frame relayout) and only the user changes the view. Chart.js
- * draws just the ticks inside the current range and autoSkip thins them if dense.
- * `mirrored` tucks labels inside the plot (progress chart). */
+/** Shared x time-axis options. The vertical gridlines are drawn by
+ * {@link calendarGridPlugin} (from the live range, so they're smooth and always
+ * visible); here we only set stable LABEL ticks at calendar boundaries computed
+ * ONCE from the data range, so panning/zooming never recomputes the axis (the
+ * old jitter). `mirrored` tucks labels inside the plot (progress chart). */
 function timeXAxis(min: number, max: number, mirrored = false) {
   // Guard against empty data (min/max would be ±Infinity → breaks the scale):
   // only pin the range when both bounds are finite, else let Chart.js auto-range.
   const haveRange = Number.isFinite(min) && Number.isFinite(max) && max > min;
-  // Compute the calendar boundary ticks a single time, up front.
-  const gridTicks = haveRange ? timeAxisGridTicks(min, max) : [];
+  // Compute the calendar boundary label positions a single time, up front.
+  const labelTicks = haveRange ? calendarGridlines(min, max) : [];
   return {
     type: "linear" as const,
+    _calendar: true, // marks this axis for calendarGridPlugin to draw lines on
     ...(haveRange ? { min, max } : {}),
-    grid: { color: "#ececec", drawTicks: false },
-    // Fixed ticks (week/month boundaries) — independent of the zoom view, so the
-    // axis never recomputes mid-pan. Chart.js clips to the visible range itself.
+    grid: { display: false }, // vertical lines come from calendarGridPlugin
+    // Fixed label ticks — independent of the zoom view, so the axis never
+    // recomputes mid-pan. Chart.js clips labels to the visible range itself.
     afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
-      if (gridTicks.length >= 2) axis.ticks = gridTicks.map((value) => ({ value }));
+      if (labelTicks.length >= 2) axis.ticks = labelTicks.map((value) => ({ value }));
     },
     ticks: {
       color: "#6b7280",
@@ -3071,7 +3075,7 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
           position: "left",
           beginAtZero: true,
           max: setsAxisMax, // headroom so the sets bars stay short
-          grid: { color: "#ececec" },
+          grid: { color: "#d4d9e2" },
           // mirror: labels hang inside the plot area, off the left axis line.
           ticks: { color: "#6b7280", precision: 0, mirror: true, padding: 4, z: 2 },
         },
@@ -3386,8 +3390,8 @@ function renderCalcCurve(
         tooltip: { callbacks: { title: (items) => `${items[0]?.label} reps`, label: (it) => `${it.formattedValue} kg` } },
       },
       scales: {
-        x: { title: { display: true, text: "reps" }, grid: { color: "#ececec" } },
-        y: { title: { display: true, text: "bar weight (kg)" }, grid: { color: "#ececec" } },
+        x: { title: { display: true, text: "reps" }, grid: { color: "#d4d9e2" } },
+        y: { title: { display: true, text: "bar weight (kg)" }, grid: { color: "#d4d9e2" } },
       },
     },
   });
