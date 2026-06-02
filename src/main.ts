@@ -69,19 +69,29 @@ import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, f
 // phones; make it available before the plugin registers.
 (globalThis as unknown as { Hammer?: unknown }).Hammer ??= Hammer;
 
+// Per-chart opt-in for the calendar gridline plugin, via the standard plugin
+// options channel: `plugins: { calendarGrid: { on: true } }`.
+declare module "chart.js" {
+  interface PluginOptionsByType<TType extends ChartType> {
+    calendarGrid?: { on?: boolean };
+  }
+}
+
 /**
  * Vertical calendar gridlines for the time charts. Drawn on the canvas every
  * frame from the LIVE visible x-range (scale.min..max), so they stay put while
  * panning, slide with the data, and stay sensibly dense at any zoom — without
  * touching the axis ticks (which would force a relayout and the old jitter).
- * Targets only the axes built by {@link timeXAxis}, marked with `_calendar`.
+ * Opt-in per chart via the plugin options (`options` arg is the resolved
+ * `plugins.calendarGrid`, guaranteed present by Chart.js).
  */
-const calendarGridPlugin: Plugin<ChartType> = {
+const calendarGridPlugin: Plugin<ChartType, { on?: boolean }> = {
   id: "calendarGrid",
-  beforeDatasetsDraw(chart) {
+  defaults: { on: false },
+  beforeDatasetsDraw(chart, _args, options) {
+    if (!options?.on) return;
     const x = chart.scales.x;
-    if (!x || !(x.options as { _calendar?: boolean })._calendar) return;
-    if (typeof x.min !== "number" || typeof x.max !== "number") return;
+    if (!x || typeof x.min !== "number" || typeof x.max !== "number") return;
     const { ctx, chartArea } = chart;
     ctx.save();
     ctx.strokeStyle = "#d4d9e2";
@@ -1623,6 +1633,7 @@ function renderCompareChart() {
               },
             },
           },
+          calendarGrid: { on: true },
           // Scroll/zoom like the other graphs: drag to pan, wheel/pinch to zoom (x).
           zoom: {
             pan: { enabled: true, mode: "x" },
@@ -1669,6 +1680,7 @@ function renderCompareChart() {
       plugins: {
         legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: { title: (items) => tsLabel(Number(items[0]?.parsed.x)), label: (it) => `${it.dataset.label}: ${it.formattedValue} kg` } },
+        calendarGrid: { on: true },
         zoom: {
           pan: { enabled: true, mode: "x" },
           zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
@@ -2956,7 +2968,6 @@ function timeXAxis(min: number, max: number, mirrored = false) {
   const labelTicks = haveRange ? calendarGridlines(min, max) : [];
   return {
     type: "linear" as const,
-    _calendar: true, // marks this axis for calendarGridPlugin to draw lines on
     ...(haveRange ? { min, max } : {}),
     grid: { display: false }, // vertical lines come from calendarGridPlugin
     // Fixed label ticks — independent of the zoom view, so the axis never
@@ -3058,6 +3069,7 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
       // chart already says what each colour is, so every pixel goes to the plot.
       plugins: {
         legend: { display: false },
+        calendarGrid: { on: true },
         tooltip: {
           callbacks: {
             title: (items) => {

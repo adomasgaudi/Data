@@ -38,6 +38,15 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.4",
+    title: "gridline-plugin-optin",
+    sp: 2,
+    note: "Make the gridline plugin reliably draw (it was gated on a marker Chart.js may drop).",
+    details: [
+      "The calendar-gridline plugin now opts in through the standard plugin-options channel and reads its options from the hook arg, instead of a custom scale marker that wasn't guaranteed to survive — so the vertical lines actually render.",
+    ],
+  },
+  {
     version: "b.1.12.3",
     title: "workout-dow-letter",
     sp: 1,
