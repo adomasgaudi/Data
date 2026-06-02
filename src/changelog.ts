@@ -40,13 +40,14 @@ export const CHANGELOG: Release[] = [
   {
     version: "b.1.10–b.1.20",
     title: "svg-charts-and-app-polish",
-    sp: 90,
+    sp: 93,
     note: "The b.1.10–b.1.20 run (current): the in-house SVG chart engine + Chart.js removal, dark mode, Group/Stats views, effort-SP, and lots of polish. New releases land here.",
     details: [
       "Charts rebuilt from scratch on an SVG engine (pan/pinch-zoom, tooltips, themed) — every chart migrated and Chart.js dropped.",
       "Dark mode; Group + Stats views; effort-SP dropdown; alone-tags; multi-category buckets; compare-picker redesign; List/Workouts tweaks.",
     ],
     children: [
+      { version: "b.1.13.14", sp: 3, note: "Per-set graph shows EVERY set of each day (high-rep sets as a marker); ‘Legs (all)’ category hidden from lists with a Settings toggle." },
       { version: "b.1.13.13", sp: 2, note: "Drill-in per-set graph: one bar per set (own weight → own 1RM), not a merged day range." },
       { version: "b.1.13.12", sp: 2, note: "Per-axis pinch (X-only / Y-only stretch) on every chart; Shift/Alt+wheel on desktop." },
       { version: "b.1.13.11", sp: 2, note: "List & stats defaults to By-category (collapsed); rep-max moved to a visible bar." },

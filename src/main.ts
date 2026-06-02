@@ -76,6 +76,7 @@ const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
+  showLegsAll: $<HTMLInputElement>("showLegsAll"),
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -896,6 +897,9 @@ let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
 let exerciseSort: "sets" | "category" | "tier" = "category";
+// "Legs (all)" is a broad umbrella that overlaps the narrower leg splits, so it's
+// hidden from the By-category list by default; a Settings toggle brings it back.
+let showLegsAll = (() => { try { return localStorage.getItem("colosseum.legsAll") === "1"; } catch { return false; } })();
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
@@ -1382,8 +1386,10 @@ function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): (T & { _ca
   // render emits the right header and the click→exercise map still lines up.
   const buckets = new Map<string, (T & { _cat?: string })[]>();
   for (const c of counts)
-    for (const cat of exerciseCategories(c.exerciseName))
+    for (const cat of exerciseCategories(c.exerciseName)) {
+      if (cat === "Legs (all)" && !showLegsAll) continue; // hidden unless toggled on in Settings
       (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push({ ...c, _cat: cat });
+    }
   // Busiest category first; within LIST_CATEGORIES order for ties.
   return [...buckets.entries()]
     .sort((a, b) =>
@@ -2083,19 +2089,26 @@ function renderExerciseProgressChart(exName: string) {
   if (exProgressView === "perset") {
     // One bar PER SET, each its own column (chronological) so warmups and the top
     // set never merge into a single "range of weights". Bottom = that set's
-    // weight, top = that same set's own estimated 1RM. X is a sequential index;
-    // the labels/tooltip map it back to the set's date.
-    const sets = recs
-      .filter((r) => r.username === username && r.exerciseName === exName)
+    // weight, top = that same set's own estimated 1RM. Shows EVERY logged set of
+    // the day (incl. dropsets); sets above the rep cap have no 1RM so they show
+    // as a flat marker at their weight. X is a sequential index; labels/tooltip
+    // map it back to the set's date.
+    const sets = computedRecords()
+      .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
       .slice()
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
     const points: SvgPoint[] = [];
     const dateByIdx: string[] = [];
     for (const s of sets) {
-      const e1rm = addedWeight1RM(s, formula);
-      if (e1rm === null) continue;
       const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-      points.push({ x: points.length, lo: added, hi: e1rm, meta: `${fmt(added)}×${s.reps ?? 0} → ${fmt(e1rm)} 1RM` });
+      const e1rm = addedWeight1RM(s, formula);
+      const reps = s.reps ?? 0;
+      points.push({
+        x: points.length,
+        lo: added,
+        hi: e1rm ?? added, // no estimable 1RM (high reps) → flat marker at the weight
+        meta: e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`,
+      });
       dateByIdx.push(s.date);
     }
     if (points.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
@@ -2107,7 +2120,7 @@ function renderExerciseProgressChart(exName: string) {
       formatX: dateAt, formatTipX: dateAt,
     });
     els.exerciseProgressNote.textContent =
-      "One bar = one set (oldest → newest): the bottom is that set's weight, the top is that same set's estimated 1RM. Warmups and top sets are separate bars — not a merged range.";
+      "Every set is its own bar (oldest → newest): bottom = the set's weight, top = that set's estimated 1RM. All sets of each day are shown (high-rep sets show as a marker at their weight).";
     return;
   }
 
@@ -3218,6 +3231,14 @@ async function init() {
   els.themeBtn.addEventListener("click", () =>
     setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
   );
+
+  // "Legs (all)" category visibility in the By-category list (off by default).
+  els.showLegsAll.checked = showLegsAll;
+  els.showLegsAll.addEventListener("change", () => {
+    showLegsAll = els.showLegsAll.checked;
+    try { localStorage.setItem("colosseum.legsAll", showLegsAll ? "1" : "0"); } catch { /* ignore */ }
+    renderExercisesPage();
+  });
 
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
