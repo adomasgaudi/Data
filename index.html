@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.28.0</span></h1>
+      <h1>Colosseum <span class="version">v0.29.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -718,10 +718,11 @@
         <section class="panel">
           <h2>Data — raw vs processed</h2>
           <p class="muted" id="dataIntro" style="margin: 0 0 1rem">
-            See exactly what the dashboard reads. <strong>Original</strong> is the CSV as exported,
-            untouched. <strong>Processed</strong> is the table every number is computed from — after
-            merging duplicate exercise names and turning logged weight into the bodyweight-inclusive
-            load used for 1RM. Compare them to spot any mistake.
+            See exactly what the dashboard reads and derives. <strong>Original</strong> is the CSV as
+            exported, untouched. <strong>Processed</strong> is a tracking table exposing every
+            variable and function behind a set — coefficient, effective load, each 1RM formula, the
+            added-weight 1RM, volume, category — so any wrong number traces to the exact step.
+            Grouped by athlete · exercise · date.
           </p>
           <div class="data-views" role="group" aria-label="Which table to show">
             <button type="button" class="data-viewbtn is-active" data-dataview="processed">Processed</button>

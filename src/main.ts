@@ -41,6 +41,7 @@ import {
   setVolume,
   effectiveLoad,
   linearFit,
+  MAX_1RM_REPS,
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
@@ -2752,24 +2753,60 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     });
     return { header, rows };
   }
-  // Processed: the records every number is computed from. We show the displayed
-  // (added) weight AND the bodyweight-inclusive load used for the 1RM, plus the
-  // raw exercise name when canonicalisation renamed it — so changes are visible.
+  // Processed: a tracking table that lays bare EVERY variable and function the
+  // app derives for a set, in the order they're computed — so a wrong number can
+  // be traced to the exact step. Each column maps to a named function/value:
+  //   raw_name        — original logged exercise name (before canonicalisation)
+  //   bw_coeff        — coeffFor(): how much bodyweight the lift loads
+  //   logged_w        — weight as logged
+  //   real_added      — realPullupWeight(): assisted-machine weight halved
+  //   bodyweight      — the bodyweight used (per-set log, or athlete table)
+  //   bw_source       — which of the two the Setting picked
+  //   eff_load        — effectiveLoad() = coeff*bodyweight + real_added (1RM input)
+  //   reps / capped   — logged reps, and reps capped at MAX_1RM_REPS for 1RM
+  //   epley/brzycki/nuzzo — each estimate1RM formula on the effective load
+  //   added_1RM       — addedWeight1RM(): the headline number (bw share peeled off)
+  //   volume          — setVolume() = logged_w * reps
+  //   dropset/percentile/category/tier/notes — flags & classification
   const header = [
-    "bodyweight", "raw_exercise_name", "weight", "weight_for_1RM", "reps",
-    "notes", "dropset", "percentile",
+    "raw_name", "bw_coeff", "logged_w", "real_added", "bodyweight", "bw_source",
+    "eff_load", "reps", "capped", "epley", "brzycki", "nuzzo", "added_1RM",
+    "volume", "dropset", "percentile", "category", "tier", "notes",
   ];
+  const fromTable = els.bwSource.value !== "perset";
   const rows = computedRecords().map((r) => {
-    const added = r.origWeight !== undefined ? r.origWeight : r.weight;
+    // r.weight is already the effective (bw-inclusive) load; r.origWeight is what
+    // was logged. Recompute the named intermediates for full transparency.
+    const logged = r.origWeight !== undefined ? r.origWeight : r.weight;
+    const coeff = coeffFor(r.exerciseName);
+    const realAdded = realPullupWeight(r.exerciseName, logged);
+    const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
+    const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)
+    const cappedReps = r.reps === null ? null : Math.min(r.reps, MAX_1RM_REPS);
     return {
       user: r.user,
       date: r.date,
       exercise: r.exerciseName,
       cells: [
-        dataNum(r.bodyweight),
         r.originalExerciseName && r.originalExerciseName !== r.exerciseName ? r.originalExerciseName : "",
-        dataNum(added), dataNum(r.weight), dataNum(r.reps),
-        r.notes, r.dropset ? "TRUE" : "", dataNum(r.percentile),
+        dataNum(coeff),
+        dataNum(logged),
+        realAdded === logged ? "" : dataNum(realAdded),
+        dataNum(bw),
+        coeff > 0 ? (fromTable ? "table" : "per-set") : "—",
+        dataNum(effLoad),
+        dataNum(r.reps),
+        cappedReps !== r.reps ? dataNum(cappedReps) : "",
+        dataNum(epley1RM(effLoad, cappedReps)),
+        dataNum(brzycki1RM(effLoad, cappedReps)),
+        dataNum(nuzzo1RM(effLoad, cappedReps)),
+        dataNum(addedWeight1RM(r, currentFormula())),
+        dataNum(setVolume(logged, r.reps)),
+        r.dropset ? "TRUE" : "",
+        dataNum(r.percentile),
+        exerciseCategory(r.exerciseName),
+        exerciseTier(r.exerciseName),
+        r.notes,
       ],
     };
   });
@@ -2801,7 +2838,7 @@ function renderDataTab() {
   let prevKey: string | null = null;
   const bodyParts: string[] = [];
   for (const row of pageRows) {
-    const key = `${row.user} ${row.date} ${row.exercise}`;
+    const key = `${row.user} ${row.date} ${row.exercise}`;
     if (key !== prevKey) {
       bodyParts.push(
         `<tr class="data-group"><td colspan="${cols}">` +
