@@ -10,6 +10,8 @@
   --accent-soft: rgba(40, 78, 134, 0.07);
   --gold: #b8902f;
   --gold-soft: rgba(184, 144, 47, 0.12);
+  /* Muted terracotta for destructive actions — sits in the same warm palette. */
+  --danger: #a23b3b;
 }
 * { box-sizing: border-box; }
 body {
@@ -164,7 +166,7 @@ body {
 .ex-sort { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .ex-sort-btn {
   padding: 6px 12px; font-size: 0.8rem; font-weight: 600; color: var(--muted);
-  background: var(--card); border: 0; cursor: pointer;
+  background: var(--bg); border: 0; cursor: pointer;
 }
 .ex-sort-btn + .ex-sort-btn { border-left: 1px solid var(--line); }
 .ex-sort-btn:hover { color: var(--text); }
@@ -326,7 +328,7 @@ body {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 1.1rem; line-height: 1; padding: 0 4px; border-radius: 6px;
 }
-.ecalc-del:hover { color: #c0392b; }
+.ecalc-del:hover { color: var(--danger); }
 .ecalc-addrow {
   margin-top: 0.5rem; background: var(--accent-soft); border: 1px solid var(--line);
   color: var(--accent); font: inherit; font-size: 0.82rem; font-weight: 600;

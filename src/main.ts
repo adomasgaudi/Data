@@ -182,6 +182,15 @@ const fmt = (n: number): string => {
   return Number(n.toPrecision(sf)).toLocaleString();
 };
 
+/** A 0..1 fraction as a whole-number percent, e.g. 0.6 → "60%". One place so
+ * every percentage (coefficients, percentile, body fat, training mix) reads the
+ * same way across the app. */
+const pct = (fraction: number): string => `${Math.round(fraction * 100)}%`;
+
+/** A bodyweight-multiple, always 2 dp, e.g. "1.25 BW". Single source so the
+ * leaderboard, per-athlete detail and Test tab agree. */
+const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
+
 /** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header. */
 const wr = (weight: number | null, reps: number | null): string =>
   weight === null ? "—" : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
@@ -525,7 +534,7 @@ function renderLeaderboard() {
       .map((e): LbRow | null => {
         const ratio = perBw(e.username, e.e1rm);
         if (ratio === null) return null; // can't rank without a bodyweight on file
-        return { user: e.user, username: e.username, value: ratio, valueText: `${ratio.toFixed(2)} BW`, best: wr(e.weight, e.reps), date: e.date, e1rm: e.e1rm, ratio };
+        return { user: e.user, username: e.username, value: ratio, valueText: bwMult(ratio), best: wr(e.weight, e.reps), date: e.date, e1rm: e.e1rm, ratio };
       })
       .filter((r): r is LbRow => r !== null)
       .sort((a, b) => b.value - a.value);
@@ -601,7 +610,7 @@ function onLeaderboardRowClick(e: MouseEvent) {
     `<div class="lb-detail">` +
     item("Best set", r.best) +
     item("Est. 1RM", `${fmt(r.e1rm)} kg`) +
-    item("Per bodyweight", r.ratio === null ? "—" : `${r.ratio.toFixed(2)} BW`) +
+    item("Per bodyweight", r.ratio === null ? "—" : bwMult(r.ratio)) +
     item("Achieved", shortDate(r.date)) +
     `</div>`;
   insertDetail(row, 3, detail);
@@ -847,7 +856,7 @@ function renderAthleteProfile() {
     els.athleteProfile.textContent = "No profile on file";
     return;
   }
-  const specs = [`${p.weight} kg`, `${p.height} cm`, `${Math.round(p.bodyFat * 100)}% body fat`];
+  const specs = [`${p.weight} kg`, `${p.height} cm`, `${pct(p.bodyFat)} body fat`];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
 
@@ -1001,7 +1010,7 @@ function renderMuscleMap() {
     .map(
       (c) =>
         `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[c]}"></span>` +
-        `${c} <span class="muted">${Math.round((byCat.get(c) ?? 0) * 100)}%</span></span>`,
+        `${c} <span class="muted">${pct(byCat.get(c) ?? 0)}</span></span>`,
     )
     .join("");
 
@@ -1028,7 +1037,7 @@ function athleteContext(): string {
   return [
     `Athlete: ${athleteLabel()}`,
     p
-      ? `Body: ${p.weight} kg, ${p.height} cm, ${Math.round(p.bodyFat * 100)}% body fat${p.age != null ? `, age ${p.age}` : ""}`
+      ? `Body: ${p.weight} kg, ${p.height} cm, ${pct(p.bodyFat)} body fat${p.age != null ? `, age ${p.age}` : ""}`
       : "Body: not on file",
     `Training: ${workouts.length} sessions, ${totalSets} sets, latest ${workouts[0]?.date ?? "n/a"}`,
     `Most-trained: ${counts.slice(0, 6).map((c) => `${c.exerciseName} (${c.count} sets)`).join(", ") || "none"}`,
@@ -1434,7 +1443,7 @@ function renderExerciseDetail(exName: string) {
   const coeff = coeffFor(exName);
   const bwPart =
     coeff > 0
-      ? `<span class="ex-bwpart">Bodyweight part: ${Math.round(coeff * 100)}%</span>`
+      ? `<span class="ex-bwpart">Bodyweight part: ${pct(coeff)}</span>`
       : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
   els.athleteTitle.innerHTML =
     `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}${originBadge(exName)} ${bwPart}`;
@@ -2703,7 +2712,7 @@ function renderTest() {
       "Per BW",
       addedWeight1RM === null || bw <= 0
         ? "needs 1RM & BW"
-        : eq(`${f2(addedWeight1RM)} ÷ ${f2(bw)}`, perBw === null ? null : `${perBw.toFixed(2)} BW`),
+        : eq(`${f2(addedWeight1RM)} ÷ ${f2(bw)}`, perBw === null ? null : bwMult(perBw)),
     ),
   );
   els.calcOut.innerHTML = rows.join("");
