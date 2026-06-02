@@ -156,7 +156,7 @@ const els = {
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
-  withMeOnly: $<HTMLInputElement>("withMeOnly"),
+  aloneOnly: $<HTMLInputElement>("aloneOnly"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
   addExerciseList: $("addExerciseList"),
@@ -395,26 +395,26 @@ function saveTeamPicks(usernames: string[]) {
   }
 }
 
-// ---- "Done with me" workout tags: per (athlete, day), remembered across reloads.
-const WITHME_STORE_KEY = "colosseum.withMe.v1";
-let withMeTags = new Set<string>();
+// ---- "Done alone" workout tags: per (athlete, day), remembered across reloads.
+const ALONE_STORE_KEY = "colosseum.aloneTags.v1";
+let aloneTags = new Set<string>();
 
 /** Stable tag key for a workout: the athlete + the session's ISO day. */
-const withMeKey = (date: string): string => `${els.athlete.value}|${date}`;
+const aloneKey = (date: string): string => `${els.athlete.value}|${date}`;
 
-function loadWithMe() {
+function loadAlone() {
   try {
-    const raw = localStorage.getItem(WITHME_STORE_KEY);
+    const raw = localStorage.getItem(ALONE_STORE_KEY);
     const arr = raw ? JSON.parse(raw) : null;
-    withMeTags = new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : []);
+    aloneTags = new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : []);
   } catch {
-    withMeTags = new Set();
+    aloneTags = new Set();
   }
 }
 
-function saveWithMe() {
+function saveAlone() {
   try {
-    localStorage.setItem(WITHME_STORE_KEY, JSON.stringify([...withMeTags]));
+    localStorage.setItem(ALONE_STORE_KEY, JSON.stringify([...aloneTags]));
   } catch {
     /* storage may be unavailable — tags still apply this session */
   }
@@ -989,6 +989,19 @@ const CATEGORY_COLORS: Record<TrainingCategory, string> = {
   Other: "#cbd5e1",
 };
 
+/** Colour for a LIST_CATEGORIES bucket (the new multi-category set used by the
+ * By-category list, Group view and compare picks). Muscle groups reuse
+ * CATEGORY_COLORS; the pattern/leg-split buckets get their own shades. */
+const LIST_CATEGORY_COLORS: Record<string, string> = {
+  "Squat pattern": "#1f6f8b",
+  "Deadlift pattern": "#3a4a86",
+  "Deadlift accessory": "#7a6cae",
+  "Legs (all)": "#284e86",
+  "Legs (quads/glutes/hams)": "#2f6fb0",
+};
+const listCatColor = (c: string): string =>
+  LIST_CATEGORY_COLORS[c] ?? CATEGORY_COLORS[c as TrainingCategory] ?? CATEGORY_COLORS.Other;
+
 /** Compact "what they've been doing" stat chips for the selected athlete. */
 function renderAthleteStats() {
   const s = athleteSummary(data.records, els.athlete.value);
@@ -1409,17 +1422,20 @@ function renderCompareSection() {
   for (const name of [...compareSelected]) if (!exercises.includes(name)) compareSelected.delete(name);
   if (compareSelected.size === 0) for (const name of exercises.slice(0, 2)) compareSelected.add(name);
 
-  // Category quick-picks: only categories this athlete actually trains, most-
-  // trained first. A button toggles every exercise in that category at once.
-  const catSets = new Map<TrainingCategory, number>();
-  for (const c of counts) catSets.set(exerciseCategory(c.exerciseName), (catSets.get(exerciseCategory(c.exerciseName)) ?? 0) + c.count);
-  const cats = TRAINING_CATEGORIES.filter((c) => catSets.has(c)).sort((a, b) => (catSets.get(b) ?? 0) - (catSets.get(a) ?? 0));
+  // Category quick-picks: the same multi-membership buckets as the By-category
+  // list (Squat pattern, Legs (all), …), only those this athlete trains, busiest
+  // first. A button toggles every exercise in that bucket at once.
+  const catSets = new Map<string, number>();
+  for (const c of counts)
+    for (const cat of exerciseCategories(c.exerciseName))
+      catSets.set(cat, (catSets.get(cat) ?? 0) + c.count);
+  const cats = LIST_CATEGORIES.filter((c) => catSets.has(c)).sort((a, b) => (catSets.get(b) ?? 0) - (catSets.get(a) ?? 0));
   els.compareCats.innerHTML = cats
     .map((c) => {
-      const members = exercises.filter((e) => exerciseCategory(e) === c);
+      const members = exercises.filter((e) => exerciseCategories(e).includes(c));
       const on = members.length > 0 && members.every((e) => compareSelected.has(e));
       return `<button type="button" class="compare-group${on ? " is-active" : ""}" data-cat="${escapeHtml(c)}" ` +
-        `style="--gc:${CATEGORY_COLORS[c]}">${escapeHtml(c)}</button>`;
+        `style="--gc:${listCatColor(c)}">${escapeHtml(c)}</button>`;
     })
     .join("");
 
@@ -1483,7 +1499,7 @@ function compareToggleCategory(cat: string) {
   const username = els.athlete.value;
   const members = exerciseCountsForUser(data.records, username)
     .map((c) => c.exerciseName)
-    .filter((e) => exerciseCategory(e) === cat);
+    .filter((e) => exerciseCategories(e).includes(cat));
   const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
   for (const e of members) {
     if (allOn) compareSelected.delete(e);
@@ -2245,9 +2261,9 @@ function onExerciseRowClick(e: MouseEvent) {
 
 // ---- Workouts page (one row per day or week, 20/page, expandable) ----
 function buildWorkoutGroups(): WorkoutGroup[] {
-  // "Only with me" keeps just the sessions the user tagged as done with them.
-  const onlyMine = els.withMeOnly.checked;
-  const keep = (g: WorkoutGroup) => !onlyMine || (!g.rest && withMeTags.has(withMeKey(g.date)));
+  // "Only alone" keeps just the sessions the user tagged as trained alone.
+  const onlyAlone = els.aloneOnly.checked;
+  const keep = (g: WorkoutGroup) => !onlyAlone || (!g.rest && aloneTags.has(aloneKey(g.date)));
   if (els.workoutView.value === "week") {
     return weeksForUser(data.records, els.athlete.value)
       .map((w) => ({
@@ -2595,10 +2611,10 @@ function renderWorkoutsPage() {
       const did = g.exercises
         .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
         .join("<br>");
-      const tagged = withMeTags.has(withMeKey(g.date));
+      const tagged = aloneTags.has(aloneKey(g.date));
       const tagBtn =
-        `<button type="button" class="wo-withme${tagged ? " is-on" : ""}" data-withme="${escapeHtml(g.date)}" ` +
-        `title="${tagged ? "Done with me — tap to untag" : "Tag as done with me"}">+me</button>`;
+        `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
+        `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`;
       return (
         `<tr class="wo-row" data-index="${abs}"><td>` +
         `<div class="wo-date"><span class="caret">▸</span>${g.label}${tagBtn}</div>` +
@@ -2614,14 +2630,14 @@ function renderWorkoutsPage() {
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
-  // "+me" tag toggle — tag/untag this session as done with the user, then re-render
-  // (so the chip + any active "Only with me" filter update). Doesn't expand the row.
-  const tagBtn = target.closest<HTMLButtonElement>(".wo-withme");
-  if (tagBtn?.dataset.withme) {
-    const key = withMeKey(tagBtn.dataset.withme);
-    if (withMeTags.has(key)) withMeTags.delete(key);
-    else withMeTags.add(key);
-    saveWithMe();
+  // "alone" tag toggle — tag/untag this session as trained alone, then re-render
+  // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
+  const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
+  if (tagBtn?.dataset.alone) {
+    const key = aloneKey(tagBtn.dataset.alone);
+    if (aloneTags.has(key)) aloneTags.delete(key);
+    else aloneTags.add(key);
+    saveAlone();
     renderWorkoutsPage();
     return;
   }
@@ -3420,7 +3436,7 @@ async function init() {
   // Fold in any hand-logged sets saved on this device (the Add tab).
   csvRecordCount = data.records.length;
   mergeManualSets();
-  loadWithMe(); // "done with me" workout tags saved on this device
+  loadAlone(); // "trained alone" workout tags saved on this device
 
   // Build the leaderboard exercise picker (see populateExercisePicker). By
   // default it lists PURE exercises only; the grouped/scaled estimates appear
@@ -3648,7 +3664,7 @@ async function init() {
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.withMeOnly.addEventListener("change", () => {
+  els.aloneOnly.addEventListener("change", () => {
     workoutsPage = 0;
     renderWorkoutsPage();
   });

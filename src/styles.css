@@ -818,14 +818,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* In the workouts list the date sits as a small header above that entry's exercises. */
 .wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
 .wo-did { line-height: 1.5; }
-/* "+me" tag toggle on each session — faint until tagged, accent when on. */
-.wo-withme {
+/* "alone" tag toggle on each session — faint until tagged, accent when on. */
+.wo-alone {
   margin-left: 0.5rem; font: inherit; font-size: 0.68rem; font-weight: 700;
   border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
-.wo-withme:hover { border-color: var(--accent); color: var(--accent); }
-.wo-withme.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wo-alone:hover { border-color: var(--accent); color: var(--accent); }
+.wo-alone.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }

@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.1",
+    title: "compare-cats-alone-tag",
+    sp: 2,
+    note: "Compare-graph categories use the current multi-category buckets; workout tag is now ‘alone’.",
+    details: [
+      "Compare graph ‘By category’ picks now match the By-category list / Group view buckets (Squat pattern, Legs (all), …), with multi-membership.",
+      "The workout session tag is now ‘alone’ (filter: ‘Only alone’) instead of ‘with me’.",
+    ],
+  },
+  {
     version: "b.1.12.0",
     title: "with-me-tags-effort-sp",
     sp: 5,
