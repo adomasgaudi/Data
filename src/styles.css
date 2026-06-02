@@ -211,7 +211,9 @@ main { padding-bottom: 5rem; }
 .svgc { position: relative; width: 100%; }
 .svgc-plot { width: 100%; touch-action: none; user-select: none; cursor: grab; }
 .svgc-plot:active { cursor: grabbing; }
-.svgc-svg { display: block; }
+/* touch-action MUST be on the SVG too — it's the actual touch target, so a phone
+   would otherwise scroll the page instead of letting the chart pan/zoom. */
+.svgc-svg { display: block; touch-action: none; }
 .svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); }
 .svgc-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .svgc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
@@ -230,7 +232,7 @@ main { padding-bottom: 5rem; }
 /* Graph demo (test bed) — from-scratch SVG chart. */
 .gd-box { width: 100%; touch-action: none; user-select: none; cursor: grab; }
 .gd-box:active { cursor: grabbing; }
-.gd-svg { display: block; }
+.gd-svg { display: block; touch-action: none; }
 .gd-legend { display: flex; gap: 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); }
 .gd-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .gd-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }

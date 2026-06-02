@@ -12,42 +12,7 @@
  * are unit-tested; this module is the rendering + interaction shell.
  */
 import { calendarGridlines, niceTicks } from "./chartAxis";
-
-export interface SvgPoint {
-  x: number;
-  y?: number; // line
-  lo?: number; // range bottom
-  hi?: number; // range top
-  /** Extra text shown in the tooltip (e.g. "120×5"). */
-  meta?: string;
-}
-export interface SvgSeries {
-  name: string;
-  color: string;
-  type: "line" | "range";
-  points: SvgPoint[];
-}
-export interface SvgChartConfig {
-  series: SvgSeries[];
-  height?: number;
-  /** Force the y-axis to include 0. */
-  yBeginAtZero?: boolean;
-  yUnit?: string;
-  xKind?: "time" | "linear";
-  /** Axis tick label for an x value. */
-  formatX?: (x: number) => string;
-  /** Tooltip header for an x value (defaults to formatX). */
-  formatTipX?: (x: number) => string;
-  /** Draw axis values inside the plot (wider) vs in outer margins. */
-  insideLabels?: boolean;
-  /** Allow pan/zoom (default true). */
-  interactive?: boolean;
-  /** Note shown under the legend. */
-  note?: string;
-}
-export interface SvgChart {
-  update(cfg: Partial<SvgChartConfig>): void;
-}
+import type { SvgPoint, SvgSeries, SvgChartConfig, SvgChart } from "./svgChart";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const dateLabel = (t: number) => {

@@ -38,6 +38,17 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.3",
+    title: "svg-touch-zoom-bars",
+    sp: 5,
+    note: "Fix touch pan/zoom on the new charts (one finger pans, two fingers pinch-zoom); migrate the Workouts chart too.",
+    details: [
+      "Charts wouldn't pan/zoom on a phone: the touch landed on the SVG (touch-action wasn't ‘none’ there) and there was no pinch handler. Now touch-action is set on the SVG and the engine handles one-finger pan + two-finger pinch-zoom (plus mouse drag + wheel).",
+      "Engine gained bar series, an optional right y-axis, and x-only pan; the crowded month labels are thinned everywhere now.",
+      "Workouts ‘Sets over time’ moved onto the engine (Chart.js dropped there).",
+    ],
+  },
+  {
     version: "b.1.13.2",
     title: "compare-lab-thin-months",
     sp: 2,

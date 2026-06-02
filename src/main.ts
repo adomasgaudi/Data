@@ -6,7 +6,7 @@
 import { Chart, registerables } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
-import { calendarGridlines, MS_DAY } from "./chartAxis";
+import { calendarGridlines } from "./chartAxis";
 import { mountGraphDemo } from "./graphDemo";
 import { mountGraphAdvanced } from "./graphAdvanced";
 import { mountSvgChart, type SvgChart, type SvgSeries } from "./svgChart";
@@ -209,7 +209,7 @@ let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
 let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let cmpLabSvg: SvgChart | null = null; // "Compare (lab)" test page (lab engine variant)
-let workoutSetsChart: Chart | null = null; // Workouts view: all sets over time
+let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let compareShowAll = false; // false → only top exercises + selected; true → every one
@@ -2468,10 +2468,8 @@ function jumpToWorkoutDate(iso: string) {
  * idea as the compare graph, but mixing every exercise. Collapsed by default.
  */
 function renderWorkoutSetsChart() {
-  workoutSetsChart?.destroy();
-  workoutSetsChart = null;
-  const canvas = document.getElementById("workoutSetsChart") as HTMLCanvasElement | null;
-  if (!canvas) return;
+  const box = document.getElementById("workoutSetsChart");
+  if (!box) return;
 
   const username = els.athlete.value;
   const formula = currentFormula();
@@ -2479,77 +2477,36 @@ function renderWorkoutSetsChart() {
   const mine = recs.filter((r) => r.username === username);
   if (mine.length === 0) {
     els.workoutSetsNote.textContent = "No sets with a usable 1RM yet.";
+    if (workoutSetsSvg) workoutSetsSvg.update({ series: [] });
     return;
   }
 
-  // Colour the athlete's 9 most-trained exercises; everything else is "Other".
+  // Colour the athlete's most-trained exercises; everything else is "Other".
   const ranked = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
-  const named = new Map<string, string>(); // exercise -> colour
+  const named = new Map<string, string>();
   ranked.slice(0, COMPARE_COLORS.length - 1).forEach((name, i) => named.set(name, COMPARE_COLORS[i]!));
   const OTHER = "#9aa3b2";
-
   const ts = (d: string) => Date.parse(d);
-  const r1 = (n: number) => Math.round(n * 10) / 10;
-  // One dataset per colour group, so the legend has one entry each.
-  const groups = new Map<string, { color: string; bars: { x: number; y: [number, number]; reps: number; ex: string }[] }>();
-  let tMin = Infinity, tMax = -Infinity;
+
+  type Bar = { x: number; lo: number; hi: number; meta: string };
+  const groups = new Map<string, { color: string; points: Bar[] }>();
   for (const s of mine) {
     const e1rm = addedWeight1RM(s, formula);
     if (e1rm === null) continue;
     const label = named.has(s.exerciseName) ? s.exerciseName : "Other";
     const color = named.get(s.exerciseName) ?? OTHER;
-    const g = groups.get(label) ?? groups.set(label, { color, bars: [] }).get(label)!;
+    const g = groups.get(label) ?? groups.set(label, { color, points: [] }).get(label)!;
     const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-    const x = ts(s.date);
-    if (x < tMin) tMin = x;
-    if (x > tMax) tMax = x;
-    g.bars.push({ x, y: [r1(added), r1(e1rm)], reps: s.reps ?? 0, ex: s.exerciseName });
+    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${exerciseCode(s.exerciseName)} ×${s.reps ?? 0}` });
   }
-
-  // Named groups in popularity order, then Other last.
   const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
-  const datasets = order.map((label) => {
-    const g = groups.get(label)!;
-    return {
-      label,
-      data: g.bars as unknown as { x: number; y: number }[],
-      backgroundColor: g.color,
-      borderSkipped: false,
-      barThickness: 4,
-      minBarLength: 2,
-    };
-  });
+  const series: SvgSeries[] = order.map((label) => ({ name: label, color: groups.get(label)!.color, type: "range", points: groups.get(label)!.points }));
 
-  workoutSetsChart = new Chart(canvas, {
-    type: "bar",
-    data: { datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: {
-          callbacks: {
-            title: (items) => tsLabel(Number(items[0]?.parsed.x)),
-            label: (it) => {
-              const raw = it.raw as { y: [number, number]; reps: number; ex: string };
-              return `${raw.ex}: ${fmt(raw.y[0])} kg × ${raw.reps} → ${fmt(raw.y[1])} kg 1RM`;
-            },
-          },
-        },
-        zoom: {
-          pan: { enabled: true, mode: "x" },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
-        },
-      },
-      scales: {
-        x: timeXAxis(tMin - MS_DAY, tMax + MS_DAY),
-        y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#d4d9e2" } },
-      },
-    },
-  });
+  const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
+  if (!workoutSetsSvg) workoutSetsSvg = mountSvgChart(box, config);
+  else workoutSetsSvg.update(config);
   els.workoutSetsNote.textContent =
-    `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel/pinch to zoom.`;
+    `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel to zoom · tap a bar.`;
 }
 
 function renderWorkoutsPage() {
