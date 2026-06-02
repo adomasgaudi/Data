@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.33.0</span></h1>
+      <h1>Colosseum <span class="version">v0.34.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -160,6 +160,19 @@
               <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
               <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
             </div>
+            <!-- Compare several exercises' 1RM trend on one graph. Shown only in
+                 the list view (hidden in a single-exercise drill-in). Tick the
+                 exercises to overlay; each becomes a line. -->
+            <details id="exerciseCompare" class="exercise-compare">
+              <summary class="exercise-compare-summary">Compare on one graph <span class="ec-caret">▾</span></summary>
+              <div class="exercise-compare-body">
+                <div id="compareChips" class="compare-chips"></div>
+                <div class="chart-wrap chart-wrap--big">
+                  <canvas id="compareChart"></canvas>
+                </div>
+                <p class="muted" id="compareNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
+              </div>
+            </details>
             <!-- Exercise stat readouts (record, sets-per-week, rep-max targets)
                  tucked into a collapsible so the drill-in stays short. Starts
                  closed; renderers below still fill the inner divs as before.

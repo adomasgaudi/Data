@@ -118,6 +118,9 @@ const els = {
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exProgressView: $("exProgressView"),
   exerciseFilter: $("exerciseFilter"),
+  exerciseCompare: $<HTMLDetailsElement>("exerciseCompare"),
+  compareChips: $("compareChips"),
+  compareNote: $("compareNote"),
   exerciseSearch: $<HTMLInputElement>("exerciseSearch"),
   exerciseNotTrained: $<HTMLInputElement>("exerciseNotTrained"),
   exerciseShowThird: $<HTMLInputElement>("exerciseShowThird"),
@@ -161,6 +164,8 @@ let data: LoadedData;
 let lbChart: Chart | null = null;
 let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
 let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
+let compareChart: Chart | null = null; // Exercises list multi-exercise overlay
+const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
 const PAGE_SIZE = 20;
@@ -1121,14 +1126,96 @@ function sumCounts(items: readonly ExerciseCount[]): number {
   return items.reduce((s, c) => s + c.count, 0);
 }
 
+// Distinct colours for the overlay lines (cycled if more exercises are picked).
+const COMPARE_COLORS = [
+  "#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a99", "#c46a1f", "#8a8d2f",
+];
+
+/**
+ * Exercises-list "compare on one graph" tool: chips to tick the athlete's
+ * exercises (most-trained first), and an overlaid estimated-1RM trend line per
+ * ticked exercise. Defaults to the athlete's top two exercises the first time.
+ */
+function renderCompareSection() {
+  const username = els.athlete.value;
+  const exercises = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+
+  // Drop any previous picks that this athlete doesn't have; seed with top 2.
+  for (const name of [...compareSelected]) if (!exercises.includes(name)) compareSelected.delete(name);
+  if (compareSelected.size === 0) for (const name of exercises.slice(0, 2)) compareSelected.add(name);
+
+  els.compareChips.innerHTML = exercises
+    .map(
+      (name) =>
+        `<button type="button" class="compare-chip${compareSelected.has(name) ? " is-active" : ""}" ` +
+        `data-ex="${escapeHtml(name)}">${escapeHtml(name)}${originBadge(name)}</button>`,
+    )
+    .join("");
+
+  renderCompareChart();
+}
+
+/** Draw the overlay: one estimated-1RM line per ticked exercise, on a time axis. */
+function renderCompareChart() {
+  compareChart?.destroy();
+  compareChart = null;
+  const canvas = document.getElementById("compareChart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+
+  const username = els.athlete.value;
+  const formula = currentFormula();
+  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
+  const picks = [...compareSelected];
+  if (picks.length === 0) {
+    els.compareNote.textContent = "Tick one or more exercises above to overlay their 1RM trends.";
+    return;
+  }
+
+  const ts = (d: string) => Date.parse(d);
+  const datasets = picks.map((name, i) => {
+    const series = exerciseProgressByWeek(recs, username, name, formula).filter((p) => p.bestE1rm !== null);
+    const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
+    return {
+      label: name,
+      data: series.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 })),
+      borderColor: color,
+      backgroundColor: color,
+      tension: 0.25,
+      spanGaps: true,
+      pointRadius: 2,
+    };
+  });
+
+  compareChart = new Chart(canvas, {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { title: (items) => tsLabel(Number(items[0]?.parsed.x)), label: (it) => `${it.dataset.label}: ${it.formattedValue} kg` } },
+      },
+      scales: {
+        x: { type: "linear", grid: { color: "#ececec" }, ticks: { callback: (v) => tsLabel(Number(v)), maxRotation: 0, autoSkip: true } },
+        y: { title: { display: true, text: "est. 1RM (kg)" }, grid: { color: "#ececec" } },
+      },
+    },
+  });
+  els.compareNote.textContent = `Estimated 1RM (${formula}) over time for the ticked exercises.`;
+}
+
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
 function renderExercisesPage() {
   if (selectedExercise !== null) {
     els.exerciseFilter.hidden = true; // period filter is a list-view control only
+    els.exerciseCompare.hidden = true; // compare graph is a list-view tool only
     renderExerciseDetail(selectedExercise);
     return;
   }
   els.exerciseFilter.hidden = false;
+  els.exerciseCompare.hidden = false;
+  renderCompareSection();
   els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
   els.exerciseWeekly.hidden = true; // sets-per-week chips are a drill-in detail too
   els.exerciseTargets.hidden = true; // rep-max targets are a drill-in control too
@@ -2848,6 +2935,17 @@ async function init() {
   setupExerciseRange();
   setupExerciseSort();
   setupExerciseSearch();
+
+  // Compare-graph chips: toggle an exercise in/out of the overlay (delegated).
+  els.compareChips.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".compare-chip");
+    if (!chip?.dataset.ex) return;
+    const name = chip.dataset.ex;
+    if (compareSelected.has(name)) compareSelected.delete(name);
+    else compareSelected.add(name);
+    chip.classList.toggle("is-active");
+    renderCompareChart();
+  });
 
   // Pagination (delegated on the persistent pager containers).
   els.exercisesPager.addEventListener("click", (e) => {

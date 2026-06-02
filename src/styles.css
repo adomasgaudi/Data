@@ -622,6 +622,25 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* "(also: …)" note shown next to a merged exercise name or a scaling-group name,
    so the original/source names are visible in every view. */
 .origin-note { font-size: 0.82em; font-weight: 400; color: var(--muted); font-style: italic; }
+/* Exercises-list "compare on one graph" tool. */
+.exercise-compare { margin: 0 0 1rem; }
+.exercise-compare[hidden] { display: none; }
+.exercise-compare-summary {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+}
+.exercise-compare-summary::-webkit-details-marker { display: none; }
+.exercise-compare-summary:hover, .exercise-compare[open] > .exercise-compare-summary { color: var(--accent); }
+.exercise-compare[open] .ec-caret { transform: rotate(180deg); color: var(--accent); }
+.exercise-compare-body { margin-top: 0.75rem; }
+.compare-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; }
+.compare-chip {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  font: inherit; font-size: 0.8rem; cursor: pointer;
+  padding: 0.3rem 0.7rem; border-radius: 99px;
+}
+.compare-chip:hover { color: var(--text); }
+.compare-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
 /* Data tab: wide raw/processed tables scroll horizontally; cells stay compact. */
 .data-views { display: flex; gap: 0.5rem; }
 /* Pill toggle for the Data tab's Processed/Original views (own class so the
