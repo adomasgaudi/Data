@@ -212,8 +212,6 @@ let cmpLabSvg: SvgChart | null = null; // "Compare (lab)" test page (lab engine 
 let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
-let compareShowAll = false; // false → only top exercises + selected; true → every one
-const COMPARE_TOP = 12; // how many most-trained chips to show before "+ N more"
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
@@ -1466,43 +1464,45 @@ function renderCompareSection() {
 }
 
 /**
- * The per-exercise chip list for the compare graph. An athlete with many lifts
- * would otherwise show a wall of pills, so by default this shows only the most-
- * trained {@link COMPARE_TOP} (plus any selected ones that fall outside the top)
- * with a "+ N more" expander, and a search box filters to anything by name.
+ * Compare-graph exercise picker. To avoid a wall of pills: by DEFAULT it shows
+ * only the SELECTED lifts (tap to remove, colour-matched to the chart), and you
+ * SEARCH to add more — typing lists matches as add chips. Bulk category/tier
+ * quick-picks live in a collapsible below.
  */
 function renderCompareChips() {
   const username = els.athlete.value;
   const exercises = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
   const q = compareChipQuery.trim().toLowerCase();
+  // Colour per selected exercise, matching the chart's line/legend colours.
+  const selOrder = exercises.filter((e) => compareSelected.has(e));
+  const colorOf = (name: string) => COMPARE_COLORS[selOrder.indexOf(name) % COMPARE_COLORS.length] ?? "#6b7280";
 
-  let shown: string[];
-  let moreBtn = "";
+  let html: string;
   if (q) {
-    shown = exercises.filter((e) => e.toLowerCase().includes(q));
+    // Search mode: matches to add/remove (selected ones marked).
+    const matches = exercises.filter((e) => e.toLowerCase().includes(q)).slice(0, 40);
+    html = matches.length
+      ? matches
+          .map((name) => {
+            const on = compareSelected.has(name);
+            return `<button type="button" class="compare-chip${on ? " is-active" : ""}" data-ex="${escapeHtml(name)}">` +
+              `${on ? "✓ " : "+ "}${escapeHtml(name)}</button>`;
+          })
+          .join("")
+      : `<span class="compare-empty muted">No exercise matches “${escapeHtml(compareChipQuery.trim())}”.</span>`;
   } else {
-    const top = exercises.slice(0, COMPARE_TOP);
-    const selOutside = exercises.filter((e) => compareSelected.has(e) && !top.includes(e));
-    if (compareShowAll) {
-      shown = exercises;
-      moreBtn = `<button type="button" class="compare-chip compare-more" data-more="less">Show fewer ▴</button>`;
-    } else {
-      shown = [...top, ...selOutside];
-      const hidden = exercises.length - shown.length;
-      if (hidden > 0)
-        moreBtn = `<button type="button" class="compare-chip compare-more" data-more="all">+ ${hidden} more ▾</button>`;
-    }
+    // Default: just the selected lifts as removable, colour-matched chips.
+    html = selOrder.length
+      ? selOrder
+          .map(
+            (name) =>
+              `<button type="button" class="compare-chip is-chosen" data-ex="${escapeHtml(name)}" style="--cc:${colorOf(name)}">` +
+              `<span class="cc-dot" style="background:${colorOf(name)}"></span>${escapeHtml(name)} <span class="cc-x">✕</span></button>`,
+          )
+          .join("")
+      : `<span class="compare-empty muted">No lifts selected — search above to add, or use Quick add.</span>`;
   }
-
-  const chips = shown
-    .map(
-      (name) =>
-        `<button type="button" class="compare-chip${compareSelected.has(name) ? " is-active" : ""}" ` +
-        `data-ex="${escapeHtml(name)}">${escapeHtml(name)}${originBadge(name)}</button>`,
-    )
-    .join("");
-  const empty = shown.length === 0 ? `<span class="compare-empty muted">No exercise matches “${escapeHtml(compareChipQuery.trim())}”.</span>` : "";
-  els.compareChips.innerHTML = chips + moreBtn + empty;
+  els.compareChips.innerHTML = html;
   els.compareSelCount.textContent = `${compareSelected.size} selected`;
 }
 
@@ -3638,15 +3638,7 @@ async function init() {
 
   // Compare-graph chips: toggle an exercise in/out of the overlay (delegated).
   els.compareChips.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    // "+ N more" / "Show fewer" expander.
-    const more = t.closest<HTMLButtonElement>(".compare-more");
-    if (more) {
-      compareShowAll = more.dataset.more === "all";
-      renderCompareChips();
-      return;
-    }
-    const chip = t.closest<HTMLButtonElement>(".compare-chip");
+    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".compare-chip");
     if (!chip?.dataset.ex) return;
     const name = chip.dataset.ex;
     if (compareSelected.has(name)) compareSelected.delete(name);

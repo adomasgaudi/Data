@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.13.3</span></h1>
+      <h1>Colosseum <span class="version">b.1.13.4</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -198,18 +198,21 @@
                  graph' tab. Tick the exercises to overlay; each becomes a line. -->
             <div id="exerciseCompare" class="exercise-compare" hidden>
               <div class="exercise-compare-body">
-                <div class="compare-quick">
-                  <span class="compare-quick-lbl">By category</span>
-                  <div id="compareCats" class="compare-quick-row"></div>
-                  <span class="compare-quick-lbl">By tier</span>
-                  <div id="compareTiers" class="compare-quick-row"></div>
+                <div class="compare-chips-head">
+                  <input id="compareSearch" class="compare-search" type="search" placeholder="Search to add an exercise…" autocomplete="off" />
+                  <span id="compareSelCount" class="compare-selcount muted"></span>
                   <button type="button" id="compareClear" class="compare-clear">Clear</button>
                 </div>
-                <div class="compare-chips-head">
-                  <input id="compareSearch" class="compare-search" type="search" placeholder="Find an exercise…" autocomplete="off" />
-                  <span id="compareSelCount" class="compare-selcount muted"></span>
-                </div>
                 <div id="compareChips" class="compare-chips"></div>
+                <details id="compareQuick" class="compare-quick-wrap">
+                  <summary class="compare-quick-sum">Quick add: categories &amp; tiers <span class="cq-caret">▾</span></summary>
+                  <div class="compare-quick">
+                    <span class="compare-quick-lbl">By category</span>
+                    <div id="compareCats" class="compare-quick-row"></div>
+                    <span class="compare-quick-lbl">By tier</span>
+                    <div id="compareTiers" class="compare-quick-row"></div>
+                  </div>
+                </details>
                 <div id="compareView" class="cal-mode" role="group" aria-label="Compare chart view">
                   <button type="button" class="cal-mode-btn is-active" data-compareview="trend">1RM trend</button>
                   <button type="button" class="cal-mode-btn" data-compareview="perset">Per-set range</button>

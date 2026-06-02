@@ -214,7 +214,7 @@ main { padding-bottom: 5rem; }
 /* touch-action MUST be on the SVG too — it's the actual touch target, so a phone
    would otherwise scroll the page instead of letting the chart pan/zoom. */
 .svgc-svg { display: block; touch-action: none; }
-.svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); }
+.svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); max-height: 4.5rem; overflow-y: auto; }
 .svgc-key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .svgc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
 .svgc-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
@@ -945,7 +945,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Quick-pick rows: add a whole category or tier of exercises at once. */
 .compare-quick {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
-  margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--line);
+  margin-top: 0.5rem;
 }
 .compare-quick-lbl { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .compare-quick-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -984,6 +984,20 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .compare-chip:hover { color: var(--text); }
 .compare-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* Selected lifts shown as colour-matched, removable chips (default view). */
+.compare-chip.is-chosen {
+  display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text);
+  border-color: var(--cc, var(--line)); background: var(--panel); font-weight: 600;
+}
+.compare-chip.is-chosen .cc-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.compare-chip.is-chosen .cc-x { color: var(--muted); font-size: 0.72rem; }
+.compare-chip.is-chosen:hover { border-color: var(--danger); }
+.compare-chip.is-chosen:hover .cc-x { color: var(--danger); }
+/* Quick-add (categories & tiers) tucked into a collapsible to cut clutter. */
+.compare-quick-wrap { margin: 0 0 0.6rem; }
+.compare-quick-sum { cursor: pointer; font-size: 0.78rem; color: var(--muted); font-weight: 600; list-style: none; }
+.compare-quick-sum::-webkit-details-marker { display: none; }
+.compare-quick-wrap[open] .cq-caret { transform: rotate(180deg); display: inline-block; }
 /* The compare-overlay and Test-tab graphs are 30% shorter than the default
    big chart (70vh -> 49vh). */
 .exercise-compare .chart-wrap--big,

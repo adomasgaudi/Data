@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.4",
+    title: "compare-picker-redesign",
+    sp: 3,
+    note: "Cleaner Compare picker: shows only your selected lifts (tap ✕ to remove), search to add, quick-picks collapsed.",
+    details: [
+      "No more wall of pills: by default the picker shows just the chosen lifts as colour-matched, removable chips; type in the search box to add others.",
+      "Category & tier bulk picks moved into a ‘Quick add’ dropdown; the chart legend scrolls instead of ballooning.",
+    ],
+  },
+  {
     version: "b.1.13.3",
     title: "svg-touch-zoom-bars",
     sp: 5,
