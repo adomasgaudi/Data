@@ -21,6 +21,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.5.2",
+    title: "sets-graph-height-and-autodeploy",
+    sp: 1,
+    note: "Sets-over-time graph 30% shorter; auto-deploy workflow added.",
+    details: [
+      "Workouts 'Sets over time' graph height reduced 30% (70vh → 49vh).",
+      "Added a GitHub Pages deploy workflow so pushes publish a live URL to refresh.",
+    ],
+  },
+  {
     version: "b.1.5.1",
     title: "compare-trend-scroll",
     sp: 1,

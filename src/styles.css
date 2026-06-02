@@ -668,6 +668,8 @@ select.subtle-select:hover, select.subtle-select:focus {
 .workout-sets-summary:hover, .workout-sets[open] > .workout-sets-summary { color: var(--accent); }
 .workout-sets[open] .ws-caret { transform: rotate(180deg); color: var(--accent); }
 .workout-sets-body { margin-top: 0.75rem; }
+/* Sets-over-time graph is 30% shorter than the default big chart (70vh). */
+.workout-sets .chart-wrap--big { height: 49vh; }
 .exercise-compare { margin: 0 0 1rem; }
 .exercise-compare[hidden] { display: none; }
 .exercise-compare-summary {
