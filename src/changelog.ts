@@ -21,6 +21,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.4.0",
+    title: "calendar-gridlines",
+    sp: 3,
+    note: "Time-axis gridlines only on week/month boundaries.",
+    details: [
+      "Vertical gridlines now land only on clean calendar points, not arbitrary spots.",
+      "Long ranges mark the 1st of each month; short ranges mark Mondays.",
+      "Applied to the progress graph and both compare views via one shared axis helper.",
+    ],
+  },
+  {
     version: "b.1.3.2.1",
     title: "compare-perset-thinner",
     sp: 1,

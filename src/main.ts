@@ -1431,6 +1431,7 @@ function renderCompareChart() {
     // Per-set range: one floating bar per set (weight → that set's own 1RM),
     // colour-coded per exercise, all on a shared time axis.
     const r1 = (n: number) => Math.round(n * 10) / 10;
+    let psMin = Infinity, psMax = -Infinity;
     const datasets = picks.map((name, i) => {
       const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
       const sets = recs.filter((r) => r.username === username && r.exerciseName === name);
@@ -1439,7 +1440,10 @@ function renderCompareChart() {
           const e1rm = addedWeight1RM(s, formula);
           if (e1rm === null) return null;
           const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-          return { x: ts(s.date), y: [r1(added), r1(e1rm)] as [number, number], reps: s.reps ?? 0 };
+          const x = ts(s.date);
+          if (x < psMin) psMin = x;
+          if (x > psMax) psMax = x;
+          return { x, y: [r1(added), r1(e1rm)] as [number, number], reps: s.reps ?? 0 };
         })
         .filter((b): b is { x: number; y: [number, number]; reps: number } => b !== null);
       return {
@@ -1475,7 +1479,7 @@ function renderCompareChart() {
           },
         },
         scales: {
-          x: { type: "linear", grid: { color: "#ececec" }, ticks: { callback: (v) => tsLabel(Number(v)), maxRotation: 0, autoSkip: true } },
+          x: timeXAxis(psMin - MS_DAY, psMax + MS_DAY),
           y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#ececec" } },
         },
       },
@@ -1485,12 +1489,18 @@ function renderCompareChart() {
     return;
   }
 
+  let trMin = Infinity, trMax = -Infinity;
   const datasets = picks.map((name, i) => {
     const series = exerciseProgressByWeek(recs, username, name, formula).filter((p) => p.bestE1rm !== null);
     const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
     return {
       label: name,
-      data: series.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 })),
+      data: series.map((p) => {
+        const x = ts(p.date);
+        if (x < trMin) trMin = x;
+        if (x > trMax) trMax = x;
+        return { x, y: Math.round(p.bestE1rm! * 10) / 10 };
+      }),
       borderColor: color,
       backgroundColor: color,
       tension: 0.25,
@@ -1510,7 +1520,7 @@ function renderCompareChart() {
         tooltip: { callbacks: { title: (items) => tsLabel(Number(items[0]?.parsed.x)), label: (it) => `${it.dataset.label}: ${it.formattedValue} kg` } },
       },
       scales: {
-        x: { type: "linear", grid: { color: "#ececec" }, ticks: { callback: (v) => tsLabel(Number(v)), maxRotation: 0, autoSkip: true } },
+        x: timeXAxis(trMin - MS_DAY, trMax + MS_DAY),
         y: { title: { display: true, text: "est. 1RM (kg)" }, grid: { color: "#ececec" } },
       },
     },
@@ -2563,6 +2573,58 @@ function tsLabel(ts: number): string {
   return shortDate(new Date(ts).toISOString().slice(0, 10));
 }
 
+const MS_DAY = 86_400_000;
+
+/**
+ * Tick timestamps at clean calendar boundaries spanning [min, max]: Mondays when
+ * the range is short (≤ ~16 weeks), otherwise the 1st of each month. Used so the
+ * vertical gridlines land only on meaningful points (week/month starts) instead
+ * of arbitrary axis positions. UTC throughout to match the ISO date keys.
+ */
+function timeAxisGridTicks(min: number, max: number): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
+  const byMonth = max - min > 16 * 7 * MS_DAY;
+  const out: number[] = [];
+  const d = new Date(min);
+  if (byMonth) {
+    // First of the month at or after `min`.
+    let cur = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    if (cur < min) cur = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+    for (let t = cur; t <= max; t = Date.UTC(new Date(t).getUTCFullYear(), new Date(t).getUTCMonth() + 1, 1)) out.push(t);
+  } else {
+    // Monday at or after `min` (getUTCDay: 0=Sun..6=Sat).
+    const day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    const dow = new Date(day0).getUTCDay();
+    const toMonday = (8 - (dow === 0 ? 7 : dow)) % 7; // days forward to next Monday
+    for (let t = day0 + toMonday * MS_DAY; t <= max; t += 7 * MS_DAY) out.push(t);
+  }
+  return out;
+}
+
+/** Shared x time-axis options: gridlines only on week/month boundaries, labels
+ * on those same ticks. `mirrored` tucks labels inside the plot (progress chart). */
+function timeXAxis(min: number, max: number, mirrored = false) {
+  const ticks = timeAxisGridTicks(min, max);
+  return {
+    type: "linear" as const,
+    min,
+    max,
+    border: { display: true, color: "#ececec" },
+    grid: { color: "#ececec", drawTicks: false },
+    afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
+      if (ticks.length) axis.ticks = ticks.map((value) => ({ value }));
+    },
+    ticks: {
+      color: "#6b7280",
+      maxRotation: 0,
+      autoSkip: false,
+      includeBounds: false,
+      ...(mirrored ? { mirror: true, padding: 8, z: 2 } : {}),
+      callback: (value: string | number) => tsLabel(Number(value)),
+    },
+  };
+}
+
 function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]): Chart {
   // X is a real time axis (milliseconds), so dates sit at their true spacing —
   // a 2-month gap looks like a gap, not the same step as consecutive sessions.
@@ -2662,24 +2724,8 @@ function drawProgressChart(canvas: HTMLCanvasElement, series: ExerciseDayPoint[]
         },
       },
       scales: {
-        x: {
-          type: "linear",
-          min: xMin,
-          max: xMax,
-          grid: { color: "#ececec" },
-          ticks: {
-            color: "#6b7280",
-            maxRotation: 0,
-            autoSkip: true,
-            // Sit the date labels inside the plot so they steal no edge space.
-            // mirror flips them above the bottom axis; a positive padding lifts
-            // them clear of the canvas edge so they're not clipped at the bottom.
-            mirror: true,
-            padding: 8,
-            z: 2,
-            callback: (value) => tsLabel(Number(value)),
-          },
-        },
+        // Vertical gridlines only on week/month boundaries; labels tucked inside.
+        x: timeXAxis(xMin, xMax, true),
         ySets: {
           position: "left",
           beginAtZero: true,
