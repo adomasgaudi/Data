@@ -60,6 +60,7 @@ import {
   type TrainingCategory,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
+import { CHANGELOG, CURRENT_VERSION } from "./changelog";
 
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
@@ -97,6 +98,11 @@ const els = {
   healthBadge: $("healthBadge"),
   healthPage: $("healthPage"),
   healthClose: $<HTMLButtonElement>("healthClose"),
+  changelogBtn: $<HTMLButtonElement>("changelogBtn"),
+  changelogVer: $("changelogVer"),
+  changelogPage: $("changelogPage"),
+  changelogClose: $<HTMLButtonElement>("changelogClose"),
+  changelog: $("changelog"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
   athleteProfile: $("athleteProfile"),
@@ -464,6 +470,22 @@ function renderStatus() {
 function openHealth() {
   setSettingsOpen(false);
   els.healthPage.hidden = false;
+}
+
+/** Open the version-history overlay from Settings. */
+function openChangelog() {
+  setSettingsOpen(false);
+  els.changelogPage.hidden = false;
+}
+
+/** Render the version-history list (newest first) into the overlay. */
+function renderChangelog() {
+  els.changelog.innerHTML = CHANGELOG.map(
+    (r) =>
+      `<div class="cl-row"><span class="cl-ver">${escapeHtml(r.version)}</span>` +
+      `<div class="cl-body"><span class="cl-title">${escapeHtml(r.title)}</span>` +
+      `<span class="cl-note">${escapeHtml(r.note)}</span></div></div>`,
+  ).join("");
 }
 
 function renderHealth() {
@@ -2971,6 +2993,12 @@ async function init() {
 
   prefillTestFromPick(); // load Adomas / Squat into the calculator on first paint
 
+  // Version label + history come from the single CHANGELOG source.
+  const verEl = document.querySelector(".version");
+  if (verEl) verEl.textContent = CURRENT_VERSION;
+  els.changelogVer.textContent = CURRENT_VERSION;
+  renderChangelog();
+
   renderStatus();
   renderHealth();
   renderAll();
@@ -2998,6 +3026,10 @@ async function init() {
   });
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
+  });
+  els.changelogBtn.addEventListener("click", openChangelog);
+  els.changelogClose.addEventListener("click", () => {
+    els.changelogPage.hidden = true;
   });
 
   els.formula.addEventListener("change", renderAll);

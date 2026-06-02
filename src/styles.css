@@ -895,6 +895,15 @@ select.subtle-select:hover, select.subtle-select:focus {
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }
+/* Version history list (Settings → Version history). */
+.cl-row { display: flex; gap: 0.85rem; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.cl-ver {
+  flex: 0 0 5.5rem; font-variant-numeric: tabular-nums; font-weight: 700;
+  font-size: 0.82rem; color: var(--accent);
+}
+.cl-body { display: flex; flex-direction: column; gap: 1px; }
+.cl-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.cl-note { font-size: 0.82rem; color: var(--muted); }
 .health-section { font-size: 0.95rem; margin: 1.25rem 0 0.25rem; }
 
 /* Keep wide tables usable on narrow screens: let the panel scroll sideways

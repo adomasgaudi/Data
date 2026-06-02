@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">v0.36.1</span></h1>
+      <h1>Colosseum <span class="version">b.1.0.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -29,6 +29,9 @@
           <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
+          </button>
+          <button type="button" id="changelogBtn" class="settings-link">
+            Version history <span id="changelogVer" class="muted"></span>
           </button>
         </div>
       </div>
@@ -779,6 +782,17 @@
         </div>
         <p class="muted">Validation issues and out-of-range values found while loading the sheet.</p>
         <div id="health"></div>
+      </div>
+    </div>
+
+    <div id="changelogPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Version history</h2>
+          <button type="button" id="changelogClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">Every released version, newest first — the same log as the git history.</p>
+        <div id="changelog"></div>
       </div>
     </div>
 
