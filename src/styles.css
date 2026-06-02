@@ -149,6 +149,24 @@ body {
 }
 .stat-val { font-size: 0.95rem; font-weight: 700; color: var(--accent); }
 .stat-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+/* Momentum row: trend chips for the athlete's main lifts (▲/▼ kg/week). */
+.momentum { margin: 0 0 1.25rem; }
+.momentum:empty { display: none; }
+.mo-lead { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem; }
+.mo-sub { font-weight: 400; }
+.mo-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.mo-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.8rem; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel);
+}
+.mo-arrow { font-size: 0.85em; }
+.mo-rate { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mo-up { border-color: rgba(46, 125, 82, 0.4); }
+.mo-up .mo-arrow { color: #2e7d52; }
+.mo-down { border-color: rgba(162, 59, 59, 0.4); }
+.mo-down .mo-arrow { color: var(--danger); }
+.mo-flat .mo-arrow { color: var(--muted); }
 .train-breakdown { margin: 0 0 1.25rem; }
 .train-breakdown:empty { display: none; }
 .tb-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
