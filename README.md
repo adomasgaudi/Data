@@ -57,8 +57,8 @@ is turned into a comparable strength figure in named steps:
   a front lever or straight-leg raise is ~0.1 (a little weight far from the pivot
   changes everything), a pull-up 0.95, a squat 0.6, a bench 0.
 - **Effective 1RM** = the chosen formula (Epley / Brzycki / the bench-specific Nuzzo
-  curve) applied to the effective load. Reps are **capped at `MAX_1RM_REPS`** for
-  ranking so a 35-rep set can't extrapolate to a phantom max.
+  curve) applied to the effective load. Sets above `MAX_1RM_REPS` reps yield **no
+  1RM at all** (shown as "—"), so a high-rep set can't extrapolate to a phantom max.
 - **Added-weight 1RM** = effective 1RM − the bodyweight share, so the reported max is
   comparable to the weight you actually put on the bar. This is what the leaderboard,
   PRs and progress charts all use.

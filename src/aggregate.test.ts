@@ -347,6 +347,23 @@ describe("bestSet", () => {
     expect(best?.record.weight).toBe(90);
     expect(best?.e1rm).toBeCloseTo(105, 6);
   });
+
+  it("ignores above-cap sets (no 1RM) when choosing the best", () => {
+    // A heavy-looking 100×30 set is above the rep cap → no 1RM, so the 90×5
+    // (e1rm 105) set must win rather than the capped one being clamped in.
+    const sets = [
+      rec({ exerciseName: "Bench Press", weight: 100, reps: 30 }), // above cap → excluded
+      rec({ exerciseName: "Bench Press", weight: 90, reps: 5 }), // e1rm 105
+    ];
+    const best = bestSet(sets, "epley");
+    expect(best?.record.reps).toBe(5);
+    expect(best?.e1rm).toBeCloseTo(105, 6);
+  });
+
+  it("is null when every set is above the rep cap", () => {
+    const sets = [rec({ exerciseName: "Squat", weight: 60, reps: 40 }), rec({ exerciseName: "Squat", weight: 50, reps: 25 })];
+    expect(bestSet(sets, "epley")).toBeNull();
+  });
 });
 
 describe("leaderboard", () => {
@@ -362,6 +379,15 @@ describe("leaderboard", () => {
       const userSets = FIXTURE.filter((r) => r.username === entry.username && r.exerciseName === "Bench Press");
       for (const s of userSets) expect(entry.e1rm + 1e-9).toBeGreaterThanOrEqual(epley1RM(s.weight, s.reps)!);
     }
+  });
+
+  it("drops a user whose only set for the exercise is above the rep cap", () => {
+    const recs = [
+      rec({ user: "Ada", username: "ada", exerciseName: "Squat", weight: 100, reps: 3 }),
+      rec({ user: "Bob", username: "bob", exerciseName: "Squat", weight: 80, reps: 40 }), // above cap → no 1RM
+    ];
+    const lb = leaderboard(recs, "Squat", "epley");
+    expect(lb.map((e) => e.username)).toEqual(["ada"]); // bob excluded, not clamped in
   });
 });
 
