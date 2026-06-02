@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.2",
+    title: "compare-lab-thin-months",
+    sp: 2,
+    note: "Add a safe Compare (lab) copy where the crowded bottom month labels are thinned; real chart untouched.",
+    details: [
+      "Other → ‘Compare (lab)’: a copy of the Compare graph (lab engine) that shows the athlete's top lifts, with x-axis labels thinned so months don't crowd at wide zoom — gridlines stay at every boundary.",
+      "Done in a separate src/svgChartLab.ts + page so the working Compare graph can't break.",
+    ],
+  },
+  {
     version: "b.1.13.1",
     title: "merge-version-history",
     sp: 1,
