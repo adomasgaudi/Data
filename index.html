@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.10.4</span></h1>
+      <h1>Colosseum <span class="version">b.1.11.0</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -198,6 +198,10 @@
                   <span class="compare-quick-lbl">By tier</span>
                   <div id="compareTiers" class="compare-quick-row"></div>
                   <button type="button" id="compareClear" class="compare-clear">Clear</button>
+                </div>
+                <div class="compare-chips-head">
+                  <input id="compareSearch" class="compare-search" type="search" placeholder="Find an exercise…" autocomplete="off" />
+                  <span id="compareSelCount" class="compare-selcount muted"></span>
                 </div>
                 <div id="compareChips" class="compare-chips"></div>
                 <div id="compareView" class="cal-mode" role="group" aria-label="Compare chart view">

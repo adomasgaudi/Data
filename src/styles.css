@@ -190,10 +190,23 @@ main { padding-bottom: 5rem; }
 }
 .team-chip:hover { border-color: var(--accent); }
 .team-chip.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.team-body {
+.team-cols {
   display: grid; gap: 0.9rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
+/* Combined comparison table: all exercises, everyone's est 1RM side by side. */
+.team-summaries { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin: 0 0 0.9rem; }
+.team-sumchip {
+  display: flex; flex-direction: column; gap: 1px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 0.4rem 0.7rem; font-size: 0.85rem;
+}
+.team-sumchip .muted { font-size: 0.74rem; }
+.team-shared-table { margin: 0.3rem 0 0; }
+.team-shared-table td, .team-shared-table th { padding: 0.3rem 0.5rem; }
+.team-shared-table .ex-code { font-weight: 600; }
+.team-shared-table .team-win { color: var(--accent); font-weight: 700; }
+/* Rows everyone in the group has trained — faint tint so overlaps stand out. */
+.team-shared-table .team-shared-row { background: var(--accent-soft); }
 .team-col { border: 1px solid var(--line); border-radius: 12px; padding: 0.8rem 0.9rem; background: var(--panel); }
 .team-col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .team-col-head h3 { margin: 0; font-size: 1.05rem; }
@@ -696,13 +709,13 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hm-cell.lvl-4 { background: var(--accent); }
 .hm-cell[data-date] { cursor: pointer; }
 .hm-cell[data-date]:hover { outline: 2px solid var(--gold); outline-offset: -1px; }
-/* Month divider: a line down the LEFT of the whole week-column where a new month
-   begins (drawn in the 3px gap so it never splits a week and adds no layout). */
-.hm-cell.hm-mstart { position: relative; }
-.hm-cell.hm-mstart::before {
-  content: ""; position: absolute; left: -3px; top: -2px;
-  width: 2px; height: calc(100% + 5px);
-  background: var(--muted); border-radius: 1px; pointer-events: none; z-index: 1;
+/* Alternating-month tint: every square of an odd-numbered month gets a faint
+   warm overlay so months read as distinct bands, without losing the heat colour
+   underneath. A pseudo-element (not background) keeps the heat + today ring. */
+.hm-cell { position: relative; }
+.hm-cell.hm-modd::after {
+  content: ""; position: absolute; inset: 0; border-radius: 3px;
+  background: rgba(184, 144, 47, 0.16); pointer-events: none;
 }
 /* Today's cell is outlined in gold so it's easy to find in the year grid. */
 .hm-cell.is-today { box-shadow: 0 0 0 2px var(--gold); }
@@ -897,7 +910,19 @@ select.subtle-select:hover, select.subtle-select:focus {
   font: inherit; font-size: 0.75rem; cursor: pointer; padding: 0.25rem 0.6rem; border-radius: 8px; margin-left: auto;
 }
 .compare-clear:hover { color: var(--danger); border-color: var(--danger); }
-.compare-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; }
+/* Search + selected-count above the chips, so a long lift list stays manageable. */
+.compare-chips-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+.compare-search {
+  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.85rem;
+  padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--text);
+}
+.compare-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.compare-selcount { flex: none; font-size: 0.78rem; white-space: nowrap; }
+/* Cap the chip area so even "show all" scrolls instead of pushing the graph down. */
+.compare-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; max-height: 9.5rem; overflow-y: auto; }
+.compare-empty { font-size: 0.82rem; align-self: center; }
+.compare-more { border-style: dashed; color: var(--accent); font-weight: 600; }
 #compareView { margin-bottom: 0.6rem; }
 .compare-chip {
   background: none; border: 1px solid var(--line); color: var(--muted);

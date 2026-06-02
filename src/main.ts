@@ -135,6 +135,8 @@ const els = {
   exSearchBar: $("exSearchBar"),
   exerciseCompare: $("exerciseCompare"),
   compareChips: $("compareChips"),
+  compareSearch: $<HTMLInputElement>("compareSearch"),
+  compareSelCount: $("compareSelCount"),
   compareCats: $("compareCats"),
   compareTiers: $("compareTiers"),
   compareClear: $<HTMLButtonElement>("compareClear"),
@@ -202,6 +204,9 @@ let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
 let compareChart: Chart | null = null; // Exercises list multi-exercise overlay
 let workoutSetsChart: Chart | null = null; // Workouts view: all sets over time
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
+let compareChipQuery = ""; // search box text filtering the compare chips
+let compareShowAll = false; // false → only top exercises + selected; true → every one
+const COMPARE_TOP = 12; // how many most-trained chips to show before "+ N more"
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
 
@@ -363,6 +368,27 @@ function loadLastAthlete(): string | null {
 function saveLastAthlete(username: string) {
   try {
     localStorage.setItem(ATHLETE_STORE_KEY, username);
+  } catch {
+    /* storage may be unavailable — selection still applies this session */
+  }
+}
+
+// ---- Group view: which people were picked, remembered across reloads ----
+const TEAM_STORE_KEY = "colosseum.teamPicks.v1";
+
+function loadTeamPicks(): string[] {
+  try {
+    const raw = localStorage.getItem(TEAM_STORE_KEY);
+    const arr = raw ? JSON.parse(raw) : null;
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTeamPicks(usernames: string[]) {
+  try {
+    localStorage.setItem(TEAM_STORE_KEY, JSON.stringify(usernames));
   } catch {
     /* storage may be unavailable — selection still applies this session */
   }
@@ -828,7 +854,6 @@ interface WorkoutGroup {
   rest: boolean;
 }
 let workoutGroups: WorkoutGroup[] = [];
-let exercisesPage = 0;
 let workoutsPage = 0;
 let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
@@ -880,7 +905,6 @@ function syncAthleteChips() {
 function renderAthlete() {
   saveLastAthlete(els.athlete.value); // remember across reloads
   syncAthleteChips();
-  exercisesPage = 0;
   workoutsPage = 0;
   selectedExercise = null;
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
@@ -1239,7 +1263,6 @@ function setupExerciseRange(): void {
     exerciseRangeDays = Number(btn.dataset.days) || 0;
     els.exerciseRange.open = false; // close the dropdown after a pick
     paint();
-    exercisesPage = 0;
     selectedExercise = null;
     renderExercisesPage();
   });
@@ -1264,7 +1287,6 @@ function setupExerciseSort(): void {
     exerciseSort = mode;
     for (const b of els.exerciseSort.querySelectorAll<HTMLElement>(".ex-sort-btn"))
       b.classList.toggle("is-active", b.dataset.sort === mode);
-    exercisesPage = 0;
     selectedExercise = null;
     renderExercisesPage();
   });
@@ -1275,19 +1297,16 @@ function setupExerciseSort(): void {
 function setupExerciseSearch(): void {
   els.exerciseSearch.addEventListener("input", () => {
     exerciseSearch = els.exerciseSearch.value;
-    exercisesPage = 0;
     selectedExercise = null;
     renderExercisesPage();
   });
   els.exerciseNotTrained.addEventListener("change", () => {
     exerciseShowNotTrained = els.exerciseNotTrained.checked;
-    exercisesPage = 0;
     selectedExercise = null;
     renderExercisesPage();
   });
   els.exerciseShowThird.addEventListener("change", () => {
     exerciseShowThird = els.exerciseShowThird.checked;
-    exercisesPage = 0;
     selectedExercise = null;
     renderExercisesPage();
   });
@@ -1387,15 +1406,49 @@ function renderCompareSection() {
       `title="${escapeHtml(t.label)}"><span class="tier-badge tier-${t.tier}">${t.tier}</span> ${members.length}</button>`;
   }).join("");
 
-  els.compareChips.innerHTML = exercises
+  renderCompareChips();
+  renderCompareChart();
+}
+
+/**
+ * The per-exercise chip list for the compare graph. An athlete with many lifts
+ * would otherwise show a wall of pills, so by default this shows only the most-
+ * trained {@link COMPARE_TOP} (plus any selected ones that fall outside the top)
+ * with a "+ N more" expander, and a search box filters to anything by name.
+ */
+function renderCompareChips() {
+  const username = els.athlete.value;
+  const exercises = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const q = compareChipQuery.trim().toLowerCase();
+
+  let shown: string[];
+  let moreBtn = "";
+  if (q) {
+    shown = exercises.filter((e) => e.toLowerCase().includes(q));
+  } else {
+    const top = exercises.slice(0, COMPARE_TOP);
+    const selOutside = exercises.filter((e) => compareSelected.has(e) && !top.includes(e));
+    if (compareShowAll) {
+      shown = exercises;
+      moreBtn = `<button type="button" class="compare-chip compare-more" data-more="less">Show fewer ▴</button>`;
+    } else {
+      shown = [...top, ...selOutside];
+      const hidden = exercises.length - shown.length;
+      if (hidden > 0)
+        moreBtn = `<button type="button" class="compare-chip compare-more" data-more="all">+ ${hidden} more ▾</button>`;
+    }
+  }
+
+  const chips = shown
     .map(
       (name) =>
         `<button type="button" class="compare-chip${compareSelected.has(name) ? " is-active" : ""}" ` +
         `data-ex="${escapeHtml(name)}">${escapeHtml(name)}${originBadge(name)}</button>`,
     )
     .join("");
-
-  renderCompareChart();
+  const empty = shown.length === 0 ? `<span class="compare-empty muted">No exercise matches “${escapeHtml(compareChipQuery.trim())}”.</span>` : "";
+  els.compareChips.innerHTML = chips + moreBtn + empty;
+  els.compareSelCount.textContent = `${compareSelected.size} selected`;
 }
 
 /** Toggle every exercise in a category in/out of the compare selection. If they're
@@ -1661,10 +1714,9 @@ function renderExercisesPage() {
     `<th class="num">Best set</th>` +
     `</tr></thead>`;
   const colspan = nCols + 2;
-  const start = exercisesPage * PAGE_SIZE;
-  // When grouping, emit a category sub-header row whenever the category changes.
-  // Track the previous page's last category so a header isn't dropped at a page
-  // boundary. Sub-header rows carry no data-index, so click mapping is unaffected.
+  // No pagination: the whole (date-scoped) list renders in one scroll. The Period
+  // filter is what keeps it short — there's no page boundary to track.
+  const start = 0;
   const prevItem = start > 0 ? ordered[start - 1] : undefined;
   let prevCat = exerciseSort === "category" && prevItem ? (prevItem._cat ?? null) : null;
   // Tier mode: track the previous row's tier so a header is emitted when it
@@ -1685,7 +1737,6 @@ function renderExercisesPage() {
     );
   };
   const rows = ordered
-    .slice(start, start + PAGE_SIZE)
     .map((it, i) => {
       const abs = start + i;
       if (exerciseSort === "tier") {
@@ -1723,7 +1774,7 @@ function renderExercisesPage() {
     : "No exercises trained in this period.";
   els.athleteTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="${colspan}" class="muted">${emptyMsg}</td></tr>`}</tbody>`;
-  els.exercisesPager.innerHTML = pagerHtml(exercisesPage, ordered.length);
+  els.exercisesPager.innerHTML = ""; // no pagination — the Period filter scopes the list
 }
 
 /** Drill-in view for one exercise: a back link + its sets grouped by week. */
@@ -2256,13 +2307,6 @@ function dataYears(trained: Map<string, number>): number[] {
 function yearGridHtml(year: number, counts: Map<string, number>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
-  // The week-column where each month (Feb..Dec) begins, so a divider line can be
-  // drawn down the LEFT of that whole column — never splitting a week mid-way.
-  const monthStartCols = new Set<number>();
-  for (let m = 1; m < 12; m++) {
-    const doyStart = Math.round((Date.UTC(year, m, 1) - Date.UTC(year, 0, 1)) / 86_400_000);
-    monthStartCols.add(Math.floor((startDow + doyStart) / 7) + 1);
-  }
   const cells: string[] = [];
   for (let i = 0; i < startDow; i++) cells.push(`<div class="hm-cell empty"></div>`);
   let days = 0;
@@ -2276,11 +2320,11 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
       totalSets += sets;
     }
     const isToday = iso === todayIso();
-    const col = Math.floor((startDow + doy) / 7) + 1; // 1-based grid column (week)
-    const mStart = monthStartCols.has(col) ? " hm-mstart" : "";
+    // Tint alternating months so each month's squares read as a distinct band.
+    const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${mStart}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
     );
   }
 
@@ -3619,13 +3663,26 @@ async function init() {
 
   // Compare-graph chips: toggle an exercise in/out of the overlay (delegated).
   els.compareChips.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".compare-chip");
+    const t = e.target as HTMLElement;
+    // "+ N more" / "Show fewer" expander.
+    const more = t.closest<HTMLButtonElement>(".compare-more");
+    if (more) {
+      compareShowAll = more.dataset.more === "all";
+      renderCompareChips();
+      return;
+    }
+    const chip = t.closest<HTMLButtonElement>(".compare-chip");
     if (!chip?.dataset.ex) return;
     const name = chip.dataset.ex;
     if (compareSelected.has(name)) compareSelected.delete(name);
     else compareSelected.add(name);
-    chip.classList.toggle("is-active");
+    renderCompareChips(); // keeps the selected count + chip states in sync
     renderCompareChart();
+  });
+  // Search box filters the chip list to anything matching by name.
+  els.compareSearch.addEventListener("input", () => {
+    compareChipQuery = els.compareSearch.value;
+    renderCompareChips();
   });
   // Category / tier quick-picks add or remove a whole group at once.
   els.compareCats.addEventListener("click", (e) => {
@@ -3652,14 +3709,8 @@ async function init() {
     renderCompareChart();
   });
 
-  // Pagination (delegated on the persistent pager containers).
-  els.exercisesPager.addEventListener("click", (e) => {
-    const p = pageFromClick(e);
-    if (p !== null) {
-      exercisesPage = p;
-      renderExercisesPage();
-    }
-  });
+  // Pagination (delegated on the persistent pager containers). The exercises
+  // List & stats view no longer paginates — the Period filter scopes it.
   els.workoutsPager.addEventListener("click", (e) => {
     const p = pageFromClick(e);
     if (p !== null) {
@@ -4295,53 +4346,10 @@ function setupGroupsView() {
  * athletes the first time the view opens; the user toggles people in/out. */
 const teamSelected = new Set<string>();
 
-/** One athlete's column: bodyweight + cadence, their top lifts (the "level"),
- * and their last few workouts. */
-function teamColumn(u: { user: string; username: string }, recs: SetRecord[], formula: OneRepMaxFormula): string {
-  const summary = athleteSummary(data.records, u.username);
-  const prs = personalRecords(
-    filterRecords(recs, { usernames: [u.username], excludeDropsets: els.excludeDropsets.checked }),
-    formula,
-  )
-    .sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm)
-    .slice(0, 6);
-  const codes = exerciseCodesFor(prs.map((p) => p.exerciseName));
-  const levelRows =
-    prs
-      .map(
-        (p) =>
-          `<tr><td><span class="ex-code">${escapeHtml(codes.get(p.exerciseName) ?? exerciseCode(p.exerciseName))}</span>` +
-          `<span class="gv-sub muted">${escapeHtml(p.exerciseName)}</span></td>` +
-          `<td class="num">${fmt(p.bestE1rm.e1rm)}</td></tr>`,
-      )
-      .join("") || `<tr><td class="muted">No lifts yet.</td><td></td></tr>`;
-
-  const days = workoutsForUser(data.records, u.username).slice(0, 4);
-  const workouts =
-    days
-      .map((d) => {
-        const exs = d.exercises.map((e) => exerciseCode(e.exerciseName)).join(" · ");
-        return (
-          `<div class="team-wo"><div class="team-wo-date">${shortDate(d.date)} <span class="muted">· ${d.totalSets} sets</span></div>` +
-          `<div class="team-wo-exs muted">${escapeHtml(exs)}</div></div>`
-        );
-      })
-      .join("") || `<p class="muted">No workouts.</p>`;
-
-  const bw = summary.bodyweightLast;
-  return (
-    `<div class="team-col">` +
-    `<div class="team-col-head"><h3>${escapeHtml(u.user)}</h3>` +
-    `${bw !== null ? `<span class="muted team-bw">${fmt(bw)} kg</span>` : ""}</div>` +
-    `<div class="team-stat muted">${summary.sessionsPerWeek.toFixed(1)} sessions/wk · ${summary.sets} sets</div>` +
-    `<div class="team-sec-lbl">Top lifts · est 1RM</div>` +
-    `<table class="data-table team-table"><tbody>${levelRows}</tbody></table>` +
-    `<div class="team-sec-lbl">Latest workouts</div>${workouts}` +
-    `</div>`
-  );
-}
-
-/** Render the multi-person Group view: a column per selected athlete. */
+/** Render the multi-person Group view: ONE combined table of every exercise any
+ * selected athlete has trained, with each person's estimated 1RM side by side so
+ * they can be compared directly (— where someone hasn't done it; the leader's
+ * cell per row is highlighted). A compact per-person summary sits on top. */
 function renderTeamView() {
   const users = distinctUsers(data.records);
   if (teamSelected.size === 0) for (const u of users.slice(0, 2)) teamSelected.add(u.username);
@@ -4362,16 +4370,69 @@ function renderTeamView() {
   }
   const formula = currentFormula();
   const recs = computedRecords();
-  els.teamBody.innerHTML = picks.map((u) => teamColumn(u, recs, formula)).join("");
+
+  // Per-person best estimated 1RM by exercise, plus a quick header summary.
+  const maps = picks.map((u) => {
+    const m = new Map<string, number>();
+    for (const p of personalRecords(
+      filterRecords(recs, { usernames: [u.username], excludeDropsets: els.excludeDropsets.checked }),
+      formula,
+    ))
+      m.set(p.exerciseName, p.bestE1rm.e1rm);
+    return m;
+  });
+  const summaries = picks
+    .map((u) => {
+      const s = athleteSummary(data.records, u.username);
+      const bw = s.bodyweightLast;
+      return (
+        `<div class="team-sumchip"><strong>${escapeHtml(u.user)}</strong>` +
+        `<span class="muted">${bw !== null ? `${fmt(bw)} kg · ` : ""}${s.sessionsPerWeek.toFixed(1)}/wk · ${s.sets} sets</span></div>`
+      );
+    })
+    .join("");
+
+  // Union of every exercise anyone in the group has trained, busiest 1RM first.
+  const union = [...new Set(maps.flatMap((m) => [...m.keys()]))];
+  const topOf = (ex: string) => Math.max(...maps.map((m) => m.get(ex) ?? 0));
+  union.sort((a, b) => topOf(b) - topOf(a));
+  const codes = exerciseCodesFor(union);
+
+  const head =
+    `<thead><tr><th>Exercise</th>${picks.map((u) => `<th class="num">${escapeHtml(u.user)}</th>`).join("")}</tr></thead>`;
+  const rows = union
+    .map((ex) => {
+      const vals = maps.map((m) => m.get(ex));
+      const present = vals.filter((v): v is number => v !== undefined);
+      const best = present.length ? Math.max(...present) : null;
+      const shared = present.length === picks.length && picks.length > 1;
+      const cells = vals
+        .map((v) => `<td class="num${v !== undefined && v === best ? " team-win" : ""}">${v === undefined ? "—" : fmt(v)}</td>`)
+        .join("");
+      return (
+        `<tr class="${shared ? "team-shared-row" : ""}"><td><span class="ex-code">${escapeHtml(codes.get(ex) ?? exerciseCode(ex))}</span>` +
+        `<span class="gv-sub muted">${escapeHtml(ex)}</span></td>${cells}</tr>`
+      );
+    })
+    .join("");
+
+  els.teamBody.innerHTML =
+    `<div class="team-summaries">${summaries}</div>` +
+    (union.length
+      ? `<div class="team-sec-lbl">All exercises · est 1RM (kg) — shared rows highlighted</div>` +
+        `<table class="data-table team-shared-table">${head}<tbody>${rows}</tbody></table>`
+      : `<p class="muted">No exercises logged for the selected people in this view.</p>`);
 }
 
 function setupTeamView() {
+  for (const u of loadTeamPicks()) teamSelected.add(u); // remember last session's picks
   els.teamChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".team-chip");
     const name = btn?.dataset.username;
     if (!name) return;
     if (teamSelected.has(name)) teamSelected.delete(name);
     else teamSelected.add(name);
+    saveTeamPicks([...teamSelected]);
     renderTeamView();
   });
 }
