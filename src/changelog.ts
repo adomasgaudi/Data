@@ -24,6 +24,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "b.1.9.1",
+    title: "best-sets-3mo",
+    sp: 2,
+    note: "Drill into a lift to see your 5 best sets (real weight×reps) from the last 3 months.",
+    details: [
+      "Under the Best 1RM card, a 'Best sets · last 3 months' list shows the actual top sets by estimated 1RM.",
+      "These are real logged sets (weight × reps + when), not the computed rep-max columns in the list.",
+    ],
+  },
+  {
     version: "b.1.9.0",
     title: "multi-category-buckets",
     sp: 5,
@@ -186,7 +196,7 @@ export const COMPONENTS: Component[] = [
   { name: "Leaderboard", version: "b1.0" },
   { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
   { name: "Workouts", version: "b1.2" }, // bumped: today outlined in year heatmap
-  { name: "Exercises", version: "b1.3" }, // bumped: multi-category By-category sort
+  { name: "Exercises", version: "b1.4" }, // bumped: best-sets (last 3 months) in the drill-in
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },

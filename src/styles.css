@@ -177,6 +177,13 @@ main { padding-bottom: 5rem; }
 .gv-raw { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
 .gv-rank { color: var(--muted); width: 1.4rem; }
 .gv-empty { margin: 0.4rem 0 0; font-size: 0.85rem; }
+
+/* Drill-in "best sets, last 3 months": the real top weight×reps, not a rep-max. */
+.exercise-topsets[hidden] { display: none; }
+.ts-lead { font-size: 0.78rem; margin: 0.2rem 0 0.3rem; }
+.ts-table { margin: 0 0 0.6rem; }
+.ts-table td, .ts-table th { padding: 0.28rem 0.5rem; }
+.ts-table sup { font-size: 0.7em; }
 /* Custom athlete picker: rounded pill chips (the native <select> is hidden and
    only holds state). */
 .athlete-select-hidden { display: none; }

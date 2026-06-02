@@ -115,6 +115,7 @@ const els = {
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
   exerciseRecord: $("exerciseRecord"),
+  exerciseTopSets: $("exerciseTopSets"),
   exerciseWeekly: $("exerciseWeekly"),
   exerciseTargets: $("exerciseTargets"),
   exerciseStats: $<HTMLDetailsElement>("exerciseStats"),
@@ -1570,6 +1571,7 @@ function renderExercisesPage() {
   }
   els.exerciseStats.hidden = false;
   els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
+  els.exerciseTopSets.hidden = true; // best-sets list is a drill-in detail too
   els.exerciseWeekly.hidden = true; // sets-per-week chips are a drill-in detail too
   els.exerciseTargets.hidden = true; // rep-max targets are a drill-in control too
   els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in
@@ -1726,6 +1728,7 @@ function renderExerciseDetail(exName: string) {
   // dropdown always has content to show.
   els.exerciseStats.open = false;
   renderExerciseRecord(pr);
+  renderExerciseTopSets(exName);
   renderExerciseWeekly(exName);
   renderExerciseTargets(pr);
   renderExerciseCalc(pr);
@@ -1785,6 +1788,45 @@ function renderExerciseRecord(pr: PersonalRecord | undefined) {
     `<div class="record-item"><span class="record-label">Top weight</span>` +
     `<span class="record-value">${wr(pr.topWeight.weight, pr.topWeight.reps)} kg</span>` +
     `<span class="record-meta">${shortDate(pr.topWeight.date)}</span></div>`;
+}
+
+/**
+ * The actual 5 best sets (by estimated 1RM) from the last 3 calendar months —
+ * the real weight×reps lifted, not a computed rep-max. Shown under the record
+ * card in a drill-in so the owner sees genuine recent top sets at a glance.
+ */
+function renderExerciseTopSets(exName: string) {
+  const formula = currentFormula();
+  const username = els.athlete.value;
+  const d = new Date();
+  d.setMonth(d.getMonth() - 3);
+  const cutoff = d.toISOString().slice(0, 10);
+  const scored = computedRecords()
+    .filter((r) => r.username === username && r.exerciseName === exName && r.date && r.date >= cutoff)
+    .map((s) => ({ s, e1rm: addedWeight1RM(s, formula) }))
+    .filter((x): x is { s: SetRecord; e1rm: number } => x.e1rm !== null)
+    .sort((a, b) => b.e1rm - a.e1rm)
+    .slice(0, 5);
+  if (scored.length === 0) {
+    els.exerciseTopSets.hidden = true;
+    els.exerciseTopSets.innerHTML = "";
+    return;
+  }
+  els.exerciseTopSets.hidden = false;
+  const rows = scored
+    .map((x) => {
+      const added = x.s.origWeight !== undefined ? x.s.origWeight : x.s.weight;
+      return (
+        `<tr><td>${wr(added, x.s.reps)}</td>` +
+        `<td class="num">${fmt(x.e1rm)}</td>` +
+        `<td class="num muted">${x.s.date ? shortDate(x.s.date) : "—"}</td></tr>`
+      );
+    })
+    .join("");
+  els.exerciseTopSets.innerHTML =
+    `<div class="ts-lead muted">Best sets · last 3 months</div>` +
+    `<table class="data-table ts-table"><thead><tr><th>Set</th><th class="num">est 1RM</th><th class="num">when</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>`;
 }
 
 /** Reps for which we show a target working weight under the record card. */
