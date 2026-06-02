@@ -60,7 +60,7 @@ import {
   type TrainingCategory,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, TOTAL_SP } from "./changelog";
 
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
@@ -482,14 +482,25 @@ function openChangelog() {
   els.changelogPage.hidden = false;
 }
 
-/** Render the version-history list (newest first) into the overlay. */
+/** Render the version-history list (newest first) into the overlay. Each release
+ * is an expandable row: version + SP + one-line note collapsed; bullet details
+ * when opened. */
 function renderChangelog() {
-  els.changelog.innerHTML = CHANGELOG.map(
+  const header = `<p class="cl-summary muted">${CHANGELOG.length} releases · ${TOTAL_SP} story points shipped</p>`;
+  const rows = CHANGELOG.map(
     (r) =>
-      `<div class="cl-row"><span class="cl-ver">${escapeHtml(r.version)}</span>` +
-      `<div class="cl-body"><span class="cl-title">${escapeHtml(r.title)}</span>` +
-      `<span class="cl-note">${escapeHtml(r.note)}</span></div></div>`,
+      `<details class="cl-row">` +
+      `<summary class="cl-sum">` +
+      `<span class="cl-ver">${escapeHtml(r.version)}</span>` +
+      `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span>` +
+      `<span class="cl-note">${escapeHtml(r.note)}</span></span>` +
+      `<span class="cl-sp" title="${r.sp} story points">SP ${r.sp}</span>` +
+      `<span class="cl-caret">▾</span>` +
+      `</summary>` +
+      `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>` +
+      `</details>`,
   ).join("");
+  els.changelog.innerHTML = header + rows;
 }
 
 function renderHealth() {

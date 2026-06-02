@@ -917,15 +917,31 @@ select.subtle-select:hover, select.subtle-select:focus {
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }
-/* Version history list (Settings → Version history). */
-.cl-row { display: flex; gap: 0.85rem; padding: 9px 0; border-bottom: 1px solid var(--line); }
+/* Version history list (Settings → Version history) — expandable rows. */
+.cl-summary { font-size: 0.8rem; margin: 0 0 0.5rem; }
+.cl-row { border-bottom: 1px solid var(--line); }
+.cl-sum {
+  display: flex; align-items: center; gap: 0.75rem; cursor: pointer;
+  padding: 9px 2px; list-style: none; user-select: none;
+}
+.cl-sum::-webkit-details-marker { display: none; }
+.cl-sum:hover { background: var(--accent-soft); }
 .cl-ver {
-  flex: 0 0 5.5rem; font-variant-numeric: tabular-nums; font-weight: 700;
+  flex: 0 0 5rem; font-variant-numeric: tabular-nums; font-weight: 700;
   font-size: 0.82rem; color: var(--accent);
 }
-.cl-body { display: flex; flex-direction: column; gap: 1px; }
+.cl-mid { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .cl-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
-.cl-note { font-size: 0.82rem; color: var(--muted); }
+.cl-note { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.cl-sp {
+  flex: none; font-size: 0.7rem; font-weight: 700; color: var(--gold);
+  background: var(--gold-soft); border-radius: 999px; padding: 2px 8px;
+}
+.cl-caret { flex: none; color: var(--muted); font-size: 0.75rem; transition: transform 0.15s; }
+.cl-row[open] .cl-caret { transform: rotate(180deg); color: var(--accent); }
+.cl-details { margin: 0 0 0.6rem; padding: 0 0 0 6.5rem; }
+.cl-details li { font-size: 0.82rem; color: var(--muted); margin: 2px 0; }
+@media (max-width: 560px) { .cl-details { padding-left: 1.25rem; } }
 .health-section { font-size: 0.95rem; margin: 1.25rem 0 0.25rem; }
 
 /* Keep wide tables usable on narrow screens: let the panel scroll sideways
