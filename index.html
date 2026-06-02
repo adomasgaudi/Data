@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.12.5</span></h1>
+      <h1>Colosseum <span class="version">b.1.12.6</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -886,6 +886,19 @@
           <div id="teamBody" class="team-body"></div>
         </section>
       </div>
+
+      <div id="tab-graphdemo" class="tab-panel" hidden>
+        <section class="panel">
+          <div class="groups-head">
+            <h2>Graph demo <span class="muted" style="font-size: 0.8rem">(test bed)</span></h2>
+            <p class="muted" style="margin: 0.25rem 0 0">
+              A from-scratch SVG chart (no Chart.js) to test a clean replacement. Drag to pan,
+              wheel/pinch to zoom — the axes and sides should stay perfectly still.
+            </p>
+          </div>
+          <div id="graphDemoBox" class="gd-box"></div>
+        </section>
+      </div>
     </main>
 
     <!-- App-style bottom navigation. Workouts/Exercises drive the Athlete
@@ -919,6 +932,7 @@
         <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Merges &amp; body parts</button>
         <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
         <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
+        <button class="other-item" data-tab="graphdemo" role="menuitem"><span class="other-ico">📈</span> Graph demo (test)</button>
         <button class="other-item" data-tab="guide" role="menuitem"><span class="other-ico">📖</span> Guide</button>
       </div>
     </div>

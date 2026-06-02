@@ -7,6 +7,7 @@ import { Chart, registerables } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import Hammer from "hammerjs";
 import { calendarGridlines, MS_DAY } from "./chartAxis";
+import { mountGraphDemo } from "./graphDemo";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -2927,6 +2928,12 @@ function timeXAxis(min: number, max: number, mirrored = false) {
     type: "linear" as const,
     ...(haveRange ? { min, max } : {}),
     grid: { color: "#d4d9e2", drawTicks: false },
+    // Pin the axis's horizontal padding so the plot area (and the y-axis) can't
+    // shift sideways as the edge date-labels change while panning.
+    afterFit: (scale: { paddingLeft: number; paddingRight: number }) => {
+      scale.paddingLeft = 0;
+      scale.paddingRight = 0;
+    },
     // Fixed ticks (week/month boundaries) — independent of the zoom view, so the
     // axis never recomputes mid-pan. Chart.js clips to the visible range itself.
     afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
@@ -4505,6 +4512,10 @@ function switchTopTab(name: string) {
   if (name === "leaderboards") lbChart?.resize();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
+  if (name === "graphdemo") {
+    const box = document.getElementById("graphDemoBox");
+    if (box) mountGraphDemo(box);
+  }
   updateBottomNav();
 }
 

@@ -38,6 +38,16 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.12.6",
+    title: "axis-pin-and-graph-demo",
+    sp: 3,
+    note: "Pin the graph axis padding so the sides can't shift on pan; add a from-scratch SVG ‘Graph demo’ in Other to test a clean replacement.",
+    details: [
+      "timeXAxis pins its horizontal padding (afterFit) so the plot area / y-axis stay fixed while panning — fixes the sides drifting sideways.",
+      "New Other → ‘Graph demo (test)’ page: a self-contained SVG chart (no Chart.js) with fixed axes and drag/wheel pan-zoom, to evaluate replacing the chart tech.",
+    ],
+  },
+  {
     version: "b.1.12.5",
     title: "revert-graph-gridlines",
     sp: 2,

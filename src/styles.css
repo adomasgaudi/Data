@@ -207,6 +207,14 @@ main { padding-bottom: 5rem; }
   display: grid; gap: 0.9rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
+/* Graph demo (test bed) — from-scratch SVG chart. */
+.gd-box { width: 100%; touch-action: none; user-select: none; cursor: grab; }
+.gd-box:active { cursor: grabbing; }
+.gd-svg { display: block; }
+.gd-legend { display: flex; gap: 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); }
+.gd-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+.gd-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
 /* Combined comparison table: all exercises, everyone's est 1RM side by side. */
 .team-summaries { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin: 0 0 0.9rem; }
 .team-sumchip {
