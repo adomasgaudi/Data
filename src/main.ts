@@ -53,8 +53,6 @@ import {
   realPullupWeight,
   EXERCISE_GROUPS,
   exerciseCategory,
-  exerciseCode,
-  exerciseCodesFor,
   exerciseTier,
   TRAINING_CATEGORIES,
   type TrainingCategory,
@@ -152,9 +150,6 @@ const els = {
   bwTitle: $("bwTitle"),
   bwGroups: $("bwGroups"),
   mergeList: $("mergeList"),
-  recordsTitle: $("recordsTitle"),
-  recordsTable: $<HTMLTableElement>("recordsTable"),
-  recordsPager: $("recordsPager"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
   calcReps: $<HTMLInputElement>("calcReps"),
   calcBw: $<HTMLInputElement>("calcBw"),
@@ -491,6 +486,15 @@ function renderChangelog() {
   // Count actual released versions (a grouped minor counts its sub-versions).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.children?.length ?? 1), 0);
   const header = `<p class="cl-summary muted">${releaseCount} releases · ${TOTAL_SP} story points shipped</p>`;
+  // Per-section versions (same data as the chips under the title).
+  const sections =
+    `<div class="cl-sections"><div class="cl-sections-lbl muted">Section versions</div>` +
+    `<div class="cl-sections-row">` +
+    COMPONENTS.map(
+      (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
+        `<span class="cv-ver">${escapeHtml(c.version)}</span></span>`,
+    ).join("") +
+    `</div></div>`;
   const rows = CHANGELOG.map((r) => {
     // Grouped minor: list each folded patch under the bullets.
     const children = r.children?.length
@@ -519,7 +523,7 @@ function renderChangelog() {
       `</details>`
     );
   }).join("");
-  els.changelog.innerHTML = header + rows;
+  els.changelog.innerHTML = header + sections + rows;
 }
 
 function renderHealth() {
@@ -778,9 +782,6 @@ function renderPersonalRecords() {
 // Exercises shown in the (date-filtered) list, in display order — what the
 // exercises row click handler maps an index back to.
 let exercisesView: string[] = [];
-// Exercises shown in the Records sub-page, in display order — what a Records row
-// click maps back to so it can jump to that exercise's drill-in.
-let recordsView: string[] = [];
 let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
 let athleteWorkouts: WorkoutDay[] = [];
 
@@ -797,7 +798,6 @@ let workoutGroups: WorkoutGroup[] = [];
 let exercisesPage = 0;
 let workoutsPage = 0;
 let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
-let recordsPage = 0;
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
@@ -844,7 +844,6 @@ function renderAthlete() {
   syncAthleteChips();
   exercisesPage = 0;
   workoutsPage = 0;
-  recordsPage = 0;
   selectedExercise = null;
   athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
@@ -858,55 +857,9 @@ function renderAthlete() {
   renderWorkoutCalendar();
   renderWorkoutSetsChart();
   renderWorkoutsPage();
-  renderRecordsPage();
 }
 
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
-function renderRecordsPage() {
-  const username = els.athlete.value;
-  const recs = personalRecords(
-    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
-    currentFormula(),
-  ).sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
-
-  els.recordsTitle.innerHTML =
-    `${escapeHtml(athleteLabel())} — personal records ` +
-    `<span class="muted">(${recs.length} exercises · est. working weights, kg · short codes · tap to open)</span>`;
-  // Codes are made unique across this athlete's whole record set (all pages), so
-  // the suffix on a collision doesn't shift as you page through.
-  const codes = exerciseCodesFor(recs.map((p) => p.exerciseName));
-  const formula = currentFormula();
-  // Estimated working weight for N reps off the best 1RM (— if undefined).
-  const rm = (oneRm: number, reps: number) => {
-    const w = reps === 1 ? oneRm : weightForReps(oneRm, reps, formula);
-    return w === null ? "—" : fmt(w);
-  };
-  const head =
-    `<thead><tr><th>Exercise</th><th class="num">1RM</th><th class="num">5RM</th>` +
-    `<th class="num">10RM</th><th class="num">15RM</th></tr></thead>`;
-  // recordsView maps a clicked row back to its exercise name (for the drill-in jump).
-  recordsView = recs.map((p) => p.exerciseName);
-  const start = recordsPage * PAGE_SIZE;
-  const rows = recs
-    .slice(start, start + PAGE_SIZE)
-    .map((p, i) => {
-      const e1rm = p.bestE1rm.e1rm;
-      // Cramped (5 columns), so the exercise is shown as its 3-letter code with
-      // the full name in the tooltip and a small subline so it stays readable.
-      return (
-        `<tr class="rec-row" data-index="${start + i}" title="${escapeHtml(p.exerciseName)}">` +
-        `<td><span class="ex-code">${escapeHtml(codes.get(p.exerciseName) ?? exerciseCode(p.exerciseName))}</span> <span class="go-chevron">›</span>` +
-        `<div class="ex-fullname muted">${escapeHtml(p.exerciseName)}${originBadge(p.exerciseName)}</div></td>` +
-        `<td class="num">${rm(e1rm, 1)}</td><td class="num">${rm(e1rm, 5)}</td>` +
-        `<td class="num">${rm(e1rm, 10)}</td><td class="num">${rm(e1rm, 15)}</td></tr>`
-      );
-    })
-    .join("");
-  els.recordsTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="5" class="muted">No records for this athlete.</td></tr>`}</tbody>`;
-  els.recordsPager.innerHTML = pagerHtml(recordsPage, recs.length);
-}
-
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
  * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
@@ -3463,17 +3416,6 @@ async function init() {
   });
   els.ecalcAddRow.addEventListener("click", ecalcAddRow);
 
-  // A Records row jumps to that exercise's drill-in on the Exercises sub-tab.
-  els.recordsTable.addEventListener("click", (e) => {
-    const row = (e.target as HTMLElement).closest("tr.rec-row") as HTMLTableRowElement | null;
-    if (!row) return;
-    const exName = recordsView[Number(row.dataset.index)];
-    if (exName === undefined) return;
-    showSubtab("exercises");
-    selectedExercise = exName;
-    renderExercisesPage();
-  });
-
   // Period filter for the exercises list — a custom dropdown (not a native
   // select) so the menu looks the same on every OS.
   setupExerciseRange();
@@ -3536,13 +3478,6 @@ async function init() {
       els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
       renderTest();
     });
-  els.recordsPager.addEventListener("click", (e) => {
-    const p = pageFromClick(e);
-    if (p !== null) {
-      recordsPage = p;
-      renderRecordsPage();
-    }
-  });
 
   setupSubtabs();
 

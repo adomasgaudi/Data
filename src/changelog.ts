@@ -24,23 +24,19 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
-    version: "b.1.6.1",
-    title: "per-section-version-chips",
-    sp: 1,
-    note: "Per-section version chips under the title.",
+    version: "b.1.6",
+    title: "navigation-and-version-tracking",
+    sp: 6,
+    note: "Bottom nav bar, grouped version history, and per-section version chips.",
     details: [
-      "Each app section (Graphs, Workouts, Data, Athlete…) now shows its own bMAJOR.MINOR version under the title.",
-      "These bump independently whenever that section is updated.",
+      "Athlete tabs became a bottom nav bar; the Records tab was removed.",
+      "Version history folds every minor into one expandable group with summed SP.",
+      "Per-section version chips under the title (and listed in this page).",
     ],
-  },
-  {
-    version: "b.1.6.0",
-    title: "bottom-nav-and-changelog-groups",
-    sp: 3,
-    note: "Athlete tabs as a bottom nav bar; version history grouped by minor.",
-    details: [
-      "Workouts / Exercises / Records are now a fixed bottom nav bar with icons, not small pills.",
-      "Version history folds every finished minor (and the old 0.x eras) into one expandable entry with summed SP.",
+    children: [
+      { version: "b.1.6.2", sp: 1, note: "Removed the Records tab; section versions also listed in Settings." },
+      { version: "b.1.6.1", sp: 1, note: "Per-section version chips under the title." },
+      { version: "b.1.6.0", sp: 3, note: "Athlete bottom nav bar + version history grouped by minor/era." },
     ],
   },
   {
@@ -195,13 +191,12 @@ export interface Component {
 }
 export const COMPONENTS: Component[] = [
   { name: "Leaderboard", version: "b1.0" },
-  { name: "Athlete", version: "b1.1" }, // bumped: bottom nav bar (b.1.6.0)
+  { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
   { name: "Workouts", version: "b1.1" }, // bumped: sets-over-time graph (b.1.5)
   { name: "Exercises", version: "b1.0" },
   { name: "Data", version: "b1.0" },
   { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
   { name: "Calculator", version: "b1.0" },
-  { name: "Records", version: "b1.0" },
 ];
 
 /** Sum of all story points shipped (grouped entries already total their children). */
