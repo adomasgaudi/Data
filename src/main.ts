@@ -2541,7 +2541,7 @@ function renderBwParts() {
       const body = list
         .map(
           (r) =>
-            `<tr><td>${escapeHtml(r.name)}</td>` +
+            `<tr><td>${escapeHtml(r.name)}${originBadge(r.name)}</td>` +
             `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
             `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
             `<td class="num">${r.count.toLocaleString()}</td></tr>`,
@@ -2605,19 +2605,21 @@ function prefillTestFromPick() {
     return;
   }
   const formula = currentFormula();
+  // Pick the top set the SAME way the athlete page does: best bodyweight-aware
+  // added-weight 1RM (honours the rep cap), not a raw estimate — so the Test tab
+  // seeds the exact set the PR/leaderboard would. Display the logged bar weight.
   const sets = setsForUserExercise(data.records, username, exName);
-  // The "top record": the set with the best estimated 1RM (matches the athlete page).
   let best: SetRecord | null = null;
   let bestE1rm = -Infinity;
   for (const s of sets) {
-    const e = estimate1RM(s.weight, s.reps, formula);
+    const e = addedWeight1RM(computeRecord(s), formula);
     if (e !== null && e > bestE1rm) {
       bestE1rm = e;
-      best = s;
+      best = s; // keep the raw set so we show the logged weight/reps
     }
   }
   if (!best || best.weight === null || best.reps === null) {
-    els.testPickHint.textContent = "No logged sets with weight & reps for this exercise.";
+    els.testPickHint.textContent = "No logged sets with a usable 1RM for this exercise.";
     return;
   }
   els.calcWeight.value = String(best.weight);
