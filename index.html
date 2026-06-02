@@ -8,7 +8,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.6.2</span></h1>
+      <h1>Colosseum <span class="version">b.1.6.3</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -168,30 +168,36 @@
         <div id="sub-exercises" class="subtab-panel" hidden>
           <section class="panel">
             <h2 id="athleteTitle">Exercises</h2>
-            <div id="exerciseFilter" class="ex-filter">
-              <input id="exerciseSearch" class="ex-search" type="search" placeholder="Search exercises…" aria-label="Search exercises" />
-              <span class="ex-filter-lbl">Period</span>
-              <details id="exerciseRange" class="period-dd" data-days="0">
-                <summary class="period-dd-summary">
-                  <span class="period-dd-value">All time</span>
-                  <span class="period-dd-caret">▾</span>
-                </summary>
-                <div class="period-dd-menu" role="listbox"></div>
-              </details>
-              <span class="ex-filter-lbl">Sort</span>
-              <div id="exerciseSort" class="ex-sort" role="group" aria-label="Sort exercises">
-                <button type="button" class="ex-sort-btn is-active" data-sort="sets">By sets</button>
-                <button type="button" class="ex-sort-btn" data-sort="tier">By tier</button>
-                <button type="button" class="ex-sort-btn" data-sort="category">By category</button>
+            <div class="ex-tabbar">
+              <div id="exercisesTabs" class="ex-tabs" role="tablist">
+                <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
+                <button type="button" class="ex-tab" data-extab="compare" role="tab">Compare graph</button>
               </div>
-              <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
-              <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
+              <div class="ex-filters-wrap">
+                <button type="button" id="exFiltersBtn" class="ex-filters-btn" aria-label="Filters &amp; sort" aria-haspopup="true">⋯</button>
+                <div id="exerciseFilter" class="ex-filters-menu" hidden>
+                  <span class="ex-filter-lbl">Period</span>
+                  <details id="exerciseRange" class="period-dd" data-days="0">
+                    <summary class="period-dd-summary">
+                      <span class="period-dd-value">All time</span>
+                      <span class="period-dd-caret">▾</span>
+                    </summary>
+                    <div class="period-dd-menu" role="listbox"></div>
+                  </details>
+                  <span class="ex-filter-lbl">Sort</span>
+                  <div id="exerciseSort" class="ex-sort" role="group" aria-label="Sort exercises">
+                    <button type="button" class="ex-sort-btn is-active" data-sort="sets">By sets</button>
+                    <button type="button" class="ex-sort-btn" data-sort="tier">By tier</button>
+                    <button type="button" class="ex-sort-btn" data-sort="category">By category</button>
+                  </div>
+                  <label class="ex-nottrained"><input type="checkbox" id="exerciseNotTrained" /> Show not-trained</label>
+                  <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
+                </div>
+              </div>
             </div>
-            <!-- Compare several exercises' 1RM trend on one graph. Shown only in
-                 the list view (hidden in a single-exercise drill-in). Tick the
-                 exercises to overlay; each becomes a line. -->
-            <details id="exerciseCompare" class="exercise-compare">
-              <summary class="exercise-compare-summary">Compare on one graph <span class="ec-caret">▾</span></summary>
+            <!-- Compare several exercises' 1RM trend on one graph — the 'Compare
+                 graph' tab. Tick the exercises to overlay; each becomes a line. -->
+            <div id="exerciseCompare" class="exercise-compare" hidden>
               <div class="exercise-compare-body">
                 <div class="compare-quick">
                   <span class="compare-quick-lbl">By category</span>
@@ -210,7 +216,7 @@
                 </div>
                 <p class="muted" id="compareNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
               </div>
-            </details>
+            </div>
             <!-- Exercise stat readouts (record, sets-per-week, rep-max targets)
                  tucked into a collapsible so the drill-in stays short. Starts
                  closed; renderers below still fill the inner divs as before.
@@ -254,6 +260,11 @@
             <table id="athleteTable" class="data-table"></table>
             <div id="exercisesPager" class="pager"></div>
           </section>
+          <!-- Floating search for the exercise list — fixed above the bottom nav
+               so scrolling the long list doesn't move it. -->
+          <div id="exSearchBar" class="ex-search-bar" hidden>
+            <input id="exerciseSearch" class="ex-search" type="search" placeholder="Search exercises…" aria-label="Search exercises" />
+          </div>
         </div>
 
         <details class="ai-soon">

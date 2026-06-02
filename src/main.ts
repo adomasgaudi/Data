@@ -124,7 +124,10 @@ const els = {
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exProgressView: $("exProgressView"),
   exerciseFilter: $("exerciseFilter"),
-  exerciseCompare: $<HTMLDetailsElement>("exerciseCompare"),
+  exercisesTabs: $("exercisesTabs"),
+  exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
+  exSearchBar: $("exSearchBar"),
+  exerciseCompare: $("exerciseCompare"),
   compareChips: $("compareChips"),
   compareCats: $("compareCats"),
   compareTiers: $("compareTiers"),
@@ -802,6 +805,8 @@ let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
 let exerciseSort: "sets" | "category" | "tier" = "sets";
+// Which Exercises in-page tab is showing: the records-style list, or the compare graph.
+let exercisesTab: "list" | "compare" = "list";
 // Live search filter for the exercises list (substring on the exercise name).
 let exerciseSearch = "";
 // When true, append exercises this athlete has never logged (greyed) so gaps
@@ -1508,14 +1513,31 @@ function renderCompareChart() {
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
 function renderExercisesPage() {
   if (selectedExercise !== null) {
-    els.exerciseFilter.hidden = true; // period filter is a list-view control only
-    els.exerciseCompare.hidden = true; // compare graph is a list-view tool only
+    // Drill-in: hide the list-view chrome (tabs, filters, search, compare).
+    els.exercisesTabs.hidden = true;
+    els.exFiltersBtn.hidden = true;
+    els.exerciseFilter.hidden = true;
+    els.exSearchBar.hidden = true;
+    els.exerciseCompare.hidden = true;
     renderExerciseDetail(selectedExercise);
     return;
   }
-  els.exerciseFilter.hidden = false;
-  els.exerciseCompare.hidden = false;
-  renderCompareSection();
+  // List view: the two in-page tabs decide what shows.
+  els.exercisesTabs.hidden = false;
+  const onCompare = exercisesTab === "compare";
+  els.exFiltersBtn.hidden = onCompare; // filters/search only apply to the list
+  els.exSearchBar.hidden = onCompare;
+  els.exerciseFilter.hidden = true; // the kebab menu starts closed
+  els.exerciseCompare.hidden = !onCompare;
+  els.athleteTable.hidden = onCompare;
+  els.exercisesPager.hidden = onCompare;
+  els.exerciseStats.hidden = onCompare;
+  if (onCompare) {
+    renderCompareSection();
+    els.athleteTitle.innerHTML = "";
+    return;
+  }
+  els.exerciseStats.hidden = false;
   els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
   els.exerciseWeekly.hidden = true; // sets-per-week chips are a drill-in detail too
   els.exerciseTargets.hidden = true; // rep-max targets are a drill-in control too
@@ -1555,7 +1577,28 @@ function renderExercisesPage() {
   // List view: no title. The athlete chips above already name the athlete.
   els.athleteTitle.innerHTML = "";
 
-  const head = `<thead><tr><th>Exercise</th><th class="num">Sets</th></tr></thead>`;
+  // Records-style rep-max columns: each exercise's best 1RM, and the working
+  // weights for 5/10/15 reps off it. Built from the athlete's PRs.
+  const formula = currentFormula();
+  const prByEx = new Map<string, number>();
+  for (const p of personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
+    formula,
+  ))
+    prByEx.set(p.exerciseName, p.bestE1rm.e1rm);
+  const rm = (oneRm: number, reps: number): string => {
+    const w = reps === 1 ? oneRm : weightForReps(oneRm, reps, formula);
+    return w === null ? "—" : fmt(w);
+  };
+  const rmCells = (name: string): string => {
+    const pr = prByEx.get(name);
+    if (pr === undefined) return `<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>`;
+    return `<td class="num">${rm(pr, 1)}</td><td class="num">${rm(pr, 5)}</td><td class="num">${rm(pr, 10)}</td><td class="num">${rm(pr, 15)}</td>`;
+  };
+
+  const head =
+    `<thead><tr><th>Exercise</th><th class="num">1RM</th><th class="num">5RM</th>` +
+    `<th class="num">10RM</th><th class="num">15RM</th></tr></thead>`;
   const start = exercisesPage * PAGE_SIZE;
   // When grouping, emit a category sub-header row whenever the category changes.
   // Track the previous page's last category so a header isn't dropped at a page
@@ -1571,13 +1614,16 @@ function renderExercisesPage() {
     if (!it.trained)
       return (
         `<tr class="ex-missing-row"><td>${escapeHtml(it.exerciseName)}` +
-        `<div class="ex-wk">not trained</div></td><td class="num">—</td></tr>`
+        `<div class="ex-wk">not trained</div></td>` +
+        `<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>`
       );
     const wk = weeklySetStats(setsForUserExercise(data.records, username, it.exerciseName), today);
-    const sub = `<div class="ex-wk muted">${wk.thisWeek}/${wk.peakPerWeek}</div>`; // this week / peak
+    // Subline: this-week / peak sets, plus the total set count — keeps the list's
+    // training-frequency info while the columns show strength (records-style).
+    const sub = `<div class="ex-wk muted">${it.count.toLocaleString()} sets · ${wk.thisWeek}/${wk.peakPerWeek} wk</div>`;
     return (
-      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(it.exerciseName)}${originBadge(it.exerciseName)}${sub}</td>` +
-      `<td class="num">${it.count.toLocaleString()} <span class="go-chevron">›</span></td></tr>`
+      `<tr class="ex-row" data-index="${abs}"><td class="${rankCls}">${escapeHtml(it.exerciseName)}${originBadge(it.exerciseName)}` +
+      ` <span class="go-chevron">›</span>${sub}</td>${rmCells(it.exerciseName)}</tr>`
     );
   };
   const rows = ordered
@@ -1591,7 +1637,7 @@ function renderExercisesPage() {
         let header = "";
         if (tier !== prevTier) {
           header = ft
-            ? `<tr class="ex-tier-row"><td colspan="2"><span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
+            ? `<tr class="ex-tier-row"><td colspan="5"><span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
             : "";
           prevTier = tier;
         }
@@ -1607,7 +1653,7 @@ function renderExercisesPage() {
         const collapsed = collapsedExCats.has(cat);
         header =
           `<tr class="ex-cat-row${collapsed ? " is-collapsed" : ""}" data-cat="${escapeHtml(cat)}">` +
-          `<td colspan="2"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
+          `<td colspan="5"><span class="caret">▸</span>${escapeHtml(cat)}</td></tr>`;
         prevCat = cat;
       }
       return header + (collapsedExCats.has(cat) ? "" : rowHtml(it, abs, ""));
@@ -1617,7 +1663,7 @@ function renderExercisesPage() {
     ? `No exercises match “${escapeHtml(exerciseSearch.trim())}”.`
     : "No exercises trained in this period.";
   els.athleteTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">${emptyMsg}</td></tr>`}</tbody>`;
+    head + `<tbody>${rows || `<tr><td colspan="5" class="muted">${emptyMsg}</td></tr>`}</tbody>`;
   els.exercisesPager.innerHTML = pagerHtml(exercisesPage, ordered.length);
 }
 
@@ -3421,6 +3467,27 @@ async function init() {
   setupExerciseRange();
   setupExerciseSort();
   setupExerciseSearch();
+
+  // Exercises in-page tabs: List & stats  ↔  Compare graph.
+  els.exercisesTabs.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-tab");
+    if (!btn?.dataset.extab) return;
+    const t = btn.dataset.extab === "compare" ? "compare" : "list";
+    if (t === exercisesTab) return;
+    exercisesTab = t;
+    for (const b of els.exercisesTabs.querySelectorAll<HTMLElement>(".ex-tab"))
+      b.classList.toggle("is-active", b.dataset.extab === t);
+    renderExercisesPage();
+  });
+  // Kebab (⋯) opens the filters/sort menu; click-outside closes it.
+  els.exFiltersBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    els.exerciseFilter.hidden = !els.exerciseFilter.hidden;
+  });
+  document.addEventListener("click", (e) => {
+    if (!els.exerciseFilter.hidden && !els.exerciseFilter.contains(e.target as Node) && e.target !== els.exFiltersBtn)
+      els.exerciseFilter.hidden = true;
+  });
 
   // Compare-graph chips: toggle an exercise in/out of the overlay (delegated).
   els.compareChips.addEventListener("click", (e) => {

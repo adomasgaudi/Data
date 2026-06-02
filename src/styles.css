@@ -222,6 +222,41 @@ body {
 }
 .ex-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ex-nottrained { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; color: var(--muted); font-weight: 600; cursor: pointer; }
+/* Exercises in-page tab bar (List & stats | Compare graph) + kebab filters. */
+.ex-tabbar { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.9rem; border-bottom: 1px solid var(--line); }
+.ex-tabs { display: flex; gap: 0.25rem; flex: 1 1 auto; }
+.ex-tabs[hidden] { display: none; }
+.ex-tab {
+  background: none; border: none; color: var(--muted); font: inherit; font-size: 0.9rem;
+  cursor: pointer; padding: 0.6rem 0.9rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ex-tab:hover { color: var(--text); }
+.ex-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.ex-filters-wrap { position: relative; flex: none; }
+.ex-filters-btn {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; line-height: 1;
+}
+.ex-filters-btn[hidden] { display: none; }
+.ex-filters-btn:hover { color: var(--accent); border-color: var(--accent); }
+.ex-filters-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0.85rem 1rem; box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12); min-width: 210px;
+}
+.ex-filters-menu[hidden] { display: none; }
+/* Floating search: fixed above the bottom nav bar so the list scrolls under it. */
+.ex-search-bar {
+  position: fixed; left: 0; right: 0; bottom: calc(3.4rem + env(safe-area-inset-bottom, 0px));
+  z-index: 49; padding: 0.5rem 1rem;
+  background: var(--panel); border-top: 1px solid var(--line);
+  box-shadow: 0 -2px 10px rgba(20, 24, 38, 0.05);
+}
+.ex-search-bar[hidden] { display: none; }
+.ex-search-bar .ex-search { flex: 1 1 auto; width: 100%; }
+/* Extra clearance so the list's last rows clear the floating search + nav bar. */
+#sub-exercises { padding-bottom: 3.5rem; }
 /* Exercises the athlete has never trained: greyed, italic, not tappable. */
 .ex-missing-row td { color: var(--muted); font-style: italic; }
 .ex-missing-row .ex-wk { font-style: normal; font-size: 0.72rem; }
