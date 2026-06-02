@@ -9,6 +9,7 @@ import Hammer from "hammerjs";
 import { calendarGridlines, MS_DAY } from "./chartAxis";
 import { mountGraphDemo } from "./graphDemo";
 import { mountGraphAdvanced } from "./graphAdvanced";
+import { mountSvgChart, type SvgChart, type SvgSeries } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -205,7 +206,7 @@ let data: LoadedData;
 let lbChart: Chart | null = null;
 let exerciseChart: Chart | null = null; // per-exercise drill-in progress graph
 let calcCurveChart: Chart | null = null; // Test-tab weight-vs-reps diagram
-let compareChart: Chart | null = null; // Exercises list multi-exercise overlay
+let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let workoutSetsChart: Chart | null = null; // Workouts view: all sets over time
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
@@ -1532,127 +1533,55 @@ function compareToggleTier(tier: string) {
   renderCompareSection();
 }
 
-/** Draw the overlay: one estimated-1RM line per ticked exercise, on a time axis. */
+/** Draw the overlay on the SVG engine: one estimated-1RM line per ticked exercise
+ * (trend view), or one floating weight→1RM bar per set (per-set view). */
 function renderCompareChart() {
-  compareChart?.destroy();
-  compareChart = null;
-  const canvas = document.getElementById("compareChart") as HTMLCanvasElement | null;
-  if (!canvas) return;
+  const box = document.getElementById("compareChart");
+  if (!box) return;
 
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   const picks = [...compareSelected];
+  const ts = (d: string) => Date.parse(d);
+
   if (picks.length === 0) {
     els.compareNote.textContent = "Tick one or more exercises above to overlay them.";
+    if (compareSvg) compareSvg.update({ series: [] });
     return;
   }
 
-  const ts = (d: string) => Date.parse(d);
-
+  let series: SvgSeries[];
   if (compareView === "perset") {
-    // Per-set range: one floating bar per set (weight → that set's own 1RM),
-    // colour-coded per exercise, all on a shared time axis.
-    const r1 = (n: number) => Math.round(n * 10) / 10;
-    let psMin = Infinity, psMax = -Infinity;
-    const datasets = picks.map((name, i) => {
+    series = picks.map((name, i) => {
       const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
-      const sets = recs.filter((r) => r.username === username && r.exerciseName === name);
-      const bars = sets
+      const points = recs
+        .filter((r) => r.username === username && r.exerciseName === name)
         .map((s) => {
           const e1rm = addedWeight1RM(s, formula);
           if (e1rm === null) return null;
           const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-          const x = ts(s.date);
-          if (x < psMin) psMin = x;
-          if (x > psMax) psMax = x;
-          return { x, y: [r1(added), r1(e1rm)] as [number, number], reps: s.reps ?? 0 };
+          return { x: ts(s.date), lo: added, hi: e1rm, meta: `×${s.reps ?? 0}` };
         })
-        .filter((b): b is { x: number; y: [number, number]; reps: number } => b !== null);
-      return {
-        label: name,
-        data: bars as unknown as { x: number; y: number }[],
-        backgroundColor: color,
-        borderSkipped: false,
-        barThickness: 4,
-        minBarLength: 2,
-      };
-    });
-    compareChart = new Chart(canvas, {
-      type: "bar",
-      data: { datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              title: (items) => tsLabel(Number(items[0]?.parsed.x)),
-              label: (it) => {
-                const raw = it.raw as { y: [number, number]; reps: number };
-                return `${it.dataset.label}: ${fmt(raw.y[0])} kg × ${raw.reps} → ${fmt(raw.y[1])} kg 1RM`;
-              },
-            },
-          },
-          // Scroll/zoom like the other graphs: drag to pan, wheel/pinch to zoom (x).
-          zoom: {
-            pan: { enabled: true, mode: "x" },
-            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
-          },
-        },
-        scales: {
-          x: timeXAxis(psMin - MS_DAY, psMax + MS_DAY),
-          y: { title: { display: true, text: "kg (weight → 1RM)" }, grid: { color: "#d4d9e2" } },
-        },
-      },
+        .filter((p): p is { x: number; lo: number; hi: number; meta: string } => p !== null);
+      return { name, color, type: "range" as const, points };
     });
     els.compareNote.textContent =
-      `Every set's weight → its own estimated 1RM (${formula}), one bar per set, coloured per exercise. Drag to pan · wheel/pinch to zoom.`;
-    return;
+      `Every set's weight → its own estimated 1RM (${formula}), one bar per set. Drag to pan · wheel to zoom · tap a bar.`;
+  } else {
+    series = picks.map((name, i) => {
+      const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
+      const points = exerciseProgressByWeek(recs, username, name, formula)
+        .filter((p) => p.bestE1rm !== null)
+        .map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
+      return { name, color, type: "line" as const, points };
+    });
+    els.compareNote.textContent = `Estimated 1RM (${formula}) over time. Drag to pan · wheel to zoom · tap a point.`;
   }
 
-  let trMin = Infinity, trMax = -Infinity;
-  const datasets = picks.map((name, i) => {
-    const series = exerciseProgressByWeek(recs, username, name, formula).filter((p) => p.bestE1rm !== null);
-    const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
-    return {
-      label: name,
-      data: series.map((p) => {
-        const x = ts(p.date);
-        if (x < trMin) trMin = x;
-        if (x > trMax) trMax = x;
-        return { x, y: Math.round(p.bestE1rm! * 10) / 10 };
-      }),
-      borderColor: color,
-      backgroundColor: color,
-      tension: 0.25,
-      spanGaps: true,
-      pointRadius: 2,
-    };
-  });
-
-  compareChart = new Chart(canvas, {
-    type: "line",
-    data: { datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { title: (items) => tsLabel(Number(items[0]?.parsed.x)), label: (it) => `${it.dataset.label}: ${it.formattedValue} kg` } },
-        zoom: {
-          pan: { enabled: true, mode: "x" },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
-        },
-      },
-      scales: {
-        x: timeXAxis(trMin - MS_DAY, trMax + MS_DAY),
-        y: { title: { display: true, text: "est. 1RM (kg)" }, beginAtZero: true, grid: { color: "#d4d9e2" } },
-      },
-    },
-  });
-  els.compareNote.textContent = `Estimated 1RM (${formula}) over time for the ticked exercises. Drag to pan · wheel/pinch to zoom.`;
+  const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
+  if (!compareSvg) compareSvg = mountSvgChart(box, config);
+  else compareSvg.update(config);
 }
 
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----

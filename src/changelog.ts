@@ -38,6 +38,17 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.13.0",
+    title: "svg-engine-compare",
+    sp: 10,
+    note: "New from-scratch SVG chart engine; the Compare graph is the first chart moved onto it (Chart.js dropped there).",
+    details: [
+      "src/svgChart.ts: reusable engine (line + range series, time/linear x, free pan/zoom, inside labels, tooltips) — no Chart.js, fixed axis frame so nothing drifts.",
+      "Exercises → Compare graph (trend + per-set) now renders on the engine; tap a point/bar for its values.",
+      "Pure axis maths (calendarGridlines + new niceTicks) are unit-tested. Other charts will move over next, one at a time.",
+    ],
+  },
+  {
     version: "b.1.12.9",
     title: "graph-advanced-variant",
     sp: 2,

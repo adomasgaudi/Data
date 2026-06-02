@@ -8,6 +8,25 @@
 export const MS_DAY = 86_400_000;
 
 /**
+ * "Nice" round tick values across [min, max] — roughly `target` of them, on a
+ * 1/2/5×10ⁿ step. Pure, for the y-axis of the SVG charts. Returns at least the
+ * bounds-snapped values; empty only for a non-positive span.
+ */
+export function niceTicks(min: number, max: number, target = 6): number[] {
+  const span = max - min;
+  if (!(span > 0) || !Number.isFinite(span)) return [];
+  const raw = span / Math.max(1, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) {
+    out.push(Math.round(v * 1e6) / 1e6);
+  }
+  return out;
+}
+
+/**
  * Calendar-anchored vertical-gridline timestamps spanning [min, max], with the
  * granularity chosen by how wide the range is so the line count stays sensible:
  *   • ≤ ~16 weeks  → Mondays

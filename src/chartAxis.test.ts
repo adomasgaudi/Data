@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calendarGridlines, MS_DAY } from "./chartAxis";
+import { calendarGridlines, MS_DAY, niceTicks } from "./chartAxis";
 
 const utc = (y: number, m: number, d: number) => Date.UTC(y, m, d);
 const isMonday = (t: number) => new Date(t).getUTCDay() === 1;
@@ -52,5 +52,29 @@ describe("calendarGridlines", () => {
     const inner = calendarGridlines(utc(2025, 3, 1), utc(2025, 7, 31));
     // Every monthly boundary inside the inner window also appears in the wide one.
     for (const t of inner) expect(wide).toContain(t);
+  });
+});
+
+describe("niceTicks", () => {
+  it("returns nothing for a non-positive or non-finite span", () => {
+    expect(niceTicks(5, 5)).toEqual([]);
+    expect(niceTicks(10, 0)).toEqual([]);
+    expect(niceTicks(0, Infinity)).toEqual([]);
+  });
+  it("makes round steps and stays within range", () => {
+    const t = niceTicks(0, 120, 6);
+    expect(t[0]).toBe(0);
+    expect(t).toContain(100);
+    expect(t.every((v) => v >= 0 && v <= 120)).toBe(true);
+    // Even spacing on a 1/2/5×10ⁿ step.
+    const step = t[1]! - t[0]!;
+    for (let i = 1; i < t.length; i++) expect(Math.abs(t[i]! - t[i - 1]! - step)).toBeLessThan(1e-6);
+    expect([1, 2, 5, 10, 20, 25, 50].includes(step)).toBe(true);
+  });
+  it("handles small ranges with fractional steps", () => {
+    const t = niceTicks(0, 3, 6);
+    expect(t.length).toBeGreaterThanOrEqual(3);
+    expect(t[0]).toBe(0);
+    expect(Math.max(...t)).toBeLessThanOrEqual(3);
   });
 });
