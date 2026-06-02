@@ -321,23 +321,31 @@ function saveLastAthlete(username: string) {
  * The chosen bodyweight source (profile table vs the value logged per set) is a
  * Setting. Exercises with coefficient 0 are returned untouched.
  */
-function computedRecords(): SetRecord[] {
+/**
+ * Fold the bodyweight share into ONE record exactly as computedRecords does, so
+ * any view can get the same bodyweight-aware numbers the leaderboard/PRs use.
+ * `weight` becomes the effective (bw-inclusive) load; `origWeight` keeps the
+ * logged bar weight for display. The single source of truth for this transform.
+ */
+function computeRecord(r: SetRecord): SetRecord {
   const fromTable = els.bwSource.value !== "perset";
-  return data.records.map((r) => {
-    const coeff = coeffFor(r.exerciseName);
-    // Assisted pull-ups: the logged weight is the machine dial value, which over-
-    // reads ~2x. Use the halved real assistance for all strength maths, but keep
-    // the logged value as origWeight so the displayed set still tells you what to
-    // set on the machine.
-    const realAdded = realPullupWeight(r.exerciseName, r.weight);
-    if (coeff <= 0) {
-      if (realAdded === r.weight) return r;
-      return { ...r, weight: realAdded, origWeight: r.weight };
-    }
-    const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
-    // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-    return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
-  });
+  const coeff = coeffFor(r.exerciseName);
+  // Assisted pull-ups: the logged weight is the machine dial value, which over-
+  // reads ~2x. Use the halved real assistance for all strength maths, but keep
+  // the logged value as origWeight so the displayed set still tells you what to
+  // set on the machine.
+  const realAdded = realPullupWeight(r.exerciseName, r.weight);
+  if (coeff <= 0) {
+    if (realAdded === r.weight) return r;
+    return { ...r, weight: realAdded, origWeight: r.weight };
+  }
+  const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
+  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
+  return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
+}
+
+function computedRecords(): SetRecord[] {
+  return data.records.map(computeRecord);
 }
 
 /**
@@ -1939,28 +1947,54 @@ const NOTE_PREVIEW_LEN = 8;
 
 /**
  * Plain-text explanation of how a set's estimated 1RM was produced, with the
- * actual weight and reps plugged in. Mirrors the formulas in metrics.ts so the
- * reveal under the 1RM cell always matches the number shown. The Workouts table
- * feeds raw logged weight (no bodyweight share), so this reads straight off the
- * logged weight/reps.
+ * actual numbers plugged in. Takes a COMPUTED record (bodyweight already folded
+ * into `weight`, logged bar weight in `origWeight`) so the reveal shows the full
+ * chain — bodyweight share, effective load, the formula, then peeling the body
+ * share back off — and always matches the bodyweight-aware number displayed.
  */
-function oneRmFormulaText(s: SetRecord, formula: OneRepMaxFormula): string {
-  const w = s.weight;
-  const r = s.reps;
-  if (w === null || r === null || w <= 0 || r <= 0) return "Needs a weight and reps to estimate a 1RM.";
-  const e1rm = estimate1RM(w, r, formula);
+function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
+  const effLoad = c.weight; // bodyweight-inclusive load
+  const r = c.reps;
+  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return "Needs a weight and reps to estimate a 1RM.";
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
-  const result = e1rm === null ? "—" : `${f2(e1rm)} kg`;
-  if (r === 1) return `${formula}: a single rep is the 1RM → ${f2(w)} kg.`;
-  if (formula === "brzycki") {
-    if (r >= 37) return "Brzycki is undefined at 37+ reps.";
-    return `Brzycki: weight × 36 / (37 − reps) = ${f2(w)} × 36 / (37 − ${r}) = ${result}.`;
+  // Bar weight vs the body's share folded in by computeRecord.
+  const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
+  const bodyLoad = effLoad - added;
+  const hasBody = bodyLoad > 0.01;
+  const cappedReps = Math.min(r, MAX_1RM_REPS);
+  const capNote = cappedReps !== r ? ` (reps capped at ${MAX_1RM_REPS})` : "";
+  const eff1rm = estimate1RM(effLoad, cappedReps, formula);
+  const added1rm = addedWeight1RM(c, formula);
+  const addedTxt = added1rm === null ? "—" : `${f2(added1rm)} kg`;
+
+  const parts: string[] = [];
+  if (hasBody) {
+    parts.push(
+      `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg.`,
+    );
   }
-  if (formula === "nuzzo") {
-    const pct = benchPctForReps(r);
-    return `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so weight ÷ that % = ${f2(w)} ÷ ${f2(pct)}% = ${result}.`;
+  if (cappedReps === 1) {
+    parts.push(`${formula}: a single is the 1RM → ${f2(effLoad)} kg.`);
+  } else if (formula === "brzycki") {
+    parts.push(
+      r >= 37
+        ? "Brzycki is undefined at 37+ reps."
+        : `Brzycki: load × 36 / (37 − reps) = ${f2(effLoad)} × 36 / (37 − ${cappedReps})${capNote} = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+    );
+  } else if (formula === "nuzzo") {
+    const pct = benchPctForReps(cappedReps);
+    parts.push(
+      `Nuzzo bench curve: ${cappedReps} reps${capNote} ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(effLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+    );
+  } else {
+    parts.push(
+      `Epley: load × (1 + reps/30) = ${f2(effLoad)} × (1 + ${cappedReps}/30)${capNote} = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+    );
   }
-  return `Epley: weight × (1 + reps/30) = ${f2(w)} × (1 + ${r}/30) = ${result}.`;
+  if (hasBody && eff1rm !== null) {
+    parts.push(`Peel the bodyweight share back off: ${f2(eff1rm)} − ${f2(bodyLoad)} = ${addedTxt} added-weight 1RM.`);
+  }
+  return parts.join(" ");
 }
 
 /**
@@ -1971,7 +2005,12 @@ function oneRmFormulaText(s: SetRecord, formula: OneRepMaxFormula): string {
  * are independent sub-rows, so a set can show either or both.
  */
 function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
-  const e1rm = estimate1RM(s.weight, s.reps, formula);
+  // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
+  // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
+  // what was actually loaded. `s` is a raw record; compute it here so the
+  // Workouts and Exercises sets tables match every other view.
+  const computed = computeRecord(s);
+  const e1rm = addedWeight1RM(computed, formula);
   const vol = setVolume(s.weight, s.reps);
   const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
   let preview = "";
@@ -1996,7 +2035,7 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
   const formulaRow =
     e1rm === null
       ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="3" class="muted">${escapeHtml(oneRmFormulaText(s, formula))}</td></tr>`;
+      : `<tr class="e1rm-formula-row" hidden><td colspan="3" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
   return main + noteRow + formulaRow;
 }
 
