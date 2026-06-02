@@ -38,6 +38,17 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.10.1",
+    title: "effort-sp-chips",
+    sp: 5,
+    note: "Part chips now show effort (SP) on the new 1·2·3·5·10·20·30·50·100 scale, plus a whole-site grade; list calculator removed.",
+    details: [
+      "Section chips show the story points spent on each part instead of a version, with a gold ‘Whole site SP 100’ grade.",
+      "Every part re-graded by reading the full history on the modified-Fibonacci scale (no in-between values).",
+      "Removed the single-exercise Calculator (and empty Stats) from the multi-exercise list — they only belong in a drill-in.",
+    ],
+  },
+  {
     version: "b.1.10.0",
     title: "training-group-view",
     sp: 5,
@@ -203,29 +214,32 @@ const TOP = CHANGELOG.find((r) => !r.soon)!;
 export const CURRENT_VERSION = TOP.children?.length ? TOP.children[0]!.version : TOP.version;
 
 /**
- * Per-section versions shown as chips under the title. Each part of the app
- * carries its own `bMAJOR.MINOR` version; bump the relevant one whenever that
- * section changes (minor for a feature/fix, e.g. b1.0 → b1.1). Keep this list in
- * step with the work — it's the at-a-glance "what's been touched" tracker.
+ * Per-section EFFORT shown as chips under the title — the story points spent on
+ * each part of the app, graded by reading the whole history (not a sum of the
+ * release log; it's a holistic estimate of how much went into that section).
+ *
+ * SP scale is the modified Fibonacci with NO in-between values:
+ *   1, 2, 3, 5, 10, 20, 30, 50, 100.
+ * Re-grade a part (up a step on the scale) when it has grown materially.
  */
 export interface Component {
   name: string;
-  version: string;
+  sp: number;
 }
 export const COMPONENTS: Component[] = [
-  { name: "Leaderboard", version: "b1.0" },
-  { name: "Athlete", version: "b1.2" }, // bumped: removed Records tab
-  { name: "Workouts", version: "b1.2" }, // bumped: today outlined in year heatmap
-  { name: "Exercises", version: "b1.5" }, // bumped: single editable rep-max column
-  { name: "Data", version: "b1.0" },
-  { name: "Graphs", version: "b1.2" }, // bumped: per-set/compare graphs, calendar gridlines, smoothness
-  { name: "Calculator", version: "b1.0" },
-  { name: "Add", version: "b1.1" }, // bumped: export/import backup
-  { name: "Navigation", version: "b1.0" }, // bottom nav + Other sheet
-  { name: "Stats", version: "b1.2" }, // renamed from Groups: patterns / categories cards
-  { name: "Group", version: "b1.0" }, // train people together: levels + workouts side by side
+  { name: "Exercises", sp: 30 }, // drill-ins, categories, tiers, merges, codes, rep-max, best-sets, compare
+  { name: "Athlete", sp: 20 }, // per-athlete pages, chips, muscle map, momentum, training mix
+  { name: "Workouts", sp: 20 }, // day/week list, rest days, year heatmap, sets-over-time
+  { name: "Graphs", sp: 20 }, // compare/per-set graphs, gridlines, smooth pan/zoom, curves
+  { name: "Leaderboard", sp: 10 }, // boards, rank/sex/BW/axis filters, pattern-lift toggle
+  { name: "Data", sp: 10 }, // raw+processed CSV tab, every computed variable, search
+  { name: "Calculator", sp: 5 }, // multi-row reps↔weight calc + Test-tab curve
+  { name: "Add", sp: 5 }, // hand-log sets, merge, export/import
+  { name: "Navigation", sp: 5 }, // bottom nav + Other sheet
+  { name: "Stats", sp: 5 }, // pattern / category cards (was Groups)
+  { name: "Group", sp: 5 }, // train people together: levels + workouts side by side
 ];
 
-/** Sum of all story points shipped (grouped entries already total their
- * children; planned "soon" entries don't count). */
-export const TOTAL_SP = CHANGELOG.reduce((s, r) => s + (r.soon ? 0 : r.sp), 0);
+/** A single holistic grade for the WHOLE site, on the same modified-Fibonacci
+ * scale — top of the scale, an epic-sized build. */
+export const WEBSITE_SP = 100;

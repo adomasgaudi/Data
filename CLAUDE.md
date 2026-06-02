@@ -27,8 +27,9 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   Keep the longer detail in the commit body as before.
 - **Give every task a code + size.** Each task the owner gives gets a code:
   a 2–5 letter **category** + a number (e.g. `EXR-3`, `DATA-1`, `CHART-2`), plus
-  a Scrum **story-point** estimate (`SP:1/2/3/5/8`, Fibonacci — 1 trivial,
-  8 large). Put `CODE (SP:n)` at the **start of the commit subject, before the
+  a Scrum **story-point** estimate on the **modified-Fibonacci scale with NO
+  in-between values: `1, 2, 3, 5, 10, 20, 30, 50, 100`** (1 trivial → 100 epic).
+  Only ever use a number from that set. Put `CODE (SP:n)` at the **start of the commit subject, before the
   version**, e.g. `EXR-3 (SP:3) 0.36.0 tier-list`, and lead the chat reply with
   the same `CODE (SP:n)`. Recorded in commit + chat only (no separate file).
   Reuse a category for related areas — current ones: `EXR` exercises view,
@@ -47,11 +48,13 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   static `<span class="version">` in `index.html` and the top `CHANGELOG` entry
   must both show the version you're committing; update both in the same commit,
   then rebuild so `dist/index.html` carries it.
-- **Per-section versions:** `COMPONENTS` in `src/changelog.ts` lists a `bMAJOR.MINOR`
-  version per app section (Leaderboard, Athlete, Workouts, Exercises, Data, Graphs,
-  Calculator, Records), shown as chips under the title. Whenever a change touches a
-  section, **bump that component's minor** (e.g. Graphs `b1.2` → `b1.3`) in the same
-  commit. A change spanning several sections bumps each one it touches.
+- **Per-section effort (SP, not versions):** `COMPONENTS` in `src/changelog.ts`
+  lists the **story points spent on each app part** (Exercises, Athlete, Workouts,
+  Graphs, Leaderboard, Data, Calculator, Add, Navigation, Stats, Group), shown as
+  chips under the title, plus a single `WEBSITE_SP` whole-site grade. The SP is a
+  **holistic grade on the modified-Fibonacci scale** (`1,2,3,5,10,20,30,50,100`),
+  NOT a sum of the release log. When a part grows materially, **re-grade it up one
+  step** (e.g. `10 → 20`) in the same commit; keep `WEBSITE_SP` in step too.
 
 ## Project at a glance
 

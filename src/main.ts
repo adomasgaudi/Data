@@ -62,7 +62,7 @@ import {
   type TrainingCategory,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, TOTAL_SP, COMPONENTS } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, COMPONENTS } from "./changelog";
 
 // chartjs-plugin-zoom reads Hammer from the global scope for touch pan/pinch on
 // phones; make it available before the plugin registers.
@@ -514,14 +514,14 @@ function renderChangelog() {
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
-  const header = `<p class="cl-summary muted">${releaseCount} releases · ${TOTAL_SP} story points shipped</p>`;
-  // Per-section versions (same data as the chips under the title).
+  const header = `<p class="cl-summary muted">${releaseCount} releases · whole site graded <strong>SP ${WEBSITE_SP}</strong></p>`;
+  // Effort per part — the SP spent on each section (same chips as under the title).
   const sections =
-    `<div class="cl-sections"><div class="cl-sections-lbl muted">Section versions</div>` +
+    `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per part (story points)</div>` +
     `<div class="cl-sections-row">` +
     COMPONENTS.map(
       (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
-        `<span class="cv-ver">${escapeHtml(c.version)}</span></span>`,
+        `<span class="cv-ver">SP ${c.sp}</span></span>`,
     ).join("") +
     `</div></div>`;
   const rows = CHANGELOG.map((r) => {
@@ -1571,16 +1571,21 @@ function renderExercisesPage() {
   els.athleteTable.hidden = onCompare;
   els.exercisesPager.hidden = onCompare;
   els.exerciseStats.hidden = onCompare;
+  els.exerciseCalc.hidden = true; // single-exercise calculator: drill-in only
   if (onCompare) {
     renderCompareSection();
     els.athleteTitle.innerHTML = "";
     return;
   }
-  els.exerciseStats.hidden = false;
-  els.exerciseRecord.hidden = true; // top-record card only shows inside a drill-in
-  els.exerciseTopSets.hidden = true; // best-sets list is a drill-in detail too
-  els.exerciseWeekly.hidden = true; // sets-per-week chips are a drill-in detail too
-  els.exerciseTargets.hidden = true; // rep-max targets are a drill-in control too
+  // Everything in the Stats block (record, best-sets, weekly, targets) and the
+  // reps↔weight Calculator are about ONE exercise, so they only belong in a
+  // drill-in — hide the whole lot on the multi-exercise list.
+  els.exerciseStats.hidden = true;
+  els.exerciseCalc.hidden = true;
+  els.exerciseRecord.hidden = true;
+  els.exerciseTopSets.hidden = true;
+  els.exerciseWeekly.hidden = true;
+  els.exerciseTargets.hidden = true;
   els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in
   exerciseChart?.destroy();
   exerciseChart = null;
@@ -3404,13 +3409,17 @@ async function init() {
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 
-  // Per-section version chips under the title (Graphs b1.2, Workouts b1.1, …).
+  // Per-section effort chips under the title — the SP spent on each part
+  // (Exercises SP 30, Athlete SP 20, …), plus the whole-site grade.
   const cv = document.getElementById("componentVersions");
   if (cv) {
-    cv.innerHTML = COMPONENTS.map(
-      (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
-        `<span class="cv-ver">${escapeHtml(c.version)}</span></span>`,
-    ).join("");
+    cv.innerHTML =
+      COMPONENTS.map(
+        (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
+          `<span class="cv-ver">SP ${c.sp}</span></span>`,
+      ).join("") +
+      `<span class="cv-chip cv-chip--total"><span class="cv-name">Whole site</span>` +
+      `<span class="cv-ver">SP ${WEBSITE_SP}</span></span>`;
   }
 
   renderStatus();
