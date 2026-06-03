@@ -596,11 +596,33 @@ function computedRecords(): SetRecord[] {
  */
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
-  const exercises = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
+  const pure = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
+  // Append the synthetic combinable/comparable lifts (SQ mix, DL pattern) whose
+  // members are present, so they're selectable on the leaderboard too.
+  const synth = availableSyntheticNames(pure);
+  const exercises = [...pure, ...synth];
   els.exercise.innerHTML = exercises
-    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
+    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}${synth.includes(e) ? " ✦" : ""}</option>`)
     .join("");
   els.exercise.value = exercises.includes(prev) ? prev : (exercises[0] ?? "");
+}
+
+/** Synthetic group derived-names (SQ mix, DL pattern) whose group has ≥1 member
+ * among `presentNames` — i.e. they exist in computedRecords and can be picked. */
+function availableSyntheticNames(presentNames: Iterable<string>): string[] {
+  const present = new Set(presentNames);
+  const out: string[] = [];
+  for (const t of [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS]) {
+    if ((t.members ?? []).some((m) => present.has(m.exerciseName))) out.push(t.derivedName ?? t.label);
+  }
+  return out;
+}
+
+/** Per-athlete exercise list for the Compare picker: their logged lifts plus any
+ * synthetic group lifts they have (≥1 member trained), so synthetics are pickable. */
+function compareExerciseNames(username: string): string[] {
+  const names = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
+  return [...names, ...availableSyntheticNames(names)];
 }
 
 // Groups/scaling were removed — every exercise is its own lift. These helpers
@@ -1682,7 +1704,7 @@ const COMPARE_COLORS = [
 function renderCompareSection() {
   const username = els.athlete.value;
   const counts = exerciseCountsForUser(activeRecords(), username);
-  const exercises = counts.map((c) => c.exerciseName);
+  const exercises = compareExerciseNames(username); // pure lifts + available synthetics
 
   // Drop any previous picks that this athlete doesn't have; seed with top 2.
   for (const name of [...compareSelected]) if (!exercises.includes(name)) compareSelected.delete(name);
@@ -1726,7 +1748,7 @@ function renderCompareSection() {
  */
 function renderCompareChips() {
   const username = els.athlete.value;
-  const exercises = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
+  const exercises = compareExerciseNames(username); // pure lifts + available synthetics
   const q = compareChipQuery.trim().toLowerCase();
   // Colour per selected exercise, matching the chart's line/legend colours.
   const selOrder = exercises.filter((e) => compareSelected.has(e));
