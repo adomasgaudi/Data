@@ -2525,7 +2525,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 // ---- Workouts overview: a per-year heatmap of training days ----
 let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
-let heatFilter = "all"; // "all" | "cat:<Category>" | "ex:<Exercise>"
+let heatFilter = "cat:Legs"; // "all" | "cat:<Category>" | "ex:<Exercise>" — defaults to Legs
 
 /** Map of this athlete's training dates (ISO) → total sets that day (unfiltered).
  * Used for the list of years; colouring uses {@link filteredDayCounts}. */
@@ -2559,13 +2559,14 @@ function filteredDayCounts(): Map<string, number> {
   return m;
 }
 
-/** Open the heatmap on the athlete's most recent training year, filter cleared
- * (a previous athlete's exercise filter won't apply to the new one). */
+/** Open the heatmap on the athlete's most recent training year, with the filter
+ * reset to Legs (the default view). A previous athlete's *exercise* filter won't
+ * carry over; categories like Legs are common to everyone, so we land on it. */
 function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
   const y = Number(latest?.slice(0, 4));
   if (Number.isFinite(y)) heatYear = y;
-  heatFilter = "all";
+  heatFilter = "cat:Legs";
 }
 
 /** Intensity bucket for a day's set count: 0 rest, then 1+/2+/4+/6+/10+ sets
@@ -2608,7 +2609,7 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
     const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"></div>`,
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
 
