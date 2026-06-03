@@ -2404,14 +2404,14 @@ function renderExerciseProgressChart(exName: string) {
     { name: "Est. 1RM (per set)", color: "#b8902f", type: "scatter", axis: "left", points: e1rmPts },
     { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "left", points: strengthPts },
     { name: "Per-set range", color: "#284e86", type: "range", axis: "left", points: rangePoints, hidden: true },
-    { name: "Sets/week", color: "#6c4ab0", type: "bars", axis: "right", points: setsPts, hidden: true, outline: true },
+    { name: "Sets/week", color: "#6c4ab0", type: "bars", axis: "right", points: setsPts, hidden: true, fillOpacity: 0.18 },
   ];
   if (trendPts.length)
     series.push({ name: "Trend (log)", color: "#c0603a", type: "line", axis: "left", points: trendPts, hidden: true });
 
   mount({
     series, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true,
-    rightHeadroom: 3, // sets/week axis is 3× tall, so the bars sit low and squished
+    rightHeadroom: 5, // sets/week axis is 5× tall (baseline still 0), so the bars stay low and clear of the 1RM data
     yUnit: "kg", rightUnit: "sets", insideLabels: true, height: 320,
   });
   els.exerciseProgressNote.textContent =

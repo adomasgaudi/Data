@@ -37,6 +37,8 @@ export interface SvgSeries {
   hidden?: boolean;
   /** Bars only: draw as a thin outline (no fill) so they don't cover other series. */
   outline?: boolean;
+  /** Fill opacity 0..1 (e.g. bars you want see-through over other series). Default 1. */
+  fillOpacity?: number;
 }
 export interface SvgChartConfig {
   series: SvgSeries[];
@@ -287,8 +289,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / Math.max(1, inView.length);
         const bw = Math.max(2, stepPx * 0.63); // ~30% thinner than a full week
         const base = Math.min(h - M.b, Math.max(M.t, ymap(0)));
-        // Outline bars: transparent fill + a thin stroke, so they don't cover other series.
-        const paint = s.outline ? `fill="none" stroke="${s.color}" stroke-width="1.3"` : `fill="${s.color}"`;
+        // Bars can be outline-only or a translucent fill so they don't hide other series.
+        const paint = s.outline
+          ? `fill="none" stroke="${s.color}" stroke-width="1.3"`
+          : `fill="${s.color}" fill-opacity="${s.fillOpacity ?? 1}"`;
         for (const p of s.points) {
           const x = xPix(p.x);
           if (x < M.l - bw || x > W - M.r + bw) continue;
