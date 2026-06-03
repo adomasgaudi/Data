@@ -917,6 +917,8 @@ let exerciseShowThird = false;
 // default, so every category starts collapsed — the list opens as a tidy set of
 // category headers you tap to open.
 const expandedExCats = new Set<string>();
+// Same idea for the By-tier sort: which frequency tiers (S/A/B/C/D) are expanded.
+const expandedExTiers = new Set<string>();
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
@@ -1752,17 +1754,20 @@ function renderExercisesPage() {
     .map((it, i) => {
       const abs = start + i;
       if (exerciseSort === "tier") {
-        // Emit a tier banner when the frequency tier changes going down the list.
+        // Emit a collapsible tier banner when the tier changes; tiers start
+        // collapsed (expandedExTiers empty), so the list opens as tidy banners.
         const ft = frequencyTier(it.count);
         const tier = ft?.tier ?? null;
         let header = "";
         if (tier !== prevTier) {
+          const collapsed = tier !== null && !expandedExTiers.has(tier);
           header = ft
-            ? `<tr class="ex-tier-row"><td colspan="${colspan}"><span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
+            ? `<tr class="ex-tier-row${collapsed ? " is-collapsed" : ""}" data-tier="${ft.tier}"><td colspan="${colspan}"><span class="caret">▸</span> <span class="tier-badge tier-${ft.tier}">${ft.tier}</span> ${escapeHtml(ft.label)}</td></tr>`
             : "";
           prevTier = tier;
         }
-        return header + rowHtml(it, abs, "");
+        const tierHidden = tier !== null && !expandedExTiers.has(tier);
+        return header + (tierHidden ? "" : rowHtml(it, abs, ""));
       }
       if (exerciseSort !== "category") return rowHtml(it, abs, abs === 0 && it.trained ? "rank-1" : "");
       // Category mode: emit a collapsible sub-header when the category changes;
@@ -2159,6 +2164,16 @@ function onExerciseRowClick(e: MouseEvent) {
     const cat = catRow.dataset.cat ?? "";
     if (expandedExCats.has(cat)) expandedExCats.delete(cat);
     else expandedExCats.add(cat);
+    renderExercisesPage();
+    return;
+  }
+
+  // Tier mode: tapping a tier banner collapses/expands its exercises.
+  const tierRow = target.closest("tr.ex-tier-row") as HTMLTableRowElement | null;
+  if (tierRow) {
+    const tier = tierRow.dataset.tier ?? "";
+    if (expandedExTiers.has(tier)) expandedExTiers.delete(tier);
+    else expandedExTiers.add(tier);
     renderExercisesPage();
     return;
   }

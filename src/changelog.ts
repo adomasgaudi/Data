@@ -38,21 +38,22 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
-    version: "b.1.10–b.1.20",
-    title: "svg-charts-and-app-polish",
-    sp: 95,
-    note: "The b.1.10–b.1.20 run (current): the in-house SVG chart engine + Chart.js removal, dark mode, Group/Stats views, effort-SP, and lots of polish. New releases land here.",
+    version: "b.1.13",
+    title: "drillin-charts-and-polish",
+    sp: 55,
+    note: "The b.1.13 run (current): every chart on the new SVG engine, Chart.js removed, dark mode, per-axis zoom, and drill-in/list polish. New releases land here.",
     details: [
-      "Charts rebuilt from scratch on an SVG engine (pan/pinch-zoom, tooltips, themed) — every chart migrated and Chart.js dropped.",
-      "Dark mode; Group + Stats views; effort-SP dropdown; alone-tags; multi-category buckets; compare-picker redesign; List/Workouts tweaks.",
+      "All charts migrated to the in-house SVG engine (pan/pinch-zoom incl. per-axis stretch, tooltips, themed); Chart.js dropped.",
+      "Dark mode; compare-picker redesign; per-set & 1RM-trend fixes; list defaults + rep-max bar.",
     ],
     children: [
+      { version: "b.1.13.16", sp: 3, note: "New Fibonacci SP scale (…8,13,…80,130,200); version history split into b.1.13 / b.1.12 / b.1.10–b.1.11; By-tier collapsed by default." },
       { version: "b.1.13.15", sp: 2, note: "Drill-in 1RM trend zooms vertically too (both y-axes together); per-set range already free-pans." },
       { version: "b.1.13.14", sp: 3, note: "Per-set graph shows EVERY set of each day (high-rep sets as a marker); ‘Legs (all)’ category hidden from lists with a Settings toggle." },
       { version: "b.1.13.13", sp: 2, note: "Drill-in per-set graph: one bar per set (own weight → own 1RM), not a merged day range." },
       { version: "b.1.13.12", sp: 2, note: "Per-axis pinch (X-only / Y-only stretch) on every chart; Shift/Alt+wheel on desktop." },
       { version: "b.1.13.11", sp: 2, note: "List & stats defaults to By-category (collapsed); rep-max moved to a visible bar." },
-      { version: "b.1.13.10", sp: 1, note: "Merge version history into b.1.6–b.1.9 and b.1.10–b.1.20 dropdowns." },
+      { version: "b.1.13.10", sp: 1, note: "Merge version history into range dropdowns." },
       { version: "b.1.13.9", sp: 2, note: "Per-axis pinch test (X-only / Y-only) in Graph (advanced)." },
       { version: "b.1.13.8", sp: 5, note: "Leaderboard → SVG; Chart.js removed entirely (~84 KB lighter)." },
       { version: "b.1.13.7", sp: 5, note: "Dark mode — header toggle, charts themed too." },
@@ -63,6 +64,18 @@ export const CHANGELOG: Release[] = [
       { version: "b.1.13.2", sp: 2, note: "Compare (lab) page with thinned month labels." },
       { version: "b.1.13.1", sp: 1, note: "Merged the b.1.12 run into one dropdown." },
       { version: "b.1.13.0", sp: 10, note: "New from-scratch SVG chart engine; Compare graph migrated." },
+    ],
+  },
+  {
+    version: "b.1.12",
+    title: "graph-saga-tags-effort",
+    sp: 23,
+    note: "The b.1.12 run: the graph fix/rewrite saga (→ the from-scratch SVG demo), workout ‘alone’ tags, and the effort-SP dropdown.",
+    details: [
+      "Long run of gridline/scroll fixes culminating in the SVG demo + advanced charts.",
+      "Workout ‘alone’ tags + weekday letter; effort-SP dropdown (exact + Fibonacci).",
+    ],
+    children: [
       { version: "b.1.12.9", sp: 2, note: "‘Advanced’ graph (wider, values inside)." },
       { version: "b.1.12.8", sp: 1, note: "Demo graph: free 2-D pan + both-axis zoom." },
       { version: "b.1.12.7", sp: 2, note: "Demo scrolls; 1RM-trend anchors at zero." },
@@ -73,6 +86,18 @@ export const CHANGELOG: Release[] = [
       { version: "b.1.12.2", sp: 3, note: "Canvas gridline plugin (later reverted) + chartAxis tests." },
       { version: "b.1.12.1", sp: 2, note: "Compare categories multi-bucket; workout ‘alone’ tag." },
       { version: "b.1.12.0", sp: 5, note: "Workout alone tags + effort-SP dropdown." },
+    ],
+  },
+  {
+    version: "b.1.10–b.1.11",
+    title: "group-view-effort-sp",
+    sp: 20,
+    note: "The b.1.10–b.1.11 run: Group/Stats views, effort-SP chips, multi-category buckets, and List/Workouts polish.",
+    details: [
+      "New Group view (+ old view renamed ‘Stats’); effort-SP chips; combined Group comparison.",
+      "List ‘Best set’ column, single rep-max, no pagination; year-heatmap month dividers.",
+    ],
+    children: [
       { version: "b.1.11.0", sp: 5, note: "Searchable compare chips, no list pagination, combined Group view." },
       { version: "b.1.10.4", sp: 2, note: "Year heatmap month dividers; list defaults 3 months / 50." },
       { version: "b.1.10.3", sp: 1, note: "Fix progress graph vertical drift." },
@@ -199,7 +224,7 @@ const TOP = CHANGELOG.find((r) => !r.soon)!;
 export const CURRENT_VERSION = TOP.children?.length ? TOP.children[0]!.version : TOP.version;
 
 /** The modified-Fibonacci SP scale — the only allowed grades, no in-between. */
-export const SP_SCALE = [1, 2, 3, 5, 10, 20, 30, 50, 100] as const;
+export const SP_SCALE = [1, 2, 3, 5, 8, 13, 20, 30, 50, 80, 130, 200] as const;
 
 /** Snap an exact story-point count to the nearest value on {@link SP_SCALE}
  * (so a fib-SP is only ever 10, 20, 30, … never an in-between number). */

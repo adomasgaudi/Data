@@ -471,11 +471,14 @@ main { padding-bottom: 5rem; }
 /* Caret points right when collapsed, down when the category is open. */
 .ex-cat-row .caret { transition: transform 0.12s ease; }
 .ex-cat-row:not(.is-collapsed) .caret { transform: rotate(90deg); }
-/* Frequency-tier banner rows (By tier sort) with an S/A/B/C/D badge. */
+/* Frequency-tier banner rows (By tier sort) with an S/A/B/C/D badge. Collapsible. */
+.ex-tier-row { cursor: pointer; }
 .ex-tier-row td {
   font-size: 0.74rem; font-weight: 600; color: var(--text);
   background: var(--accent-soft); padding-top: 9px; padding-bottom: 9px;
 }
+.ex-tier-row .caret { transition: transform 0.12s ease; }
+.ex-tier-row:not(.is-collapsed) .caret { transform: rotate(90deg); }
 .tier-badge {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.5rem; height: 1.5rem; border-radius: 6px; margin-right: 0.5rem;
