@@ -2995,6 +2995,17 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+/** One set's display for the Workouts session line: weight^reps, except a
+ * bodyweight/placeholder load (0 or 1 — StrengthLevel sometimes forbids 0) that
+ * carries a note shows the NOTE as the base (it's really the difficulty/variation)
+ * with the reps as a superscript. */
+function setDisplay(s: SetRecord): string {
+  const note = s.notes?.trim();
+  if ((s.weight === 0 || s.weight === 1) && note)
+    return `<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+  return wr(s.weight, s.reps);
+}
+
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const byWeek = workoutViewMode === "week";
@@ -3022,9 +3033,9 @@ function renderWorkoutsPage() {
           .map((e) => {
             const setsTxt = g.sets
               .filter((s) => s.exerciseName === e.exerciseName)
-              .map((s) => wr(s.weight, s.reps))
+              .map((s) => setDisplay(s))
               .join(" ");
-            return `${escapeHtml(e.exerciseName)} <span class="wo-setlist muted">${setsTxt}</span>`;
+            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(exerciseCode(e.exerciseName))}</span> <span class="wo-setlist muted">${setsTxt}</span>`;
           })
           .join("<br>");
       } else {
