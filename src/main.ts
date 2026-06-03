@@ -179,6 +179,7 @@ const els = {
   addExerciseList: $("addExerciseList"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
+  addSets: $<HTMLInputElement>("addSets"),
   addDate: $<HTMLInputElement>("addDate"),
   addSubmit: $<HTMLButtonElement>("addSubmit"),
   addHint: $("addHint"),
@@ -4434,7 +4435,7 @@ async function init() {
   for (const sel of [
     els.formula, els.bwSource, els.rank, els.sexFilter,
     els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
-    els.dataUser, els.groupsAthlete,
+    els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);
 }
@@ -4851,12 +4852,16 @@ function prefillAddSet(exerciseName: string, date?: string) {
   const username = els.athlete.value;
   if (username) {
     const has = Array.from(els.addAthlete.options).some((o) => o.value === username);
-    if (has) els.addAthlete.value = username;
+    if (has) {
+      els.addAthlete.value = username;
+      els.addAthlete.dispatchEvent(new Event("change", { bubbles: true })); // sync custom dropdown
+    }
   }
   els.addExercise.value = exerciseName;
   if (date) els.addDate.value = date;
   els.addWeight.value = "";
   els.addReps.value = "";
+  els.addSets.value = "";
   els.addWeight.focus();
   els.addHint.textContent = `Logging more sets of ${exerciseName} — enter weight and reps, then Add.`;
 }
@@ -4868,6 +4873,9 @@ function onAddSubmit() {
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
   const date = els.addDate.value || todayIso();
+  // How many identical sets to log at once (blank/1 = a single set).
+  const setsRaw = Math.round(parseFloat(els.addSets.value));
+  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
   if (!username || !exerciseName) {
     els.addHint.textContent = "Pick an athlete and enter an exercise.";
     return;
@@ -4876,21 +4884,24 @@ function onAddSubmit() {
     els.addHint.textContent = "Enter the reps (1 or more).";
     return;
   }
-  manualEntries.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    user,
-    username,
-    date,
-    exerciseName,
-    weight: Number.isFinite(weight) ? weight : null,
-    reps,
-  });
+  for (let i = 0; i < sets; i++) {
+    manualEntries.push({
+      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      user,
+      username,
+      date,
+      exerciseName,
+      weight: Number.isFinite(weight) ? weight : null,
+      reps,
+    });
+  }
   saveManual();
   mergeManualSets();
-  // Keep the just-entered athlete / exercise / weight / reps / date in place so
-  // logging the next set of the same exercise is one tap (Add again). Nothing is
-  // cleared — the form "remembers" what you last added.
-  els.addHint.textContent = `Added ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}. Tap Add again to log another set.`;
+  // Keep the just-entered athlete / exercise / weight / reps / sets / date in
+  // place so logging the next set of the same exercise is one tap (Add again).
+  // Nothing is cleared — the form "remembers" what you last added.
+  const setWord = sets === 1 ? "set" : `${sets} sets`;
+  els.addHint.textContent = `Added ${setWord} of ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}. Tap Add again to log more.`;
   renderAddTab();
   renderAll(); // every view now includes the new set
   renderDataTab();
