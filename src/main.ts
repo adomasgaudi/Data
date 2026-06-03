@@ -436,6 +436,27 @@ function saveAlone() {
   }
 }
 
+// ---- Per-set difficulty grade (RPE 1–10), saved on this device. The source CSV
+// has no difficulty column, so the owner can grade how hard each set felt and it
+// persists across reloads, keyed by athlete|exercise|date|setNumber.
+const RPE_STORE_KEY = "colosseum.rpe.v1";
+let rpeGrades: Record<string, number> = (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem(RPE_STORE_KEY) ?? "{}");
+    return o && typeof o === "object" ? (o as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+/** Stable id for one set. */
+const setId = (r: SetRecord): string => `${r.username}|${r.exerciseName}|${r.date}|${r.setNumber}`;
+const rpeFor = (r: SetRecord): number | undefined => rpeGrades[setId(r)];
+function setRpe(id: string, v: number | null) {
+  if (v === null || !(v >= 1 && v <= 10)) delete rpeGrades[id];
+  else rpeGrades[id] = v;
+  try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(rpeGrades)); } catch { /* ignore */ }
+}
+
 /**
  * Records with the bodyweight-lifted load baked into `weight`, so the existing
  * leaderboard / PR / progress maths produce bodyweight-aware estimated 1RMs.
@@ -2364,7 +2385,8 @@ function renderExerciseProgressChart(exName: string) {
       dashes: reps,
       meta:
         (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
-        ` · ${shortDate(s.date)}`,
+        ` · ${shortDate(s.date)}` +
+        (rpeFor(s) ? ` · RPE ${rpeFor(s)}` : ""),
     });
     if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
   }
@@ -2423,6 +2445,7 @@ function renderExerciseProgressChart(exName: string) {
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  if (target.closest(".set-rpe")) return; // the difficulty picker handles itself
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
@@ -2811,6 +2834,7 @@ function renderWorkoutsPage() {
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
+  if (target.closest(".set-rpe")) return; // the difficulty picker handles itself
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -2857,7 +2881,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   const body = group.exercises
     .map((e) => {
       const header =
-        `<tr class="set-ex-row"><td colspan="3" class="wo-exname">` +
+        `<tr class="set-ex-row"><td colspan="4" class="wo-exname">` +
         `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span></td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
@@ -2896,7 +2920,7 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
 // and you change both. The note toggle is handled by toggleSetNote(), wired
 // into onWorkoutRowClick and onExerciseRowClick.
 const SETS_HEAD =
-  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th></tr></thead>`;
+  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="How hard it felt, 1 easy – 10 max">RPE</th></tr></thead>`;
 
 /** How many characters of a note to show inline before truncating with "…". */
 const NOTE_PREVIEW_LEN = 8;
@@ -2985,19 +3009,41 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
     e1rm === null
       ? "—"
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
+  const grade = rpeFor(s);
+  const rpeCell =
+    `<select class="set-rpe${grade ? " is-set" : ""}" data-setid="${escapeHtml(setId(s))}" aria-label="How hard (RPE 1–10)">` +
+    `<option value="">–</option>` +
+    Array.from({ length: 10 }, (_, i) => i + 1)
+      .map((n) => `<option value="${n}"${grade === n ? " selected" : ""}>${n}</option>`)
+      .join("") +
+    `</select>`;
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
     `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
-    `<td class="num">${vol === null ? "—" : fmt(vol)}</td></tr>`;
+    `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
+    `<td class="num rpe-cell">${rpeCell}</td></tr>`;
   const noteRow = note
-    ? `<tr class="set-note-row" hidden><td colspan="3" class="muted">${escapeHtml(note)}</td></tr>`
+    ? `<tr class="set-note-row" hidden><td colspan="4" class="muted">${escapeHtml(note)}</td></tr>`
     : "";
   const formulaRow =
     e1rm === null
       ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="3" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
+      : `<tr class="e1rm-formula-row" hidden><td colspan="4" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
   return main + noteRow + formulaRow;
+}
+
+/** A set's RPE picker changed: save the grade (or clear it) and reflect it on the
+ * cell. Returns true if it handled the event. Shared by both sets tables. */
+function onSetRpeChange(e: Event): boolean {
+  const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".set-rpe");
+  if (!sel?.dataset.setid) return false;
+  const v = sel.value === "" ? null : Number(sel.value);
+  setRpe(sel.dataset.setid, v);
+  sel.classList.toggle("is-set", v !== null);
+  // Refresh the drill-in graph so the new grade shows in the per-set tooltip.
+  if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
+  return true;
 }
 
 /** Click on a set row that has a note: expand/collapse the hidden note row that
@@ -3048,7 +3094,7 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     else byDate.set(s.date, [s]);
   }
   const body = Array.from(byDate, ([date, daySets]) => {
-    const header = `<tr class="set-date-row"><td colspan="3" class="wo-date">${shortDate(date)}</td></tr>`;
+    const header = `<tr class="set-date-row"><td colspan="4" class="wo-date">${shortDate(date)}</td></tr>`;
     return header + daySets.map((s) => setRowsHtml(s, formula)).join("");
   }).join("");
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
@@ -3736,12 +3782,14 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
+    if (onSetRpeChange(e)) return;
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));
     repMaxCols = Number.isFinite(n) && n >= 1 && n <= 30 ? [n] : [1];
     if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
   });
+  els.workoutsTable.addEventListener("change", onSetRpeChange);
   // Category picker bar: tap a category chip to show/hide it in the list.
   els.exCatBar.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-cat-chip");

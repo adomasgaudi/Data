@@ -1316,6 +1316,14 @@ select.subtle-select:hover, select.subtle-select:focus {
   font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0; margin-right: 0.5rem;
 }
 .back-btn:hover { text-decoration: underline; }
+/* Per-set difficulty (RPE) picker in the sets tables. */
+.set-rpe {
+  font: inherit; font-size: 0.78rem; color: var(--muted);
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 1px 2px; cursor: pointer;
+}
+.set-rpe.is-set { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+.rpe-cell { width: 3.2em; }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }

@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.18", sp: 3, note: "Grade how hard each set felt: every set in the Workouts and Exercises sets tables gets an RPE (1–10) picker. Saved on the device (the CSV has no difficulty column) and shown in the per-set graph tooltip." },
       { version: "b.2.0.17", sp: 1, note: "Sets/week bars: translucent fill (was outline) and squished further (5× taller right axis, baseline still 0) so they stay low and don't overlap the 1RM data." },
       { version: "b.2.0.16", sp: 1, note: "Sets/week bars are now 30% thinner, outline-only (transparent), and sit low on a 3× taller right axis so they no longer tower over the 1RM data." },
       { version: "b.2.0.15", sp: 5, note: "Combine lifts in a drill-in: a “＋ combine with…” picker views e.g. Squat + Smith Machine Squat as one (records, best sets, weekly and graph all merged). Moved the chart's “Center” button into the controls so it no longer covers the legend toggles." },
