@@ -8,7 +8,6 @@
  */
 import { parseRows, sanityCheck, type ParseResult, type SanityWarning } from "./domain";
 import { canonicalizeExerciseNames, type ExerciseMerge } from "./aggregate";
-import { foldNoteVariant } from "./variants";
 import { parseCsv } from "./csv";
 import csvText from "./data/ud.csv?raw";
 
@@ -27,12 +26,7 @@ export async function loadData(): Promise<LoadedData> {
   // Fold variant spellings of the same exercise into one name. This is done in
   // the app (not the source sheet) because re-exports would otherwise bring the
   // same variants back. Raw names are preserved on each record.
-  const { records: canon, merges } = canonicalizeExerciseNames(parsed.records);
-  // Then fold leverage settings logged in the note (SQ8, 10cm, 5 level) into a
-  // concrete variant exercise ("Push Ups (SQ8)"), so each height tracks on its
-  // own and can be scaled. Done here, after canonicalisation, so it's consistent
-  // in every view. Names with no recognised setting are left untouched.
-  const records = canon.map(foldNoteVariant);
+  const { records, merges } = canonicalizeExerciseNames(parsed.records);
   // Sanity-check the canonicalised records so warnings reference displayed names.
   return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records), rawCsv: csvText };
 }

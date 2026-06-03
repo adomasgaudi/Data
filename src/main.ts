@@ -51,13 +51,6 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import {
-  parseVariantLabel,
-  defaultVariantCoeff,
-  variantName,
-  hasVariantTag,
-  splitVariant,
-} from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
@@ -154,7 +147,6 @@ const els = {
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exPersetBest: $<HTMLButtonElement>("exPersetBest"),
   exCombineBar: $("exCombineBar"),
-  exVariants: $("exVariants"),
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
@@ -197,9 +189,6 @@ const els = {
   addExerciseList: $("addExerciseList"),
   addArmPos: $<HTMLSelectElement>("addArmPos"),
   addArmPosField: $("addArmPosField"),
-  addVariant: $<HTMLInputElement>("addVariant"),
-  addVariantField: $("addVariantField"),
-  addVariantLabel: $("addVariantLabel"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
   addSets: $<HTMLInputElement>("addSets"),
@@ -431,18 +420,8 @@ function loadCoeffOverrides(): Record<string, number> {
 
 function coeffFor(exerciseName: string): number {
   if (Object.prototype.hasOwnProperty.call(coeffOverrides, exerciseName)) return coeffOverrides[exerciseName]!;
-  if (EXERCISE_BW_COEFF[exerciseName] !== undefined) return EXERCISE_BW_COEFF[exerciseName]!;
-  // A leverage variant ("Push Ups (SQ8)") with no explicit override seeds its
-  // bodyweight-part from the base lift scaled by the setting — the owner then
-  // fine-tunes it. Done before the keyword heuristic, which would otherwise just
-  // read the base ("push up") and ignore the incline.
-  const sv = splitVariant(exerciseName);
-  if (sv) {
-    const pv = parseVariantLabel(sv.label);
-    if (pv) return defaultVariantCoeff(coeffFor(sv.base), pv);
-  }
   // Pinned value first, otherwise the leverage-aware heuristic (front lever ≈ 0.1…).
-  return defaultBwCoeff(exerciseName);
+  return EXERCISE_BW_COEFF[exerciseName] ?? defaultBwCoeff(exerciseName);
 }
 
 function setCoeff(exerciseName: string, value: number) {
@@ -2297,7 +2276,6 @@ function renderExerciseDetail(exName: string) {
     strengthAsOf(),
   ).find((p) => p.exerciseName === exName);
   renderCombineBar(exName, username);
-  renderExerciseVariants(exName, username);
   // Stats start collapsed on every drill-in (the <details> persists across
   // exercises, so reset it). renderExerciseWeekly always fills the chips, so the
   // dropdown always has content to show.
@@ -2357,58 +2335,6 @@ function renderCombineBar(exName: string, username: string) {
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
     picker;
-}
-
-/**
- * Drill-in "Variants & scaling" panel. When the viewed lift is a leverage variant
- * (or a base that has them), list every sibling height with its best set, its
- * effort (bodyweight-inclusive est. 1RM — what should LINE UP across heights when
- * the scaling is right) and an EDITABLE bodyweight-% so the owner can compare them
- * and tune each % on the spot. Hidden when the lift has no leverage variants. */
-function renderExerciseVariants(exName: string, username: string): void {
-  const formula = currentFormula();
-  const base = splitVariant(exName)?.base ?? exName;
-  // Best (bodyweight-inclusive) effort 1RM + best raw set per sibling exercise.
-  const byEx = new Map<string, { best: SetRecord; eff1rm: number }>();
-  for (const r of computedRecords()) {
-    if (r.username !== username) continue;
-    const b = splitVariant(r.exerciseName)?.base ?? r.exerciseName;
-    if (b !== base) continue;
-    if (addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
-    const eff = estimate1RM(r.weight, r.reps, formula);
-    if (eff === null) continue;
-    const cur = byEx.get(r.exerciseName);
-    if (!cur || eff > cur.eff1rm) byEx.set(r.exerciseName, { best: r, eff1rm: eff });
-  }
-  const variants = [...byEx.keys()].filter((n) => splitVariant(n));
-  if (variants.length === 0) { els.exVariants.hidden = true; return; }
-  const rows = [...byEx.entries()]
-    .sort((a, b) => b[1].eff1rm - a[1].eff1rm)
-    .map(([name, v]) => {
-      const label = splitVariant(name)?.label ?? "base (floor)";
-      const coeff = coeffFor(name);
-      const isCur = name === exName;
-      // Show the originally-logged (bar) weight in the best-set cell, not the
-      // bodyweight-folded effective load.
-      const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
-      return (
-        `<tr${isCur ? ' class="exv-cur"' : ""}>` +
-        `<td><button type="button" class="exv-name" data-exname="${escapeHtml(name)}" title="View ${escapeHtml(name)}">${escapeHtml(label)}</button></td>` +
-        `<td class="num">${wr(dispW, v.best.reps)}</td>` +
-        `<td class="num">${fmt(v.eff1rm)}</td>` +
-        `<td class="num"><input class="bw-input exv-bw" type="number" step="0.05" min="0" max="2" value="${coeff}" data-ex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></td>` +
-        `</tr>`
-      );
-    })
-    .join("");
-  els.exVariants.hidden = false;
-  els.exVariants.innerHTML =
-    `<div class="exv-head"><strong>${escapeHtml(base)} — heights</strong> ` +
-    `<span class="muted">tune each BW % so equal-effort heights show the same effort 1RM</span></div>` +
-    `<table class="data-table exv-table"><thead><tr>` +
-    `<th>Height</th><th class="num">Best</th><th class="num" title="Bodyweight-inclusive estimated 1RM — should match across heights of equal effort when the % is right">Effort</th>` +
-    `<th class="num" title="Bodyweight part — how much of your weight this height loads. Lower hole/more incline = less. Edit to scale.">BW</th>` +
-    `</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -4678,20 +4604,6 @@ async function init() {
   // Expand/collapse rows.
   els.lbTable.addEventListener("click", onLeaderboardRowClick);
   els.athleteTable.addEventListener("click", onExerciseRowClick);
-  // Variants panel: editing a BW % rescales that height; tapping a height name
-  // drills into it. Both re-render the panel so the comparison updates live.
-  els.exVariants.addEventListener("change", (e) => {
-    if (!(e.target as HTMLElement).classList.contains("bw-input")) return;
-    onBwInputChange(e);
-    if (selectedExercise) renderExerciseDetail(selectedExercise);
-  });
-  els.exVariants.addEventListener("click", (e) => {
-    const link = (e.target as HTMLElement).closest<HTMLElement>(".exv-name");
-    if (!link?.dataset.exname) return;
-    selectedExercise = link.dataset.exname;
-    combinedWith = [];
-    renderExercisesPage();
-  });
   // Back link in the exercise drill-in (lives in the title, outside the table).
   els.athleteTitle.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".back-btn")) {
@@ -5355,43 +5267,6 @@ function updateArmPosField(): void {
       SITUP_ARM_POSITIONS.map((p) => `<option value="${p}">${p}</option>`).join("");
 }
 
-/* Leverage-variant picker on the Add form. Some bodyweight lifts are progressed
- * by changing the angle/height rather than the load, and the owner logs that
- * setting (squat-rack hole, level, cm). For those exercises a small numeric field
- * appears; the value is folded into the name as a tracked variant ("Push Ups
- * (SQ8)") exactly like the note-parser does for historical data. */
-type VariantField = { dim: "sq" | "smith" | "cm"; label: string; hint: string };
-function variantFieldFor(name: string): VariantField | null {
-  const n = name.toLowerCase();
-  if (!n.trim() || hasVariantTag(name)) return null;
-  if (/smith/.test(n) && /push/.test(n)) return { dim: "smith", label: "Level", hint: "e.g. 5" };
-  // Handstand / pike work is logged by height off the floor (cm).
-  if (/handstand|headstand|pike/.test(n)) return { dim: "cm", label: "Height (cm)", hint: "e.g. 15" };
-  // Everything the owner progresses by squat-rack height: incline push-ups,
-  // inverted rows, rack-pull deadlifts, good mornings, dips, leg raises/pull-ins.
-  if (/push|inverted row|\brow\b|deadlift|good morning|\bdip\b|leg pull|pull[- ]?in|leg raise/.test(n))
-    return { dim: "sq", label: "Squat-rack hole", hint: "e.g. 8 (lower = harder)" };
-  return null;
-}
-
-/** The tag a chosen variant value folds into the name as, e.g. 8 → "SQ8". */
-function variantLabelFromField(f: VariantField, value: number): string {
-  if (f.dim === "sq") return `SQ${Math.round(value)}`;
-  if (f.dim === "cm") return `${Math.round(value)}cm`;
-  return `L${Math.round(value * 10) / 10}`;
-}
-
-/** Show/populate the leverage-variant field for the exercise being added. */
-function updateVariantField(): void {
-  const f = variantFieldFor(els.addExercise.value);
-  els.addVariantField.hidden = !f;
-  if (f) {
-    els.addVariantLabel.textContent = f.label;
-    els.addVariant.placeholder = f.hint;
-    els.addVariant.step = f.dim === "smith" ? "0.5" : "1";
-  }
-}
-
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
 // forms (add-a-set and add-a-new-exercise).
 const AF_FIELDS =
@@ -5580,11 +5455,6 @@ function onAddSubmit() {
   // Fold the chosen arm position into the name so it tracks as its own variant.
   const armPos = !els.addArmPosField.hidden ? els.addArmPos.value : "";
   if (armPos && isDeclineSitup(exerciseName)) exerciseName = `${exerciseName} (${armPos})`;
-  // Fold a chosen leverage variant (squat-rack hole / level / cm) into the name.
-  const vf = variantFieldFor(exerciseName);
-  const vVal = parseFloat(els.addVariant.value);
-  if (vf && !els.addVariantField.hidden && Number.isFinite(vVal))
-    exerciseName = variantName(exerciseName, variantLabelFromField(vf, vVal));
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
   const date = els.addDate.value || todayIso();
@@ -5662,11 +5532,7 @@ async function importManual(file: File) {
 function setupAddTab() {
   renderAddTab();
   updateArmPosField();
-  updateVariantField();
-  els.addExercise.addEventListener("input", () => {
-    updateArmPosField();
-    updateVariantField();
-  });
+  els.addExercise.addEventListener("input", updateArmPosField);
   els.addSubmit.addEventListener("click", onAddSubmit);
   els.addExport.addEventListener("click", exportManual);
   els.addImport.addEventListener("click", () => els.addImportFile.click());
