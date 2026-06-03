@@ -2143,7 +2143,7 @@ function renderExerciseProgressChart(exName: string) {
   ];
   if (trendPts.length) svgSeries.push({ name: "Trend", color: "#c0603a", type: "line", axis: "right", noLegend: true, points: trendPts });
   els.exerciseProgressNote.textContent = progressSummaryNote(series);
-  mount({ series: svgSeries, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true, yUnit: "sets", rightUnit: "kg", insideLabels: true, panMode: "x", height: 300 });
+  mount({ series: svgSeries, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true, yUnit: "sets", rightUnit: "kg", insideLabels: true, height: 300 });
 }
 
 

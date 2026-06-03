@@ -265,8 +265,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const hideTip = () => { tipEl.hidden = true; };
 
   // ---- interactions: 1 finger / mouse = pan, 2 fingers = pinch-zoom, wheel = zoom ----
-  /** Data (x,y) under a client pixel, using the live view + current geometry. */
-  function dataAt(clientX: number, clientY: number) {
+  /** Vertical screen fraction (0=top..1=bottom) + the x data value under a pixel. */
+  function pixInfo(clientX: number, clientY: number) {
     const svg = plotEl.querySelector("svg");
     const rect = svg ? svg.getBoundingClientRect() : plotEl.getBoundingClientRect();
     const W = widthOf();
@@ -276,24 +276,27 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const plotH = h - M.t - M.b;
     const lx = ((clientX - rect.left) / rect.width) * W;
     const ly = ((clientY - rect.top) / rect.height) * h;
-    return {
-      x: view.xMin + ((lx - M.l) / plotW) * (view.xMax - view.xMin),
-      y: view.yMin + (1 - (ly - M.t) / plotH) * (view.yMax - view.yMin),
-    };
+    return { fx: view.xMin + ((lx - M.l) / plotW) * (view.xMax - view.xMin), vfrac: (ly - M.t) / plotH };
   }
-  /** Zoom about data point (fx, fy) by independent factors per axis (>1 = out). */
-  function zoomXY(fx: number, fy: number, kx: number, ky: number) {
-    view = {
-      xMin: fx - (fx - view.xMin) * kx,
-      xMax: fx + (view.xMax - fx) * kx,
-      yMin: panX() ? view.yMin : fy - (fy - view.yMin) * ky,
-      yMax: panX() ? view.yMax : fy + (view.yMax - fy) * ky,
-    };
+  /** Zoom by independent factors per axis (>1 = out): x about fx, y about the
+   * screen-fraction `vfrac` so BOTH the left and right y-axes scale together. */
+  function zoomXY(fx: number, vfrac: number, kx: number, ky: number) {
+    let { xMin, xMax, yMin, yMax } = view;
+    xMin = fx - (fx - xMin) * kx;
+    xMax = fx + (xMax - fx) * kx;
+    if (!panX()) {
+      const fyL = yMin + (1 - vfrac) * (yMax - yMin);
+      yMin = fyL - (fyL - yMin) * ky;
+      yMax = fyL + (yMax - fyL) * ky;
+      const fyR = ry.yMin + (1 - vfrac) * (ry.yMax - ry.yMin);
+      ry = { yMin: fyR - (fyR - ry.yMin) * ky, yMax: fyR + (ry.yMax - fyR) * ky };
+    }
+    view = { xMin, xMax, yMin, yMax };
   }
 
   const SPREAD = 26; // min finger spread (px) on an axis before that axis stretches
   const pts = new Map<number, { x: number; y: number }>();
-  let pan: { x: number; y: number; v: typeof view; moved: boolean } | null = null;
+  let pan: { x: number; y: number; v: typeof view; r: typeof ry; moved: boolean } | null = null;
   // Per-axis pinch: track the horizontal spread (drives X) and vertical spread
   // (drives Y) between the two fingers separately, so spreading them sideways
   // stretches only X, up/down only Y, diagonally both.
@@ -314,15 +317,17 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const h = H();
       const plotW = W - M.l - M.r;
       const plotH = h - M.t - M.b;
-      // pan by midpoint movement
-      const ddx = ((mx - pinch.mx) / plotW) * (view.xMax - view.xMin);
-      const ddy = panX() ? 0 : ((my - pinch.my) / plotH) * (view.yMax - view.yMin);
-      view = { xMin: view.xMin - ddx, xMax: view.xMax - ddx, yMin: view.yMin + ddy, yMax: view.yMax + ddy };
+      // pan by midpoint movement (both y-axes shift together)
+      const fracX = (mx - pinch.mx) / plotW;
+      const fracY = panX() ? 0 : (my - pinch.my) / plotH;
+      const lr = view.yMax - view.yMin;
+      view = { xMin: view.xMin - fracX * (view.xMax - view.xMin), xMax: view.xMax - fracX * (view.xMax - view.xMin), yMin: view.yMin + fracY * lr, yMax: view.yMax + fracY * lr };
+      if (!panX()) { const rr = ry.yMax - ry.yMin; ry = { yMin: ry.yMin + fracY * rr, yMax: ry.yMax + fracY * rr }; }
       // per-axis zoom about the midpoint, gated by the spread on each axis
-      const f = dataAt(mx, my);
+      const { fx, vfrac } = pixInfo(mx, my);
       const kx = pinch.hx > SPREAD && hx > 4 ? pinch.hx / hx : 1;
       const ky = pinch.vy > SPREAD && vy > 4 ? pinch.vy / vy : 1;
-      zoomXY(f.x, f.y, kx, ky);
+      zoomXY(fx, vfrac, kx, ky);
       pinch = { hx, vy, mx, my };
       hideTip();
       draw();
@@ -334,8 +339,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const plotH = h - M.t - M.b;
       if (Math.abs(e.clientX - pan.x) + Math.abs(e.clientY - pan.y) > 4) pan.moved = true;
       const dx = ((e.clientX - pan.x) / plotW) * (pan.v.xMax - pan.v.xMin);
-      const dy = panX() ? 0 : ((e.clientY - pan.y) / plotH) * (pan.v.yMax - pan.v.yMin);
+      const fracY = panX() ? 0 : (e.clientY - pan.y) / plotH;
+      const dy = fracY * (pan.v.yMax - pan.v.yMin);
       view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: pan.v.yMin + dy, yMax: pan.v.yMax + dy };
+      if (!panX()) { const rr = pan.r.yMax - pan.r.yMin; ry = { yMin: pan.r.yMin + fracY * rr, yMax: pan.r.yMax + fracY * rr }; }
       hideTip();
       draw();
     }
@@ -346,7 +353,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (pts.size < 2) pinch = null;
     if (pts.size === 1) {
       const p = [...pts.values()][0]!;
-      pan = { x: p.x, y: p.y, v: { ...view }, moved: true }; // keep panning with the remaining finger
+      pan = { x: p.x, y: p.y, v: { ...view }, r: { ...ry }, moved: true }; // keep panning with the remaining finger
     } else if (pts.size === 0) {
       pan = null;
       window.removeEventListener("pointermove", onMove);
@@ -368,7 +375,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       pinch = { hx: Math.abs(a!.x - b!.x), vy: Math.abs(a!.y - b!.y), mx: (a!.x + b!.x) / 2, my: (a!.y + b!.y) / 2 };
       pan = null;
     } else {
-      pan = { x: e.clientX, y: e.clientY, v: { ...view }, moved: false };
+      pan = { x: e.clientX, y: e.clientY, v: { ...view }, r: { ...ry }, moved: false };
     }
     e.preventDefault();
   });
@@ -382,10 +389,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     (e) => {
       if (!interactive()) return;
       e.preventDefault();
-      const f = dataAt(e.clientX, e.clientY);
+      const { fx, vfrac } = pixInfo(e.clientX, e.clientY);
       const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
       // Shift+wheel = X only, Alt+wheel = Y only, plain = both.
-      zoomXY(f.x, f.y, e.altKey ? 1 : k, e.shiftKey ? 1 : k);
+      zoomXY(fx, vfrac, e.altKey ? 1 : k, e.shiftKey ? 1 : k);
       hideTip();
       draw();
     },
