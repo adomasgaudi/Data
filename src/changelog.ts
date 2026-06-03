@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.24", sp: 0.1, note: "Year heatmap day-of-month numbers are now centred in the square and much more transparent — a faint hint rather than a label." },
       { version: "b.2.0.23", sp: 0.5, note: "Year heatmap squares now show a tiny day-of-month number in the corner; Workouts now defaults to By week + Muscle groups, and the year heatmap defaults to the Legs filter." },
       { version: "b.2.0.22", sp: 0.5, note: "Sign-in is remembered: once you press “Sign in as admin” you skip the landing gate on every later visit (hidden before paint, no flash)." },
       { version: "b.2.0.21", sp: 0.5, note: "Decorative landing gate: a simple sign-in screen with one “Sign in as admin” button that reveals the app (no real auth)." },

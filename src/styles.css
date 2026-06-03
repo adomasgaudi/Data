@@ -900,15 +900,15 @@ select.subtle-select:hover, select.subtle-select:focus {
   background: var(--hm-rest-even); border: 1px solid var(--hm-bd-even);
 }
 .hm-cell.empty { background: transparent; border-color: transparent; }
-/* Tiny day-of-month number, tucked in the corner. Faint by default (reads on the
-   light rest/blue squares); flips to a light tint on the dark blue/gold levels. */
+/* Tiny day-of-month number, centred and very faint — just a hint, not a label.
+   A touch lighter on the dark blue/gold levels so it doesn't vanish. */
 .hm-dom {
-  position: absolute; top: 0; left: 2px; line-height: 1;
-  font-size: 8px; font-weight: 600; pointer-events: none;
-  color: rgba(0, 0, 0, 0.35);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  line-height: 1; font-size: 8px; font-weight: 600; pointer-events: none;
+  color: rgba(0, 0, 0, 0.16);
 }
 .hm-cell.empty .hm-dom { display: none; }
-.hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-5 .hm-dom { color: rgba(255, 255, 255, 0.55); }
+.hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-5 .hm-dom { color: rgba(255, 255, 255, 0.28); }
 .hm-cell.lvl-0 { background: var(--hm-rest-even); }
 .hm-cell.lvl-1 { background: #bcd6f2; }  /* 1 set — light blue */
 .hm-cell.lvl-2 { background: #6fa0db; }  /* 2–3 — darker blue */
