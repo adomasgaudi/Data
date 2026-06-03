@@ -204,6 +204,8 @@ const els = {
   activeSetBar: $("activeSetBar"),
   bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
+  codesTable: $("codesTable"),
+  codesSearch: $<HTMLInputElement>("codesSearch"),
   groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
@@ -429,6 +431,42 @@ function setCoeff(exerciseName: string, value: number) {
   } catch {
     /* storage may be unavailable (e.g. private mode) — edits still apply this session */
   }
+}
+
+// ---- Exercise code overrides (the short codes shown in lists/tooltips) ----
+// Same layering as the coefficients: profile.ts derives a default code, the
+// owner's edits in the Codes tab are stored here and win. codeFor() is the single
+// read point; exerciseCodesFor(names, codeFor) resolves any code clashes.
+const CODE_STORE_KEY = "colosseum.exerciseCodes.v1";
+const codeOverrides: Record<string, string> = loadCodeOverrides();
+
+function loadCodeOverrides(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(CODE_STORE_KEY);
+    const obj = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The code shown for an exercise: the owner's override if set, else the default. */
+function codeFor(exerciseName: string): string {
+  const o = codeOverrides[exerciseName];
+  return o && o.trim() ? o : exerciseCode(exerciseName);
+}
+
+function saveCodeOverrides() {
+  try { localStorage.setItem(CODE_STORE_KEY, JSON.stringify(codeOverrides)); }
+  catch { /* storage may be unavailable — edits still apply this session */ }
+}
+
+/** Set or clear (blank → back to default) one exercise's code override. */
+function setCodeOverride(exerciseName: string, code: string) {
+  const trimmed = code.trim();
+  if (!trimmed || trimmed === exerciseCode(exerciseName)) delete codeOverrides[exerciseName];
+  else codeOverrides[exerciseName] = trimmed;
+  saveCodeOverrides();
 }
 
 // ---- Last picked athlete: remembered across reloads ----
@@ -2161,7 +2199,7 @@ function renderExercisesPage() {
   };
   // 3-letter codes (unique across this athlete's whole list) keep rows from
   // wrapping; the full name sits on a muted, ellipsised subline.
-  const codes = exerciseCodesFor(ordered.map((it) => it.exerciseName));
+  const codes = exerciseCodesFor(ordered.map((it) => it.exerciseName), codeFor);
   const nCols = repMaxCols.length;
   const rmCells = (name: string): string => {
     const oneRm = prByEx.get(name)?.bestE1rm.e1rm;
@@ -2176,7 +2214,7 @@ function renderExercisesPage() {
     return `<td class="num ex-bestset">${pr ? wr(pr.bestE1rm.weight, pr.bestE1rm.reps) : "—"}</td>`;
   };
   const exCell = (name: string): string =>
-    `<span class="ex-code">${escapeHtml(codes.get(name) ?? exerciseCode(name))}</span>` +
+    `<span class="ex-code">${escapeHtml(codes.get(name) ?? codeFor(name))}</span>` +
     `<span class="ex-name-sub muted">${escapeHtml(name)}${originBadge(name)}</span>`;
 
   const head =
@@ -3085,7 +3123,7 @@ function renderWorkoutSetsChart() {
     const color = named.get(s.exerciseName) ?? OTHER;
     const g = groups.get(label) ?? groups.set(label, { color, points: [] }).get(label)!;
     const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${exerciseCode(s.exerciseName)} ×${s.reps ?? 0}` });
+    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${codeFor(s.exerciseName)} ×${s.reps ?? 0}` });
   }
   const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
   const series: SvgSeries[] = order.map((label) => ({ name: label, color: groups.get(label)!.color, type: "range", points: groups.get(label)!.points }));
@@ -3155,7 +3193,7 @@ function renderWorkoutsPage() {
               .filter((s) => s.exerciseName === e.exerciseName)
               .map((s) => setDisplay(s))
               .join(" ");
-            const name = workoutNameMode === "code" ? exerciseCode(e.exerciseName) : e.exerciseName;
+            const name = workoutNameMode === "code" ? codeFor(e.exerciseName) : e.exerciseName;
             const addBtn = showAddSets
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
@@ -3762,6 +3800,61 @@ function renderBwGroupBar(): void {
     `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>`;
 }
 
+// ---- Exercise codes tab: rename the short code shown for each lift ----
+let codesQuery = "";
+
+/** Render the editable exercise-code list (most-trained first, searchable). */
+function renderCodesTab(): void {
+  const counts = new Map<string, number>();
+  for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
+  for (const name of Object.keys(codeOverrides)) if (!counts.has(name)) counts.set(name, 0); // keep edited-but-absent lifts visible
+  const q = codesQuery.trim().toLowerCase();
+  const names = [...counts.keys()]
+    .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q))
+    .sort((a, b) => (counts.get(b)! - counts.get(a)!) || a.localeCompare(b));
+
+  const head = `<thead><tr><th>Exercise</th><th>Code</th><th class="num">Sets</th></tr></thead>`;
+  const body = names
+    .map((name) => {
+      const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
+      const def = exerciseCode(name);
+      return (
+        `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}</td>` +
+        `<td class="codes-cell">` +
+        `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
+        `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +
+        (overridden
+          ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
+          : `<span class="codes-def muted">default</span>`) +
+        `</td><td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
+      );
+    })
+    .join("");
+  els.codesTable.innerHTML = names.length
+    ? head + `<tbody>${body}</tbody>`
+    : `<tbody><tr><td class="muted">No exercises match.</td></tr></tbody>`;
+}
+
+/** Wire the Codes tab's search box, per-row code edits and reset buttons. */
+function setupCodesTab(): void {
+  els.codesSearch.addEventListener("input", () => { codesQuery = els.codesSearch.value; renderCodesTab(); });
+  // Commit a typed code on blur/Enter (change), then refresh everywhere it shows.
+  els.codesTable.addEventListener("change", (e) => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>(".codes-input");
+    if (!input?.dataset.ex) return;
+    setCodeOverride(input.dataset.ex, input.value);
+    renderCodesTab();
+    renderAll();
+  });
+  els.codesTable.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-reset]");
+    if (!btn?.dataset.reset) return;
+    setCodeOverride(btn.dataset.reset, ""); // blank clears the override
+    renderCodesTab();
+    renderAll();
+  });
+}
+
 /** Expanded info panel for one exercise on the Index page: category / muscle /
  * tier, bodyweight part, merged spellings, total sets, who trains it, the best
  * estimated 1RM ever logged (any athlete) and the date span. */
@@ -4282,6 +4375,7 @@ async function init() {
   setupDataTab();
   renderDataTab();
   setupAddTab();
+  setupCodesTab();
   setupGroupsView();
   setupTeamView();
   setupChecklists();
@@ -5579,7 +5673,7 @@ function renderGroupsView() {
           .map((p) => {
             const w = p.bestE1rm.weight;
             return (
-              `<tr><td><span class="ex-code">${escapeHtml(exerciseCode(p.exerciseName))}</span>` +
+              `<tr><td><span class="ex-code">${escapeHtml(codeFor(p.exerciseName))}</span>` +
               `<span class="gv-sub muted">${escapeHtml(p.exerciseName)}</span></td>` +
               `<td class="num">${fmt(p.bestE1rm.e1rm)}</td>` +
               `<td class="num gv-raw">${w === null ? "—" : fmt(w)}×${p.bestE1rm.reps}</td></tr>`
@@ -5606,7 +5700,7 @@ function renderGroupsView() {
               .map(
                 (r, i) =>
                   `<tr><td class="gv-rank">${i + 1}</td>` +
-                  `<td>${escapeHtml(r.user)}<span class="gv-sub muted">${escapeHtml(exerciseCode(r.ex))}</span></td>` +
+                  `<td>${escapeHtml(r.user)}<span class="gv-sub muted">${escapeHtml(codeFor(r.ex))}</span></td>` +
                   `<td class="num">${fmt(r.e1rm)}</td></tr>`,
               )
               .join("") +
@@ -5681,7 +5775,7 @@ function renderTeamView() {
   const union = [...new Set(maps.flatMap((m) => [...m.keys()]))];
   const topOf = (ex: string) => Math.max(...maps.map((m) => m.get(ex) ?? 0));
   union.sort((a, b) => topOf(b) - topOf(a));
-  const codes = exerciseCodesFor(union);
+  const codes = exerciseCodesFor(union, codeFor);
 
   const head =
     `<thead><tr><th>Exercise</th>${picks.map((u) => `<th class="num">${escapeHtml(u.user)}</th>`).join("")}</tr></thead>`;
@@ -5695,7 +5789,7 @@ function renderTeamView() {
         .map((v) => `<td class="num${v !== undefined && v === best ? " team-win" : ""}">${v === undefined ? "—" : fmt(v)}</td>`)
         .join("");
       return (
-        `<tr class="${shared ? "team-shared-row" : ""}"><td><span class="ex-code">${escapeHtml(codes.get(ex) ?? exerciseCode(ex))}</span>` +
+        `<tr class="${shared ? "team-shared-row" : ""}"><td><span class="ex-code">${escapeHtml(codes.get(ex) ?? codeFor(ex))}</span>` +
         `<span class="gv-sub muted">${escapeHtml(ex)}</span></td>${cells}</tr>`
       );
     })
@@ -5739,6 +5833,7 @@ function switchTopTab(name: string) {
   if (name === "sitemap") renderSiteMap();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
+  if (name === "codes") renderCodesTab();
   updateBottomNav();
 }
 

@@ -1589,6 +1589,22 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-row-hidden { opacity: 0.5; }
 .bw-allhidden { margin: 0; padding: 9px 12px; font-size: 0.82rem; }
 
+/* Exercise codes tab: editable per-lift code with a reset-to-default control. */
+.codes-cell { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.codes-input {
+  width: 6.5em; font: inherit; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.02em;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px;
+}
+.codes-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.codes-input.is-custom { border-color: var(--accent); color: var(--accent); }
+.codes-reset {
+  font: inherit; font-size: 0.75rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+}
+.codes-reset:hover { border-color: var(--accent); color: var(--accent); }
+.codes-def { font-size: 0.75rem; }
+
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }

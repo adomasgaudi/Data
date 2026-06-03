@@ -23,7 +23,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.1.30</span></h1>
+        <h1>Colosseum <span class="version">b.2.1.31</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -978,6 +978,21 @@
         </section>
       </div>
 
+      <div id="tab-codes" class="tab-panel" hidden>
+        <section class="panel">
+          <div class="groups-head">
+            <h2>Exercise codes</h2>
+            <p class="muted" style="margin: 0.25rem 0 0">
+              The short codes shown in the Workouts list, graphs and tables (e.g. <strong>DL</strong>,
+              <strong>HT</strong>, <strong>slRDL</strong>). Type a new code to rename one; clear the box
+              to go back to the default. Saved on this device and used everywhere.
+            </p>
+          </div>
+          <input id="codesSearch" class="compare-search" type="search" placeholder="Search exercises…" autocomplete="off" style="margin: 0.75rem 0" />
+          <table id="codesTable" class="data-table"></table>
+        </section>
+      </div>
+
       <div id="tab-sitemap" class="tab-panel" hidden>
         <section class="panel">
           <div class="groups-head">
@@ -1021,6 +1036,7 @@
         <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
         <button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
         <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
+        <button class="other-item" data-tab="codes" role="menuitem"><span class="other-ico">🏷️</span> Exercise codes</button>
         <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
         <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
         <button class="other-item" data-tab="sitemap" role="menuitem"><span class="other-ico">🗺️</span> Site map</button>

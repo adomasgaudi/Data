@@ -733,13 +733,20 @@ export function exerciseCode(exerciseName: string): string {
  * share a code, later ones get a numeric suffix ("dBP", "dBP2", "dBP3") so each
  * row in a table reads distinctly. Order in determines suffix order, so pass the
  * names in their display order for stable codes. Returns a name→code map.
+ *
+ * `baseCode` resolves one name's (non-unique) code; it defaults to
+ * {@link exerciseCode} but callers can pass a resolver that layers user-set code
+ * overrides on top, so a renamed code still gets collision-resolved here.
  */
-export function exerciseCodesFor(names: Iterable<string>): Map<string, string> {
+export function exerciseCodesFor(
+  names: Iterable<string>,
+  baseCode: (name: string) => string = exerciseCode,
+): Map<string, string> {
   const out = new Map<string, string>();
   const used = new Map<string, number>(); // base code → how many times seen
   for (const name of names) {
     if (out.has(name)) continue; // same name → same code, only assign once
-    const base = exerciseCode(name);
+    const base = baseCode(name);
     const seen = used.get(base) ?? 0;
     used.set(base, seen + 1);
     out.set(name, seen === 0 ? base : `${base}${seen + 1}`);
