@@ -24,6 +24,7 @@ import {
   personalRecords,
   athleteSummary,
   withSyntheticGroups,
+  buildActiveExerciseSet,
   type SyntheticGroupDef,
   type PersonalRecord,
   type WorkoutDay,
@@ -178,6 +179,7 @@ const els = {
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
+  activeSetBar: $("activeSetBar"),
   bwGroups: $("bwGroups"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
@@ -527,11 +529,59 @@ const SYNTHETIC_GROUP_DEFS: SyntheticGroupDef[] = [...COMBINABLE_GROUPS, ...COMP
   }),
 );
 
+/* ---- Global "active exercise set" filter (app-wide) ----------------------
+ * Restrict the WHOLE app to a chosen subset of exercises: a frequency-tier
+ * cutoff (S/A/B/C/D by instance count) plus manual include/exclude overrides,
+ * all set in the Index page and saved on this device. `activeSet` is null when
+ * the filter is OFF (the default — nothing hidden); otherwise it's the set of
+ * allowed exercise names. activeRecords() is the single choke point every view
+ * reads through; the synthetic group lifts are filtered too (each pure member is
+ * judged on its own count, see buildActiveExerciseSet). */
+const ACTIVE_CUTOFF_KEY = "colosseum.activeSet.cutoff.v1";
+const ACTIVE_INCLUDE_KEY = "colosseum.activeSet.include.v1";
+const ACTIVE_EXCLUDE_KEY = "colosseum.activeSet.exclude.v1";
+const loadJsonArray = (key: string): string[] => {
+  try { const a = JSON.parse(localStorage.getItem(key) ?? "[]"); return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []; }
+  catch { return []; }
+};
+let activeCutoff: string | null = (() => { try { const v = localStorage.getItem(ACTIVE_CUTOFF_KEY); return v && v !== "none" ? v : null; } catch { return null; } })();
+let activeInclude = new Set<string>(loadJsonArray(ACTIVE_INCLUDE_KEY));
+let activeExclude = new Set<string>(loadJsonArray(ACTIVE_EXCLUDE_KEY));
+/** The allowed-exercise set, or null when the filter is off. Rebuilt by refreshActiveSet(). */
+let activeSet: Set<string> | null = null;
+
+/** Recompute activeSet from the cutoff + overrides against the current data. Call
+ * after data loads or any active-set control changes, then re-render. */
+function refreshActiveSet(): void {
+  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0) {
+    activeSet = null; // filter fully off → no filtering at all
+    return;
+  }
+  activeSet = buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
+}
+
+/** Persist the active-set controls to localStorage. */
+function saveActiveSet(): void {
+  try {
+    localStorage.setItem(ACTIVE_CUTOFF_KEY, activeCutoff ?? "none");
+    localStorage.setItem(ACTIVE_INCLUDE_KEY, JSON.stringify([...activeInclude]));
+    localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
+  } catch { /* storage may be unavailable */ }
+}
+
+/** Raw logged records, filtered to the active exercise set (or all, if off). The
+ * single choke point every view/graph/list reads instead of data.records. */
+function activeRecords(): SetRecord[] {
+  if (!activeSet) return data.records;
+  const allow = activeSet;
+  return data.records.filter((r) => allow.has(r.exerciseName));
+}
+
 function computedRecords(): SetRecord[] {
-  // Pure logged records with bodyweight folded in, PLUS the synthetic combinable/
-  // comparable group records derived from those computed loads (so the ratio
-  // scales the total bw-inclusive load). Pure lifts are never mutated.
-  const pure = data.records.map(computeRecord);
+  // Active-filtered logged records with bodyweight folded in, PLUS the synthetic
+  // combinable/comparable group records derived from those computed loads (so the
+  // ratio scales the total bw-inclusive load). Pure lifts are never mutated.
+  const pure = activeRecords().map(computeRecord);
   return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
 }
 
@@ -542,7 +592,7 @@ function computedRecords(): SetRecord[] {
  */
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
-  const exercises = distinctExercises(data.records); // pure lifts, most-logged first
+  const exercises = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
   els.exercise.innerHTML = exercises
     .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
     .join("");
@@ -1142,7 +1192,7 @@ function renderAthlete() {
   syncAthleteChips();
   workoutsPage = 0;
   selectedExercise = null;
-  athleteWorkouts = workoutsForUser(data.records, els.athlete.value);
+  athleteWorkouts = workoutsForUser(activeRecords(), els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   initHeatYear();
   renderAthleteProfile();
@@ -1213,7 +1263,7 @@ const listCatColor = (c: string): string =>
 
 /** Compact "what they've been doing" stat chips for the selected athlete. */
 function renderAthleteStats() {
-  const s = athleteSummary(data.records, els.athlete.value);
+  const s = athleteSummary(activeRecords(), els.athlete.value);
   if (s.sets === 0) {
     els.athleteStats.innerHTML = "";
     return;
@@ -1239,7 +1289,7 @@ function renderMomentum() {
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   // Consider the athlete's most-trained exercises, then keep those with a trend.
-  const top = exerciseCountsForUser(data.records, username).slice(0, 12);
+  const top = exerciseCountsForUser(activeRecords(), username).slice(0, 12);
   const chips: { name: string; perWeek: number }[] = [];
   for (const c of top) {
     const pts = exerciseProgressByWeek(recs, username, c.exerciseName, formula).filter((p) => p.bestE1rm !== null);
@@ -1275,7 +1325,7 @@ function renderMomentum() {
 
 /** "What they train": a proportional bar of sets per muscle/movement category. */
 function renderTrainBreakdown() {
-  const counts = exerciseCountsForUser(data.records, els.athlete.value);
+  const counts = exerciseCountsForUser(activeRecords(), els.athlete.value);
   const byCat = new Map<TrainingCategory, number>();
   let total = 0;
   for (const c of counts) {
@@ -1319,7 +1369,7 @@ function renderMuscleMap() {
   // in the data; ×100 for display). Falls back to grey where there's no score.
   const username = els.athlete.value;
   const byCat = new Map<TrainingCategory, number>();
-  for (const r of data.records) {
+  for (const r of activeRecords()) {
     if (r.username !== username || r.percentile === null) continue;
     const cat = exerciseCategory(r.exerciseName);
     const cur = byCat.get(cat);
@@ -1393,8 +1443,8 @@ function renderMuscleMap() {
 function athleteContext(): string {
   const username = els.athlete.value;
   const p = ATHLETES[username];
-  const counts = exerciseCountsForUser(data.records, username);
-  const workouts = workoutsForUser(data.records, username);
+  const counts = exerciseCountsForUser(activeRecords(), username);
+  const workouts = workoutsForUser(activeRecords(), username);
   const totalSets = counts.reduce((s, c) => s + c.count, 0);
   const prs = personalRecords(
     filterRecords(computedRecords(), { usernames: [username], excludeDropsets: true }),
@@ -1627,7 +1677,7 @@ const COMPARE_COLORS = [
  */
 function renderCompareSection() {
   const username = els.athlete.value;
-  const counts = exerciseCountsForUser(data.records, username);
+  const counts = exerciseCountsForUser(activeRecords(), username);
   const exercises = counts.map((c) => c.exerciseName);
 
   // Drop any previous picks that this athlete doesn't have; seed with top 2.
@@ -1672,7 +1722,7 @@ function renderCompareSection() {
  */
 function renderCompareChips() {
   const username = els.athlete.value;
-  const exercises = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const exercises = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
   const q = compareChipQuery.trim().toLowerCase();
   // Colour per selected exercise, matching the chart's line/legend colours.
   const selOrder = exercises.filter((e) => compareSelected.has(e));
@@ -1711,7 +1761,7 @@ function renderCompareChips() {
  * all already in, remove them; otherwise add the missing ones. Re-renders chips. */
 function compareToggleCategory(cat: string) {
   const username = els.athlete.value;
-  const members = exerciseCountsForUser(data.records, username)
+  const members = exerciseCountsForUser(activeRecords(), username)
     .map((c) => c.exerciseName)
     .filter((e) => exerciseCategories(e).includes(cat));
   const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
@@ -1725,7 +1775,7 @@ function compareToggleCategory(cat: string) {
 /** Toggle every exercise in a frequency tier in/out of the compare selection. */
 function compareToggleTier(tier: string) {
   const username = els.athlete.value;
-  const members = exerciseCountsForUser(data.records, username)
+  const members = exerciseCountsForUser(activeRecords(), username)
     .filter((c) => (frequencyTier(c.count)?.tier ?? null) === tier)
     .map((c) => c.exerciseName);
   const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
@@ -1869,7 +1919,8 @@ function renderExercisesPage() {
   els.exerciseTargets.hidden = true;
   els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in (SVG engine stays mounted, just hidden)
   const cutoff = exerciseRangeCutoff();
-  const scoped = cutoff ? data.records.filter((r) => r.date && r.date >= cutoff) : data.records;
+  const base = activeRecords(); // honour the app-wide active exercise set
+  const scoped = cutoff ? base.filter((r) => r.date && r.date >= cutoff) : base;
   const username = els.athlete.value;
 
   // The displayed list: the athlete's trained exercises, plus — when "Show
@@ -1879,8 +1930,8 @@ function renderExercisesPage() {
   type ExItem = ExerciseCount & { trained: boolean };
   let items: ExItem[] = exerciseCountsForUser(scoped, username).map((c) => ({ ...c, trained: true }));
   if (exerciseShowNotTrained) {
-    const trainedEver = new Set(exerciseCountsForUser(data.records, username).map((c) => c.exerciseName));
-    for (const name of distinctExercises(data.records))
+    const trainedEver = new Set(exerciseCountsForUser(base, username).map((c) => c.exerciseName));
+    for (const name of distinctExercises(base))
       if (!trainedEver.has(name)) items.push({ exerciseName: name, count: 0, trained: false });
   }
   // Fold out 3rd-tier (cardio / mobility / warm-up) exercises unless the toggle
@@ -2080,7 +2131,7 @@ function renderExerciseDetail(exName: string) {
  * a picker to add another of this athlete's lifts, so e.g. Squat + Smith Machine
  * Squat are viewed as one. */
 function renderCombineBar(exName: string, username: string) {
-  const trained = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const trained = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
   const addable = trained.filter((n) => n !== exName && !combinedWith.includes(n));
   const chips = combinedWith
     .map((n) => `<button type="button" class="ex-combine-chip" data-remove="${escapeHtml(n)}" title="Remove">${escapeHtml(n)} ✕</button>`)
@@ -2540,7 +2591,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     return aloneFilter === "alone" ? tagged : !tagged;
   };
   if (els.workoutView.value === "week") {
-    return weeksForUser(data.records, els.athlete.value)
+    return weeksForUser(activeRecords(), els.athlete.value)
       .map((w) => ({
         label: `Week of ${shortDate(w.weekStart)}`,
         date: w.weekStart,
@@ -2695,7 +2746,7 @@ function heatFilterLabel(): string {
  * category, or one exercise. Lives inside the re-rendered calendar HTML, so it's
  * handled by delegation in the workoutCalendar click handler (data-heatval). */
 function heatFilterSelect(): string {
-  const exs = exerciseCountsForUser(data.records, els.athlete.value); // most-trained first
+  const exs = exerciseCountsForUser(activeRecords(), els.athlete.value); // most-trained first
   const cats = TRAINING_CATEGORIES.filter((c) => exs.some((e) => exerciseCategory(e.exerciseName) === c));
   const opt = (val: string, label: string) =>
     `<button type="button" class="xdd-opt${heatFilter === val ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${escapeHtml(label)}</button>`;
@@ -2813,7 +2864,7 @@ function renderWorkoutSetsChart() {
   }
 
   // Colour the athlete's most-trained exercises; everything else is "Other".
-  const ranked = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const ranked = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
   const named = new Map<string, string>();
   ranked.slice(0, COMPARE_COLORS.length - 1).forEach((name, i) => named.set(name, COMPARE_COLORS[i]!));
   const OTHER = "#9aa3b2";
@@ -3228,6 +3279,47 @@ function renderMergeList() {
   els.mergeList.innerHTML = `<table class="data-table">${head}<tbody>${body}</tbody></table>`;
 }
 
+/**
+ * The app-wide active-set control on the Index page: a frequency-tier cutoff that
+ * hides every lift below it everywhere in the app (default None = show all). The
+ * per-exercise include/exclude overrides get inline toggles in a later slice; for
+ * now the cutoff is the lever, and any manual overrides are summarised + clearable.
+ */
+function renderActiveSetBar(totalExercises: number): void {
+  const active = activeSet ? activeSet.size : totalExercises;
+  const opt = (val: string, label: string) =>
+    `<option value="${val}"${(activeCutoff ?? "none") === val ? " selected" : ""}>${label}</option>`;
+  const tierOpts = FREQ_TIERS.map((t) => opt(t.tier, t.label)).join("");
+  const overrides = activeInclude.size + activeExclude.size;
+  const status = activeSet
+    ? `<span class="as-status is-on">Showing ${active} of ${totalExercises} exercises app-wide</span>`
+    : `<span class="as-status muted">Showing all ${totalExercises} exercises (filter off)</span>`;
+  const clear = overrides
+    ? ` · <button type="button" class="as-clear" data-asclear="1">clear ${overrides} manual override${overrides === 1 ? "" : "s"}</button>`
+    : "";
+  els.activeSetBar.innerHTML =
+    `<label class="as-label">Show app-wide ` +
+    `<select id="activeCutoff" class="subtle-select">${opt("none", "All exercises")}${tierOpts}</select>` +
+    `</label> ${status}${clear}` +
+    `<p class="as-hint muted">Restrict the whole app (every list, graph, leaderboard) to your most-trained lifts. ` +
+    `Pick a tier to hide rarer exercises; e.g. “S” keeps only the staples.</p>`;
+}
+
+/** Cutoff dropdown changed: save + re-render the whole app. */
+function onActiveCutoffChange(value: string): void {
+  activeCutoff = value === "none" ? null : value;
+  saveActiveSet();
+  renderAll();
+}
+
+/** Clear all manual include/exclude overrides (keeps the tier cutoff). */
+function clearActiveOverrides(): void {
+  activeInclude = new Set();
+  activeExclude = new Set();
+  saveActiveSet();
+  renderAll();
+}
+
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
 function renderBwParts() {
   renderMergeList();
@@ -3242,6 +3334,7 @@ function renderBwParts() {
   const withPart = rows.filter((r) => r.coeff > 0).length;
   els.bwTitle.innerHTML =
     `Exercises <span class="muted">(${rows.length} · ${withPart} with a bodyweight part · edit to update all stats)</span>`;
+  renderActiveSetBar(rows.length);
 
   // Group the exercises by training category so similar lifts share a dropdown.
   const byCat = new Map<TrainingCategory, typeof rows>();
@@ -3376,7 +3469,7 @@ function populateTestExercises(username: string) {
     els.testExercise.innerHTML = `<option value="">— pick an athlete first —</option>`;
     return;
   }
-  const exercises = exerciseCountsForUser(data.records, username);
+  const exercises = exerciseCountsForUser(activeRecords(), username);
   els.testExercise.innerHTML = exercises
     .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</option>`)
     .join("");
@@ -3500,45 +3593,58 @@ function renderTest() {
 }
 
 /**
- * Calculator graph — the same Nuzzo research chart as the explainer page
- * (public/reps-1rm.html): the study's bench point estimates plotted as dots
- * (x = %1RM, y = reps to failure) with the best-fit curve through them, on the
- * modern scrollable/pannable SVG engine. Your typed set is overlaid as a gold
- * dot at (its %1RM on the Nuzzo curve, its reps) so the chart stays personal.
+ * Calculator graph — the Nuzzo research chart, plotted on YOUR scale: the study's
+ * bench point estimates as dots and the best-fit curve, but the x-axis is the BAR
+ * WEIGHT (added kg) the curve predicts at each %1RM for your set's estimated 1RM,
+ * not the bare %1RM. So it reads "at this weight on the bar you can do N reps".
+ * Each %1RM p maps to bar weight = (p/100 × eff1RM) − bodyweight share; reps stay
+ * on y. Your typed set is the gold dot at (added weight, reps). Same study data +
+ * best-fit curve as the explainer page (public/reps-1rm.html), just on a kg axis.
  */
 function renderCalcCurve(
-  _effLoad: number,
-  _bodyweightLoad: number,
+  effLoad: number,
+  bodyweightLoad: number,
   curReps: number,
-  _curAdded: number,
+  curAdded: number,
   _formula: OneRepMaxFormula,
 ) {
   const box = document.getElementById("calcCurveChart");
   if (!box) return;
 
-  // All 17 study points as scatter dots.
+  // The set's Nuzzo 1RM sets the weight scale (this is the Nuzzo bench chart).
+  // Without a usable 1RM (e.g. no reps yet) we can't place a weight axis.
+  const eff1rm = nuzzo1RM(effLoad, Math.max(1, curReps));
+  if (eff1rm === null || eff1rm <= 0) {
+    els.calcCurveNote.textContent = "Enter a weight and reps to see the weight↔reps curve.";
+    if (calcCurveSvg) calcCurveSvg.update({ series: [] });
+    return;
+  }
+  // %1RM → bar weight (added kg) for THIS set: peel the bodyweight share back off.
+  const barAt = (pct: number) => (pct / 100) * eff1rm - bodyweightLoad;
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+
+  // All 17 study points, each at its predicted bar weight.
   const studyPts: SvgPoint[] = BENCH_REPS_STUDY.map(([pct, reps]) => ({
-    x: pct,
-    y: Math.round(reps * 10) / 10,
-    meta: `${reps.toFixed(1)} reps`,
+    x: r1(barAt(pct)),
+    y: r1(reps),
+    meta: `${reps.toFixed(1)} reps @ ${Math.round(pct)}%`,
   }));
   // Best-fit curve sampled densely across the data span (95% → 15% of 1RM).
   const fitPts: SvgPoint[] = [];
   for (let pct = 95; pct >= 15; pct -= 0.5) {
-    fitPts.push({ x: pct, y: Math.round(benchRepsAtPct(pct) * 10) / 10 });
+    fitPts.push({ x: r1(barAt(pct)), y: r1(benchRepsAtPct(pct)) });
   }
   const series: SvgSeries[] = [
     { name: "Best-fit curve", color: "#284e86", type: "line", points: fitPts, noLegend: true },
     { name: "Study estimates (Nuzzo et al.)", color: "#1a1a1a", type: "scatter", points: studyPts },
   ];
-  // Overlay the set you typed, if it's a real rep count.
+  // Overlay the set you typed at its actual added weight.
   if (curReps >= 1) {
-    const pct = benchPctForReps(curReps);
     series.push({
       name: "Your set",
       color: "#b8902f",
       type: "scatter",
-      points: [{ x: Math.round(pct * 10) / 10, y: curReps, meta: `${curReps} reps ≈ ${Math.round(pct)}% of 1RM` }],
+      points: [{ x: r1(curAdded), y: curReps, meta: `${fmt(curAdded)} kg × ${curReps}` }],
     });
   }
   const config: SvgChartConfig = {
@@ -3546,16 +3652,18 @@ function renderCalcCurve(
     xKind: "linear",
     yBeginAtZero: true,
     height: 300,
-    formatX: (x) => `${Math.round(x)}%`,
-    formatTipX: (x) => `${Math.round(x)}% of 1RM`,
+    yUnit: "reps",
+    formatX: (x) => `${Math.round(x)}`,
+    formatTipX: (x) => `${Math.round(x)} kg`,
   };
   if (!calcCurveSvg) calcCurveSvg = mountSvgChart(box, config);
   else calcCurveSvg.update(config);
   els.calcCurveNote.textContent =
-    "Bench reps you can do at each % of 1RM — dots are the study data, the line is the best-fit curve (gold dot = the set you typed). Drag to pan · wheel to zoom.";
+    "Reps you can do at each bar weight (kg) for this set's Nuzzo 1RM — dots are the study data, the line is the best-fit curve (gold dot = the set you typed). Drag to pan · wheel to zoom.";
 }
 
 function renderAll() {
+  refreshActiveSet(); // keep the app-wide active exercise set current before any render
   renderLeaderboard();
   renderPersonalRecords();
   renderAthlete();
@@ -3987,6 +4095,14 @@ async function init() {
     }
   });
   els.bwGroups.addEventListener("change", onBwInputChange);
+  // App-wide active-set controls (Index): tier cutoff dropdown + clear-overrides.
+  els.activeSetBar.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeCutoff");
+    if (sel) onActiveCutoffChange(sel.value);
+  });
+  els.activeSetBar.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("[data-asclear]")) clearActiveOverrides();
+  });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
     const nameEl = (e.target as HTMLElement).closest<HTMLElement>(".bw-ex-name");
@@ -4583,7 +4699,7 @@ function groupCard(name: string, memberCount: number, bodyHtml: string): string 
 function renderGroupsView() {
   const formula = currentFormula();
   const recs = computedRecords();
-  const present = distinctExercises(data.records); // most-trained first
+  const present = distinctExercises(activeRecords()); // most-trained first (active set)
 
   // Athlete picker: "Everyone" + each athlete; keep the current selection.
   const users = distinctUsers(data.records);
@@ -4718,7 +4834,7 @@ function renderTeamView() {
   });
   const summaries = picks
     .map((u) => {
-      const s = athleteSummary(data.records, u.username);
+      const s = athleteSummary(activeRecords(), u.username);
       const bw = s.bodyweightLast;
       return (
         `<div class="team-sumchip"><strong>${escapeHtml(u.user)}</strong>` +
