@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.10", title: "Code/full name toggle", sp: 0.5, note: "Workouts exercise view has a Code / Full toggle to switch between short exercise codes and full names." },
       { version: "b.2.1.9", title: "Codes and note difficulty", sp: 1, note: "Workouts session lines now show short exercise codes (full name on hover) instead of long names, and a bodyweight/placeholder set (weight 0 or 1) that has a note shows the note as its difficulty with the reps as a superscript." },
       { version: "b.2.1.8", title: "Exercise vs group toggle", sp: 1, note: "Workouts “Show” is now a clear Exercises / Groups toggle; in Groups mode a small picker chooses the dimension (muscle / functional / combined / compared). Defaults to the written-out exercise view." },
       { version: "b.2.1.7", title: "Sets written out, no zero", sp: 2, note: "Bodyweight sets no longer show a meaningless “0” — just the reps as a superscript. And the Workouts session line (Show: Exercises) writes out every set as weight^reps (e.g. 40¹⁵ 40¹²) instead of only the set count." },

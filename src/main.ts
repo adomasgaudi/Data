@@ -166,6 +166,8 @@ const els = {
   workoutsPager: $("workoutsPager"),
   workoutViewToggle: $("workoutViewToggle"),
   workoutShowToggle: $("workoutShowToggle"),
+  workoutNameToggle: $("workoutNameToggle"),
+  workoutNameLabel: $("workoutNameLabel"),
   workoutGroupDimLabel: $("workoutGroupDimLabel"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
@@ -1173,6 +1175,7 @@ let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
 let workoutViewMode: "day" | "week" = "week"; // By day / By week toggle
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
+let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
 /** Reflect workoutViewMode on the segmented toggle buttons. */
 function syncWorkoutViewToggle(): void {
   for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
@@ -1184,6 +1187,9 @@ function syncWorkoutShowToggle(): void {
   for (const b of els.workoutShowToggle.querySelectorAll<HTMLElement>(".seg-btn"))
     b.classList.toggle("is-active", b.dataset.show === workoutShowMode);
   els.workoutGroupDimLabel.hidden = workoutShowMode !== "groups";
+  els.workoutNameLabel.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
+  for (const b of els.workoutNameToggle.querySelectorAll<HTMLElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.name === workoutNameMode);
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -3035,7 +3041,8 @@ function renderWorkoutsPage() {
               .filter((s) => s.exerciseName === e.exerciseName)
               .map((s) => setDisplay(s))
               .join(" ");
-            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(exerciseCode(e.exerciseName))}</span> <span class="wo-setlist muted">${setsTxt}</span>`;
+            const name = workoutNameMode === "code" ? exerciseCode(e.exerciseName) : e.exerciseName;
+            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>`;
           })
           .join("<br>");
       } else {
@@ -4177,6 +4184,14 @@ async function init() {
     const m = btn?.dataset.show;
     if ((m !== "exercises" && m !== "groups") || m === workoutShowMode) return;
     workoutShowMode = m;
+    syncWorkoutShowToggle();
+    renderWorkoutsPage();
+  });
+  els.workoutNameToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
+    const m = btn?.dataset.name;
+    if ((m !== "code" && m !== "full") || m === workoutNameMode) return;
+    workoutNameMode = m;
     syncWorkoutShowToggle();
     renderWorkoutsPage();
   });

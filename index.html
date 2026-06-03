@@ -22,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.1.9</span></h1>
+      <h1>Colosseum <span class="version">b.2.1.10</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -166,6 +166,12 @@
                   <option value="compared">Compared lift</option>
                 </select>
               </label>
+              <span class="inline-label" id="workoutNameLabel">Names
+                <span id="workoutNameToggle" class="seg-toggle" role="group" aria-label="Exercise code or full name">
+                  <button type="button" class="seg-btn is-active" data-name="code">Code</button>
+                  <button type="button" class="seg-btn" data-name="full">Full</button>
+                </span>
+              </span>
               <label class="inline-label">Per page
                 <select id="workoutsPageSize">
                   <option value="20">20</option>
