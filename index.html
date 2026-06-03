@@ -22,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.30</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.31</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -929,46 +929,6 @@
         </section>
       </div>
 
-      <div id="tab-graphdemo" class="tab-panel" hidden>
-        <section class="panel">
-          <div class="groups-head">
-            <h2>Graph demo <span class="muted" style="font-size: 0.8rem">(safe version)</span></h2>
-            <p class="muted" style="margin: 0.25rem 0 0">
-              The stable fallback: a from-scratch SVG chart (no Chart.js) with labels outside the
-              plot. Drag to pan freely, wheel/pinch to zoom. Leave this one as-is.
-            </p>
-          </div>
-          <div id="graphDemoBox" class="gd-box"></div>
-        </section>
-      </div>
-
-      <div id="tab-cmplab" class="tab-panel" hidden>
-        <section class="panel">
-          <div class="groups-head">
-            <h2>Compare <span class="muted" style="font-size: 0.8rem">(lab copy)</span></h2>
-            <p class="muted" style="margin: 0.25rem 0 0">
-              A safe copy of the Compare graph to iterate on — here the bottom month labels are
-              thinned so they don't crowd at wide zoom. The real Compare graph is left untouched.
-            </p>
-          </div>
-          <div id="cmpLabBox"></div>
-        </section>
-      </div>
-
-      <div id="tab-graphadv" class="tab-panel" hidden>
-        <section class="panel">
-          <div class="groups-head">
-            <h2>Graph <span class="muted" style="font-size: 0.8rem">(advanced)</span></h2>
-            <p class="muted" style="margin: 0.25rem 0 0">
-              Same engine, wider plot with the x/y values drawn inside the graph. Drag to pan;
-              <strong>two-finger pinch stretches per axis</strong> — spread sideways for X only, up/down for
-              Y only, diagonally for both. (Desktop: wheel = both, Shift+wheel = X, Alt+wheel = Y.)
-            </p>
-          </div>
-          <div id="graphAdvBox" class="gd-box"></div>
-        </section>
-      </div>
-
       <div id="tab-sitemap" class="tab-panel" hidden>
         <section class="panel">
           <div class="groups-head">
@@ -1014,9 +974,6 @@
         <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
         <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
         <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
-        <button class="other-item" data-tab="cmplab" role="menuitem"><span class="other-ico">🔬</span> Compare (lab)</button>
-        <button class="other-item" data-tab="graphadv" role="menuitem"><span class="other-ico">📈</span> Graph (advanced)</button>
-        <button class="other-item" data-tab="graphdemo" role="menuitem"><span class="other-ico">🛟</span> Graph demo (safe)</button>
         <button class="other-item" data-tab="sitemap" role="menuitem"><span class="other-ico">🗺️</span> Site map</button>
         <button class="other-item" data-tab="guide" role="menuitem"><span class="other-ico">📖</span> Guide</button>
       </div>

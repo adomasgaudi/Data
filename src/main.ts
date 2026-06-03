@@ -4,10 +4,7 @@
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
 import { niceTicks, MS_DAY } from "./chartAxis";
-import { mountGraphDemo } from "./graphDemo";
-import { mountGraphAdvanced } from "./graphAdvanced";
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
-import { mountSvgChartLab } from "./svgChartLab";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -204,7 +201,6 @@ let data: LoadedData;
 let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
-let cmpLabSvg: SvgChart | null = null; // "Compare (lab)" test page (lab engine variant)
 let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
@@ -1714,29 +1710,6 @@ function compareToggleTier(tier: string) {
     else compareSelected.add(e);
   }
   renderCompareSection();
-}
-
-/** "Compare (lab)" page: a copy of the Compare trend graph rendered through the
- * LAB engine (thinned x-labels), populated with the athlete's most-trained lifts
- * so it's busy enough to test label crowding. Does not touch the real chart. */
-function renderCmpLab() {
-  const box = document.getElementById("cmpLabBox");
-  if (!box) return;
-  const username = els.athlete.value;
-  const formula = currentFormula();
-  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
-  const top = exerciseCountsForUser(data.records, username).slice(0, 10).map((c) => c.exerciseName);
-  const series: SvgSeries[] = top.map((name, i) => ({
-    name,
-    color: COMPARE_COLORS[i % COMPARE_COLORS.length]!,
-    type: "line",
-    points: exerciseProgressByWeek(recs, username, name, formula)
-      .filter((p) => p.bestE1rm !== null)
-      .map((p) => ({ x: Date.parse(p.date), y: Math.round(p.bestE1rm! * 10) / 10 })),
-  }));
-  const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
-  if (!cmpLabSvg) cmpLabSvg = mountSvgChartLab(box, config);
-  else cmpLabSvg.update(config);
 }
 
 /** Draw the overlay on the SVG engine: one estimated-1RM line per ticked exercise
@@ -4750,15 +4723,6 @@ function switchTopTab(name: string) {
   if (name === "sitemap") renderSiteMap();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
-  if (name === "graphdemo") {
-    const box = document.getElementById("graphDemoBox");
-    if (box) mountGraphDemo(box);
-  }
-  if (name === "graphadv") {
-    const box = document.getElementById("graphAdvBox");
-    if (box) mountGraphAdvanced(box);
-  }
-  if (name === "cmplab") renderCmpLab();
   updateBottomNav();
 }
 

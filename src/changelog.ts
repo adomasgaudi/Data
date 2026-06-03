@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.31", sp: 1, note: "Removed the three throwaway graph test-pages (Graph demo, Graph (advanced) and Compare (lab)) from the Other menu — they were scratch pads for trying chart ideas and aren't needed in the app." },
       { version: "b.2.0.30", sp: 0.1, note: "Workouts list now shows 50 entries per page by default (was 20)." },
       { version: "b.2.0.29", sp: 2, note: "The per-set RIR (difficulty) picker is now a custom dropdown that looks the same on every phone/browser instead of the OS one. Closed it shows the range + a one-word feel (e.g. “0.5–1.3 difficult”); open it lists every band with the full description." },
       { version: "b.2.0.28", sp: 1, note: "Workouts “alone” filter is now one cycling button (Alone: Both → Only alone → Not alone), replacing the old “Only alone” checkbox — so you can also list just the sessions you trained with others." },
