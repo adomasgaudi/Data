@@ -65,6 +65,15 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   `10 → 20`) in the same commit; keep `WEBSITE_SP` in step too. **Under the title
   only the whole-site SP is shown — the per-part chips are NOT duplicated there;
   they live in Settings → Version history.**
+- **Always weigh effort against the owner's real velocity in every tech/architecture
+  decision.** Before recommending or estimating work, check the **version tree and SP
+  points** (`CHANGELOG`/`COMPONENTS` in `src/changelog.ts` and the git log) to see how
+  hard comparable past tasks actually were. **Calibration: the owner does ~50–100 SP
+  per day; a few SP is usually ~5–10 minutes.** So translate any recommendation into
+  that scale — e.g. an `SP:0.5` task is minutes, an `SP:13` task is a chunk of a day,
+  and anything above ~100 SP is multi-day and should be broken up or reconsidered.
+  Frame "is this worth it?" answers in **days/SP the owner will actually spend**, not
+  abstract effort, and prefer plans that fit inside a day's budget.
 - **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
   the header bar.
 
