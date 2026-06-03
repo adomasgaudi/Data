@@ -1291,6 +1291,12 @@ select.subtle-select:hover, select.subtle-select:focus {
   font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0; margin-right: 0.5rem;
 }
 .back-btn:hover { text-decoration: underline; }
+.ex-info-btn {
+  background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
+  cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px; margin-left: 0.35rem; white-space: nowrap;
+}
+.ex-info-btn:hover { border-color: var(--accent); }
 .bw-input {
   width: 4.5rem; text-align: right; font: inherit; font-size: 0.85rem;
   background: var(--bg); color: var(--text);

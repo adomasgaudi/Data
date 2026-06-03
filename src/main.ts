@@ -1973,7 +1973,8 @@ function renderExerciseDetail(exName: string) {
       ? `<span class="ex-bwpart">Bodyweight part: ${pct(coeff)}</span>`
       : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
   els.athleteTitle.innerHTML =
-    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}${originBadge(exName)} ${bwPart}`;
+    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}${originBadge(exName)} ${bwPart}` +
+    ` <button type="button" class="ex-info-btn" data-exinfo="${escapeHtml(exName)}" title="See this exercise's merges & data (all athletes)">ℹ Exercise info</button>`;
   els.exercisesPager.innerHTML = "";
   const username = els.athlete.value;
   const pr = personalRecords(
@@ -3069,7 +3070,7 @@ function renderBwParts() {
       const body = list
         .map(
           (r) =>
-            `<tr><td>${escapeHtml(r.name)}${originBadge(r.name)}</td>` +
+            `<tr data-exrow="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}${originBadge(r.name)}</td>` +
             `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
             `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
             `<td class="num">${r.count.toLocaleString()}</td></tr>`,
@@ -3088,6 +3089,23 @@ function renderBwParts() {
       );
     })
     .join("");
+}
+
+/** Open the Exercises (merges & data) page and scroll to one exercise's row,
+ * opening its category dropdown and flashing the row. Called from the per-athlete
+ * drill-in's "Exercise info" button — the same exercise, but with no person. */
+function jumpToExerciseInfo(exName: string) {
+  switchTopTab("bwparts");
+  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(exName)}"]`);
+  if (!row) return;
+  const details = row.closest<HTMLDetailsElement>("details.bw-cat");
+  if (details && !details.open) details.open = true;
+  // Let the just-opened <details> lay out before scrolling to the row.
+  requestAnimationFrame(() => {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.classList.add("wo-flash");
+    window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
+  });
 }
 
 /** Apply an edited bodyweight coefficient and refresh every dependent view. */
@@ -3565,7 +3583,10 @@ async function init() {
     if ((e.target as HTMLElement).closest(".back-btn")) {
       selectedExercise = null;
       renderExercisesPage();
+      return;
     }
+    const info = (e.target as HTMLElement).closest<HTMLElement>(".ex-info-btn");
+    if (info?.dataset.exinfo) jumpToExerciseInfo(info.dataset.exinfo);
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 
