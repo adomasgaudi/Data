@@ -11,8 +11,17 @@
     </script>
   </head>
   <body>
+    <!-- Decorative landing gate: one button that reveals the app (admin). -->
+    <div id="loginGate" class="login-gate">
+      <div class="login-card">
+        <h1 class="login-logo">🏛️ Colosseum</h1>
+        <p class="muted" style="margin:.3rem 0 1.4rem">Strength training dashboard</p>
+        <button id="loginAdminBtn" type="button" class="login-btn">Sign in as admin</button>
+      </div>
+    </div>
+
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.20</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.21</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>

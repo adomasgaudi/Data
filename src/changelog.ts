@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.21", sp: 0.5, note: "Decorative landing gate: a simple sign-in screen with one “Sign in as admin” button that reveals the app (no real auth)." },
       { version: "b.2.0.20", sp: 0.5, note: "Year heatmap heat colours re-scaled: 1 set light blue, 2–3 darker blue, 4–5 dark blue, 6–9 light gold, 10+ dark gold." },
       { version: "b.2.0.19", sp: 0.5, note: "Year heatmap rest squares now alternate by month — white with a thin gray outline vs very light gray with a slightly darker outline — instead of the warm tint (themed for dark mode too)." },
       { version: "b.2.0.18", sp: 3, note: "Grade how hard each set felt: every set in the Workouts and Exercises sets tables gets an RPE (1–10) picker. Saved on the device (the CSV has no difficulty column) and shown in the per-set graph tooltip." },

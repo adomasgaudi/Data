@@ -4805,4 +4805,13 @@ function setupBottomNav() {
   });
 }
 
+// Decorative landing gate: lock scrolling until the single "Sign in as admin"
+// button is pressed, which just reveals the app (no real auth — everyone is admin).
+document.body.classList.add("locked");
+document.getElementById("loginAdminBtn")?.addEventListener("click", () => {
+  const gate = document.getElementById("loginGate");
+  if (gate) gate.hidden = true;
+  document.body.classList.remove("locked");
+});
+
 void init();

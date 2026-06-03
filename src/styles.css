@@ -50,6 +50,24 @@
   --hm-bd-odd: #3c4757;
 }
 * { box-sizing: border-box; }
+body.locked { overflow: hidden; }
+/* Decorative landing gate. */
+.login-gate {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 1.5rem;
+}
+.login-gate[hidden] { display: none; }
+.login-card {
+  width: 100%; max-width: 340px; text-align: center; background: var(--card);
+  border: 1px solid var(--line); border-radius: 16px; padding: 2.2rem 1.5rem;
+  box-shadow: 0 10px 40px rgba(20, 24, 38, 0.18);
+}
+.login-logo { margin: 0; font-size: 1.7rem; }
+.login-btn {
+  width: 100%; padding: 0.7rem; font: inherit; font-weight: 700; font-size: 1rem;
+  color: #fff; background: var(--accent); border: 0; border-radius: 10px; cursor: pointer;
+}
+.login-btn:hover { filter: brightness(1.08); }
 body {
   margin: 0;
   font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
