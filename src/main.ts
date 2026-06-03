@@ -1054,6 +1054,9 @@ function syncAthleteChips() {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
+    // Bring the selected chip into view in the horizontally-scrolling row so it's
+    // visible in the sticky bar even if it was scrolled off to the side.
+    if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 }
 
