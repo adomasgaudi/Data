@@ -1719,12 +1719,13 @@ function renderCompareChart() {
   } else {
     series = picks.map((name, i) => {
       const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
-      const points = exerciseProgressByWeek(recs, username, name, formula)
+      const raw = exerciseProgressByWeek(recs, username, name, formula)
         .filter((p) => p.bestE1rm !== null)
         .map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
-      return { name, color, type: "line" as const, points };
+      // Current strength = best est. 1RM so far, so the line never drops.
+      return { name, color, type: "line" as const, points: runningMaxPoints(raw) };
     });
-    els.compareNote.textContent = `Estimated 1RM (${formula}) over time. Drag to pan · wheel to zoom · tap a point.`;
+    els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date (never drops). Drag to pan · wheel to zoom · tap a point.`;
   }
 
   const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
@@ -2245,9 +2246,21 @@ function ecalcRemoveRow(index: number) {
   ecalcRenderRows();
 }
 
+/** "Current strength" = the best estimated 1RM achieved UP TO each date, so the
+ * line never drops: a weaker set just means an off day, not lost strength. Takes
+ * x-sorted {x,y} points and returns the running maximum of y. */
+function runningMaxPoints<T extends { x: number; y: number }>(points: T[]): T[] {
+  let m = -Infinity;
+  return points.map((p) => {
+    m = Math.max(m, p.y);
+    return { ...p, y: Math.round(m * 10) / 10 };
+  });
+}
+const CURRENT_STRENGTH_COLOR = "#2e7d52";
+
 /** Per-exercise progress graph in the drill-in, on the SVG engine: "1RM trend"
- * = weekly-sets bars (left axis) + est-1RM line + trend line (right axis); or
- * "per-set range" = one weight→1RM bar per set. */
+ * = weekly-sets bars (left axis) + est-1RM line + current-strength + trend line
+ * (right axis); or "per-set range" = one weight→1RM bar per set. */
 function renderExerciseProgressChart(exName: string) {
   const box = document.getElementById("exerciseProgressChart");
   if (!box) return;
@@ -2294,6 +2307,7 @@ function renderExerciseProgressChart(exName: string) {
     for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
     const seenInDay = new Map<string, number>();
     const points: SvgPoint[] = [];
+    const strengthRaw: { x: number; y: number }[] = [];
     for (const s of sets) {
       const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
       const e1rm = addedWeight1RM(s, formula);
@@ -2305,8 +2319,9 @@ function renderExerciseProgressChart(exName: string) {
       // Spread same-day sets across ~0.7 of the day (centred), so a single set
       // lands right on midnight and multiple sets fan out without crossing midnight.
       const frac = total > 1 ? (idx / (total - 1) - 0.5) * 0.7 : 0;
+      const x = base + frac * MS_DAY;
       points.push({
-        x: base + frac * MS_DAY,
+        x,
         lo: added,
         hi: e1rm ?? added, // no estimable 1RM (high reps) → flat marker at the weight
         dashes: reps, // each dash = one rep done from this starting weight
@@ -2314,16 +2329,24 @@ function renderExerciseProgressChart(exName: string) {
           (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
           ` · ${shortDate(s.date)}`,
       });
+      if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
     }
     if (points.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
     els.exerciseProgress.hidden = false;
+    const strengthPts = runningMaxPoints(strengthRaw.slice().sort((a, b) => a.x - b.x));
     mount({
-      series: [{ name: exName, color: "#284e86", type: "range", points }],
+      series: [
+        { name: exName, color: "#284e86", type: "range", points },
+        // Current strength = best est. 1RM so far; a flat/rising ceiling over the sets.
+        { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", points: strengthPts },
+      ],
       xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
     });
-    els.exerciseProgressNote.textContent = exPersetBestOnly
-      ? "Each day's best set only (highest estimated 1RM): it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did."
-      : "Every set is its own line on a real time axis: it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did. All sets of each day are shown, fanned out within the day.";
+    els.exerciseProgressNote.textContent =
+      (exPersetBestOnly
+        ? "Each day's best set only (highest estimated 1RM): it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did."
+        : "Every set is its own line on a real time axis: it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did. All sets of each day are shown, fanned out within the day.") +
+      " The green line is your current strength — the best 1RM reached so far (it never drops).";
     return;
   }
 
@@ -2340,9 +2363,12 @@ function renderExerciseProgressChart(exName: string) {
     const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
     if (fit) trendPts = [pts[0]!, pts[pts.length - 1]!].map((p) => ({ x: ts(p.date), y: Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10 }));
   }
+  const e1rmPts = pts.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
   const svgSeries: SvgSeries[] = [
     { name: "Sets/week", color: "#284e86", type: "bars", axis: "left", points: series.map((p) => ({ x: ts(p.date), y: p.sets })) },
-    { name: "Est. 1RM (kg)", color: "#b8902f", type: "line", axis: "right", points: pts.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 })) },
+    { name: "Est. 1RM (kg)", color: "#b8902f", type: "line", axis: "right", points: e1rmPts },
+    // Current strength = best est. 1RM achieved so far (never drops).
+    { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "right", points: runningMaxPoints(e1rmPts) },
   ];
   if (trendPts.length) svgSeries.push({ name: "Trend", color: "#c0603a", type: "line", axis: "right", noLegend: true, points: trendPts });
   els.exerciseProgressNote.textContent = progressSummaryNote(series);
