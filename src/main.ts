@@ -261,18 +261,33 @@ function setTheme(dark: boolean) {
 }
 
 /** Which view the dashboard is showing: "admin" (the default, full access) or
- * "user". For now this only flips a banner near the title — no behaviour gates
- * yet; it's the hook a later slice will hang user-facing restrictions on. */
+ * "user". Admin sees every "Other" destination; user sees only the Guide. */
 type ViewMode = "admin" | "user";
 let viewMode: ViewMode = (() => {
   try { return localStorage.getItem("colosseum.viewMode") === "user" ? "user" : "admin"; } catch { return "admin"; }
 })();
+/** Top-tab panels a user (non-admin) is allowed to see; everything else in the
+ * "Other" sheet is hidden for them, leaving just the Guide. */
+const USER_VIEW_TABS = new Set(["athlete", "guide"]);
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
   els.viewBadge.hidden = mode !== "user";
   els.viewModeBtn.textContent = mode === "user" ? "🛡 Switch to admin view" : "👤 Switch to user view";
   els.viewModeBtn.setAttribute("aria-pressed", String(mode === "user"));
+  // The "Other" sheet: user view keeps only the Guide; admin shows everything.
+  for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
+    item.hidden = mode === "user" && item.dataset.tab !== "guide";
+  }
+  // If we just entered user view while on an admin-only panel, drop back to the
+  // athlete (Workouts) view so nothing restricted stays on screen.
+  if (mode === "user") {
+    const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+    if (!USER_VIEW_TABS.has(current)) {
+      switchTopTab("athlete");
+      showSubtab("workouts");
+    }
+  }
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
