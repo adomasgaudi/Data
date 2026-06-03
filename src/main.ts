@@ -3103,7 +3103,8 @@ function renderBwParts() {
       const body = list
         .map(
           (r) =>
-            `<tr data-exrow="${escapeHtml(r.name)}"><td>${escapeHtml(r.name)}${originBadge(r.name)}</td>` +
+            `<tr data-exrow="${escapeHtml(r.name)}"><td>` +
+            `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}</td>` +
             `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
             `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
             `<td class="num">${r.count.toLocaleString()}</td></tr>`,
@@ -3122,6 +3123,48 @@ function renderBwParts() {
       );
     })
     .join("");
+}
+
+/** Expanded info panel for one exercise on the Index page: category / muscle /
+ * tier, bodyweight part, merged spellings, total sets, who trains it, the best
+ * estimated 1RM ever logged (any athlete) and the date span. */
+function exerciseInfoHtml(name: string): string {
+  const formula = currentFormula();
+  const recs = computedRecords().filter((r) => r.exerciseName === name);
+  const cat = exerciseCategory(name);
+  const mg = muscleGroup(name);
+  const tierLabel = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" }[exerciseTier(name)];
+  const coeff = coeffFor(name);
+  const variants = exerciseOrigin(name).filter((v) => v !== name);
+
+  const athletes = new Map<string, string>();
+  let first = "", last = "", setCount = 0;
+  let best: { e1rm: number; who: string; date: string; w: number | null; reps: number } | null = null;
+  for (const r of recs) {
+    setCount++;
+    if (r.username) athletes.set(r.username, r.user || r.username);
+    if (r.date) { if (!first || r.date < first) first = r.date; if (!last || r.date > last) last = r.date; }
+    const e = addedWeight1RM(r, formula);
+    if (e !== null && (!best || e > best.e1rm))
+      best = { e1rm: e, who: r.user || r.username, date: r.date, w: r.weight, reps: r.reps ?? 0 };
+  }
+  const item = (label: string, value: string) =>
+    `<div class="ex-info-item"><span class="ex-info-lbl">${escapeHtml(label)}</span><span class="ex-info-val">${value}</span></div>`;
+
+  const rows = [
+    item("Category", escapeHtml(cat)),
+    item("Muscle group", escapeHtml(mg)),
+    item("Tier", escapeHtml(tierLabel)),
+    item("Bodyweight part", coeff > 0 ? pct(coeff) : "—"),
+    item("Total sets", setCount.toLocaleString()),
+    item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
+    best
+      ? item("Best 1RM (anyone)", `${fmt(best.e1rm)} kg <span class="muted">(${escapeHtml(best.who)} · ${best.w === null ? "—" : fmt(best.w)}×${best.reps} · ${shortDate(best.date)})</span>`)
+      : item("Best 1RM (anyone)", "—"),
+    first && last ? item("Logged", `${shortDate(first)} → ${shortDate(last)}`) : "",
+    variants.length ? item("Also logged as", escapeHtml(variants.join(", "))) : "",
+  ].join("");
+  return `<div class="ex-info">${rows}</div>`;
 }
 
 /** Open the Exercises (merges & data) page and scroll to one exercise's row,
@@ -3739,6 +3782,15 @@ async function init() {
     }
   });
   els.bwGroups.addEventListener("change", onBwInputChange);
+  // Tap an exercise name on the Index to expand its info panel (toggle).
+  els.bwGroups.addEventListener("click", (e) => {
+    const nameEl = (e.target as HTMLElement).closest<HTMLElement>(".bw-ex-name");
+    if (!nameEl?.dataset.exname) return;
+    const row = nameEl.closest<HTMLTableRowElement>("tr");
+    if (!row) return;
+    if (toggleCollapse(row)) return; // open → close
+    insertDetail(row, 3, exerciseInfoHtml(nameEl.dataset.exname));
+  });
   for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
     input.addEventListener("input", () => {
       els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
