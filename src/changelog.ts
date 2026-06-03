@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.3", title: "Re-graded effort SP", sp: 0.5, note: "Re-graded the per-part effort up to current scope (Graphs & Exercises to 80, Workouts/Calculator/Navigation/Leaderboard a step higher): the whole-site total moves from 214 to 293 SP." },
       { version: "b.2.1.2", title: "Titles, groups and SP fix", sp: 3, note: "Every release now has a 2–5 word title; big version groups are split into 20–30 SP chunks; fixed the group SP total showing a long decimal tail." },
       { version: "b.2.1.1", title: "Browse groups panel", sp: 3, note: "New “Browse groups” panel on the Index: pick a dimension (Muscle / Functional / Combined) then a group to read what it means and the lifts under it; inspector chips jump to a group's explanation." },
       { version: "b.2.1.0", title: "Trimmed version history", sp: 0.5, note: "Started the b.2.1 minor and trimmed every version-history note to one short line." },
@@ -377,16 +378,16 @@ export interface Component {
   sp: number;
 }
 export const COMPONENTS: Component[] = [
-  { name: "Exercises", sp: 50 }, // drill-ins, categories, tiers, merges, rep-max header, best-sets, compare+sets, Index info + browse groups, period bar
-  { name: "Graphs", sp: 50 }, // SVG engine; real time axis + calendar bands, dashed reps, current strength, scatter, legend toggles, merged graph, log trend
+  { name: "Exercises", sp: 80 }, // drill-ins, categories, tiers, merges, rep-max header, best-sets, compare+sets, Index info + inspector + browse groups, active-exercises filter, combinable/comparable lifts
+  { name: "Graphs", sp: 80 }, // SVG engine; real time axis + calendar bands, dashed reps, current strength, scatter, legend toggles, merged drill-in graph, sets/week bars, log trend
+  { name: "Workouts", sp: 30 }, // day/week list, muscle-group view, rest days, year heatmap + day numbers + alone-tags, sets-over-time, RIR difficulty
   { name: "Athlete", sp: 22 }, // per-athlete pages, sticky chips, muscle map, momentum, training mix
-  { name: "Workouts", sp: 22 }, // day/week list, muscle-group view, rest days, year heatmap, sets-over-time, "with me" tags
   { name: "Data", sp: 20 }, // raw+processed CSV tab, every computed variable, search, live refresh from StrengthLevel + status
-  { name: "Leaderboard", sp: 11 }, // boards, rank/sex/BW/axis filters
+  { name: "Leaderboard", sp: 13 }, // boards, rank/sex/BW/axis filters, combined lifts in the picker
+  { name: "Calculator", sp: 13 }, // multi-row reps↔weight calc + the Nuzzo research scatter/best-fit chart (shared with the explainer page), bar-weight axis
+  { name: "Navigation", sp: 13 }, // bottom nav + Other sheet, Site map, version history (titles, 20–30 groups) + SP-over-time
   { name: "Group", sp: 9 }, // train people together: combined comparison table, remembered picks
-  { name: "Navigation", sp: 9 }, // bottom nav + Other sheet, Site map, version history + SP-over-time
   { name: "Add", sp: 7 }, // hand-log sets, merge, export/import
-  { name: "Calculator", sp: 8 }, // multi-row reps↔weight calc + the Nuzzo research scatter/best-fit chart (shared with the explainer page)
   { name: "Stats", sp: 6 }, // per-category cards (was Groups)
 ];
 
