@@ -83,6 +83,49 @@ export function timeBands(min: number, max: number): TimeBand[] {
 }
 
 /**
+ * "Compacted time" axis: a monotonic remapping of real timestamps that squeezes
+ * the long empty gaps (rest weeks, layoffs) so every training session is roughly
+ * evenly spaced and all the sets fit on screen — at the cost of the x-axis no
+ * longer being linear in real time. Built from the data's own timestamps: each
+ * gap between consecutive distinct points is capped at the median gap, so a
+ * normal training cadence is preserved while outliers (a month off) collapse.
+ *
+ * `to` maps a real timestamp → compacted coordinate (feed the chart these);
+ * `from` inverts it (compacted coordinate → real timestamp) so axis ticks and
+ * tooltips can still print real calendar dates. Both are piecewise-linear and
+ * extrapolate at real (slope-1) rate outside the data range. With < 2 distinct
+ * points there's nothing to compact, so both are the identity.
+ */
+export interface TimeCompactor {
+  to(t: number): number;
+  from(c: number): number;
+}
+export function buildCompactor(times: Iterable<number>): TimeCompactor {
+  const uniq = [...new Set([...times].filter((t) => Number.isFinite(t)))].sort((a, b) => a - b);
+  if (uniq.length < 2) return { to: (t) => t, from: (c) => c };
+  const gaps: number[] = [];
+  for (let i = 1; i < uniq.length; i++) gaps.push(uniq[i]! - uniq[i - 1]!);
+  const sorted = [...gaps].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+  const cap = Math.max(median, 1);
+  // Compacted coordinate of each distinct real timestamp.
+  const c: number[] = [0];
+  for (let i = 1; i < uniq.length; i++) c.push(c[i - 1]! + Math.min(uniq[i]! - uniq[i - 1]!, cap));
+  // Piecewise-linear interpolation between two parallel monotonic arrays.
+  const interp = (xs: number[], ys: number[], v: number): number => {
+    if (v <= xs[0]!) return ys[0]! + (v - xs[0]!); // slope-1 extrapolation
+    const last = xs.length - 1;
+    if (v >= xs[last]!) return ys[last]! + (v - xs[last]!);
+    let lo = 0, hi = last;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid]! <= v) lo = mid; else hi = mid; }
+    const span = xs[hi]! - xs[lo]!;
+    const f = span > 0 ? (v - xs[lo]!) / span : 0;
+    return ys[lo]! + f * (ys[hi]! - ys[lo]!);
+  };
+  return { to: (t) => interp(uniq, c, t), from: (cc) => interp(c, uniq, cc) };
+}
+
+/**
  * "Nice" round tick values across [min, max] — roughly `target` of them, on a
  * 1/2/5×10ⁿ step. Pure, for the y-axis of the SVG charts. Returns at least the
  * bounds-snapped values; empty only for a non-positive span.

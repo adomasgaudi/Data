@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calendarGridlines, MS_DAY, niceTicks, timeBands, timeLevel } from "./chartAxis";
+import { buildCompactor, calendarGridlines, MS_DAY, niceTicks, timeBands, timeLevel } from "./chartAxis";
 
 const utc = (y: number, m: number, d: number) => Date.UTC(y, m, d);
 const isMonday = (t: number) => new Date(t).getUTCDay() === 1;
@@ -118,5 +118,44 @@ describe("niceTicks", () => {
     expect(t.length).toBeGreaterThanOrEqual(3);
     expect(t[0]).toBe(0);
     expect(Math.max(...t)).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("buildCompactor", () => {
+  it("is the identity with fewer than two distinct points", () => {
+    const c = buildCompactor([5]);
+    expect(c.to(5)).toBe(5);
+    expect(c.from(5)).toBe(5);
+    expect(buildCompactor([]).to(42)).toBe(42);
+    expect(buildCompactor([7, 7, 7]).to(7)).toBe(7);
+  });
+  it("keeps order and round-trips at the data points", () => {
+    const days = [0, 1, 2, 30, 31].map((d) => d * MS_DAY); // a cluster, a long gap, a cluster
+    const c = buildCompactor(days);
+    const mapped = days.map((d) => c.to(d));
+    // strictly increasing → order preserved
+    for (let i = 1; i < mapped.length; i++) expect(mapped[i]!).toBeGreaterThan(mapped[i - 1]!);
+    // to/from invert at every data point
+    for (const d of days) expect(c.from(c.to(d))).toBeCloseTo(d, 3);
+  });
+  it("squeezes the long gap down to the median gap", () => {
+    const days = [0, 1, 2, 30, 31].map((d) => d * MS_DAY);
+    const c = buildCompactor(days);
+    const gapBig = c.to(30 * MS_DAY) - c.to(2 * MS_DAY); // the 28-day layoff
+    const gapSmall = c.to(1 * MS_DAY) - c.to(0); // a normal 1-day step
+    // The median gap here is 1 day, so the big gap collapses to ~1 day, not 28.
+    expect(gapBig).toBeCloseTo(gapSmall, 6);
+    // The real span is still much larger than the compacted span.
+    expect(c.to(31 * MS_DAY) - c.to(0)).toBeLessThan((31 * MS_DAY) / 5);
+  });
+  it("is monotonic for arbitrary query points between sessions", () => {
+    const days = [0, 5, 6, 7, 40].map((d) => d * MS_DAY);
+    const c = buildCompactor(days);
+    let prev = -Infinity;
+    for (let d = -2; d <= 42; d++) {
+      const v = c.to(d * MS_DAY);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
   });
 });

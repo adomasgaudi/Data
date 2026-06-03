@@ -12,7 +12,20 @@
  * The pure axis maths (calendar gridlines, nice y ticks) live in chartAxis.ts and
  * are unit-tested; this module is the rendering + interaction shell.
  */
-import { timeBands, niceTicks } from "./chartAxis";
+import { timeBands, niceTicks, buildCompactor, type TimeCompactor } from "./chartAxis";
+
+/* "Compacted time" is a single app-wide preference: flip it on any time chart and
+ * every time chart follows, so the axis mode is consistent everywhere. Stored on
+ * the device; subscribers (the mounted compactable charts) re-draw on change. */
+const COMPACT_KEY = "colosseum.timeCompact.v1";
+let compactPref = (() => { try { return localStorage.getItem(COMPACT_KEY) === "1"; } catch { return false; } })();
+const compactSubs = new Set<() => void>();
+function setCompactPref(on: boolean): void {
+  if (on === compactPref) return;
+  compactPref = on;
+  try { localStorage.setItem(COMPACT_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+  for (const fn of [...compactSubs]) fn();
+}
 
 export interface SvgPoint {
   x: number;
@@ -52,6 +65,10 @@ export interface SvgChartConfig {
   yUnit?: string;
   rightUnit?: string;
   xKind?: "time" | "linear";
+  /** Time charts only: show a "realistic ⇄ compacted time" toggle in the legend
+   * row. Compacted mode squeezes the empty gaps so every session fits on screen
+   * (see buildCompactor). The toggle is app-wide — all compactable charts follow. */
+  compactable?: boolean;
   /** Axis tick label for an x value. */
   formatX?: (x: number) => string;
   /** Tooltip header for an x value (defaults to formatX). */
@@ -111,8 +128,32 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const interactive = () => cfg.interactive ?? true;
   const panX = () => (cfg.panMode ?? "xy") === "x";
   const xKind = () => cfg.xKind ?? "time";
-  const fmtX = (x: number) => (cfg.formatX ? cfg.formatX(x) : xKind() === "time" ? dateLabel(x) : num(x));
-  const fmtTipX = (x: number) => (cfg.formatTipX ? cfg.formatTipX(x) : fmtX(x));
+
+  // ---- compacted-time support ----
+  const compactable = () => (cfg.compactable ?? false) && xKind() === "time";
+  const useCompact = () => compactable() && compactPref;
+  let compactor: TimeCompactor = { to: (t) => t, from: (c) => c };
+  function rebuildCompactor() {
+    const xs: number[] = [];
+    for (const s of cfg.series) for (const p of s.points) xs.push(p.x);
+    compactor = buildCompactor(xs);
+  }
+  // The series used for ALL geometry (extents, drawing, tooltip): the raw series
+  // in realistic mode, or a copy with each x squeezed onto the compacted axis.
+  const geomSeries = (): SvgSeries[] =>
+    useCompact()
+      ? cfg.series.map((s) => ({ ...s, points: s.points.map((p) => ({ ...p, x: compactor.to(p.x) })) }))
+      : cfg.series;
+
+  const fmtX = (x: number) => {
+    if (useCompact()) return dateLabel(compactor.from(x));
+    if (cfg.formatX) return cfg.formatX(x);
+    return xKind() === "time" ? dateLabel(x) : num(x);
+  };
+  const fmtTipX = (x: number) => {
+    if (useCompact()) return dateLabel(compactor.from(x));
+    return cfg.formatTipX ? cfg.formatTipX(x) : fmtX(x);
+  };
   // Series the user has toggled off via the legend (keyed by name). Visible
   // series drive the axes and tooltip; hidden ones still show in the legend so
   // they can be turned back on.
@@ -138,7 +179,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
-    const xe = xExtent(cfg.series.filter(visible));
+    const xe = xExtent(geomSeries().filter(visible));
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
@@ -199,7 +240,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     let xLabels = "";
     let bands = "";
     const clampX = (px: number) => Math.max(M.l, Math.min(W - M.r, px));
-    if (xKind() === "time") {
+    if (xKind() === "time" && !useCompact()) {
       // Calendar bands (day/week/month/year): alternating background stripes give
       // the period at a glance, and each band's label is centred in it — so labels
       // never disappear when you zoom in and never collide into "Jan 1, Jan 1".
@@ -244,7 +285,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // shouldn't be hide-able into a blank chart).
     const legendCount = cfg.series.filter((s) => !s.noLegend).length;
     const toggleable = legendCount >= 2;
-    for (const s of cfg.series) {
+    for (const s of geomSeries()) {
       if (!s.noLegend)
         legend +=
           `<span class="svgc-key${toggleable ? " is-toggle" : ""}${visible(s) ? "" : " is-off"}"` +
@@ -307,6 +348,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       : `<line x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${h - M.b}" class="svgc-frame" stroke-width="1"/>` +
         `<line x1="${M.l}" y1="${h - M.b}" x2="${W - M.r}" y2="${h - M.b}" class="svgc-frame" stroke-width="1"/>`;
 
+    // Time-axis charts get an app-wide "realistic ⇄ compacted" toggle on the right
+    // of the legend row. Compacted squeezes the empty gaps so all sets fit.
+    if (compactable())
+      legend +=
+        `<button type="button" class="svgc-compact${useCompact() ? " is-on" : ""}" aria-pressed="${useCompact()}" ` +
+        `title="${useCompact() ? "Showing compacted time (gaps squeezed). Tap for real time spacing." : "Showing real time (with the gaps). Tap to squeeze the gaps so all sets fit."}">` +
+        `${useCompact() ? "⇄ Compacted time" : "⇄ Realistic time"}</button>`;
     legendEl.innerHTML = legend;
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
@@ -329,8 +377,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const plotW = W - M.l - M.r;
     const localX = ((clientX - rect.left) / rect.width) * W;
     const xVal = view.xMin + ((localX - M.l) / plotW) * (view.xMax - view.xMin);
+    const gs = geomSeries();
     let best: { p: SvgPoint; dx: number } | null = null;
-    for (const s of cfg.series) {
+    for (const s of gs) {
       if (!visible(s)) continue;
       for (const p of s.points) {
         const dx = Math.abs(p.x - xVal);
@@ -339,7 +388,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     }
     if (!best) return;
     const xv = best.p.x;
-    const rows = cfg.series
+    const rows = gs
       .map((s) => {
         if (!visible(s)) return "";
         const p = s.points.find((q) => q.x === xv);
@@ -504,6 +553,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     draw();
   };
   legendEl.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".svgc-compact")) { setCompactPref(!compactPref); return; }
     const key = (e.target as HTMLElement).closest<HTMLElement>(".svgc-key.is-toggle");
     if (key?.dataset.series) toggleSeries(key.dataset.series);
   });
@@ -513,6 +563,20 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (key?.dataset.series) { e.preventDefault(); toggleSeries(key.dataset.series); }
   });
 
+  // Follow the app-wide compacted-time preference: when it flips on any chart,
+  // every compactable chart re-frames and redraws. Stale subs (after a re-mount
+  // into the same container) drop themselves once detached.
+  if (cfg.compactable) {
+    const sub = () => {
+      if (!container.isConnected) { compactSubs.delete(sub); return; }
+      resetView();
+      hideTip();
+      draw();
+    };
+    compactSubs.add(sub);
+  }
+
+  rebuildCompactor();
   resetView();
   draw();
 
@@ -520,7 +584,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     update(next: Partial<SvgChartConfig>) {
       const seriesChanged = next.series !== undefined;
       cfg = { ...cfg, ...next };
-      if (seriesChanged) resetView();
+      if (seriesChanged) { rebuildCompactor(); resetView(); }
       hideTip();
       draw();
     },

@@ -773,7 +773,7 @@ function renderChangelog() {
     });
     mountSvgChart(spBox, {
       series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],
-      xKind: "time", yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
+      xKind: "time", compactable: true, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
     });
   }
 }
@@ -1945,7 +1945,7 @@ function renderCompareChart() {
     els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date (never drops). Drag to pan · wheel to zoom · tap a point.`;
   }
 
-  const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
+  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
   if (!compareSvg) compareSvg = mountSvgChart(box, config);
   else compareSvg.update(config);
 
@@ -2616,7 +2616,7 @@ function renderExerciseProgressChart(exName: string) {
     series.push({ name: "Trend (log)", color: "#c0603a", type: "line", axis: "left", points: trendPts, hidden: true });
 
   mount({
-    series, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true,
+    series, xKind: "time", compactable: true, yBeginAtZero: true, rightBeginAtZero: true,
     rightHeadroom: 5, // sets/week axis is 5× tall (baseline still 0), so the bars stay low and clear of the 1RM data
     yUnit: "kg", rightUnit: "sets", insideLabels: true, height: 320,
   });
@@ -2995,7 +2995,7 @@ function renderWorkoutSetsChart() {
   const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
   const series: SvgSeries[] = order.map((label) => ({ name: label, color: groups.get(label)!.color, type: "range", points: groups.get(label)!.points }));
 
-  const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
+  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
   if (!workoutSetsSvg) workoutSetsSvg = mountSvgChart(box, config);
   else workoutSetsSvg.update(config);
   els.workoutSetsNote.textContent =
