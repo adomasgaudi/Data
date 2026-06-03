@@ -38,10 +38,23 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.2",
+    title: "v2-milestone",
+    sp: 0, // auto-computed below = sum of children
+    note: "Version 2 (current): the dashboard graduates to a polished, self-updating app — real-time charts, every lift on its own, one-click data refresh from StrengthLevel, and a clean settings-driven UI. New releases land here.",
+    details: [
+      "A round-number milestone after the big b.1.14 run: live data refresh, real time-axis charts with calendar bands, ungrouped exercises, and tidied chrome.",
+      "Onwards from here, b.2.x patches build on this foundation.",
+    ],
+    children: [
+      { version: "b.2.0.0", sp: 1, note: "Version 2 milestone — rolled the b.1.x line up to b.2 to mark the self-updating, real-time-chart app." },
+    ],
+  },
+  {
     version: "b.1.14",
     title: "real-time-axis-and-pickers",
     sp: 0, // auto-computed below = sum of children
-    note: "The b.1.14 run (current): per-set graph on a real time axis with calendar bands, dashed rep lines and a best-set-only toggle, a By-category show/hide picker, the rep-max reps chosen in the column header, and every exercise standing on its own (no scaling groups). New releases land here.",
+    note: "The b.1.14 run: per-set graph on a real time axis with calendar bands, dashed rep lines and a best-set-only toggle, a By-category show/hide picker, the rep-max reps chosen in the column header, and every exercise standing on its own (no scaling groups).",
     details: [
       "Per-set drill-in chart now uses genuine calendar time with alternating year/month/week bands; same-day sets fan out within the day; each set's line is dashed, one dash per rep; optional best-set-only view.",
       "By-category list: chips to choose which categories you see; rep-max reps moved into the column header; scaling/pattern groups removed so each lift is separate.",

@@ -45,7 +45,7 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   (`b.x`) for big/breaking work. When unsure, prefer the patch. The single source
   of truth is `CURRENT_VERSION`/`CHANGELOG` in `src/changelog.ts`. **Releases are
   NOT separate top-level rows — each new version is prepended as the first child
-  of the current minor's group** (right now the **`b.1.14`** group): add the
+  of the current group** (right now the **`b.2`** group): add the
   child `{ version, sp, note }` at the top of its `children[]`. **The group's `sp`
   total is computed automatically (sum of its children) — do NOT hand-maintain it;
   SP totals are functionally calculated wherever possible.** `CURRENT_VERSION` reads that first child, so the on-screen
