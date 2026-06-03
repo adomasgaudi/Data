@@ -484,6 +484,38 @@ main { padding-bottom: 5rem; }
   width: 1.5rem; height: 1.5rem; border-radius: 6px; margin-right: 0.5rem;
   font-weight: 800; color: #fff; font-size: 0.8rem;
 }
+
+/* By-category picker: chips above the list to choose which categories show. */
+.ex-cat-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+  margin: 0 0 0.85rem;
+}
+.ex-cat-bar-lbl { font-size: 0.72rem; margin-right: 0.1rem; }
+.ex-cat-chip {
+  appearance: none; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--accent-soft); color: var(--text);
+  padding: 0.22rem 0.66rem; font-size: 0.74rem; font-weight: 600;
+  line-height: 1; transition: opacity 0.12s ease, background 0.12s ease;
+}
+.ex-cat-chip:hover { border-color: var(--accent); }
+.ex-cat-chip.is-off {
+  background: transparent; color: var(--muted); opacity: 0.6;
+  text-decoration: line-through;
+}
+
+/* Rep-max reps chosen right in the column header (compact number input). */
+.rm-col-head { white-space: nowrap; }
+.rm-col-input {
+  width: 2.4em; text-align: right;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--card); color: var(--text);
+  font: inherit; font-size: 0.82rem; font-weight: 700;
+  padding: 1px 3px; margin-right: 1px;
+}
+.rm-col-input::-webkit-outer-spin-button,
+.rm-col-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.rm-col-input { -moz-appearance: textfield; }
 .tier-S { background: #b8902f; }
 .tier-A { background: #284e86; }
 .tier-B { background: #2e7d52; }

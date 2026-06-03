@@ -3,7 +3,7 @@
  * call the pure compute functions, and paint the DOM. No business logic lives
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
-import { niceTicks } from "./chartAxis";
+import { niceTicks, MS_DAY } from "./chartAxis";
 import { mountGraphDemo } from "./graphDemo";
 import { mountGraphAdvanced } from "./graphAdvanced";
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
@@ -130,8 +130,7 @@ const els = {
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
-  exRepMaxBar: $("exRepMaxBar"),
-  repMaxInput: $<HTMLInputElement>("repMaxInput"),
+  exCatBar: $("exCatBar"),
   exSearchBar: $("exSearchBar"),
   exerciseCompare: $("exerciseCompare"),
   compareChips: $("compareChips"),
@@ -919,6 +918,10 @@ let exerciseShowThird = false;
 const expandedExCats = new Set<string>();
 // Same idea for the By-tier sort: which frequency tiers (S/A/B/C/D) are expanded.
 const expandedExTiers = new Set<string>();
+// Categories the owner has chosen to HIDE from the By-category list (picker chips).
+const hiddenExCats = new Set<string>((() => {
+  try { return JSON.parse(localStorage.getItem("colosseum.hiddenCats") ?? "[]") as string[]; } catch { return []; }
+})());
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
@@ -1390,6 +1393,7 @@ function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): (T & { _ca
   for (const c of counts)
     for (const cat of exerciseCategories(c.exerciseName)) {
       if (cat === "Legs (all)" && !showLegsAll) continue; // hidden unless toggled on in Settings
+      if (hiddenExCats.has(cat)) continue; // hidden via the category picker
       (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push({ ...c, _cat: cat });
     }
   // Busiest category first; within LIST_CATEGORIES order for ties.
@@ -1626,7 +1630,7 @@ function renderExercisesPage() {
     els.exerciseFilter.hidden = true;
     els.exSearchBar.hidden = true;
     els.exerciseCompare.hidden = true;
-    els.exRepMaxBar.hidden = true;
+    els.exCatBar.hidden = true;
     renderExerciseDetail(selectedExercise);
     return;
   }
@@ -1635,7 +1639,8 @@ function renderExercisesPage() {
   const onCompare = exercisesTab === "compare";
   els.exFiltersBtn.hidden = onCompare; // filters/search only apply to the list
   els.exSearchBar.hidden = onCompare;
-  els.exRepMaxBar.hidden = onCompare; // rep-max only applies to the list table
+  // Category picker only in By-category list mode.
+  els.exCatBar.hidden = onCompare || exerciseSort !== "category";
   els.exerciseFilter.hidden = true; // the kebab menu starts closed
   els.exerciseCompare.hidden = !onCompare;
   els.athleteTable.hidden = onCompare;
@@ -1684,6 +1689,22 @@ function renderExercisesPage() {
   const ordered = orderedExerciseCounts(items);
   exercisesView = ordered.map((it) => it.exerciseName);
 
+  // Category picker: chips for every category this athlete has, tap to show/hide.
+  if (exerciseSort === "category") {
+    const present = new Set<string>();
+    for (const it of items)
+      for (const cat of exerciseCategories(it.exerciseName)) {
+        if (cat === "Legs (all)" && !showLegsAll) continue;
+        present.add(cat);
+      }
+    const cats = LIST_CATEGORIES.filter((c) => present.has(c));
+    els.exCatBar.innerHTML =
+      `<span class="ex-cat-bar-lbl muted">Show:</span>` +
+      cats
+        .map((c) => `<button type="button" class="ex-cat-chip${hiddenExCats.has(c) ? " is-off" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`)
+        .join("");
+  }
+
   // List view: no title. The athlete chips above already name the athlete.
   els.athleteTitle.innerHTML = "";
 
@@ -1724,7 +1745,10 @@ function renderExercisesPage() {
 
   const head =
     `<thead><tr><th>Exercise</th>` +
-    repMaxCols.map((n) => `<th class="num">${n === 1 ? "1RM" : `${n}RM`}</th>`).join("") +
+    // The rep-max column header is editable: type the rep count right in the head.
+    repMaxCols
+      .map((n) => `<th class="num rm-col-head"><input class="rm-col-input" type="number" min="1" max="30" step="1" value="${n}" inputmode="numeric" aria-label="Rep-max reps" />RM</th>`)
+      .join("") +
     `<th class="num">Best set</th>` +
     `</tr></thead>`;
   const colspan = nCols + 2;
@@ -2092,40 +2116,50 @@ function renderExerciseProgressChart(exName: string) {
   };
 
   if (exProgressView === "perset") {
-    // One bar PER SET, each its own column (chronological) so warmups and the top
-    // set never merge into a single "range of weights". Bottom = that set's
-    // weight, top = that same set's own estimated 1RM. Shows EVERY logged set of
-    // the day (incl. dropsets); sets above the rep cap have no 1RM so they show
-    // as a flat marker at their weight. X is a sequential index; labels/tooltip
-    // map it back to the set's date.
+    // One bar PER SET, on a REAL time axis: each set sits at its true calendar
+    // date, so the x-axis is genuine time (a long gap between sessions shows as a
+    // long gap). Bottom = that set's weight, top = that same set's own estimated
+    // 1RM. Shows EVERY logged set of the day (incl. dropsets); sets above the rep
+    // cap have no 1RM so they show as a flat marker at their weight. Multiple sets
+    // on the same day are fanned out across a fraction of that day so they don't
+    // stack on one pixel — yet the day still appears once on the date axis.
     const sets = computedRecords()
       .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
       .slice()
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
+    // Count sets per day so same-day sets can be fanned out evenly.
+    const perDay = new Map<string, number>();
+    for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
+    const seenInDay = new Map<string, number>();
     const points: SvgPoint[] = [];
-    const dateByIdx: string[] = [];
     for (const s of sets) {
       const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
       const e1rm = addedWeight1RM(s, formula);
       const reps = s.reps ?? 0;
+      const base = Date.parse(s.date);
+      const total = perDay.get(s.date) ?? 1;
+      const idx = seenInDay.get(s.date) ?? 0;
+      seenInDay.set(s.date, idx + 1);
+      // Spread same-day sets across ~0.7 of the day (centred), so a single set
+      // lands right on midnight and multiple sets fan out without crossing midnight.
+      const frac = total > 1 ? (idx / (total - 1) - 0.5) * 0.7 : 0;
       points.push({
-        x: points.length,
+        x: base + frac * MS_DAY,
         lo: added,
         hi: e1rm ?? added, // no estimable 1RM (high reps) → flat marker at the weight
-        meta: e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`,
+        meta:
+          (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
+          ` · ${shortDate(s.date)}`,
       });
-      dateByIdx.push(s.date);
     }
     if (points.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
     els.exerciseProgress.hidden = false;
-    const dateAt = (v: number) => { const d = dateByIdx[Math.round(v)]; return d ? shortDate(d) : ""; };
     mount({
       series: [{ name: exName, color: "#284e86", type: "range", points }],
-      xKind: "linear", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
-      formatX: dateAt, formatTipX: dateAt,
+      xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
     });
     els.exerciseProgressNote.textContent =
-      "Every set is its own bar (oldest → newest): bottom = the set's weight, top = that set's estimated 1RM. All sets of each day are shown (high-rep sets show as a marker at their weight).";
+      "Every set is its own bar on a real time axis: bottom = the set's weight, top = that set's estimated 1RM. All sets of each day are shown, fanned out within the day (high-rep sets show as a marker at their weight).";
     return;
   }
 
@@ -3414,12 +3448,24 @@ async function init() {
     e.stopPropagation();
     els.exerciseFilter.hidden = !els.exerciseFilter.hidden;
   });
-  // Single editable rep-max: type the rep count (e.g. 1, 3, 5) and the one
-  // column recalculates the working weight for that many reps.
-  els.repMaxInput.addEventListener("input", () => {
-    const n = Math.round(Number(els.repMaxInput.value));
+  // Rep-max reps live in the column header now: editing the header input (fires
+  // on blur/Enter, so typing doesn't lose focus) recalculates the column.
+  els.athleteTable.addEventListener("change", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
+    if (!inp) return;
+    const n = Math.round(Number(inp.value));
     repMaxCols = Number.isFinite(n) && n >= 1 && n <= 30 ? [n] : [1];
     if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
+  });
+  // Category picker bar: tap a category chip to show/hide it in the list.
+  els.exCatBar.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-cat-chip");
+    if (!chip?.dataset.cat) return;
+    const cat = chip.dataset.cat;
+    if (hiddenExCats.has(cat)) hiddenExCats.delete(cat);
+    else hiddenExCats.add(cat);
+    try { localStorage.setItem("colosseum.hiddenCats", JSON.stringify([...hiddenExCats])); } catch { /* ignore */ }
+    renderExercisesPage();
   });
   document.addEventListener("click", (e) => {
     if (!els.exerciseFilter.hidden && !els.exerciseFilter.contains(e.target as Node) && e.target !== els.exFiltersBtn)

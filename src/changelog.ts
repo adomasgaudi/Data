@@ -38,10 +38,23 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "b.1.14",
+    title: "real-time-axis-and-pickers",
+    sp: 5,
+    note: "The b.1.14 run (current): per-set graph on a real time axis, a By-category show/hide picker, and the rep-max reps chosen in the column header. New releases land here.",
+    details: [
+      "Per-set drill-in chart now uses genuine calendar time (real gaps between sessions); same-day sets fan out within the day.",
+      "By-category list: chips to choose which categories you see; rep-max reps moved into the column header.",
+    ],
+    children: [
+      { version: "b.1.14.0", sp: 5, note: "Per-set graph on a REAL time axis (each day once, sets fanned within the day); By-category show/hide chips; rep-max reps chosen in the column header." },
+    ],
+  },
+  {
     version: "b.1.13",
     title: "drillin-charts-and-polish",
     sp: 55,
-    note: "The b.1.13 run (current): every chart on the new SVG engine, Chart.js removed, dark mode, per-axis zoom, and drill-in/list polish. New releases land here.",
+    note: "The b.1.13 run: every chart on the new SVG engine, Chart.js removed, dark mode, per-axis zoom, and drill-in/list polish.",
     details: [
       "All charts migrated to the in-house SVG engine (pan/pinch-zoom incl. per-axis stretch, tooltips, themed); Chart.js dropped.",
       "Dark mode; compare-picker redesign; per-set & 1RM-trend fixes; list defaults + rep-max bar.",
