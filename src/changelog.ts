@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.44", sp: 0.5, note: "Workouts “By day” list now labels today's session “Today” instead of its date (e.g. instead of “W Jun 3”), so the most recent session is easy to spot." },
       { version: "b.2.0.43", sp: 1, note: "Settings now has a “Switch to user view” button. It flips the dashboard between admin (the default) and a user view; in user view a “👤 User view” badge shows next to the title. For now that's all it does — no features are hidden yet; it's the switch a later step will hang user-facing limits on. Remembered on your device." },
       { version: "b.2.0.42", sp: 8, note: "Index page now has a “Group by” picker — slice every exercise by Category, Muscle group, Function (movement pattern), Combinable or Comparable group — and it respects the app-wide filter: when you restrict the app to your staples, each group shows the active lifts and tucks the rest, greyed, under a “Show hidden” sub-dropdown so nothing disappears without trace." },
       { version: "b.2.0.41", sp: 0.5, note: "Compare graph period picker tidied: dropped the “Showing period:” label (the dropdown already shows the period, e.g. “Last 3 months”) and moved the dropdown to the right of its row." },

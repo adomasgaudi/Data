@@ -2716,7 +2716,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
   return days
     .map((d) => ({
-      label: `${dowLetter(d.date)} ${shortDate(d.date)}`,
+      label: d.date === todayIso() ? "Today" : `${dowLetter(d.date)} ${shortDate(d.date)}`,
       date: d.date,
       totalSets: d.totalSets,
       exercises: d.exercises,
