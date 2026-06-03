@@ -1469,6 +1469,23 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-cat .data-table td, .bw-cat .data-table th { overflow-wrap: anywhere; }
 .bw-cat .data-table tbody tr:last-child td { border-bottom: none; }
 
+/* Index "Group by" picker. */
+.bw-groupby { margin: 0 0 0.6rem; }
+.bw-groupby .as-label { font-size: 0.85rem; font-weight: 600; }
+
+/* Lifts the app-wide filter hides: greyed, tucked behind a "Show hidden" toggle. */
+.bw-hidden { border-top: 1px dashed var(--line); }
+.bw-hidden-sum {
+  cursor: pointer; list-style: none; padding: 7px 12px;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); user-select: none;
+}
+.bw-hidden-sum::-webkit-details-marker { display: none; }
+.bw-hidden-sum::before { content: "▸ "; font-size: 0.7rem; }
+.bw-hidden[open] > .bw-hidden-sum::before { content: "▾ "; }
+.bw-hidden-sum:hover { color: var(--accent); }
+.bw-row-hidden { opacity: 0.5; }
+.bw-allhidden { margin: 0; padding: 9px 12px; font-size: 0.82rem; }
+
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }

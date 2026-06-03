@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.42", sp: 8, note: "Index page now has a “Group by” picker — slice every exercise by Category, Muscle group, Function (movement pattern), Combinable or Comparable group — and it respects the app-wide filter: when you restrict the app to your staples, each group shows the active lifts and tucks the rest, greyed, under a “Show hidden” sub-dropdown so nothing disappears without trace." },
       { version: "b.2.0.41", sp: 0.5, note: "Compare graph period picker tidied: dropped the “Showing period:” label (the dropdown already shows the period, e.g. “Last 3 months”) and moved the dropdown to the right of its row." },
       { version: "b.2.0.40", sp: 3, note: "The synthetic group lifts are now selectable: “SQ mix” and “DL pattern” appear (marked ✦) in the Colosseum leaderboard exercise picker and in the Compare graph search/chips, so you can rank or chart them like any lift. They show whenever at least one of their member lifts is present." },
       { version: "b.2.0.39", sp: 5, note: "Index inspector upgraded: tap any exercise to see its registry tags (hover each for the why), its combinable/comparable group membership with the plain-language reason and member list, and its active-set status — plus per-exercise “Always show” / “Always hide” toggles that force a lift in or out of the app-wide filter on the spot." },

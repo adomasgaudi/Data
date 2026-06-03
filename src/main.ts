@@ -69,6 +69,7 @@ import {
   exerciseTier,
   TRAINING_CATEGORIES,
   type TrainingCategory,
+  type MuscleGroup,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, fibSp } from "./changelog";
@@ -184,6 +185,7 @@ const els = {
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
   activeSetBar: $("activeSetBar"),
+  bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
@@ -1187,6 +1189,72 @@ const hiddenExCats = new Set<string>((() => {
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
+
+// How the Index page groups its exercise rows. "category" is the primary training
+// bucket (one per lift); the others let the owner slice the same lifts by fine
+// muscle, by functional movement pattern (multi-membership), or by the
+// combinable / comparable synthetic-group membership.
+type IndexGroupMode = "category" | "muscle" | "function" | "combinable" | "comparable";
+let bwGroupMode: IndexGroupMode = "category";
+const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
+  { mode: "category", label: "Category" },
+  { mode: "muscle", label: "Muscle group" },
+  { mode: "function", label: "Function (movement)" },
+  { mode: "combinable", label: "Combinable" },
+  { mode: "comparable", label: "Comparable" },
+];
+// Fine muscle groups in display order, with a colour (legs/arms split off the
+// CATEGORY_COLORS shades; the rest reuse them).
+const INDEX_MUSCLES: MuscleGroup[] = [
+  "Quads", "Hamstrings", "Glutes", "Calves", "Chest", "Back", "Shoulders",
+  "Biceps", "Triceps", "Core", "Cardio", "Mobility", "Skill", "Other",
+];
+const muscleColor = (m: MuscleGroup): string =>
+  (({ Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf", Biceps: "#9c5bb8", Triceps: "#b07fc9" } as Record<string, string>)[m]) ??
+  CATEGORY_COLORS[m as TrainingCategory] ?? CATEGORY_COLORS.Other;
+
+interface IndexRow { name: string; coeff: number; count: number; }
+interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
+
+/** Split the Index exercise rows into ordered, labelled buckets for the chosen
+ * grouping mode. "function" is multi-membership (one lift can appear in several
+ * pattern buckets); "combinable"/"comparable" show each synthetic group's members
+ * plus a trailing bucket for everything not in such a group. */
+function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
+  const groupBy = <K extends string>(key: (r: IndexRow) => K): Map<K, IndexRow[]> => {
+    const by = new Map<K, IndexRow[]>();
+    for (const r of rows) {
+      const k = key(r);
+      const list = by.get(k);
+      if (list) list.push(r); else by.set(k, [r]);
+    }
+    return by;
+  };
+
+  if (mode === "muscle") {
+    const by = groupBy((r) => muscleGroup(r.name));
+    return INDEX_MUSCLES.filter((m) => by.has(m)).map((m) => ({ key: m, label: m, color: muscleColor(m), rows: by.get(m)! }));
+  }
+  if (mode === "function") {
+    return LIST_CATEGORIES
+      .map((c) => ({ key: c, label: c, color: listCatColor(c), rows: rows.filter((r) => exerciseCategories(r.name).includes(c)) }))
+      .filter((b) => b.rows.length);
+  }
+  if (mode === "combinable" || mode === "comparable") {
+    const groups = mode === "combinable" ? COMBINABLE_GROUPS : COMPARABLE_GROUPS;
+    const buckets: IndexBucket[] = groups
+      .map((g) => ({ key: g.id, label: g.label, color: "#1f6f8b", rows: rows.filter((r) => g.members?.some((m) => m.exerciseName === r.name)) }))
+      .filter((b) => b.rows.length);
+    const grouped = new Set(buckets.flatMap((b) => b.rows.map((r) => r.name)));
+    const rest = rows.filter((r) => !grouped.has(r.name));
+    if (rest.length)
+      buckets.push({ key: "__ungrouped", label: mode === "combinable" ? "Not in a combinable group" : "Not in a comparable group", color: CATEGORY_COLORS.Other, rows: rest });
+    return buckets;
+  }
+  // category (default): the one primary training bucket per lift.
+  const by = groupBy((r) => exerciseCategory(r.name));
+  return TRAINING_CATEGORIES.filter((c) => by.has(c)).map((c) => ({ key: c, label: c, color: CATEGORY_COLORS[c], rows: by.get(c)! }));
+}
 
 /** Build the custom athlete chip row from the (hidden) select's options. */
 function buildAthleteChips() {
@@ -3366,9 +3434,15 @@ function toggleActiveOverride(name: string, which: "include" | "exclude"): void 
 function reopenIndexDetail(name: string): void {
   const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
   if (!row) return;
-  const details = row.closest<HTMLDetailsElement>("details.bw-cat");
-  if (details && !details.open) details.open = true;
+  openAncestorDetails(row); // the group, and the "Show hidden" sub-dropdown if nested
   if (!row.nextElementSibling?.classList.contains("detail-row")) insertDetail(row, 3, exerciseInfoHtml(name));
+}
+
+/** Open every <details> ancestor of an element (so a row tucked inside the Index
+ * "Show hidden" sub-dropdown becomes visible, not just its group). */
+function openAncestorDetails(el: HTMLElement): void {
+  for (let p = el.parentElement; p; p = p.parentElement)
+    if (p instanceof HTMLDetailsElement) p.open = true;
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
@@ -3377,27 +3451,24 @@ function renderBwParts() {
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
-  const rows = [...counts.keys()]
-    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)!, cat: exerciseCategory(name) }))
-    // Most-trained first (by set count), then alphabetical - kept inside each category.
+  const rows: IndexRow[] = [...counts.keys()]
+    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)! }))
+    // Most-trained first (by set count), then alphabetical - kept inside each group.
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   const withPart = rows.filter((r) => r.coeff > 0).length;
   els.bwTitle.innerHTML =
     `Exercises <span class="muted">(${rows.length} · ${withPart} with a bodyweight part · edit to update all stats)</span>`;
   renderActiveSetBar(rows.length);
+  renderBwGroupBar();
 
-  // Group the exercises by training category so similar lifts share a dropdown.
-  const byCat = new Map<TrainingCategory, typeof rows>();
-  for (const r of rows) {
-    const list = byCat.get(r.cat) ?? [];
-    list.push(r);
-    byCat.set(r.cat, list);
-  }
+  // Slice the same rows into the chosen grouping (category / muscle / function /
+  // combinable / comparable).
+  const buckets = indexBuckets(rows, bwGroupMode);
 
-  // Remember which categories the user has opened, so editing/re-rendering keeps
-  // them as they were. Categories start collapsed by default (empty set on first
-  // paint); afterwards we read the live open/closed state back out of the DOM.
+  // Remember which groups the user has opened, so editing/re-rendering keeps them
+  // as they were. Groups start collapsed by default (empty set on first paint);
+  // afterwards we read the live open/closed state back out of the DOM.
   if (bwOpenCats === null) bwOpenCats = new Set<string>();
   else {
     bwOpenCats = new Set<string>();
@@ -3407,33 +3478,55 @@ function renderBwParts() {
   const open = (cat: string) => bwOpenCats!.has(cat);
 
   const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
-  els.bwGroups.innerHTML = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
-    .map((cat) => {
-      const list = byCat.get(cat)!;
-      const catWithPart = list.filter((r) => r.coeff > 0).length;
-      const body = list
-        .map(
-          (r) =>
-            `<tr data-exrow="${escapeHtml(r.name)}"><td>` +
-            `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}</td>` +
-            `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
-            `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
-            `<td class="num">${r.count.toLocaleString()}</td></tr>`,
-        )
-        .join("");
-      const partNote = catWithPart > 0 ? ` · ${catWithPart} with a BW part` : "";
+  // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
+  const rowHtml = (r: IndexRow, hidden: boolean) =>
+    `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
+    `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}</td>` +
+    `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
+    `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
+    `<td class="num">${r.count.toLocaleString()}</td></tr>`;
+  const table = (rs: IndexRow[], hidden: boolean) =>
+    `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
+
+  els.bwGroups.innerHTML = buckets
+    .map((b) => {
+      // Split the group by the app-wide active-set filter: active lifts stay in
+      // the main list; the rest are greyed under a "Show hidden" sub-dropdown.
+      const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
+      const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
+      const partCount = b.rows.filter((r) => r.coeff > 0).length;
+      const partNote = partCount > 0 ? ` · ${partCount} with a BW part` : "";
+      const meta = activeSet
+        ? `${shown.length} shown${hidden.length ? ` · ${hidden.length} hidden` : ""}${partNote}`
+        : `${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}${partNote}`;
+      const shownBlock = shown.length
+        ? table(shown, false)
+        : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
+      const hiddenBlock = hidden.length
+        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
+        : "";
       return (
-        `<details class="bw-cat" data-cat="${escapeHtml(cat)}"${open(cat) ? " open" : ""}>` +
+        `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
         `<summary class="bw-cat-summary">` +
-        `<span class="bw-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
-        `<span class="bw-cat-name">${escapeHtml(cat)}</span>` +
-        `<span class="bw-cat-meta muted">${list.length} exercise${list.length === 1 ? "" : "s"}${partNote}</span>` +
+        `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
+        `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
+        `<span class="bw-cat-meta muted">${meta}</span>` +
         `</summary>` +
-        `<table class="data-table">${head}<tbody>${body}</tbody></table>` +
+        shownBlock +
+        hiddenBlock +
         `</details>`
       );
     })
     .join("");
+}
+
+/** The "Group by" picker above the Index exercise groups. */
+function renderBwGroupBar(): void {
+  const opts = INDEX_GROUP_MODES
+    .map((m) => `<option value="${m.mode}"${m.mode === bwGroupMode ? " selected" : ""}>${escapeHtml(m.label)}</option>`)
+    .join("");
+  els.bwGroupBar.innerHTML =
+    `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>`;
 }
 
 /** Expanded info panel for one exercise on the Index page: category / muscle /
@@ -3530,8 +3623,7 @@ function jumpToExerciseInfo(exName: string) {
   switchTopTab("bwparts");
   const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(exName)}"]`);
   if (!row) return;
-  const details = row.closest<HTMLDetailsElement>("details.bw-cat");
-  if (details && !details.open) details.open = true;
+  openAncestorDetails(row); // group + "Show hidden" sub-dropdown if the lift is filtered out
   // Let the just-opened <details> lay out before scrolling to the row.
   requestAnimationFrame(() => {
     row.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -4198,6 +4290,13 @@ async function init() {
   });
   els.activeSetBar.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("[data-asclear]")) clearActiveOverrides();
+  });
+  // Index "Group by" picker: re-slice the same lifts by category / muscle / etc.
+  els.bwGroupBar.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#bwGroupBy");
+    if (!sel) return;
+    bwGroupMode = sel.value as IndexGroupMode;
+    renderBwParts();
   });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
