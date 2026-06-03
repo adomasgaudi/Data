@@ -2666,7 +2666,8 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 // ---- Workouts overview: a per-year heatmap of training days ----
 let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
-let heatFilter = "cat:Legs"; // "all" | "cat:<Category>" | "ex:<Exercise>" — defaults to Legs
+let heatFilter = "cat:Legs"; // "all" | "cat:<bodypart>" | "mus:<muscle>" | "fun:<pattern>" | "ex:<exercise>"
+let heatLastGroup = "cat:Legs"; // last non-"all" filter, for the group/all quick toggle
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
 // instead of jumping to that day — so you can tag many days quickly in one go.
 let aloneTagMode = false;
@@ -2682,15 +2683,18 @@ function trainingDays(): Map<string, number> {
 /** Sets on a day that match the active {@link heatFilter} (all / one category /
  * one exercise). */
 function dayMatchCount(d: WorkoutDay): number {
-  if (heatFilter.startsWith("cat:")) {
-    const cat = heatFilter.slice(4);
-    return d.exercises.reduce((s, e) => (exerciseCategory(e.exerciseName) === cat ? s + e.count : s), 0);
-  }
-  if (heatFilter.startsWith("ex:")) {
-    const ex = heatFilter.slice(3);
-    return d.exercises.reduce((s, e) => (e.exerciseName === ex ? s + e.count : s), 0);
-  }
-  return d.totalSets;
+  if (heatFilter === "all" || heatFilter === "") return d.totalSets;
+  const sep = heatFilter.indexOf(":");
+  const kind = heatFilter.slice(0, sep);
+  const val = heatFilter.slice(sep + 1);
+  const match = (name: string): boolean => {
+    if (kind === "cat") return exerciseCategory(name) === val; // coarse body part
+    if (kind === "mus") return muscleGroup(name) === val; // fine muscle group
+    if (kind === "fun") return tagsForExercise(name).some((t) => t.kind === "functional-pattern" && t.label === val);
+    if (kind === "ex") return name === val;
+    return false;
+  };
+  return d.exercises.reduce((s, e) => (match(e.exerciseName) ? s + e.count : s), 0);
 }
 
 /** Training dates → matching set count, honouring the heatmap filter. */
@@ -2785,9 +2789,9 @@ function heatScopeToggle(): string {
 
 /** Human label for the active heatmap filter value. */
 function heatFilterLabel(): string {
-  if (heatFilter.startsWith("cat:")) return heatFilter.slice(4);
-  if (heatFilter.startsWith("ex:")) return heatFilter.slice(3);
-  return "All exercises";
+  if (heatFilter === "all" || heatFilter === "") return "All exercises";
+  const i = heatFilter.indexOf(":");
+  return i >= 0 ? heatFilter.slice(i + 1) : heatFilter;
 }
 
 /** Filter as a custom dropdown (no native <select>): all exercises, one training
@@ -2795,21 +2799,40 @@ function heatFilterLabel(): string {
  * handled by delegation in the workoutCalendar click handler (data-heatval). */
 function heatFilterSelect(): string {
   const exs = exerciseCountsForUser(activeRecords(), els.athlete.value); // most-trained first
-  const cats = TRAINING_CATEGORIES.filter((c) => exs.some((e) => exerciseCategory(e.exerciseName) === c));
+  const names = exs.map((e) => e.exerciseName);
+  const cats = TRAINING_CATEGORIES.filter((c) => names.some((n) => exerciseCategory(n) === c));
+  const muscles = MUSCLE_GROUP_TAGS.map((t) => t.label).filter((l) => names.some((n) => muscleGroup(n) === l));
+  const funcs = FUNCTIONAL_PATTERN_TAGS.map((t) => t.label).filter((l) =>
+    names.some((n) => tagsForExercise(n).some((t) => t.kind === "functional-pattern" && t.label === l)),
+  );
   const opt = (val: string, label: string) =>
     `<button type="button" class="xdd-opt${heatFilter === val ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${escapeHtml(label)}</button>`;
+  const section = (title: string, items: [string, string][]) =>
+    items.length ? `<div class="xdd-group">${title}</div>${items.map(([v, l]) => opt(v, l)).join("")}` : "";
   const menu =
     opt("all", "All exercises") +
-    (cats.length ? `<div class="xdd-group">Categories</div>${cats.map((c) => opt(`cat:${c}`, c)).join("")}` : "") +
-    (exs.length
-      ? `<div class="xdd-group">Exercises</div>${exs.map((e) => opt(`ex:${e.exerciseName}`, e.exerciseName)).join("")}`
-      : "");
+    section("Body part", cats.map((c) => [`cat:${c}`, c])) +
+    section("Muscle group", muscles.map((m) => [`mus:${m}`, m])) +
+    section("Functional", funcs.map((f) => [`fun:${f}`, f])) +
+    section("Exercises", exs.map((e) => [`ex:${e.exerciseName}`, e.exerciseName]));
+  // Quick toggle: flip the heatmap between the selected group and All.
+  const isAll = heatFilter === "all" || heatFilter === "";
+  const toggle =
+    `<button type="button" class="heat-grp-toggle${isAll ? "" : " is-on"}" data-heattoggle="1" ` +
+    `title="Toggle between this group and all exercises">${isAll ? `Show ${escapeHtml(heatFilterLabel2(heatLastGroup))}` : "Show all"}</button>`;
   return (
     `<div class="xdd xdd-heat">` +
     `<button type="button" class="xdd-btn">${escapeHtml(heatFilterLabel())}<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
-    `</div>`
+    `</div>${toggle}`
   );
+}
+
+/** Label for a stored heatFilter value (used by the group/all quick toggle). */
+function heatFilterLabel2(filter: string): string {
+  if (filter === "all" || filter === "") return "all";
+  const i = filter.indexOf(":");
+  return i >= 0 ? filter.slice(i + 1) : filter;
 }
 
 /** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
@@ -4053,6 +4076,12 @@ async function init() {
     const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt");
     if (heatOpt?.dataset.heatval !== undefined) {
       heatFilter = heatOpt.dataset.heatval;
+      if (heatFilter !== "all" && heatFilter !== "") heatLastGroup = heatFilter; // remember for the toggle
+      return renderWorkoutCalendar();
+    }
+    if (target.closest("[data-heattoggle]")) {
+      if (heatFilter === "all" || heatFilter === "") heatFilter = heatLastGroup;
+      else { heatLastGroup = heatFilter; heatFilter = "all"; }
       return renderWorkoutCalendar();
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");

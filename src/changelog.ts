@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.6", title: "Heatmap category filter", sp: 2, note: "The year-heatmap filter now lets you colour by any of the new categories — body part, fine muscle group (Quads, Lats (rows)…) or functional pattern — not just the coarse ones, plus a quick toggle to flip between the chosen group and all exercises." },
       { version: "b.2.1.5", title: "Workouts grouping controls", sp: 2, note: "Workouts “View” is now a By day / By week toggle (not a dropdown), and “Show” is the app's own dropdown that can group each session by Exercises, Muscle group, Functional group, Combined lift or Compared lift." },
       { version: "b.2.1.4", title: "Back split and deadlift fix", sp: 5, note: "Split the Back muscle group into Lower back, Upper back (traps), Lats (pulls) and Lats (rows). Fixed the deadlift groups: holds & the one-arm side deadlift are accessories, good mornings / back extensions / plain RDLs are the deadlift pattern, and the inverted deadlift is a lats row. Registry now supports per-exercise include/exclude overrides." },
       { version: "b.2.1.3", title: "Re-graded effort SP", sp: 0.5, note: "Re-graded the per-part effort up to current scope (Graphs & Exercises to 80, Workouts/Calculator/Navigation/Leaderboard a step higher): the whole-site total moves from 214 to 293 SP." },
