@@ -881,10 +881,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .hm-cell.empty { background: transparent; border-color: transparent; }
 .hm-cell.lvl-0 { background: var(--hm-rest-even); }
-.hm-cell.lvl-1 { background: rgba(40, 78, 134, 0.30); }
-.hm-cell.lvl-2 { background: rgba(40, 78, 134, 0.55); }
-.hm-cell.lvl-3 { background: rgba(40, 78, 134, 0.78); }
-.hm-cell.lvl-4 { background: var(--accent); }
+.hm-cell.lvl-1 { background: #bcd6f2; }  /* 1 set — light blue */
+.hm-cell.lvl-2 { background: #6fa0db; }  /* 2–3 — darker blue */
+.hm-cell.lvl-3 { background: #284e86; }  /* 4–5 — dark blue */
+.hm-cell.lvl-4 { background: #e6c879; }  /* 6–9 — light gold */
+.hm-cell.lvl-5 { background: #b8902f; }  /* 10+ — dark gold */
 /* Odd months: very light gray rest squares + a slightly darker outline. */
 .hm-cell.hm-modd { border-color: var(--hm-bd-odd); }
 .hm-cell.hm-modd.lvl-0 { background: var(--hm-rest-odd); }

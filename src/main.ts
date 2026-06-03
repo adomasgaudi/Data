@@ -2568,13 +2568,15 @@ function initHeatYear() {
   heatFilter = "all";
 }
 
-/** Intensity bucket (0–4) for a day's set count, GitHub-contribution style. */
+/** Intensity bucket for a day's set count: 0 rest, then 1+/2+/4+/6+/10+ sets
+ * (light blue → dark blue → light gold → dark gold). */
 function heatLevel(sets: number): number {
   if (sets <= 0) return 0;
-  if (sets <= 3) return 1;
-  if (sets <= 7) return 2;
-  if (sets <= 12) return 3;
-  return 4;
+  if (sets < 2) return 1; // 1 set — light blue
+  if (sets < 4) return 2; // 2–3 — darker blue
+  if (sets < 6) return 3; // 4–5 — dark blue
+  if (sets < 10) return 4; // 6–9 — light gold
+  return 5; // 10+ — dark gold
 }
 
 /** The years (descending) that have any training, for the ‹ › year nav. */
@@ -2671,7 +2673,8 @@ function renderWorkoutCalendar() {
   const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}</div>`;
   const legend =
     `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1"></span>` +
-    `<span class="hm-cell lvl-2"></span><span class="hm-cell lvl-3"></span><span class="hm-cell lvl-4"></span> More</div>`;
+    `<span class="hm-cell lvl-2"></span><span class="hm-cell lvl-3"></span><span class="hm-cell lvl-4"></span>` +
+    `<span class="hm-cell lvl-5"></span> More</div>`;
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
