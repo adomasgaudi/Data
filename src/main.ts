@@ -597,14 +597,17 @@ function computedRecords(): SetRecord[] {
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
   const pure = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
-  // Append the synthetic combinable/comparable lifts (SQ mix, DL pattern) whose
-  // members are present, so they're selectable on the leaderboard too.
+  // The synthetic combinable/comparable lifts (SQ mix, DL pattern) whose members
+  // are present — surfaced in a labelled group at the TOP so they're easy to find.
   const synth = availableSyntheticNames(pure);
-  const exercises = [...pure, ...synth];
-  els.exercise.innerHTML = exercises
-    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}${synth.includes(e) ? " ✦" : ""}</option>`)
-    .join("");
-  els.exercise.value = exercises.includes(prev) ? prev : (exercises[0] ?? "");
+  const opt = (e: string) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`;
+  const synthGroup = synth.length
+    ? `<optgroup label="✦ Combined lifts">${synth.map(opt).join("")}</optgroup>`
+    : "";
+  els.exercise.innerHTML = synthGroup + pure.map(opt).join("");
+  const all = [...synth, ...pure];
+  // Default to the most-trained real lift (not a synthetic), keeping any prior pick.
+  els.exercise.value = all.includes(prev) ? prev : (pure[0] ?? synth[0] ?? "");
 }
 
 /** Synthetic group derived-names (SQ mix, DL pattern) whose group has ≥1 member

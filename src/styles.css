@@ -50,6 +50,10 @@
   --hm-bd-odd: #3c4757;
 }
 * { box-sizing: border-box; }
+/* The [hidden] attribute must always win — class rules like `.ex-period-bar
+ * { display: flex }` otherwise override the UA default and keep hidden bars
+ * visible (e.g. the period control lingering on the Compare graph). */
+[hidden] { display: none !important; }
 body.locked { overflow: hidden; }
 /* Decorative landing gate. */
 .login-gate {
