@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.27", sp: 0.5, note: "Year heatmap now rings any day you tagged “trained alone” with a red outline (inset, so it reads on every square colour); the ring updates live when you toggle the tag." },
       { version: "b.2.0.26", sp: 1, note: "Per-set difficulty switched from RPE (1–10) to RIR — Reps In Reserve. The picker now offers 11 descriptive bands (0.1–0.3 “almost impossible” down to 30–100 “warm-up light”) instead of bare numbers; header, tooltip and graph all read RIR. Old RPE numbers don't carry over (stored under a new key)." },
       { version: "b.2.0.25", sp: 0.1, note: "Year heatmap day-of-month numbers turned down even more (barely-there): 8% black / 16% white on dark days." },
       { version: "b.2.0.24", sp: 0.1, note: "Year heatmap day-of-month numbers are now centred in the square and much more transparent — a faint hint rather than a label." },
