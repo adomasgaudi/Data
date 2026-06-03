@@ -58,6 +58,10 @@ import {
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
+  tagsForExercise,
+  combinableGroupsFor,
+  comparableGroupsFor,
+  membersOfGroup,
   type RegistryTag,
   LIST_CATEGORIES,
   exerciseCode,
@@ -3320,6 +3324,31 @@ function clearActiveOverrides(): void {
   renderAll();
 }
 
+/** Toggle one exercise's force-IN (include) or force-OUT (exclude) override from
+ * the Index inspector, then re-apply app-wide and re-open the inspector row. */
+function toggleActiveOverride(name: string, which: "include" | "exclude"): void {
+  if (which === "include") {
+    if (activeInclude.has(name)) activeInclude.delete(name);
+    else { activeInclude.add(name); activeExclude.delete(name); }
+  } else {
+    if (activeExclude.has(name)) activeExclude.delete(name);
+    else { activeExclude.add(name); activeInclude.delete(name); }
+  }
+  saveActiveSet();
+  renderAll();
+  reopenIndexDetail(name);
+}
+
+/** After a re-render, re-open one exercise's Index info row so its inspector
+ * stays visible (used by the force-in/out toggles). */
+function reopenIndexDetail(name: string): void {
+  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  if (!row) return;
+  const details = row.closest<HTMLDetailsElement>("details.bw-cat");
+  if (details && !details.open) details.open = true;
+  if (!row.nextElementSibling?.classList.contains("detail-row")) insertDetail(row, 3, exerciseInfoHtml(name));
+}
+
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
 function renderBwParts() {
   renderMergeList();
@@ -3411,10 +3440,18 @@ function exerciseInfoHtml(name: string): string {
   const item = (label: string, value: string) =>
     `<div class="ex-info-item"><span class="ex-info-lbl">${escapeHtml(label)}</span><span class="ex-info-val">${value}</span></div>`;
 
+  // Registry tags this exercise carries (muscle / pattern / group membership),
+  // each chip explains its WHY on hover.
+  const tags = tagsForExercise(name);
+  const tagChips = tags.length
+    ? tags.map((t) => `<span class="ex-tag" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</span>`).join("")
+    : `<span class="muted">none</span>`;
+
   const rows = [
     item("Category", escapeHtml(cat)),
     item("Muscle group", escapeHtml(mg)),
     item("Tier", escapeHtml(tierLabel)),
+    item("Tags", `<span class="ex-tags">${tagChips}</span>`),
     item("Bodyweight part", coeff > 0 ? pct(coeff) : "—"),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
@@ -3424,7 +3461,44 @@ function exerciseInfoHtml(name: string): string {
     first && last ? item("Logged", `${shortDate(first)} → ${shortDate(last)}`) : "",
     variants.length ? item("Also logged as", escapeHtml(variants.join(", "))) : "",
   ].join("");
-  return `<div class="ex-info">${rows}</div>`;
+
+  // Combinable / comparable group membership, with members present in the data
+  // and the plain-language WHY behind the grouping.
+  const presentNames = distinctExercises(data.records);
+  const groups = [...combinableGroupsFor(name), ...comparableGroupsFor(name)];
+  const groupHtml = groups
+    .map((g) => {
+      const members = membersOfGroup(g, presentNames);
+      const memberList = members
+        .map((m) => `${escapeHtml(m.exerciseName)}${m.ratio !== 1 ? ` <span class="muted">×${m.ratio}</span>` : ""}`)
+        .join(", ");
+      const kindNote = g.kind === "combinable-group" ? "merged 1:1 into one lift" : "scaled onto one curve";
+      return (
+        `<div class="ex-group"><div class="ex-group-hd">${escapeHtml(g.label)} ` +
+        `<span class="muted">— ${kindNote}</span></div>` +
+        `<div class="ex-group-why muted">${escapeHtml(g.why)}</div>` +
+        `<div class="ex-group-members">Members: ${memberList || "—"}</div></div>`
+      );
+    })
+    .join("");
+
+  // Active-set status + per-exercise force-in / force-out overrides.
+  const incl = activeInclude.has(name);
+  const excl = activeExclude.has(name);
+  const statusTxt = !activeSet
+    ? "Filter off — shown everywhere"
+    : activeSet.has(name)
+      ? "Active — shown app-wide"
+      : "Hidden by the active-set filter";
+  const statusCls = activeSet && !activeSet.has(name) ? "is-hidden" : "is-on";
+  const activeHtml =
+    `<div class="ex-active">` +
+    `<span class="ex-active-status ${statusCls}">${statusTxt}</span>` +
+    `<button type="button" class="ex-force${incl ? " is-on" : ""}" data-asinclude="${escapeHtml(name)}">${incl ? "✓ Always show" : "Always show"}</button>` +
+    `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
+    `</div>`;
+
+  return `<div class="ex-info">${rows}${groupHtml}${activeHtml}</div>`;
 }
 
 /** Open the Exercises (merges & data) page and scroll to one exercise's row,
@@ -4105,6 +4179,11 @@ async function init() {
   });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
+    // Per-exercise active-set overrides in the inspector (force in / out).
+    const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
+    if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
+    const exc = (e.target as HTMLElement).closest<HTMLElement>("[data-asexclude]");
+    if (exc?.dataset.asexclude) { toggleActiveOverride(exc.dataset.asexclude, "exclude"); return; }
     const nameEl = (e.target as HTMLElement).closest<HTMLElement>(".bw-ex-name");
     if (!nameEl?.dataset.exname) return;
     const row = nameEl.closest<HTMLTableRowElement>("tr");
