@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.7", title: "Sets written out, no zero", sp: 2, note: "Bodyweight sets no longer show a meaningless “0” — just the reps as a superscript. And the Workouts session line (Show: Exercises) writes out every set as weight^reps (e.g. 40¹⁵ 40¹²) instead of only the set count." },
       { version: "b.2.1.6", title: "Heatmap category filter", sp: 2, note: "The year-heatmap filter now lets you colour by any of the new categories — body part, fine muscle group (Quads, Lats (rows)…) or functional pattern — not just the coarse ones, plus a quick toggle to flip between the chosen group and all exercises." },
       { version: "b.2.1.5", title: "Workouts grouping controls", sp: 2, note: "Workouts “View” is now a By day / By week toggle (not a dropdown), and “Show” is the app's own dropdown that can group each session by Exercises, Muscle group, Functional group, Combined lift or Compared lift." },
       { version: "b.2.1.4", title: "Back split and deadlift fix", sp: 5, note: "Split the Back muscle group into Lower back, Upper back (traps), Lats (pulls) and Lats (rows). Fixed the deadlift groups: holds & the one-arm side deadlift are accessories, good mornings / back extensions / plain RDLs are the deadlift pattern, and the inverted deadlift is a lats row. Registry now supports per-exercise include/exclude overrides." },

@@ -873,6 +873,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
 .seg-btn:hover { color: var(--text); }
 .seg-btn.is-active { color: #fff; background: var(--accent); }
+/* Workouts session line: each set written as weight^reps. */
+.wo-setlist { font-size: 0.85rem; }
+.wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
+/* A weightless set shows just its reps as a (slightly larger) superscript. */
+sup.wr-bw { font-size: 0.85em; }
 .heat-filter {
   font: inherit; font-size: 0.82rem; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; max-width: 60vw;

@@ -255,9 +255,14 @@ const pct = (fraction: number): string => `${Math.round(fraction * 100)}%`;
  * leaderboard, per-athlete detail and Test tab agree. */
 const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
 
-/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header. */
+/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header.
+ * When there's no (added) weight — bodyweight reps, holds — the meaningless "0"
+ * base is dropped and just the reps show as the superscript. Negative (assisted)
+ * weights keep their number. */
 const wr = (weight: number | null, reps: number | null): string =>
-  weight === null ? "—" : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
+  weight === null || weight === 0
+    ? (reps === null ? "—" : `<sup class="wr-bw">${reps}</sup>`)
+    : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
 
 /** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
 const MONTH_ABBR = [
@@ -3003,8 +3008,15 @@ function renderWorkoutsPage() {
       let did: string;
       const dim = els.workoutGrouping.value;
       if (dim === "exercises") {
+        // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
         did = g.exercises
-          .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
+          .map((e) => {
+            const setsTxt = g.sets
+              .filter((s) => s.exerciseName === e.exerciseName)
+              .map((s) => wr(s.weight, s.reps))
+              .join(" ");
+            return `${escapeHtml(e.exerciseName)} <span class="wo-setlist muted">${setsTxt}</span>`;
+          })
           .join("<br>");
       } else {
         // Sum each exercise's sets into the chosen grouping dimension.
