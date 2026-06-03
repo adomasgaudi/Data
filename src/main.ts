@@ -2373,7 +2373,9 @@ function renderExerciseProgressChart(exName: string) {
   const e1rmPts = pts.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
   const svgSeries: SvgSeries[] = [
     { name: "Sets/week", color: "#284e86", type: "bars", axis: "left", points: series.map((p) => ({ x: ts(p.date), y: p.sets })) },
-    { name: "Est. 1RM (kg)", color: "#b8902f", type: "line", axis: "right", points: e1rmPts },
+    // Each week's best est-1RM as dots (not a line — it bounces around, so a
+    // line would imply a smoother trend than the data shows).
+    { name: "Est. 1RM (kg)", color: "#b8902f", type: "scatter", axis: "right", points: e1rmPts },
     // Current strength = best est. 1RM achieved so far (never drops).
     { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "right", points: runningMaxPoints(e1rmPts) },
   ];

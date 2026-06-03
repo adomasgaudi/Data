@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.12", sp: 1, note: "1RM-trend graph: each week's est-1RM is now a scatter of dots, not a connected line (it bounces around, so a line implied a trend that isn't there). The current-strength ceiling stays a line." },
       { version: "b.2.0.11", sp: 2, note: "Index: tap any exercise to expand its info — category, muscle group, tier, bodyweight part, total sets, who trains it, the best 1RM ever logged (anyone) and the date span." },
       { version: "b.2.0.10", sp: 1, note: "Exercises list: the active period (e.g. “Last 3 months”) is now always shown above the list and tappable to change — no more forgetting it's filtered." },
       { version: "b.2.0.9", sp: 1, note: "Renamed the all-exercises / body-parts page to “Index” so it's not confused with a person's own Exercises list; added a one-line explainer at its top." },

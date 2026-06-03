@@ -27,7 +27,7 @@ export interface SvgPoint {
 export interface SvgSeries {
   name: string;
   color: string;
-  type: "line" | "range" | "bars";
+  type: "line" | "range" | "bars" | "scatter";
   /** Which y-scale this series uses (default "left"). */
   axis?: "left" | "right";
   points: SvgPoint[];
@@ -235,6 +235,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
         body += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
         for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="2.4" fill="${s.color}"/>`;
+      } else if (s.type === "scatter") {
+        // Dots only, no connecting line — for values that jump around (e.g. a
+        // day's est-1RM) where a line would imply a trend that isn't there.
+        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.8"/>`;
       } else if (s.type === "range") {
         for (const p of s.points) {
           const x = xPix(p.x);
