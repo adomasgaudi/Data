@@ -1484,8 +1484,10 @@ sup.wr-bw { font-size: 0.85em; }
 .xdd-rpe .xdd-caret { font-size: 0.6rem; }
 .xdd-rpe.is-set .xdd-btn { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
 .xdd-rpe.is-set .xdd-caret { color: rgba(255, 255, 255, 0.85); }
-/* Menu hugs the cell width and wraps long descriptions instead of going wide. */
-.xdd-rpe .xdd-menu { min-width: max(100%, 13rem); max-width: 15rem; }
+/* Menu hugs the cell width and wraps long descriptions instead of going wide.
+   The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
+   edge (it grows leftward) — left-anchored it overflowed off the screen. */
+.xdd-rpe .xdd-menu { min-width: max(100%, 13rem); max-width: min(15rem, 92vw); left: auto; right: 0; }
 .xdd-rpe .set-rpe-opt { white-space: normal; line-height: 1.25; padding: 6px 9px; font-size: 0.78rem; }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }
