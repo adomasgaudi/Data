@@ -12,10 +12,9 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.14.4</span></h1>
+      <h1>Colosseum <span class="version">b.1.14.5</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
-        <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
           <label>1RM formula
@@ -33,6 +32,7 @@
           </label>
           <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
           <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
+          <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
           </button>
@@ -43,13 +43,9 @@
       </div>
     </header>
 
-    <!-- Per-section version chips, populated from COMPONENTS in changelog.ts. -->
-    <!-- Per-part effort (SP): collapsed into a dropdown to keep the header clean.
-         Summary shows the whole-site grade; expand for each part. -->
-    <details id="effortPanel" class="effort-panel">
-      <summary id="effortSummary" class="effort-summary"></summary>
-      <div id="componentVersions" class="component-versions"></div>
-    </details>
+    <!-- Whole-site effort (SP) only. The per-part breakdown lives in Settings →
+         Version history, so it isn't duplicated here. -->
+    <p id="effortSummary" class="effort-line"></p>
 
     <nav class="tabs" role="tablist">
       <button class="tab" data-tab="leaderboards" role="tab">Colosseum</button>

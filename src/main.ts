@@ -213,8 +213,8 @@ const PAGE_SIZE = 50; // List & stats page size
 function setTheme(dark: boolean) {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   try { localStorage.setItem("colosseum.theme", dark ? "dark" : "light"); } catch { /* ignore */ }
-  els.themeBtn.textContent = dark ? "☀" : "🌙";
-  els.themeBtn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  els.themeBtn.textContent = dark ? "☀ Light mode" : "🌙 Dark mode";
+  els.themeBtn.setAttribute("aria-pressed", String(dark));
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
@@ -3223,23 +3223,13 @@ async function init() {
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 
-  // Per-part effort under the title, in a dropdown. Each chip carries the EXACT
-  // story points and the Fibonacci grade (≈) it snaps to; the summary shows the
-  // whole-site exact total and its grade.
+  // Whole-site effort (SP) under the title — just the total and its Fibonacci
+  // grade. The per-part breakdown lives in Settings → Version history.
   const effortSummary = document.getElementById("effortSummary");
   if (effortSummary)
     effortSummary.innerHTML =
       `<span class="effort-lbl">Effort</span>` +
-      `<span class="effort-total">${WEBSITE_EXACT_SP} SP <span class="effort-fib">≈ ${WEBSITE_SP}</span></span>` +
-      `<span class="effort-caret">▾</span>`;
-  const cv = document.getElementById("componentVersions");
-  if (cv) {
-    cv.innerHTML = COMPONENTS.map(
-      (c) =>
-        `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
-        `<span class="cv-ver">${c.sp}<span class="cv-fib">≈${fibSp(c.sp)}</span></span></span>`,
-    ).join("");
-  }
+      `<span class="effort-total">${WEBSITE_EXACT_SP} SP <span class="effort-fib">≈ ${WEBSITE_SP}</span></span>`;
 
   renderStatus();
   renderHealth();

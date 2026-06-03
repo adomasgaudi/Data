@@ -51,13 +51,14 @@ export const CHANGELOG: Release[] = [
   {
     version: "b.1.14",
     title: "real-time-axis-and-pickers",
-    sp: 16,
+    sp: 0, // auto-computed below = sum of children
     note: "The b.1.14 run (current): per-set graph on a real time axis with calendar bands, dashed rep lines and a best-set-only toggle, a By-category show/hide picker, the rep-max reps chosen in the column header, and every exercise standing on its own (no scaling groups). New releases land here.",
     details: [
       "Per-set drill-in chart now uses genuine calendar time with alternating year/month/week bands; same-day sets fan out within the day; each set's line is dashed, one dash per rep; optional best-set-only view.",
       "By-category list: chips to choose which categories you see; rep-max reps moved into the column header; scaling/pattern groups removed so each lift is separate.",
     ],
     children: [
+      { version: "b.1.14.5", sp: 1, note: "Tidy chrome: only the whole-site SP under the title (per-part chips live in Version history), night mode moved into Settings, and group SP totals are now auto-summed from their releases." },
       { version: "b.1.14.4", sp: 5, note: "Removed scaling/“pattern” groups — Bench Press, Shoulder Press, Row, etc. are each their own exercise (no more ‘(also: …)’ merging); Group view is category-only. Queued a ‘fetch live data’ task." },
       { version: "b.1.14.3", sp: 3, note: "Time axis fixed: alternating year/month/week background bands; labels adapt to zoom (never blank, never duplicate ‘Jan 1’)." },
       { version: "b.1.14.2", sp: 1, note: "Per-set graph: ‘Best set only’ toggle — show just each day's top set (highest estimated 1RM) instead of every set." },
@@ -245,6 +246,13 @@ export const CHANGELOG: Release[] = [
     ],
   },
 ];
+
+// A grouped minor's `sp` is the SUM of its children — computed here, never
+// hand-maintained, so the totals can't drift from the per-release numbers. The
+// literal `sp` on a group with children is just a placeholder; this overwrites it.
+for (const r of CHANGELOG) {
+  if (r.children?.length) r.sp = r.children.reduce((s, c) => s + c.sp, 0);
+}
 
 /** The on-screen version: always the latest actual sub-version. When the newest
  * entry is a grouped minor, that's its first (newest) child, not the group name. */

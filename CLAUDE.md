@@ -27,9 +27,11 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   Keep the longer detail in the commit body as before.
 - **Give every task a code + size.** Each task the owner gives gets a code:
   a 2–5 letter **category** + a number (e.g. `EXR-3`, `DATA-1`, `CHART-2`), plus
-  a Scrum **story-point** estimate on the **modified-Fibonacci scale with NO
-  in-between values: `1, 2, 3, 5, 8, 13, 20, 30, 50, 80, 130, 200`** (1 trivial → 200 epic).
-  Only ever use a number from that set. Put `CODE (SP:n)` at the **start of the commit subject, before the
+  a Scrum **story-point** estimate on the **modified-Fibonacci scale: `1, 2, 3, 5,
+  8, 13, 20, 30, 50, 80, 130, 200`** (1 trivial → 200 epic) — prefer a value from
+  that set. **For a genuinely tiny change a fractional `0.5` or `0.1` SP is
+  allowed** (a one-line text/colour tweak can be `SP:0.1`), even when it's
+  relevant work. Put `CODE (SP:n)` at the **start of the commit subject, before the
   version**, e.g. `EXR-3 (SP:3) 0.36.0 tier-list`, and lead the chat reply with
   the same `CODE (SP:n)`. Recorded in commit + chat only (no separate file).
   Reuse a category for related areas — current ones: `EXR` exercises view,
@@ -43,9 +45,10 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   (`b.x`) for big/breaking work. When unsure, prefer the patch. The single source
   of truth is `CURRENT_VERSION`/`CHANGELOG` in `src/changelog.ts`. **Releases are
   NOT separate top-level rows — each new version is prepended as the first child
-  of the current minor's group** (right now the **`b.1.13`** group): add the
-  child `{ version, sp, note }` at the top of its `children[]` and bump its group
-  `sp` total. `CURRENT_VERSION` reads that first child, so the on-screen
+  of the current minor's group** (right now the **`b.1.14`** group): add the
+  child `{ version, sp, note }` at the top of its `children[]`. **The group's `sp`
+  total is computed automatically (sum of its children) — do NOT hand-maintain it;
+  SP totals are functionally calculated wherever possible.** `CURRENT_VERSION` reads that first child, so the on-screen
   `<span class="version">` follows automatically. Each minor is its own folded
   group (`b.1.13`, `b.1.12`, `b.1.10–b.1.11`, `b.1.6–b.1.9`, `b.1.0–b.1.5`, the
   eras). Start a new group when a new minor (`b.1.14`, …) begins.
@@ -55,11 +58,15 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   then rebuild so `dist/index.html` carries it.
 - **Per-section effort (SP, not versions):** `COMPONENTS` in `src/changelog.ts`
   lists the **story points spent on each app part** (Exercises, Athlete, Workouts,
-  Graphs, Leaderboard, Data, Calculator, Add, Navigation, Stats, Group), shown as
-  chips under the title, plus a single `WEBSITE_SP` whole-site grade. The SP is a
-  **holistic grade on the modified-Fibonacci scale** (`1,2,3,5,8,13,20,30,50,80,130,200`),
-  NOT a sum of the release log. When a part grows materially, **re-grade it up one
-  step** (e.g. `10 → 20`) in the same commit; keep `WEBSITE_SP` in step too.
+  Graphs, Leaderboard, Data, Calculator, Add, Navigation, Stats, Group), plus a
+  single `WEBSITE_SP` whole-site grade. The SP is a **holistic grade on the
+  modified-Fibonacci scale** (`1,2,3,5,8,13,20,30,50,80,130,200`), NOT a sum of the
+  release log. When a part grows materially, **re-grade it up one step** (e.g.
+  `10 → 20`) in the same commit; keep `WEBSITE_SP` in step too. **Under the title
+  only the whole-site SP is shown — the per-part chips are NOT duplicated there;
+  they live in Settings → Version history.**
+- **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
+  the header bar.
 
 ## Project at a glance
 
