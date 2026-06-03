@@ -705,6 +705,18 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
     for (const p of line) expect(p.y).toBeCloseTo(100, 1); // flat at 100 throughout
   });
 
+  it("the MORE you train, the slower it fades — frequent light sets beat one long layoff", () => {
+    // A) hit a 100 peak, then keep training a light 50 every 30 days for 180 days.
+    const trained = [{ x: at(0), y: 100 }];
+    for (let d = 30; d <= 180; d += 30) trained.push({ x: at(d), y: 50 });
+    const aEnd = decayedStrengthSeries(trained, at(180)).at(-1)!.y;
+    // B) hit the same peak once, then nothing for 180 days.
+    const bEnd = decayedStrengthSeries([{ x: at(0), y: 100 }], at(180)).at(-1)!.y;
+    // Training must keep MORE strength — each session makes the decay weaker, so
+    // repeated training can never drop faster than idling (the old bug).
+    expect(aEnd).toBeGreaterThan(bEnd);
+  });
+
   it("a >2-week gap costs ~10%/month, then a light set restarts the clock (no further loss)", () => {
     // Peak 100 (day 0); nothing for 44 days (grace + a month) → ~10% lost; then a
     // light 60 set on day 44 and another on day 54. Training resets the timer, so

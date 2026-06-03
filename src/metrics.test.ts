@@ -17,6 +17,7 @@ import {
   predictedRir,
   linearFit,
   strengthRetention,
+  grownStability,
   daysBetweenIso,
   STRENGTH_DECAY,
 } from "./metrics";
@@ -341,28 +342,43 @@ describe("strengthRetention (detraining decay)", () => {
     expect(strengthRetention(-5)).toBe(1); // future/oddities never penalised
   });
 
-  it("is about 10% down one month after the grace ends", () => {
-    // grace (14d) + tau (30d) = 44 days → retention exactly 0.90 by construction.
-    expect(strengthRetention(STRENGTH_DECAY.graceDays + STRENGTH_DECAY.tauDays)).toBeCloseTo(0.9, 6);
+  it("is about 10% down a month after the grace ends (fresh lift)", () => {
+    // baseStability is tuned so a freshly-hit lift keeps ~90% 30 days past grace.
+    expect(strengthRetention(44)).toBeCloseTo(0.9, 2);
   });
 
-  it("keeps fading but slower (logarithmic) after that", () => {
+  it("decelerates: each further month removes less than the month before", () => {
     const oneMonth = strengthRetention(44);
     const twoMonths = strengthRetention(74);
     const threeMonths = strengthRetention(104);
     expect(oneMonth).toBeGreaterThan(twoMonths);
     expect(twoMonths).toBeGreaterThan(threeMonths);
-    // Deceleration: each further month removes less than the month before.
     expect(oneMonth - twoMonths).toBeGreaterThan(twoMonths - threeMonths);
   });
 
-  it("never decays below the floor", () => {
-    expect(strengthRetention(100000)).toBe(STRENGTH_DECAY.floor);
+  it("a more durable (trained-up) stability decays SLOWER than a fresh one", () => {
+    const trained = grownStability(grownStability(STRENGTH_DECAY.baseStability));
     fc.assert(
-      fc.property(fc.double({ min: 0, max: 1e6, noNaN: true }), (d) => {
-        const r = strengthRetention(d);
-        return r >= STRENGTH_DECAY.floor && r <= 1;
+      fc.property(fc.double({ min: 30, max: 2000, noNaN: true }), (d) => {
+        // Same days off, bigger stability ⇒ at least as much strength kept.
+        return strengthRetention(d, trained) >= strengthRetention(d, STRENGTH_DECAY.baseStability) - 1e-12;
       }),
+    );
+    // …and strictly more somewhere past the grace.
+    expect(strengthRetention(120, trained)).toBeGreaterThan(strengthRetention(120));
+  });
+
+  it("never decays below the floor", () => {
+    expect(strengthRetention(1e9)).toBe(STRENGTH_DECAY.floor);
+    fc.assert(
+      fc.property(
+        fc.double({ min: 0, max: 1e6, noNaN: true }),
+        fc.double({ min: 1, max: 5000, noNaN: true }),
+        (d, s) => {
+          const r = strengthRetention(d, s);
+          return r >= STRENGTH_DECAY.floor && r <= 1;
+        },
+      ),
     );
   });
 
@@ -377,6 +393,18 @@ describe("strengthRetention (detraining decay)", () => {
         },
       ),
     );
+  });
+});
+
+describe("grownStability", () => {
+  it("increases stability with each session and caps at maxStability", () => {
+    expect(grownStability(STRENGTH_DECAY.baseStability)).toBeGreaterThan(STRENGTH_DECAY.baseStability);
+    expect(grownStability(STRENGTH_DECAY.baseStability)).toBeCloseTo(
+      STRENGTH_DECAY.baseStability * STRENGTH_DECAY.stabilityGrowth,
+      6,
+    );
+    expect(grownStability(STRENGTH_DECAY.maxStability)).toBe(STRENGTH_DECAY.maxStability);
+    expect(grownStability(STRENGTH_DECAY.maxStability * 5)).toBe(STRENGTH_DECAY.maxStability);
   });
 });
 

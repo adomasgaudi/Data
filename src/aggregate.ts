@@ -10,6 +10,8 @@ import {
   MAX_1RM_REPS,
   daysBetweenIso,
   strengthRetention,
+  grownStability,
+  STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
 import { isIsometric } from "./profile";
@@ -565,17 +567,18 @@ export interface BestSet {
 
 /**
  * Build the "current strength" line for a chart, as a forward simulation of the
- * detraining model. Strength is carried as a `level` that:
- *   • holds flat while you keep training — EVERY set resets the decay clock, even
- *     a lighter one, because you're still training the lift (so a gap only
- *     "counts" from your last set, not from your peak);
- *   • sags through any gap longer than the two-week grace (level × retention(gap
- *     since the last set)); and
- *   • a fresh set can only lift the level (max with its own e1rm), never lower it.
- * The line is extended to `todayMs` so the present-day fade shows even when the
- * last set is old.
+ * spaced-repetition detraining model. Strength is carried as a `level`, and the
+ * lift's durability as a `stability` that grows with every session:
+ *   • the clock restarts on EVERY set (even a lighter one) — you're still
+ *     training the lift, so a gap counts from your last set, not your peak;
+ *   • through a gap the level fades on exp(−(t−grace)/stability);
+ *   • each new training day grows `stability` (grownStability), so the more you
+ *     train a lift the FLATTER its future decay — frequent training can never
+ *     make it drop faster; and
+ *   • a set can only lift the level (max with its own e1rm), never lower it.
+ * Extended to `todayMs` so the present-day fade shows even when the last set is old.
  *
- * `points` are {x: ms-timestamp, y: e1rm} in any order. Within each gap it's
+ * `points` are {x: ms-timestamp, y: e1rm} in any order; within each gap it's
  * sampled every `stepDays` for a smooth sag. Pure so it can be unit-tested.
  */
 export function decayedStrengthSeries(
@@ -586,20 +589,28 @@ export function decayedStrengthSeries(
   if (points.length === 0) return [];
   const sorted = points.slice().sort((a, b) => a.x - b.x);
   const step = stepDays * MS_PER_DAY;
+  const dayOf = (x: number) => Math.round(x / MS_PER_DAY); // group same-day sets into one session
   const out: { x: number; y: number }[] = [];
   const push = (x: number, y: number) => out.push({ x, y: Math.round(y * 10) / 10 });
 
   let anchorX = sorted[0]!.x; // the last training day — where the decay clock restarts
   let level = sorted[0]!.y; // strength carried from that day
-  // Strength at time x given the current anchor (grace measured from the anchor).
-  const decayedAt = (x: number) => level * strengthRetention((x - anchorX) / MS_PER_DAY);
+  let stability: number = STRENGTH_DECAY.baseStability; // durability; grows with each session
+  let prevDay = dayOf(anchorX);
+  // Strength at time x given the current anchor + stability (grace from the anchor).
+  const decayedAt = (x: number) => level * strengthRetention((x - anchorX) / MS_PER_DAY, stability);
   push(anchorX, level);
 
   for (let i = 1; i < sorted.length; i++) {
     const s = sorted[i]!;
     for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag in the gap
     level = Math.max(decayedAt(s.x), s.y); // decay over the gap, then the set re-proves strength
-    anchorX = s.x; // training resets the two-week clock
+    anchorX = s.x; // training resets the grace clock
+    const day = dayOf(s.x);
+    if (day !== prevDay) {
+      stability = grownStability(stability); // a new session makes future decay weaker
+      prevDay = day;
+    }
     push(anchorX, level);
   }
   // Tail: sag from the last training day to today.

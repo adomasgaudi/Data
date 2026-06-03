@@ -47,6 +47,7 @@ import {
   linearFit,
   MAX_1RM_REPS,
   strengthRetention,
+  grownStability,
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
@@ -4053,35 +4054,39 @@ function renderTest() {
 
 /**
  * Strength-fade explainer: % of a peak 1RM still available vs days since you last
- * trained the lift (the detraining model in metrics.ts). Flat through the grace
- * period, then a logarithmically-slowing decline to the floor. A few labelled
- * milestone dots make the shape concrete. Static (no inputs) — drawn with the
- * calculator so it sizes correctly when the Test tab is shown.
+ * trained the lift (the spaced-repetition model in metrics.ts). Two curves show
+ * the key idea — a freshly-hit lift fades faster than one you've drilled for
+ * months, because each session grows its durability. Static (no inputs) — drawn
+ * with the calculator so it sizes correctly when the Test tab is shown.
  */
 function renderDecayCurve() {
   const box = document.getElementById("decayCurveChart");
   if (!box) return;
   const maxDays = 540; // ~1.5 years out — long enough to see the tail flatten
   const r1 = (n: number) => Math.round(n * 10) / 10;
-  const linePts: SvgPoint[] = [];
-  for (let d = 0; d <= maxDays; d += 2) {
-    linePts.push({ x: d, y: r1(strengthRetention(d) * 100) });
-  }
-  // Milestone dots people can relate to.
+  // A "well-trained" lift = stability grown by several sessions.
+  let trained: number = STRENGTH_DECAY.baseStability;
+  for (let i = 0; i < 4; i++) trained = grownStability(trained);
+  const curve = (stability: number): SvgPoint[] => {
+    const pts: SvgPoint[] = [];
+    for (let d = 0; d <= maxDays; d += 2) pts.push({ x: d, y: r1(strengthRetention(d, stability) * 100) });
+    return pts;
+  };
   const milestones: { d: number; label: string }[] = [
     { d: STRENGTH_DECAY.graceDays, label: "2 weeks" },
-    { d: STRENGTH_DECAY.graceDays + STRENGTH_DECAY.tauDays, label: "+1 month" },
+    { d: 44, label: "+1 month" },
     { d: 90, label: "3 months" },
     { d: 180, label: "6 months" },
     { d: 365, label: "1 year" },
   ];
   const dots: SvgPoint[] = milestones.map((m) => {
     const pct = r1(strengthRetention(m.d) * 100);
-    return { x: m.d, y: pct, meta: `${m.label}: ${pct}% kept` };
+    return { x: m.d, y: pct, meta: `${m.label}: ${pct}% kept (fresh lift)` };
   });
   const series: SvgSeries[] = [
-    { name: "Strength kept", color: "#284e86", type: "line", points: linePts, noLegend: true },
-    { name: "Milestones", color: "#b8902f", type: "scatter", points: dots },
+    { name: "Fresh lift", color: "#284e86", type: "line", points: curve(STRENGTH_DECAY.baseStability) },
+    { name: "Well-trained lift", color: CURRENT_STRENGTH_COLOR, type: "line", points: curve(trained) },
+    { name: "Milestones (fresh)", color: "#b8902f", type: "scatter", points: dots },
   ];
   const config: SvgChartConfig = {
     series,
@@ -4097,7 +4102,8 @@ function renderDecayCurve() {
   const floorPct = Math.round(STRENGTH_DECAY.floor * 100);
   els.decayCurveNote.textContent =
     `% of your peak 1RM kept after N days without training a lift. Flat for the first ` +
-    `${STRENGTH_DECAY.graceDays} days, ~10% lost a month later, then a slow logarithmic tail down to a ${floorPct}% floor.`;
+    `${STRENGTH_DECAY.graceDays} days, then an exponential fade to a ${floorPct}% floor. ` +
+    `The more you've trained a lift the flatter its curve — a fresh PR (blue) fades faster than a well-drilled lift (green).`;
 }
 
 /**
