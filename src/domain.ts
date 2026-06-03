@@ -47,6 +47,10 @@ export interface SetRecord {
   notes: string;
   dropset: boolean;
   percentile: number | null;
+  /** Set on SYNTHETIC records only: the id of the combinable/comparable registry
+   * group this record was derived for (e.g. "combine.sq-mix", "compare.dl-pattern").
+   * Pure logged records never carry it. Lets views/filters tell synthetics apart. */
+  syntheticGroupId?: string;
 }
 
 /** "" / null / undefined -> null; otherwise coerce to a finite number or fail. */

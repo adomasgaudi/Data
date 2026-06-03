@@ -457,7 +457,54 @@ export function scaleToGroup(
     const scale = members[r.exerciseName];
     if (scale === undefined || scale <= 0) continue;
     const sc = (w: number | null) => (w === null ? null : w / scale);
-    out.push({ ...r, exerciseName: groupName, weight: sc(r.weight), origWeight: sc(r.origWeight ?? r.weight) });
+    out.push({
+      ...r,
+      exerciseName: groupName,
+      // Remember the source lift unless it was already tracked by canonicalisation.
+      originalExerciseName: r.originalExerciseName ?? r.exerciseName,
+      weight: sc(r.weight),
+      origWeight: sc(r.origWeight ?? r.weight),
+    });
+  }
+  return out;
+}
+
+/** A combinable/comparable group as the synthetic generator needs it. */
+export interface SyntheticGroupDef {
+  /** Registry tag id, stamped onto each synthetic record (e.g. "compare.dl-pattern"). */
+  id: string;
+  /** The exercise name the synthetic records are emitted under (e.g. "DL pattern"). */
+  derivedName: string;
+  /** Member exercise name → scaling quotient toward the reference (1 = combinable). */
+  members: Record<string, number>;
+}
+
+/**
+ * Build the SYNTHETIC records for combinable/comparable groups, returning ONLY
+ * the new records (not the originals). For each group, every member set is
+ * relabeled to the group's derivedName and its load scaled by 1/quotient so the
+ * members sit on one curve (combinable groups use quotient 1, i.e. no scaling).
+ *
+ * IMPORTANT: pass records whose `weight` is already the bodyweight-INCLUSIVE
+ * effective load (i.e. post-computeRecord). The owner's rule is that the ratio
+ * scales the TOTAL (bodyweight part + added), so we scale the effective load
+ * here and tag each output `syntheticGroupId`; downstream computeRecord must skip
+ * these (they're already computed) to avoid folding bodyweight in twice. The pure
+ * source lifts are never touched — synthetics are additional records.
+ *
+ * `originalExerciseName` is preserved so a synthetic still remembers it came from
+ * e.g. "Romanian Deadlift".
+ */
+export function withSyntheticGroups(
+  computedRecords: readonly SetRecord[],
+  groups: readonly SyntheticGroupDef[],
+): SetRecord[] {
+  const out: SetRecord[] = [];
+  for (const g of groups) {
+    // scaleToGroup relabels to derivedName, scales the load, and preserves the
+    // source lift in originalExerciseName. We only add the syntheticGroupId tag.
+    for (const r of scaleToGroup(computedRecords, g.derivedName, g.members))
+      out.push({ ...r, syntheticGroupId: g.id });
   }
   return out;
 }

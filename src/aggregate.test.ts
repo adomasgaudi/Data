@@ -21,6 +21,7 @@ import {
   exerciseProgressByWeek,
   addedWeight1RM,
   scaleToGroup,
+  withSyntheticGroups,
   nearDuplicateExercises,
   canonicalizeExerciseNames,
   sameExerciseKey,
@@ -257,6 +258,59 @@ describe("scaleToGroup", () => {
     );
     // 140 at quotient 0.7 → a 200 deadlift-equivalent single.
     expect(addedWeight1RM(scaled!, "epley")).toBeCloseTo(200, 6);
+  });
+
+  it("remembers the source lift in originalExerciseName", () => {
+    const [scaled] = scaleToGroup(
+      [rec({ exerciseName: "Romanian Deadlift", weight: 140, reps: 1 })],
+      "DL pattern",
+      { "Romanian Deadlift": 0.8 },
+    );
+    expect(scaled!.exerciseName).toBe("DL pattern");
+    expect(scaled!.originalExerciseName).toBe("Romanian Deadlift");
+  });
+});
+
+describe("withSyntheticGroups", () => {
+  const groups = [
+    { id: "combine.sq-mix", derivedName: "SQ mix", members: { Squat: 1, "Smith Machine Squat": 1 } },
+    { id: "compare.dl-pattern", derivedName: "DL pattern", members: { Deadlift: 1, "Romanian Deadlift": 0.8 } },
+  ];
+
+  it("emits only the new synthetic records, tagged with their group id", () => {
+    const computed = [
+      rec({ exerciseName: "Squat", weight: 200, origWeight: 140, reps: 1 }),
+      rec({ exerciseName: "Smith Machine Squat", weight: 190, origWeight: 130, reps: 1 }),
+      rec({ exerciseName: "Deadlift", weight: 200, origWeight: 200, reps: 1 }),
+      rec({ exerciseName: "Romanian Deadlift", weight: 160, origWeight: 160, reps: 1 }),
+      rec({ exerciseName: "Bench Press", weight: 100, reps: 1 }), // in no group → ignored
+    ];
+    const synth = withSyntheticGroups(computed, groups);
+    // 2 squat members + 2 deadlift members = 4 synthetic records, none from bench.
+    expect(synth).toHaveLength(4);
+    expect(synth.every((r) => !!r.syntheticGroupId)).toBe(true);
+    expect(synth.filter((r) => r.exerciseName === "SQ mix")).toHaveLength(2);
+    expect(synth.filter((r) => r.exerciseName === "DL pattern")).toHaveLength(2);
+  });
+
+  it("leaves the pure source records untouched", () => {
+    const computed = [rec({ exerciseName: "Deadlift", weight: 200, origWeight: 200, reps: 1 })];
+    const before = structuredClone(computed);
+    withSyntheticGroups(computed, groups);
+    expect(computed).toEqual(before); // inputs not mutated
+  });
+
+  it("combinable members keep their load (ratio 1); comparable members are scaled", () => {
+    const computed = [
+      rec({ exerciseName: "Smith Machine Squat", weight: 190, origWeight: 130, reps: 1 }),
+      rec({ exerciseName: "Romanian Deadlift", weight: 160, origWeight: 160, reps: 1 }),
+    ];
+    const synth = withSyntheticGroups(computed, groups);
+    const smith = synth.find((r) => r.originalExerciseName === "Smith Machine Squat")!;
+    expect(smith.weight).toBeCloseTo(190, 6); // ratio 1 → unchanged
+    const rdl = synth.find((r) => r.originalExerciseName === "Romanian Deadlift")!;
+    expect(rdl.weight).toBeCloseTo(200, 6); // 160 / 0.8 → 200 deadlift-equivalent
+    expect(addedWeight1RM(rdl, "epley")).toBeCloseTo(200, 6); // 1RM scales cleanly
   });
 });
 
