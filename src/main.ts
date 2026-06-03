@@ -699,6 +699,8 @@ function openChangelog() {
  * is an expandable row: version + SP + one-line note collapsed; bullet details
  * when opened. */
 function renderChangelog() {
+  // Show SP without a binary floating-point tail (e.g. 83.3, not 83.30000000001).
+  const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
@@ -723,8 +725,9 @@ function renderChangelog() {
           .map(
             (c) =>
               `<div class="cl-child"><span class="cl-cver">${escapeHtml(c.version)}</span>` +
-              `<span class="cl-cnote">${escapeHtml(c.note)}</span>` +
-              `<span class="cl-csp">SP ${c.sp}</span></div>`,
+              `<span class="cl-cmid"><span class="cl-ctitle">${escapeHtml(c.title)}</span>` +
+              `<span class="cl-cnote">${escapeHtml(c.note)}</span></span>` +
+              `<span class="cl-csp">SP ${fmtSp(c.sp)}</span></div>`,
           )
           .join("") +
         `</div>`
@@ -732,7 +735,7 @@ function renderChangelog() {
     // Planned entries show a "soon" tag instead of an SP chip.
     const spOrTag = r.soon
       ? `<span class="cl-soon">soon</span>`
-      : `<span class="cl-sp" title="${r.sp} story points">SP ${r.sp}</span>`;
+      : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>`;
     return (
       `<details class="cl-row${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
@@ -757,7 +760,7 @@ function renderChangelog() {
     let total = 0;
     const points = SP_HISTORY.map((p) => {
       total += p.sp;
-      return { x: Date.parse(p.date), y: total, meta: `${p.version} · +${p.sp} → ${total} SP` };
+      return { x: Date.parse(p.date), y: total, meta: `${p.version} · +${fmtSp(p.sp)} → ${fmtSp(total)} SP` };
     });
     mountSvgChart(spBox, {
       series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],

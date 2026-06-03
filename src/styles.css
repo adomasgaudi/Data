@@ -1537,7 +1537,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-children { margin: 0 0 0.7rem; padding: 0 0 0 6.5rem; }
 .cl-child { display: flex; align-items: baseline; gap: 0.6rem; padding: 3px 0; border-top: 1px solid var(--line); }
 .cl-cver { flex: 0 0 4rem; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.78rem; color: var(--accent); }
-.cl-cnote { flex: 1 1 auto; font-size: 0.8rem; color: var(--muted); }
+.cl-cmid { flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cl-ctitle { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.cl-cnote { font-size: 0.8rem; color: var(--muted); }
 .cl-csp { flex: none; font-size: 0.68rem; font-weight: 700; color: var(--gold); }
 @media (max-width: 560px) { .cl-details, .cl-children { padding-left: 1.25rem; } }
 .health-section { font-size: 0.95rem; margin: 1.25rem 0 0.25rem; }
