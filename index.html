@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.8</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.9</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -50,7 +50,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab" data-tab="leaderboards" role="tab">Colosseum</button>
       <button class="tab is-active" data-tab="athlete" role="tab">Athlete</button>
-      <button class="tab" data-tab="bwparts" role="tab">Exercises</button>
+      <button class="tab" data-tab="bwparts" role="tab">Index</button>
       <button class="tab" data-tab="test" role="tab">Test</button>
       <button class="tab" data-tab="data" role="tab">Data</button>
       <button class="tab" data-tab="add" role="tab">Add</button>
@@ -351,6 +351,13 @@
       </div>
 
       <div id="tab-bwparts" class="tab-panel" hidden>
+        <section class="panel">
+          <h2>Index — all exercises</h2>
+          <p class="muted" style="margin: 0 0 0.75rem">
+            The master list of every exercise across all athletes — merges and bodyweight
+            parts. (Not one person's training; for that, pick an athlete on the Exercises tab.)
+          </p>
+        </section>
         <section class="panel">
           <h2>Merged exercises</h2>
           <p class="muted" style="margin: 0 0 0.75rem">
@@ -990,7 +997,7 @@
         <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
         <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
         <button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
-        <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Merges &amp; body parts</button>
+        <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
         <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
         <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
         <button class="other-item" data-tab="cmplab" role="menuitem"><span class="other-ico">🔬</span> Compare (lab)</button>
