@@ -25,6 +25,7 @@ import {
   athleteSummary,
   withSyntheticGroups,
   buildActiveExerciseSet,
+  decayedStrengthSeries,
   type SyntheticGroupDef,
   type PersonalRecord,
   type WorkoutDay,
@@ -2565,36 +2566,11 @@ function ecalcRemoveRow(index: number) {
   ecalcRenderRows();
 }
 
-/** "Current strength" with detraining: at each sampled date, the best estimated
- * 1RM you'd reached by then, faded by how long ago each was set (the metrics.ts
- * model). So the line pops up when you train and sags through layoffs — and it
- * runs all the way to today, so the present-day fade is visible even if the last
- * logged set is old. Input points are {x: ms timestamp, y: e1rm}. */
-function decayingStrengthPoints<T extends { x: number; y: number }>(
-  points: T[],
-  todayMs: number = Date.parse(todayIso()),
-): { x: number; y: number }[] {
-  if (points.length === 0) return [];
-  const sorted = points.slice().sort((a, b) => a.x - b.x);
-  const firstX = sorted[0]!.x;
-  const endX = Math.max(sorted[sorted.length - 1]!.x, todayMs);
-  // Sample every few days for a smooth sag, and pin every training day so the
-  // recovery "pops" stay sharp.
-  const xs = new Set<number>();
-  for (let t = firstX; t < endX; t += 4 * MS_DAY) xs.add(t);
-  xs.add(endX);
-  for (const p of sorted) xs.add(p.x);
-  const out: { x: number; y: number }[] = [];
-  for (const x of [...xs].sort((a, b) => a - b)) {
-    let best = -Infinity;
-    for (const p of sorted) {
-      if (p.x > x) break; // sorted: only count sets up to this sample date
-      const v = p.y * strengthRetention((x - p.x) / MS_DAY);
-      if (v > best) best = v;
-    }
-    if (best > -Infinity) out.push({ x, y: Math.round(best * 10) / 10 });
-  }
-  return out;
+/** "Current strength" line for a chart, faded for time off the lift — pure
+ * builder lives in aggregate.ts (decayedStrengthSeries); this wraps it with the
+ * app's "today". */
+function decayingStrengthPoints<T extends { x: number; y: number }>(points: T[]): { x: number; y: number }[] {
+  return decayedStrengthSeries(points, Date.parse(todayIso()));
 }
 const CURRENT_STRENGTH_COLOR = "#2e7d52";
 
