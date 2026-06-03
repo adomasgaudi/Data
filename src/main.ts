@@ -3272,7 +3272,7 @@ function onWorkoutRowClick(e: MouseEvent) {
  * second tap needed. A set with a note still toggles its own note row. */
 function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
-  const peaks = peakEffective1RMByUserExercise(formula);
+  const strengthByDay = currentStrengthByUserExercise(formula);
   const body = group.exercises
     .map((e) => {
       const addBtn = showAddSets
@@ -3284,7 +3284,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
         `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
-        .map((s) => setRowsHtml(s, formula, effPeakFor(peaks, s)))
+        .map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s)))
         .join("");
       return header + sets;
     })
@@ -3316,30 +3316,61 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
   row.classList.add("open");
 }
 
+const MS_PER_DAY_RIR = 86_400_000;
+const dayNumber = (iso: string): number => Math.round(Date.parse(iso) / MS_PER_DAY_RIR);
+
 /**
- * Peak EFFECTIVE (bodyweight-inclusive) estimated 1RM per athlete+exercise — the
- * "strength value" each set's predicted RIR is measured against. Keyed
- * "username exerciseName". Built from the computed (bodyweight-folded)
- * records so the load frame matches the per-set effective load fed into
- * predictedRir, and using the same addedWeight1RM null-guard as everywhere else
- * (isometrics and over-cap rep sets contribute no 1RM). Build it once per render
- * and look sets up against it. */
-function peakEffective1RMByUserExercise(formula: OneRepMaxFormula): Map<string, number> {
-  const peaks = new Map<string, number>();
+ * CURRENT-strength (faded) EFFECTIVE 1RM per athlete+exercise, by training day —
+ * the anchor each set's predicted RIR is measured against. Mirrors the on-screen
+ * "current strength" line (decayedStrengthSeries): between sessions a lift fades
+ * on the Ebbinghaus curve, and each session grows that lift's stability (so a
+ * well-drilled lift fades slower). The level kept for a day is
+ * max(faded-from-the-last-session, that day's best set) — so a set is judged
+ * against your ABILITY ON THAT DAY, not an all-time peak from a stronger era
+ * (which made light or detrained sets read as huge reps-in-reserve).
+ *
+ * Effective (bodyweight-inclusive) frame and the same addedWeight1RM null-guard
+ * as the displayed 1RM, so it lines up with the per-set effective load fed into
+ * predictedRir. Keyed "username exerciseName" → (dayNumber → level). Built once
+ * per render. */
+function currentStrengthByUserExercise(formula: OneRepMaxFormula): Map<string, Map<number, number>> {
+  // 1) Best effective 1RM reached on each day, per athlete+exercise.
+  const byKeyDay = new Map<string, Map<number, number>>();
   for (const r of computedRecords()) {
-    if (addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
+    if (!r.date || addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
     const eff = estimate1RM(r.weight, r.reps, formula); // effective (bw-inclusive) 1RM
     if (eff === null) continue;
-    const key = `${r.username} ${r.exerciseName}`;
-    const cur = peaks.get(key);
-    if (cur === undefined || eff > cur) peaks.set(key, eff);
+    const key = `${r.username} ${r.exerciseName}`;
+    let dm = byKeyDay.get(key);
+    if (!dm) byKeyDay.set(key, (dm = new Map()));
+    const d = dayNumber(r.date);
+    dm.set(d, Math.max(dm.get(d) ?? -Infinity, eff));
   }
-  return peaks;
+  // 2) Forward-simulate the fade + consolidation to get the current level per day.
+  const out = new Map<string, Map<number, number>>();
+  for (const [key, dm] of byKeyDay) {
+    const days = [...dm.keys()].sort((a, b) => a - b);
+    const levels = new Map<number, number>();
+    let anchor = days[0]!;
+    let level = dm.get(anchor)!;
+    let stability: number = STRENGTH_DECAY.baseStability;
+    levels.set(anchor, level);
+    for (let i = 1; i < days.length; i++) {
+      const d = days[i]!;
+      level = Math.max(level * strengthRetention(d - anchor, stability), dm.get(d)!);
+      anchor = d;
+      stability = grownStability(stability); // a new session makes future decay weaker
+      levels.set(d, level);
+    }
+    out.set(key, levels);
+  }
+  return out;
 }
 
-/** The peak effective 1RM for one set's athlete+exercise, or null if none. */
-const effPeakFor = (peaks: Map<string, number>, s: SetRecord): number | null =>
-  peaks.get(`${s.username} ${s.exerciseName}`) ?? null;
+/** The current-strength (faded) effective 1RM for one set's athlete+exercise on
+ * the day of that set, or null if none. */
+const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): number | null =>
+  (s.date ? m.get(`${s.username} ${s.exerciseName}`)?.get(dayNumber(s.date)) : undefined) ?? null;
 
 // Compact header for the sets tables: weight / est. 1RM / volume, all in kg.
 // AI-NOTE: setRowsHtml/SETS_HEAD are shared by BOTH the Workouts day→exercise
@@ -3348,7 +3379,7 @@ const effPeakFor = (peaks: Map<string, number>, s: SetRecord): number | null =>
 // and you change both. The note toggle is handled by toggleSetNote(), wired
 // into onWorkoutRowClick and onExerciseRowClick.
 const SETS_HEAD =
-  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Predicted Reps In Reserve — your est. 1RM says you should manage this many reps at this weight, minus the reps you actually did. High = the set was easy (many left); ~0 = near failure; negative = you beat the estimate.">pRIR</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
+  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. High = the set was easy (many left); ~0 = near failure. Tap a number to see the maths.">pRIR</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
 
 /** How many characters of a note to show inline before truncating with "…". */
 const NOTE_PREVIEW_LEN = 8;
@@ -3413,16 +3444,16 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
 /**
  * Plain-text explanation of a set's predicted RIR, numbers plugged in — the
  * pRIR counterpart of oneRmFormulaText. Takes the COMPUTED record (bodyweight
- * already folded into `weight`) plus the exercise's peak EFFECTIVE 1RM (the
- * strength anchor), and walks the chain: the strongest set you've logged →
- * the reps the curve predicts at this load → minus the reps you actually did.
- * Returns "" when no prediction is possible (caller then renders a plain "—").
+ * already folded into `weight`) plus the anchor: the CURRENT-strength (faded)
+ * EFFECTIVE 1RM for that lift on that day. Walks the chain: your current
+ * strength → the reps the curve predicts at this load → minus the reps you
+ * actually did. Returns "" when no prediction is possible (caller renders "—").
  */
-function predictedRirText(c: SetRecord, peakEff1RM: number | null, formula: OneRepMaxFormula): string {
+function predictedRirText(c: SetRecord, anchorE1RM: number | null, formula: OneRepMaxFormula): string {
   const effLoad = c.weight;
   const r = c.reps;
-  if (peakEff1RM === null || effLoad === null || r === null || effLoad <= 0 || r <= 0) return "";
-  const predicted = repsForWeight(peakEff1RM, effLoad, formula);
+  if (anchorE1RM === null || effLoad === null || r === null || effLoad <= 0 || r <= 0) return "";
+  const predicted = repsForWeight(anchorE1RM, effLoad, formula);
   if (predicted === null) return "";
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
   // Bar weight vs the body's share folded in by computeRecord (same split the
@@ -3436,8 +3467,8 @@ function predictedRirText(c: SetRecord, peakEff1RM: number | null, formula: OneR
   const curve = formula === "brzycki" ? "Brzycki" : formula === "nuzzo" ? "Nuzzo bench" : "Epley";
   const rir = predicted - r;
   return (
-    `Strength anchor: your best ${c.exerciseName} works out to a ${f2(peakEff1RM)} kg estimated 1RM` +
-    `${hasBody ? " (bodyweight included)" : ""} — the strongest set you've logged. ` +
+    `Strength anchor: your current ${c.exerciseName} strength on this day is about a ${f2(anchorE1RM)} kg estimated 1RM` +
+    `${hasBody ? " (bodyweight included)" : ""} — your best, faded for time off the lift. ` +
     `The ${curve} curve says at ${loadTxt} you should manage about ${f2(predicted)} reps; ` +
     `you did ${r}, so predicted − actual = ${f2(predicted)} − ${r} = ${f2(rir)} reps in reserve.`
   );
@@ -3450,7 +3481,7 @@ function predictedRirText(c: SetRecord, peakEff1RM: number | null, formula: OneR
  * weight cell with a caret; tapping the row expands the full note. Both reveals
  * are independent sub-rows, so a set can show either or both.
  */
-function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, peakEff1RM: number | null): string {
+function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
   // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
   // what was actually loaded. `s` is a raw record; compute it here so the
@@ -3458,11 +3489,11 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, peakEff1RM: number
   const computed = computeRecord(s);
   const e1rm = addedWeight1RM(computed, formula);
   const vol = setVolume(s.weight, s.reps);
-  // Predicted RIR: what this exercise's peak est. 1RM says you should manage at
-  // this (effective) load, minus the reps you did. Effective frame on both sides
-  // so bodyweight lifts line up.
-  const predRir = predictedRir(peakEff1RM, computed.weight, s.reps, formula);
-  const prirText = predictedRirText(computed, peakEff1RM, formula);
+  // Predicted RIR: what your CURRENT (faded) strength for this lift says you
+  // should manage at this (effective) load, minus the reps you did. Effective
+  // frame on both sides so bodyweight lifts line up.
+  const predRir = predictedRir(anchorE1RM, computed.weight, s.reps, formula);
+  const prirText = predictedRirText(computed, anchorE1RM, formula);
   const prirCell =
     predRir === null
       ? "—"
@@ -3620,7 +3651,7 @@ function togglePrirFormula(target: HTMLElement): boolean {
  */
 function setsByDateTableHtml(sets: readonly SetRecord[]): string {
   const formula = currentFormula();
-  const peaks = peakEffective1RMByUserExercise(formula);
+  const strengthByDay = currentStrengthByUserExercise(formula);
   const byDate = new Map<string, SetRecord[]>();
   for (const s of sets) {
     const g = byDate.get(s.date);
@@ -3629,7 +3660,7 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
   }
   const body = Array.from(byDate, ([date, daySets]) => {
     const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula, effPeakFor(peaks, s))).join("");
+    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
   }).join("");
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
 }
