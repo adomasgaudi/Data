@@ -40,13 +40,14 @@ export const CHANGELOG: Release[] = [
   {
     version: "b.1.14",
     title: "real-time-axis-and-pickers",
-    sp: 8,
-    note: "The b.1.14 run (current): per-set graph on a real time axis with dashed rep lines and a best-set-only toggle, a By-category show/hide picker, and the rep-max reps chosen in the column header. New releases land here.",
+    sp: 11,
+    note: "The b.1.14 run (current): per-set graph on a real time axis with calendar bands, dashed rep lines and a best-set-only toggle, a By-category show/hide picker, and the rep-max reps chosen in the column header. New releases land here.",
     details: [
-      "Per-set drill-in chart now uses genuine calendar time (real gaps between sessions); same-day sets fan out within the day; each set's line is dashed, one dash per rep; optional best-set-only view.",
+      "Per-set drill-in chart now uses genuine calendar time with alternating year/month/week bands; same-day sets fan out within the day; each set's line is dashed, one dash per rep; optional best-set-only view.",
       "By-category list: chips to choose which categories you see; rep-max reps moved into the column header.",
     ],
     children: [
+      { version: "b.1.14.3", sp: 3, note: "Time axis fixed: alternating year/month/week background bands; labels adapt to zoom (never blank, never duplicate ‘Jan 1’)." },
       { version: "b.1.14.2", sp: 1, note: "Per-set graph: ‘Best set only’ toggle — show just each day's top set (highest estimated 1RM) instead of every set." },
       { version: "b.1.14.1", sp: 2, note: "Per-set lines are dashed — one dash per rep — so reps read at a glance (50→59 over 5 reps = 5 dashes)." },
       { version: "b.1.14.0", sp: 5, note: "Per-set graph on a REAL time axis (each day once, sets fanned within the day); By-category show/hide chips; rep-max reps chosen in the column header." },

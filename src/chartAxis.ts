@@ -6,6 +6,81 @@
  */
 
 export const MS_DAY = 86_400_000;
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Time granularity for the calendar bands, picked by how wide the view is. */
+export type TimeLevel = "day" | "week" | "month" | "year";
+
+export function timeLevel(span: number): TimeLevel {
+  if (!(span > 0)) return "day";
+  if (span <= 12 * MS_DAY) return "day";
+  if (span <= 26 * 7 * MS_DAY) return "week"; // ~half a year
+  if (span <= 3 * 365 * MS_DAY) return "month";
+  return "year";
+}
+
+export interface TimeBand {
+  start: number; // band start (UTC ms), may be before `min`
+  end: number; // band end (UTC ms, exclusive), may be after `max`
+  label: string; // unambiguous label centred in the band
+  shade: boolean; // alternate fill, stable across panning (by absolute period #)
+}
+
+/**
+ * Calendar bands spanning [min, max] at an auto-picked granularity (day / week /
+ * month / year). Each band carries its own label and an alternating `shade` flag
+ * (parity of the absolute period number, so the stripes never flip while you pan).
+ * Bands always cover the visible range — so labels never vanish when you zoom in —
+ * and the labels include the year where it would otherwise be ambiguous, so you
+ * never get three identical "Jan 1"s. Everything is UTC to match the ISO dates.
+ */
+export function timeBands(min: number, max: number): TimeBand[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
+  const level = timeLevel(max - min);
+  const out: TimeBand[] = [];
+  const d = new Date(min);
+
+  if (level === "day") {
+    let t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    while (t < max) {
+      const nd = new Date(t);
+      const end = Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth(), nd.getUTCDate() + 1);
+      out.push({ start: t, end, label: `${MON[nd.getUTCMonth()]} ${nd.getUTCDate()}`, shade: Math.floor(t / MS_DAY) % 2 === 0 });
+      t = end;
+    }
+  } else if (level === "week") {
+    const day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    const dow = new Date(day0).getUTCDay(); // 0=Sun..6=Sat → step back to Monday
+    let t = day0 - ((dow === 0 ? 7 : dow) - 1) * MS_DAY;
+    while (t < max) {
+      const nd = new Date(t);
+      const end = t + 7 * MS_DAY;
+      out.push({ start: t, end, label: `${MON[nd.getUTCMonth()]} ${nd.getUTCDate()}`, shade: Math.round(t / (7 * MS_DAY)) % 2 === 0 });
+      t = end;
+    }
+  } else if (level === "month") {
+    let y = d.getUTCFullYear();
+    let m = d.getUTCMonth();
+    let t = Date.UTC(y, m, 1);
+    while (t < max) {
+      const end = Date.UTC(y, m + 1, 1);
+      out.push({ start: t, end, label: m === 0 ? `${MON[m]} ${y}` : MON[m]!, shade: (y * 12 + m) % 2 === 0 });
+      m++;
+      if (m > 11) { m = 0; y++; }
+      t = end;
+    }
+  } else {
+    let y = d.getUTCFullYear();
+    let t = Date.UTC(y, 0, 1);
+    while (t < max) {
+      const end = Date.UTC(y + 1, 0, 1);
+      out.push({ start: t, end, label: String(y), shade: y % 2 === 0 });
+      y++;
+      t = end;
+    }
+  }
+  return out;
+}
 
 /**
  * "Nice" round tick values across [min, max] — roughly `target` of them, on a

@@ -12,7 +12,7 @@
  * The pure axis maths (calendar gridlines, nice y ticks) live in chartAxis.ts and
  * are unit-tested; this module is the rendering + interaction shell.
  */
-import { calendarGridlines, niceTicks } from "./chartAxis";
+import { timeBands, niceTicks } from "./chartAxis";
 
 export interface SvgPoint {
   x: number;
@@ -169,19 +169,46 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       }
     }
 
-    // x gridlines + thinned labels.
+    // x bands + gridlines + thinned labels.
     let xLabels = "";
-    const xticks = xKind() === "time" ? calendarGridlines(view.xMin, view.xMax) : niceTicks(view.xMin, view.xMax, 7);
-    let lastLabelPx = -Infinity;
-    for (const t of xticks) {
-      const px = xPix(t);
-      if (px < M.l - 0.5 || px > W - M.r + 0.5) continue;
-      grid += `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
-      if (px - lastLabelPx < 42) continue; // thin crowded labels (gridlines stay)
-      lastLabelPx = px;
-      xLabels += inside()
-        ? halo(px.toFixed(1), (h - M.b - 5).toFixed(1), "middle", fmtX(t))
-        : `<text x="${px.toFixed(1)}" y="${(h - M.b + 16).toFixed(1)}" text-anchor="middle" class="svgc-axislabel" font-size="11">${fmtX(t)}</text>`;
+    let bands = "";
+    const clampX = (px: number) => Math.max(M.l, Math.min(W - M.r, px));
+    if (xKind() === "time") {
+      // Calendar bands (day/week/month/year): alternating background stripes give
+      // the period at a glance, and each band's label is centred in it — so labels
+      // never disappear when you zoom in and never collide into "Jan 1, Jan 1".
+      let lastLabelPx = -Infinity;
+      for (const b of timeBands(view.xMin, view.xMax)) {
+        const x0 = xPix(b.start);
+        const x1 = xPix(b.end);
+        if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) continue;
+        const cx0 = clampX(x0);
+        const cx1 = clampX(x1);
+        if (b.shade && cx1 - cx0 > 0.5)
+          bands += `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" class="svgc-band"/>`;
+        // gridline at the band boundary
+        if (x0 >= M.l - 0.5 && x0 <= W - M.r + 0.5)
+          grid += `<line x1="${x0.toFixed(1)}" y1="${M.t}" x2="${x0.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
+        // label centred in the visible part of the band, thinned if crowded
+        const mid = (cx0 + cx1) / 2;
+        if (mid - lastLabelPx < 40) continue;
+        lastLabelPx = mid;
+        xLabels += inside()
+          ? halo(mid.toFixed(1), (h - M.b - 5).toFixed(1), "middle", b.label)
+          : `<text x="${mid.toFixed(1)}" y="${(h - M.b + 16).toFixed(1)}" text-anchor="middle" class="svgc-axislabel" font-size="11">${esc(b.label)}</text>`;
+      }
+    } else {
+      let lastLabelPx = -Infinity;
+      for (const t of niceTicks(view.xMin, view.xMax, 7)) {
+        const px = xPix(t);
+        if (px < M.l - 0.5 || px > W - M.r + 0.5) continue;
+        grid += `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
+        if (px - lastLabelPx < 42) continue; // thin crowded labels (gridlines stay)
+        lastLabelPx = px;
+        xLabels += inside()
+          ? halo(px.toFixed(1), (h - M.b - 5).toFixed(1), "middle", fmtX(t))
+          : `<text x="${px.toFixed(1)}" y="${(h - M.b + 16).toFixed(1)}" text-anchor="middle" class="svgc-axislabel" font-size="11">${fmtX(t)}</text>`;
+      }
     }
 
     // series
@@ -237,7 +264,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
       `<defs><clipPath id="${clipId}"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath></defs>` +
-      `<g clip-path="url(#${clipId})">${grid}${body}${inside() ? xLabels + yLabels : ""}</g>` +
+      `<g clip-path="url(#${clipId})">${bands}${grid}${body}${inside() ? xLabels + yLabels : ""}</g>` +
       frame +
       (inside() ? "" : xLabels + yLabels) +
       `</svg>`;

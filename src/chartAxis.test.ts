@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calendarGridlines, MS_DAY, niceTicks } from "./chartAxis";
+import { calendarGridlines, MS_DAY, niceTicks, timeBands, timeLevel } from "./chartAxis";
 
 const utc = (y: number, m: number, d: number) => Date.UTC(y, m, d);
 const isMonday = (t: number) => new Date(t).getUTCDay() === 1;
@@ -52,6 +52,48 @@ describe("calendarGridlines", () => {
     const inner = calendarGridlines(utc(2025, 3, 1), utc(2025, 7, 31));
     // Every monthly boundary inside the inner window also appears in the wide one.
     for (const t of inner) expect(wide).toContain(t);
+  });
+});
+
+describe("timeLevel", () => {
+  it("picks the granularity by span", () => {
+    expect(timeLevel(3 * MS_DAY)).toBe("day");
+    expect(timeLevel(40 * MS_DAY)).toBe("week");
+    expect(timeLevel(400 * MS_DAY)).toBe("month");
+    expect(timeLevel(5 * 365 * MS_DAY)).toBe("year");
+  });
+});
+
+describe("timeBands", () => {
+  it("returns nothing for empty or invalid ranges", () => {
+    expect(timeBands(NaN, 1)).toEqual([]);
+    expect(timeBands(200, 100)).toEqual([]);
+  });
+
+  it("always covers the visible range (so zoomed-in labels never vanish)", () => {
+    // A 3-day window — used to leave no Monday in view and thus no labels.
+    const min = utc(2026, 0, 6); // Tue
+    const max = utc(2026, 0, 9); // Fri
+    const bands = timeBands(min, max);
+    expect(bands.length).toBeGreaterThanOrEqual(3);
+    expect(bands[0]!.start).toBeLessThanOrEqual(min);
+    expect(bands[bands.length - 1]!.end).toBeGreaterThanOrEqual(max);
+    expect(bands.every((b) => b.label.length > 0)).toBe(true);
+  });
+
+  it("labels each year distinctly for a multi-year span (no duplicate 'Jan 1')", () => {
+    const bands = timeBands(utc(2022, 0, 1), utc(2026, 0, 1));
+    expect(bands.map((b) => b.label)).toContain("2022");
+    expect(bands.map((b) => b.label)).toContain("2025");
+    expect(new Set(bands.map((b) => b.label)).size).toBe(bands.length); // all unique
+  });
+
+  it("contiguous bands with stable alternating shade", () => {
+    const bands = timeBands(utc(2025, 0, 10), utc(2025, 5, 20)); // monthly
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i]!.start).toBe(bands[i - 1]!.end); // no gaps/overlaps
+      expect(bands[i]!.shade).toBe(!bands[i - 1]!.shade); // alternates
+    }
   });
 });
 
