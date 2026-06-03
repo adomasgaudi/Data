@@ -234,6 +234,14 @@ main { padding-bottom: 5rem; }
 /* SVG chart engine (the Chart.js replacement). */
 .svgc { position: relative; width: 100%; }
 .ex-prog-wrap { position: relative; }
+.ex-prog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ex-best-toggle {
+  padding: 5px 12px; font: inherit; font-size: 0.8rem; font-weight: 600;
+  color: var(--muted); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.ex-best-toggle:hover { color: var(--text); border-color: var(--accent); }
+.ex-best-toggle.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
 .svgc-plot { width: 100%; touch-action: none; user-select: none; cursor: grab; }
 .svgc-plot:active { cursor: grabbing; }
 /* touch-action MUST be on the SVG too — it's the actual touch target, so a phone

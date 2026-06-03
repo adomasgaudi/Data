@@ -127,6 +127,7 @@ const els = {
   exerciseProgressNote: $("exerciseProgressNote"),
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exProgressView: $("exProgressView"),
+  exPersetBest: $<HTMLButtonElement>("exPersetBest"),
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
@@ -207,6 +208,7 @@ const compareSelected = new Set<string>(); // exercises ticked for the overlay g
 let compareChipQuery = ""; // search box text filtering the compare chips
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
+let exPersetBestOnly = false; // per-set: show only each day's best set (top estimated 1RM)
 
 const PAGE_SIZE = 50; // List & stats page size
 
@@ -2114,6 +2116,10 @@ function renderExerciseProgressChart(exName: string) {
     if (!exerciseSvg) exerciseSvg = mountSvgChart(box, config);
     else exerciseSvg.update(config);
   };
+  // "Best set only" applies to the per-set view; hide the toggle in trend view.
+  els.exPersetBest.hidden = exProgressView !== "perset";
+  els.exPersetBest.classList.toggle("is-active", exPersetBestOnly);
+  els.exPersetBest.setAttribute("aria-pressed", String(exPersetBestOnly));
 
   if (exProgressView === "perset") {
     // One bar PER SET, on a REAL time axis: each set sits at its true calendar
@@ -2123,10 +2129,22 @@ function renderExerciseProgressChart(exName: string) {
     // cap have no 1RM so they show as a flat marker at their weight. Multiple sets
     // on the same day are fanned out across a fraction of that day so they don't
     // stack on one pixel — yet the day still appears once on the date axis.
-    const sets = computedRecords()
+    let sets = computedRecords()
       .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
       .slice()
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
+    // Optional: keep only each day's best set (the one with the highest estimated
+    // 1RM, falling back to raw weight for high-rep sets that have no estimate).
+    if (exPersetBestOnly) {
+      const bestByDay = new Map<string, SetRecord>();
+      const scoreOf = (r: SetRecord) =>
+        addedWeight1RM(r, formula) ?? (r.origWeight !== undefined ? (r.origWeight ?? 0) : (r.weight ?? 0));
+      for (const s of sets) {
+        const cur = bestByDay.get(s.date);
+        if (!cur || scoreOf(s) > scoreOf(cur)) bestByDay.set(s.date, s);
+      }
+      sets = [...bestByDay.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    }
     // Count sets per day so same-day sets can be fanned out evenly.
     const perDay = new Map<string, number>();
     for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
@@ -2159,8 +2177,9 @@ function renderExerciseProgressChart(exName: string) {
       series: [{ name: exName, color: "#284e86", type: "range", points }],
       xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
     });
-    els.exerciseProgressNote.textContent =
-      "Every set is its own line on a real time axis: it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did. All sets of each day are shown, fanned out within the day.";
+    els.exerciseProgressNote.textContent = exPersetBestOnly
+      ? "Each day's best set only (highest estimated 1RM): it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did."
+      : "Every set is its own line on a real time axis: it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did. All sets of each day are shown, fanned out within the day.";
     return;
   }
 
@@ -3374,6 +3393,10 @@ async function init() {
     exProgressView = view;
     for (const b of els.exProgressView.querySelectorAll<HTMLElement>(".cal-mode-btn"))
       b.classList.toggle("is-active", b.dataset.exview === view);
+    if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
+  });
+  els.exPersetBest.addEventListener("click", () => {
+    exPersetBestOnly = !exPersetBestOnly;
     if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
   });
   els.summariseBtn.addEventListener("click", runSummary);
