@@ -116,6 +116,14 @@ body {
   border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 0.85rem; cursor: pointer;
 }
 .settings-link:hover { border-color: var(--accent); color: var(--accent); }
+/* "Refresh data" call-to-action in the Data tab. */
+.refresh-panel h2 { margin-top: 0; }
+.refresh-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  background: var(--accent); color: #fff; text-decoration: none;
+  border-radius: 8px; padding: 10px 16px; font-weight: 700; font-size: 0.9rem;
+}
+.refresh-btn:hover { filter: brightness(1.08); }
 /* Full-screen overlay "page" (e.g. Data health), opened from Settings. */
 .overlay-page {
   position: fixed; inset: 0; z-index: 60; background: var(--bg);

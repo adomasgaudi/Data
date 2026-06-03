@@ -1,0 +1,56 @@
+name: Refresh StrengthLevel data
+
+# Manually-run ("Run workflow" button) refresh: scrape the latest workouts from
+# StrengthLevel, write src/data/ud.csv, and commit it. That push triggers the
+# Deploy workflow, so the live site rebuilds with the fresh numbers a minute or
+# two later — no local setup, no CORS.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "sync = only new workouts (fast) · rebuild = re-scrape everything (slow)"
+        type: choice
+        default: sync
+        options: [sync, rebuild]
+
+# Needs write access so it can commit the refreshed CSV back to the branch.
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Remember each athlete's StrengthLevel user_id between runs so we don't
+      # re-scrape every profile page each time.
+      - name: Restore user_id cache
+        uses: actions/cache@v4
+        with:
+          path: .userid-cache.json
+          key: strengthlevel-userid-cache
+
+      - name: Fetch latest workouts
+        run: node scripts/strengthlevel.cjs "${{ inputs.mode }}"
+
+      - name: Commit refreshed CSV
+        run: |
+          if git diff --quiet -- src/data/ud.csv; then
+            echo "No data changes — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          ROWS=$(($(wc -l < src/data/ud.csv) - 1))
+          git add src/data/ud.csv
+          git commit -m "data: refresh StrengthLevel export (${ROWS} rows)"
+          git push

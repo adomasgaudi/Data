@@ -5,3 +5,4 @@ Colosseum-dashboard.html
 .env.local
 *.log
 .DS_Store
+.userid-cache.json

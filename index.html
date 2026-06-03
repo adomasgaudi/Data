@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.14.5</span></h1>
+      <h1>Colosseum <span class="version">b.1.14.6</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -777,6 +777,22 @@
       </div>
 
       <div id="tab-data" class="tab-panel" hidden>
+        <section class="panel refresh-panel">
+          <h2>Refresh data from StrengthLevel</h2>
+          <p class="muted" style="margin: 0 0 0.8rem">
+            Pulls everyone's newest workouts and updates the site for you. Click the button
+            below — it opens GitHub; there, press the green <strong>“Run workflow”</strong>
+            button (leave the mode on <em>sync</em>). Wait a minute or two, then come back here
+            and refresh the page — the new numbers will be in.
+          </p>
+          <a id="refreshDataBtn" class="refresh-btn"
+             href="https://github.com/adomasgaudi/data/actions/workflows/fetch-data.yml"
+             target="_blank" rel="noopener">↻ Refresh data on GitHub</a>
+          <p class="settings-hint" style="margin: 0.7rem 0 0">
+            “sync” grabs only new workouts (fast). “rebuild” re-fetches everything (slow) — only
+            needed if something looks wrong.
+          </p>
+        </section>
         <section class="panel">
           <h2>Data — raw vs processed</h2>
           <p class="muted" id="dataIntro" style="margin: 0 0 1rem">
