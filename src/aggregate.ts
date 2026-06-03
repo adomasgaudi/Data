@@ -120,6 +120,49 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
   });
 }
 
+/** A frequency tier: an id ("S".."D") and the minimum set count that reaches it. */
+export interface FreqTier {
+  tier: string;
+  min: number;
+}
+
+/**
+ * The set of exercise names that are "active" given a frequency-tier cutoff plus
+ * manual include/exclude overrides — the engine behind the app-wide active-set
+ * filter. An exercise is active when its total set count reaches the cutoff
+ * tier's threshold (or there is no cutoff), then:
+ *   - excludeOverrides force it OUT (even if it passed the tier), and
+ *   - includeOverrides force it IN (even if it's below the tier).
+ * Members of combinable/comparable groups are counted INDIVIDUALLY here (this
+ * works on raw exercise names), so each member passes or fails on its own; a
+ * synthetic derived lift ("SQ mix") has its own combined count and is judged on
+ * that. `freqTiers` must be ordered hardest→easiest (highest min first).
+ */
+export function buildActiveExerciseSet(
+  records: readonly SetRecord[],
+  cutoffTier: string | null,
+  includeOverrides: readonly string[],
+  excludeOverrides: readonly string[],
+  freqTiers: readonly FreqTier[],
+): Set<string> {
+  // Count sets per exercise (same rule as distinctExercises).
+  const counts = new Map<string, number>();
+  for (const r of records) {
+    if (r.exerciseName === "") continue;
+    counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
+  }
+  // The minimum set count to be active. No cutoff (null / not found) → 0 (all in).
+  const cutoff = cutoffTier ? freqTiers.find((t) => t.tier === cutoffTier)?.min ?? 0 : 0;
+  const exclude = new Set(excludeOverrides);
+  const active = new Set<string>();
+  for (const [name, count] of counts) {
+    if (exclude.has(name)) continue; // forced out wins over everything
+    if (count >= cutoff) active.add(name); // passes the tier
+  }
+  for (const name of includeOverrides) if (!exclude.has(name)) active.add(name); // forced in
+  return active;
+}
+
 export interface ExerciseCount {
   exerciseName: string;
   count: number;

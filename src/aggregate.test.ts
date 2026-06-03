@@ -22,6 +22,7 @@ import {
   addedWeight1RM,
   scaleToGroup,
   withSyntheticGroups,
+  buildActiveExerciseSet,
   nearDuplicateExercises,
   canonicalizeExerciseNames,
   sameExerciseKey,
@@ -311,6 +312,60 @@ describe("withSyntheticGroups", () => {
     const rdl = synth.find((r) => r.originalExerciseName === "Romanian Deadlift")!;
     expect(rdl.weight).toBeCloseTo(200, 6); // 160 / 0.8 → 200 deadlift-equivalent
     expect(addedWeight1RM(rdl, "epley")).toBeCloseTo(200, 6); // 1RM scales cleanly
+  });
+});
+
+describe("buildActiveExerciseSet", () => {
+  const TIERS = [
+    { tier: "S", min: 25 },
+    { tier: "A", min: 15 },
+    { tier: "B", min: 8 },
+    { tier: "C", min: 3 },
+    { tier: "D", min: 1 },
+  ];
+  // 10x Squat, 9x Bench (both tier B), 2x Curl (tier D), 1x Plank (tier D).
+  const recs = [
+    ...Array.from({ length: 10 }, () => rec({ exerciseName: "Squat" })),
+    ...Array.from({ length: 9 }, () => rec({ exerciseName: "Bench Press" })),
+    ...Array.from({ length: 2 }, () => rec({ exerciseName: "Barbell Curl" })),
+    rec({ exerciseName: "Plank" }),
+  ];
+
+  it("with no cutoff and no overrides, everything is active", () => {
+    const set = buildActiveExerciseSet(recs, null, [], [], TIERS);
+    expect(set).toEqual(new Set(["Squat", "Bench Press", "Barbell Curl", "Plank"]));
+  });
+
+  it("a tier cutoff keeps only exercises at/above that set count", () => {
+    const set = buildActiveExerciseSet(recs, "B", [], [], TIERS); // B = 8+ sets
+    expect(set.has("Squat")).toBe(true); // 10
+    expect(set.has("Bench Press")).toBe(true); // 9
+    expect(set.has("Barbell Curl")).toBe(false); // 2 → below B
+    expect(set.has("Plank")).toBe(false); // 1 → below B
+  });
+
+  it("an exclude override removes an otherwise-passing exercise", () => {
+    const set = buildActiveExerciseSet(recs, "B", [], ["Bench Press"], TIERS);
+    expect(set.has("Squat")).toBe(true);
+    expect(set.has("Bench Press")).toBe(false); // forced out despite passing
+  });
+
+  it("an include override keeps a below-cutoff exercise", () => {
+    const set = buildActiveExerciseSet(recs, "B", ["Plank"], [], TIERS);
+    expect(set.has("Plank")).toBe(true); // forced in despite 1 set
+  });
+
+  it("exclude wins over include for the same exercise", () => {
+    const set = buildActiveExerciseSet(recs, null, ["Squat"], ["Squat"], TIERS);
+    expect(set.has("Squat")).toBe(false);
+  });
+
+  it("judges combinable members individually (a rare member drops out)", () => {
+    // Squat is a staple (10), Smith Machine Squat is rare (1) — only Squat passes B.
+    const r2 = [...recs, rec({ exerciseName: "Smith Machine Squat" })];
+    const set = buildActiveExerciseSet(r2, "B", [], [], TIERS);
+    expect(set.has("Squat")).toBe(true);
+    expect(set.has("Smith Machine Squat")).toBe(false);
   });
 });
 
