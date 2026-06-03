@@ -696,6 +696,29 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
     for (const p of line) expect(p.y).toBeLessThanOrEqual(100 + 1e-9);
   });
 
+  it("regular training holds strength flat — every set resets the clock, even light ones", () => {
+    // Peak 100 on day 0, then a much lighter (50) set every 10 days for 200 days.
+    // No gap ever exceeds the 2-week grace, so nothing should be lost.
+    const pts = [{ x: at(0), y: 100 }];
+    for (let d = 10; d <= 200; d += 10) pts.push({ x: at(d), y: 50 });
+    const line = decayedStrengthSeries(pts, at(200), 4);
+    for (const p of line) expect(p.y).toBeCloseTo(100, 1); // flat at 100 throughout
+  });
+
+  it("a >2-week gap costs ~10%/month, then a light set restarts the clock (no further loss)", () => {
+    // Peak 100 (day 0); nothing for 44 days (grace + a month) → ~10% lost; then a
+    // light 60 set on day 44 and another on day 54. Training resets the timer, so
+    // the second light set 10 days later holds the line flat (no extra decay).
+    const line = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(44), y: 60 }, { x: at(54), y: 60 }],
+      at(54),
+      4,
+    );
+    const yAt = (d: number) => line.find((p) => p.x === at(d))?.y;
+    expect(yAt(44)!).toBeCloseTo(90, 0); // ~10% lost over the gap
+    expect(yAt(54)!).toBeCloseTo(90, 0); // light set 10 days later: held, not decayed further
+  });
+
   it("is empty for no points", () => {
     expect(decayedStrengthSeries([], at(10))).toEqual([]);
   });

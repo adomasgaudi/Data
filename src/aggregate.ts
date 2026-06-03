@@ -564,15 +564,19 @@ export interface BestSet {
 }
 
 /**
- * Build the "current strength" line for a chart: at each sampled moment, the
- * best estimated 1RM reached so far, faded by how long ago each was set (the
- * detraining model). The line therefore SAGS through any layoff longer than the
- * grace period and POPS back up on the next training day, and is extended to
- * `todayMs` so the present-day fade shows even when the last set is old.
+ * Build the "current strength" line for a chart, as a forward simulation of the
+ * detraining model. Strength is carried as a `level` that:
+ *   • holds flat while you keep training — EVERY set resets the decay clock, even
+ *     a lighter one, because you're still training the lift (so a gap only
+ *     "counts" from your last set, not from your peak);
+ *   • sags through any gap longer than the two-week grace (level × retention(gap
+ *     since the last set)); and
+ *   • a fresh set can only lift the level (max with its own e1rm), never lower it.
+ * The line is extended to `todayMs` so the present-day fade shows even when the
+ * last set is old.
  *
- * `points` are {x: ms-timestamp, y: e1rm} in any order. Sampling is every
- * `stepDays` for a smooth sag, plus every training day pinned exactly so the
- * recovery pops stay sharp. Pure so it can be unit-tested directly.
+ * `points` are {x: ms-timestamp, y: e1rm} in any order. Within each gap it's
+ * sampled every `stepDays` for a smooth sag. Pure so it can be unit-tested.
  */
 export function decayedStrengthSeries(
   points: readonly { x: number; y: number }[],
@@ -581,22 +585,26 @@ export function decayedStrengthSeries(
 ): { x: number; y: number }[] {
   if (points.length === 0) return [];
   const sorted = points.slice().sort((a, b) => a.x - b.x);
-  const firstX = sorted[0]!.x;
-  const endX = Math.max(sorted[sorted.length - 1]!.x, todayMs);
-  const xs = new Set<number>();
-  for (let t = firstX; t < endX; t += stepDays * MS_PER_DAY) xs.add(t);
-  xs.add(endX);
-  for (const p of sorted) xs.add(p.x);
+  const step = stepDays * MS_PER_DAY;
   const out: { x: number; y: number }[] = [];
-  for (const x of [...xs].sort((a, b) => a - b)) {
-    let best = -Infinity;
-    for (const p of sorted) {
-      if (p.x > x) break; // sorted: only sets up to this sample date count
-      const v = p.y * strengthRetention((x - p.x) / MS_PER_DAY);
-      if (v > best) best = v;
-    }
-    if (best > -Infinity) out.push({ x, y: Math.round(best * 10) / 10 });
+  const push = (x: number, y: number) => out.push({ x, y: Math.round(y * 10) / 10 });
+
+  let anchorX = sorted[0]!.x; // the last training day — where the decay clock restarts
+  let level = sorted[0]!.y; // strength carried from that day
+  // Strength at time x given the current anchor (grace measured from the anchor).
+  const decayedAt = (x: number) => level * strengthRetention((x - anchorX) / MS_PER_DAY);
+  push(anchorX, level);
+
+  for (let i = 1; i < sorted.length; i++) {
+    const s = sorted[i]!;
+    for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag in the gap
+    level = Math.max(decayedAt(s.x), s.y); // decay over the gap, then the set re-proves strength
+    anchorX = s.x; // training resets the two-week clock
+    push(anchorX, level);
   }
+  // Tail: sag from the last training day to today.
+  for (let u = anchorX + step; u < todayMs; u += step) push(u, decayedAt(u));
+  if (todayMs > anchorX) push(todayMs, decayedAt(todayMs));
   return out;
 }
 
