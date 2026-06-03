@@ -3087,11 +3087,20 @@ function onWorkoutRowClick(e: MouseEvent) {
     renderWorkoutCalendar(); // refresh the year map so the red "alone" ring updates live
     return;
   }
-  // "+ set" on an exercise → jump to the Add tab with the athlete, exercise and
-  // that session's date pre-filled, ready to log another set.
+  // Inline "add set" form (shown right under an exercise). Handle its own
+  // buttons here and swallow any other click inside it, so clicking the inputs
+  // never bubbles up to expand/collapse the row.
+  const inForm = target.closest<HTMLElement>(".wo-addform");
+  if (inForm) {
+    if (target.closest(".wo-af-go")) onInlineAddGo(inForm);
+    else if (target.closest(".wo-af-cancel")) removeInlineAddForm(inForm);
+    return;
+  }
+  // "+ set" on an exercise → open a small inline form right here so the set is
+  // logged on this screen, without leaving for the Add page.
   const addBtn = target.closest<HTMLButtonElement>(".wo-addset");
   if (addBtn?.dataset.addex) {
-    prefillAddSet(addBtn.dataset.addex, addBtn.dataset.adddate);
+    toggleInlineAddForm(addBtn);
     return;
   }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
@@ -3130,7 +3139,8 @@ function workoutGroupHtml(group: WorkoutGroup): string {
     .map((e) => {
       const header =
         `<tr class="set-ex-row"><td colspan="4" class="wo-exname">` +
-        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span></td></tr>`;
+        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
+        `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button></td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
         .map((s) => setRowsHtml(s, formula))
@@ -4843,27 +4853,113 @@ function renderAddTab() {
     : `<tbody><tr><td class="muted">No hand-logged sets yet.</td></tr></tbody>`;
 }
 
-/** Open the Add tab pre-filled to log more sets of a given exercise — used by the
- * "+ set" buttons in the Workouts exercise view. Athlete defaults to the one the
- * workouts page is showing; date defaults to that session's date. */
-function prefillAddSet(exerciseName: string, date?: string) {
-  switchTopTab("add");
-  renderAddTab(); // make sure the athlete options exist before we set one
-  const username = els.athlete.value;
-  if (username) {
-    const has = Array.from(els.addAthlete.options).some((o) => o.value === username);
-    if (has) {
-      els.addAthlete.value = username;
-      els.addAthlete.dispatchEvent(new Event("change", { bubbles: true })); // sync custom dropdown
+/** Compact inline "add set" form shown right under an exercise in the Workouts
+ * view, so a set is logged on this screen without jumping to the Add page. The
+ * athlete is the one the page is showing; the date is the session's date. */
+function inlineAddFormHtml(exerciseName: string, date: string): string {
+  return (
+    `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(date)}">` +
+    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
+    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+    `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />` +
+    `<button type="button" class="wo-af-go">Add</button>` +
+    `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
+    `<span class="wo-af-msg muted"></span>` +
+    `</span>`
+  );
+}
+
+/** Remove an open inline add form, plus its wrapping detail-table row if it sits
+ * in the expanded sets table. */
+function removeInlineAddForm(form: HTMLElement) {
+  const row = form.closest("tr.wo-addform-row");
+  if (row) row.remove();
+  else form.remove();
+}
+
+/** Toggle the inline add form for a "+ set" button. In the expanded sets table
+ * it becomes its own row under the exercise header; in the collapsed session
+ * summary it sits inline right after the button. */
+function toggleInlineAddForm(btn: HTMLElement) {
+  const ex = btn.dataset.addex ?? "";
+  const date = btn.dataset.adddate ?? "";
+  const headerRow = btn.closest("tr.set-ex-row");
+  if (headerRow) {
+    const next = headerRow.nextElementSibling;
+    if (next?.classList.contains("wo-addform-row")) {
+      next.remove();
+      return;
     }
+    const tr = document.createElement("tr");
+    tr.className = "wo-addform-row";
+    tr.innerHTML = `<td colspan="4">${inlineAddFormHtml(ex, date)}</td>`;
+    headerRow.insertAdjacentElement("afterend", tr);
+    tr.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+    return;
   }
-  els.addExercise.value = exerciseName;
-  if (date) els.addDate.value = date;
-  els.addWeight.value = "";
-  els.addReps.value = "";
-  els.addSets.value = "";
-  els.addWeight.focus();
-  els.addHint.textContent = `Logging more sets of ${exerciseName} — enter weight and reps, then Add.`;
+  const sib = btn.nextElementSibling;
+  if (sib?.classList.contains("wo-addform")) {
+    sib.remove();
+    return;
+  }
+  btn.insertAdjacentHTML("afterend", inlineAddFormHtml(ex, date));
+  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+}
+
+/** Log the set(s) from an inline form into the hand-logged sets, then refresh
+ * the Workouts view in place (keeping the open weeks/days expanded). */
+function onInlineAddGo(form: HTMLElement) {
+  const exerciseName = form.dataset.addex ?? "";
+  const date = form.dataset.adddate || todayIso();
+  const msg = form.querySelector<HTMLElement>(".wo-af-msg");
+  const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
+  const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
+  const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
+  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
+  const username = els.athlete.value;
+  const user = athleteLabel();
+  if (!username || !exerciseName) return;
+  if (!Number.isFinite(reps) || reps < 1) {
+    if (msg) msg.textContent = "Enter reps (1+).";
+    form.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
+    return;
+  }
+  for (let i = 0; i < sets; i++) {
+    manualEntries.push({
+      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      user,
+      username,
+      date,
+      exerciseName,
+      weight: Number.isFinite(weight) ? weight : null,
+      reps,
+    });
+  }
+  saveManual();
+  mergeManualSets();
+  // Which weeks/days are expanded right now — reopen them after the rebuild.
+  const openDates = new Set(
+    Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
+      .map((r) => workoutGroups[Number(r.dataset.index)]?.date)
+      .filter((d): d is string => Boolean(d)),
+  );
+  // The set just landed in data.records; rebuild this athlete's day cache so the
+  // day view (week view reads activeRecords directly) reflects it too.
+  athleteWorkouts = workoutsForUser(activeRecords(), els.athlete.value);
+  renderWorkoutsPage();
+  reopenWorkoutGroups(openDates);
+  renderWorkoutCalendar();
+  renderWorkoutSetsChart();
+  renderDataTab();
+}
+
+/** After a re-render, re-expand the workout rows whose group date is in the set. */
+function reopenWorkoutGroups(dates: Set<string>) {
+  for (const row of document.querySelectorAll<HTMLTableRowElement>("tr.wo-row")) {
+    if (row.classList.contains("open")) continue;
+    const grp = workoutGroups[Number(row.dataset.index)];
+    if (grp && dates.has(grp.date)) insertDetail(row, 2, workoutGroupHtml(grp));
+  }
 }
 
 function onAddSubmit() {

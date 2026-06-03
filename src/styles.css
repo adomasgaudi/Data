@@ -1067,6 +1067,26 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
 .wo-addset:hover { border-color: var(--accent); color: var(--accent); }
+.wo-addform {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
+  margin: 0.3rem 0 0.1rem 0.35rem; vertical-align: middle;
+}
+.wo-addform input {
+  width: 3.4rem; font: inherit; font-size: 0.8rem; padding: 2px 6px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
+}
+.wo-addform .wo-af-go {
+  font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px;
+  background: var(--accent); color: #fff;
+}
+.wo-addform .wo-af-cancel {
+  font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  background: var(--panel); color: var(--muted);
+}
+.wo-addform .wo-af-msg { font-size: 0.72rem; }
+.wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }
