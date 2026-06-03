@@ -22,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.1.7</span></h1>
+      <h1>Colosseum <span class="version">b.2.1.8</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -152,9 +152,14 @@
                   <button type="button" class="seg-btn is-active" data-view="week">By week</button>
                 </span>
               </span>
-              <label class="inline-label">Show
+              <span class="inline-label">Show
+                <span id="workoutShowToggle" class="seg-toggle" role="group" aria-label="Exercise view or group view">
+                  <button type="button" class="seg-btn is-active" data-show="exercises">Exercises</button>
+                  <button type="button" class="seg-btn" data-show="groups">Groups</button>
+                </span>
+              </span>
+              <label class="inline-label" id="workoutGroupDimLabel" hidden>By
                 <select id="workoutGrouping">
-                  <option value="exercises">Exercises</option>
                   <option value="muscles" selected>Muscle group</option>
                   <option value="functional">Functional group</option>
                   <option value="combined">Combined lift</option>

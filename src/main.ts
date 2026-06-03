@@ -165,6 +165,8 @@ const els = {
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutViewToggle: $("workoutViewToggle"),
+  workoutShowToggle: $("workoutShowToggle"),
+  workoutGroupDimLabel: $("workoutGroupDimLabel"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
@@ -1170,10 +1172,18 @@ let workoutGroups: WorkoutGroup[] = [];
 let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
 let workoutViewMode: "day" | "week" = "week"; // By day / By week toggle
+let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
 /** Reflect workoutViewMode on the segmented toggle buttons. */
 function syncWorkoutViewToggle(): void {
   for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
     b.classList.toggle("is-active", b.dataset.view === workoutViewMode);
+}
+/** Reflect workoutShowMode on its toggle, and show the group-dimension picker
+ * only in group view. */
+function syncWorkoutShowToggle(): void {
+  for (const b of els.workoutShowToggle.querySelectorAll<HTMLElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.show === workoutShowMode);
+  els.workoutGroupDimLabel.hidden = workoutShowMode !== "groups";
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -3006,8 +3016,7 @@ function renderWorkoutsPage() {
       }
       const abs = start + i;
       let did: string;
-      const dim = els.workoutGrouping.value;
-      if (dim === "exercises") {
+      if (workoutShowMode === "exercises") {
         // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
         did = g.exercises
           .map((e) => {
@@ -3019,8 +3028,8 @@ function renderWorkoutsPage() {
           })
           .join("<br>");
       } else {
-        // Sum each exercise's sets into the chosen grouping dimension.
-        did = groupSessionCounts(g.exercises, dim)
+        // Group view: sum each exercise's sets into the chosen grouping dimension.
+        did = groupSessionCounts(g.exercises, els.workoutGrouping.value)
           .map(([label, c]) => `${escapeHtml(label)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
           .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
@@ -4150,6 +4159,14 @@ async function init() {
     workoutViewMode = v;
     syncWorkoutViewToggle();
     workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.workoutShowToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
+    const m = btn?.dataset.show;
+    if ((m !== "exercises" && m !== "groups") || m === workoutShowMode) return;
+    workoutShowMode = m;
+    syncWorkoutShowToggle();
     renderWorkoutsPage();
   });
   els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
