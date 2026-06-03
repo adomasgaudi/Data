@@ -272,6 +272,10 @@ main { padding-bottom: 5rem; }
 .lb-svg .lb-rank1 { fill: var(--gold); font-weight: 700; }
 .svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); max-height: 4.5rem; overflow-y: auto; }
 .svgc-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+/* When there are 2+ series, legend keys are clickable show/hide toggles. */
+.svgc-key.is-toggle { cursor: pointer; padding: 1px 6px; border-radius: 999px; border: 1px solid transparent; user-select: none; }
+.svgc-key.is-toggle:hover { border-color: var(--line); }
+.svgc-key.is-off { opacity: 0.45; text-decoration: line-through; }
 .svgc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
 .svgc-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
 .svgc-note[hidden] { display: none; }

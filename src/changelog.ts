@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.7", sp: 3, note: "Graphs with 2+ lines: tap a legend key to show/hide that series (e.g. hide raw 1RM to see just current strength). Legend keys are now toggle buttons; keeps your pan/zoom." },
       { version: "b.2.0.6", sp: 5, note: "“Current strength” line on every 1RM graph — the best estimated 1RM reached up to each date (never drops; a weaker set is just an off day). Added to the drill-in 1RM-trend and per-set charts; the Compare graph's trend line now shows current strength." },
       { version: "b.2.0.5", sp: 2, note: "Exercise drill-in: an “ℹ Exercise info” button jumps to that exercise's row on the Exercises (merges & data) page — the same lift, no specific person — opening its category and flashing the row." },
       { version: "b.2.0.4", sp: 3, note: "New “Site map” tab (Other menu): a mind map of the whole app — every tab and what's inside it, drawn as a colour-coded tree." },

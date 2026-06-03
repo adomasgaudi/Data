@@ -104,9 +104,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const xKind = () => cfg.xKind ?? "time";
   const fmtX = (x: number) => (cfg.formatX ? cfg.formatX(x) : xKind() === "time" ? dateLabel(x) : num(x));
   const fmtTipX = (x: number) => (cfg.formatTipX ? cfg.formatTipX(x) : fmtX(x));
-  const leftSeries = () => cfg.series.filter((s) => s.axis !== "right");
-  const rightSeries = () => cfg.series.filter((s) => s.axis === "right");
-  const hasRight = () => rightSeries().length > 0;
+  // Series the user has toggled off via the legend (keyed by name). Visible
+  // series drive the axes and tooltip; hidden ones still show in the legend so
+  // they can be turned back on.
+  const hidden = new Set<string>();
+  const visible = (s: SvgSeries) => !hidden.has(s.name);
+  const leftSeries = () => cfg.series.filter((s) => s.axis !== "right" && visible(s));
+  const rightSeries = () => cfg.series.filter((s) => s.axis === "right" && visible(s));
+  const hasRight = () => cfg.series.some((s) => s.axis === "right"); // keep right margin stable
 
   container.classList.add("svgc");
   container.innerHTML = `<div class="svgc-legend"></div><div class="svgc-plot"></div><div class="svgc-note muted"></div><div class="svgc-tip" hidden></div>`;
@@ -123,7 +128,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
-    const xe = xExtent(cfg.series);
+    const xe = xExtent(cfg.series.filter(visible));
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
@@ -214,7 +219,17 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // series
     let body = "";
     let legend = "";
+    // Legend keys become toggles only when there are 2+ of them (a single series
+    // shouldn't be hide-able into a blank chart).
+    const legendCount = cfg.series.filter((s) => !s.noLegend).length;
+    const toggleable = legendCount >= 2;
     for (const s of cfg.series) {
+      if (!s.noLegend)
+        legend +=
+          `<span class="svgc-key${toggleable ? " is-toggle" : ""}${visible(s) ? "" : " is-off"}"` +
+          `${toggleable ? ` role="button" tabindex="0" data-series="${esc(s.name)}" title="Show/hide ${esc(s.name)}"` : ""}>` +
+          `<span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`;
+      if (!visible(s)) continue; // hidden: in the legend, but not drawn
       const ymap = yOf(s);
       if (s.type === "line") {
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
@@ -250,7 +265,6 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           body += `<rect x="${(x - bw / 2).toFixed(1)}" y="${Math.min(top, base).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(base - top).toFixed(1)}" rx="2" fill="${s.color}"/>`;
         }
       }
-      if (!s.noLegend) legend += `<span class="svgc-key"><span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`;
     }
 
     const frame = inside()
@@ -281,14 +295,18 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const localX = ((clientX - rect.left) / rect.width) * W;
     const xVal = view.xMin + ((localX - M.l) / plotW) * (view.xMax - view.xMin);
     let best: { p: SvgPoint; dx: number } | null = null;
-    for (const s of cfg.series) for (const p of s.points) {
-      const dx = Math.abs(p.x - xVal);
-      if (!best || dx < best.dx) best = { p, dx };
+    for (const s of cfg.series) {
+      if (!visible(s)) continue;
+      for (const p of s.points) {
+        const dx = Math.abs(p.x - xVal);
+        if (!best || dx < best.dx) best = { p, dx };
+      }
     }
     if (!best) return;
     const xv = best.p.x;
     const rows = cfg.series
       .map((s) => {
+        if (!visible(s)) return "";
         const p = s.points.find((q) => q.x === xv);
         if (!p) return "";
         const unit = s.axis === "right" ? cfg.rightUnit : cfg.yUnit;
@@ -441,6 +459,24 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     { passive: false },
   );
   if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => draw()).observe(plotEl);
+
+  // Legend keys double as show/hide toggles (when there are 2+ series). Toggling
+  // keeps the current pan/zoom — only the series and tooltip update.
+  const toggleSeries = (name: string) => {
+    if (hidden.has(name)) hidden.delete(name);
+    else hidden.add(name);
+    hideTip();
+    draw();
+  };
+  legendEl.addEventListener("click", (e) => {
+    const key = (e.target as HTMLElement).closest<HTMLElement>(".svgc-key.is-toggle");
+    if (key?.dataset.series) toggleSeries(key.dataset.series);
+  });
+  legendEl.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const key = (e.target as HTMLElement).closest<HTMLElement>(".svgc-key.is-toggle");
+    if (key?.dataset.series) { e.preventDefault(); toggleSeries(key.dataset.series); }
+  });
 
   resetView();
   draw();
