@@ -173,6 +173,7 @@ const els = {
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
+  addSetsToggle: $<HTMLInputElement>("addSetsToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -1177,6 +1178,9 @@ let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
 let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default: day)
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
 let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
+// Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
+// default (cleaner list); toggled + remembered via the "+ set buttons" checkbox.
+let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
 /** Reflect workoutViewMode on the segmented toggle buttons. */
 function syncWorkoutViewToggle(): void {
   for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
@@ -3043,10 +3047,11 @@ function renderWorkoutsPage() {
               .map((s) => setDisplay(s))
               .join(" ");
             const name = workoutNameMode === "code" ? exerciseCode(e.exerciseName) : e.exerciseName;
-            const addBtn =
-              `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
-              `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`;
-            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span> ${addBtn}`;
+            const addBtn = showAddSets
+              ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
+                `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
+              : "";
+            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${addBtn}`;
           })
           .join("<br>");
       } else {
@@ -3144,10 +3149,13 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
   const body = group.exercises
     .map((e) => {
+      const addBtn = showAddSets
+        ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
+        : "";
       const header =
         `<tr class="set-ex-row"><td colspan="4" class="wo-exname">` +
         `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
-        `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button></td></tr>`;
+        `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
         .map((s) => setRowsHtml(s, formula))
@@ -4231,6 +4239,12 @@ async function init() {
   });
   els.restToggle.addEventListener("change", () => {
     workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.addSetsToggle.checked = showAddSets; // reflect the remembered choice
+  els.addSetsToggle.addEventListener("change", () => {
+    showAddSets = els.addSetsToggle.checked;
+    localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
