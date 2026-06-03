@@ -125,6 +125,7 @@ const els = {
   exerciseProgressNote: $("exerciseProgressNote"),
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exPersetBest: $<HTMLButtonElement>("exPersetBest"),
+  exCombineBar: $("exCombineBar"),
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
@@ -986,6 +987,17 @@ function renderPersonalRecords() {
 // exercises row click handler maps an index back to.
 let exercisesView: string[] = [];
 let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
+// Extra exercises folded into the current drill-in so several lifts (e.g. Squat
+// + Smith Machine Squat) are viewed together as one. Reset on each new drill-in.
+let combinedWith: string[] = [];
+/** Relabel the combined exercises to the primary so all the existing per-exercise
+ * drill-in logic treats them as one lift. A no-op when nothing is combined. */
+function remapCombined(recs: SetRecord[]): SetRecord[] {
+  if (combinedWith.length === 0 || selectedExercise === null) return recs;
+  const extra = new Set(combinedWith);
+  const primary = selectedExercise;
+  return recs.map((r) => (extra.has(r.exerciseName) ? { ...r, exerciseName: primary } : r));
+}
 let athleteWorkouts: WorkoutDay[] = [];
 
 // A row in the Workouts list: a day or a week (or an empty rest day).
@@ -1785,6 +1797,7 @@ function renderExercisesPage() {
   // List view: the two in-page tabs decide what shows.
   els.exercisesTabs.hidden = false;
   const onCompare = exercisesTab === "compare";
+  els.exCombineBar.hidden = true; // drill-in only
   els.exFiltersBtn.hidden = onCompare; // filters/search only apply to the list
   els.exSearchBar.hidden = onCompare;
   // The period is always shown in the list view so it's never a hidden surprise.
@@ -1983,9 +1996,10 @@ function renderExerciseDetail(exName: string) {
   els.exercisesPager.innerHTML = "";
   const username = els.athlete.value;
   const pr = personalRecords(
-    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
+    filterRecords(remapCombined(computedRecords()), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     currentFormula(),
   ).find((p) => p.exerciseName === exName);
+  renderCombineBar(exName, username);
   // Stats start collapsed on every drill-in (the <details> persists across
   // exercises, so reset it). renderExerciseWeekly always fills the chips, so the
   // dropdown always has content to show.
@@ -1996,7 +2010,7 @@ function renderExerciseDetail(exName: string) {
   renderExerciseTargets(pr);
   renderExerciseCalc(pr);
   renderExerciseProgressChart(exName);
-  const weeks = setsByWeek(setsForUserExercise(data.records, username, exName));
+  const weeks = setsByWeek(setsForUserExercise(remapCombined(data.records), username, exName));
   const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
   // Label each row by its ISO week-of-year number (e.g. "w15"), with the start
   // date kept as a muted hint so the number can still be placed in time.
@@ -2019,10 +2033,32 @@ function renderExerciseDetail(exName: string) {
   if (firstWeek && firstRow) insertDetail(firstRow, 2, setsByDateTableHtml(firstWeek.sets));
 }
 
+/** Drill-in "combine with" bar: chips for the exercises folded in (removable) +
+ * a picker to add another of this athlete's lifts, so e.g. Squat + Smith Machine
+ * Squat are viewed as one. */
+function renderCombineBar(exName: string, username: string) {
+  const trained = exerciseCountsForUser(data.records, username).map((c) => c.exerciseName);
+  const addable = trained.filter((n) => n !== exName && !combinedWith.includes(n));
+  const chips = combinedWith
+    .map((n) => `<button type="button" class="ex-combine-chip" data-remove="${escapeHtml(n)}" title="Remove">${escapeHtml(n)} ✕</button>`)
+    .join("");
+  const select =
+    `<select class="ex-combine-add" aria-label="Combine with another exercise">` +
+    `<option value="">＋ combine with…</option>` +
+    addable.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
+    `</select>`;
+  els.exCombineBar.hidden = false;
+  els.exCombineBar.innerHTML =
+    `<span class="ex-combine-lbl muted">Viewing together:</span>` +
+    `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
+    chips +
+    select;
+}
+
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
  * week so far, and the trailing 1-month / 3-month average sets per week. */
 function renderExerciseWeekly(exName: string) {
-  const stats = weeklySetStats(setsForUserExercise(data.records, els.athlete.value, exName), todayIso());
+  const stats = weeklySetStats(setsForUserExercise(remapCombined(data.records), els.athlete.value, exName), todayIso());
   const chip = (label: string, value: string) =>
     `<div class="wk-chip"><span class="wk-val">${value}</span><span class="wk-lbl">${label}</span></div>`;
   els.exerciseWeekly.hidden = false;
@@ -2064,7 +2100,7 @@ function renderExerciseTopSets(exName: string) {
   const d = new Date();
   d.setMonth(d.getMonth() - 3);
   const cutoff = d.toISOString().slice(0, 10);
-  const scored = computedRecords()
+  const scored = remapCombined(computedRecords())
     .filter((r) => r.username === username && r.exerciseName === exName && r.date && r.date >= cutoff)
     .map((s) => ({ s, e1rm: addedWeight1RM(s, formula) }))
     .filter((x): x is { s: SetRecord; e1rm: number } => x.e1rm !== null)
@@ -2278,7 +2314,7 @@ function renderExerciseProgressChart(exName: string) {
   const box = document.getElementById("exerciseProgressChart");
   if (!box) return;
   // Same records the Records card/table use (honour "Exclude dropsets").
-  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
+  const recs = filterRecords(remapCombined(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
   const formula = currentFormula();
   const username = els.athlete.value;
   const ts = (d: string) => Date.parse(d);
@@ -2292,7 +2328,7 @@ function renderExerciseProgressChart(exName: string) {
 
   // ---- Per-set range: one weight→1RM bar per set on a real time axis; same-day
   // sets fan out within the day. Optionally only each day's best set. ----
-  let sets = computedRecords()
+  let sets = remapCombined(computedRecords())
     .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
     .slice()
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
@@ -2428,6 +2464,7 @@ function onExerciseRowClick(e: MouseEvent) {
   const exName = exercisesView[Number(row.dataset.index)];
   if (exName === undefined) return;
   selectedExercise = exName;
+  combinedWith = []; // fresh drill-in: not combined with anything yet
   renderExercisesPage();
 }
 
@@ -2796,6 +2833,7 @@ function onWorkoutRowClick(e: MouseEvent) {
     if (exName) {
       showSubtab("exercises");
       selectedExercise = exName;
+      combinedWith = [];
       renderExercisesPage();
     }
     return;
@@ -3635,6 +3673,20 @@ async function init() {
     }
     const info = (e.target as HTMLElement).closest<HTMLElement>(".ex-info-btn");
     if (info?.dataset.exinfo) jumpToExerciseInfo(info.dataset.exinfo);
+  });
+  // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
+  els.exCombineBar.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-combine-add");
+    if (!sel || !sel.value || selectedExercise === null) return;
+    if (sel.value !== selectedExercise && !combinedWith.includes(sel.value)) combinedWith.push(sel.value);
+    renderExercisesPage();
+  });
+  els.exCombineBar.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-combine-chip[data-remove]");
+    const name = chip?.dataset.remove;
+    if (!name) return;
+    combinedWith = combinedWith.filter((n) => n !== name);
+    renderExercisesPage();
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 

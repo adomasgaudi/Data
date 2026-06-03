@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.14</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.15</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -169,6 +169,9 @@
         <div id="sub-exercises" class="subtab-panel" hidden>
           <section class="panel">
             <h2 id="athleteTitle">Exercises</h2>
+            <!-- Drill-in only: combine this lift with others (e.g. Squat + Smith
+                 Machine Squat) to view them as one. -->
+            <div id="exCombineBar" class="ex-combine" hidden></div>
             <div class="ex-tabbar">
               <div id="exercisesTabs" class="ex-tabs" role="tablist">
                 <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
@@ -263,9 +266,9 @@
             <div id="exerciseProgress" class="exercise-progress" hidden>
               <div class="ex-prog-controls">
                 <button type="button" id="exPersetBest" class="ex-best-toggle" aria-pressed="false" hidden>Best set only</button>
+                <button type="button" id="exerciseProgressCenter" class="ex-best-toggle" title="Center on data" aria-label="Center on data">⌖ Center</button>
               </div>
               <div class="ex-prog-wrap">
-                <button type="button" class="chart-center" id="exerciseProgressCenter" title="Center on data" aria-label="Center on data">⌖ Center</button>
                 <div id="exerciseProgressChart"></div>
               </div>
               <p class="muted" id="exerciseProgressNote"></p>
