@@ -1354,6 +1354,9 @@ sup.wr-bw { font-size: 0.85em; }
 .detail-table th, .detail-table td { padding: 5px 10px; }
 .detail-table th { background: rgba(20, 24, 38, 0.03); }
 .detail-table tbody tr:last-child td { border-bottom: none; }
+/* Predicted reps-in-reserve cell: a computed hint, so it reads quieter than the
+   logged numbers next to it. */
+.prir { color: var(--muted); cursor: help; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }

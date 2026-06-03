@@ -183,6 +183,29 @@ export function repsForWeight(
 }
 
 /**
+ * Predicted reps-in-reserve for a set: how many reps the athlete's estimated 1RM
+ * says they *should* manage at this load (repsForWeight), minus the reps they
+ * actually did. Both the 1RM and the load must be in the SAME frame — feed the
+ * effective (bodyweight-inclusive) load and the effective 1RM so bodyweight lifts
+ * line up. A positive value means reps left in the tank (a submaximal set); ~0
+ * means the set was taken to failure (it's at or defining the 1RM); a negative
+ * value means they beat what the 1RM predicts — a sign the estimate is stale/low.
+ * Returns null when reps are missing/non-positive or the predicted reps can't be
+ * computed (no 1RM, non-positive load, Brzycki out of range).
+ */
+export function predictedRir(
+  oneRepMax: number | null,
+  weight: number | null,
+  reps: number | null,
+  formula: OneRepMaxFormula = "epley",
+): number | null {
+  if (reps === null || reps <= 0) return null;
+  const predicted = repsForWeight(oneRepMax, weight, formula);
+  if (predicted === null) return null;
+  return predicted - reps;
+}
+
+/**
  * Ordinary least-squares line through points: returns slope and intercept, or
  * null if there are fewer than two points or all x are equal. Used to read a
  * progression rate (kg per day) off an athlete's estimated-1RM history.

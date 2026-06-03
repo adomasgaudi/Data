@@ -14,6 +14,7 @@ import {
   estimate1RM,
   weightForReps,
   repsForWeight,
+  predictedRir,
   linearFit,
   strengthRetention,
   daysBetweenIso,
@@ -303,6 +304,32 @@ describe("repsForWeight", () => {
     expect(repsForWeight(100, null)).toBeNull();
     expect(repsForWeight(0, 80)).toBeNull();
     expect(repsForWeight(100, 0)).toBeNull();
+  });
+});
+
+describe("predictedRir (predicted reps in reserve)", () => {
+  it("is predicted reps minus real reps (Epley)", () => {
+    // At a 100 kg 1RM, 75 kg predicts 10 reps. Doing 7 leaves ~3 in reserve.
+    expect(predictedRir(100, 75, 7, "epley")!).toBeCloseTo(10 - 7, 6);
+    expect(predictedRir(100, 60, 12, "epley")!).toBeCloseTo(20 - 12, 6);
+  });
+
+  it("is ~0 for a set taken to the predicted max", () => {
+    // The set that defines the 1RM has nothing in reserve: real reps ≈ predicted.
+    const oneRm = epley1RM(80, 5)!;
+    expect(predictedRir(oneRm, 80, 5, "epley")!).toBeCloseTo(0, 6);
+  });
+
+  it("goes negative when the lifter beats the prediction (stale 1RM)", () => {
+    // 75 kg predicts 10 reps off a 100 kg max; doing 14 means the max is low.
+    expect(predictedRir(100, 75, 14, "epley")!).toBeLessThan(0);
+  });
+
+  it("is null for missing/non-positive reps or an uncomputable prediction", () => {
+    expect(predictedRir(100, 75, null)).toBeNull();
+    expect(predictedRir(100, 75, 0)).toBeNull();
+    expect(predictedRir(null, 75, 5)).toBeNull();
+    expect(predictedRir(100, 0, 5)).toBeNull();
   });
 });
 

@@ -41,6 +41,7 @@ import {
   estimate1RM,
   weightForReps,
   repsForWeight,
+  predictedRir,
   setVolume,
   effectiveLoad,
   linearFit,
@@ -3268,25 +3269,26 @@ function onWorkoutRowClick(e: MouseEvent) {
  * second tap needed. A set with a note still toggles its own note row. */
 function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
+  const peaks = peakEffective1RMByUserExercise(formula);
   const body = group.exercises
     .map((e) => {
       const addBtn = showAddSets
         ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
         : "";
       const header =
-        `<tr class="set-ex-row"><td colspan="4" class="wo-exname">` +
+        `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
         `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
         `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
-        .map((s) => setRowsHtml(s, formula))
+        .map((s) => setRowsHtml(s, formula, effPeakFor(peaks, s)))
         .join("");
       return header + sets;
     })
     .join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
   const addExRow = showAddSets
-    ? `<tr class="set-ex-row wo-addex-host"><td colspan="4"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
+    ? `<tr class="set-ex-row wo-addex-host"><td colspan="5"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
     : "";
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}</tbody></table>`;
 }
@@ -3311,6 +3313,31 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
   row.classList.add("open");
 }
 
+/**
+ * Peak EFFECTIVE (bodyweight-inclusive) estimated 1RM per athlete+exercise — the
+ * "strength value" each set's predicted RIR is measured against. Keyed
+ * "username exerciseName". Built from the computed (bodyweight-folded)
+ * records so the load frame matches the per-set effective load fed into
+ * predictedRir, and using the same addedWeight1RM null-guard as everywhere else
+ * (isometrics and over-cap rep sets contribute no 1RM). Build it once per render
+ * and look sets up against it. */
+function peakEffective1RMByUserExercise(formula: OneRepMaxFormula): Map<string, number> {
+  const peaks = new Map<string, number>();
+  for (const r of computedRecords()) {
+    if (addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
+    const eff = estimate1RM(r.weight, r.reps, formula); // effective (bw-inclusive) 1RM
+    if (eff === null) continue;
+    const key = `${r.username} ${r.exerciseName}`;
+    const cur = peaks.get(key);
+    if (cur === undefined || eff > cur) peaks.set(key, eff);
+  }
+  return peaks;
+}
+
+/** The peak effective 1RM for one set's athlete+exercise, or null if none. */
+const effPeakFor = (peaks: Map<string, number>, s: SetRecord): number | null =>
+  peaks.get(`${s.username} ${s.exerciseName}`) ?? null;
+
 // Compact header for the sets tables: weight / est. 1RM / volume, all in kg.
 // AI-NOTE: setRowsHtml/SETS_HEAD are shared by BOTH the Workouts day→exercise
 // sets table and the Exercises weekly drill-in. The compact W/1RM/Vol headers
@@ -3318,7 +3345,7 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
 // and you change both. The note toggle is handled by toggleSetNote(), wired
 // into onWorkoutRowClick and onExerciseRowClick.
 const SETS_HEAD =
-  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
+  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Predicted Reps In Reserve — your est. 1RM says you should manage this many reps at this weight, minus the reps you actually did. High = the set was easy (many left); ~0 = near failure; negative = you beat the estimate.">pRIR</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
 
 /** How many characters of a note to show inline before truncating with "…". */
 const NOTE_PREVIEW_LEN = 8;
@@ -3387,7 +3414,7 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
  * weight cell with a caret; tapping the row expands the full note. Both reveals
  * are independent sub-rows, so a set can show either or both.
  */
-function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
+function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, peakEff1RM: number | null): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
   // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
   // what was actually loaded. `s` is a raw record; compute it here so the
@@ -3395,6 +3422,14 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
   const computed = computeRecord(s);
   const e1rm = addedWeight1RM(computed, formula);
   const vol = setVolume(s.weight, s.reps);
+  // Predicted RIR: what this exercise's peak est. 1RM says you should manage at
+  // this (effective) load, minus the reps you did. Effective frame on both sides
+  // so bodyweight lifts line up.
+  const predRir = predictedRir(peakEff1RM, computed.weight, s.reps, formula);
+  const prirCell =
+    predRir === null
+      ? "—"
+      : `<span class="prir" title="Your peak est. 1RM predicts about ${(predRir + (s.reps ?? 0)).toFixed(1)} reps at this weight; you did ${s.reps}.">${Math.round(predRir)}</span>`;
   const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
   let preview = "";
   if (note) {
@@ -3413,14 +3448,15 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
     `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
+    `<td class="num">${prirCell}</td>` +
     `<td class="num rpe-cell">${rpeCell}</td></tr>`;
   const noteRow = note
-    ? `<tr class="set-note-row" hidden><td colspan="4" class="muted">${escapeHtml(note)}</td></tr>`
+    ? `<tr class="set-note-row" hidden><td colspan="5" class="muted">${escapeHtml(note)}</td></tr>`
     : "";
   const formulaRow =
     e1rm === null
       ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="4" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
+      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
   return main + noteRow + formulaRow;
 }
 
@@ -3523,6 +3559,7 @@ function toggleE1rmFormula(target: HTMLElement): boolean {
  */
 function setsByDateTableHtml(sets: readonly SetRecord[]): string {
   const formula = currentFormula();
+  const peaks = peakEffective1RMByUserExercise(formula);
   const byDate = new Map<string, SetRecord[]>();
   for (const s of sets) {
     const g = byDate.get(s.date);
@@ -3530,8 +3567,8 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     else byDate.set(s.date, [s]);
   }
   const body = Array.from(byDate, ([date, daySets]) => {
-    const header = `<tr class="set-date-row"><td colspan="4" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula)).join("");
+    const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
+    return header + daySets.map((s) => setRowsHtml(s, formula, effPeakFor(peaks, s))).join("");
   }).join("");
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
 }
