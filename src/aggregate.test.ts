@@ -27,8 +27,9 @@ import {
   canonicalizeExerciseNames,
   sameExerciseKey,
   athleteSummary,
+  decayedStrengthSeries,
 } from "./aggregate";
-import { epley1RM } from "./metrics";
+import { epley1RM, strengthRetention } from "./metrics";
 
 /** Minimal record factory for readable fixtures. */
 function rec(p: Partial<SetRecord>): SetRecord {
@@ -649,5 +650,53 @@ describe("bestSet detraining decay (asOf)", () => {
     const peak = bestSet([oldPr, recent], "epley")!.e1rm;
     const current = bestSet([oldPr, recent], "epley", "2025-06-01")!.e1rm;
     expect(current).toBeLessThanOrEqual(peak + 1e-9);
+  });
+});
+
+describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
+  const DAY = 86_400_000;
+  const base = Date.parse("2024-01-01");
+  const at = (d: number) => base + d * DAY;
+
+  it("sags during a layoff: a lone peak fades below itself by the end", () => {
+    // One 100 kg peak on day 0, no training since; 'today' is day 200.
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }], at(200));
+    const last = line[line.length - 1]!;
+    expect(last.x).toBe(at(200)); // extended to today
+    expect(last.y).toBeLessThan(100); // it dipped
+    // And by exactly the model's amount (within rounding).
+    expect(last.y).toBeCloseTo(100 * strengthRetention(200), 1);
+  });
+
+  it("holds flat through the 2-week grace, then strictly declines", () => {
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }], at(120), 2);
+    const yAt = (d: number) => line.find((p) => p.x === at(d))?.y;
+    expect(yAt(0)).toBe(100);
+    expect(yAt(14)).toBe(100); // grace: nothing lost yet
+    expect(yAt(44)!).toBeLessThan(100); // a month past grace: down ~10%
+    expect(yAt(44)!).toBeCloseTo(90, 0);
+    // Monotonic non-increasing across the whole single-peak line.
+    for (let i = 1; i < line.length; i++) {
+      expect(line[i]!.y).toBeLessThanOrEqual(line[i - 1]!.y + 1e-9);
+    }
+  });
+
+  it("pops back up on the next training day after a long gap", () => {
+    // Peak 100 on day 0, then a fresh 95 set on day 100 (well past grace).
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 95 }], at(140), 4);
+    const justBefore = line.filter((p) => p.x < at(100)).pop()!;
+    const onTrainingDay = line.find((p) => p.x === at(100))!;
+    expect(justBefore.y).toBeLessThan(95); // sagged below the fresh set during the gap
+    expect(onTrainingDay.y).toBeCloseTo(95, 1); // …then pops up to the fresh lift
+    expect(onTrainingDay.y).toBeGreaterThan(justBefore.y); // a visible upward step
+  });
+
+  it("never shows more than the all-time peak", () => {
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(50), y: 80 }], at(300));
+    for (const p of line) expect(p.y).toBeLessThanOrEqual(100 + 1e-9);
+  });
+
+  it("is empty for no points", () => {
+    expect(decayedStrengthSeries([], at(10))).toEqual([]);
   });
 });

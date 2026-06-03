@@ -564,6 +564,43 @@ export interface BestSet {
 }
 
 /**
+ * Build the "current strength" line for a chart: at each sampled moment, the
+ * best estimated 1RM reached so far, faded by how long ago each was set (the
+ * detraining model). The line therefore SAGS through any layoff longer than the
+ * grace period and POPS back up on the next training day, and is extended to
+ * `todayMs` so the present-day fade shows even when the last set is old.
+ *
+ * `points` are {x: ms-timestamp, y: e1rm} in any order. Sampling is every
+ * `stepDays` for a smooth sag, plus every training day pinned exactly so the
+ * recovery pops stay sharp. Pure so it can be unit-tested directly.
+ */
+export function decayedStrengthSeries(
+  points: readonly { x: number; y: number }[],
+  todayMs: number,
+  stepDays = 4,
+): { x: number; y: number }[] {
+  if (points.length === 0) return [];
+  const sorted = points.slice().sort((a, b) => a.x - b.x);
+  const firstX = sorted[0]!.x;
+  const endX = Math.max(sorted[sorted.length - 1]!.x, todayMs);
+  const xs = new Set<number>();
+  for (let t = firstX; t < endX; t += stepDays * MS_PER_DAY) xs.add(t);
+  xs.add(endX);
+  for (const p of sorted) xs.add(p.x);
+  const out: { x: number; y: number }[] = [];
+  for (const x of [...xs].sort((a, b) => a - b)) {
+    let best = -Infinity;
+    for (const p of sorted) {
+      if (p.x > x) break; // sorted: only sets up to this sample date count
+      const v = p.y * strengthRetention((x - p.x) / MS_PER_DAY);
+      if (v > best) best = v;
+    }
+    if (best > -Infinity) out.push({ x, y: Math.round(best * 10) / 10 });
+  }
+  return out;
+}
+
+/**
  * The set giving the highest current strength among `records`.
  *
  * Normally that's just the highest estimated 1RM. When `asOf` (today, ISO) is
