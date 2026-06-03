@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBwCoeff, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, LIST_CATEGORIES, realPullupWeight } from "./profile";
+import { bodyComposition, defaultBwCoeff, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, LIST_CATEGORIES, muscleGroup, realPullupWeight } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -164,6 +164,32 @@ describe("exerciseCategory", () => {
   it("falls back to Other for the noise", () => {
     expect(exerciseCategory("Cold shower")).toBe("Mobility");
     expect(exerciseCategory("KG - track food")).toBe("Other");
+  });
+});
+
+describe("muscleGroup (fine split)", () => {
+  it("splits the legs into the prime mover", () => {
+    expect(muscleGroup("Squat")).toBe("Quads");
+    expect(muscleGroup("Leg Extension")).toBe("Quads");
+    expect(muscleGroup("Romanian Deadlift")).toBe("Hamstrings");
+    expect(muscleGroup("Lying Leg Curl")).toBe("Hamstrings");
+    expect(muscleGroup("Hip Thrust")).toBe("Glutes");
+    expect(muscleGroup("Standing Calf Raise")).toBe("Calves");
+  });
+  it("splits the upper body, specific before broad", () => {
+    expect(muscleGroup("Close Grip Bench Press")).toBe("Triceps");
+    expect(muscleGroup("Tricep Pushdown")).toBe("Triceps");
+    expect(muscleGroup("Barbell Curl")).toBe("Biceps");
+    expect(muscleGroup("Bench Press")).toBe("Chest");
+    expect(muscleGroup("Bent Over Row")).toBe("Back");
+    expect(muscleGroup("Seated Shoulder Press")).toBe("Shoulders");
+    expect(muscleGroup("Deadlift")).toBe("Back");
+  });
+  it("keeps core and non-lifts out of the muscle splits", () => {
+    expect(muscleGroup("Hanging Leg Raise")).toBe("Core");
+    expect(muscleGroup("Plank")).toBe("Core");
+    expect(muscleGroup("Treadmill Run")).toBe("Cardio");
+    expect(muscleGroup("KG - track food")).toBe("Other");
   });
 });
 

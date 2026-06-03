@@ -54,6 +54,7 @@ import {
   realPullupWeight,
   exerciseCategory,
   exerciseCategories,
+  muscleGroup,
   LIST_CATEGORIES,
   exerciseCode,
   exerciseCodesFor,
@@ -150,6 +151,7 @@ const els = {
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutView: $<HTMLSelectElement>("workoutView"),
+  workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
@@ -2528,9 +2530,23 @@ function renderWorkoutsPage() {
         return `<tr class="rest-row" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
       }
       const abs = start + i;
-      const did = g.exercises
-        .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
-        .join("<br>");
+      let did: string;
+      if (els.workoutGrouping.value === "muscles") {
+        // Sum each exercise's sets into its muscle group (Quads, Hams, …).
+        const byMuscle = new Map<string, number>();
+        for (const e of g.exercises) {
+          const m = muscleGroup(e.exerciseName);
+          byMuscle.set(m, (byMuscle.get(m) ?? 0) + e.count);
+        }
+        did = [...byMuscle.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([m, c]) => `${escapeHtml(m)} <span class="muted">${c}</span>`)
+          .join("<br>");
+      } else {
+        did = g.exercises
+          .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
+          .join("<br>");
+      }
       const tagged = aloneTags.has(aloneKey(g.date));
       const tagBtn =
         `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
@@ -3353,6 +3369,7 @@ async function init() {
     workoutsPage = 0;
     renderWorkoutsPage();
   });
+  els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
   els.workoutsPageSize.addEventListener("change", () => {
     workoutsPageSize = Number(els.workoutsPageSize.value) === 50 ? 50 : 20;
     workoutsPage = 0;

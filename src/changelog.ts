@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.1", sp: 2, note: "Workouts: a “Show” toggle to list each session by muscle group (Quads, Hams, Glutes, Chest, Back, …) with set counts, instead of exercise names." },
       { version: "b.2.0.0", sp: 1, note: "Version 2 milestone — rolled the b.1.x line up to b.2 to mark the self-updating, real-time-chart app." },
     ],
   },

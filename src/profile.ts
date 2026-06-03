@@ -187,6 +187,56 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
   return "Other";
 }
 
+/** Finer muscle groups than {@link exerciseCategory} — the legs split into
+ * Quads / Hamstrings / Glutes / Calves, and the upper body into Chest / Back /
+ * Shoulders / Biceps / Triceps. Used by the Workouts view's "muscle groups"
+ * mode. One PRIMARY group per exercise (the prime mover), chosen by keyword. */
+export type MuscleGroup =
+  | "Quads" | "Hamstrings" | "Glutes" | "Calves"
+  | "Chest" | "Back" | "Shoulders" | "Biceps" | "Triceps"
+  | "Core" | "Cardio" | "Mobility" | "Skill" | "Other";
+
+export function muscleGroup(exerciseName: string): MuscleGroup {
+  const n = exerciseName.toLowerCase();
+  const has = (...k: string[]) => k.some((s) => n.includes(s));
+
+  // Non-lifts first (mirror exerciseCategory's ordering so skills/cardio win).
+  if (has("stretch", "split", "pancake", "pose", "mobility", "ankle", "posture", "breath", "cold shower", "meditation"))
+    return "Mobility";
+  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
+    return "Cardio";
+  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "balance"))
+    return n.includes("push") ? "Shoulders" : "Skill";
+
+  // Core (before legs/arms so "ab"/"plank"/"leg raise" don't fall to Legs).
+  if (has("crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "knee raise", "knee tuck", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "woodchop", "pallof", "rollout", "twist", "bicycle", "mountain climber", "vacuum", "l-sit", "l sit", "lsit"))
+    return "Core";
+
+  // Legs, split into the prime mover.
+  if (has("calf", "calves")) return "Calves";
+  if (has("leg curl", "romanian", "rdl", "stiff leg", "stiff-leg", "good morning", "nordic", "hamstring", "ham "))
+    return "Hamstrings";
+  if (has("hip thrust", "glute", "hip extension", "bridge", "hip abduction", "abduction", "abductor", "hip adduction", "adduction", "adductor", "back extension", "hyperextension", "reverse hyper"))
+    return "Glutes";
+  if (has("squat", "leg press", "leg extension", "lunge", "hack", "sissy", "step up", "step-up", "pistol", "wall sit", "split squat", "bulgarian", "cossack", "belt squat", "quad"))
+    return "Quads";
+
+  // Upper body. Order matters: shoulders/triceps/biceps before the broad
+  // chest/back keywords (e.g. "close grip bench" is triceps, not chest).
+  if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military", "behind the neck", "arnold", "shrug", "delt"))
+    return "Shoulders";
+  if (has("tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"))
+    return "Triceps";
+  if (has("curl", "preacher", "hammer")) return "Biceps";
+  if (has("bench", "chest", "fly", "pec", "push up", "pushup", "push-up", "pushups", "press up", "dip"))
+    return "Chest";
+  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "lat ", "lat pull", "pullover", "pull over", "face pull", "inverted row", "scapular"))
+    return "Back";
+  if (has("deadlift", "clean", "snatch")) return "Back"; // posterior-chain pulls
+
+  return "Other";
+}
+
 /**
  * The category headers used by the Exercises "By category" sort and the Group
  * view's Categories mode. Unlike {@link exerciseCategory} (one PRIMARY bucket
