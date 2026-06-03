@@ -542,8 +542,7 @@ main { padding-bottom: 5rem; }
 }
 .ex-cat-bar-lbl { font-size: 0.72rem; margin-right: 0.1rem; }
 /* Always-visible active-period bar above the exercise list. */
-.ex-period-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.85rem; }
-.ex-period-lbl { font-size: 0.78rem; font-weight: 600; }
+.ex-period-bar { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0 0 0.85rem; }
 /* Drill-in "view together" combine bar. */
 .ex-combine { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 0.85rem; }
 .ex-combine[hidden] { display: none; }

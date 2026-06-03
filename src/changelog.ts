@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.41", sp: 0.5, note: "Compare graph period picker tidied: dropped the “Showing period:” label (the dropdown already shows the period, e.g. “Last 3 months”) and moved the dropdown to the right of its row." },
       { version: "b.2.0.40", sp: 3, note: "The synthetic group lifts are now selectable: “SQ mix” and “DL pattern” appear (marked ✦) in the Colosseum leaderboard exercise picker and in the Compare graph search/chips, so you can rank or chart them like any lift. They show whenever at least one of their member lifts is present." },
       { version: "b.2.0.39", sp: 5, note: "Index inspector upgraded: tap any exercise to see its registry tags (hover each for the why), its combinable/comparable group membership with the plain-language reason and member list, and its active-set status — plus per-exercise “Always show” / “Always hide” toggles that force a lift in or out of the app-wide filter on the spot." },
       { version: "b.2.0.38", sp: 1, note: "Calculator's Nuzzo graph now plots the x-axis as bar weight (added kg) instead of % of 1RM: it reads “at this weight on the bar you can do N reps”, scaled to your set's estimated 1RM. Same study dots + best-fit curve, with your typed set as the gold dot at its actual weight." },
