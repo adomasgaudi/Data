@@ -1061,6 +1061,12 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-alone:hover { border-color: var(--accent); color: var(--accent); }
 .wo-alone.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wo-addset {
+  margin-left: 0.35rem; font: inherit; font-size: 0.68rem; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
+}
+.wo-addset:hover { border-color: var(--accent); color: var(--accent); }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }

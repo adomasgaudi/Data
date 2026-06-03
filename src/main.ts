@@ -3042,7 +3042,10 @@ function renderWorkoutsPage() {
               .map((s) => setDisplay(s))
               .join(" ");
             const name = workoutNameMode === "code" ? exerciseCode(e.exerciseName) : e.exerciseName;
-            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>`;
+            const addBtn =
+              `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
+              `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`;
+            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span> ${addBtn}`;
           })
           .join("<br>");
       } else {
@@ -3081,6 +3084,13 @@ function onWorkoutRowClick(e: MouseEvent) {
     saveAlone();
     renderWorkoutsPage();
     renderWorkoutCalendar(); // refresh the year map so the red "alone" ring updates live
+    return;
+  }
+  // "+ set" on an exercise → jump to the Add tab with the athlete, exercise and
+  // that session's date pre-filled, ready to log another set.
+  const addBtn = target.closest<HTMLButtonElement>(".wo-addset");
+  if (addBtn?.dataset.addex) {
+    prefillAddSet(addBtn.dataset.addex, addBtn.dataset.adddate);
     return;
   }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
@@ -4832,6 +4842,25 @@ function renderAddTab() {
     : `<tbody><tr><td class="muted">No hand-logged sets yet.</td></tr></tbody>`;
 }
 
+/** Open the Add tab pre-filled to log more sets of a given exercise — used by the
+ * "+ set" buttons in the Workouts exercise view. Athlete defaults to the one the
+ * workouts page is showing; date defaults to that session's date. */
+function prefillAddSet(exerciseName: string, date?: string) {
+  switchTopTab("add");
+  renderAddTab(); // make sure the athlete options exist before we set one
+  const username = els.athlete.value;
+  if (username) {
+    const has = Array.from(els.addAthlete.options).some((o) => o.value === username);
+    if (has) els.addAthlete.value = username;
+  }
+  els.addExercise.value = exerciseName;
+  if (date) els.addDate.value = date;
+  els.addWeight.value = "";
+  els.addReps.value = "";
+  els.addWeight.focus();
+  els.addHint.textContent = `Logging more sets of ${exerciseName} — enter weight and reps, then Add.`;
+}
+
 function onAddSubmit() {
   const username = els.addAthlete.value;
   const user = els.addAthlete.selectedOptions[0]?.textContent ?? username;
@@ -4858,10 +4887,10 @@ function onAddSubmit() {
   });
   saveManual();
   mergeManualSets();
-  els.addWeight.value = "";
-  els.addReps.value = "";
-  els.addExercise.value = "";
-  els.addHint.textContent = `Added ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}.`;
+  // Keep the just-entered athlete / exercise / weight / reps / date in place so
+  // logging the next set of the same exercise is one tap (Add again). Nothing is
+  // cleared — the form "remembers" what you last added.
+  els.addHint.textContent = `Added ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}. Tap Add again to log another set.`;
   renderAddTab();
   renderAll(); // every view now includes the new set
   renderDataTab();
