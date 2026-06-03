@@ -1322,6 +1322,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 .health-item.dup { color: var(--text); }
 /* Version history list (Settings → Version history) — expandable rows. */
 .cl-summary { font-size: 0.8rem; margin: 0 0 0.5rem; }
+.cl-spchart-wrap { margin: 0 0 1rem; padding: 0 0 0.85rem; border-bottom: 1px solid var(--line); }
 .cl-sections { margin: 0 0 1rem; padding: 0 0 0.85rem; border-bottom: 1px solid var(--line); }
 .cl-sections-lbl { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-bottom: 0.4rem; }
 .cl-sections-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem; }

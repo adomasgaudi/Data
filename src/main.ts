@@ -64,6 +64,7 @@ import {
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, fibSp } from "./changelog";
+import { SP_HISTORY } from "./spHistory";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -553,7 +554,10 @@ function renderChangelog() {
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
-  const header = `<p class="cl-summary muted">${releaseCount} releases · whole site <strong>${WEBSITE_EXACT_SP} SP</strong> (≈ ${WEBSITE_SP} on the Fibonacci scale)</p>`;
+  const header =
+    `<p class="cl-summary muted">${releaseCount} releases · whole site <strong>${WEBSITE_EXACT_SP} SP</strong> (≈ ${WEBSITE_SP} on the Fibonacci scale)</p>` +
+    `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by commit date)</div>` +
+    `<div id="spHistoryChart"></div></div>`;
   // Effort per part — exact SP and the Fibonacci grade it snaps to.
   const sections =
     `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per part — exact SP (≈ Fibonacci)</div>` +
@@ -596,6 +600,22 @@ function renderChangelog() {
     );
   }).join("");
   els.changelog.innerHTML = header + sections + rows;
+
+  // SP-over-time line: cumulative story points across every release commit,
+  // plotted on a real time axis. The container is recreated on each render, so
+  // mount a fresh chart each time.
+  const spBox = document.getElementById("spHistoryChart");
+  if (spBox && SP_HISTORY.length) {
+    let total = 0;
+    const points = SP_HISTORY.map((p) => {
+      total += p.sp;
+      return { x: Date.parse(p.date), y: total, meta: `${p.version} · +${p.sp} → ${total} SP` };
+    });
+    mountSvgChart(spBox, {
+      series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],
+      xKind: "time", yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
+    });
+  }
 }
 
 function renderHealth() {
