@@ -15,6 +15,9 @@ import {
   weightForReps,
   repsForWeight,
   linearFit,
+  strengthRetention,
+  daysBetweenIso,
+  STRENGTH_DECAY,
 } from "./metrics";
 
 describe("epley1RM", () => {
@@ -300,5 +303,73 @@ describe("repsForWeight", () => {
     expect(repsForWeight(100, null)).toBeNull();
     expect(repsForWeight(0, 80)).toBeNull();
     expect(repsForWeight(100, 0)).toBeNull();
+  });
+});
+
+describe("strengthRetention (detraining decay)", () => {
+  it("loses nothing during the two-week grace period", () => {
+    expect(strengthRetention(0)).toBe(1);
+    expect(strengthRetention(7)).toBe(1);
+    expect(strengthRetention(STRENGTH_DECAY.graceDays)).toBe(1);
+    expect(strengthRetention(-5)).toBe(1); // future/oddities never penalised
+  });
+
+  it("is about 10% down one month after the grace ends", () => {
+    // grace (14d) + tau (30d) = 44 days → retention exactly 0.90 by construction.
+    expect(strengthRetention(STRENGTH_DECAY.graceDays + STRENGTH_DECAY.tauDays)).toBeCloseTo(0.9, 6);
+  });
+
+  it("keeps fading but slower (logarithmic) after that", () => {
+    const oneMonth = strengthRetention(44);
+    const twoMonths = strengthRetention(74);
+    const threeMonths = strengthRetention(104);
+    expect(oneMonth).toBeGreaterThan(twoMonths);
+    expect(twoMonths).toBeGreaterThan(threeMonths);
+    // Deceleration: each further month removes less than the month before.
+    expect(oneMonth - twoMonths).toBeGreaterThan(twoMonths - threeMonths);
+  });
+
+  it("never decays below the floor", () => {
+    expect(strengthRetention(100000)).toBe(STRENGTH_DECAY.floor);
+    fc.assert(
+      fc.property(fc.double({ min: 0, max: 1e6, noNaN: true }), (d) => {
+        const r = strengthRetention(d);
+        return r >= STRENGTH_DECAY.floor && r <= 1;
+      }),
+    );
+  });
+
+  it("is non-increasing in days off", () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 0, max: 5000, noNaN: true }),
+        fc.double({ min: 0, max: 5000, noNaN: true }),
+        (a, b) => {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          return strengthRetention(lo) >= strengthRetention(hi) - 1e-12;
+        },
+      ),
+    );
+  });
+});
+
+describe("daysBetweenIso", () => {
+  it("counts whole days between ISO dates", () => {
+    expect(daysBetweenIso("2024-01-01", "2024-01-01")).toBe(0);
+    expect(daysBetweenIso("2024-01-01", "2024-01-15")).toBe(14);
+    expect(daysBetweenIso("2024-01-31", "2024-02-01")).toBe(1);
+  });
+
+  it("is negative when the second date precedes the first", () => {
+    expect(daysBetweenIso("2024-02-01", "2024-01-31")).toBe(-1);
+  });
+
+  it("is unaffected by month/year boundaries (UTC midnight)", () => {
+    expect(daysBetweenIso("2023-12-31", "2024-01-01")).toBe(1);
+    expect(daysBetweenIso("2024-01-01", "2025-01-01")).toBe(366); // 2024 is a leap year
+  });
+
+  it("returns 0 for unparseable input", () => {
+    expect(daysBetweenIso("nope", "2024-01-01")).toBe(0);
   });
 });

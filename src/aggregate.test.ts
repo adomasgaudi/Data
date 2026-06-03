@@ -624,3 +624,30 @@ describe("weeklySetStats", () => {
     expect(s.threeMonthAvgPerWeek).toBeCloseTo(1.0, 6);
   });
 });
+
+describe("bestSet detraining decay (asOf)", () => {
+  // An old monster single vs a solid recent one. Without decay the old PR wins;
+  // with decay (asOf today) the year-old lift fades and the fresh one takes over.
+  const oldPr = rec({ exerciseName: "Squat", weight: 200, reps: 1, date: "2024-01-01", bodyweight: 80 });
+  const recent = rec({ exerciseName: "Squat", weight: 150, reps: 1, date: "2025-01-01", bodyweight: 80 });
+
+  it("ignores age when no asOf date is given (all-time peak)", () => {
+    const best = bestSet([oldPr, recent], "epley");
+    expect(best?.record.weight).toBe(200);
+    expect(best?.e1rm).toBeCloseTo(200, 6);
+  });
+
+  it("fades old lifts so a fresh set can win, and reports the decayed value", () => {
+    // "Today" is right after the recent set: the old PR is ~a year stale.
+    const best = bestSet([oldPr, recent], "epley", "2025-01-05");
+    expect(best?.record.weight).toBe(150); // the recent, barely-decayed set
+    expect(best?.e1rm).toBeLessThan(200); // and below the all-time peak
+    expect(best?.e1rm).toBeGreaterThan(140); // still near its fresh value
+  });
+
+  it("never exceeds the all-time peak once decay is on", () => {
+    const peak = bestSet([oldPr, recent], "epley")!.e1rm;
+    const current = bestSet([oldPr, recent], "epley", "2025-06-01")!.e1rm;
+    expect(current).toBeLessThanOrEqual(peak + 1e-9);
+  });
+});

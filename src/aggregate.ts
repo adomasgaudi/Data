@@ -5,7 +5,13 @@
  * is trivial for plain JS, so the only thing that matters is correctness.
  */
 import type { SetRecord } from "./domain";
-import { estimate1RM, MAX_1RM_REPS, type OneRepMaxFormula } from "./metrics";
+import {
+  estimate1RM,
+  MAX_1RM_REPS,
+  daysBetweenIso,
+  strengthRetention,
+  type OneRepMaxFormula,
+} from "./metrics";
 import { isIsometric } from "./profile";
 
 /** Generic "find the element maximizing a numeric key". Null-valued elements are
@@ -557,11 +563,28 @@ export interface BestSet {
   e1rm: number; // added-weight 1RM (bodyweight share peeled back off)
 }
 
-/** The single set with the highest added-weight 1RM among `records`. */
-export function bestSet(records: readonly SetRecord[], formula: OneRepMaxFormula = "epley"): BestSet | null {
-  const record = maxBy(records, (r) => addedWeight1RM(r, formula));
+/**
+ * The set giving the highest current strength among `records`.
+ *
+ * Normally that's just the highest estimated 1RM. When `asOf` (today, ISO) is
+ * given, the detraining model is applied: each set's 1RM is faded by how long
+ * ago it was performed, so a monster lift from a year ago can be overtaken by a
+ * solid recent one — the winning `e1rm` is the *decayed* (current) value. This
+ * is what powers the "current strength" mode of the settings toggle.
+ */
+export function bestSet(
+  records: readonly SetRecord[],
+  formula: OneRepMaxFormula = "epley",
+  asOf?: string,
+): BestSet | null {
+  const value = (r: SetRecord): number | null => {
+    const base = addedWeight1RM(r, formula);
+    if (base === null) return null;
+    return asOf ? base * strengthRetention(daysBetweenIso(r.date, asOf)) : base;
+  };
+  const record = maxBy(records, value);
   if (record === null) return null;
-  const e1rm = addedWeight1RM(record, formula);
+  const e1rm = value(record);
   return e1rm === null ? null : { record, e1rm };
 }
 
@@ -582,6 +605,7 @@ export function leaderboard(
   records: readonly SetRecord[],
   exerciseName: string,
   formula: OneRepMaxFormula = "epley",
+  asOf?: string,
 ): LeaderboardEntry[] {
   const forExercise = records.filter((r) => r.exerciseName === exerciseName);
   const byUser = new Map<string, SetRecord[]>();
@@ -593,7 +617,7 @@ export function leaderboard(
 
   const entries: LeaderboardEntry[] = [];
   for (const sets of byUser.values()) {
-    const best = bestSet(sets, formula);
+    const best = bestSet(sets, formula, asOf);
     if (!best || best.record.weight === null || best.record.reps === null) continue;
     entries.push({
       user: best.record.user,
@@ -801,6 +825,7 @@ export function athleteSummary(records: readonly SetRecord[], username: string):
 export function personalRecords(
   records: readonly SetRecord[],
   formula: OneRepMaxFormula = "epley",
+  asOf?: string,
 ): PersonalRecord[] {
   const groups = new Map<string, SetRecord[]>();
   for (const r of records) {
@@ -816,7 +841,7 @@ export function personalRecords(
   for (const sets of groups.values()) {
     // Heaviest is by the originally-logged (added) weight, not the calc load.
     const heaviest = maxBy(sets, disp);
-    const best = bestSet(sets, formula);
+    const best = bestSet(sets, formula, asOf);
     if (!heaviest || !best || heaviest.reps === null) continue;
     if (best.record.weight === null || best.record.reps === null) continue;
     out.push({

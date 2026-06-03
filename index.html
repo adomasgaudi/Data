@@ -23,7 +23,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.0.47</span></h1>
+        <h1>Colosseum <span class="version">b.2.1.28</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -44,6 +44,8 @@
             </select>
           </label>
           <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
+          <label class="check"><input type="checkbox" id="decayStrength" /> Current strength (fade with time off)</label>
+          <p class="settings-hint">Off = your all-time best 1RM. On = a “use it or lose it” estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing after that, never below half.</p>
           <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
           <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
           <button type="button" id="viewModeBtn" class="settings-link" aria-pressed="false">👤 Switch to user view</button>
@@ -150,18 +152,32 @@
             </details>
             <div id="workoutCalendar" class="wo-calendar"></div>
             <div class="wo-controls">
-              <label class="inline-label">View
-                <select id="workoutView">
-                  <option value="day">By day</option>
-                  <option value="week" selected>By week</option>
-                </select>
-              </label>
-              <label class="inline-label">Show
+              <span class="inline-label">View
+                <span id="workoutViewToggle" class="seg-toggle" role="group" aria-label="View by day or week">
+                  <button type="button" class="seg-btn is-active" data-view="day">By day</button>
+                  <button type="button" class="seg-btn" data-view="week">By week</button>
+                </span>
+              </span>
+              <span class="inline-label">Show
+                <span id="workoutShowToggle" class="seg-toggle" role="group" aria-label="Exercise view or group view">
+                  <button type="button" class="seg-btn is-active" data-show="exercises">Exercises</button>
+                  <button type="button" class="seg-btn" data-show="groups">Groups</button>
+                </span>
+              </span>
+              <label class="inline-label" id="workoutGroupDimLabel" hidden>By
                 <select id="workoutGrouping">
-                  <option value="exercises">Exercises</option>
-                  <option value="muscles" selected>Muscle groups</option>
+                  <option value="muscles" selected>Muscle group</option>
+                  <option value="functional">Functional group</option>
+                  <option value="combined">Combined lift</option>
+                  <option value="compared">Compared lift</option>
                 </select>
               </label>
+              <span class="inline-label" id="workoutNameLabel">Names
+                <span id="workoutNameToggle" class="seg-toggle" role="group" aria-label="Exercise code or full name">
+                  <button type="button" class="seg-btn is-active" data-name="code">Code</button>
+                  <button type="button" class="seg-btn" data-name="full">Full</button>
+                </span>
+              </span>
               <label class="inline-label">Per page
                 <select id="workoutsPageSize">
                   <option value="20">20</option>
@@ -170,6 +186,9 @@
               </label>
               <label class="check" id="restToggleLabel">
                 <input type="checkbox" id="restToggle" /> Show rest days
+              </label>
+              <label class="check" id="addSetsToggleLabel">
+                <input type="checkbox" id="addSetsToggle" /> + set buttons
               </label>
               <button type="button" id="aloneFilter" class="alone-filter" data-state="both"
                 title="Filter by the ‘alone’ tag — tap to cycle: show all sessions / only the ones you tagged trained alone / only the ones you didn’t">
@@ -346,6 +365,16 @@
           </p>
         </section>
         <section class="panel">
+          <h2>Strength fade — use it or lose it</h2>
+          <p class="muted" style="margin: 0 0 1rem">
+            How a lift's estimated 1RM fades when you stop training it (the “Current strength”
+            setting). Full strength for two weeks, then about 10% gone a month later, slowing down
+            after that and never dropping below half. Drag to pan · wheel to zoom.
+          </p>
+          <div id="decayCurveChart"></div>
+          <p class="muted" id="decayCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
+        </section>
+        <section class="panel">
           <h2>How the numbers work</h2>
           <div class="calc-explain">
             <p><strong>1. Effective load.</strong> For lifts that move your body (pull-ups, squats…),
@@ -374,6 +403,14 @@
             The master list of every exercise across all athletes — merges and bodyweight
             parts. (Not one person's training; for that, pick an athlete on the Exercises tab.)
           </p>
+        </section>
+        <section class="panel">
+          <h2>Browse groups</h2>
+          <p class="muted" style="margin: 0 0 0.75rem">
+            How exercises are grouped. Open a dimension, then a group, to read what it means and
+            see exactly which lifts fall under it.
+          </p>
+          <div id="groupBrowser" class="group-browser"></div>
         </section>
         <section class="panel">
           <h2>Merged exercises</h2>
@@ -881,6 +918,9 @@
             </label>
             <label class="add-field add-field--sm">Reps
               <input id="addReps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" />
+            </label>
+            <label class="add-field add-field--sm">Sets
+              <input id="addSets" type="number" step="1" min="1" inputmode="numeric" placeholder="1" />
             </label>
             <label class="add-field add-field--sm">Date
               <input id="addDate" type="date" />

@@ -86,5 +86,8 @@ StrengthLevel data and shows leaderboards, personal records and estimated 1RMs.
 
 - Develop on branch `claude/strength-training-dashboard-SdAlT`. Commit and push
   when work is complete. Don't open a PR unless asked.
+- **Always merge & deploy.** After finishing a change, merge the working branch
+  into the deployed branch `claude/strength-training-dashboard-SdAlT` and push so
+  it goes live — don't wait to be asked.
 - Keep correctness logic in pure functions with tests; run `npm test` and
   `npm run typecheck` before considering a change done.

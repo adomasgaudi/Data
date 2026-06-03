@@ -225,3 +225,41 @@ export function effectiveLoad(
   if (coeff <= 0) return addedWeight;
   return (bodyweight ?? 0) * coeff + (addedWeight ?? 0);
 }
+
+/**
+ * Detraining ("use it or lose it") model. A strength achievement isn't frozen:
+ * stop training a lift and your *current* ability fades. The shape the owner
+ * asked for: nothing lost for a two-week grace, then ~10% gone one month later,
+ * then a logarithmically-slowing decline toward a floor (so it never hits zero —
+ * muscle memory keeps a big chunk).
+ *
+ * loss(t) = lossPerLog · ln(1 + (t − grace)/tau), retention = 1 − loss, floored.
+ * With tau = 30d and lossPerLog = 0.10/ln2, retention is exactly 0.90 at 30 days
+ * past the grace period (≈10% lost a month after detraining starts).
+ */
+export const STRENGTH_DECAY = {
+  graceDays: 14, // full strength retained for the first two weeks off
+  tauDays: 30, // log time-constant
+  lossPerLog: 0.1 / Math.LN2, // ⇒ ~10% lost one month after the grace ends
+  floor: 0.5, // never decays below half the peak (muscle memory)
+} as const;
+
+/**
+ * Fraction (0–1] of a peak strength still available after `daysSinceTrained`
+ * days without training that lift. 1 = full strength (within the grace period).
+ */
+export function strengthRetention(daysSinceTrained: number): number {
+  const { graceDays, tauDays, lossPerLog, floor } = STRENGTH_DECAY;
+  if (!Number.isFinite(daysSinceTrained) || daysSinceTrained <= graceDays) return 1;
+  const loss = lossPerLog * Math.log(1 + (daysSinceTrained - graceDays) / tauDays);
+  return Math.max(floor, 1 - loss);
+}
+
+/** Whole days from ISO date `from` to ISO date `to` (negative if `to` precedes
+ * `from`). Both are "yyyy-MM-dd"; parsed as UTC midnight so DST can't skew it. */
+export function daysBetweenIso(from: string, to: string): number {
+  const a = Date.parse(from);
+  const b = Date.parse(to);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.round((b - a) / 86_400_000);
+}

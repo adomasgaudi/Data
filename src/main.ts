@@ -44,6 +44,8 @@ import {
   effectiveLoad,
   linearFit,
   MAX_1RM_REPS,
+  strengthRetention,
+  STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
@@ -58,10 +60,13 @@ import {
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
+  MUSCLE_GROUP_TAGS,
+  FUNCTIONAL_PATTERN_TAGS,
   tagsForExercise,
   combinableGroupsFor,
   comparableGroupsFor,
   membersOfGroup,
+  exercisesForTag,
   type RegistryTag,
   LIST_CATEGORIES,
   exerciseCode,
@@ -88,6 +93,7 @@ const els = {
   viewModeBtn: $<HTMLButtonElement>("viewModeBtn"),
   viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
+  decayStrength: $<HTMLInputElement>("decayStrength"),
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -164,11 +170,16 @@ const els = {
   workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
-  workoutView: $<HTMLSelectElement>("workoutView"),
+  workoutViewToggle: $("workoutViewToggle"),
+  workoutShowToggle: $("workoutShowToggle"),
+  workoutNameToggle: $("workoutNameToggle"),
+  workoutNameLabel: $("workoutNameLabel"),
+  workoutGroupDimLabel: $("workoutGroupDimLabel"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
+  addSetsToggle: $<HTMLInputElement>("addSetsToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -177,6 +188,7 @@ const els = {
   addArmPosField: $("addArmPosField"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
+  addSets: $<HTMLInputElement>("addSets"),
   addDate: $<HTMLInputElement>("addDate"),
   addSubmit: $<HTMLButtonElement>("addSubmit"),
   addHint: $("addHint"),
@@ -191,6 +203,7 @@ const els = {
   activeSetBar: $("activeSetBar"),
   bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
+  groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
   calcReps: $<HTMLInputElement>("calcReps"),
@@ -198,6 +211,7 @@ const els = {
   calcCoeff: $<HTMLInputElement>("calcCoeff"),
   calcOut: $("calcOut"),
   calcCurveNote: $("calcCurveNote"),
+  decayCurveNote: $("decayCurveNote"),
   testAthlete: $<HTMLSelectElement>("testAthlete"),
   testExercise: $<HTMLSelectElement>("testExercise"),
   testPickHint: $("testPickHint"),
@@ -219,6 +233,7 @@ const els = {
 let data: LoadedData;
 let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
+let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
@@ -272,9 +287,14 @@ const pct = (fraction: number): string => `${Math.round(fraction * 100)}%`;
  * leaderboard, per-athlete detail and Test tab agree. */
 const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
 
-/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header. */
+/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header.
+ * When there's no (added) weight — bodyweight reps, holds — the meaningless "0"
+ * base is dropped and just the reps show as the superscript. Negative (assisted)
+ * weights keep their number. */
 const wr = (weight: number | null, reps: number | null): string =>
-  weight === null ? "—" : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
+  weight === null || weight === 0
+    ? (reps === null ? "—" : `<sup class="wr-bw">${reps}</sup>`)
+    : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
 
 /** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
 const MONTH_ABBR = [
@@ -315,6 +335,15 @@ const isoWeekNumber = (iso: string): number => {
 /** Today as an ISO YYYY-MM-DD string — the reference point for "this week" and
  * the trailing-window sets-per-week averages. */
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
+
+// "Current strength" mode: when on, 1RM achievements fade with time off the lift
+// (detraining model in metrics.ts) instead of showing the all-time peak. Toggled
+// in Settings and remembered on this device.
+let decayStrength = localStorage.getItem("colosseum.decayStrength") === "1";
+/** Reference date for the detraining model — today's date when "current
+ * strength" is on, otherwise undefined (keep all-time peaks). Passed into the
+ * leaderboard / personal-record aggregators. */
+const strengthAsOf = (): string | undefined => (decayStrength ? todayIso() : undefined);
 
 /** Elapsed training time from first to last logged date, in the unit that reads
  * cleanest at that scale: days under 2 weeks, weeks under ~2 months, months
@@ -618,14 +647,17 @@ function computedRecords(): SetRecord[] {
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
   const pure = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
-  // Append the synthetic combinable/comparable lifts (SQ mix, DL pattern) whose
-  // members are present, so they're selectable on the leaderboard too.
+  // The synthetic combinable/comparable lifts (SQ mix, DL pattern) whose members
+  // are present — surfaced in a labelled group at the TOP so they're easy to find.
   const synth = availableSyntheticNames(pure);
-  const exercises = [...pure, ...synth];
-  els.exercise.innerHTML = exercises
-    .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}${synth.includes(e) ? " ✦" : ""}</option>`)
-    .join("");
-  els.exercise.value = exercises.includes(prev) ? prev : (exercises[0] ?? "");
+  const opt = (e: string) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`;
+  const synthGroup = synth.length
+    ? `<optgroup label="✦ Combined lifts">${synth.map(opt).join("")}</optgroup>`
+    : "";
+  els.exercise.innerHTML = synthGroup + pure.map(opt).join("");
+  const all = [...synth, ...pure];
+  // Default to the most-trained real lift (not a synthetic), keeping any prior pick.
+  els.exercise.value = all.includes(prev) ? prev : (pure[0] ?? synth[0] ?? "");
 }
 
 /** Synthetic group derived-names (SQ mix, DL pattern) whose group has ≥1 member
@@ -713,6 +745,8 @@ function openChangelog() {
  * is an expandable row: version + SP + one-line note collapsed; bullet details
  * when opened. */
 function renderChangelog() {
+  // Show SP without a binary floating-point tail (e.g. 83.3, not 83.30000000001).
+  const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
@@ -737,8 +771,9 @@ function renderChangelog() {
           .map(
             (c) =>
               `<div class="cl-child"><span class="cl-cver">${escapeHtml(c.version)}</span>` +
-              `<span class="cl-cnote">${escapeHtml(c.note)}</span>` +
-              `<span class="cl-csp">SP ${c.sp}</span></div>`,
+              `<span class="cl-cmid"><span class="cl-ctitle">${escapeHtml(c.title)}</span>` +
+              `<span class="cl-cnote">${escapeHtml(c.note)}</span></span>` +
+              `<span class="cl-csp">SP ${fmtSp(c.sp)}</span></div>`,
           )
           .join("") +
         `</div>`
@@ -746,7 +781,7 @@ function renderChangelog() {
     // Planned entries show a "soon" tag instead of an SP chip.
     const spOrTag = r.soon
       ? `<span class="cl-soon">soon</span>`
-      : `<span class="cl-sp" title="${r.sp} story points">SP ${r.sp}</span>`;
+      : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>`;
     return (
       `<details class="cl-row${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
@@ -771,7 +806,7 @@ function renderChangelog() {
     let total = 0;
     const points = SP_HISTORY.map((p) => {
       total += p.sp;
-      return { x: Date.parse(p.date), y: total, meta: `${p.version} · +${p.sp} → ${total} SP` };
+      return { x: Date.parse(p.date), y: total, meta: `${p.version} · +${fmtSp(p.sp)} → ${fmtSp(total)} SP` };
     });
     mountSvgChart(spBox, {
       series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],
@@ -953,7 +988,7 @@ function renderLeaderboard() {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
   });
-  const entries = leaderboard(filtered, exercise, formula);
+  const entries = leaderboard(filtered, exercise, formula, strengthAsOf());
   const perBw = (username: string, e1rm: number): number | null => {
     const bw = ATHLETES[username]?.weight;
     return bw ? e1rm / bw : null;
@@ -998,7 +1033,7 @@ function renderLeaderboard() {
       ...(band.max !== undefined ? { maxReps: band.max } : {}),
     });
     const byUser = new Map<string, number>();
-    for (const e of leaderboard(f, exercise, formula)) {
+    for (const e of leaderboard(f, exercise, formula, strengthAsOf())) {
       const v = rel ? perBw(e.username, e.e1rm) : e.e1rm;
       if (v !== null) byUser.set(e.username, v);
     }
@@ -1125,7 +1160,7 @@ function renderPersonalRecords() {
   const filtered = filterRecords(base, { excludeDropsets: els.excludeDropsets.checked });
   // Personal records for the currently selected exercise/group only (one row per
   // athlete), honouring the same sex/bodyweight comparison filter as the chart.
-  const prs = personalRecords(filtered, formula)
+  const prs = personalRecords(filtered, formula, strengthAsOf())
     .filter((p) => p.exerciseName === exercise)
     .filter((p) => athletePassesColiseum(p.username));
   prs.sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
@@ -1175,6 +1210,27 @@ interface WorkoutGroup {
 let workoutGroups: WorkoutGroup[] = [];
 let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
+let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default: day)
+let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
+let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
+// Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
+// default (cleaner list); toggled + remembered via the "+ set buttons" checkbox.
+let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+/** Reflect workoutViewMode on the segmented toggle buttons. */
+function syncWorkoutViewToggle(): void {
+  for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.view === workoutViewMode);
+}
+/** Reflect workoutShowMode on its toggle, and show the group-dimension picker
+ * only in group view. */
+function syncWorkoutShowToggle(): void {
+  for (const b of els.workoutShowToggle.querySelectorAll<HTMLElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.show === workoutShowMode);
+  els.workoutGroupDimLabel.hidden = workoutShowMode !== "groups";
+  els.workoutNameLabel.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
+  for (const b of els.workoutNameToggle.querySelectorAll<HTMLElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.name === workoutNameMode);
+}
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
@@ -1225,11 +1281,17 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
 // Fine muscle groups in display order, with a colour (legs/arms split off the
 // CATEGORY_COLORS shades; the rest reuse them).
 const INDEX_MUSCLES: MuscleGroup[] = [
-  "Quads", "Hamstrings", "Glutes", "Calves", "Chest", "Back", "Shoulders",
-  "Biceps", "Triceps", "Core", "Cardio", "Mobility", "Skill", "Other",
+  "Quads", "Hamstrings", "Glutes", "Calves",
+  "Lower back", "Upper back", "Lats (pulls)", "Lats (rows)",
+  "Chest", "Shoulders", "Biceps", "Triceps",
+  "Core", "Cardio", "Mobility", "Skill", "Other",
 ];
 const muscleColor = (m: MuscleGroup): string =>
-  (({ Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf", Biceps: "#9c5bb8", Triceps: "#b07fc9" } as Record<string, string>)[m]) ??
+  (({
+    Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf",
+    "Lower back": "#3b66a6", "Upper back": "#4f79b8", "Lats (pulls)": "#5f86c2", "Lats (rows)": "#7497ce",
+    Biceps: "#9c5bb8", Triceps: "#b07fc9",
+  } as Record<string, string>)[m]) ??
   CATEGORY_COLORS[m as TrainingCategory] ?? CATEGORY_COLORS.Other;
 
 interface IndexRow { name: string; coeff: number; count: number; }
@@ -1562,6 +1624,7 @@ function athleteContext(): string {
   const prs = personalRecords(
     filterRecords(computedRecords(), { usernames: [username], excludeDropsets: true }),
     currentFormula(),
+    strengthAsOf(),
   );
   const topLifts = [...prs].sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm).slice(0, 8);
 
@@ -1941,10 +2004,11 @@ function renderCompareChart() {
       const raw = exerciseProgressByWeek(recs, username, name, formula)
         .filter((p) => p.bestE1rm !== null)
         .map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
-      // Current strength = best est. 1RM so far, so the line never drops.
-      return { name, color, type: "line" as const, points: runningMaxPoints(raw) };
+      // Current strength = best est. 1RM reached so far, then faded for time off
+      // the lift (sags through layoffs, pops back up when you train).
+      return { name, color, type: "line" as const, points: decayingStrengthPoints(raw) };
     });
-    els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date (never drops). Drag to pan · wheel to zoom · tap a point.`;
+    els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date, faded for time off the lift (sags during breaks, recovers when you train). Drag to pan · wheel to zoom · tap a point.`;
   }
 
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
@@ -2087,6 +2151,7 @@ function renderExercisesPage() {
   for (const p of personalRecords(
     filterRecords(prBasis, { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     formula,
+    strengthAsOf(),
   ))
     prByEx.set(p.exerciseName, p);
   const rm = (oneRm: number, reps: number): string => {
@@ -2205,6 +2270,7 @@ function renderExerciseDetail(exName: string) {
   const pr = personalRecords(
     filterRecords(remapCombined(computedRecords()), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     currentFormula(),
+    strengthAsOf(),
   ).find((p) => p.exerciseName === exName);
   renderCombineBar(exName, username);
   // Stats start collapsed on every drill-in (the <details> persists across
@@ -2249,17 +2315,23 @@ function renderCombineBar(exName: string, username: string) {
   const chips = combinedWith
     .map((n) => `<button type="button" class="ex-combine-chip" data-remove="${escapeHtml(n)}" title="Remove">${escapeHtml(n)} ✕</button>`)
     .join("");
-  const select =
-    `<select class="ex-combine-add" aria-label="Combine with another exercise">` +
-    `<option value="">＋ combine with…</option>` +
-    addable.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
-    `</select>`;
+  // Custom HTML/CSS dropdown (the app's .xdd style), not a native <select>, so it
+  // looks the same on every phone/browser. Toggled + selected via delegated
+  // handlers on exCombineBar.
+  const menu = addable.length
+    ? addable.map((n) => `<button type="button" class="xdd-opt" role="option" data-combineadd="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")
+    : `<div class="xdd-group">No other lifts to combine</div>`;
+  const picker =
+    `<div class="xdd ex-combine-dd">` +
+    `<button type="button" class="xdd-btn ex-combine-btn">＋ combine with…<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
+    `</div>`;
   els.exCombineBar.hidden = false;
   els.exCombineBar.innerHTML =
     `<span class="ex-combine-lbl muted">Viewing together:</span>` +
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
-    select;
+    picker;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -2493,15 +2565,36 @@ function ecalcRemoveRow(index: number) {
   ecalcRenderRows();
 }
 
-/** "Current strength" = the best estimated 1RM achieved UP TO each date, so the
- * line never drops: a weaker set just means an off day, not lost strength. Takes
- * x-sorted {x,y} points and returns the running maximum of y. */
-function runningMaxPoints<T extends { x: number; y: number }>(points: T[]): T[] {
-  let m = -Infinity;
-  return points.map((p) => {
-    m = Math.max(m, p.y);
-    return { ...p, y: Math.round(m * 10) / 10 };
-  });
+/** "Current strength" with detraining: at each sampled date, the best estimated
+ * 1RM you'd reached by then, faded by how long ago each was set (the metrics.ts
+ * model). So the line pops up when you train and sags through layoffs — and it
+ * runs all the way to today, so the present-day fade is visible even if the last
+ * logged set is old. Input points are {x: ms timestamp, y: e1rm}. */
+function decayingStrengthPoints<T extends { x: number; y: number }>(
+  points: T[],
+  todayMs: number = Date.parse(todayIso()),
+): { x: number; y: number }[] {
+  if (points.length === 0) return [];
+  const sorted = points.slice().sort((a, b) => a.x - b.x);
+  const firstX = sorted[0]!.x;
+  const endX = Math.max(sorted[sorted.length - 1]!.x, todayMs);
+  // Sample every few days for a smooth sag, and pin every training day so the
+  // recovery "pops" stay sharp.
+  const xs = new Set<number>();
+  for (let t = firstX; t < endX; t += 4 * MS_DAY) xs.add(t);
+  xs.add(endX);
+  for (const p of sorted) xs.add(p.x);
+  const out: { x: number; y: number }[] = [];
+  for (const x of [...xs].sort((a, b) => a - b)) {
+    let best = -Infinity;
+    for (const p of sorted) {
+      if (p.x > x) break; // sorted: only count sets up to this sample date
+      const v = p.y * strengthRetention((x - p.x) / MS_DAY);
+      if (v > best) best = v;
+    }
+    if (best > -Infinity) out.push({ x, y: Math.round(best * 10) / 10 });
+  }
+  return out;
 }
 const CURRENT_STRENGTH_COLOR = "#2e7d52";
 
@@ -2514,7 +2607,8 @@ function logFit(pts: { x: number; y: number }[]): { a: number; b: number } | nul
 
 /** One combined per-exercise graph (drill-in). Every "view" is a series you can
  * switch on/off by tapping its legend key: Per-set range (each set's weight→1RM,
- * dashes = reps), Current strength (best 1RM so far — a connected line), Est.
+ * dashes = reps), Current strength (best 1RM so far, faded for time off — a
+ * connected line that sags during breaks and pops back when you train), Est.
  * 1RM/wk dots, Sets/week bars, and an optional logarithmic Trend. kg on the left
  * axis (so the bars and lines share one scale); weekly set-count on the right. */
 function renderExerciseProgressChart(exName: string) {
@@ -2577,7 +2671,7 @@ function renderExerciseProgressChart(exName: string) {
     if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
   }
   const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
-  const strengthPts = runningMaxPoints(strengthSorted);
+  const strengthPts = decayingStrengthPoints(strengthSorted);
   // A dot for EVERY set's estimated 1RM (per the request), not a weekly summary.
   const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
 
@@ -2623,7 +2717,7 @@ function renderExerciseProgressChart(exName: string) {
     yUnit: "kg", rightUnit: "sets", insideLabels: true, height: 320,
   });
   els.exerciseProgressNote.textContent =
-    "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
+    "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far, faded for time off — sags during breaks, pops back up when you train, runs to today), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
     (exPersetBestOnly ? " Per-set views show each day's best set only." : "");
 }
 
@@ -2703,7 +2797,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     const tagged = aloneTags.has(aloneKey(g.date));
     return aloneFilter === "alone" ? tagged : !tagged;
   };
-  if (els.workoutView.value === "week") {
+  if (workoutViewMode === "week") {
     return weeksForUser(activeRecords(), els.athlete.value)
       .map((w) => ({
         label: `Week of ${shortDate(w.weekStart)}`,
@@ -2731,7 +2825,8 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 // ---- Workouts overview: a per-year heatmap of training days ----
 let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
-let heatFilter = "cat:Legs"; // "all" | "cat:<Category>" | "ex:<Exercise>" — defaults to Legs
+let heatFilter = "cat:Legs"; // "all" | "cat:<bodypart>" | "mus:<muscle>" | "fun:<pattern>" | "ex:<exercise>"
+let heatLastGroup = "cat:Legs"; // last non-"all" filter, for the group/all quick toggle
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
 // instead of jumping to that day — so you can tag many days quickly in one go.
 let aloneTagMode = false;
@@ -2747,15 +2842,18 @@ function trainingDays(): Map<string, number> {
 /** Sets on a day that match the active {@link heatFilter} (all / one category /
  * one exercise). */
 function dayMatchCount(d: WorkoutDay): number {
-  if (heatFilter.startsWith("cat:")) {
-    const cat = heatFilter.slice(4);
-    return d.exercises.reduce((s, e) => (exerciseCategory(e.exerciseName) === cat ? s + e.count : s), 0);
-  }
-  if (heatFilter.startsWith("ex:")) {
-    const ex = heatFilter.slice(3);
-    return d.exercises.reduce((s, e) => (e.exerciseName === ex ? s + e.count : s), 0);
-  }
-  return d.totalSets;
+  if (heatFilter === "all" || heatFilter === "") return d.totalSets;
+  const sep = heatFilter.indexOf(":");
+  const kind = heatFilter.slice(0, sep);
+  const val = heatFilter.slice(sep + 1);
+  const match = (name: string): boolean => {
+    if (kind === "cat") return exerciseCategory(name) === val; // coarse body part
+    if (kind === "mus") return muscleGroup(name) === val; // fine muscle group
+    if (kind === "fun") return tagsForExercise(name).some((t) => t.kind === "functional-pattern" && t.label === val);
+    if (kind === "ex") return name === val;
+    return false;
+  };
+  return d.exercises.reduce((s, e) => (match(e.exerciseName) ? s + e.count : s), 0);
 }
 
 /** Training dates → matching set count, honouring the heatmap filter. */
@@ -2850,9 +2948,9 @@ function heatScopeToggle(): string {
 
 /** Human label for the active heatmap filter value. */
 function heatFilterLabel(): string {
-  if (heatFilter.startsWith("cat:")) return heatFilter.slice(4);
-  if (heatFilter.startsWith("ex:")) return heatFilter.slice(3);
-  return "All exercises";
+  if (heatFilter === "all" || heatFilter === "") return "All exercises";
+  const i = heatFilter.indexOf(":");
+  return i >= 0 ? heatFilter.slice(i + 1) : heatFilter;
 }
 
 /** Filter as a custom dropdown (no native <select>): all exercises, one training
@@ -2860,21 +2958,40 @@ function heatFilterLabel(): string {
  * handled by delegation in the workoutCalendar click handler (data-heatval). */
 function heatFilterSelect(): string {
   const exs = exerciseCountsForUser(activeRecords(), els.athlete.value); // most-trained first
-  const cats = TRAINING_CATEGORIES.filter((c) => exs.some((e) => exerciseCategory(e.exerciseName) === c));
+  const names = exs.map((e) => e.exerciseName);
+  const cats = TRAINING_CATEGORIES.filter((c) => names.some((n) => exerciseCategory(n) === c));
+  const muscles = MUSCLE_GROUP_TAGS.map((t) => t.label).filter((l) => names.some((n) => muscleGroup(n) === l));
+  const funcs = FUNCTIONAL_PATTERN_TAGS.map((t) => t.label).filter((l) =>
+    names.some((n) => tagsForExercise(n).some((t) => t.kind === "functional-pattern" && t.label === l)),
+  );
   const opt = (val: string, label: string) =>
     `<button type="button" class="xdd-opt${heatFilter === val ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${escapeHtml(label)}</button>`;
+  const section = (title: string, items: [string, string][]) =>
+    items.length ? `<div class="xdd-group">${title}</div>${items.map(([v, l]) => opt(v, l)).join("")}` : "";
   const menu =
     opt("all", "All exercises") +
-    (cats.length ? `<div class="xdd-group">Categories</div>${cats.map((c) => opt(`cat:${c}`, c)).join("")}` : "") +
-    (exs.length
-      ? `<div class="xdd-group">Exercises</div>${exs.map((e) => opt(`ex:${e.exerciseName}`, e.exerciseName)).join("")}`
-      : "");
+    section("Body part", cats.map((c) => [`cat:${c}`, c])) +
+    section("Muscle group", muscles.map((m) => [`mus:${m}`, m])) +
+    section("Functional", funcs.map((f) => [`fun:${f}`, f])) +
+    section("Exercises", exs.map((e) => [`ex:${e.exerciseName}`, e.exerciseName]));
+  // Quick toggle: flip the heatmap between the selected group and All.
+  const isAll = heatFilter === "all" || heatFilter === "";
+  const toggle =
+    `<button type="button" class="heat-grp-toggle${isAll ? "" : " is-on"}" data-heattoggle="1" ` +
+    `title="Toggle between this group and all exercises">${isAll ? `Show ${escapeHtml(heatFilterLabel2(heatLastGroup))}` : "Show all"}</button>`;
   return (
     `<div class="xdd xdd-heat">` +
     `<button type="button" class="xdd-btn">${escapeHtml(heatFilterLabel())}<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
-    `</div>`
+    `</div>${toggle}`
   );
+}
+
+/** Label for a stored heatFilter value (used by the group/all quick toggle). */
+function heatFilterLabel2(filter: string): string {
+  if (filter === "all" || filter === "") return "all";
+  const i = filter.indexOf(":");
+  return i >= 0 ? filter.slice(i + 1) : filter;
 }
 
 /** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
@@ -2941,7 +3058,7 @@ function shiftHeatYear(delta: number) {
 
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
 function jumpToWorkoutDate(iso: string) {
-  if (els.workoutView.value !== "day") els.workoutView.value = "day"; // calendar is per-day
+  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutViewToggle(); } // calendar is per-day
   const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
   workoutsPage = Math.floor(idx / workoutsPageSize);
@@ -3004,9 +3121,38 @@ function renderWorkoutSetsChart() {
     `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel to zoom · tap a bar.`;
 }
 
+/** Sum a session's exercise set-counts into the chosen grouping dimension
+ * (muscle / functional pattern / combined / comparable), biggest first. An
+ * exercise with no group in that dimension is simply omitted; functional
+ * patterns are multi-membership, so a lift can add to more than one. */
+function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const e of exercises) {
+    let labels: string[];
+    if (dim === "muscles") labels = [muscleGroup(e.exerciseName)];
+    else if (dim === "functional") labels = tagsForExercise(e.exerciseName).filter((t) => t.kind === "functional-pattern").map((t) => t.label);
+    else if (dim === "combined") labels = combinableGroupsFor(e.exerciseName).map((t) => t.label);
+    else if (dim === "compared") labels = comparableGroupsFor(e.exerciseName).map((t) => t.label);
+    else labels = [];
+    for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + e.count);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+/** One set's display for the Workouts session line: weight^reps, except a
+ * bodyweight/placeholder load (0 or 1 — StrengthLevel sometimes forbids 0) that
+ * carries a note shows the NOTE as the base (it's really the difficulty/variation)
+ * with the reps as a superscript. */
+function setDisplay(s: SetRecord): string {
+  const note = s.notes?.trim();
+  if ((s.weight === 0 || s.weight === 1) && note)
+    return `<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+  return wr(s.weight, s.reps);
+}
+
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
-  const byWeek = els.workoutView.value === "week";
+  const byWeek = workoutViewMode === "week";
   els.restToggleLabel.hidden = byWeek; // rest days only make sense per day
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
@@ -3025,30 +3171,41 @@ function renderWorkoutsPage() {
       }
       const abs = start + i;
       let did: string;
-      if (els.workoutGrouping.value === "muscles") {
-        // Sum each exercise's sets into its muscle group (Quads, Hams, …).
-        const byMuscle = new Map<string, number>();
-        for (const e of g.exercises) {
-          const m = muscleGroup(e.exerciseName);
-          byMuscle.set(m, (byMuscle.get(m) ?? 0) + e.count);
-        }
-        did = [...byMuscle.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([m, c]) => `${escapeHtml(m)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
+      if (workoutShowMode === "exercises") {
+        // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
+        did = g.exercises
+          .map((e) => {
+            const setsTxt = g.sets
+              .filter((s) => s.exerciseName === e.exerciseName)
+              .map((s) => setDisplay(s))
+              .join(" ");
+            const name = workoutNameMode === "code" ? exerciseCode(e.exerciseName) : e.exerciseName;
+            const addBtn = showAddSets
+              ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
+                `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
+              : "";
+            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${addBtn}`;
+          })
           .join("<br>");
       } else {
-        did = g.exercises
-          .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
-          .join("<br>");
+        // Group view: sum each exercise's sets into the chosen grouping dimension.
+        did = groupSessionCounts(g.exercises, els.workoutGrouping.value)
+          .map(([label, c]) => `${escapeHtml(label)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
+          .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
       const tagged = aloneTags.has(aloneKey(g.date));
       const tagBtn =
         `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
         `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`;
+      // "+ exercise" adds a brand-new exercise to this session (shown with the
+      // rest of the quick-add UI).
+      const addExBtn = showAddSets
+        ? `<div class="wo-addex-wrap"><button type="button" class="wo-addex" data-adddate="${escapeHtml(g.date)}" title="Add a new exercise to this session">+ exercise</button></div>`
+        : "";
       return (
         `<tr class="wo-row" data-index="${abs}"><td>` +
         `<div class="wo-date"><span class="caret">▸</span>${g.label}${tagBtn}</div>` +
-        `<div class="wo-did">${did}</div></td>` +
+        `<div class="wo-did">${did}${addExBtn}</div></td>` +
         `<td class="num">${g.totalSets}</td></tr>`
       );
     })
@@ -3071,6 +3228,36 @@ function onWorkoutRowClick(e: MouseEvent) {
     saveAlone();
     renderWorkoutsPage();
     renderWorkoutCalendar(); // refresh the year map so the red "alone" ring updates live
+    return;
+  }
+  // Inline "add set" form (shown right under an exercise). Handle its own
+  // buttons here and swallow any other click inside it, so clicking the inputs
+  // never bubbles up to expand/collapse the row.
+  const inForm = target.closest<HTMLElement>(".wo-addform");
+  if (inForm) {
+    if (target.closest(".wo-af-go")) onInlineAddGo(inForm);
+    else if (target.closest(".wo-af-cancel")) removeInlineAddForm(inForm);
+    else {
+      // Day / Today toggle — light up the tapped option.
+      const seg = target.closest<HTMLElement>(".wo-af-when .seg-btn");
+      if (seg)
+        for (const b of inForm.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn"))
+          b.classList.toggle("is-active", b === seg);
+    }
+    return;
+  }
+  // "+ exercise" on a session → inline form with a searchable exercise picker,
+  // to add a brand-new exercise to that day.
+  const addExBtn = target.closest<HTMLButtonElement>(".wo-addex");
+  if (addExBtn) {
+    toggleInlineAddExerciseForm(addExBtn);
+    return;
+  }
+  // "+ set" on an exercise → open a small inline form right here so the set is
+  // logged on this screen, without leaving for the Add page.
+  const addBtn = target.closest<HTMLButtonElement>(".wo-addset");
+  if (addBtn?.dataset.addex) {
+    toggleInlineAddForm(addBtn);
     return;
   }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
@@ -3107,9 +3294,13 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
   const body = group.exercises
     .map((e) => {
+      const addBtn = showAddSets
+        ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
+        : "";
       const header =
         `<tr class="set-ex-row"><td colspan="4" class="wo-exname">` +
-        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span></td></tr>`;
+        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
+        `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
         .map((s) => setRowsHtml(s, formula))
@@ -3117,7 +3308,11 @@ function workoutGroupHtml(group: WorkoutGroup): string {
       return header + sets;
     })
     .join("");
-  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
+  // A trailing "+ exercise" row to add a brand-new exercise to this session.
+  const addExRow = showAddSets
+    ? `<tr class="set-ex-row wo-addex-host"><td colspan="4"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
+    : "";
+  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -3465,8 +3660,51 @@ function openAncestorDetails(el: HTMLElement): void {
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
+/** "Browse groups" on the Index page: two levels of native <details> — open a
+ * dimension (Muscle groups / Functional groups / Combined lifts), then a group,
+ * to read its plain-language explanation and the exercises that fall under it. */
+function renderGroupBrowser() {
+  const names = distinctExercises(data.records);
+  const groupBlock = (t: RegistryTag): string => {
+    const ex = exercisesForTag(t, names);
+    const list = ex.length
+      ? ex.map((e) => `<span class="gb-ex">${escapeHtml(e)}</span>`).join("")
+      : `<span class="muted">none logged</span>`;
+    return (
+      `<details class="gb-group" data-gb="${escapeHtml(t.label)}">` +
+      `<summary class="gb-sum"><span class="caret">▸</span>${escapeHtml(t.label)} ` +
+      `<span class="gb-count muted">${ex.length}</span></summary>` +
+      `<div class="gb-why">${escapeHtml(t.why)}</div>` +
+      `<div class="gb-exlist">${list}</div></details>`
+    );
+  };
+  const dim = (title: string, tags: readonly RegistryTag[]): string =>
+    `<details class="gb-dim"><summary class="gb-dim-sum"><span class="caret">▸</span>${escapeHtml(title)} ` +
+    `<span class="gb-count muted">${tags.length}</span></summary>` +
+    `<div class="gb-dim-body">${tags.map(groupBlock).join("")}</div></details>`;
+  els.groupBrowser.innerHTML =
+    dim("Muscle groups", MUSCLE_GROUP_TAGS) +
+    dim("Functional groups", FUNCTIONAL_PATTERN_TAGS) +
+    dim("Combined lifts", [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS]);
+}
+
+/** Open the Browse-groups panel to a specific group (from an inspector tag chip):
+ * expand its dimension + the group, scroll to it and flash. */
+function jumpToGroup(label: string): void {
+  const group = els.groupBrowser.querySelector<HTMLDetailsElement>(`details.gb-group[data-gb="${CSS.escape(label)}"]`);
+  if (!group) return;
+  group.closest<HTMLDetailsElement>("details.gb-dim")?.setAttribute("open", "");
+  group.open = true;
+  requestAnimationFrame(() => {
+    group.scrollIntoView({ behavior: "smooth", block: "center" });
+    group.classList.add("wo-flash");
+    window.setTimeout(() => group.classList.remove("wo-flash"), 1600);
+  });
+}
+
 function renderBwParts() {
   renderMergeList();
+  renderGroupBrowser();
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
@@ -3578,7 +3816,7 @@ function exerciseInfoHtml(name: string): string {
   // each chip explains its WHY on hover.
   const tags = tagsForExercise(name);
   const tagChips = tags.length
-    ? tags.map((t) => `<span class="ex-tag" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</span>`).join("")
+    ? tags.map((t) => `<button type="button" class="ex-tag" data-tagjump="${escapeHtml(t.label)}" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</button>`).join("")
     : `<span class="muted">none</span>`;
 
   const rows = [
@@ -3797,6 +4035,56 @@ function renderTest() {
   );
   els.calcOut.innerHTML = rows.join("");
   renderCalcCurve(effLoad, bodyweightLoad, reps, addedWeight, calcTab);
+  renderDecayCurve();
+}
+
+/**
+ * Strength-fade explainer: % of a peak 1RM still available vs days since you last
+ * trained the lift (the detraining model in metrics.ts). Flat through the grace
+ * period, then a logarithmically-slowing decline to the floor. A few labelled
+ * milestone dots make the shape concrete. Static (no inputs) — drawn with the
+ * calculator so it sizes correctly when the Test tab is shown.
+ */
+function renderDecayCurve() {
+  const box = document.getElementById("decayCurveChart");
+  if (!box) return;
+  const maxDays = 540; // ~1.5 years out — long enough to see the tail flatten
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const linePts: SvgPoint[] = [];
+  for (let d = 0; d <= maxDays; d += 2) {
+    linePts.push({ x: d, y: r1(strengthRetention(d) * 100) });
+  }
+  // Milestone dots people can relate to.
+  const milestones: { d: number; label: string }[] = [
+    { d: STRENGTH_DECAY.graceDays, label: "2 weeks" },
+    { d: STRENGTH_DECAY.graceDays + STRENGTH_DECAY.tauDays, label: "+1 month" },
+    { d: 90, label: "3 months" },
+    { d: 180, label: "6 months" },
+    { d: 365, label: "1 year" },
+  ];
+  const dots: SvgPoint[] = milestones.map((m) => {
+    const pct = r1(strengthRetention(m.d) * 100);
+    return { x: m.d, y: pct, meta: `${m.label}: ${pct}% kept` };
+  });
+  const series: SvgSeries[] = [
+    { name: "Strength kept", color: "#284e86", type: "line", points: linePts, noLegend: true },
+    { name: "Milestones", color: "#b8902f", type: "scatter", points: dots },
+  ];
+  const config: SvgChartConfig = {
+    series,
+    xKind: "linear",
+    yBeginAtZero: true,
+    height: 300,
+    yUnit: "%",
+    formatX: (x) => `${Math.round(x)}`,
+    formatTipX: (x) => `${Math.round(x)} days off`,
+  };
+  if (!decayCurveSvg) decayCurveSvg = mountSvgChart(box, config);
+  else decayCurveSvg.update(config);
+  const floorPct = Math.round(STRENGTH_DECAY.floor * 100);
+  els.decayCurveNote.textContent =
+    `% of your peak 1RM kept after N days without training a lift. Flat for the first ` +
+    `${STRENGTH_DECAY.graceDays} days, ~10% lost a month later, then a slow logarithmic tail down to a ${floorPct}% floor.`;
 }
 
 /**
@@ -4042,6 +4330,13 @@ async function init() {
     renderExercisesPage();
   });
 
+  els.decayStrength.checked = decayStrength;
+  els.decayStrength.addEventListener("change", () => {
+    decayStrength = els.decayStrength.checked;
+    try { localStorage.setItem("colosseum.decayStrength", decayStrength ? "1" : "0"); } catch { /* ignore */ }
+    renderAll(); // every 1RM/leaderboard/PR view re-reads strengthAsOf()
+  });
+
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -4092,6 +4387,12 @@ async function init() {
     const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt");
     if (heatOpt?.dataset.heatval !== undefined) {
       heatFilter = heatOpt.dataset.heatval;
+      if (heatFilter !== "all" && heatFilter !== "") heatLastGroup = heatFilter; // remember for the toggle
+      return renderWorkoutCalendar();
+    }
+    if (target.closest("[data-heattoggle]")) {
+      if (heatFilter === "all" || heatFilter === "") heatFilter = heatLastGroup;
+      else { heatLastGroup = heatFilter; heatFilter = "all"; }
       return renderWorkoutCalendar();
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
@@ -4141,8 +4442,29 @@ async function init() {
     if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
   });
   els.summariseBtn.addEventListener("click", runSummary);
-  els.workoutView.addEventListener("change", () => {
+  els.workoutViewToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
+    const v = btn?.dataset.view;
+    if ((v !== "day" && v !== "week") || v === workoutViewMode) return;
+    workoutViewMode = v;
+    syncWorkoutViewToggle();
     workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.workoutShowToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
+    const m = btn?.dataset.show;
+    if ((m !== "exercises" && m !== "groups") || m === workoutShowMode) return;
+    workoutShowMode = m;
+    syncWorkoutShowToggle();
+    renderWorkoutsPage();
+  });
+  els.workoutNameToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
+    const m = btn?.dataset.name;
+    if ((m !== "code" && m !== "full") || m === workoutNameMode) return;
+    workoutNameMode = m;
+    syncWorkoutShowToggle();
     renderWorkoutsPage();
   });
   els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
@@ -4153,6 +4475,12 @@ async function init() {
   });
   els.restToggle.addEventListener("change", () => {
     workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.addSetsToggle.checked = showAddSets; // reflect the remembered choice
+  els.addSetsToggle.addEventListener("change", () => {
+    showAddSets = els.addSetsToggle.checked;
+    localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
@@ -4177,18 +4505,43 @@ async function init() {
     if (info?.dataset.exinfo) jumpToExerciseInfo(info.dataset.exinfo);
   });
   // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
-  els.exCombineBar.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-combine-add");
-    if (!sel || !sel.value || selectedExercise === null) return;
-    if (sel.value !== selectedExercise && !combinedWith.includes(sel.value)) combinedWith.push(sel.value);
-    renderExercisesPage();
-  });
   els.exCombineBar.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-combine-chip[data-remove]");
-    const name = chip?.dataset.remove;
-    if (!name) return;
-    combinedWith = combinedWith.filter((n) => n !== name);
-    renderExercisesPage();
+    const t = e.target as HTMLElement;
+    // Toggle the custom "+ combine with…" dropdown.
+    const btn = t.closest(".ex-combine-btn");
+    if (btn) {
+      const dd = btn.closest<HTMLElement>(".xdd");
+      const menu = dd?.querySelector<HTMLElement>(".xdd-menu");
+      if (dd && menu) {
+        const opening = menu.hasAttribute("hidden");
+        menu.toggleAttribute("hidden", !opening);
+        dd.classList.toggle("open", opening);
+      }
+      return;
+    }
+    // Pick an exercise to combine in.
+    const opt = t.closest<HTMLElement>("[data-combineadd]");
+    if (opt?.dataset.combineadd) {
+      const n = opt.dataset.combineadd;
+      if (selectedExercise !== null && n !== selectedExercise && !combinedWith.includes(n)) combinedWith.push(n);
+      renderExercisesPage();
+      return;
+    }
+    // Remove a combined chip.
+    const chip = t.closest<HTMLElement>(".ex-combine-chip[data-remove]");
+    if (chip?.dataset.remove) {
+      combinedWith = combinedWith.filter((n) => n !== chip.dataset.remove);
+      renderExercisesPage();
+    }
+  });
+  // Close the combine dropdown when clicking elsewhere.
+  document.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".ex-combine-dd")) return;
+    const menu = els.exCombineBar.querySelector<HTMLElement>(".ex-combine-dd .xdd-menu");
+    if (menu && !menu.hasAttribute("hidden")) {
+      menu.setAttribute("hidden", "");
+      menu.closest(".xdd")?.classList.remove("open");
+    }
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 
@@ -4325,6 +4678,9 @@ async function init() {
   });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
+    // A tag chip in the inspector jumps to that group in the Browse-groups panel.
+    const tagJump = (e.target as HTMLElement).closest<HTMLElement>("[data-tagjump]");
+    if (tagJump?.dataset.tagjump) { jumpToGroup(tagJump.dataset.tagjump); return; }
     // Per-exercise active-set overrides in the inspector (force in / out).
     const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
     if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
@@ -4352,8 +4708,8 @@ async function init() {
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
     els.formula, els.bwSource, els.rank, els.sexFilter,
-    els.workoutView, els.workoutsPageSize, els.testAthlete, els.testExercise,
-    els.dataUser, els.groupsAthlete,
+    els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
+    els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);
 }
@@ -4687,6 +5043,7 @@ interface ManualEntry {
 }
 const MANUAL_KEY = "colosseum.manualSets.v1";
 let manualEntries: ManualEntry[] = loadManual();
+let editingManualId: string | null = null; // which hand-logged set is being edited inline
 
 function loadManual(): ManualEntry[] {
   try {
@@ -4744,16 +5101,30 @@ function renderAddTab() {
     .join("");
   if (!els.addDate.value) els.addDate.value = todayIso();
 
-  // Recently-added list (newest first), each with a delete button.
+  // Recently-added list (newest first). Each row has Edit + Delete; the row being
+  // edited swaps its cells for inputs (exercise / weight × reps / date) + Save.
   const rows = [...manualEntries]
     .reverse()
-    .map(
-      (m) =>
+    .map((m) => {
+      if (m.id === editingManualId) {
+        return (
+          `<tr data-edit-row="${escapeHtml(m.id)}"><td>${escapeHtml(m.user)}</td>` +
+          `<td><input class="me-ex" value="${escapeHtml(m.exerciseName)}" /></td>` +
+          `<td class="num"><input class="me-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" value="${m.weight ?? ""}" />` +
+          `<span class="muted"> × </span><input class="me-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" value="${m.reps ?? ""}" /></td>` +
+          `<td class="num"><input class="me-date" type="date" value="${escapeHtml(m.date)}" /></td>` +
+          `<td class="num"><button type="button" class="manual-save" data-id="${escapeHtml(m.id)}">Save</button>` +
+          `<button type="button" class="manual-cancel" aria-label="Cancel">×</button></td></tr>`
+        );
+      }
+      return (
         `<tr><td>${escapeHtml(m.user)}</td><td>${escapeHtml(m.exerciseName)}</td>` +
         `<td class="num">${m.weight ?? "—"}${m.reps != null ? `×${m.reps}` : ""}</td>` +
         `<td class="num">${escapeHtml(m.date)}</td>` +
-        `<td class="num"><button type="button" class="manual-del" data-id="${escapeHtml(m.id)}" aria-label="Delete">×</button></td></tr>`,
-    )
+        `<td class="num"><button type="button" class="manual-edit" data-id="${escapeHtml(m.id)}" aria-label="Edit">✎</button>` +
+        `<button type="button" class="manual-del" data-id="${escapeHtml(m.id)}" aria-label="Delete">×</button></td></tr>`
+      );
+    })
     .join("");
   els.addCount.textContent = manualEntries.length ? `(${manualEntries.length})` : "";
   els.addTable.innerHTML = manualEntries.length
@@ -4786,6 +5157,187 @@ function updateArmPosField(): void {
       SITUP_ARM_POSITIONS.map((p) => `<option value="${p}">${p}</option>`).join("");
 }
 
+// The weight / reps / sets inputs + Add / cancel buttons shared by both inline
+// forms (add-a-set and add-a-new-exercise).
+const AF_FIELDS =
+  `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
+  `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+  `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />` +
+  `<button type="button" class="wo-af-go">Add</button>` +
+  `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
+  `<span class="wo-af-msg muted"></span>`;
+
+/** Day / Today chooser — only worth showing when the session you're viewing
+ * isn't today (so you can log to a past day or to today). */
+function afWhenToggle(date: string, today: string): string {
+  return date === today
+    ? ""
+    : `<span class="wo-af-when seg-toggle">` +
+        `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>` +
+        `<button type="button" class="seg-btn" data-when="today">Today</button>` +
+        `</span>`;
+}
+
+/** Compact inline "add set" form shown right under an exercise in the Workouts
+ * view, so a set is logged on this screen without jumping to the Add page. The
+ * athlete is the one the page is showing; the date is the session's date. */
+function inlineAddFormHtml(exerciseName: string, date: string): string {
+  const today = todayIso();
+  return (
+    `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    afWhenToggle(date, today) +
+    AF_FIELDS +
+    `</span>`
+  );
+}
+
+/** Like the add-set form, but with a searchable exercise picker up front so a
+ * brand-new exercise can be added to a session (type to filter every known
+ * exercise; a new name is allowed too). */
+function inlineAddExerciseFormHtml(date: string): string {
+  const today = todayIso();
+  return (
+    `<span class="wo-addform wo-addform--new" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    afWhenToggle(date, today) +
+    `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" aria-label="Exercise" autocomplete="off" />` +
+    AF_FIELDS +
+    `</span>`
+  );
+}
+
+/** Remove an open inline add form, plus its wrapping detail-table row if it sits
+ * in the expanded sets table. */
+function removeInlineAddForm(form: HTMLElement) {
+  const row = form.closest("tr.wo-addform-row");
+  if (row) row.remove();
+  else form.remove();
+}
+
+/** Toggle the inline add form for a "+ set" button. In the expanded sets table
+ * it becomes its own row under the exercise header; in the collapsed session
+ * summary it sits inline right after the button. */
+function toggleInlineAddForm(btn: HTMLElement) {
+  const ex = btn.dataset.addex ?? "";
+  const date = btn.dataset.adddate ?? "";
+  const headerRow = btn.closest("tr.set-ex-row");
+  if (headerRow) {
+    const next = headerRow.nextElementSibling;
+    if (next?.classList.contains("wo-addform-row")) {
+      next.remove();
+      return;
+    }
+    const tr = document.createElement("tr");
+    tr.className = "wo-addform-row";
+    tr.innerHTML = `<td colspan="4">${inlineAddFormHtml(ex, date)}</td>`;
+    headerRow.insertAdjacentElement("afterend", tr);
+    tr.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+    return;
+  }
+  const sib = btn.nextElementSibling;
+  if (sib?.classList.contains("wo-addform")) {
+    sib.remove();
+    return;
+  }
+  btn.insertAdjacentHTML("afterend", inlineAddFormHtml(ex, date));
+  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+}
+
+/** Toggle the inline "add a new exercise" form for a "+ exercise" button. Same
+ * two contexts as toggleInlineAddForm, but the form leads with a searchable
+ * exercise picker. */
+function toggleInlineAddExerciseForm(btn: HTMLElement) {
+  const date = btn.dataset.adddate ?? "";
+  const hostRow = btn.closest("tr.set-ex-row");
+  if (hostRow) {
+    const next = hostRow.nextElementSibling;
+    if (next?.classList.contains("wo-addform-row")) {
+      next.remove();
+      return;
+    }
+    const tr = document.createElement("tr");
+    tr.className = "wo-addform-row";
+    tr.innerHTML = `<td colspan="4">${inlineAddExerciseFormHtml(date)}</td>`;
+    hostRow.insertAdjacentElement("afterend", tr);
+    tr.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+    return;
+  }
+  const sib = btn.nextElementSibling;
+  if (sib?.classList.contains("wo-addform")) {
+    sib.remove();
+    return;
+  }
+  btn.insertAdjacentHTML("afterend", inlineAddExerciseFormHtml(date));
+  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+}
+
+/** Log the set(s) from an inline form into the hand-logged sets, then refresh
+ * the Workouts view in place (keeping the open weeks/days expanded). */
+function onInlineAddGo(form: HTMLElement) {
+  // New-exercise form carries a search input; the per-exercise form carries the
+  // name on the button's data-addex.
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const exerciseName = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  // Use whichever day the toggle has selected (the session day or today); with no
+  // toggle (session already is today) both are the same.
+  const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
+  const date =
+    (when === "today" ? form.dataset.todaydate : form.dataset.daydate) || form.dataset.daydate || todayIso();
+  const msg = form.querySelector<HTMLElement>(".wo-af-msg");
+  if (exInput && !exerciseName) {
+    if (msg) msg.textContent = "Pick or type an exercise.";
+    exInput.focus();
+    return;
+  }
+  const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
+  const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
+  const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
+  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
+  const username = els.athlete.value;
+  const user = athleteLabel();
+  if (!username || !exerciseName) return;
+  if (!Number.isFinite(reps) || reps < 1) {
+    if (msg) msg.textContent = "Enter reps (1+).";
+    form.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
+    return;
+  }
+  for (let i = 0; i < sets; i++) {
+    manualEntries.push({
+      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      user,
+      username,
+      date,
+      exerciseName,
+      weight: Number.isFinite(weight) ? weight : null,
+      reps,
+    });
+  }
+  saveManual();
+  mergeManualSets();
+  // Which weeks/days are expanded right now — reopen them after the rebuild.
+  const openDates = new Set(
+    Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
+      .map((r) => workoutGroups[Number(r.dataset.index)]?.date)
+      .filter((d): d is string => Boolean(d)),
+  );
+  // The set just landed in data.records; rebuild this athlete's day cache so the
+  // day view (week view reads activeRecords directly) reflects it too.
+  athleteWorkouts = workoutsForUser(activeRecords(), els.athlete.value);
+  renderWorkoutsPage();
+  reopenWorkoutGroups(openDates);
+  renderWorkoutCalendar();
+  renderWorkoutSetsChart();
+  renderDataTab();
+}
+
+/** After a re-render, re-expand the workout rows whose group date is in the set. */
+function reopenWorkoutGroups(dates: Set<string>) {
+  for (const row of document.querySelectorAll<HTMLTableRowElement>("tr.wo-row")) {
+    if (row.classList.contains("open")) continue;
+    const grp = workoutGroups[Number(row.dataset.index)];
+    if (grp && dates.has(grp.date)) insertDetail(row, 2, workoutGroupHtml(grp));
+  }
+}
+
 function onAddSubmit() {
   const username = els.addAthlete.value;
   const user = els.addAthlete.selectedOptions[0]?.textContent ?? username;
@@ -4796,6 +5348,9 @@ function onAddSubmit() {
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
   const date = els.addDate.value || todayIso();
+  // How many identical sets to log at once (blank/1 = a single set).
+  const setsRaw = Math.round(parseFloat(els.addSets.value));
+  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
   if (!username || !exerciseName) {
     els.addHint.textContent = "Pick an athlete and enter an exercise.";
     return;
@@ -4804,23 +5359,24 @@ function onAddSubmit() {
     els.addHint.textContent = "Enter the reps (1 or more).";
     return;
   }
-  manualEntries.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    user,
-    username,
-    date,
-    exerciseName,
-    weight: Number.isFinite(weight) ? weight : null,
-    reps,
-  });
+  for (let i = 0; i < sets; i++) {
+    manualEntries.push({
+      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      user,
+      username,
+      date,
+      exerciseName,
+      weight: Number.isFinite(weight) ? weight : null,
+      reps,
+    });
+  }
   saveManual();
   mergeManualSets();
-  els.addWeight.value = "";
-  els.addReps.value = "";
-  els.addExercise.value = "";
-  els.addArmPos.value = "";
-  updateArmPosField(); // hide the arm-position dropdown again
-  els.addHint.textContent = `Added ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}.`;
+  // Keep the just-entered athlete / exercise / weight / reps / sets / date in
+  // place so logging the next set of the same exercise is one tap (Add again).
+  // Nothing is cleared — the form "remembers" what you last added.
+  const setWord = sets === 1 ? "set" : `${sets} sets`;
+  els.addHint.textContent = `Added ${setWord} of ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}. Tap Add again to log more.`;
   renderAddTab();
   renderAll(); // every view now includes the new set
   renderDataTab();
@@ -4876,15 +5432,58 @@ function setupAddTab() {
     els.addImportFile.value = ""; // allow re-importing the same file
   });
   els.addTable.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".manual-del");
-    if (!btn?.dataset.id) return;
-    manualEntries = manualEntries.filter((m) => m.id !== btn.dataset.id);
+    const t = e.target as HTMLElement;
+    const editBtn = t.closest<HTMLButtonElement>(".manual-edit");
+    if (editBtn?.dataset.id) {
+      editingManualId = editBtn.dataset.id; // open this row's inline editor
+      renderAddTab();
+      return;
+    }
+    if (t.closest(".manual-cancel")) {
+      editingManualId = null;
+      renderAddTab();
+      return;
+    }
+    const saveBtn = t.closest<HTMLButtonElement>(".manual-save");
+    if (saveBtn?.dataset.id) {
+      saveManualEdit(saveBtn.dataset.id, saveBtn.closest("tr")!);
+      return;
+    }
+    const delBtn = t.closest<HTMLButtonElement>(".manual-del");
+    if (!delBtn?.dataset.id) return;
+    manualEntries = manualEntries.filter((m) => m.id !== delBtn.dataset.id);
     saveManual();
     mergeManualSets();
     renderAddTab();
     renderAll();
     renderDataTab();
   });
+}
+
+/** Commit the inline edits for one hand-logged set (exercise / weight / reps /
+ * date) from its editor row, then refresh everywhere. */
+function saveManualEdit(id: string, row: HTMLElement) {
+  const entry = manualEntries.find((m) => m.id === id);
+  if (!entry) return;
+  const exerciseName = row.querySelector<HTMLInputElement>(".me-ex")!.value.trim();
+  const weight = parseFloat(row.querySelector<HTMLInputElement>(".me-weight")!.value);
+  const reps = Math.round(parseFloat(row.querySelector<HTMLInputElement>(".me-reps")!.value));
+  const date = row.querySelector<HTMLInputElement>(".me-date")!.value || entry.date;
+  if (!exerciseName || !Number.isFinite(reps) || reps < 1) {
+    els.addHint.textContent = "Need an exercise and reps (1 or more) to save.";
+    return;
+  }
+  entry.exerciseName = exerciseName;
+  entry.weight = Number.isFinite(weight) ? weight : null;
+  entry.reps = reps;
+  entry.date = date;
+  editingManualId = null;
+  saveManual();
+  mergeManualSets();
+  renderAddTab();
+  renderAll();
+  renderDataTab();
+  els.addHint.textContent = `Updated ${exerciseName} for ${entry.user}.`;
 }
 
 function setupChecklists() {
@@ -4985,6 +5584,7 @@ function renderGroupsView() {
       const prs = personalRecords(
         filterRecords(recs, { usernames: [who], excludeDropsets: els.excludeDropsets.checked }),
         formula,
+        strengthAsOf(),
       );
       const byEx = new Map(prs.map((p) => [p.exerciseName, p]));
       const rows = members
@@ -5016,7 +5616,7 @@ function renderGroupsView() {
       // Everyone: best e1rm per athlete across the group's member lifts, ranked.
       const byUser = new Map<string, { user: string; e1rm: number; ex: string }>();
       for (const m of members) {
-        for (const e of leaderboard(base, m, formula)) {
+        for (const e of leaderboard(base, m, formula, strengthAsOf())) {
           const cur = byUser.get(e.username);
           if (!cur || e.e1rm > cur.e1rm) byUser.set(e.username, { user: e.user, e1rm: e.e1rm, ex: m });
         }
@@ -5085,6 +5685,7 @@ function renderTeamView() {
     for (const p of personalRecords(
       filterRecords(recs, { usernames: [u.username], excludeDropsets: els.excludeDropsets.checked }),
       formula,
+      strengthAsOf(),
     ))
       m.set(p.exerciseName, p.bestE1rm.e1rm);
     return m;

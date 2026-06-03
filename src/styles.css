@@ -50,6 +50,10 @@
   --hm-bd-odd: #3c4757;
 }
 * { box-sizing: border-box; }
+/* The [hidden] attribute must always win — class rules like `.ex-period-bar
+ * { display: flex }` otherwise override the UA default and keep hidden bars
+ * visible (e.g. the period control lingering on the Compare graph). */
+[hidden] { display: none !important; }
 body.locked { overflow: hidden; }
 /* Decorative landing gate. */
 .login-gate {
@@ -523,6 +527,14 @@ main { padding-bottom: 5rem; }
 .add-form .primary-btn { height: 38px; }
 .manual-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 6px; }
 .manual-del:hover { color: var(--danger); }
+.manual-edit { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0 6px; }
+.manual-edit:hover { color: var(--accent); }
+.manual-cancel { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 6px; }
+.manual-cancel:hover { color: var(--danger); }
+.manual-save { font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px; background: var(--accent); color: #fff; }
+.me-ex { width: 100%; }
+.me-weight, .me-reps { width: 3.2rem; }
+.me-ex, .me-weight, .me-reps, .me-date { font: inherit; font-size: 0.82rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }
 .add-saved-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
 .add-io { display: flex; gap: 0.4rem; }
 .add-io .settings-link { font-size: 0.8rem; padding: 6px 10px; }
@@ -571,10 +583,9 @@ main { padding-bottom: 5rem; }
 }
 .ex-combine-chip.is-primary { cursor: default; background: var(--accent); color: #fff; border-color: var(--accent); }
 .ex-combine-chip[data-remove]:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
-.ex-combine-add {
-  border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--text);
-  font: inherit; font-size: 0.78rem; padding: 0.2rem 0.4rem;
-}
+/* The "+ combine with…" custom dropdown, sized to sit inline with the chips. */
+.ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: 999px; }
+.ex-combine-dd .xdd-menu { min-width: max(100%, 12rem); }
 .ex-cat-chip {
   appearance: none; cursor: pointer;
   border: 1px solid var(--line); border-radius: 999px;
@@ -880,6 +891,19 @@ select.subtle-select:hover, select.subtle-select:focus {
 .cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
 .cal-mode-btn:hover { color: var(--text); }
 .cal-mode-btn.is-active { color: #fff; background: var(--accent); }
+/* Segmented toggle (e.g. Workouts View: By day / By week). */
+.seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg-btn { padding: 6px 12px; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.is-active { color: #fff; background: var(--accent); }
+/* Workouts session line: each set written as weight^reps. */
+.wo-exname { font-weight: 600; }
+.wo-setlist { font-size: 0.85rem; }
+.wo-note { font-style: italic; }
+.wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
+/* A weightless set shows just its reps as a (slightly larger) superscript. */
+sup.wr-bw { font-size: 0.85em; }
 .heat-filter {
   font: inherit; font-size: 0.82rem; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; max-width: 60vw;
@@ -950,6 +974,13 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .cal-tagmode:hover { border-color: #e23b3b; color: #e23b3b; }
 .cal-tagmode.is-on { background: #e23b3b; border-color: #e23b3b; color: #fff; }
+/* Heatmap group/all quick toggle. */
+.heat-grp-toggle {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; line-height: 1;
+}
+.heat-grp-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.heat-grp-toggle.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Hint shown while armed; same red as the ring so it reads as one feature. */
 .cal-taghint {
   font-size: 0.78rem; color: #e23b3b; margin: 0.1rem 0 0.5rem;
@@ -1054,6 +1085,41 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .wo-alone:hover { border-color: var(--accent); color: var(--accent); }
 .wo-alone.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wo-addset {
+  margin-left: 0.35rem; font: inherit; font-size: 0.68rem; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
+}
+.wo-addset:hover { border-color: var(--accent); color: var(--accent); }
+.wo-addex-wrap { margin-top: 0.35rem; }
+.wo-addex {
+  font: inherit; font-size: 0.7rem; font-weight: 700;
+  border: 1px dashed var(--line); border-radius: 999px; padding: 2px 10px;
+  background: var(--panel); color: var(--muted); cursor: pointer;
+}
+.wo-addex:hover { border-color: var(--accent); color: var(--accent); }
+.wo-addform {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
+  margin: 0.3rem 0 0.1rem 0.35rem; vertical-align: middle;
+}
+.wo-addform .wo-af-ex { width: 8.5rem; }
+.wo-addform input {
+  width: 3.4rem; font: inherit; font-size: 0.8rem; padding: 2px 6px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
+}
+.wo-addform .wo-af-go {
+  font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px;
+  background: var(--accent); color: #fff;
+}
+.wo-addform .wo-af-cancel {
+  font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  background: var(--panel); color: var(--muted);
+}
+.wo-addform .wo-af-msg { font-size: 0.72rem; }
+.wo-addform .wo-af-when .seg-btn { padding: 2px 8px; font-size: 0.72rem; font-weight: 700; }
+.wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }
@@ -1430,10 +1496,30 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Index inspector: registry tag chips, group membership, active-set overrides. */
 .ex-tags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
 .ex-tag {
-  display: inline-block; font-size: 0.72rem; font-weight: 600;
+  display: inline-block; font: inherit; font-size: 0.72rem; font-weight: 600;
   background: var(--accent-soft); color: var(--accent);
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; cursor: help;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; cursor: pointer;
 }
+.ex-tag:hover { border-color: var(--accent); }
+/* Browse-groups panel on the Index page (two levels of <details>). */
+.group-browser { display: flex; flex-direction: column; gap: 6px; }
+.gb-dim > .gb-dim-sum {
+  list-style: none; cursor: pointer; font-weight: 700; font-size: 0.95rem;
+  padding: 8px 10px; background: var(--accent-soft); border-radius: 8px;
+}
+.gb-dim-sum::-webkit-details-marker { display: none; }
+.gb-dim[open] > .gb-dim-sum { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.gb-dim-body { padding: 4px 4px 8px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; }
+.gb-group { border-bottom: 1px solid var(--line); }
+.gb-group:last-child { border-bottom: 0; }
+.gb-sum { list-style: none; cursor: pointer; font-weight: 600; font-size: 0.86rem; padding: 7px 8px; }
+.gb-sum::-webkit-details-marker { display: none; }
+.gb-sum .caret, .gb-dim-sum .caret { display: inline-block; transition: transform 0.12s ease; color: var(--muted); margin-right: 0.3rem; }
+.gb-group[open] > .gb-sum .caret, .gb-dim[open] > .gb-dim-sum .caret { transform: rotate(90deg); }
+.gb-count { font-weight: 600; }
+.gb-why { font-size: 0.8rem; color: var(--muted); padding: 0 8px 6px 22px; }
+.gb-exlist { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 9px 22px; }
+.gb-ex { font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
 .ex-group { margin: 0.4rem 0 0; padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .ex-group-hd { font-size: 0.82rem; font-weight: 700; }
 .ex-group-why { font-size: 0.76rem; margin: 0.2rem 0; }
@@ -1547,7 +1633,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-children { margin: 0 0 0.7rem; padding: 0 0 0 6.5rem; }
 .cl-child { display: flex; align-items: baseline; gap: 0.6rem; padding: 3px 0; border-top: 1px solid var(--line); }
 .cl-cver { flex: 0 0 4rem; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.78rem; color: var(--accent); }
-.cl-cnote { flex: 1 1 auto; font-size: 0.8rem; color: var(--muted); }
+.cl-cmid { flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cl-ctitle { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.cl-cnote { font-size: 0.8rem; color: var(--muted); }
 .cl-csp { flex: none; font-size: 0.68rem; font-weight: 700; color: var(--gold); }
 @media (max-width: 560px) { .cl-details, .cl-children { padding-left: 1.25rem; } }
 .health-section { font-size: 0.95rem; margin: 1.25rem 0 0.25rem; }
