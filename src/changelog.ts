@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.10", sp: 1, note: "Exercises list: the active period (e.g. “Last 3 months”) is now always shown above the list and tappable to change — no more forgetting it's filtered." },
       { version: "b.2.0.9", sp: 1, note: "Renamed the all-exercises / body-parts page to “Index” so it's not confused with a person's own Exercises list; added a one-line explainer at its top." },
       { version: "b.2.0.8", sp: 1, note: "The athlete chip row now sticks to the top while you scroll, and the selected athlete scrolls into view — so you always see whose data you're looking at." },
       { version: "b.2.0.7", sp: 3, note: "Graphs with 2+ lines: tap a legend key to show/hide that series (e.g. hide raw 1RM to see just current strength). Legend keys are now toggle buttons; keeps your pan/zoom." },

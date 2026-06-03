@@ -145,6 +145,7 @@ const els = {
   exerciseNotTrained: $<HTMLInputElement>("exerciseNotTrained"),
   exerciseShowThird: $<HTMLInputElement>("exerciseShowThird"),
   exerciseRange: $<HTMLDetailsElement>("exerciseRange"),
+  exPeriodBar: $("exPeriodBar"),
   exerciseSort: $("exerciseSort"),
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
@@ -1780,6 +1781,7 @@ function renderExercisesPage() {
     els.exSearchBar.hidden = true;
     els.exerciseCompare.hidden = true;
     els.exCatBar.hidden = true;
+    els.exPeriodBar.hidden = true;
     renderExerciseDetail(selectedExercise);
     return;
   }
@@ -1788,6 +1790,8 @@ function renderExercisesPage() {
   const onCompare = exercisesTab === "compare";
   els.exFiltersBtn.hidden = onCompare; // filters/search only apply to the list
   els.exSearchBar.hidden = onCompare;
+  // The period is always shown in the list view so it's never a hidden surprise.
+  els.exPeriodBar.hidden = onCompare;
   // Category picker only in By-category list mode.
   els.exCatBar.hidden = onCompare || exerciseSort !== "category";
   els.exerciseFilter.hidden = true; // the kebab menu starts closed

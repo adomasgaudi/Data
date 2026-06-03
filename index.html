@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.9</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.10</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -177,14 +177,6 @@
               <div class="ex-filters-wrap">
                 <button type="button" id="exFiltersBtn" class="ex-filters-btn" aria-label="Filters &amp; sort" aria-haspopup="true">⋯</button>
                 <div id="exerciseFilter" class="ex-filters-menu" hidden>
-                  <span class="ex-filter-lbl">Period</span>
-                  <details id="exerciseRange" class="period-dd" data-days="0">
-                    <summary class="period-dd-summary">
-                      <span class="period-dd-value">All time</span>
-                      <span class="period-dd-caret">▾</span>
-                    </summary>
-                    <div class="period-dd-menu" role="listbox"></div>
-                  </details>
                   <span class="ex-filter-lbl">Sort</span>
                   <div id="exerciseSort" class="ex-sort" role="group" aria-label="Sort exercises">
                     <button type="button" class="ex-sort-btn" data-sort="sets">By sets</button>
@@ -195,6 +187,18 @@
                   <label class="ex-nottrained"><input type="checkbox" id="exerciseShowThird" /> Show cardio/mobility</label>
                 </div>
               </div>
+            </div>
+            <!-- Active period, always visible (it's easy to forget the list is
+                 only the last 3 months). Tap to change. -->
+            <div id="exPeriodBar" class="ex-period-bar" hidden>
+              <span class="ex-period-lbl muted">Showing period:</span>
+              <details id="exerciseRange" class="period-dd" data-days="0">
+                <summary class="period-dd-summary">
+                  <span class="period-dd-value">All time</span>
+                  <span class="period-dd-caret">▾</span>
+                </summary>
+                <div class="period-dd-menu" role="listbox"></div>
+              </details>
             </div>
             <!-- By-category picker: tap a category to show/hide it in the list. -->
             <div id="exCatBar" class="ex-cat-bar" hidden></div>
