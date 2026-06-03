@@ -1057,7 +1057,7 @@ interface WorkoutGroup {
 }
 let workoutGroups: WorkoutGroup[] = [];
 let workoutsPage = 0;
-let workoutsPageSize = 20; // entries per page in the Workouts list (20 or 50)
+let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
