@@ -85,6 +85,8 @@ const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
+  viewModeBtn: $<HTMLButtonElement>("viewModeBtn"),
+  viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
@@ -231,6 +233,21 @@ function setTheme(dark: boolean) {
   try { localStorage.setItem("colosseum.theme", dark ? "dark" : "light"); } catch { /* ignore */ }
   els.themeBtn.textContent = dark ? "☀ Light mode" : "🌙 Dark mode";
   els.themeBtn.setAttribute("aria-pressed", String(dark));
+}
+
+/** Which view the dashboard is showing: "admin" (the default, full access) or
+ * "user". For now this only flips a banner near the title — no behaviour gates
+ * yet; it's the hook a later slice will hang user-facing restrictions on. */
+type ViewMode = "admin" | "user";
+let viewMode: ViewMode = (() => {
+  try { return localStorage.getItem("colosseum.viewMode") === "user" ? "user" : "admin"; } catch { return "admin"; }
+})();
+function setViewMode(mode: ViewMode) {
+  viewMode = mode;
+  try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
+  els.viewBadge.hidden = mode !== "user";
+  els.viewModeBtn.textContent = mode === "user" ? "🛡 Switch to admin view" : "👤 Switch to user view";
+  els.viewModeBtn.setAttribute("aria-pressed", String(mode === "user"));
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
@@ -4007,6 +4024,12 @@ async function init() {
   els.themeBtn.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀" : "🌙";
   els.themeBtn.addEventListener("click", () =>
     setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
+  );
+
+  // Admin ↔ user view toggle (just shows a banner near the title for now).
+  setViewMode(viewMode);
+  els.viewModeBtn.addEventListener("click", () =>
+    setViewMode(viewMode === "user" ? "admin" : "user"),
   );
 
   // "Legs (all)" category visibility in the By-category list (off by default).
