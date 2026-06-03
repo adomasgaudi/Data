@@ -22,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.1.4</span></h1>
+      <h1>Colosseum <span class="version">b.2.1.5</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -146,16 +146,19 @@
             </details>
             <div id="workoutCalendar" class="wo-calendar"></div>
             <div class="wo-controls">
-              <label class="inline-label">View
-                <select id="workoutView">
-                  <option value="day">By day</option>
-                  <option value="week" selected>By week</option>
-                </select>
-              </label>
+              <span class="inline-label">View
+                <span id="workoutViewToggle" class="seg-toggle" role="group" aria-label="View by day or week">
+                  <button type="button" class="seg-btn" data-view="day">By day</button>
+                  <button type="button" class="seg-btn is-active" data-view="week">By week</button>
+                </span>
+              </span>
               <label class="inline-label">Show
                 <select id="workoutGrouping">
                   <option value="exercises">Exercises</option>
-                  <option value="muscles" selected>Muscle groups</option>
+                  <option value="muscles" selected>Muscle group</option>
+                  <option value="functional">Functional group</option>
+                  <option value="combined">Combined lift</option>
+                  <option value="compared">Compared lift</option>
                 </select>
               </label>
               <label class="inline-label">Per page

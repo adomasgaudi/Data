@@ -164,7 +164,7 @@ const els = {
   workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
-  workoutView: $<HTMLSelectElement>("workoutView"),
+  workoutViewToggle: $("workoutViewToggle"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
@@ -1164,6 +1164,12 @@ interface WorkoutGroup {
 let workoutGroups: WorkoutGroup[] = [];
 let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
+let workoutViewMode: "day" | "week" = "week"; // By day / By week toggle
+/** Reflect workoutViewMode on the segmented toggle buttons. */
+function syncWorkoutViewToggle(): void {
+  for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.view === workoutViewMode);
+}
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
 // sets), and within each category still by sets.
@@ -2632,7 +2638,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     const tagged = aloneTags.has(aloneKey(g.date));
     return aloneFilter === "alone" ? tagged : !tagged;
   };
-  if (els.workoutView.value === "week") {
+  if (workoutViewMode === "week") {
     return weeksForUser(activeRecords(), els.athlete.value)
       .map((w) => ({
         label: `Week of ${shortDate(w.weekStart)}`,
@@ -2870,7 +2876,7 @@ function shiftHeatYear(delta: number) {
 
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
 function jumpToWorkoutDate(iso: string) {
-  if (els.workoutView.value !== "day") els.workoutView.value = "day"; // calendar is per-day
+  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutViewToggle(); } // calendar is per-day
   const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
   workoutsPage = Math.floor(idx / workoutsPageSize);
@@ -2933,9 +2939,27 @@ function renderWorkoutSetsChart() {
     `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel to zoom · tap a bar.`;
 }
 
+/** Sum a session's exercise set-counts into the chosen grouping dimension
+ * (muscle / functional pattern / combined / comparable), biggest first. An
+ * exercise with no group in that dimension is simply omitted; functional
+ * patterns are multi-membership, so a lift can add to more than one. */
+function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const e of exercises) {
+    let labels: string[];
+    if (dim === "muscles") labels = [muscleGroup(e.exerciseName)];
+    else if (dim === "functional") labels = tagsForExercise(e.exerciseName).filter((t) => t.kind === "functional-pattern").map((t) => t.label);
+    else if (dim === "combined") labels = combinableGroupsFor(e.exerciseName).map((t) => t.label);
+    else if (dim === "compared") labels = comparableGroupsFor(e.exerciseName).map((t) => t.label);
+    else labels = [];
+    for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + e.count);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
-  const byWeek = els.workoutView.value === "week";
+  const byWeek = workoutViewMode === "week";
   els.restToggleLabel.hidden = byWeek; // rest days only make sense per day
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
@@ -2954,21 +2978,16 @@ function renderWorkoutsPage() {
       }
       const abs = start + i;
       let did: string;
-      if (els.workoutGrouping.value === "muscles") {
-        // Sum each exercise's sets into its muscle group (Quads, Hams, …).
-        const byMuscle = new Map<string, number>();
-        for (const e of g.exercises) {
-          const m = muscleGroup(e.exerciseName);
-          byMuscle.set(m, (byMuscle.get(m) ?? 0) + e.count);
-        }
-        did = [...byMuscle.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .map(([m, c]) => `${escapeHtml(m)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
-          .join("<br>");
-      } else {
+      const dim = els.workoutGrouping.value;
+      if (dim === "exercises") {
         did = g.exercises
           .map((e) => `${escapeHtml(e.exerciseName)} <span class="muted">${e.count}</span>`)
           .join("<br>");
+      } else {
+        // Sum each exercise's sets into the chosen grouping dimension.
+        did = groupSessionCounts(g.exercises, dim)
+          .map(([label, c]) => `${escapeHtml(label)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
+          .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
       const tagged = aloneTags.has(aloneKey(g.date));
       const tagBtn =
@@ -4083,7 +4102,12 @@ async function init() {
     if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
   });
   els.summariseBtn.addEventListener("click", runSummary);
-  els.workoutView.addEventListener("change", () => {
+  els.workoutViewToggle.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
+    const v = btn?.dataset.view;
+    if ((v !== "day" && v !== "week") || v === workoutViewMode) return;
+    workoutViewMode = v;
+    syncWorkoutViewToggle();
     workoutsPage = 0;
     renderWorkoutsPage();
   });
@@ -4315,7 +4339,7 @@ async function init() {
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
     els.formula, els.bwSource, els.rank, els.sexFilter,
-    els.workoutView, els.workoutsPageSize, els.testAthlete, els.testExercise,
+    els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
     els.dataUser, els.groupsAthlete,
   ])
     enhanceSelect(sel);

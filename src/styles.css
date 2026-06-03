@@ -867,6 +867,12 @@ select.subtle-select:hover, select.subtle-select:focus {
 .cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
 .cal-mode-btn:hover { color: var(--text); }
 .cal-mode-btn.is-active { color: #fff; background: var(--accent); }
+/* Segmented toggle (e.g. Workouts View: By day / By week). */
+.seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg-btn { padding: 6px 12px; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.is-active { color: #fff; background: var(--accent); }
 .heat-filter {
   font: inherit; font-size: 0.82rem; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; max-width: 60vw;
