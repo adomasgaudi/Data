@@ -347,6 +347,17 @@ describe("strengthRetention (detraining decay)", () => {
     expect(strengthRetention(44)).toBeCloseTo(0.9, 2);
   });
 
+  it("is aggressive enough for a fresh lift — real loss by 6 months and a year", () => {
+    expect(strengthRetention(180)).toBeLessThan(0.78); // >22% gone by ~6 months
+    expect(strengthRetention(365)).toBeLessThan(0.68); // >32% gone by ~1 year
+  });
+
+  it("is genuinely curved, not linear (drops far faster early than late)", () => {
+    const earlyDrop = strengthRetention(44) - strengthRetention(104); // months 1→3 past grace
+    const lateDrop = strengthRetention(284) - strengthRetention(344); // a later equal window
+    expect(earlyDrop).toBeGreaterThan(lateDrop * 1.8); // early loss ≫ late loss
+  });
+
   it("decelerates: each further month removes less than the month before", () => {
     const oneMonth = strengthRetention(44);
     const twoMonths = strengthRetention(74);

@@ -250,38 +250,44 @@ export function effectiveLoad(
 }
 
 /**
- * Detraining ("use it or lose it") model — the spaced-repetition / Ebbinghaus
- * forgetting curve. A strength achievement isn't frozen: stop training a lift and
- * your *current* ability fades on an exponential curve, R(t) = exp(−(t−grace)/S).
+ * Detraining ("use it or lose it") model — a LOGARITHMIC forgetting curve, the
+ * mirror of a learning curve: you lose strength fast at first, then ever more
+ * slowly. The *loss* grows with the log of time off:
  *
- * The twist that makes it behave like a LEARNING curve: `S` (stability — how
- * durable the memory is, in days) GROWS with every training session, so each rep
- * makes the curve flatter and the decay weaker (a well-drilled lift is retained
- * far longer than a one-off PR). A freshly-hit lift uses `baseStability`, tuned so
- * it loses ~10% a month after the two-week grace; repeated training multiplies S
- * up to `maxStability`. Floored so it never hits zero (muscle memory).
+ *   loss(t) = lossPerLog · ln(1 + (t − grace) / S),   retention = 1 − loss (floored)
+ *
+ * Curved (not the near-straight line an exponential gives) and aggressive: with
+ * S = baseStability = 30 and lossPerLog = 0.10/ln2, a freshly-hit lift loses ~10%
+ * one month past the grace, ~27% by six months, ~36% by a year.
+ *
+ * The learning-curve twist: `S` (durability, days) GROWS with each training
+ * session (grownStability), so a well-drilled lift fades more slowly than a one-off
+ * PR — but only modestly (capped low), so even trained lifts keep a visible,
+ * curved fade rather than flattening to a line. Floored so it never hits zero.
  */
 export const STRENGTH_DECAY = {
   graceDays: 14, // full strength retained for two weeks after a session
-  baseStability: 285, // days; a freshly-hit lift loses ~10% a month past grace
-  stabilityGrowth: 1.5, // each session makes strength this much more durable
-  maxStability: 2000, // cap — even a lifelong lift fades (slowly) in the end
+  baseStability: 30, // days; a freshly-hit lift loses ~10% a month past grace
+  lossPerLog: 0.1 / Math.LN2, // ⇒ exactly 10% lost one month after the grace ends
+  stabilityGrowth: 1.8, // each session makes the lift this much more durable
+  maxStability: 90, // modest cap — trained lifts fade slower, but still clearly
   floor: 0.5, // never decays below half the peak (muscle memory)
 } as const;
 
 /**
  * Fraction (0–1] of a peak strength still available after `daysSinceTrained` days
  * without training a lift, for a memory of durability `stabilityDays`. Flat
- * through the grace, then exp(−(t−grace)/S), floored. Bigger S ⇒ a flatter curve
- * (slower decay) — that's how repeated training weakens the fade (grownStability).
+ * through the grace, then a logarithmic decline, floored. Bigger S ⇒ a flatter
+ * curve (slower decay) — that's how repeated training weakens the fade.
  */
 export function strengthRetention(
   daysSinceTrained: number,
   stabilityDays: number = STRENGTH_DECAY.baseStability,
 ): number {
-  const { graceDays, floor } = STRENGTH_DECAY;
+  const { graceDays, lossPerLog, floor } = STRENGTH_DECAY;
   if (!Number.isFinite(daysSinceTrained) || daysSinceTrained <= graceDays) return 1;
-  return Math.max(floor, Math.exp(-(daysSinceTrained - graceDays) / Math.max(1, stabilityDays)));
+  const loss = lossPerLog * Math.log(1 + (daysSinceTrained - graceDays) / Math.max(1, stabilityDays));
+  return Math.max(floor, 1 - loss);
 }
 
 /** Each training session consolidates the lift: durability (stability) grows by
