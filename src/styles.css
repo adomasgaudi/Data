@@ -1086,6 +1086,7 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--panel); color: var(--muted);
 }
 .wo-addform .wo-af-msg { font-size: 0.72rem; }
+.wo-addform .wo-af-when .seg-btn { padding: 2px 8px; font-size: 0.72rem; font-weight: 700; }
 .wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */

@@ -3094,6 +3094,13 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (inForm) {
     if (target.closest(".wo-af-go")) onInlineAddGo(inForm);
     else if (target.closest(".wo-af-cancel")) removeInlineAddForm(inForm);
+    else {
+      // Day / Today toggle — light up the tapped option.
+      const seg = target.closest<HTMLElement>(".wo-af-when .seg-btn");
+      if (seg)
+        for (const b of inForm.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn"))
+          b.classList.toggle("is-active", b === seg);
+    }
     return;
   }
   // "+ set" on an exercise → open a small inline form right here so the set is
@@ -4857,8 +4864,19 @@ function renderAddTab() {
  * view, so a set is logged on this screen without jumping to the Add page. The
  * athlete is the one the page is showing; the date is the session's date. */
 function inlineAddFormHtml(exerciseName: string, date: string): string {
+  const today = todayIso();
+  // Let the user log against the day they're looking at OR today — only worth a
+  // toggle when those differ (looking at a past session). Defaults to that day.
+  const whenToggle =
+    date === today
+      ? ""
+      : `<span class="wo-af-when seg-toggle">` +
+        `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>` +
+        `<button type="button" class="seg-btn" data-when="today">Today</button>` +
+        `</span>`;
   return (
-    `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(date)}">` +
+    `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    whenToggle +
     `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
     `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
     `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />` +
@@ -4910,7 +4928,11 @@ function toggleInlineAddForm(btn: HTMLElement) {
  * the Workouts view in place (keeping the open weeks/days expanded). */
 function onInlineAddGo(form: HTMLElement) {
   const exerciseName = form.dataset.addex ?? "";
-  const date = form.dataset.adddate || todayIso();
+  // Use whichever day the toggle has selected (the session day or today); with no
+  // toggle (session already is today) both are the same.
+  const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
+  const date =
+    (when === "today" ? form.dataset.todaydate : form.dataset.daydate) || form.dataset.daydate || todayIso();
   const msg = form.querySelector<HTMLElement>(".wo-af-msg");
   const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
   const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
