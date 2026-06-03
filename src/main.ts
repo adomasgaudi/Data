@@ -173,6 +173,8 @@ const els = {
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
   addExerciseList: $("addExerciseList"),
+  addArmPos: $<HTMLSelectElement>("addArmPos"),
+  addArmPosField: $("addArmPosField"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
   addDate: $<HTMLInputElement>("addDate"),
@@ -4759,10 +4761,38 @@ function renderAddTab() {
     : `<tbody><tr><td class="muted">No hand-logged sets yet.</td></tr></tbody>`;
 }
 
+/* Some bodyweight lifts are progressed by changing leverage, not load. Decline
+ * sit-ups get harder as the arms move from the stomach up over the head — so when
+ * that exercise is entered, the Add form offers an arm-position choice (easiest →
+ * hardest) and the pick is folded into the logged exercise name, making each
+ * position its own tracked variant (like a heavier weight would be). */
+const SITUP_ARM_POSITIONS = [
+  "arms on stomach",
+  "arms straight by sides",
+  "hands on head",
+  "arms overhead, elbows bent",
+  "arms overhead, straight",
+];
+const isDeclineSitup = (name: string): boolean =>
+  /decline\s*sit[\s-]*ups?/.test(name.toLowerCase());
+
+/** Show/populate the arm-position dropdown only for decline sit-ups. */
+function updateArmPosField(): void {
+  const show = isDeclineSitup(els.addExercise.value);
+  els.addArmPosField.hidden = !show;
+  if (show && els.addArmPos.options.length === 0)
+    els.addArmPos.innerHTML =
+      `<option value="">— pick a position —</option>` +
+      SITUP_ARM_POSITIONS.map((p) => `<option value="${p}">${p}</option>`).join("");
+}
+
 function onAddSubmit() {
   const username = els.addAthlete.value;
   const user = els.addAthlete.selectedOptions[0]?.textContent ?? username;
-  const exerciseName = els.addExercise.value.trim();
+  let exerciseName = els.addExercise.value.trim();
+  // Fold the chosen arm position into the name so it tracks as its own variant.
+  const armPos = !els.addArmPosField.hidden ? els.addArmPos.value : "";
+  if (armPos && isDeclineSitup(exerciseName)) exerciseName = `${exerciseName} (${armPos})`;
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
   const date = els.addDate.value || todayIso();
@@ -4788,6 +4818,8 @@ function onAddSubmit() {
   els.addWeight.value = "";
   els.addReps.value = "";
   els.addExercise.value = "";
+  els.addArmPos.value = "";
+  updateArmPosField(); // hide the arm-position dropdown again
   els.addHint.textContent = `Added ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}.`;
   renderAddTab();
   renderAll(); // every view now includes the new set
@@ -4833,6 +4865,8 @@ async function importManual(file: File) {
 
 function setupAddTab() {
   renderAddTab();
+  updateArmPosField();
+  els.addExercise.addEventListener("input", updateArmPosField);
   els.addSubmit.addEventListener("click", onAddSubmit);
   els.addExport.addEventListener("click", exportManual);
   els.addImport.addEventListener("click", () => els.addImportFile.click());
