@@ -47,6 +47,8 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.29", sp: 2, note: "The per-set RIR (difficulty) picker is now a custom dropdown that looks the same on every phone/browser instead of the OS one. Closed it shows the range + a one-word feel (e.g. “0.5–1.3 difficult”); open it lists every band with the full description." },
+      { version: "b.2.0.28", sp: 1, note: "Workouts “alone” filter is now one cycling button (Alone: Both → Only alone → Not alone), replacing the old “Only alone” checkbox — so you can also list just the sessions you trained with others." },
       { version: "b.2.0.27", sp: 0.5, note: "Year heatmap now rings any day you tagged “trained alone” with a red outline (inset, so it reads on every square colour); the ring updates live when you toggle the tag." },
       { version: "b.2.0.26", sp: 1, note: "Per-set difficulty switched from RPE (1–10) to RIR — Reps In Reserve. The picker now offers 11 descriptive bands (0.1–0.3 “almost impossible” down to 30–100 “warm-up light”) instead of bare numbers; header, tooltip and graph all read RIR. Old RPE numbers don't carry over (stored under a new key)." },
       { version: "b.2.0.25", sp: 0.1, note: "Year heatmap day-of-month numbers turned down even more (barely-there): 8% black / 16% white on dark days." },

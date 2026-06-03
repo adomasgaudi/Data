@@ -1013,6 +1013,18 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* In the workouts list the date sits as a small header above that entry's exercises. */
 .wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
 .wo-did { line-height: 1.5; }
+/* Workouts "alone" filter — one button that cycles Both → Only alone → Not
+   alone. Faint when off (Both = no filter), accent when filtering. */
+.alone-filter {
+  font: inherit; font-size: 0.82rem; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px;
+  background: var(--panel); color: var(--muted); cursor: pointer;
+}
+.alone-filter:hover { border-color: var(--accent); color: var(--accent); }
+.alone-filter[data-state="alone"],
+.alone-filter[data-state="notAlone"] {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
 /* "alone" tag toggle on each session — faint until tagged, accent when on. */
 .wo-alone {
   margin-left: 0.5rem; font: inherit; font-size: 0.68rem; font-weight: 700;
@@ -1363,17 +1375,23 @@ select.subtle-select:hover, select.subtle-select:focus {
   font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0; margin-right: 0.5rem;
 }
 .back-btn:hover { text-decoration: underline; }
-/* Per-set difficulty (RIR — reps in reserve) picker in the sets tables. The
-   chosen option text can be long, so the closed select is clamped to its cell
-   width; the open dropdown still shows each band in full. */
-.set-rpe {
-  font: inherit; font-size: 0.78rem; color: var(--muted);
-  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
-  padding: 1px 2px; cursor: pointer;
-  max-width: 100%; box-sizing: border-box;
-}
-.set-rpe.is-set { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+/* Per-set difficulty (RIR — reps in reserve) picker in the sets tables — a custom
+   HTML/CSS dropdown (.xdd-rpe), not a native <select>, so it looks the same on
+   every device. The closed button is compact (clamped to the cell); the open menu
+   matches the cell width and wraps each band's full description to 2 lines. */
 .rpe-cell { width: 4.6em; max-width: 4.6em; }
+.xdd-rpe { display: block; width: 100%; }
+.xdd-rpe .xdd-btn {
+  padding: 2px 4px; font-size: 0.74rem; font-weight: 600; gap: 0.15rem;
+  border-radius: 6px; background: var(--card); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.xdd-rpe .xdd-caret { font-size: 0.6rem; }
+.xdd-rpe.is-set .xdd-btn { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+.xdd-rpe.is-set .xdd-caret { color: rgba(255, 255, 255, 0.85); }
+/* Menu hugs the cell width and wraps long descriptions instead of going wide. */
+.xdd-rpe .xdd-menu { min-width: max(100%, 13rem); max-width: 15rem; }
+.xdd-rpe .set-rpe-opt { white-space: normal; line-height: 1.25; padding: 6px 9px; font-size: 0.78rem; }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }

@@ -157,7 +157,7 @@ const els = {
   workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
   restToggle: $<HTMLInputElement>("restToggle"),
   restToggleLabel: $("restToggleLabel"),
-  aloneOnly: $<HTMLInputElement>("aloneOnly"),
+  aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
   addExerciseList: $("addExerciseList"),
@@ -444,22 +444,25 @@ function saveAlone() {
 // FELT and that maps to a band, not an exact rep count.
 //
 // RIR ladder — the single source of truth. `id` is the stored value and also
-// the range shown in the cell; `desc` is the plain-language feel. Bands run
-// hardest (almost no reps left) → easiest (many reps in reserve). Contiguous,
-// non-overlapping.
-const RIR_BANDS: ReadonlyArray<{ id: string; desc: string }> = [
-  { id: "0.1–0.3", desc: "almost impossible — elite powerlifter grinding ~10s" },
-  { id: "0.3–0.5", desc: "extremely difficult — trained person, 2–4s grind" },
-  { id: "0.5–1.3", desc: "difficult — 1–2s grind, a 2nd rep seems improbable" },
-  { id: "1.3–1.5", desc: "maybe one more rep, but very hard" },
-  { id: "1.5–1.8", desc: "could do another rep, but hard" },
-  { id: "1.8–2.5", desc: "1 RIR for sure, maybe 2" },
-  { id: "2.5–4", desc: "2–3 reps in reserve" },
-  { id: "4–8", desc: "4–8 reps in reserve" },
-  { id: "8–15", desc: "8–15 reps in reserve" },
-  { id: "15–30", desc: "15–30 reps in reserve" },
-  { id: "30–100", desc: "30–100 reps in reserve (warm-up light)" },
+// the range shown in the cell; `word` is a one-word feel for the closed picker
+// button; `desc` is the full plain-language feel shown in the open list. Bands
+// run hardest (almost no reps left) → easiest (many reps in reserve).
+// Contiguous, non-overlapping.
+const RIR_BANDS: ReadonlyArray<{ id: string; word: string; desc: string }> = [
+  { id: "0.1–0.3", word: "max", desc: "almost impossible — elite powerlifter grinding ~10s" },
+  { id: "0.3–0.5", word: "brutal", desc: "extremely difficult — trained person, 2–4s grind" },
+  { id: "0.5–1.3", word: "difficult", desc: "difficult — 1–2s grind, a 2nd rep seems improbable" },
+  { id: "1.3–1.5", word: "very hard", desc: "maybe one more rep, but very hard" },
+  { id: "1.5–1.8", word: "hard", desc: "could do another rep, but hard" },
+  { id: "1.8–2.5", word: "1–2 left", desc: "1 RIR for sure, maybe 2" },
+  { id: "2.5–4", word: "2–3 left", desc: "2–3 reps in reserve" },
+  { id: "4–8", word: "easy", desc: "4–8 reps in reserve" },
+  { id: "8–15", word: "very easy", desc: "8–15 reps in reserve" },
+  { id: "15–30", word: "light", desc: "15–30 reps in reserve" },
+  { id: "30–100", word: "warm-up", desc: "30–100 reps in reserve (warm-up light)" },
 ];
+/** Look up a band by its stored id. */
+const rirBand = (id: string | undefined) => RIR_BANDS.find((b) => b.id === id);
 const RIR_IDS = new Set(RIR_BANDS.map((b) => b.id));
 const RPE_STORE_KEY = "colosseum.rir.v1";
 let rpeGrades: Record<string, string> = (() => {
@@ -2467,7 +2470,7 @@ function renderExerciseProgressChart(exName: string) {
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
-  if (target.closest(".set-rpe")) return; // the difficulty picker handles itself
+  if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
@@ -2515,10 +2518,30 @@ function onExerciseRowClick(e: MouseEvent) {
 }
 
 // ---- Workouts page (one row per day or week, 20/page, expandable) ----
+// The "alone" filter cycles three ways: show every session, only the ones the
+// user tagged trained-alone, or only the ones they didn't. Rest days carry no
+// tag, so they're dropped by both the alone-only and not-alone filters.
+type AloneFilter = "both" | "alone" | "notAlone";
+const ALONE_FILTER_LABEL: Record<AloneFilter, string> = {
+  both: "Alone: Both",
+  alone: "Alone: Only alone",
+  notAlone: "Alone: Not alone",
+};
+const ALONE_FILTER_NEXT: Record<AloneFilter, AloneFilter> = {
+  both: "alone",
+  alone: "notAlone",
+  notAlone: "both",
+};
+let aloneFilter: AloneFilter = "both";
+
 function buildWorkoutGroups(): WorkoutGroup[] {
-  // "Only alone" keeps just the sessions the user tagged as trained alone.
-  const onlyAlone = els.aloneOnly.checked;
-  const keep = (g: WorkoutGroup) => !onlyAlone || (!g.rest && aloneTags.has(aloneKey(g.date)));
+  // Filter on the "alone" tag: both (no filter), only tagged, or only untagged.
+  const keep = (g: WorkoutGroup): boolean => {
+    if (aloneFilter === "both") return true;
+    if (g.rest) return false; // rest days are never tagged either way
+    const tagged = aloneTags.has(aloneKey(g.date));
+    return aloneFilter === "alone" ? tagged : !tagged;
+  };
   if (els.workoutView.value === "week") {
     return weeksForUser(data.records, els.athlete.value)
       .map((w) => ({
@@ -2862,7 +2885,7 @@ function renderWorkoutsPage() {
 
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
-  if (target.closest(".set-rpe")) return; // the difficulty picker handles itself
+  if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -3038,15 +3061,7 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
     e1rm === null
       ? "—"
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
-  const grade = rpeFor(s);
-  const rpeCell =
-    `<select class="set-rpe${grade ? " is-set" : ""}" data-setid="${escapeHtml(setId(s))}" aria-label="Reps in reserve (RIR)">` +
-    `<option value="">–</option>` +
-    RIR_BANDS.map(
-      (b) =>
-        `<option value="${escapeHtml(b.id)}"${grade === b.id ? " selected" : ""} title="${escapeHtml(b.desc)}">${escapeHtml(b.id)} — ${escapeHtml(b.desc)}</option>`,
-    ).join("") +
-    `</select>`;
+  const rpeCell = rpeDropdownHtml(setId(s), rpeFor(s));
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
     `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
@@ -3063,17 +3078,62 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
   return main + noteRow + formulaRow;
 }
 
-/** A set's RPE picker changed: save the grade (or clear it) and reflect it on the
- * cell. Returns true if it handled the event. Shared by both sets tables. */
-function onSetRpeChange(e: Event): boolean {
-  const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".set-rpe");
-  if (!sel?.dataset.setid) return false;
-  const v = sel.value === "" ? null : sel.value;
-  setRpe(sel.dataset.setid, v);
-  sel.classList.toggle("is-set", v !== null);
-  // Refresh the drill-in graph so the new grade shows in the per-set tooltip.
-  if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
-  return true;
+/** The per-set RIR picker as a custom HTML/CSS dropdown (no native <select>, so it
+ * looks the same on every device). Closed button shows "range word" (or "–" when
+ * unset); the open menu lists every band with its full description, plus a Clear
+ * row. Reuses the app's .xdd dropdown styling; matched to the cell width. Clicks
+ * are handled by delegation in the sets-table handler (onSetRpeClick). */
+function rpeDropdownHtml(sid: string, grade: string | undefined): string {
+  const band = rirBand(grade);
+  const label = band ? `${band.id} ${band.word}` : "–";
+  const optHtml = (val: string, text: string, title: string, active: boolean) =>
+    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
+  const menu =
+    optHtml("", "– none", "Clear the grade", !band) +
+    RIR_BANDS.map((b) => optHtml(b.id, `${b.id} — ${b.desc}`, b.desc, grade === b.id)).join("");
+  return (
+    `<div class="xdd xdd-rpe${band ? " is-set" : ""}" data-setid="${escapeHtml(sid)}">` +
+    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve (RIR)">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
+    `</div>`
+  );
+}
+
+/** Click inside a set's RIR dropdown: toggle the menu open, or apply a picked
+ * band (save it, re-render the cell, refresh the drill-in graph). Returns true if
+ * it handled the click. Shared by both sets tables. */
+function onSetRpeClick(target: HTMLElement): boolean {
+  const dd = target.closest<HTMLElement>(".xdd-rpe");
+  if (!dd?.dataset.setid) return false;
+  const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
+  // Tapping the closed button toggles this menu (and closes any other open one).
+  if (target.closest(".set-rpe-btn")) {
+    const opening = menu.hasAttribute("hidden");
+    closeAllRpeMenus();
+    menu.toggleAttribute("hidden", !opening);
+    dd.classList.toggle("open", opening);
+    return true;
+  }
+  // Tapping a band applies it.
+  const opt = target.closest<HTMLElement>(".set-rpe-opt");
+  if (opt?.dataset.rir !== undefined) {
+    const v = opt.dataset.rir === "" ? null : opt.dataset.rir;
+    setRpe(dd.dataset.setid, v);
+    // Swap in a freshly-rendered dropdown so the button label + is-set update.
+    dd.outerHTML = rpeDropdownHtml(dd.dataset.setid, v ?? undefined);
+    // Refresh the drill-in graph so the new grade shows in the per-set tooltip.
+    if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
+    return true;
+  }
+  return true; // a click inside the open menu (e.g. on a gap) — swallow it
+}
+
+/** Close every open RIR dropdown menu (used before opening one, and on outside click). */
+function closeAllRpeMenus(): void {
+  for (const dd of document.querySelectorAll<HTMLElement>(".xdd-rpe.open")) {
+    dd.classList.remove("open");
+    dd.querySelector<HTMLElement>(".xdd-menu")?.setAttribute("hidden", "");
+  }
 }
 
 /** Click on a set row that has a note: expand/collapse the hidden note row that
@@ -3708,6 +3768,8 @@ async function init() {
         dd.classList.remove("open");
         dd.querySelector<HTMLElement>(".xdd-menu")?.setAttribute("hidden", "");
       }
+    // Same for any open per-set RIR dropdown.
+    if (!(e.target as HTMLElement).closest(".xdd-rpe.open")) closeAllRpeMenus();
   });
   // "Center on data" snaps the drill-in chart's pan/zoom back to the data fit.
   els.exerciseProgressCenter.addEventListener("click", () => {
@@ -3733,7 +3795,10 @@ async function init() {
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.aloneOnly.addEventListener("change", () => {
+  els.aloneFilter.addEventListener("click", () => {
+    aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
+    els.aloneFilter.dataset.state = aloneFilter;
+    els.aloneFilter.textContent = ALONE_FILTER_LABEL[aloneFilter];
     workoutsPage = 0;
     renderWorkoutsPage();
   });
@@ -3812,14 +3877,12 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
-    if (onSetRpeChange(e)) return;
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));
     repMaxCols = Number.isFinite(n) && n >= 1 && n <= 30 ? [n] : [1];
     if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
   });
-  els.workoutsTable.addEventListener("change", onSetRpeChange);
   // Category picker bar: tap a category chip to show/hide it in the list.
   els.exCatBar.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-cat-chip");

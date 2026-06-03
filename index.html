@@ -22,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.27</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.29</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -167,9 +167,10 @@
               <label class="check" id="restToggleLabel">
                 <input type="checkbox" id="restToggle" /> Show rest days
               </label>
-              <label class="check" id="aloneOnlyLabel" title="Only show workouts you tagged as trained alone (tap ‘alone’ on a session)">
-                <input type="checkbox" id="aloneOnly" /> Only alone
-              </label>
+              <button type="button" id="aloneFilter" class="alone-filter" data-state="both"
+                title="Filter by the ‘alone’ tag — tap to cycle: show all sessions / only the ones you tagged trained alone / only the ones you didn’t">
+                Alone: Both
+              </button>
             </div>
             <table id="workoutsTable" class="data-table"></table>
             <div id="workoutsPager" class="pager"></div>
