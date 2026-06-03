@@ -19,6 +19,8 @@ export interface SvgPoint {
   y?: number; // line / bars
   lo?: number; // range bottom
   hi?: number; // range top
+  /** For range bars: split the line into exactly this many dashes (e.g. reps). */
+  dashes?: number;
   /** Extra text shown in the tooltip (e.g. "120×5"). */
   meta?: string;
 }
@@ -194,7 +196,20 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       } else if (s.type === "range") {
         for (const p of s.points) {
           const x = xPix(p.x);
-          body += `<line x1="${x.toFixed(1)}" y1="${ymap(p.hi ?? 0).toFixed(1)}" x2="${x.toFixed(1)}" y2="${ymap(p.lo ?? 0).toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="round"/>`;
+          const yHi = ymap(p.hi ?? 0);
+          const yLo = ymap(p.lo ?? 0);
+          const L = Math.abs(yLo - yHi);
+          const n = p.dashes && p.dashes > 1 ? Math.round(p.dashes) : 0;
+          // n dashes + (n-1) equal gaps span exactly the line, so the dash count
+          // reads as the rep count at a glance.
+          let dash = "";
+          let cap = "round";
+          if (n > 1 && L > 3) {
+            const d = L / (2 * n - 1);
+            dash = ` stroke-dasharray="${d.toFixed(2)} ${d.toFixed(2)}"`;
+            cap = "butt";
+          }
+          body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}"${dash}/>`;
         }
       } else {
         // bars: from baseline (0, clamped into plot) to the value.

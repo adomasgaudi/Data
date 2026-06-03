@@ -2147,6 +2147,7 @@ function renderExerciseProgressChart(exName: string) {
         x: base + frac * MS_DAY,
         lo: added,
         hi: e1rm ?? added, // no estimable 1RM (high reps) → flat marker at the weight
+        dashes: reps, // each dash = one rep done from this starting weight
         meta:
           (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
           ` · ${shortDate(s.date)}`,
@@ -2159,7 +2160,7 @@ function renderExerciseProgressChart(exName: string) {
       xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
     });
     els.exerciseProgressNote.textContent =
-      "Every set is its own bar on a real time axis: bottom = the set's weight, top = that set's estimated 1RM. All sets of each day are shown, fanned out within the day (high-rep sets show as a marker at their weight).";
+      "Every set is its own line on a real time axis: it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did. All sets of each day are shown, fanned out within the day.";
     return;
   }
 
