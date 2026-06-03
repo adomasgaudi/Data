@@ -108,107 +108,19 @@ export function realPullupWeight(exerciseName: string, weight: number | null): n
 }
 
 /**
- * Groups of closely-related lifts that should share one leaderboard. Each member
- * carries a scaling quotient = the fraction of the GROUP's reference lift you can
- * typically move on it, on the total load (bodyweight share + added). To compare
- * everyone on the reference lift, a member's load is divided by its quotient — so
- * a Romanian Deadlift (people lift ~0.7 of their deadlift) at 100 kg counts as a
- * ~143 kg deadlift-equivalent. The reference lift itself is 1.0. These are sane
- * starting estimates, editable later.
+ * Scaling/“pattern” groups have been REMOVED at the owner's request — every
+ * exercise stands on its own (Bench Press, Dumbbell Bench Press, Incline Bench
+ * Press, Shoulder Press, Military Press, … are all separate lifts, never folded
+ * into one combined board). The empty list keeps the type/import surface stable
+ * for any remaining references; nothing is ever grouped or scaled.
  */
 export interface ExerciseGroup {
   name: string; // shown in the exercise picker; usually the reference lift's name
   members: Record<string, number>; // exact exercise name → scaling quotient (0..~1.1)
 }
 
-export const EXERCISE_GROUPS: ExerciseGroup[] = [
-  {
-    // "Squat pattern" is the combined/scaled board for all squat variants. It is
-    // a distinct name from the "Squat" exercise on purpose — Squat and Smith
-    // Machine Squat stay as their own pure lifts; this only merges them when the
-    // grouped/scaled toggle is on.
-    name: "Squat pattern",
-    members: {
-      Squat: 1,
-      "Smith Machine Squat": 0.95,
-      "Front Squat": 0.8,
-      "Belt Squat": 0.9,
-      "Hack Squat": 1.0,
-      "Overhead Squat": 0.55,
-      "Goblet Squat": 0.5,
-      "Box Squat": 0.95,
-    },
-  },
-  {
-    // "Deadlift pattern" deliberately combines ONLY the conventional Deadlift and
-    // the Romanian Deadlift for now (owner will expand it carefully later). Every
-    // other deadlift variant stays its own separate exercise. Distinct name from
-    // the "Deadlift" exercise; only appears when the grouped/scaled toggle is on.
-    name: "Deadlift pattern",
-    members: {
-      Deadlift: 1,
-      "Romanian Deadlift": 0.7,
-    },
-  },
-  {
-    name: "Bench Press",
-    members: {
-      "Bench Press": 1,
-      "Dumbbell Bench Press": 0.9,
-      "Incline Bench Press": 0.82,
-      "Incline Dumbbell Bench Press": 0.74,
-      "Decline Bench Press": 1.05,
-      "Close Grip Bench Press": 0.9,
-      "Chest Press": 0.95,
-    },
-  },
-  {
-    name: "Shoulder Press",
-    members: {
-      "Shoulder Press": 1,
-      "Seated Shoulder Press": 1,
-      "Machine Shoulder Press": 1,
-      "Shoulder Press (Machine Plates)": 1,
-      "Dumbbell Shoulder Press": 0.85,
-      "Seated Dumbbell Shoulder Press": 0.85,
-      "Military Press": 1,
-      "Behind The Neck Press": 0.9,
-    },
-  },
-  {
-    name: "Row",
-    members: {
-      "Bent Over Row": 1,
-      "T Bar Row": 1,
-      "Machine Row": 1,
-      "Seated Cable Row": 1,
-      "Iso-Lateral Low Row": 1,
-      "Bent Over Dumbbell Row": 0.55,
-      "Dumbbell Row": 0.5,
-    },
-  },
-  {
-    name: "Bicep Curl",
-    members: {
-      "Barbell Curl": 1,
-      "EZ Bar Curl": 0.95,
-      "Preacher Curl": 0.9,
-      "Machine Bicep Curl": 1,
-      "Dumbbell Curl": 0.5,
-      "Hammer Curl": 0.5,
-      "Dumbbell Preacher Curl": 0.45,
-    },
-  },
-];
+export const EXERCISE_GROUPS: ExerciseGroup[] = [];
 
-/** Reverse lookup: exercise name → its group and scaling quotient, if grouped. */
-export function groupOf(exerciseName: string): { group: string; scale: number } | null {
-  for (const g of EXERCISE_GROUPS) {
-    const scale = g.members[exerciseName];
-    if (scale !== undefined) return { group: g.name, scale };
-  }
-  return null;
-}
 
 /**
  * Isometric / timed exercises where the "reps" column is really seconds (holds,

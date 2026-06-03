@@ -25,7 +25,6 @@ import {
   filterRecords,
   leaderboard,
   personalRecords,
-  scaleToGroup,
   athleteSummary,
   type PersonalRecord,
   type WorkoutDay,
@@ -53,7 +52,6 @@ import {
   bodyComposition,
   defaultBwCoeff,
   realPullupWeight,
-  EXERCISE_GROUPS,
   exerciseCategory,
   exerciseCategories,
   LIST_CATEGORIES,
@@ -89,7 +87,6 @@ const els = {
   axisReset: $<HTMLButtonElement>("axisReset"),
   formula: $<HTMLSelectElement>("formula"),
   excludeDropsets: $<HTMLInputElement>("excludeDropsets"),
-  groupToggle: $<HTMLInputElement>("groupToggle"),
   lbTitle: $("lbTitle"),
   lbTable: $<HTMLTableElement>("lbTable"),
   prTable: $<HTMLTableElement>("prTable"),
@@ -192,7 +189,6 @@ const els = {
   dataUser: $<HTMLSelectElement>("dataUser"),
   otherSheet: $("otherSheet"),
   groupsAthlete: $<HTMLSelectElement>("groupsAthlete"),
-  groupsMode: $("groupsMode"),
   groupsBody: $("groupsBody"),
   teamChips: $("teamChips"),
   teamBody: $("teamBody"),
@@ -469,54 +465,29 @@ function computedRecords(): SetRecord[] {
 }
 
 /**
- * Fill the Colosseum exercise picker. By DEFAULT (toggle off) it lists only pure
- * exercises — every distinct logged lift, on its own, no scaling. When the owner
- * ticks the grouped/scaled toggle, the scaled GROUP names are prepended (and the
- * member lifts stay listed too, so you can still pick the pure version).
- * Re-runnable: keeps the current selection if it still exists, else picks the
- * first option. Call it on load and whenever the toggle flips.
- *
- * AI-NOTE: groups are intentionally hidden by default — see selectionRecords.
+ * Fill the Colosseum exercise picker with every distinct logged lift, each on its
+ * own (no scaling, no groups). Re-runnable: keeps the current selection if it
+ * still exists, else picks the first option.
  */
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
   const exercises = distinctExercises(data.records); // pure lifts, most-logged first
-  const groupsWithData = els.groupToggle.checked
-    ? EXERCISE_GROUPS.filter((g) => exercises.some((e) => g.members[e] !== undefined)).map((g) => g.name)
-    : [];
-  const options = [...groupsWithData, ...exercises];
-  els.exercise.innerHTML = options
+  els.exercise.innerHTML = exercises
     .map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`)
     .join("");
-  els.exercise.value = options.includes(prev) ? prev : (options[0] ?? "");
+  els.exercise.value = exercises.includes(prev) ? prev : (exercises[0] ?? "");
 }
 
-/**
- * If the leaderboard selection is a group, fold its members in (scaled); else as-is.
- *
- * AI-NOTE: group scaling is OFF by default. It fabricates a cross-exercise
- * comparison (e.g. a single-leg RDL ÷0.35 looks like a much bigger deadlift), so
- * groups only appear — and only scale — when the owner ticks the "grouped/scaled
- * estimates" toggle. With the toggle off, group names aren't even offered in the
- * picker (see populateExercisePicker), so this returns records unchanged.
- */
-function selectionRecords(records: SetRecord[], selection: string): SetRecord[] {
-  if (!els.groupToggle.checked) return records; // pure exercises only
-  const grp = EXERCISE_GROUPS.find((g) => g.name === selection);
-  return grp ? scaleToGroup(records, grp.name, grp.members) : records;
-}
-
-/** True when the current selection is a scaled exercise group (not a pure lift). */
-function selectionIsGroup(selection: string): boolean {
-  return els.groupToggle.checked && EXERCISE_GROUPS.some((g) => g.name === selection);
+// Groups/scaling were removed — every exercise is its own lift. These helpers
+// stay as thin pass-throughs so their many call sites don't need touching.
+function selectionRecords(records: SetRecord[], _selection: string): SetRecord[] {
+  return records;
 }
 
 // ---- "Where this name came from" indicator, shared by every view -------------
-// Two kinds of combine carry an origin note:
-//   • merged spellings  — e.g. "Pull Ups" was also logged as "Chin Ups"
-//   • scaling groups    — e.g. "Squat pattern" combines Squat, Front Squat, …
-// exerciseOrigin() returns the source names for either, so the same "(also: …)"
-// badge can be shown wherever an exercise name appears.
+// Only one kind of combine carries an origin note now: merged spellings — e.g.
+// "Pull Ups" was also logged as "Chin Ups". exerciseOrigin() returns those source
+// spellings so the "(also: …)" badge can be shown wherever the name appears.
 let mergeVariantsCache: Map<string, string[]> | null = null;
 
 /** canonical display name → the other raw spellings folded into it (from merges). */
@@ -528,12 +499,8 @@ function mergeVariantsFor(name: string): string[] {
   return mergeVariantsCache.get(name) ?? [];
 }
 
-/** The source names behind an exercise/group name, or [] if it's a plain lift.
- * For a scaling group it's the member lifts; for a merged name it's the other
- * spellings. */
+/** The other spellings folded into a merged name, or [] for a plain lift. */
 function exerciseOrigin(name: string): string[] {
-  const group = EXERCISE_GROUPS.find((g) => g.name === name);
-  if (group) return Object.keys(group.members);
   return mergeVariantsFor(name);
 }
 
@@ -737,8 +704,7 @@ function renderLeaderboard() {
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
   // Groups are scaled cross-exercise estimates — label them clearly so a grouped
   // number is never mistaken for a real single-exercise lift.
-  const groupNote = selectionIsGroup(exercise) ? " · ⚠ scaled estimate (group)" : "";
-  els.lbTitle.textContent = `${exercise}${originBadge(exercise, true)} · ${metricNote} · best per rep band${groupNote}${coliseumFilterNote()}`;
+  els.lbTitle.textContent = `${exercise}${originBadge(exercise, true)} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, bandData, rel);
 }
@@ -3167,9 +3133,8 @@ async function init() {
   mergeManualSets();
   loadAlone(); // "trained alone" workout tags saved on this device
 
-  // Build the leaderboard exercise picker (see populateExercisePicker). By
-  // default it lists PURE exercises only; the grouped/scaled estimates appear
-  // only when the owner ticks the toggle.
+  // Build the leaderboard exercise picker (see populateExercisePicker): every
+  // distinct logged lift, each on its own.
   populateExercisePicker();
   els.rank.innerHTML =
     `<option value="abs">Total (kg)</option><option value="rel">Per bodyweight</option>`;
@@ -3180,14 +3145,6 @@ async function init() {
     renderPersonalRecords(); // PRs are scoped to the selected exercise
   });
   els.rank.addEventListener("change", renderLeaderboard);
-
-  // Grouped/scaled estimates toggle: rebuild the picker (adds/removes group
-  // names) and re-render. Off by default, so the Colosseum shows pure lifts.
-  els.groupToggle.addEventListener("change", () => {
-    populateExercisePicker();
-    renderLeaderboard();
-    renderPersonalRecords();
-  });
 
   // Coliseum comparison filters: re-render both the chart and the PR table, which
   // share the sex/bodyweight filter. The axis inputs only affect the chart, but
@@ -4038,7 +3995,7 @@ function setupChecklists() {
 }
 
 /** Toggle which tab panel is visible when a tab button is clicked. */
-// ---- Group view: movement patterns / muscle groups across athletes ----------
+// ---- Group view: muscle-group categories across athletes --------------------
 
 /** One collapsible-free card per group, with a small heading + a count chip. */
 function groupCard(name: string, memberCount: number, bodyHtml: string): string {
@@ -4050,16 +4007,13 @@ function groupCard(name: string, memberCount: number, bodyHtml: string): string 
   );
 }
 
-let groupsMode: "patterns" | "categories" = "patterns";
-
-/** Render the Group view: each movement pattern (EXERCISE_GROUPS) or category
- * (LIST_CATEGORIES, multi-membership) shown for one athlete (best 1RM per member
- * lift) or for everyone (a mini leaderboard across the group's member lifts). */
+/** Render the Group view: each category (LIST_CATEGORIES, multi-membership)
+ * shown for one athlete (best 1RM per member lift) or for everyone (a mini
+ * leaderboard across the category's member lifts). */
 function renderGroupsView() {
   const formula = currentFormula();
   const recs = computedRecords();
   const present = distinctExercises(data.records); // most-trained first
-  const presentSet = new Set(present);
 
   // Athlete picker: "Everyone" + each athlete; keep the current selection.
   const users = distinctUsers(data.records);
@@ -4070,17 +4024,11 @@ function renderGroupsView() {
   els.groupsAthlete.value = prev || "";
   const who = els.groupsAthlete.value;
 
-  // Each "source" is a named bucket with its member lifts present in the data.
-  const sources: { name: string; members: string[] }[] =
-    groupsMode === "patterns"
-      ? EXERCISE_GROUPS.map((g) => ({
-          name: g.name,
-          members: Object.keys(g.members).filter((m) => presentSet.has(m)),
-        }))
-      : LIST_CATEGORIES.map((cat) => ({
-          name: cat,
-          members: present.filter((e) => exerciseCategories(e).includes(cat)),
-        }));
+  // Each "source" is a named category bucket with its member lifts in the data.
+  const sources: { name: string; members: string[] }[] = LIST_CATEGORIES.map((cat) => ({
+    name: cat,
+    members: present.filter((e) => exerciseCategories(e).includes(cat)),
+  }));
 
   const base = filterRecords(recs, { excludeDropsets: els.excludeDropsets.checked });
   const cards: string[] = [];
@@ -4154,16 +4102,6 @@ function renderGroupsView() {
 
 function setupGroupsView() {
   els.groupsAthlete.addEventListener("change", renderGroupsView);
-  els.groupsMode.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".ex-sort-btn");
-    const mode = btn?.dataset.mode;
-    if (mode !== "patterns" && mode !== "categories") return;
-    if (mode === groupsMode) return;
-    groupsMode = mode;
-    for (const b of els.groupsMode.querySelectorAll<HTMLElement>(".ex-sort-btn"))
-      b.classList.toggle("is-active", b.dataset.mode === mode);
-    renderGroupsView();
-  });
   renderGroupsView(); // populate the athlete picker before first open
 }
 

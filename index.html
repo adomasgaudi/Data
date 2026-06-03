@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.14.3</span></h1>
+      <h1>Colosseum <span class="version">b.1.14.4</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
@@ -91,9 +91,6 @@
               </span>
               <label class="check">
                 <input type="checkbox" id="excludeDropsets" checked /> Exclude dropsets
-              </label>
-              <label class="check" title="Off by default. When on, 'pattern' lifts (Squat pattern, Deadlift pattern) appear — related lifts scaled into one combined board. Rough cross-exercise ESTIMATES, not real single-lift numbers.">
-                <input type="checkbox" id="groupToggle" /> Show pattern lifts (scaled estimate)
               </label>
             </div>
           </div>
@@ -861,18 +858,14 @@
           <div class="groups-head">
             <h2>Stats view</h2>
             <p class="muted" style="margin: 0.25rem 0 0">
-              Movement patterns &amp; muscle groups, each combining several lifts. Shows the
-              best estimated 1RM per group for the chosen athlete (or everyone).
+              Muscle-group categories, each listing the lifts that fall under them. Shows the
+              best estimated 1RM per category for the chosen athlete (or everyone).
             </p>
           </div>
           <div class="groups-controls">
             <label class="inline-label">Athlete
               <select id="groupsAthlete"></select>
             </label>
-            <div id="groupsMode" class="ex-sort" role="tablist" aria-label="Group by">
-              <button type="button" class="ex-sort-btn is-active" data-mode="patterns">Movement patterns</button>
-              <button type="button" class="ex-sort-btn" data-mode="categories">Categories</button>
-            </div>
           </div>
           <div id="groupsBody" class="groups-body"></div>
         </section>
