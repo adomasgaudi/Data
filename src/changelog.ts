@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.19", title: "Strength decay (use it or lose it)", sp: 5, note: "New Settings toggle “Current strength (fade with time off)”. Off = your all-time best 1RM (unchanged). On = a detraining estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing logarithmically after that, never below half. Each set fades by its own age, so a fresh solid lift can overtake a stale old PR. Drives the leaderboard, personal records and exercise cards; pure tested model in metrics.ts (strengthRetention)." },
       { version: "b.2.1.18", title: "Add a new exercise to a session", sp: 1, note: "Each session now has a “+ exercise” button (part of the quick-add UI) that opens an inline form with a searchable exercise picker — type to filter every known exercise (or enter a new name) and log a set for it on that day or today, without leaving the Workouts screen." },
       { version: "b.2.1.17", title: "Toggle the + set buttons", sp: 0.5, note: "A new “+ set buttons” checkbox in the Workouts controls shows or hides all the inline quick-add (+ set) buttons, so the list can stay clean when you're just reading it. Off by default and remembered on this device." },
       { version: "b.2.1.16", title: "Workouts default to By day", sp: 0.1, note: "The Workouts list now opens grouped By day instead of By week — flip to By week any time with the toggle." },

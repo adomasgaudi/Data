@@ -22,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.1.18</span></h1>
+      <h1>Colosseum <span class="version">b.2.1.19</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -41,6 +41,8 @@
             </select>
           </label>
           <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
+          <label class="check"><input type="checkbox" id="decayStrength" /> Current strength (fade with time off)</label>
+          <p class="settings-hint">Off = your all-time best 1RM. On = a “use it or lose it” estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing after that, never below half.</p>
           <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
           <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
           <button type="button" id="healthBtn" class="settings-link">

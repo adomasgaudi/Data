@@ -88,6 +88,7 @@ const els = {
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
+  decayStrength: $<HTMLInputElement>("decayStrength"),
   settingsPanel: $("settingsPanel"),
   bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -309,6 +310,15 @@ const isoWeekNumber = (iso: string): number => {
 /** Today as an ISO YYYY-MM-DD string — the reference point for "this week" and
  * the trailing-window sets-per-week averages. */
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
+
+// "Current strength" mode: when on, 1RM achievements fade with time off the lift
+// (detraining model in metrics.ts) instead of showing the all-time peak. Toggled
+// in Settings and remembered on this device.
+let decayStrength = localStorage.getItem("colosseum.decayStrength") === "1";
+/** Reference date for the detraining model — today's date when "current
+ * strength" is on, otherwise undefined (keep all-time peaks). Passed into the
+ * leaderboard / personal-record aggregators. */
+const strengthAsOf = (): string | undefined => (decayStrength ? todayIso() : undefined);
 
 /** Elapsed training time from first to last logged date, in the unit that reads
  * cleanest at that scale: days under 2 weeks, weeks under ~2 months, months
@@ -953,7 +963,7 @@ function renderLeaderboard() {
     excludeDropsets: els.excludeDropsets.checked,
     requireWeightAndReps: true,
   });
-  const entries = leaderboard(filtered, exercise, formula);
+  const entries = leaderboard(filtered, exercise, formula, strengthAsOf());
   const perBw = (username: string, e1rm: number): number | null => {
     const bw = ATHLETES[username]?.weight;
     return bw ? e1rm / bw : null;
@@ -998,7 +1008,7 @@ function renderLeaderboard() {
       ...(band.max !== undefined ? { maxReps: band.max } : {}),
     });
     const byUser = new Map<string, number>();
-    for (const e of leaderboard(f, exercise, formula)) {
+    for (const e of leaderboard(f, exercise, formula, strengthAsOf())) {
       const v = rel ? perBw(e.username, e.e1rm) : e.e1rm;
       if (v !== null) byUser.set(e.username, v);
     }
@@ -1125,7 +1135,7 @@ function renderPersonalRecords() {
   const filtered = filterRecords(base, { excludeDropsets: els.excludeDropsets.checked });
   // Personal records for the currently selected exercise/group only (one row per
   // athlete), honouring the same sex/bodyweight comparison filter as the chart.
-  const prs = personalRecords(filtered, formula)
+  const prs = personalRecords(filtered, formula, strengthAsOf())
     .filter((p) => p.exerciseName === exercise)
     .filter((p) => athletePassesColiseum(p.username));
   prs.sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm);
@@ -1517,6 +1527,7 @@ function athleteContext(): string {
   const prs = personalRecords(
     filterRecords(computedRecords(), { usernames: [username], excludeDropsets: true }),
     currentFormula(),
+    strengthAsOf(),
   );
   const topLifts = [...prs].sort((a, b) => b.bestE1rm.e1rm - a.bestE1rm.e1rm).slice(0, 8);
 
@@ -2042,6 +2053,7 @@ function renderExercisesPage() {
   for (const p of personalRecords(
     filterRecords(prBasis, { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     formula,
+    strengthAsOf(),
   ))
     prByEx.set(p.exerciseName, p);
   const rm = (oneRm: number, reps: number): string => {
@@ -2160,6 +2172,7 @@ function renderExerciseDetail(exName: string) {
   const pr = personalRecords(
     filterRecords(remapCombined(computedRecords()), { usernames: [username], excludeDropsets: els.excludeDropsets.checked }),
     currentFormula(),
+    strengthAsOf(),
   ).find((p) => p.exerciseName === exName);
   renderCombineBar(exName, username);
   // Stats start collapsed on every drill-in (the <details> persists across
@@ -4117,6 +4130,13 @@ async function init() {
     renderExercisesPage();
   });
 
+  els.decayStrength.checked = decayStrength;
+  els.decayStrength.addEventListener("change", () => {
+    decayStrength = els.decayStrength.checked;
+    try { localStorage.setItem("colosseum.decayStrength", decayStrength ? "1" : "0"); } catch { /* ignore */ }
+    renderAll(); // every 1RM/leaderboard/PR view re-reads strengthAsOf()
+  });
+
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -5327,6 +5347,7 @@ function renderGroupsView() {
       const prs = personalRecords(
         filterRecords(recs, { usernames: [who], excludeDropsets: els.excludeDropsets.checked }),
         formula,
+        strengthAsOf(),
       );
       const byEx = new Map(prs.map((p) => [p.exerciseName, p]));
       const rows = members
@@ -5358,7 +5379,7 @@ function renderGroupsView() {
       // Everyone: best e1rm per athlete across the group's member lifts, ranked.
       const byUser = new Map<string, { user: string; e1rm: number; ex: string }>();
       for (const m of members) {
-        for (const e of leaderboard(base, m, formula)) {
+        for (const e of leaderboard(base, m, formula, strengthAsOf())) {
           const cur = byUser.get(e.username);
           if (!cur || e.e1rm > cur.e1rm) byUser.set(e.username, { user: e.user, e1rm: e.e1rm, ex: m });
         }
@@ -5427,6 +5448,7 @@ function renderTeamView() {
     for (const p of personalRecords(
       filterRecords(recs, { usernames: [u.username], excludeDropsets: els.excludeDropsets.checked }),
       formula,
+      strengthAsOf(),
     ))
       m.set(p.exerciseName, p.bestE1rm.e1rm);
     return m;
