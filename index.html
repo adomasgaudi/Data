@@ -23,7 +23,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.1.36</span></h1>
+        <h1>Colosseum <span class="version">b.2.1.37</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -206,6 +206,10 @@
             <!-- Drill-in only: combine this lift with others (e.g. Squat + Smith
                  Machine Squat) to view them as one. -->
             <div id="exCombineBar" class="ex-combine" hidden></div>
+            <!-- Drill-in only: leverage variants of this lift (incline heights),
+                 each with an editable bodyweight-% so they can be scaled onto one
+                 curve and compared. -->
+            <div id="exVariants" class="ex-variants" hidden></div>
             <div class="ex-tabbar">
               <div id="exercisesTabs" class="ex-tabs" role="tablist">
                 <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
@@ -912,6 +916,9 @@
             </label>
             <label class="add-field" id="addArmPosField" hidden>Arm position
               <select id="addArmPos"></select>
+            </label>
+            <label class="add-field add-field--sm" id="addVariantField" hidden><span id="addVariantLabel">Variant</span>
+              <input id="addVariant" type="number" step="0.5" inputmode="decimal" placeholder="" />
             </label>
             <label class="add-field add-field--sm">Weight (kg)
               <input id="addWeight" type="number" step="0.5" inputmode="decimal" placeholder="kg" />

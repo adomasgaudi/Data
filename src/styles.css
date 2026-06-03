@@ -575,6 +575,15 @@ main { padding-bottom: 5rem; }
 /* Drill-in "view together" combine bar. */
 .ex-combine { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 0.85rem; }
 .ex-combine[hidden] { display: none; }
+/* Drill-in leverage-variant scaling panel. */
+.ex-variants { margin: 0 0 0.85rem; padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); }
+.ex-variants[hidden] { display: none; }
+.exv-head { font-size: 0.78rem; margin-bottom: 0.4rem; }
+.exv-table { margin: 0; font-size: 0.82rem; }
+.exv-table th, .exv-table td { padding: 4px 8px; }
+.exv-cur > td { background: rgba(20, 24, 38, 0.05); font-weight: 600; }
+.exv-name { border: none; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
+.exv-bw { width: 4.2rem; }
 .ex-combine-lbl { font-size: 0.75rem; }
 .ex-combine-chip {
   border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft);
