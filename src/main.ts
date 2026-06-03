@@ -139,6 +139,7 @@ const els = {
   compareTiers: $("compareTiers"),
   compareClear: $<HTMLButtonElement>("compareClear"),
   compareNote: $("compareNote"),
+  compareSets: $("compareSets"),
   exerciseSearch: $<HTMLInputElement>("exerciseSearch"),
   exerciseNotTrained: $<HTMLInputElement>("exerciseNotTrained"),
   exerciseShowThird: $<HTMLInputElement>("exerciseShowThird"),
@@ -1556,6 +1557,7 @@ function renderCompareChart() {
 
   if (picks.length === 0) {
     els.compareNote.textContent = "Tick one or more exercises above to overlay them.";
+    els.compareSets.innerHTML = "";
     if (compareSvg) compareSvg.update({ series: [] });
     return;
   }
@@ -1591,6 +1593,40 @@ function renderCompareChart() {
   const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
   if (!compareSvg) compareSvg = mountSvgChart(box, config);
   else compareSvg.update(config);
+
+  renderCompareSets(picks, username, recs, formula);
+}
+
+/** The list of actual sets the compare graph is built from, newest first, one
+ * row per logged set with a colour dot matching its line on the chart. */
+function renderCompareSets(picks: string[], username: string, recs: SetRecord[], formula: OneRepMaxFormula) {
+  type Row = { date: string; name: string; color: string; added: number; reps: number; e1rm: number | null };
+  const rows: Row[] = [];
+  picks.forEach((name, i) => {
+    const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
+    for (const s of recs.filter((r) => r.username === username && r.exerciseName === name)) {
+      const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+      rows.push({ date: s.date, name, color, added, reps: s.reps ?? 0, e1rm: addedWeight1RM(s, formula) });
+    }
+  });
+  rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  if (rows.length === 0) {
+    els.compareSets.innerHTML = `<div class="cmp-sets-lbl muted">No logged sets for the selected exercises.</div>`;
+    return;
+  }
+  const head = `<thead><tr><th>Date</th><th>Exercise</th><th class="num">Set</th><th class="num">est 1RM</th></tr></thead>`;
+  const body = rows
+    .map(
+      (r) =>
+        `<tr><td class="muted">${shortDate(r.date)}</td>` +
+        `<td><span class="cmp-setdot" style="background:${r.color}"></span>${escapeHtml(r.name)}</td>` +
+        `<td class="num">${fmt(r.added)}×${r.reps}</td>` +
+        `<td class="num">${r.e1rm === null ? "—" : fmt(r.e1rm)}</td></tr>`,
+    )
+    .join("");
+  els.compareSets.innerHTML =
+    `<div class="cmp-sets-lbl muted">The ${rows.length} sets behind the graph (newest first)</div>` +
+    `<div class="cmp-sets-scroll"><table class="data-table">${head}<tbody>${body}</tbody></table></div>`;
 }
 
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----

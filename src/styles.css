@@ -1031,6 +1031,12 @@ select.subtle-select:hover, select.subtle-select:focus {
 .workout-sets .chart-wrap--big { height: 49vh; }
 .exercise-compare { margin: 0 0 1rem; }
 .exercise-compare[hidden] { display: none; }
+/* The sets behind the compare graph, listed under it. */
+.cmp-sets { margin-top: 0.6rem; }
+.cmp-sets-lbl { font-size: 0.75rem; margin-bottom: 0.3rem; }
+.cmp-sets-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.cmp-sets-scroll table { margin: 0; }
+.cmp-setdot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
 .exercise-compare-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
   font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
