@@ -122,6 +122,214 @@ export interface ExerciseGroup {
 export const EXERCISE_GROUPS: ExerciseGroup[] = [];
 
 
+/* ======================================================================== *
+ * UNIFIED EXERCISE TAG REGISTRY — the single source of truth for grouping.
+ *
+ * Every way the app groups exercises (fine muscle groups, functional movement
+ * patterns, "combinable" lifts merged into one, "comparable" lifts scaled onto
+ * one curve) is declared ONCE here, as data. The keyword functions below
+ * (muscleGroup, exerciseCategories) READ from these tables instead of carrying
+ * their own copies, so there is only one place to edit a keyword set.
+ *
+ * AI-NOTE: this registry replaced the hand-maintained keyword blocks inside
+ * muscleGroup()/exerciseCategories(). To change membership, edit the tables
+ * here — the functions follow. Parity is locked by profile.test.ts.
+ * ======================================================================== */
+
+export type TagKind =
+  | "muscle-group" // fine muscle: Quads, Hams, Glutes, Calves, Chest, Back, Shoulders, Biceps, Triceps, Core, …
+  | "functional-pattern" // movement pattern: Hinge, Squat pattern, Deadlift pattern, Deadlift accessory, leg splits
+  | "combinable-group" // members merged 1:1 into ONE synthetic lift (e.g. "SQ mix")
+  | "comparable-group" // members scaled by a ratio onto ONE synthetic curve (e.g. "DL pattern")
+  | "dissolvable"; // SCAFFOLD ONLY (not active): a future split of one entry into variants
+
+export interface TagMember {
+  /** Exact exercise name as logged. */
+  exerciseName: string;
+  /** Scaling quotient toward the group's reference lift. 1 = identical (combinable);
+   * 0.8 = "80% of the reference" (comparable). scaleToGroup() DIVIDES by this. */
+  ratio: number;
+}
+
+export interface RegistryTag {
+  /** Stable key, e.g. "muscle.quads", "pattern.hinge", "combine.sq-mix". */
+  id: string;
+  kind: TagKind;
+  /** Display name (also the synthetic exercise name for combinable/comparable). */
+  label: string;
+  /** Plain-language WHY, shown in the Index inspector. */
+  why: string;
+  /** Keyword substrings (lowercased) that put a name in this tag. */
+  keywords?: string[];
+  /** Explicit members for combinable/comparable/dissolvable groups. */
+  members?: TagMember[];
+  /** The exercise name the synthetic group emits records under (defaults to label). */
+  derivedName?: string;
+  /** Dissolvable scaffold: the exercise members would fold into (unused for now). */
+  dissolveInto?: string;
+}
+
+/**
+ * Fine muscle-group tags, IN PRIORITY ORDER (first match wins) — the exact
+ * ordering and keyword sets that muscleGroup() used to hold inline, so output is
+ * unchanged. The leading non-lift entries (Mobility/Cardio/Skill/Core) mirror
+ * exerciseCategory()'s precedence so a skill or stretch never falls to a muscle.
+ * Two special cases that aren't pure keyword matches stay in muscleGroup():
+ * "handstand … push" → Shoulders, and a trailing deadlift/clean/snatch → Back.
+ */
+export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
+  { id: "muscle.mobility", kind: "muscle-group", label: "Mobility",
+    why: "Stretching, splits, poses, breathwork — not a loaded muscle.",
+    keywords: ["stretch", "split", "pancake", "pose", "mobility", "ankle", "posture", "breath", "cold shower", "meditation"] },
+  { id: "muscle.cardio", kind: "muscle-group", label: "Cardio",
+    why: "Conditioning / calorie work — not a strength muscle group.",
+    keywords: ["run", "bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"] },
+  { id: "muscle.skill", kind: "muscle-group", label: "Skill",
+    why: "Calisthenic skills (levers, planche, handstands, flags) — whole-body skill, not one muscle. A handstand PUSH-up is the exception: it trains shoulders.",
+    keywords: ["front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "balance"] },
+  { id: "muscle.core", kind: "muscle-group", label: "Core",
+    why: "Trunk work: crunches, planks, leg/knee raises, rotation. Checked before legs/arms so an 'ab' or 'leg raise' doesn't read as legs.",
+    keywords: ["crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "knee raise", "knee tuck", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "woodchop", "pallof", "rollout", "twist", "bicycle", "mountain climber", "vacuum", "l-sit", "l sit", "lsit"] },
+  { id: "muscle.calves", kind: "muscle-group", label: "Calves",
+    why: "Calf raises and the like.",
+    keywords: ["calf", "calves"] },
+  { id: "muscle.hams", kind: "muscle-group", label: "Hamstrings",
+    why: "Knee-flexion / hip-hinge posterior chain: leg curls, RDLs, good mornings, nordics.",
+    keywords: ["leg curl", "romanian", "rdl", "stiff leg", "stiff-leg", "good morning", "nordic", "hamstring", "ham "] },
+  { id: "muscle.glutes", kind: "muscle-group", label: "Glutes",
+    why: "Hip-extension dominant: thrusts, bridges, abduction/adduction, back extensions.",
+    keywords: ["hip thrust", "glute", "hip extension", "bridge", "hip abduction", "abduction", "abductor", "hip adduction", "adduction", "adductor", "back extension", "hyperextension", "reverse hyper"] },
+  { id: "muscle.quads", kind: "muscle-group", label: "Quads",
+    why: "Front-thigh dominant: squats, presses, extensions, lunges drive the knee.",
+    keywords: ["squat", "leg press", "leg extension", "lunge", "hack", "sissy", "step up", "step-up", "pistol", "wall sit", "split squat", "bulgarian", "cossack", "belt squat", "quad"] },
+  { id: "muscle.shoulders", kind: "muscle-group", label: "Shoulders",
+    why: "Overhead and lateral delt work; shrugs. Checked before chest/back so a press isn't misread.",
+    keywords: ["shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military", "behind the neck", "arnold", "shrug", "delt"] },
+  { id: "muscle.triceps", kind: "muscle-group", label: "Triceps",
+    why: "Elbow-extension: pushdowns, skulls, JM press, close-grip bench. Before chest so close-grip bench reads triceps.",
+    keywords: ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"] },
+  { id: "muscle.biceps", kind: "muscle-group", label: "Biceps",
+    why: "Elbow-flexion: curls, preacher, hammer.",
+    keywords: ["curl", "preacher", "hammer"] },
+  { id: "muscle.chest", kind: "muscle-group", label: "Chest",
+    why: "Horizontal push: bench, flyes, push-ups, dips.",
+    keywords: ["bench", "chest", "fly", "pec", "push up", "pushup", "push-up", "pushups", "press up", "dip"] },
+  { id: "muscle.back", kind: "muscle-group", label: "Back",
+    why: "Pulling: rows, pulldowns, pull-ups, face pulls. (Deadlifts/cleans/snatches are added as posterior-chain pulls.)",
+    keywords: ["row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "lat ", "lat pull", "pullover", "pull over", "face pull", "inverted row", "scapular"] },
+];
+
+/**
+ * Functional movement-pattern tags. These overlay the muscle groups in
+ * exerciseCategories() (a deadlift is a Hinge AND a Deadlift pattern AND Back…).
+ * The "Squat pattern" / "Deadlift pattern" / "Deadlift accessory" / leg-split
+ * keyword sets are the ones exerciseCategories() used to hold inline.
+ */
+export const FUNCTIONAL_PATTERN_TAGS: RegistryTag[] = [
+  { id: "pattern.squat", kind: "functional-pattern", label: "Squat pattern",
+    why: "Knee-dominant: anything with 'squat' in the name.",
+    keywords: ["squat"] },
+  { id: "pattern.deadlift", kind: "functional-pattern", label: "Deadlift pattern",
+    why: "The deadlift family — conventional, Romanian, sumo, etc.",
+    keywords: ["deadlift", "rdl", "romanian deadlift"] },
+  { id: "pattern.deadlift-accessory", kind: "functional-pattern", label: "Deadlift accessory",
+    why: "Posterior-chain work that supports the deadlift but isn't the main lift.",
+    keywords: ["back extension", "hyperextension", "reverse hyper", "good morning", "glute ham", "ghr", "hip thrust", "rack pull", "snatch grip deadlift", "deficit deadlift", "block pull", "romanian deadlift", "rdl", "nordic"] },
+  { id: "pattern.hinge", kind: "functional-pattern", label: "Hinge",
+    why: "Hip-hinge movements (push the hips back, flat-ish back): deadlifts, RDLs, good mornings, back extensions, thrusts.",
+    keywords: ["deadlift", "rdl", "romanian", "good morning", "back extension", "hyperextension", "reverse hyper", "nordic", "hip thrust"] },
+];
+
+/** Combinable groups: members are the SAME lift, merged 1:1 into one staple. */
+export const COMBINABLE_GROUPS: RegistryTag[] = [
+  { id: "combine.sq-mix", kind: "combinable-group", label: "SQ mix", derivedName: "SQ mix",
+    why: "Back squat and Smith-machine squat are the same pattern at the same loading — combined into one staple for volume / frequency / progress. The pure lifts stay untouched; in the active-set filter each member still passes or fails on its own count.",
+    members: [
+      { exerciseName: "Squat", ratio: 1 },
+      { exerciseName: "Smith Machine Squat", ratio: 1 },
+    ] },
+];
+
+/**
+ * Comparable groups: members are RELATED but lift different loads for the same
+ * effort, so each is scaled by a ratio onto the reference lift's curve, creating
+ * a NEW synthetic exercise (e.g. "DL pattern"). The pure lifts (Deadlift, RDL…)
+ * are never changed. ratio = fraction of the reference: RDL ≈ 0.8 of a deadlift.
+ */
+export const COMPARABLE_GROUPS: RegistryTag[] = [
+  { id: "compare.dl-pattern", kind: "comparable-group", label: "DL pattern", derivedName: "DL pattern",
+    why: "Deadlift variants move different loads for the same effort. Each is scaled to a conventional-deadlift equivalent (RDL/stiff-leg ≈ 80%) so they sit on one curve. This is a NEW synthetic lift — Deadlift and RDL themselves are never altered.",
+    members: [
+      { exerciseName: "Deadlift", ratio: 1.0 },
+      { exerciseName: "Romanian Deadlift", ratio: 0.8 },
+      { exerciseName: "Straight Leg Deadlift", ratio: 0.8 },
+      { exerciseName: "Stiff Leg Deadlift", ratio: 0.8 },
+    ] },
+];
+
+/**
+ * SCAFFOLD ONLY (not wired into anything yet): "dissolvable" tags describe an
+ * entry that StrengthLevel logs as one exercise but is really several with very
+ * different paths/loads (e.g. lat pulldown = cable vs gravity machine). The
+ * future "dissolve" mode would split member sets out of the lumped entry.
+ */
+export const DISSOLVABLE_TAGS: RegistryTag[] = [
+  { id: "dissolve.lat-pulldown", kind: "dissolvable", label: "Lat Pulldown (split soon)",
+    why: "SCAFFOLD — not active yet. Lat pulldown is logged as one exercise but cable vs gravity-machine versions have very different paths and weights, so they should become separate exercises. Planned for a future task.",
+    dissolveInto: "Lat Pulldown",
+    members: [
+      { exerciseName: "Cable Lat Pulldown", ratio: 1 },
+      { exerciseName: "Machine Lat Pulldown", ratio: 1 },
+    ] },
+];
+
+/** Every tag in the registry, all kinds concatenated. */
+export const EXERCISE_REGISTRY: RegistryTag[] = [
+  ...MUSCLE_GROUP_TAGS,
+  ...FUNCTIONAL_PATTERN_TAGS,
+  ...COMBINABLE_GROUPS,
+  ...COMPARABLE_GROUPS,
+  ...DISSOLVABLE_TAGS,
+];
+
+/** Does a (lowercased) name contain any of the keywords? */
+const matchesKeywords = (lowerName: string, keywords: readonly string[] | undefined): boolean =>
+  !!keywords && keywords.some((k) => lowerName.includes(k));
+
+/**
+ * Every registry tag an exercise belongs to — by keyword (muscle/pattern) or by
+ * being an explicit member (combinable/comparable/dissolvable). Powers the Index
+ * inspector's per-exercise tag list. Muscle groups use first-match-wins ordering
+ * (like muscleGroup), so only the prime-mover muscle is returned for that kind.
+ */
+export function tagsForExercise(exerciseName: string): RegistryTag[] {
+  const n = exerciseName.toLowerCase();
+  const out: RegistryTag[] = [];
+  const prime = MUSCLE_GROUP_TAGS.find((t) => matchesKeywords(n, t.keywords));
+  if (prime) out.push(prime);
+  for (const t of FUNCTIONAL_PATTERN_TAGS) if (matchesKeywords(n, t.keywords)) out.push(t);
+  for (const t of [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS, ...DISSOLVABLE_TAGS])
+    if (t.members?.some((m) => m.exerciseName === exerciseName)) out.push(t);
+  return out;
+}
+
+/** Combinable groups this exact exercise name is a member of. */
+export function combinableGroupsFor(exerciseName: string): RegistryTag[] {
+  return COMBINABLE_GROUPS.filter((t) => t.members?.some((m) => m.exerciseName === exerciseName));
+}
+
+/** Comparable groups this exact exercise name is a member of. */
+export function comparableGroupsFor(exerciseName: string): RegistryTag[] {
+  return COMPARABLE_GROUPS.filter((t) => t.members?.some((m) => m.exerciseName === exerciseName));
+}
+
+/** A group's members that are actually present in a given list of exercise names. */
+export function membersOfGroup(tag: RegistryTag, names: Iterable<string>): TagMember[] {
+  const present = new Set(names);
+  return (tag.members ?? []).filter((m) => present.has(m.exerciseName));
+}
+
+
 /**
  * Isometric / timed exercises where the "reps" column is really seconds (holds,
  * hangs, supports, planks, L-sits). A rep-based 1RM is meaningless for these, so
@@ -198,42 +406,16 @@ export type MuscleGroup =
 
 export function muscleGroup(exerciseName: string): MuscleGroup {
   const n = exerciseName.toLowerCase();
-  const has = (...k: string[]) => k.some((s) => n.includes(s));
-
-  // Non-lifts first (mirror exerciseCategory's ordering so skills/cardio win).
-  if (has("stretch", "split", "pancake", "pose", "mobility", "ankle", "posture", "breath", "cold shower", "meditation"))
-    return "Mobility";
-  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
-    return "Cardio";
-  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "balance"))
-    return n.includes("push") ? "Shoulders" : "Skill";
-
-  // Core (before legs/arms so "ab"/"plank"/"leg raise" don't fall to Legs).
-  if (has("crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "knee raise", "knee tuck", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "woodchop", "pallof", "rollout", "twist", "bicycle", "mountain climber", "vacuum", "l-sit", "l sit", "lsit"))
-    return "Core";
-
-  // Legs, split into the prime mover.
-  if (has("calf", "calves")) return "Calves";
-  if (has("leg curl", "romanian", "rdl", "stiff leg", "stiff-leg", "good morning", "nordic", "hamstring", "ham "))
-    return "Hamstrings";
-  if (has("hip thrust", "glute", "hip extension", "bridge", "hip abduction", "abduction", "abductor", "hip adduction", "adduction", "adductor", "back extension", "hyperextension", "reverse hyper"))
-    return "Glutes";
-  if (has("squat", "leg press", "leg extension", "lunge", "hack", "sissy", "step up", "step-up", "pistol", "wall sit", "split squat", "bulgarian", "cossack", "belt squat", "quad"))
-    return "Quads";
-
-  // Upper body. Order matters: shoulders/triceps/biceps before the broad
-  // chest/back keywords (e.g. "close grip bench" is triceps, not chest).
-  if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military", "behind the neck", "arnold", "shrug", "delt"))
-    return "Shoulders";
-  if (has("tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"))
-    return "Triceps";
-  if (has("curl", "preacher", "hammer")) return "Biceps";
-  if (has("bench", "chest", "fly", "pec", "push up", "pushup", "push-up", "pushups", "press up", "dip"))
-    return "Chest";
-  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "lat ", "lat pull", "pullover", "pull over", "face pull", "inverted row", "scapular"))
-    return "Back";
-  if (has("deadlift", "clean", "snatch")) return "Back"; // posterior-chain pulls
-
+  // First matching MUSCLE_GROUP_TAGS entry wins (the table is in priority order,
+  // the same ordering this function used to hold inline — see the registry).
+  const prime = MUSCLE_GROUP_TAGS.find((t) => matchesKeywords(n, t.keywords));
+  if (prime) {
+    // Special case: a handstand PUSH-up trains shoulders, not "skill".
+    if (prime.id === "muscle.skill" && n.includes("push")) return "Shoulders";
+    return prime.label as MuscleGroup;
+  }
+  // Posterior-chain pulls have no muscle keyword of their own → Back.
+  if (n.includes("deadlift") || n.includes("clean") || n.includes("snatch")) return "Back";
   return "Other";
 }
 
@@ -281,12 +463,15 @@ export function exerciseCategories(exerciseName: string): string[] {
   if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross"))
     return [n.includes("push") ? "Shoulders" : "Skill"];
 
-  // Movement patterns (a squat/deadlift can belong to a pattern AND muscle groups).
-  if (n.includes("squat")) add("Squat pattern");
-  if (has("deadlift", "rdl", "romanian deadlift")) add("Deadlift pattern");
+  // Movement patterns (a squat/deadlift can belong to a pattern AND muscle
+  // groups). Keyword sets come from FUNCTIONAL_PATTERN_TAGS so they live in one
+  // place; the labels match LIST_CATEGORIES. (Hinge is a registry tag too but is
+  // not a list category, so it isn't emitted here.)
+  const pattern = (id: string) => FUNCTIONAL_PATTERN_TAGS.find((t) => t.id === id)!;
+  if (matchesKeywords(n, pattern("pattern.squat").keywords)) add("Squat pattern");
+  if (matchesKeywords(n, pattern("pattern.deadlift").keywords)) add("Deadlift pattern");
   // Posterior-chain work that supports the deadlift (not the main lift itself).
-  if (has("back extension", "hyperextension", "reverse hyper", "good morning", "glute ham", "ghr", "hip thrust", "rack pull", "snatch grip deadlift", "deficit deadlift", "block pull", "romanian deadlift", "rdl", "nordic"))
-    add("Deadlift accessory");
+  if (matchesKeywords(n, pattern("pattern.deadlift-accessory").keywords)) add("Deadlift accessory");
 
   // Leg splits: broad (everything leg-ish) vs the big three quads/glutes/hams.
   const legBroad = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell");

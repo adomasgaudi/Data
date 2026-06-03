@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBwCoeff, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, LIST_CATEGORIES, muscleGroup, realPullupWeight } from "./profile";
+import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, LIST_CATEGORIES, muscleGroup, realPullupWeight, tagsForExercise } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -226,6 +226,37 @@ describe("exerciseCategories (multi-membership)", () => {
     for (const name of ["Deadlift", "Bench Press", "Standing Calf Raise", "Plank"])
       for (const cat of exerciseCategories(name)) expect(LIST_CATEGORIES).toContain(cat);
     expect(exerciseCategories("KG - track food")).toEqual(["Other"]);
+  });
+});
+
+describe("exercise tag registry", () => {
+  it("tags a Romanian Deadlift with its muscle, the Hinge pattern and the DL-pattern group", () => {
+    const tags = tagsForExercise("Romanian Deadlift").map((t) => t.id);
+    expect(tags).toContain("muscle.hams"); // prime mover muscle
+    expect(tags).toContain("pattern.hinge"); // functional pattern
+    expect(tags).toContain("compare.dl-pattern"); // comparable group member
+  });
+
+  it("tags both squat members of the SQ-mix combinable group", () => {
+    expect(combinableGroupsFor("Squat").map((t) => t.id)).toContain("combine.sq-mix");
+    expect(combinableGroupsFor("Smith Machine Squat").map((t) => t.id)).toContain("combine.sq-mix");
+    expect(combinableGroupsFor("Bench Press")).toEqual([]); // not a member of any
+  });
+
+  it("returns the DL-pattern comparable group for its members only", () => {
+    expect(comparableGroupsFor("Deadlift").map((t) => t.id)).toContain("compare.dl-pattern");
+    expect(comparableGroupsFor("Romanian Deadlift").map((t) => t.id)).toContain("compare.dl-pattern");
+    expect(comparableGroupsFor("Squat")).toEqual([]);
+  });
+
+  it("keeps the registry internally consistent (unique ids, valid ratios)", () => {
+    const ids = EXERCISE_REGISTRY.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length); // every id unique
+    for (const t of EXERCISE_REGISTRY)
+      for (const m of t.members ?? []) expect(m.ratio).toBeGreaterThan(0);
+    // Comparable ratios are a fraction of the reference (0 < r <= ~1.2).
+    for (const t of COMPARABLE_GROUPS)
+      for (const m of t.members ?? []) expect(m.ratio).toBeLessThanOrEqual(1.2);
   });
 });
 
