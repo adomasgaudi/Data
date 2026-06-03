@@ -183,6 +183,29 @@ export function repsForWeight(
 }
 
 /**
+ * Predicted reps-in-reserve for a set: how many reps the athlete's estimated 1RM
+ * says they *should* manage at this load (repsForWeight), minus the reps they
+ * actually did. Both the 1RM and the load must be in the SAME frame — feed the
+ * effective (bodyweight-inclusive) load and the effective 1RM so bodyweight lifts
+ * line up. A positive value means reps left in the tank (a submaximal set); ~0
+ * means the set was taken to failure (it's at or defining the 1RM); a negative
+ * value means they beat what the 1RM predicts — a sign the estimate is stale/low.
+ * Returns null when reps are missing/non-positive or the predicted reps can't be
+ * computed (no 1RM, non-positive load, Brzycki out of range).
+ */
+export function predictedRir(
+  oneRepMax: number | null,
+  weight: number | null,
+  reps: number | null,
+  formula: OneRepMaxFormula = "epley",
+): number | null {
+  if (reps === null || reps <= 0) return null;
+  const predicted = repsForWeight(oneRepMax, weight, formula);
+  if (predicted === null) return null;
+  return predicted - reps;
+}
+
+/**
  * Ordinary least-squares line through points: returns slope and intercept, or
  * null if there are fewer than two points or all x are equal. Used to read a
  * progression rate (kg per day) off an athlete's estimated-1RM history.
@@ -227,32 +250,51 @@ export function effectiveLoad(
 }
 
 /**
- * Detraining ("use it or lose it") model. A strength achievement isn't frozen:
- * stop training a lift and your *current* ability fades. The shape the owner
- * asked for: nothing lost for a two-week grace, then ~10% gone one month later,
- * then a logarithmically-slowing decline toward a floor (so it never hits zero —
- * muscle memory keeps a big chunk).
+ * Detraining ("use it or lose it") model — a LOGARITHMIC forgetting curve, the
+ * mirror of a learning curve: you lose strength fast at first, then ever more
+ * slowly. The *loss* grows with the log of time off:
  *
- * loss(t) = lossPerLog · ln(1 + (t − grace)/tau), retention = 1 − loss, floored.
- * With tau = 30d and lossPerLog = 0.10/ln2, retention is exactly 0.90 at 30 days
- * past the grace period (≈10% lost a month after detraining starts).
+ *   loss(t) = lossPerLog · ln(1 + (t − grace) / S),   retention = 1 − loss (floored)
+ *
+ * Curved (not the near-straight line an exponential gives) and aggressive: with
+ * S = baseStability = 30 and lossPerLog = 0.10/ln2, a freshly-hit lift loses ~10%
+ * one month past the grace, ~27% by six months, ~36% by a year.
+ *
+ * The learning-curve twist: `S` (durability, days) GROWS with each training
+ * session (grownStability), so a well-drilled lift fades more slowly than a one-off
+ * PR — but only modestly (capped low), so even trained lifts keep a visible,
+ * curved fade rather than flattening to a line. Floored so it never hits zero.
  */
 export const STRENGTH_DECAY = {
-  graceDays: 14, // full strength retained for the first two weeks off
-  tauDays: 30, // log time-constant
-  lossPerLog: 0.1 / Math.LN2, // ⇒ ~10% lost one month after the grace ends
+  graceDays: 14, // full strength retained for two weeks after a session
+  baseStability: 30, // days; a freshly-hit lift loses ~10% a month past grace
+  lossPerLog: 0.1 / Math.LN2, // ⇒ exactly 10% lost one month after the grace ends
+  stabilityGrowth: 1.8, // each session makes the lift this much more durable
+  maxStability: 90, // modest cap — trained lifts fade slower, but still clearly
   floor: 0.5, // never decays below half the peak (muscle memory)
 } as const;
 
 /**
- * Fraction (0–1] of a peak strength still available after `daysSinceTrained`
- * days without training that lift. 1 = full strength (within the grace period).
+ * Fraction (0–1] of a peak strength still available after `daysSinceTrained` days
+ * without training a lift, for a memory of durability `stabilityDays`. Flat
+ * through the grace, then a logarithmic decline, floored. Bigger S ⇒ a flatter
+ * curve (slower decay) — that's how repeated training weakens the fade.
  */
-export function strengthRetention(daysSinceTrained: number): number {
-  const { graceDays, tauDays, lossPerLog, floor } = STRENGTH_DECAY;
+export function strengthRetention(
+  daysSinceTrained: number,
+  stabilityDays: number = STRENGTH_DECAY.baseStability,
+): number {
+  const { graceDays, lossPerLog, floor } = STRENGTH_DECAY;
   if (!Number.isFinite(daysSinceTrained) || daysSinceTrained <= graceDays) return 1;
-  const loss = lossPerLog * Math.log(1 + (daysSinceTrained - graceDays) / tauDays);
+  const loss = lossPerLog * Math.log(1 + (daysSinceTrained - graceDays) / Math.max(1, stabilityDays));
   return Math.max(floor, 1 - loss);
+}
+
+/** Each training session consolidates the lift: durability (stability) grows by
+ * the growth factor, capped at maxStability. So every repetition makes the future
+ * decay weaker — the more you've trained a lift, the slower it fades. */
+export function grownStability(stabilityDays: number): number {
+  return Math.min(STRENGTH_DECAY.maxStability, stabilityDays * STRENGTH_DECAY.stabilityGrowth);
 }
 
 /** Whole days from ISO date `from` to ISO date `to` (negative if `to` precedes

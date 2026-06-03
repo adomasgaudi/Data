@@ -575,6 +575,15 @@ main { padding-bottom: 5rem; }
 /* Drill-in "view together" combine bar. */
 .ex-combine { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 0.85rem; }
 .ex-combine[hidden] { display: none; }
+/* Drill-in squat-rack-hole scaling panel. */
+.ex-levels { margin: 0 0 0.85rem; padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); }
+.ex-levels[hidden] { display: none; }
+.exl-head { font-size: 0.78rem; margin-bottom: 0.4rem; }
+.exl-table { margin: 0; font-size: 0.82rem; }
+.exl-table th, .exl-table td { padding: 4px 8px; }
+.exl-bw { width: 4.2rem; }
+/* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight). */
+.set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); margin-right: 3px; }
 .ex-combine-lbl { font-size: 0.75rem; }
 .ex-combine-chip {
   border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft);
@@ -1354,6 +1363,14 @@ sup.wr-bw { font-size: 0.85em; }
 .detail-table th, .detail-table td { padding: 5px 10px; }
 .detail-table th { background: rgba(20, 24, 38, 0.03); }
 .detail-table tbody tr:last-child td { border-bottom: none; }
+/* Predicted reps-in-reserve cell: a computed hint, so it reads quieter than the
+   logged numbers next to it. */
+.prir-btn {
+  border: none; background: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--muted); border-bottom: 1px dotted var(--muted);
+}
+.prir-btn:hover, .prir-btn.is-open { color: var(--accent); border-bottom-color: var(--accent); }
+.prir-formula-row td { font-size: 0.82em; line-height: 1.4; padding: 4px 9px; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }
@@ -1476,8 +1493,10 @@ sup.wr-bw { font-size: 0.85em; }
 .xdd-rpe .xdd-caret { font-size: 0.6rem; }
 .xdd-rpe.is-set .xdd-btn { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
 .xdd-rpe.is-set .xdd-caret { color: rgba(255, 255, 255, 0.85); }
-/* Menu hugs the cell width and wraps long descriptions instead of going wide. */
-.xdd-rpe .xdd-menu { min-width: max(100%, 13rem); max-width: 15rem; }
+/* Menu hugs the cell width and wraps long descriptions instead of going wide.
+   The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
+   edge (it grows leftward) — left-anchored it overflowed off the screen. */
+.xdd-rpe .xdd-menu { min-width: max(100%, 13rem); max-width: min(15rem, 92vw); left: auto; right: 0; }
 .xdd-rpe .set-rpe-opt { white-space: normal; line-height: 1.25; padding: 6px 9px; font-size: 0.78rem; }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }

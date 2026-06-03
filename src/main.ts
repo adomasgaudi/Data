@@ -41,14 +41,17 @@ import {
   estimate1RM,
   weightForReps,
   repsForWeight,
+  predictedRir,
   setVolume,
   effectiveLoad,
   linearFit,
   MAX_1RM_REPS,
   strengthRetention,
+  grownStability,
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
+import { levelLabel, levelCoeffKey, defaultLevelCoeff } from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
@@ -145,6 +148,7 @@ const els = {
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exPersetBest: $<HTMLButtonElement>("exPersetBest"),
   exCombineBar: $("exCombineBar"),
+  exLevels: $("exLevels"),
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
@@ -187,6 +191,9 @@ const els = {
   addExerciseList: $("addExerciseList"),
   addArmPos: $<HTMLSelectElement>("addArmPos"),
   addArmPosField: $("addArmPosField"),
+  addVariant: $<HTMLInputElement>("addVariant"),
+  addVariantField: $("addVariantField"),
+  addVariantLabel: $("addVariantLabel"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
   addSets: $<HTMLInputElement>("addSets"),
@@ -256,18 +263,33 @@ function setTheme(dark: boolean) {
 }
 
 /** Which view the dashboard is showing: "admin" (the default, full access) or
- * "user". For now this only flips a banner near the title — no behaviour gates
- * yet; it's the hook a later slice will hang user-facing restrictions on. */
+ * "user". Admin sees every "Other" destination; user sees only the Guide. */
 type ViewMode = "admin" | "user";
 let viewMode: ViewMode = (() => {
   try { return localStorage.getItem("colosseum.viewMode") === "user" ? "user" : "admin"; } catch { return "admin"; }
 })();
+/** Top-tab panels a user (non-admin) is allowed to see; everything else in the
+ * "Other" sheet is hidden for them, leaving just the Guide. */
+const USER_VIEW_TABS = new Set(["athlete", "guide"]);
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
   els.viewBadge.hidden = mode !== "user";
   els.viewModeBtn.textContent = mode === "user" ? "🛡 Switch to admin view" : "👤 Switch to user view";
   els.viewModeBtn.setAttribute("aria-pressed", String(mode === "user"));
+  // The "Other" sheet: user view keeps only the Guide; admin shows everything.
+  for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
+    item.hidden = mode === "user" && item.dataset.tab !== "guide";
+  }
+  // If we just entered user view while on an admin-only panel, drop back to the
+  // athlete (Workouts) view so nothing restricted stays on screen.
+  if (mode === "user") {
+    const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+    if (!USER_VIEW_TABS.has(current)) {
+      switchTopTab("athlete");
+      showSubtab("workouts");
+    }
+  }
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
@@ -469,6 +491,45 @@ function setCodeOverride(exerciseName: string, code: string) {
   saveCodeOverrides();
 }
 
+// ---- Per-LEVEL bodyweight parts (the squat-rack scaling), editable + saved ----
+// A leverage level (a push-up at squat-rack hole 8) doesn't add weight — it
+// changes how much of your bodyweight you lift. Each (exercise, hole) therefore
+// has its OWN bodyweight-% : seeded from the lift's base coeff scaled by the
+// hole, then tuned by the owner. Stored on this device, keyed by levelCoeffKey.
+const LEVEL_COEFF_STORE_KEY = "colosseum.levelCoeffs.v1";
+const levelCoeffOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(LEVEL_COEFF_STORE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+
+/** Bodyweight-part for one set's hole: the owner's override, else a seeded
+ * default from the lift's base coeff scaled by the hole. */
+function levelCoeffFor(exerciseName: string, value: number): number {
+  const key = levelCoeffKey(exerciseName, value);
+  if (Object.prototype.hasOwnProperty.call(levelCoeffOverrides, key)) return levelCoeffOverrides[key]!;
+  return defaultLevelCoeff(coeffFor(exerciseName), value);
+}
+
+function setLevelCoeff(key: string, value: number) {
+  levelCoeffOverrides[key] = value;
+  try {
+    localStorage.setItem(LEVEL_COEFF_STORE_KEY, JSON.stringify(levelCoeffOverrides));
+  } catch {
+    /* storage may be unavailable — edits still apply this session */
+  }
+}
+
+/** The bodyweight-part that applies to a set: its hole's % if it has a level,
+ * else the exercise's plain coeff. The single place the two stores meet. */
+function coeffForRecord(r: SetRecord): number {
+  if (r.levelValue !== undefined) return levelCoeffFor(r.exerciseName, r.levelValue);
+  return coeffFor(r.exerciseName);
+}
+
 // ---- Last picked athlete: remembered across reloads ----
 const ATHLETE_STORE_KEY = "colosseum.lastAthlete.v1";
 
@@ -597,7 +658,9 @@ function computeRecord(r: SetRecord): SetRecord {
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
   const fromTable = els.bwSource.value !== "perset";
-  const coeff = coeffFor(r.exerciseName);
+  // A squat-rack level carries its own bodyweight-part, so an incline push-up at
+  // a high hole loads less of you than the floor version of the same exercise.
+  const coeff = coeffForRecord(r);
   // Assisted pull-ups: the logged weight is the machine dial value, which over-
   // reads ~2x. Use the halved real assistance for all strength maths, but keep
   // the logged value as origWeight so the displayed set still tells you what to
@@ -2312,6 +2375,7 @@ function renderExerciseDetail(exName: string) {
     strengthAsOf(),
   ).find((p) => p.exerciseName === exName);
   renderCombineBar(exName, username);
+  renderExerciseLevels(exName, username);
   // Stats start collapsed on every drill-in (the <details> persists across
   // exercises, so reset it). renderExerciseWeekly always fills the chips, so the
   // dropdown always has content to show.
@@ -2371,6 +2435,52 @@ function renderCombineBar(exName: string, username: string) {
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
     picker;
+}
+
+/**
+ * Drill-in "Squat-rack holes" panel. When this lift has sets logged at different
+ * holes, list each hole with its best set, its effort (bodyweight-inclusive est.
+ * 1RM — what should LINE UP across holes of equal effort when the scaling is
+ * right) and an EDITABLE bodyweight-% so the owner can compare the heights and
+ * tune each % on the spot. Hidden when the lift has no leveled sets. */
+function renderExerciseLevels(exName: string, username: string): void {
+  const formula = currentFormula();
+  // Best (bodyweight-inclusive) effort 1RM + best raw set per hole used.
+  const byHole = new Map<number, { best: SetRecord; eff1rm: number }>();
+  for (const r of computedRecords()) {
+    if (r.username !== username || r.exerciseName !== exName || r.levelValue === undefined) continue;
+    if (addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
+    const eff = estimate1RM(r.weight, r.reps, formula);
+    if (eff === null) continue;
+    const cur = byHole.get(r.levelValue);
+    if (!cur || eff > cur.eff1rm) byHole.set(r.levelValue, { best: r, eff1rm: eff });
+  }
+  if (byHole.size === 0) { els.exLevels.hidden = true; return; }
+  const rows = [...byHole.entries()]
+    .sort((a, b) => a[0] - b[0]) // by hole, low (hard) → high (easy)
+    .map(([hole, v]) => {
+      const coeff = levelCoeffFor(exName, hole);
+      const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
+      return (
+        `<tr>` +
+        `<td><strong>${escapeHtml(levelLabel(hole))}</strong></td>` +
+        `<td class="num">${wr(dispW, v.best.reps)}</td>` +
+        `<td class="num">${fmt(v.eff1rm)}</td>` +
+        `<td class="num"><input class="bw-input exl-bw" type="number" step="0.05" min="0" max="2" value="${coeff}" ` +
+        `data-levelkey="${escapeHtml(levelCoeffKey(exName, hole))}" aria-label="Bodyweight part for hole ${hole}" /></td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+  els.exLevels.hidden = false;
+  els.exLevels.innerHTML =
+    `<div class="exl-head"><strong>Squat-rack holes</strong> ` +
+    `<span class="muted">tune each BW % so equal-effort holes show the same effort 1RM</span></div>` +
+    `<table class="data-table exl-table"><thead><tr>` +
+    `<th>Hole</th><th class="num">Best</th>` +
+    `<th class="num" title="Bodyweight-inclusive estimated 1RM — should match across holes of equal effort when the % is right">Effort</th>` +
+    `<th class="num" title="Bodyweight part — how much of your weight this hole loads. Lower hole = harder = more. Edit to scale.">BW</th>` +
+    `</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -2741,6 +2851,7 @@ function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
+  if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // Category mode: tapping a category header collapses/expands its exercises.
@@ -3275,6 +3386,7 @@ function onWorkoutRowClick(e: MouseEvent) {
     return;
   }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
+  if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // An exercise name in an expanded day -> jump to that exercise's drill-in on
@@ -3306,25 +3418,26 @@ function onWorkoutRowClick(e: MouseEvent) {
  * second tap needed. A set with a note still toggles its own note row. */
 function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
+  const strengthByDay = currentStrengthByUserExercise(formula);
   const body = group.exercises
     .map((e) => {
       const addBtn = showAddSets
         ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
         : "";
       const header =
-        `<tr class="set-ex-row"><td colspan="4" class="wo-exname">` +
+        `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
         `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
         `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
-        .map((s) => setRowsHtml(s, formula))
+        .map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s)))
         .join("");
       return header + sets;
     })
     .join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
   const addExRow = showAddSets
-    ? `<tr class="set-ex-row wo-addex-host"><td colspan="4"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
+    ? `<tr class="set-ex-row wo-addex-host"><td colspan="5"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
     : "";
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}</tbody></table>`;
 }
@@ -3349,6 +3462,62 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
   row.classList.add("open");
 }
 
+const MS_PER_DAY_RIR = 86_400_000;
+const dayNumber = (iso: string): number => Math.round(Date.parse(iso) / MS_PER_DAY_RIR);
+
+/**
+ * CURRENT-strength (faded) EFFECTIVE 1RM per athlete+exercise, by training day —
+ * the anchor each set's predicted RIR is measured against. Mirrors the on-screen
+ * "current strength" line (decayedStrengthSeries): between sessions a lift fades
+ * on the Ebbinghaus curve, and each session grows that lift's stability (so a
+ * well-drilled lift fades slower). The level kept for a day is
+ * max(faded-from-the-last-session, that day's best set) — so a set is judged
+ * against your ABILITY ON THAT DAY, not an all-time peak from a stronger era
+ * (which made light or detrained sets read as huge reps-in-reserve).
+ *
+ * Effective (bodyweight-inclusive) frame and the same addedWeight1RM null-guard
+ * as the displayed 1RM, so it lines up with the per-set effective load fed into
+ * predictedRir. Keyed "username exerciseName" → (dayNumber → level). Built once
+ * per render. */
+function currentStrengthByUserExercise(formula: OneRepMaxFormula): Map<string, Map<number, number>> {
+  // 1) Best effective 1RM reached on each day, per athlete+exercise.
+  const byKeyDay = new Map<string, Map<number, number>>();
+  for (const r of computedRecords()) {
+    if (!r.date || addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
+    const eff = estimate1RM(r.weight, r.reps, formula); // effective (bw-inclusive) 1RM
+    if (eff === null) continue;
+    const key = `${r.username} ${r.exerciseName}`;
+    let dm = byKeyDay.get(key);
+    if (!dm) byKeyDay.set(key, (dm = new Map()));
+    const d = dayNumber(r.date);
+    dm.set(d, Math.max(dm.get(d) ?? -Infinity, eff));
+  }
+  // 2) Forward-simulate the fade + consolidation to get the current level per day.
+  const out = new Map<string, Map<number, number>>();
+  for (const [key, dm] of byKeyDay) {
+    const days = [...dm.keys()].sort((a, b) => a - b);
+    const levels = new Map<number, number>();
+    let anchor = days[0]!;
+    let level = dm.get(anchor)!;
+    let stability: number = STRENGTH_DECAY.baseStability;
+    levels.set(anchor, level);
+    for (let i = 1; i < days.length; i++) {
+      const d = days[i]!;
+      level = Math.max(level * strengthRetention(d - anchor, stability), dm.get(d)!);
+      anchor = d;
+      stability = grownStability(stability); // a new session makes future decay weaker
+      levels.set(d, level);
+    }
+    out.set(key, levels);
+  }
+  return out;
+}
+
+/** The current-strength (faded) effective 1RM for one set's athlete+exercise on
+ * the day of that set, or null if none. */
+const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): number | null =>
+  (s.date ? m.get(`${s.username} ${s.exerciseName}`)?.get(dayNumber(s.date)) : undefined) ?? null;
+
 // Compact header for the sets tables: weight / est. 1RM / volume, all in kg.
 // AI-NOTE: setRowsHtml/SETS_HEAD are shared by BOTH the Workouts day→exercise
 // sets table and the Exercises weekly drill-in. The compact W/1RM/Vol headers
@@ -3356,7 +3525,7 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
 // and you change both. The note toggle is handled by toggleSetNote(), wired
 // into onWorkoutRowClick and onExerciseRowClick.
 const SETS_HEAD =
-  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
+  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. High = the set was easy (many left); ~0 = near failure. Tap a number to see the maths.">pRIR</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
 
 /** How many characters of a note to show inline before truncating with "…". */
 const NOTE_PREVIEW_LEN = 8;
@@ -3419,13 +3588,46 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
 }
 
 /**
+ * Plain-text explanation of a set's predicted RIR, numbers plugged in — the
+ * pRIR counterpart of oneRmFormulaText. Takes the COMPUTED record (bodyweight
+ * already folded into `weight`) plus the anchor: the CURRENT-strength (faded)
+ * EFFECTIVE 1RM for that lift on that day. Walks the chain: your current
+ * strength → the reps the curve predicts at this load → minus the reps you
+ * actually did. Returns "" when no prediction is possible (caller renders "—").
+ */
+function predictedRirText(c: SetRecord, anchorE1RM: number | null, formula: OneRepMaxFormula): string {
+  const effLoad = c.weight;
+  const r = c.reps;
+  if (anchorE1RM === null || effLoad === null || r === null || effLoad <= 0 || r <= 0) return "";
+  const predicted = repsForWeight(anchorE1RM, effLoad, formula);
+  if (predicted === null) return "";
+  const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
+  // Bar weight vs the body's share folded in by computeRecord (same split the
+  // 1RM reveal uses), so a bodyweight lift explains its effective load too.
+  const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
+  const bodyLoad = effLoad - added;
+  const hasBody = bodyLoad > 0.01;
+  const loadTxt = hasBody
+    ? `effective load ${f2(effLoad)} kg (bar ${f2(added)} + bodyweight share ${f2(bodyLoad)})`
+    : `${f2(effLoad)} kg`;
+  const curve = formula === "brzycki" ? "Brzycki" : formula === "nuzzo" ? "Nuzzo bench" : "Epley";
+  const rir = predicted - r;
+  return (
+    `Strength anchor: your current ${c.exerciseName} strength on this day is about a ${f2(anchorE1RM)} kg estimated 1RM` +
+    `${hasBody ? " (bodyweight included)" : ""} — your best, faded for time off the lift. ` +
+    `The ${curve} curve says at ${loadTxt} you should manage about ${f2(predicted)} reps; ` +
+    `you did ${r}, so predicted − actual = ${f2(predicted)} − ${r} = ${f2(rir)} reps in reserve.`
+  );
+}
+
+/**
  * One set as table rows: the W/1RM/Vol line. The 1RM cell is a button — tapping
  * it expands a sub-row showing the exact formula and numbers used. When the set
  * has a note (or is a dropset) a short truncated preview sits on the left of the
  * weight cell with a caret; tapping the row expands the full note. Both reveals
  * are independent sub-rows, so a set can show either or both.
  */
-function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
+function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
   // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
   // what was actually loaded. `s` is a raw record; compute it here so the
@@ -3433,6 +3635,15 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
   const computed = computeRecord(s);
   const e1rm = addedWeight1RM(computed, formula);
   const vol = setVolume(s.weight, s.reps);
+  // Predicted RIR: what your CURRENT (faded) strength for this lift says you
+  // should manage at this (effective) load, minus the reps you did. Effective
+  // frame on both sides so bodyweight lifts line up.
+  const predRir = predictedRir(anchorE1RM, computed.weight, s.reps, formula);
+  const prirText = predictedRirText(computed, anchorE1RM, formula);
+  const prirCell =
+    predRir === null
+      ? "—"
+      : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
   const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
   let preview = "";
   if (note) {
@@ -3446,20 +3657,27 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
       ? "—"
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
   const rpeCell = rpeDropdownHtml(setId(s), rpeFor(s));
+  // A squat-rack hole stands in for the weight on these sets — show the tag.
+  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
-    `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
+    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
+    `<td class="num">${prirCell}</td>` +
     `<td class="num rpe-cell">${rpeCell}</td></tr>`;
   const noteRow = note
-    ? `<tr class="set-note-row" hidden><td colspan="4" class="muted">${escapeHtml(note)}</td></tr>`
+    ? `<tr class="set-note-row" hidden><td colspan="5" class="muted">${escapeHtml(note)}</td></tr>`
     : "";
   const formulaRow =
     e1rm === null
       ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="4" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
-  return main + noteRow + formulaRow;
+      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
+  const prirRow =
+    predRir === null || !prirText
+      ? ""
+      : `<tr class="prir-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(prirText)}</td></tr>`;
+  return main + noteRow + formulaRow + prirRow;
 }
 
 /** The per-set RIR picker as a custom HTML/CSS dropdown (no native <select>, so it
@@ -3554,6 +3772,26 @@ function toggleE1rmFormula(target: HTMLElement): boolean {
   return true;
 }
 
+/** Click on a pRIR cell button: expand/collapse the predicted-RIR explanation
+ * sub-row for that set. Mirrors toggleE1rmFormula — scan forward past the note /
+ * 1RM-formula rows to this set's prir-formula-row. Returns true if the click was
+ * on a pRIR button. Shared by the Workouts and Exercises sets tables. */
+function togglePrirFormula(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".prir-btn");
+  if (!btn) return false;
+  let sib = btn.closest("tr")?.nextElementSibling ?? null;
+  while (sib && !sib.classList.contains("prir-formula-row")) {
+    // Stop if we reach the next set's row rather than this set's explanation.
+    if (sib.classList.contains("set-row") || sib.querySelector(".prir-btn")) break;
+    sib = sib.nextElementSibling;
+  }
+  if (sib?.classList.contains("prir-formula-row")) {
+    sib.toggleAttribute("hidden");
+    btn.classList.toggle("is-open");
+  }
+  return true;
+}
+
 /**
  * Sets spanning several days (one week of one exercise), grouped by day. Each
  * day is a header row above that day's sets, so the date sits "up top" instead
@@ -3561,6 +3799,7 @@ function toggleE1rmFormula(target: HTMLElement): boolean {
  */
 function setsByDateTableHtml(sets: readonly SetRecord[]): string {
   const formula = currentFormula();
+  const strengthByDay = currentStrengthByUserExercise(formula);
   const byDate = new Map<string, SetRecord[]>();
   for (const s of sets) {
     const g = byDate.get(s.date);
@@ -3568,8 +3807,8 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     else byDate.set(s.date, [s]);
   }
   const body = Array.from(byDate, ([date, daySets]) => {
-    const header = `<tr class="set-date-row"><td colspan="4" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula)).join("");
+    const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
+    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
   }).join("");
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
 }
@@ -4109,35 +4348,39 @@ function renderTest() {
 
 /**
  * Strength-fade explainer: % of a peak 1RM still available vs days since you last
- * trained the lift (the detraining model in metrics.ts). Flat through the grace
- * period, then a logarithmically-slowing decline to the floor. A few labelled
- * milestone dots make the shape concrete. Static (no inputs) — drawn with the
- * calculator so it sizes correctly when the Test tab is shown.
+ * trained the lift (the spaced-repetition model in metrics.ts). Two curves show
+ * the key idea — a freshly-hit lift fades faster than one you've drilled for
+ * months, because each session grows its durability. Static (no inputs) — drawn
+ * with the calculator so it sizes correctly when the Test tab is shown.
  */
 function renderDecayCurve() {
   const box = document.getElementById("decayCurveChart");
   if (!box) return;
   const maxDays = 540; // ~1.5 years out — long enough to see the tail flatten
   const r1 = (n: number) => Math.round(n * 10) / 10;
-  const linePts: SvgPoint[] = [];
-  for (let d = 0; d <= maxDays; d += 2) {
-    linePts.push({ x: d, y: r1(strengthRetention(d) * 100) });
-  }
-  // Milestone dots people can relate to.
+  // A "well-trained" lift = stability grown by several sessions.
+  let trained: number = STRENGTH_DECAY.baseStability;
+  for (let i = 0; i < 4; i++) trained = grownStability(trained);
+  const curve = (stability: number): SvgPoint[] => {
+    const pts: SvgPoint[] = [];
+    for (let d = 0; d <= maxDays; d += 2) pts.push({ x: d, y: r1(strengthRetention(d, stability) * 100) });
+    return pts;
+  };
   const milestones: { d: number; label: string }[] = [
     { d: STRENGTH_DECAY.graceDays, label: "2 weeks" },
-    { d: STRENGTH_DECAY.graceDays + STRENGTH_DECAY.tauDays, label: "+1 month" },
+    { d: 44, label: "+1 month" },
     { d: 90, label: "3 months" },
     { d: 180, label: "6 months" },
     { d: 365, label: "1 year" },
   ];
   const dots: SvgPoint[] = milestones.map((m) => {
     const pct = r1(strengthRetention(m.d) * 100);
-    return { x: m.d, y: pct, meta: `${m.label}: ${pct}% kept` };
+    return { x: m.d, y: pct, meta: `${m.label}: ${pct}% kept (fresh lift)` };
   });
   const series: SvgSeries[] = [
-    { name: "Strength kept", color: "#284e86", type: "line", points: linePts, noLegend: true },
-    { name: "Milestones", color: "#b8902f", type: "scatter", points: dots },
+    { name: "Fresh lift", color: "#284e86", type: "line", points: curve(STRENGTH_DECAY.baseStability) },
+    { name: "Well-trained lift", color: CURRENT_STRENGTH_COLOR, type: "line", points: curve(trained) },
+    { name: "Milestones (fresh)", color: "#b8902f", type: "scatter", points: dots },
   ];
   const config: SvgChartConfig = {
     series,
@@ -4153,7 +4396,8 @@ function renderDecayCurve() {
   const floorPct = Math.round(STRENGTH_DECAY.floor * 100);
   els.decayCurveNote.textContent =
     `% of your peak 1RM kept after N days without training a lift. Flat for the first ` +
-    `${STRENGTH_DECAY.graceDays} days, ~10% lost a month later, then a slow logarithmic tail down to a ${floorPct}% floor.`;
+    `${STRENGTH_DECAY.graceDays} days, then an exponential fade to a ${floorPct}% floor. ` +
+    `The more you've trained a lift the flatter its curve — a fresh PR (blue) fades faster than a well-drilled lift (green).`;
 }
 
 /**
@@ -4564,6 +4808,21 @@ async function init() {
   // Expand/collapse rows.
   els.lbTable.addEventListener("click", onLeaderboardRowClick);
   els.athleteTable.addEventListener("click", onExerciseRowClick);
+  // Squat-rack holes panel: editing a hole's BW % rescales every set at that
+  // hole; re-render the drill-in so the effort 1RMs update live.
+  els.exLevels.addEventListener("change", (e) => {
+    const el = e.target as HTMLElement;
+    if (!el.classList.contains("exl-bw")) return;
+    const key = (el as HTMLInputElement).dataset.levelkey;
+    if (key === undefined) return;
+    let v = parseFloat((el as HTMLInputElement).value);
+    if (!Number.isFinite(v)) v = 0;
+    v = Math.min(2, Math.max(0, v));
+    setLevelCoeff(key, v);
+    renderLeaderboard();
+    renderPersonalRecords();
+    if (selectedExercise) renderExerciseDetail(selectedExercise);
+  });
   // Back link in the exercise drill-in (lives in the title, outside the table).
   els.athleteTitle.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".back-btn")) {
@@ -5110,6 +5369,9 @@ interface ManualEntry {
   exerciseName: string;
   weight: number | null;
   reps: number | null;
+  /** Squat-rack hole chosen on the Add form, stored per set — the difficulty
+   * selection that replaces added weight for incline push-ups. */
+  levelValue?: number;
 }
 const MANUAL_KEY = "colosseum.manualSets.v1";
 let manualEntries: ManualEntry[] = loadManual();
@@ -5146,6 +5408,9 @@ function manualToRecord(m: ManualEntry): SetRecord {
     notes: "",
     dropset: false,
     percentile: null,
+    ...(m.levelValue !== undefined
+      ? { levelDim: "sq" as const, levelValue: m.levelValue, levelLabel: levelLabel(m.levelValue) }
+      : {}),
   };
 }
 
@@ -5225,6 +5490,18 @@ function updateArmPosField(): void {
     els.addArmPos.innerHTML =
       `<option value="">— pick a position —</option>` +
       SITUP_ARM_POSITIONS.map((p) => `<option value="${p}">${p}</option>`).join("");
+}
+
+/* Push-ups (and the other lifts the owner does on the squat rack) are progressed
+ * by hole, not weight. For those a "Squat-rack hole" field appears, and its value
+ * is stored as the set's LEVEL — a per-set selection that picks a bodyweight-part
+ * instead of added kilos. The exercise name never changes (one exercise). */
+const usesSquatRackHole = (name: string): boolean =>
+  /push|inverted row|\brow\b|deadlift|good morning|\bdip\b|leg pull|pull[- ]?in|leg raise/i.test(name);
+
+/** Show the squat-rack-hole field only for exercises that use it. */
+function updateVariantField(): void {
+  els.addVariantField.hidden = !usesSquatRackHole(els.addExercise.value.trim());
 }
 
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
@@ -5415,6 +5692,11 @@ function onAddSubmit() {
   // Fold the chosen arm position into the name so it tracks as its own variant.
   const armPos = !els.addArmPosField.hidden ? els.addArmPos.value : "";
   if (armPos && isDeclineSitup(exerciseName)) exerciseName = `${exerciseName} (${armPos})`;
+  // A chosen squat-rack hole is stored PER SET (not in the name) — it's the
+  // difficulty selection that stands in for added weight on an incline push-up.
+  const holeRaw = parseFloat(els.addVariant.value);
+  const levelValue =
+    !els.addVariantField.hidden && Number.isFinite(holeRaw) ? Math.round(holeRaw) : undefined;
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
   const date = els.addDate.value || todayIso();
@@ -5438,6 +5720,7 @@ function onAddSubmit() {
       exerciseName,
       weight: Number.isFinite(weight) ? weight : null,
       reps,
+      ...(levelValue !== undefined ? { levelValue } : {}),
     });
   }
   saveManual();
@@ -5492,7 +5775,11 @@ async function importManual(file: File) {
 function setupAddTab() {
   renderAddTab();
   updateArmPosField();
-  els.addExercise.addEventListener("input", updateArmPosField);
+  updateVariantField();
+  els.addExercise.addEventListener("input", () => {
+    updateArmPosField();
+    updateVariantField();
+  });
   els.addSubmit.addEventListener("click", onAddSubmit);
   els.addExport.addEventListener("click", exportManual);
   els.addImport.addEventListener("click", () => els.addImportFile.click());

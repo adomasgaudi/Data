@@ -47,6 +47,16 @@ export interface SetRecord {
   notes: string;
   dropset: boolean;
   percentile: number | null;
+  /** Leverage LEVEL on a bodyweight lift whose difficulty is set by geometry,
+   * not added weight (e.g. an incline push-up at squat-rack hole 8). It's a
+   * per-set "quantified selection" — like the weight on a bar, but it picks a
+   * BODYWEIGHT-PART rather than added kilos, so every height stays ONE exercise.
+   * `levelDim` is the dimension (squat-rack hole), `levelValue` the setting and
+   * `levelLabel` its short tag ("SQ8"). Parsed from the note at load, or chosen
+   * on the Add form. */
+  levelDim?: "sq";
+  levelValue?: number;
+  levelLabel?: string;
   /** Set on SYNTHETIC records only: the id of the combinable/comparable registry
    * group this record was derived for (e.g. "combine.sq-mix", "compare.dl-pattern").
    * Pure logged records never carry it. Lets views/filters tell synthetics apart. */
