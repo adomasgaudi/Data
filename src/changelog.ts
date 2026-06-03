@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.16", sp: 1, note: "Sets/week bars are now 30% thinner, outline-only (transparent), and sit low on a 3× taller right axis so they no longer tower over the 1RM data." },
       { version: "b.2.0.15", sp: 5, note: "Combine lifts in a drill-in: a “＋ combine with…” picker views e.g. Squat + Smith Machine Squat as one (records, best sets, weekly and graph all merged). Moved the chart's “Center” button into the controls so it no longer covers the legend toggles." },
       { version: "b.2.0.14", sp: 1, note: "Sets/week bars are now as wide as the week they cover (histogram-style, no thin sticks); the Workouts muscle-group view reads “Quads — 4 sets”." },
       { version: "b.2.0.13", sp: 5, note: "Drill-in graph merged into ONE chart — every view is a legend toggle: Est. 1RM (a dot for EVERY set), Current strength (connected line), Per-set range, Sets/week, and an optional logarithmic Trend. Re-graded the whole-site effort (now ≈200 SP)." },

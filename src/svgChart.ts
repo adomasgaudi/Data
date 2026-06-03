@@ -35,6 +35,8 @@ export interface SvgSeries {
   noLegend?: boolean;
   /** Start hidden (the user can switch it on via the legend toggle). */
   hidden?: boolean;
+  /** Bars only: draw as a thin outline (no fill) so they don't cover other series. */
+  outline?: boolean;
 }
 export interface SvgChartConfig {
   series: SvgSeries[];
@@ -42,6 +44,9 @@ export interface SvgChartConfig {
   /** Force the (left) y-axis to include 0. */
   yBeginAtZero?: boolean;
   rightBeginAtZero?: boolean;
+  /** Stretch the right y-axis by this factor so its series sit low/squished
+   * (e.g. 3 = bars only fill the bottom third). Default 1. */
+  rightHeadroom?: number;
   yUnit?: string;
   rightUnit?: string;
   xKind?: "time" | "linear";
@@ -145,6 +150,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (Number.isFinite(re.yMin)) {
       const ryPad = (re.yMax - re.yMin) * 0.08 || 1;
       ry = { yMin: re.yMin - (cfg.rightBeginAtZero ? 0 : ryPad), yMax: re.yMax + ryPad };
+      // Stretch the top so these series sit low (don't tower over the left-axis data).
+      const hf = cfg.rightHeadroom ?? 1;
+      if (hf > 1) ry = { yMin: ry.yMin, yMax: ry.yMin + (ry.yMax - ry.yMin) * hf };
     } else {
       ry = { yMin: 0, yMax: 1 };
     }
@@ -277,13 +285,15 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         let step = Infinity;
         for (let i = 1; i < xs.length; i++) { const d = xs[i]! - xs[i - 1]!; if (d > 0 && d < step) step = d; }
         const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / Math.max(1, inView.length);
-        const bw = Math.max(2, stepPx * 0.9);
+        const bw = Math.max(2, stepPx * 0.63); // ~30% thinner than a full week
         const base = Math.min(h - M.b, Math.max(M.t, ymap(0)));
+        // Outline bars: transparent fill + a thin stroke, so they don't cover other series.
+        const paint = s.outline ? `fill="none" stroke="${s.color}" stroke-width="1.3"` : `fill="${s.color}"`;
         for (const p of s.points) {
           const x = xPix(p.x);
           if (x < M.l - bw || x > W - M.r + bw) continue;
           const top = ymap(p.y ?? 0);
-          body += `<rect x="${(x - bw / 2).toFixed(1)}" y="${Math.min(top, base).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(base - top).toFixed(1)}" rx="2" fill="${s.color}"/>`;
+          body += `<rect x="${(x - bw / 2).toFixed(1)}" y="${Math.min(top, base).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(base - top).toFixed(1)}" rx="2" ${paint}/>`;
         }
       }
     }
