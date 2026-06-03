@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.35", sp: 1, note: "Year heatmap now has a “Tag alone” button: tap it, then tap each trained day to add/remove the red “alone” ring — so you can tag many days at once without scrolling the workout list. Tap “Done tagging” to go back to tap-to-jump." },
       { version: "b.2.0.34", sp: 2, note: "The “reps at % of 1RM” research page and the Calculator graph now use the same modern scroll/pan/zoom chart: all 17 of the study's bench points are plotted as dots with the best-fit curve through them. The calculator also drops a gold dot for the set you typed (its reps → % of 1RM)." },
       { version: "b.2.0.33", sp: 5, note: "Groundwork for the new exercise tag system: all the ways the app groups lifts (muscle groups, movement patterns, combinable lifts like “SQ mix”, comparable lifts like “DL pattern”) now live in ONE registry as the single source of truth. No visible change yet — the muscle/category logic just reads from the registry now (locked by tests so nothing moved)." },
       { version: "b.2.0.31", sp: 1, note: "Removed the three throwaway graph test-pages (Graph demo, Graph (advanced) and Compare (lab)) from the Other menu — they were scratch pads for trying chart ideas and aren't needed in the app." },

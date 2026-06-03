@@ -34,20 +34,6 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "'{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"HOSTING OFFER (session start): Before doing anything else, use the AskUserQuestion popup to ask whether to host the Colosseum dashboard for the owners phone. If they choose yes: (1) run npm run build; (2) start (npm run preview -- --host --port 5173) in the background; (3) find the LAN WLAN IPv4 address (192.168.x.x); (4) give them the http://LAN-IP:5173/ URL for their phone; (5) automatically open that URL in the default browser with Start-Process. It is a static no-live-reload build, so the owner refreshes their phone themselves. If they choose no, do nothing.\"}}'",
-            "timeout": 10,
-            "statusMessage": "Offering to host the dashboard"
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -57,17 +43,6 @@
             "command": "'{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"PREFER POPUP QUESTIONS: The user rarely reads plain text. Whenever you would ask a question, request clarification, offer options, or seek a decision, you MUST use the AskUserQuestion tool (the multiple-choice popup) instead of asking in prose. Put the real choices as the options. Only ask in plain text if a popup genuinely cannot represent the question.\"}}'",
             "timeout": 10,
             "statusMessage": "Reminding to use popup questions"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "powershell",
-            "command": "$ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.*' } | Select-Object -First 1 -ExpandProperty IPAddress; $f = Join-Path $env:TEMP 'colosseum-last-ip.txt'; $prev = if (Test-Path $f) { (Get-Content $f -Raw).Trim() } else { '' }; if ($ip) { Set-Content -Path $f -Value $ip -Encoding ascii }; if ($ip -and $prev -and ($ip -ne $prev)) { $serving = [bool](Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue); $svc = if ($serving) { 'A server is already running on port 5173, now reachable at http://' + $ip + ':5173/. ' } else { '' }; $ctx = 'WIFI CHANGED: the LAN IP changed from ' + $prev + ' to ' + $ip + '. ' + $svc + 'Use the AskUserQuestion popup to suggest re-hosting on the new WiFi: relaunch (npm run preview -- --host --port 5173) if needed, give the http://' + $ip + ':5173/ phone URL, and offer to reopen the browser.'; @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = $ctx } } | ConvertTo-Json -Compress }",
-            "timeout": 10,
-            "statusMessage": "Checking if WiFi/IP changed"
           }
         ]
       }

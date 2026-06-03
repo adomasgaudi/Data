@@ -2612,6 +2612,7 @@ function initHeatYear() {
   const y = Number(latest?.slice(0, 4));
   if (Number.isFinite(y)) heatYear = y;
   heatFilter = "cat:Legs";
+  aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
 /** Intensity bucket for a day's set count: 0 rest, then 1+/2+/4+/6+/10+ sets
@@ -2718,7 +2719,14 @@ function renderWorkoutCalendar() {
   const years = dataYears(trainingDays()); // year list from ALL training (filter-independent)
   if (!years.includes(heatYear)) heatYear = years[0]!;
   const counts = filteredDayCounts(); // colouring honours the filter
-  const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}</div>`;
+  const tagBtn =
+    `<button type="button" class="cal-tagmode${aloneTagMode ? " is-on" : ""}" data-tagmode="alone" ` +
+    `title="${aloneTagMode ? "Done — stop tagging" : "Tag many days as trained-alone: tap this, then tap each day"}">` +
+    `${aloneTagMode ? "Done tagging" : "Tag alone"}</button>`;
+  const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}${tagBtn}</div>`;
+  const tagHint = aloneTagMode
+    ? `<div class="cal-taghint">Tap trained days to add/remove the red “alone” ring. Tap “Done tagging” when finished.</div>`
+    : "";
   const legend =
     `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1"></span>` +
     `<span class="hm-cell lvl-2"></span><span class="hm-cell lvl-3"></span><span class="hm-cell lvl-4"></span>` +
@@ -2733,7 +2741,8 @@ function renderWorkoutCalendar() {
         return `<div class="hm-block"><div class="cal-head"><strong>${y}</strong>${count(g)}</div>${g.html}</div>`;
       })
       .join("");
-    els.workoutCalendar.innerHTML = controls + blocks + legend;
+    els.workoutCalendar.innerHTML = controls + tagHint + blocks + legend;
+    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
     return;
   }
 
@@ -2743,6 +2752,7 @@ function renderWorkoutCalendar() {
   const newerExists = idx > 0; // a larger (newer) year exists
   els.workoutCalendar.innerHTML =
     controls +
+    tagHint +
     `<div class="cal-head">` +
     `<button type="button" class="cal-nav" data-heat="prev" aria-label="Previous year"${olderExists ? "" : " disabled"}>‹</button>` +
     `<strong>${heatYear}</strong>` +
@@ -2751,6 +2761,7 @@ function renderWorkoutCalendar() {
     `</div>` +
     g.html +
     legend;
+  els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
 }
 
 /** Step the heatmap to an adjacent year that has data (‹ older / › newer). */
@@ -3770,8 +3781,23 @@ async function init() {
     const nav = target.closest<HTMLElement>(".cal-nav");
     if (nav?.dataset.heat === "prev") return shiftHeatYear(-1); // older year
     if (nav?.dataset.heat === "next") return shiftHeatYear(1); // newer year
-    // Tapping a trained day in the heatmap jumps to it in the list below.
+    // "Tag alone": arm/disarm paint mode so day taps toggle the alone tag.
+    if (target.closest<HTMLElement>(".cal-tagmode")) {
+      aloneTagMode = !aloneTagMode;
+      return renderWorkoutCalendar();
+    }
     const cell = target.closest<HTMLElement>(".hm-cell[data-date]");
+    // In paint mode, tapping a trained day toggles its "alone" tag in place
+    // (no jump) so many days can be tagged quickly without scrolling the list.
+    if (aloneTagMode && cell?.dataset.date) {
+      const key = aloneKey(cell.dataset.date);
+      if (aloneTags.has(key)) aloneTags.delete(key);
+      else aloneTags.add(key);
+      saveAlone();
+      cell.classList.toggle("hm-alone", aloneTags.has(key)); // live ring, no full re-render
+      return;
+    }
+    // Otherwise, tapping a trained day in the heatmap jumps to it in the list below.
     if (cell?.dataset.date) jumpToWorkoutDate(cell.dataset.date);
   });
   // Close the heatmap filter menu on any click outside it.

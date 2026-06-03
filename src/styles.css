@@ -927,6 +927,21 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .cal-nav:hover { border-color: var(--accent); color: var(--accent); }
 .cal-count { margin-left: auto; font-size: 0.8rem; }
+/* "Tag alone" paint-mode button: outlined when idle, solid red when armed. */
+.cal-tagmode {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; line-height: 1;
+}
+.cal-tagmode:hover { border-color: #e23b3b; color: #e23b3b; }
+.cal-tagmode.is-on { background: #e23b3b; border-color: #e23b3b; color: #fff; }
+/* Hint shown while armed; same red as the ring so it reads as one feature. */
+.cal-taghint {
+  font-size: 0.78rem; color: #e23b3b; margin: 0.1rem 0 0.5rem;
+}
+/* While tagging, trained squares get a crosshair cursor; the gold hover-jump
+   outline is suppressed (you're painting, not jumping). */
+.cal-tagging .hm-cell[data-date] { cursor: crosshair; }
+.cal-tagging .hm-cell[data-date]:hover { outline-color: #e23b3b; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .cal-dow { text-align: center; font-size: 0.7rem; color: var(--muted); font-weight: 600; padding-bottom: 2px; }
 .cal-cell {
