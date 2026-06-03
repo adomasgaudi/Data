@@ -19,6 +19,12 @@
   --chart-label: #6b7280;
   --chart-halo: #ffffff;
   --chart-band: rgba(40, 78, 134, 0.06);
+  /* Year heatmap rest squares, alternating by month: even = white + thin gray
+     outline, odd = very light gray + slightly darker outline. */
+  --hm-rest-even: #ffffff;
+  --hm-rest-odd: #eceef1;
+  --hm-bd-even: #d4d9e2;
+  --hm-bd-odd: #b3bbc8;
 }
 /* Dark theme — set on <html data-theme="dark">. A deep slate that keeps the
    lapis + ochre accents readable. */
@@ -38,6 +44,10 @@
   --chart-label: #aeb6c2;
   --chart-halo: #1b212b;
   --chart-band: rgba(255, 255, 255, 0.045);
+  --hm-rest-even: #161b23;
+  --hm-rest-odd: #20272f;
+  --hm-bd-even: #2b3340;
+  --hm-bd-odd: #3c4757;
 }
 * { box-sizing: border-box; }
 body {
@@ -861,23 +871,25 @@ select.subtle-select:hover, select.subtle-select:focus {
   gap: 3px;
 }
 .hm-block + .hm-block { margin-top: 1rem; } /* stacked years in "All years" mode */
-.hm-cell { width: 18px; height: 18px; border-radius: 3px; background: var(--line); }
-.hm-cell.empty { background: transparent; }
-.hm-cell.lvl-0 { background: var(--line); }
+/* Each square has a thin month-coloured outline (border-box keeps it 18px). Rest
+   days alternate by month: white / very-light-gray (see --hm-rest-*). Active days
+   keep their heat colour but inherit the same alternating outline so the month
+   bands still read across the grid. */
+.hm-cell {
+  position: relative; width: 18px; height: 18px; border-radius: 3px;
+  background: var(--hm-rest-even); border: 1px solid var(--hm-bd-even);
+}
+.hm-cell.empty { background: transparent; border-color: transparent; }
+.hm-cell.lvl-0 { background: var(--hm-rest-even); }
 .hm-cell.lvl-1 { background: rgba(40, 78, 134, 0.30); }
 .hm-cell.lvl-2 { background: rgba(40, 78, 134, 0.55); }
 .hm-cell.lvl-3 { background: rgba(40, 78, 134, 0.78); }
 .hm-cell.lvl-4 { background: var(--accent); }
+/* Odd months: very light gray rest squares + a slightly darker outline. */
+.hm-cell.hm-modd { border-color: var(--hm-bd-odd); }
+.hm-cell.hm-modd.lvl-0 { background: var(--hm-rest-odd); }
 .hm-cell[data-date] { cursor: pointer; }
 .hm-cell[data-date]:hover { outline: 2px solid var(--gold); outline-offset: -1px; }
-/* Alternating-month tint: every square of an odd-numbered month gets a faint
-   warm overlay so months read as distinct bands, without losing the heat colour
-   underneath. A pseudo-element (not background) keeps the heat + today ring. */
-.hm-cell { position: relative; }
-.hm-cell.hm-modd::after {
-  content: ""; position: absolute; inset: 0; border-radius: 3px;
-  background: rgba(184, 144, 47, 0.16); pointer-events: none;
-}
 /* Today's cell is outlined in gold so it's easy to find in the year grid. */
 .hm-cell.is-today { box-shadow: 0 0 0 2px var(--gold); }
 .hm-legend { display: flex; align-items: center; gap: 3px; font-size: 0.72rem; margin-top: 0.2rem; }

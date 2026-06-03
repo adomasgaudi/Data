@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.19", sp: 0.5, note: "Year heatmap rest squares now alternate by month — white with a thin gray outline vs very light gray with a slightly darker outline — instead of the warm tint (themed for dark mode too)." },
       { version: "b.2.0.18", sp: 3, note: "Grade how hard each set felt: every set in the Workouts and Exercises sets tables gets an RPE (1–10) picker. Saved on the device (the CSV has no difficulty column) and shown in the per-set graph tooltip." },
       { version: "b.2.0.17", sp: 1, note: "Sets/week bars: translucent fill (was outline) and squished further (5× taller right axis, baseline still 0) so they stay low and don't overlap the 1RM data." },
       { version: "b.2.0.16", sp: 1, note: "Sets/week bars are now 30% thinner, outline-only (transparent), and sit low on a 3× taller right axis so they no longer tower over the 1RM data." },
