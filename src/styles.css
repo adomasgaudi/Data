@@ -905,10 +905,10 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hm-dom {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   line-height: 1; font-size: 8px; font-weight: 600; pointer-events: none;
-  color: rgba(0, 0, 0, 0.16);
+  color: rgba(0, 0, 0, 0.08);
 }
 .hm-cell.empty .hm-dom { display: none; }
-.hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-5 .hm-dom { color: rgba(255, 255, 255, 0.28); }
+.hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-5 .hm-dom { color: rgba(255, 255, 255, 0.16); }
 .hm-cell.lvl-0 { background: var(--hm-rest-even); }
 .hm-cell.lvl-1 { background: #bcd6f2; }  /* 1 set — light blue */
 .hm-cell.lvl-2 { background: #6fa0db; }  /* 2–3 — darker blue */
