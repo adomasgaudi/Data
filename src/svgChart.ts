@@ -269,9 +269,15 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}"${dash}/>`;
         }
       } else {
-        // bars: from baseline (0, clamped into plot) to the value.
+        // bars: from baseline (0, clamped into plot) to the value. Each bar is as
+        // wide as the data's own x-step (e.g. one week) so bars butt up against
+        // each other like a histogram, rather than thin fixed-width sticks.
         const inView = s.points.filter((p) => xPix(p.x) >= M.l && xPix(p.x) <= W - M.r);
-        const bw = Math.max(2, Math.min(22, (plotW / Math.max(1, inView.length)) * 0.5));
+        const xs = s.points.map((p) => p.x).sort((a, b) => a - b);
+        let step = Infinity;
+        for (let i = 1; i < xs.length; i++) { const d = xs[i]! - xs[i - 1]!; if (d > 0 && d < step) step = d; }
+        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / Math.max(1, inView.length);
+        const bw = Math.max(2, stepPx * 0.9);
         const base = Math.min(h - M.b, Math.max(M.t, ymap(0)));
         for (const p of s.points) {
           const x = xPix(p.x);

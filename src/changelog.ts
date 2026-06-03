@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.14", sp: 1, note: "Sets/week bars are now as wide as the week they cover (histogram-style, no thin sticks); the Workouts muscle-group view reads “Quads — 4 sets”." },
       { version: "b.2.0.13", sp: 5, note: "Drill-in graph merged into ONE chart — every view is a legend toggle: Est. 1RM (a dot for EVERY set), Current strength (connected line), Per-set range, Sets/week, and an optional logarithmic Trend. Re-graded the whole-site effort (now ≈200 SP)." },
       { version: "b.2.0.12", sp: 1, note: "1RM-trend graph: each week's est-1RM is now a scatter of dots, not a connected line (it bounces around, so a line implied a trend that isn't there). The current-strength ceiling stays a line." },
       { version: "b.2.0.11", sp: 2, note: "Index: tap any exercise to expand its info — category, muscle group, tier, bodyweight part, total sets, who trains it, the best 1RM ever logged (anyone) and the date span." },

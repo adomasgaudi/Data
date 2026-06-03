@@ -2747,7 +2747,7 @@ function renderWorkoutsPage() {
         }
         did = [...byMuscle.entries()]
           .sort((a, b) => b[1] - a[1])
-          .map(([m, c]) => `${escapeHtml(m)} <span class="muted">${c}</span>`)
+          .map(([m, c]) => `${escapeHtml(m)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
           .join("<br>");
       } else {
         did = g.exercises
