@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.1.14.6</span></h1>
+      <h1>Colosseum <span class="version">b.1.14.7</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -788,6 +788,10 @@
           <a id="refreshDataBtn" class="refresh-btn"
              href="https://github.com/adomasgaudi/data/actions/workflows/fetch-data.yml"
              target="_blank" rel="noopener">↻ Refresh data on GitHub</a>
+          <div class="refresh-status-row">
+            <span id="refreshStatus" class="refresh-status">Checking last refresh…</span>
+            <button type="button" id="refreshStatusBtn" class="refresh-check">Check again</button>
+          </div>
           <p class="settings-hint" style="margin: 0.7rem 0 0">
             “sync” grabs only new workouts (fast). “rebuild” re-fetches everything (slow) — only
             needed if something looks wrong.

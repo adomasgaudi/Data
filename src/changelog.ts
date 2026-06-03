@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "By-category list: chips to choose which categories you see; rep-max reps moved into the column header; scaling/pattern groups removed so each lift is separate.",
     ],
     children: [
+      { version: "b.1.14.7", sp: 2, note: "Refresh shows live status (reads the GitHub Action via its API): ⏳ running — keep waiting (auto-updates), ✓ succeeded, or ✗ failed — so you know whether to wait." },
       { version: "b.1.14.6", sp: 5, note: "“Refresh data” button (Data tab): one click runs a GitHub Action that scrapes the newest StrengthLevel workouts, commits ud.csv and auto-redeploys — no local setup, no CORS." },
       { version: "b.1.14.5", sp: 1, note: "Tidy chrome: only the whole-site SP under the title (per-part chips live in Version history), night mode moved into Settings, and group SP totals are now auto-summed from their releases." },
       { version: "b.1.14.4", sp: 5, note: "Removed scaling/“pattern” groups — Bench Press, Shoulder Press, Row, etc. are each their own exercise (no more ‘(also: …)’ merging); Group view is category-only. Queued a ‘fetch live data’ task." },

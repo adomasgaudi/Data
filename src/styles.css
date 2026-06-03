@@ -124,6 +124,17 @@ body {
   border-radius: 8px; padding: 10px 16px; font-weight: 700; font-size: 0.9rem;
 }
 .refresh-btn:hover { filter: brightness(1.08); }
+.refresh-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
+.refresh-status { font-size: 0.82rem; color: var(--muted); }
+.refresh-status a { color: inherit; text-decoration: underline; }
+.refresh-status.is-running { color: var(--accent); }
+.refresh-status.is-ok { color: var(--good, #2e7d52); }
+.refresh-status.is-fail { color: var(--bad, #c0392b); }
+.refresh-check {
+  background: var(--bg); border: 1px solid var(--line); color: var(--muted);
+  border-radius: 7px; padding: 4px 10px; font: inherit; font-size: 0.78rem; cursor: pointer;
+}
+.refresh-check:hover { border-color: var(--accent); color: var(--accent); }
 /* Full-screen overlay "page" (e.g. Data health), opened from Settings. */
 .overlay-page {
   position: fixed; inset: 0; z-index: 60; background: var(--bg);

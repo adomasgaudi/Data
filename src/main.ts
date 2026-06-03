@@ -184,6 +184,8 @@ const els = {
   calcTabs: $("calcTabs"),
   dataTableWrap: $("dataTableWrap"),
   dataPager: $("dataPager"),
+  refreshStatus: $("refreshStatus"),
+  refreshStatusBtn: $<HTMLButtonElement>("refreshStatusBtn"),
   dataSearch: $<HTMLInputElement>("dataSearch"),
   dataExercise: $<HTMLSelectElement>("dataExercise"),
   dataUser: $<HTMLSelectElement>("dataUser"),
@@ -3713,8 +3715,85 @@ function populateDataFilters() {
     users.map((u) => `<option value="${escapeHtml(u.user)}">${escapeHtml(u.user)}</option>`).join("");
 }
 
+// ---- "Refresh data" status -------------------------------------------------
+// The refresh runs as a GitHub Action (see the Data tab + fetch-data.yml). The
+// browser can read its status from the public GitHub API (api.github.com sends
+// CORS headers, and public-repo run status needs no auth), so we can tell the
+// owner whether to keep waiting or that it failed — without leaving the page.
+const REFRESH_RUNS_API =
+  "https://api.github.com/repos/adomasgaudi/data/actions/workflows/fetch-data.yml/runs?per_page=1";
+let refreshPollTimer: number | null = null;
+
+/** Human "x min ago" for an ISO timestamp. */
+function agoText(iso: string): string {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} h ago`;
+  return `${Math.round(h / 24)} days ago`;
+}
+
+function setRefreshStatus(html: string, cls: string) {
+  els.refreshStatus.className = `refresh-status ${cls}`;
+  els.refreshStatus.innerHTML = html;
+}
+
+/** Fetch the latest fetch-data run and show whether to keep waiting / it failed.
+ * Re-polls itself every 12 s while a run is still going. */
+async function pollRefreshStatus(): Promise<void> {
+  if (refreshPollTimer !== null) { clearTimeout(refreshPollTimer); refreshPollTimer = null; }
+  let run: {
+    status: string; conclusion: string | null; html_url: string;
+    run_started_at?: string; updated_at: string; created_at: string;
+  } | null = null;
+  try {
+    const res = await fetch(REFRESH_RUNS_API, { headers: { Accept: "application/vnd.github+json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    run = data.workflow_runs?.[0] ?? null;
+  } catch {
+    setRefreshStatus(
+      `Couldn't reach GitHub to check status — <a href="https://github.com/adomasgaudi/data/actions/workflows/fetch-data.yml" target="_blank" rel="noopener">open it on GitHub</a>.`,
+      "is-unknown",
+    );
+    return;
+  }
+  if (!run) {
+    setRefreshStatus("No refresh has run yet. Click the button above to start one.", "is-idle");
+    return;
+  }
+  const link = `<a href="${escapeHtml(run.html_url)}" target="_blank" rel="noopener">view on GitHub →</a>`;
+  if (run.status !== "completed") {
+    const started = run.run_started_at ?? run.created_at;
+    setRefreshStatus(
+      `⏳ <strong>Refresh is running…</strong> keep waiting (started ${agoText(started)}). This page will update the status by itself. ${link}`,
+      "is-running",
+    );
+    refreshPollTimer = window.setTimeout(pollRefreshStatus, 12_000);
+    return;
+  }
+  // Completed.
+  if (run.conclusion === "success") {
+    setRefreshStatus(
+      `✓ <strong>Last refresh succeeded</strong> (${agoText(run.updated_at)}). If you just ran it, reload this page to see the new data. ${link}`,
+      "is-ok",
+    );
+  } else {
+    setRefreshStatus(
+      `✗ <strong>Last refresh failed</strong> (${run.conclusion ?? "stopped"}, ${agoText(run.updated_at)}). ${link}`,
+      "is-fail",
+    );
+  }
+}
+
 function setupDataTab() {
   populateDataFilters();
+  els.refreshStatusBtn.addEventListener("click", () => {
+    setRefreshStatus("Checking…", "is-idle");
+    void pollRefreshStatus();
+  });
   document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = btn.dataset.dataview === "original" ? "original" : "processed";
@@ -4205,6 +4284,7 @@ function switchTopTab(name: string) {
     panel.hidden = panel.id !== `tab-${name}`;
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
+  if (name === "data") void pollRefreshStatus();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "graphdemo") {
