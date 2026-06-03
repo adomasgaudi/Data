@@ -1911,10 +1911,11 @@ function renderCompareChart() {
       const raw = exerciseProgressByWeek(recs, username, name, formula)
         .filter((p) => p.bestE1rm !== null)
         .map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
-      // Current strength = best est. 1RM so far, so the line never drops.
-      return { name, color, type: "line" as const, points: runningMaxPoints(raw) };
+      // Current strength = best est. 1RM reached so far, then faded for time off
+      // the lift (sags through layoffs, pops back up when you train).
+      return { name, color, type: "line" as const, points: decayingStrengthPoints(raw) };
     });
-    els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date (never drops). Drag to pan · wheel to zoom · tap a point.`;
+    els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date, faded for time off the lift (sags during breaks, recovers when you train). Drag to pan · wheel to zoom · tap a point.`;
   }
 
   const config = { series, xKind: "time" as const, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
@@ -2471,15 +2472,36 @@ function ecalcRemoveRow(index: number) {
   ecalcRenderRows();
 }
 
-/** "Current strength" = the best estimated 1RM achieved UP TO each date, so the
- * line never drops: a weaker set just means an off day, not lost strength. Takes
- * x-sorted {x,y} points and returns the running maximum of y. */
-function runningMaxPoints<T extends { x: number; y: number }>(points: T[]): T[] {
-  let m = -Infinity;
-  return points.map((p) => {
-    m = Math.max(m, p.y);
-    return { ...p, y: Math.round(m * 10) / 10 };
-  });
+/** "Current strength" with detraining: at each sampled date, the best estimated
+ * 1RM you'd reached by then, faded by how long ago each was set (the metrics.ts
+ * model). So the line pops up when you train and sags through layoffs — and it
+ * runs all the way to today, so the present-day fade is visible even if the last
+ * logged set is old. Input points are {x: ms timestamp, y: e1rm}. */
+function decayingStrengthPoints<T extends { x: number; y: number }>(
+  points: T[],
+  todayMs: number = Date.parse(todayIso()),
+): { x: number; y: number }[] {
+  if (points.length === 0) return [];
+  const sorted = points.slice().sort((a, b) => a.x - b.x);
+  const firstX = sorted[0]!.x;
+  const endX = Math.max(sorted[sorted.length - 1]!.x, todayMs);
+  // Sample every few days for a smooth sag, and pin every training day so the
+  // recovery "pops" stay sharp.
+  const xs = new Set<number>();
+  for (let t = firstX; t < endX; t += 4 * MS_DAY) xs.add(t);
+  xs.add(endX);
+  for (const p of sorted) xs.add(p.x);
+  const out: { x: number; y: number }[] = [];
+  for (const x of [...xs].sort((a, b) => a - b)) {
+    let best = -Infinity;
+    for (const p of sorted) {
+      if (p.x > x) break; // sorted: only count sets up to this sample date
+      const v = p.y * strengthRetention((x - p.x) / MS_DAY);
+      if (v > best) best = v;
+    }
+    if (best > -Infinity) out.push({ x, y: Math.round(best * 10) / 10 });
+  }
+  return out;
 }
 const CURRENT_STRENGTH_COLOR = "#2e7d52";
 
@@ -2492,7 +2514,8 @@ function logFit(pts: { x: number; y: number }[]): { a: number; b: number } | nul
 
 /** One combined per-exercise graph (drill-in). Every "view" is a series you can
  * switch on/off by tapping its legend key: Per-set range (each set's weight→1RM,
- * dashes = reps), Current strength (best 1RM so far — a connected line), Est.
+ * dashes = reps), Current strength (best 1RM so far, faded for time off — a
+ * connected line that sags during breaks and pops back when you train), Est.
  * 1RM/wk dots, Sets/week bars, and an optional logarithmic Trend. kg on the left
  * axis (so the bars and lines share one scale); weekly set-count on the right. */
 function renderExerciseProgressChart(exName: string) {
@@ -2555,7 +2578,7 @@ function renderExerciseProgressChart(exName: string) {
     if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
   }
   const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
-  const strengthPts = runningMaxPoints(strengthSorted);
+  const strengthPts = decayingStrengthPoints(strengthSorted);
   // A dot for EVERY set's estimated 1RM (per the request), not a weekly summary.
   const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
 
@@ -2601,7 +2624,7 @@ function renderExerciseProgressChart(exName: string) {
     yUnit: "kg", rightUnit: "sets", insideLabels: true, height: 320,
   });
   els.exerciseProgressNote.textContent =
-    "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
+    "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far, faded for time off — sags during breaks, pops back up when you train, runs to today), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
     (exPersetBestOnly ? " Per-set views show each day's best set only." : "");
 }
 
