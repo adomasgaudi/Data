@@ -7,6 +7,7 @@ import {
   effectiveLoad,
   benchRepsAtPct,
   benchPctForReps,
+  BENCH_REPS_STUDY,
   nuzzo1RM,
   nuzzoWeightForReps,
   nuzzoRepsAtWeight,
@@ -138,6 +139,21 @@ describe("Nuzzo bench curve", () => {
     expect(benchRepsAtPct(80)).toBeCloseTo(8.3, 1);
     expect(benchRepsAtPct(90)).toBeCloseTo(4.2, 1);
     expect(benchRepsAtPct(50)).toBeCloseTo(28.6, 1);
+  });
+
+  it("the plotted study points stay close to the fitted curve (R² ~ 1)", () => {
+    // BENCH_REPS_STUDY is what the calculator + explainer graphs plot as dots;
+    // the curve (benchRepsAtPct) is the line through them. They must not drift:
+    // every published point sits within ~12% of the curve, and the fit is tight.
+    let ssRes = 0, ssTot = 0;
+    const mean = BENCH_REPS_STUDY.reduce((a, [, r]) => a + r, 0) / BENCH_REPS_STUDY.length;
+    for (const [pct, reps] of BENCH_REPS_STUDY) {
+      const pred = benchRepsAtPct(pct);
+      expect(Math.abs(pred - reps) / reps).toBeLessThan(0.12);
+      ssRes += (reps - pred) ** 2;
+      ssTot += (reps - mean) ** 2;
+    }
+    expect(1 - ssRes / ssTot).toBeGreaterThan(0.99);
   });
 
   it("benchRepsAtPct is monotonic: heavier load => fewer reps", () => {

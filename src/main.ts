@@ -23,6 +23,8 @@ import {
   leaderboard,
   personalRecords,
   athleteSummary,
+  withSyntheticGroups,
+  type SyntheticGroupDef,
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
@@ -32,6 +34,8 @@ import {
   brzycki1RM,
   nuzzo1RM,
   benchPctForReps,
+  benchRepsAtPct,
+  BENCH_REPS_STUDY,
   estimate1RM,
   weightForReps,
   repsForWeight,
@@ -51,6 +55,9 @@ import {
   exerciseCategory,
   exerciseCategories,
   muscleGroup,
+  COMBINABLE_GROUPS,
+  COMPARABLE_GROUPS,
+  type RegistryTag,
   LIST_CATEGORIES,
   exerciseCode,
   exerciseCodesFor,
@@ -491,6 +498,9 @@ function setRpe(id: string, v: string | null) {
  * logged bar weight for display. The single source of truth for this transform.
  */
 function computeRecord(r: SetRecord): SetRecord {
+  // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
+  // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
+  if (r.syntheticGroupId) return r;
   const fromTable = els.bwSource.value !== "perset";
   const coeff = coeffFor(r.exerciseName);
   // Assisted pull-ups: the logged weight is the machine dial value, which over-
@@ -507,8 +517,22 @@ function computeRecord(r: SetRecord): SetRecord {
   return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
 }
 
+/** The combinable + comparable registry groups, in the shape withSyntheticGroups
+ * wants (id, derivedName, member→quotient map). Combinable members use ratio 1. */
+const SYNTHETIC_GROUP_DEFS: SyntheticGroupDef[] = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].map(
+  (t: RegistryTag): SyntheticGroupDef => ({
+    id: t.id,
+    derivedName: t.derivedName ?? t.label,
+    members: Object.fromEntries((t.members ?? []).map((m) => [m.exerciseName, m.ratio])),
+  }),
+);
+
 function computedRecords(): SetRecord[] {
-  return data.records.map(computeRecord);
+  // Pure logged records with bodyweight folded in, PLUS the synthetic combinable/
+  // comparable group records derived from those computed loads (so the ratio
+  // scales the total bw-inclusive load). Pure lifts are never mutated.
+  const pure = data.records.map(computeRecord);
+  return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
 }
 
 /**
@@ -2544,6 +2568,9 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
 let heatFilter = "cat:Legs"; // "all" | "cat:<Category>" | "ex:<Exercise>" — defaults to Legs
+// When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
+// instead of jumping to that day — so you can tag many days quickly in one go.
+let aloneTagMode = false;
 
 /** Map of this athlete's training dates (ISO) → total sets that day (unfiltered).
  * Used for the list of years; colouring uses {@link filteredDayCounts}. */
@@ -3462,46 +3489,59 @@ function renderTest() {
 }
 
 /**
- * Test-tab diagram: weight (y) vs reps (x). For the current set's effective 1RM,
- * plot the BAR weight you'd be predicted to lift across 1..15 reps under the
- * selected formula (effective weightForReps minus the bodyweight share), and
- * mark the set you typed. Shows how the formula trades weight for reps.
+ * Calculator graph — the same Nuzzo research chart as the explainer page
+ * (public/reps-1rm.html): the study's bench point estimates plotted as dots
+ * (x = %1RM, y = reps to failure) with the best-fit curve through them, on the
+ * modern scrollable/pannable SVG engine. Your typed set is overlaid as a gold
+ * dot at (its %1RM on the Nuzzo curve, its reps) so the chart stays personal.
  */
 function renderCalcCurve(
-  effLoad: number,
-  bodyweightLoad: number,
+  _effLoad: number,
+  _bodyweightLoad: number,
   curReps: number,
-  curAdded: number,
-  formula: OneRepMaxFormula,
+  _curAdded: number,
+  _formula: OneRepMaxFormula,
 ) {
   const box = document.getElementById("calcCurveChart");
   if (!box) return;
 
-  // 1RM of the effective load at the current reps, then read the curve back out.
-  const eff1rm = estimate1RM(effLoad, Math.min(curReps, MAX_1RM_REPS), formula);
-  if (eff1rm === null || eff1rm <= 0) {
-    els.calcCurveNote.textContent = "Enter a weight and reps to see the weight↔reps curve.";
-    if (calcCurveSvg) calcCurveSvg.update({ series: [] });
-    return;
-  }
-  const maxReps = 15;
-  const curvePts: SvgPoint[] = [];
-  for (let reps = 1; reps <= maxReps; reps++) {
-    const effW = weightForReps(eff1rm, reps, formula);
-    if (effW !== null) curvePts.push({ x: reps, y: Math.round((effW - bodyweightLoad) * 10) / 10 });
+  // All 17 study points as scatter dots.
+  const studyPts: SvgPoint[] = BENCH_REPS_STUDY.map(([pct, reps]) => ({
+    x: pct,
+    y: Math.round(reps * 10) / 10,
+    meta: `${reps.toFixed(1)} reps`,
+  }));
+  // Best-fit curve sampled densely across the data span (95% → 15% of 1RM).
+  const fitPts: SvgPoint[] = [];
+  for (let pct = 95; pct >= 15; pct -= 0.5) {
+    fitPts.push({ x: pct, y: Math.round(benchRepsAtPct(pct) * 10) / 10 });
   }
   const series: SvgSeries[] = [
-    { name: "Predicted bar weight", color: "#284e86", type: "line", points: curvePts },
-    { name: "Your set", color: "#b8902f", type: "line", points: [{ x: Math.min(curReps, maxReps), y: Math.round(curAdded * 10) / 10 }] },
+    { name: "Best-fit curve", color: "#284e86", type: "line", points: fitPts, noLegend: true },
+    { name: "Study estimates (Nuzzo et al.)", color: "#1a1a1a", type: "scatter", points: studyPts },
   ];
+  // Overlay the set you typed, if it's a real rep count.
+  if (curReps >= 1) {
+    const pct = benchPctForReps(curReps);
+    series.push({
+      name: "Your set",
+      color: "#b8902f",
+      type: "scatter",
+      points: [{ x: Math.round(pct * 10) / 10, y: curReps, meta: `${curReps} reps ≈ ${Math.round(pct)}% of 1RM` }],
+    });
+  }
   const config: SvgChartConfig = {
-    series, xKind: "linear", yBeginAtZero: true, yUnit: "kg", insideLabels: true, interactive: false, height: 260,
-    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} reps`,
+    series,
+    xKind: "linear",
+    yBeginAtZero: true,
+    height: 300,
+    formatX: (x) => `${Math.round(x)}%`,
+    formatTipX: (x) => `${Math.round(x)}% of 1RM`,
   };
   if (!calcCurveSvg) calcCurveSvg = mountSvgChart(box, config);
   else calcCurveSvg.update(config);
   els.calcCurveNote.textContent =
-    `Weight you could lift at each rep count for this ${formula} 1RM (gold dot = the set you typed).`;
+    "Bench reps you can do at each % of 1RM — dots are the study data, the line is the best-fit curve (gold dot = the set you typed). Drag to pan · wheel to zoom.";
 }
 
 function renderAll() {

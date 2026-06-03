@@ -48,8 +48,28 @@
       footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: 0.82rem; color: var(--muted); }
       footer a { word-break: break-all; }
       .chart-figure { margin: 0 0 1.75rem; }
-      .chart-figure canvas { width: 100%; height: auto; display: block; }
       .chart-figure figcaption { margin-top: 0.5rem; }
+      /* Scrollable/pannable SVG chart — mirrors the in-app chart engine. */
+      .svgc { position: relative; }
+      .svgc-plot {
+        position: relative; width: 100%; height: 440px;
+        touch-action: none; cursor: grab; user-select: none;
+        border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff;
+      }
+      .svgc-plot:active { cursor: grabbing; }
+      .svgc-svg { display: block; }
+      .svgc-grid { stroke: #ececec; }
+      .svgc-frame { stroke: #c9ccd1; }
+      .svgc-axislabel { fill: var(--muted); }
+      .svgc-tip {
+        position: absolute; top: 6px; pointer-events: none; z-index: 2;
+        background: #fff; border: 1px solid var(--line); border-radius: 8px;
+        padding: 6px 9px; font-size: 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); white-space: nowrap;
+      }
+      .svgc-tip-hd { font-weight: 700; margin-bottom: 2px; }
+      .svgc-tip-row { color: var(--text); }
+      .svgc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
+      .svgc-hint { font-size: 0.78rem; color: var(--muted); margin: 0.4rem 0 0; }
     </style>
   </head>
   <body>
@@ -78,8 +98,9 @@
       </div>
 
       <figure class="chart-figure">
-        <canvas id="repsChart" width="720" height="440" role="img"
-          aria-label="Bench press: average reps to failure plotted against percentage of 1RM, with a best-fit curve."></canvas>
+        <div id="repsChart" class="svgc" role="img"
+          aria-label="Bench press: average reps to failure plotted against percentage of 1RM, with a best-fit curve."></div>
+        <p class="svgc-hint">Drag to pan · scroll/pinch to zoom · tap a point for its value.</p>
         <figcaption class="note" id="chartCaption"></figcaption>
       </figure>
 
@@ -183,7 +204,6 @@
         }
         var r2 = 1 - ssRes / ssTot;
 
-        drawChart();
         document.getElementById("chartCaption").textContent =
           "Dots = the study’s bench-press estimates. The line is the best-fit curve through them " +
           "(least-squares cubic, R² = " + r2.toFixed(3) + " — a near-perfect match).";
@@ -224,79 +244,179 @@
           return x;
         }
 
+        // --- Scrollable/pannable SVG chart (a compact port of the in-app chart
+        // engine src/svgChart.ts, so the explainer and the calculator graph look
+        // and behave the same). Best-fit line + study scatter, drag to pan,
+        // wheel/pinch to zoom, tap a point for its value. ---
         function drawChart() {
-          var cv = document.getElementById("repsChart");
-          var LW = cv.width, LH = cv.height; // logical drawing size
-          var dpr = window.devicePixelRatio || 1;
-          cv.width = LW * dpr; cv.height = LH * dpr;
-          var ctx = cv.getContext("2d");
-          ctx.scale(dpr, dpr);
+          var ACCENT = "#284e86", INK = "#1a1a1a";
+          var H = 440;
+          // The dense best-fit line and the 17 study dots.
+          var fit = [];
+          for (var fx = 95; fx >= 15; fx -= 0.5) fit.push([fx, predict(fx)]);
+          var box = document.getElementById("repsChart");
+          box.innerHTML = '<div class="svgc-plot"></div><div class="svgc-tip" hidden></div>';
+          var plotEl = box.querySelector(".svgc-plot");
+          var tipEl = box.querySelector(".svgc-tip");
 
-          var ACCENT = "#284e86", INK = "#1a1a1a", GRID = "#ececec", MUTED = "#6b7280";
-          var mL = 54, mR = 18, mT = 18, mB = 42;
-          var pW = LW - mL - mR, pH = LH - mT - mB;
-          var xMin = 10, xMax = 100, yMin = 0, yMax = 135;
-          var xpx = function (x) { return mL + ((x - xMin) / (xMax - xMin)) * pW; };
-          var ypx = function (v) { return mT + (1 - (v - yMin) / (yMax - yMin)) * pH; };
+          var view = { xMin: 10, xMax: 100, yMin: 0, yMax: 135 }; // data-space window
+          var M = { l: 46, r: 14, t: 12, b: 26 };
+          var widthOf = function () { return Math.max(280, Math.round(plotEl.clientWidth || 700)); };
 
-          ctx.font = "12px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
-          ctx.textBaseline = "middle";
-
-          // y gridlines + labels
-          ctx.textAlign = "right";
-          for (var yv = 0; yv <= 125; yv += 25) {
-            var py = ypx(yv);
-            ctx.strokeStyle = GRID; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(mL, py); ctx.lineTo(mL + pW, py); ctx.stroke();
-            ctx.fillStyle = MUTED; ctx.fillText(String(yv), mL - 8, py);
-          }
-          // x gridlines + labels
-          ctx.textAlign = "center";
-          for (var xv = 20; xv <= 100; xv += 20) {
-            var px = xpx(xv);
-            ctx.strokeStyle = GRID; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(px, mT); ctx.lineTo(px, mT + pH); ctx.stroke();
-            ctx.fillStyle = MUTED; ctx.fillText(xv + "%", px, mT + pH + 16);
+          // "Nice" round tick steps so labels don't read 23.7, 47.4…
+          function niceTicks(lo, hi, count) {
+            var span = hi - lo; if (!(span > 0)) return [lo];
+            var raw = span / Math.max(1, count);
+            var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+            var norm = raw / mag, step = (norm >= 5 ? 5 : norm >= 2 ? 2 : 1) * mag;
+            var out = [], t = Math.ceil(lo / step) * step;
+            for (; t <= hi + step * 1e-6 && out.length < 40; t += step) out.push(Math.round(t * 1e6) / 1e6);
+            return out;
           }
 
-          // axis titles
-          ctx.fillStyle = INK;
-          ctx.fillText("% of 1RM (load)", mL + pW / 2, LH - 6);
-          ctx.save();
-          ctx.translate(14, mT + pH / 2); ctx.rotate(-Math.PI / 2);
-          ctx.fillText("Reps to failure", 0, 0);
-          ctx.restore();
+          function draw() {
+            var W = widthOf();
+            var pW = W - M.l - M.r, pH = H - M.t - M.b;
+            var xpx = function (x) { return M.l + ((x - view.xMin) / (view.xMax - view.xMin)) * pW; };
+            var ypx = function (v) { return M.t + (1 - (v - view.yMin) / (view.yMax - view.yMin)) * pH; };
 
-          // best-fit curve
-          ctx.strokeStyle = ACCENT; ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          var first = true;
-          for (var x = 95; x >= 15; x -= 0.5) {
-            var v = predict(x), X = xpx(x), Y = ypx(v);
-            if (first) { ctx.moveTo(X, Y); first = false; } else ctx.lineTo(X, Y);
+            var grid = "", yL = "", xL = "";
+            niceTicks(view.yMin, view.yMax, 6).forEach(function (v) {
+              var py = ypx(v); if (py < M.t - 0.5 || py > H - M.b + 0.5) return;
+              grid += '<line x1="' + M.l + '" y1="' + py.toFixed(1) + '" x2="' + (W - M.r) + '" y2="' + py.toFixed(1) + '" class="svgc-grid" stroke-width="1"/>';
+              yL += '<text x="' + (M.l - 6) + '" y="' + (py + 4).toFixed(1) + '" text-anchor="end" class="svgc-axislabel" font-size="11">' + Math.round(v) + '</text>';
+            });
+            niceTicks(view.xMin, view.xMax, 7).forEach(function (t) {
+              var px = xpx(t); if (px < M.l - 0.5 || px > W - M.r + 0.5) return;
+              grid += '<line x1="' + px.toFixed(1) + '" y1="' + M.t + '" x2="' + px.toFixed(1) + '" y2="' + (H - M.b) + '" class="svgc-grid" stroke-width="1"/>';
+              xL += '<text x="' + px.toFixed(1) + '" y="' + (H - M.b + 16).toFixed(1) + '" text-anchor="middle" class="svgc-axislabel" font-size="11">' + Math.round(t) + '%</text>';
+            });
+
+            var line = fit.map(function (p) { return xpx(p[0]).toFixed(1) + "," + ypx(p[1]).toFixed(1); }).join(" ");
+            var dots = "";
+            for (var d = 0; d < DATA.length; d++) {
+              dots += '<circle cx="' + xpx(DATA[d][0]).toFixed(1) + '" cy="' + ypx(DATA[d][1]).toFixed(1) + '" r="4" fill="#fff" stroke="' + INK + '" stroke-width="1.5"/>';
+            }
+            var clip = "clip-" + (W | 0);
+            var frame =
+              '<line x1="' + M.l + '" y1="' + M.t + '" x2="' + M.l + '" y2="' + (H - M.b) + '" class="svgc-frame" stroke-width="1"/>' +
+              '<line x1="' + M.l + '" y1="' + (H - M.b) + '" x2="' + (W - M.r) + '" y2="' + (H - M.b) + '" class="svgc-frame" stroke-width="1"/>';
+            plotEl.innerHTML =
+              '<svg class="svgc-svg" width="100%" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img">' +
+              '<defs><clipPath id="' + clip + '"><rect x="' + M.l + '" y="' + M.t + '" width="' + pW + '" height="' + pH + '"/></clipPath></defs>' +
+              '<g clip-path="url(#' + clip + ')">' + grid +
+              '<polyline points="' + line + '" fill="none" stroke="' + ACCENT + '" stroke-width="2.5"/>' + dots + '</g>' +
+              frame + xL + yL + '</svg>';
           }
-          ctx.stroke();
 
-          // data points (white halo so they read on the line)
-          for (var d = 0; d < DATA.length; d++) {
-            var cx = xpx(DATA[d][0]), cy = ypx(DATA[d][1]);
-            ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, 2 * Math.PI);
-            ctx.fillStyle = "#fff"; ctx.fill();
-            ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
-            ctx.fillStyle = INK; ctx.fill();
+          function showTip(clientX) {
+            var svg = plotEl.querySelector("svg"); if (!svg) return;
+            var rect = svg.getBoundingClientRect(), W = widthOf(), pW = W - M.l - M.r;
+            var lx = ((clientX - rect.left) / rect.width) * W;
+            var xVal = view.xMin + ((lx - M.l) / pW) * (view.xMax - view.xMin);
+            var best = null;
+            for (var d = 0; d < DATA.length; d++) {
+              var dx = Math.abs(DATA[d][0] - xVal);
+              if (!best || dx < best.dx) best = { p: DATA[d], dx: dx };
+            }
+            if (!best) return;
+            tipEl.innerHTML =
+              '<div class="svgc-tip-hd">' + Math.round(best.p[0]) + '% of 1RM</div>' +
+              '<div class="svgc-tip-row"><span class="svgc-dot" style="background:' + INK + '"></span>Avg reps: <b>' + best.p[1].toFixed(1) + '</b></div>';
+            tipEl.hidden = false;
+            var px = M.l + ((best.p[0] - view.xMin) / (view.xMax - view.xMin)) * pW;
+            tipEl.style.left = Math.min(Math.max(px, 8), (plotEl.clientWidth || W) - tipEl.offsetWidth - 8) + "px";
           }
+          var hideTip = function () { tipEl.hidden = true; };
 
-          // legend (top-right inside plot)
-          var lx = mL + pW - 168, ly = mT + 10;
-          ctx.textAlign = "left";
-          ctx.fillStyle = "#fff"; ctx.fillRect(lx - 8, ly - 9, 176, 44);
-          ctx.strokeStyle = GRID; ctx.lineWidth = 1; ctx.strokeRect(lx - 8, ly - 9, 176, 44);
-          ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(lx + 4, ly, 3, 0, 2 * Math.PI); ctx.fill();
-          ctx.fillStyle = INK; ctx.fillText("Study estimates (Nuzzo et al.)", lx + 14, ly);
-          ctx.strokeStyle = ACCENT; ctx.lineWidth = 2.5;
-          ctx.beginPath(); ctx.moveTo(lx, ly + 20); ctx.lineTo(lx + 10, ly + 20); ctx.stroke();
-          ctx.fillStyle = INK; ctx.fillText("Best-fit curve", lx + 14, ly + 20);
+          // ---- pan (drag) + zoom (wheel / pinch) ----
+          function pixInfo(clientX, clientY) {
+            var svg = plotEl.querySelector("svg");
+            var rect = svg ? svg.getBoundingClientRect() : plotEl.getBoundingClientRect();
+            var W = widthOf(), pW = W - M.l - M.r, pH = H - M.t - M.b;
+            var lx = ((clientX - rect.left) / rect.width) * W;
+            var ly = ((clientY - rect.top) / rect.height) * H;
+            return { fx: view.xMin + ((lx - M.l) / pW) * (view.xMax - view.xMin), vfrac: (ly - M.t) / pH };
+          }
+          function zoomXY(fx, vfrac, kx, ky) {
+            var xMin = fx - (fx - view.xMin) * kx, xMax = fx + (view.xMax - fx) * kx;
+            var fy = view.yMin + (1 - vfrac) * (view.yMax - view.yMin);
+            var yMin = fy - (fy - view.yMin) * ky, yMax = fy + (view.yMax - fy) * ky;
+            view = { xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax };
+          }
+          var pts = {}, nPts = 0, pan = null, pinch = null;
+          function onMove(e) {
+            if (!(e.pointerId in pts)) return;
+            pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+            var all = []; for (var k in pts) all.push(pts[k]);
+            var W = widthOf(), pW = W - M.l - M.r, pH = H - M.t - M.b;
+            if (all.length >= 2 && pinch) {
+              var a = all[0], b = all[1];
+              var hx = Math.abs(a.x - b.x), vy = Math.abs(a.y - b.y);
+              var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+              var fracX = (mx - pinch.mx) / pW, fracY = (my - pinch.my) / pH;
+              var lr = view.yMax - view.yMin, wr = view.xMax - view.xMin;
+              view = { xMin: view.xMin - fracX * wr, xMax: view.xMax - fracX * wr, yMin: view.yMin + fracY * lr, yMax: view.yMax + fracY * lr };
+              var pi = pixInfo(mx, my);
+              var kx = pinch.hx > 26 && hx > 4 ? pinch.hx / hx : 1;
+              var ky = pinch.vy > 26 && vy > 4 ? pinch.vy / vy : 1;
+              zoomXY(pi.fx, pi.vfrac, kx, ky);
+              pinch = { hx: hx, vy: vy, mx: mx, my: my };
+              hideTip(); draw();
+            } else if (pan) {
+              if (Math.abs(e.clientX - pan.x) + Math.abs(e.clientY - pan.y) > 4) pan.moved = true;
+              var dx = ((e.clientX - pan.x) / pW) * (pan.v.xMax - pan.v.xMin);
+              var dy = ((e.clientY - pan.y) / pH) * (pan.v.yMax - pan.v.yMin);
+              view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: pan.v.yMin + dy, yMax: pan.v.yMax + dy };
+              hideTip(); draw();
+            }
+          }
+          function onUp(e) {
+            var wasTap = nPts === 1 && pan && !pan.moved;
+            if (e.pointerId in pts) { delete pts[e.pointerId]; nPts--; }
+            if (nPts < 2) pinch = null;
+            if (nPts === 0) {
+              pan = null;
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onUp);
+              window.removeEventListener("pointercancel", onUp);
+              if (wasTap) showTip(e.clientX);
+            }
+          }
+          plotEl.addEventListener("pointerdown", function (e) {
+            if (nPts === 0) {
+              window.addEventListener("pointermove", onMove);
+              window.addEventListener("pointerup", onUp);
+              window.addEventListener("pointercancel", onUp);
+            }
+            pts[e.pointerId] = { x: e.clientX, y: e.clientY }; nPts++;
+            if (nPts >= 2) {
+              var all = []; for (var k in pts) all.push(pts[k]);
+              var a = all[0], b = all[1];
+              pinch = { hx: Math.abs(a.x - b.x), vy: Math.abs(a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+              pan = null;
+            } else {
+              pan = { x: e.clientX, y: e.clientY, v: { xMin: view.xMin, xMax: view.xMax, yMin: view.yMin, yMax: view.yMax }, moved: false };
+            }
+            e.preventDefault();
+          });
+          plotEl.addEventListener("pointermove", function (e) {
+            if (nPts > 0 || e.buttons !== 0) return;
+            if (e.pointerType === "mouse") showTip(e.clientX);
+          });
+          plotEl.addEventListener("pointerleave", hideTip);
+          plotEl.addEventListener("wheel", function (e) {
+            e.preventDefault();
+            var pi = pixInfo(e.clientX, e.clientY);
+            var k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+            zoomXY(pi.fx, pi.vfrac, e.altKey ? 1 : k, e.shiftKey ? 1 : k);
+            hideTip(); draw();
+          }, { passive: false });
+          if (typeof ResizeObserver !== "undefined") new ResizeObserver(function () { draw(); }).observe(plotEl);
+
+          draw();
         }
+        drawChart();
       })();
     </script>
   </body>

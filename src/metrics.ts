@@ -43,6 +43,18 @@ export function brzycki1RM(weight: number | null, reps: number | null): number |
 const BENCH_LN_REPS_COEFFS = [3.189078334, -1.329509482, -0.232660599, -0.6277241766] as const;
 const benchT = (pct: number): number => (pct - 55) / 40;
 
+/**
+ * The raw bench-press point estimates from Nuzzo et al. (Fig. 3) — [%1RM, avg
+ * reps to failure] — that the cubic above is fitted to. Kept here so both the
+ * calculator graph and the standalone explainer page (public/reps-1rm.html)
+ * plot the *same* study data as dots under the best-fit curve. 95% → 15% of 1RM.
+ */
+export const BENCH_REPS_STUDY: ReadonlyArray<readonly [number, number]> = [
+  [95, 2.59], [90, 4.11], [85, 6.23], [80, 8.82], [75, 11.51], [70, 14.08],
+  [65, 16.59], [60, 19.34], [55, 22.79], [50, 27.25], [45, 33.01], [40, 40.45],
+  [35, 50.1], [30, 62.62], [25, 78.88], [20, 100.02], [15, 127.49],
+];
+
 /** Average bench-press reps to failure at a given % of 1RM (e.g. 70 → ~13.8). */
 export function benchRepsAtPct(pct: number): number {
   const t = benchT(pct);
