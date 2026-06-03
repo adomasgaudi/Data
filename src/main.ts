@@ -29,7 +29,6 @@ import {
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
-  type ExerciseDayPoint,
 } from "./aggregate";
 import {
   epley1RM,
@@ -125,7 +124,6 @@ const els = {
   exerciseProgress: $("exerciseProgress"),
   exerciseProgressNote: $("exerciseProgressNote"),
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
-  exProgressView: $("exProgressView"),
   exPersetBest: $<HTMLButtonElement>("exPersetBest"),
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
@@ -210,8 +208,7 @@ let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
-let exProgressView: "trend" | "perset" = "trend"; // 1RM-trend vs per-set weight→1RM range
-let exPersetBestOnly = false; // per-set: show only each day's best set (top estimated 1RM)
+let exPersetBestOnly = false; // per-set range: show only each day's best set (top estimated 1RM)
 
 const PAGE_SIZE = 50; // List & stats page size
 
@@ -2265,9 +2262,18 @@ function runningMaxPoints<T extends { x: number; y: number }>(points: T[]): T[] 
 }
 const CURRENT_STRENGTH_COLOR = "#2e7d52";
 
-/** Per-exercise progress graph in the drill-in, on the SVG engine: "1RM trend"
- * = weekly-sets bars (left axis) + est-1RM line + current-strength + trend line
- * (right axis); or "per-set range" = one weight→1RM bar per set. */
+/** Fit y = a + b·ln(day+1) (a logarithmic curve — diminishing returns) by least
+ * squares on (ln(day+1), y). Returns null if it can't be fit. */
+function logFit(pts: { x: number; y: number }[]): { a: number; b: number } | null {
+  const f = linearFit(pts.map((p) => ({ x: Math.log(p.x + 1), y: p.y })));
+  return f ? { a: f.intercept, b: f.slope } : null;
+}
+
+/** One combined per-exercise graph (drill-in). Every "view" is a series you can
+ * switch on/off by tapping its legend key: Per-set range (each set's weight→1RM,
+ * dashes = reps), Current strength (best 1RM so far — a connected line), Est.
+ * 1RM/wk dots, Sets/week bars, and an optional logarithmic Trend. kg on the left
+ * axis (so the bars and lines share one scale); weekly set-count on the right. */
 function renderExerciseProgressChart(exName: string) {
   const box = document.getElementById("exerciseProgressChart");
   if (!box) return;
@@ -2280,108 +2286,100 @@ function renderExerciseProgressChart(exName: string) {
     if (!exerciseSvg) exerciseSvg = mountSvgChart(box, config);
     else exerciseSvg.update(config);
   };
-  // "Best set only" applies to the per-set view; hide the toggle in trend view.
-  els.exPersetBest.hidden = exProgressView !== "perset";
+  els.exPersetBest.hidden = false; // "Best set only" filters the per-set range view
   els.exPersetBest.classList.toggle("is-active", exPersetBestOnly);
   els.exPersetBest.setAttribute("aria-pressed", String(exPersetBestOnly));
 
-  if (exProgressView === "perset") {
-    // One bar PER SET, on a REAL time axis: each set sits at its true calendar
-    // date, so the x-axis is genuine time (a long gap between sessions shows as a
-    // long gap). Bottom = that set's weight, top = that same set's own estimated
-    // 1RM. Shows EVERY logged set of the day (incl. dropsets); sets above the rep
-    // cap have no 1RM so they show as a flat marker at their weight. Multiple sets
-    // on the same day are fanned out across a fraction of that day so they don't
-    // stack on one pixel — yet the day still appears once on the date axis.
-    let sets = computedRecords()
-      .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
-      .slice()
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
-    // Optional: keep only each day's best set (the one with the highest estimated
-    // 1RM, falling back to raw weight for high-rep sets that have no estimate).
-    if (exPersetBestOnly) {
-      const bestByDay = new Map<string, SetRecord>();
-      const scoreOf = (r: SetRecord) =>
-        addedWeight1RM(r, formula) ?? (r.origWeight !== undefined ? (r.origWeight ?? 0) : (r.weight ?? 0));
-      for (const s of sets) {
-        const cur = bestByDay.get(s.date);
-        if (!cur || scoreOf(s) > scoreOf(cur)) bestByDay.set(s.date, s);
-      }
-      sets = [...bestByDay.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    }
-    // Count sets per day so same-day sets can be fanned out evenly.
-    const perDay = new Map<string, number>();
-    for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
-    const seenInDay = new Map<string, number>();
-    const points: SvgPoint[] = [];
-    const strengthRaw: { x: number; y: number }[] = [];
+  // ---- Per-set range: one weight→1RM bar per set on a real time axis; same-day
+  // sets fan out within the day. Optionally only each day's best set. ----
+  let sets = computedRecords()
+    .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
+  if (exPersetBestOnly) {
+    const bestByDay = new Map<string, SetRecord>();
+    const scoreOf = (r: SetRecord) =>
+      addedWeight1RM(r, formula) ?? (r.origWeight !== undefined ? (r.origWeight ?? 0) : (r.weight ?? 0));
     for (const s of sets) {
-      const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-      const e1rm = addedWeight1RM(s, formula);
-      const reps = s.reps ?? 0;
-      const base = Date.parse(s.date);
-      const total = perDay.get(s.date) ?? 1;
-      const idx = seenInDay.get(s.date) ?? 0;
-      seenInDay.set(s.date, idx + 1);
-      // Spread same-day sets across ~0.7 of the day (centred), so a single set
-      // lands right on midnight and multiple sets fan out without crossing midnight.
-      const frac = total > 1 ? (idx / (total - 1) - 0.5) * 0.7 : 0;
-      const x = base + frac * MS_DAY;
-      points.push({
-        x,
-        lo: added,
-        hi: e1rm ?? added, // no estimable 1RM (high reps) → flat marker at the weight
-        dashes: reps, // each dash = one rep done from this starting weight
-        meta:
-          (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
-          ` · ${shortDate(s.date)}`,
-      });
-      if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
+      const cur = bestByDay.get(s.date);
+      if (!cur || scoreOf(s) > scoreOf(cur)) bestByDay.set(s.date, s);
     }
-    if (points.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
-    els.exerciseProgress.hidden = false;
-    const strengthPts = runningMaxPoints(strengthRaw.slice().sort((a, b) => a.x - b.x));
-    mount({
-      series: [
-        { name: exName, color: "#284e86", type: "range", points },
-        // Current strength = best est. 1RM so far; a flat/rising ceiling over the sets.
-        { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", points: strengthPts },
-      ],
-      xKind: "time", yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300,
+    sets = [...bestByDay.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }
+  const perDay = new Map<string, number>();
+  for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
+  const seenInDay = new Map<string, number>();
+  const rangePoints: SvgPoint[] = [];
+  const strengthRaw: { x: number; y: number }[] = [];
+  for (const s of sets) {
+    const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
+    const e1rm = addedWeight1RM(s, formula);
+    const reps = s.reps ?? 0;
+    const base = Date.parse(s.date);
+    const total = perDay.get(s.date) ?? 1;
+    const idx = seenInDay.get(s.date) ?? 0;
+    seenInDay.set(s.date, idx + 1);
+    const frac = total > 1 ? (idx / (total - 1) - 0.5) * 0.7 : 0;
+    const x = base + frac * MS_DAY;
+    rangePoints.push({
+      x,
+      lo: added,
+      hi: e1rm ?? added,
+      dashes: reps,
+      meta:
+        (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
+        ` · ${shortDate(s.date)}`,
     });
-    els.exerciseProgressNote.textContent =
-      (exPersetBestOnly
-        ? "Each day's best set only (highest estimated 1RM): it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did."
-        : "Every set is its own line on a real time axis: it starts at the weight you lifted and rises to that set's estimated 1RM — the number of dashes is the reps you did. All sets of each day are shown, fanned out within the day.") +
-      " The green line is your current strength — the best 1RM reached so far (it never drops).";
+    if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
+  }
+  const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
+  const strengthPts = runningMaxPoints(strengthSorted);
+  // A dot for EVERY set's estimated 1RM (per the request), not a weekly summary.
+  const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
+
+  // ---- Weekly set counts (the only thing still aggregated by week) ----
+  const weekly = exerciseProgressByWeek(recs, username, exName, formula);
+  const setsPts = weekly.map((p) => ({ x: ts(p.date), y: p.sets }));
+
+  if (rangePoints.length === 0 && e1rmPts.length === 0) {
+    els.exerciseProgress.hidden = true;
+    els.exerciseProgressNote.textContent = "";
     return;
   }
-
-  const series = exerciseProgressByWeek(recs, username, exName, formula);
-  if (series.length === 0) { els.exerciseProgress.hidden = true; els.exerciseProgressNote.textContent = ""; return; }
   els.exerciseProgress.hidden = false;
 
-  // Trend line fit on the est-1RM history (right axis).
-  const pts = series.filter((p) => p.bestE1rm !== null);
+  // ---- Logarithmic trend (diminishing returns) over every set's 1RM ----
   let trendPts: { x: number; y: number }[] = [];
-  if (pts.length >= 2) {
-    const t0 = ts(pts[0]!.date);
-    const day = (d: string) => (ts(d) - t0) / 86_400_000;
-    const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
-    if (fit) trendPts = [pts[0]!, pts[pts.length - 1]!].map((p) => ({ x: ts(p.date), y: Math.round((fit.intercept + fit.slope * day(p.date)) * 10) / 10 }));
+  if (strengthSorted.length >= 3) {
+    const t0 = strengthSorted[0]!.x;
+    const lf = logFit(strengthSorted.map((p) => ({ x: (p.x - t0) / MS_DAY, y: p.y })));
+    const lastDay = (strengthSorted[strengthSorted.length - 1]!.x - t0) / MS_DAY;
+    if (lf && lastDay > 0) {
+      const N = 32;
+      for (let i = 0; i <= N; i++) {
+        const dd = (lastDay * i) / N;
+        trendPts.push({ x: t0 + dd * MS_DAY, y: Math.round((lf.a + lf.b * Math.log(dd + 1)) * 10) / 10 });
+      }
+    }
   }
-  const e1rmPts = pts.map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
-  const svgSeries: SvgSeries[] = [
-    { name: "Sets/week", color: "#284e86", type: "bars", axis: "left", points: series.map((p) => ({ x: ts(p.date), y: p.sets })) },
-    // Each week's best est-1RM as dots (not a line — it bounces around, so a
-    // line would imply a smoother trend than the data shows).
-    { name: "Est. 1RM (kg)", color: "#b8902f", type: "scatter", axis: "right", points: e1rmPts },
-    // Current strength = best est. 1RM achieved so far (never drops).
-    { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "right", points: runningMaxPoints(e1rmPts) },
+
+  const series: SvgSeries[] = [
+    // kg series share the LEFT axis so the dots, bars and strength line align.
+    { name: "Est. 1RM (per set)", color: "#b8902f", type: "scatter", axis: "left", points: e1rmPts },
+    { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "left", points: strengthPts },
+    { name: "Per-set range", color: "#284e86", type: "range", axis: "left", points: rangePoints, hidden: true },
+    { name: "Sets/week", color: "#6c4ab0", type: "bars", axis: "right", points: setsPts, hidden: true },
   ];
-  if (trendPts.length) svgSeries.push({ name: "Trend", color: "#c0603a", type: "line", axis: "right", noLegend: true, points: trendPts });
-  els.exerciseProgressNote.textContent = progressSummaryNote(series);
-  mount({ series: svgSeries, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true, yUnit: "sets", rightUnit: "kg", insideLabels: true, height: 300 });
+  if (trendPts.length)
+    series.push({ name: "Trend (log)", color: "#c0603a", type: "line", axis: "left", points: trendPts, hidden: true });
+
+  mount({
+    series, xKind: "time", yBeginAtZero: true, rightBeginAtZero: true,
+    yUnit: "kg", rightUnit: "sets", insideLabels: true, height: 320,
+  });
+  els.exerciseProgressNote.textContent =
+    "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
+    (exPersetBestOnly ? " Per-set views show each day's best set only." : "");
 }
 
 
@@ -3019,26 +3017,7 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
 
 /** Best / latest / trend summary line for an exercise's day-by-day 1RM series.
  * Shown under the per-exercise drill-in chart. */
-function progressSummaryNote(series: ExerciseDayPoint[]): string {
-  const pts = series.filter((p) => p.bestE1rm !== null);
-  let trendNote = "";
-  if (pts.length >= 2) {
-    const t0 = Date.parse(pts[0]!.date);
-    const day = (d: string) => (Date.parse(d) - t0) / 86_400_000;
-    const fit = linearFit(pts.map((p) => ({ x: day(p.date), y: p.bestE1rm! })));
-    if (fit) {
-      const perWeek = fit.slope * 7;
-      const arrow = perWeek > 0.05 ? "▲" : perWeek < -0.05 ? "▼" : "▪";
-      trendNote = ` · trend ${arrow} ${perWeek >= 0 ? "+" : ""}${perWeek.toFixed(1)} kg/week`;
-    }
-  }
-  const best = pts.reduce((m, p) => (p.bestE1rm! > m.v ? { v: p.bestE1rm!, date: p.date } : m), { v: -Infinity, date: "" });
-  const latest = pts[pts.length - 1];
-  const summary = best.v > -Infinity
-    ? `Best ${fmt(best.v)} kg (${shortDate(best.date)}) · latest ${fmt(latest!.bestE1rm!)} kg${trendNote}`
-    : "No estimable 1RM yet";
-  return `${summary} · ${series.length} week(s). Bars = sets/week, gold = best 1RM, dashed = trend.`;
-}
+
 
 
 
@@ -3620,15 +3599,6 @@ async function init() {
     if (selectedExercise) renderExerciseProgressChart(selectedExercise); // re-render resets the view
   });
   // Toggle the drill-in chart between the 1RM trend and the per-set weight→1RM range.
-  els.exProgressView.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".cal-mode-btn");
-    const view = btn?.dataset.exview;
-    if (view !== "trend" && view !== "perset") return;
-    exProgressView = view;
-    for (const b of els.exProgressView.querySelectorAll<HTMLElement>(".cal-mode-btn"))
-      b.classList.toggle("is-active", b.dataset.exview === view);
-    if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
-  });
   els.exPersetBest.addEventListener("click", () => {
     exPersetBestOnly = !exPersetBestOnly;
     if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);

@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.13", sp: 5, note: "Drill-in graph merged into ONE chart — every view is a legend toggle: Est. 1RM (a dot for EVERY set), Current strength (connected line), Per-set range, Sets/week, and an optional logarithmic Trend. Re-graded the whole-site effort (now ≈200 SP)." },
       { version: "b.2.0.12", sp: 1, note: "1RM-trend graph: each week's est-1RM is now a scatter of dots, not a connected line (it bounces around, so a line implied a trend that isn't there). The current-strength ceiling stays a line." },
       { version: "b.2.0.11", sp: 2, note: "Index: tap any exercise to expand its info — category, muscle group, tier, bodyweight part, total sets, who trains it, the best 1RM ever logged (anyone) and the date span." },
       { version: "b.2.0.10", sp: 1, note: "Exercises list: the active period (e.g. “Last 3 months”) is now always shown above the list and tappable to change — no more forgetting it's filtered." },
@@ -297,17 +298,17 @@ export interface Component {
   sp: number;
 }
 export const COMPONENTS: Component[] = [
-  { name: "Exercises", sp: 34 }, // drill-ins, categories, tiers, merges, codes, rep-max, best-sets, compare
-  { name: "Athlete", sp: 22 }, // per-athlete pages, chips, muscle map, momentum, training mix
-  { name: "Graphs", sp: 30 }, // full from-scratch SVG engine; every chart migrated off Chart.js
-  { name: "Workouts", sp: 20 }, // day/week list, rest days, year heatmap, sets-over-time, "with me" tags
-  { name: "Data", sp: 12 }, // raw+processed CSV tab, every computed variable, search
-  { name: "Leaderboard", sp: 11 }, // boards, rank/sex/BW/axis filters, pattern-lift toggle
+  { name: "Exercises", sp: 50 }, // drill-ins, categories, tiers, merges, rep-max header, best-sets, compare+sets, Index info, period bar
+  { name: "Graphs", sp: 50 }, // SVG engine; real time axis + calendar bands, dashed reps, current strength, scatter, legend toggles, merged graph, log trend
+  { name: "Athlete", sp: 22 }, // per-athlete pages, sticky chips, muscle map, momentum, training mix
+  { name: "Workouts", sp: 22 }, // day/week list, muscle-group view, rest days, year heatmap, sets-over-time, "with me" tags
+  { name: "Data", sp: 20 }, // raw+processed CSV tab, every computed variable, search, live refresh from StrengthLevel + status
+  { name: "Leaderboard", sp: 11 }, // boards, rank/sex/BW/axis filters
   { name: "Group", sp: 9 }, // train people together: combined comparison table, remembered picks
+  { name: "Navigation", sp: 9 }, // bottom nav + Other sheet, Site map, version history + SP-over-time
   { name: "Add", sp: 7 }, // hand-log sets, merge, export/import
   { name: "Calculator", sp: 6 }, // multi-row reps↔weight calc + Test-tab curve
-  { name: "Stats", sp: 6 }, // pattern / category cards (was Groups)
-  { name: "Navigation", sp: 5 }, // bottom nav + Other sheet
+  { name: "Stats", sp: 6 }, // per-category cards (was Groups)
 ];
 
 /** Whole-site EXACT story points (sum of every part) and its Fibonacci grade. */

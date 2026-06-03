@@ -33,6 +33,8 @@ export interface SvgSeries {
   points: SvgPoint[];
   /** Keep this series out of the legend (e.g. a trend line). */
   noLegend?: boolean;
+  /** Start hidden (the user can switch it on via the legend toggle). */
+  hidden?: boolean;
 }
 export interface SvgChartConfig {
   series: SvgSeries[];
@@ -108,6 +110,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // series drive the axes and tooltip; hidden ones still show in the legend so
   // they can be turned back on.
   const hidden = new Set<string>();
+  for (const s of cfg.series) if (s.hidden) hidden.add(s.name); // seed default-off series
   const visible = (s: SvgSeries) => !hidden.has(s.name);
   const leftSeries = () => cfg.series.filter((s) => s.axis !== "right" && visible(s));
   const rightSeries = () => cfg.series.filter((s) => s.axis === "right" && visible(s));
@@ -132,11 +135,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
-    const yPad = (le.yMax - le.yMin) * 0.08 || 1;
-    view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
+    if (Number.isFinite(le.yMin)) {
+      const yPad = (le.yMax - le.yMin) * 0.08 || 1;
+      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
+    } else {
+      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: 0, yMax: 1 };
+    }
     const re = yExtent(rightSeries(), cfg.rightBeginAtZero);
-    const ryPad = (re.yMax - re.yMin) * 0.08 || 1;
-    ry = { yMin: re.yMin - (cfg.rightBeginAtZero ? 0 : ryPad), yMax: re.yMax + ryPad };
+    if (Number.isFinite(re.yMin)) {
+      const ryPad = (re.yMax - re.yMin) * 0.08 || 1;
+      ry = { yMin: re.yMin - (cfg.rightBeginAtZero ? 0 : ryPad), yMax: re.yMax + ryPad };
+    } else {
+      ry = { yMin: 0, yMax: 1 };
+    }
   }
 
   const halo = (x: string, y: string, anchor: string, text: string) =>
