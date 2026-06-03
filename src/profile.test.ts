@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exerciseTier, isAssistablePullup, LIST_CATEGORIES, muscleGroup, realPullupWeight, tagsForExercise } from "./profile";
+import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -257,6 +257,28 @@ describe("exercise tag registry", () => {
     // Comparable ratios are a fraction of the reference (0 < r <= ~1.2).
     for (const t of COMPARABLE_GROUPS)
       for (const m of t.members ?? []) expect(m.ratio).toBeLessThanOrEqual(1.2);
+  });
+});
+
+describe("exercisesForTag (browse a group's members)", () => {
+  const names = ["Squat", "Smith Machine Squat", "Front Squat", "Deadlift", "Romanian Deadlift", "Bench Press", "Lat Pulldown"];
+  it("lists a muscle group by prime mover", () => {
+    const quads = MUSCLE_GROUP_TAGS.find((t) => t.label === "Quads")!;
+    const got = exercisesForTag(quads, names);
+    expect(got).toContain("Squat");
+    expect(got).toContain("Front Squat");
+    expect(got).not.toContain("Bench Press");
+    expect(got).not.toContain("Deadlift"); // deadlift's prime mover is Back, not Quads
+  });
+  it("lists a functional pattern by keyword", () => {
+    const squatPat = FUNCTIONAL_PATTERN_TAGS.find((t) => t.label === "Squat pattern")!;
+    expect(exercisesForTag(squatPat, names)).toEqual(["Squat", "Smith Machine Squat", "Front Squat"]);
+    const hinge = FUNCTIONAL_PATTERN_TAGS.find((t) => t.label === "Hinge")!;
+    expect(exercisesForTag(hinge, names)).toEqual(["Deadlift", "Romanian Deadlift"]);
+  });
+  it("lists a combinable/comparable group by its explicit members", () => {
+    const dl = COMPARABLE_GROUPS.find((t) => t.id === "compare.dl-pattern")!;
+    expect(exercisesForTag(dl, names)).toEqual(["Deadlift", "Romanian Deadlift"]);
   });
 });
 

@@ -329,6 +329,24 @@ export function membersOfGroup(tag: RegistryTag, names: Iterable<string>): TagMe
   return (tag.members ?? []).filter((m) => present.has(m.exerciseName));
 }
 
+/**
+ * Every exercise in `names` that belongs to `tag` — by prime muscle (muscle
+ * groups), by keyword (functional patterns), or by explicit membership
+ * (combinable / comparable / dissolvable). Powers the Index "browse groups"
+ * view so you can open a group and see exactly which lifts fall under it.
+ */
+export function exercisesForTag(tag: RegistryTag, names: Iterable<string>): string[] {
+  const out: string[] = [];
+  for (const name of names) {
+    let inIt: boolean;
+    if (tag.kind === "muscle-group") inIt = muscleGroup(name) === tag.label;
+    else if (tag.kind === "functional-pattern") inIt = matchesKeywords(name.toLowerCase(), tag.keywords);
+    else inIt = !!tag.members?.some((m) => m.exerciseName === name);
+    if (inIt) out.push(name);
+  }
+  return out;
+}
+
 
 /**
  * Isometric / timed exercises where the "reps" column is really seconds (holds,

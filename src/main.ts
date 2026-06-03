@@ -58,10 +58,13 @@ import {
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
+  MUSCLE_GROUP_TAGS,
+  FUNCTIONAL_PATTERN_TAGS,
   tagsForExercise,
   combinableGroupsFor,
   comparableGroupsFor,
   membersOfGroup,
+  exercisesForTag,
   type RegistryTag,
   LIST_CATEGORIES,
   exerciseCode,
@@ -185,6 +188,7 @@ const els = {
   bwTitle: $("bwTitle"),
   activeSetBar: $("activeSetBar"),
   bwGroups: $("bwGroups"),
+  groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
   calcReps: $<HTMLInputElement>("calcReps"),
@@ -3381,8 +3385,51 @@ function reopenIndexDetail(name: string): void {
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
+/** "Browse groups" on the Index page: two levels of native <details> — open a
+ * dimension (Muscle groups / Functional groups / Combined lifts), then a group,
+ * to read its plain-language explanation and the exercises that fall under it. */
+function renderGroupBrowser() {
+  const names = distinctExercises(data.records);
+  const groupBlock = (t: RegistryTag): string => {
+    const ex = exercisesForTag(t, names);
+    const list = ex.length
+      ? ex.map((e) => `<span class="gb-ex">${escapeHtml(e)}</span>`).join("")
+      : `<span class="muted">none logged</span>`;
+    return (
+      `<details class="gb-group" data-gb="${escapeHtml(t.label)}">` +
+      `<summary class="gb-sum"><span class="caret">▸</span>${escapeHtml(t.label)} ` +
+      `<span class="gb-count muted">${ex.length}</span></summary>` +
+      `<div class="gb-why">${escapeHtml(t.why)}</div>` +
+      `<div class="gb-exlist">${list}</div></details>`
+    );
+  };
+  const dim = (title: string, tags: readonly RegistryTag[]): string =>
+    `<details class="gb-dim"><summary class="gb-dim-sum"><span class="caret">▸</span>${escapeHtml(title)} ` +
+    `<span class="gb-count muted">${tags.length}</span></summary>` +
+    `<div class="gb-dim-body">${tags.map(groupBlock).join("")}</div></details>`;
+  els.groupBrowser.innerHTML =
+    dim("Muscle groups", MUSCLE_GROUP_TAGS) +
+    dim("Functional groups", FUNCTIONAL_PATTERN_TAGS) +
+    dim("Combined lifts", [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS]);
+}
+
+/** Open the Browse-groups panel to a specific group (from an inspector tag chip):
+ * expand its dimension + the group, scroll to it and flash. */
+function jumpToGroup(label: string): void {
+  const group = els.groupBrowser.querySelector<HTMLDetailsElement>(`details.gb-group[data-gb="${CSS.escape(label)}"]`);
+  if (!group) return;
+  group.closest<HTMLDetailsElement>("details.gb-dim")?.setAttribute("open", "");
+  group.open = true;
+  requestAnimationFrame(() => {
+    group.scrollIntoView({ behavior: "smooth", block: "center" });
+    group.classList.add("wo-flash");
+    window.setTimeout(() => group.classList.remove("wo-flash"), 1600);
+  });
+}
+
 function renderBwParts() {
   renderMergeList();
+  renderGroupBrowser();
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
@@ -3475,7 +3522,7 @@ function exerciseInfoHtml(name: string): string {
   // each chip explains its WHY on hover.
   const tags = tagsForExercise(name);
   const tagChips = tags.length
-    ? tags.map((t) => `<span class="ex-tag" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</span>`).join("")
+    ? tags.map((t) => `<button type="button" class="ex-tag" data-tagjump="${escapeHtml(t.label)}" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</button>`).join("")
     : `<span class="muted">none</span>`;
 
   const rows = [
@@ -4235,6 +4282,9 @@ async function init() {
   });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
+    // A tag chip in the inspector jumps to that group in the Browse-groups panel.
+    const tagJump = (e.target as HTMLElement).closest<HTMLElement>("[data-tagjump]");
+    if (tagJump?.dataset.tagjump) { jumpToGroup(tagJump.dataset.tagjump); return; }
     // Per-exercise active-set overrides in the inspector (force in / out).
     const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
     if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }

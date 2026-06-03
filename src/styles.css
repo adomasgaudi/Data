@@ -1417,10 +1417,30 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Index inspector: registry tag chips, group membership, active-set overrides. */
 .ex-tags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
 .ex-tag {
-  display: inline-block; font-size: 0.72rem; font-weight: 600;
+  display: inline-block; font: inherit; font-size: 0.72rem; font-weight: 600;
   background: var(--accent-soft); color: var(--accent);
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; cursor: help;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; cursor: pointer;
 }
+.ex-tag:hover { border-color: var(--accent); }
+/* Browse-groups panel on the Index page (two levels of <details>). */
+.group-browser { display: flex; flex-direction: column; gap: 6px; }
+.gb-dim > .gb-dim-sum {
+  list-style: none; cursor: pointer; font-weight: 700; font-size: 0.95rem;
+  padding: 8px 10px; background: var(--accent-soft); border-radius: 8px;
+}
+.gb-dim-sum::-webkit-details-marker { display: none; }
+.gb-dim[open] > .gb-dim-sum { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.gb-dim-body { padding: 4px 4px 8px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; }
+.gb-group { border-bottom: 1px solid var(--line); }
+.gb-group:last-child { border-bottom: 0; }
+.gb-sum { list-style: none; cursor: pointer; font-weight: 600; font-size: 0.86rem; padding: 7px 8px; }
+.gb-sum::-webkit-details-marker { display: none; }
+.gb-sum .caret, .gb-dim-sum .caret { display: inline-block; transition: transform 0.12s ease; color: var(--muted); margin-right: 0.3rem; }
+.gb-group[open] > .gb-sum .caret, .gb-dim[open] > .gb-dim-sum .caret { transform: rotate(90deg); }
+.gb-count { font-weight: 600; }
+.gb-why { font-size: 0.8rem; color: var(--muted); padding: 0 8px 6px 22px; }
+.gb-exlist { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 9px 22px; }
+.gb-ex { font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
 .ex-group { margin: 0.4rem 0 0; padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .ex-group-hd { font-size: 0.82rem; font-weight: 700; }
 .ex-group-why { font-size: 0.76rem; margin: 0.2rem 0; }

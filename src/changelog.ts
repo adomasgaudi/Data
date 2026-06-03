@@ -46,6 +46,7 @@ export const CHANGELOG: Release[] = [
       "Kicks off the new minor; first up, the version-history notes are trimmed to one line each.",
     ],
     children: [
+      { version: "b.2.1.1", sp: 3, note: "New “Browse groups” panel on the Index: open a dimension (Muscle / Functional / Combined), then a group, to read what it means and see the lifts under it. Inspector tag chips jump to a group's explanation." },
       { version: "b.2.1.0", sp: 0.5, note: "Started the b.2.1 minor and trimmed every version-history note to one short line." },
     ],
   },
