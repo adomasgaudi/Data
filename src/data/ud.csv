@@ -1,7 +1,4 @@
 user,username,date,bodyweight,exercise_name,set_number,weight,reps,notes,dropset,percentile
-Adomas,adomasgaudi,2026-05-28,91.4,Plate lifts,1,25,30,"Fast warm, 50cm",,
-Adomas,adomasgaudi,2026-05-28,91.4,Plate lifts,2,30,6,60cm,,
-Adomas,adomasgaudi,2026-05-28,91.4,Plate lifts,3,30,13,"Slower, 50cm",,
 Adomas,adomasgaudi,2026-05-27,91.4,Plate lifts,1,30,17,,,
 Adomas,adomasgaudi,2026-05-27,91.4,Plate lifts,2,30,14,,,
 Adomas,adomasgaudi,2026-05-25,91.4,Plate lifts,1,25,31,R: 30kgx23,,
@@ -3440,14 +3437,6 @@ Adomas,adomasgaudi,2023-08-30,82,Deadlift,1,70,5,,,0.02603961391
 Adomas,adomasgaudi,2023-08-30,82,Push Ups,1,,20,,,0.2122332504
 Adomas,adomasgaudi,2023-08-30,82,Squat,1,50,20,,,0.08830489806
 Adomas,adomasgaudi,2023-08-30,82,Muscle Ups,1,,1,,,0.1804260728
-Kristina,andromeda94,2026-05-28,44,Plate lifts,1,8.7,13,,,
-Kristina,andromeda94,2026-05-28,44,Plate lifts,2,8.7,15,,,
-Kristina,andromeda94,2026-05-28,44,Roman Chair Side Bend,1,4,20,,,0.6046103554
-Kristina,andromeda94,2026-05-28,44,Single Leg Romanian Deadlift,1,20,20,Landmine,,0.7043727604
-Kristina,andromeda94,2026-05-28,44,Single Leg Romanian Deadlift,2,22.5,17,Landmine,,0.7443018067
-Kristina,andromeda94,2026-05-28,44,Single Leg Romanian Deadlift,3,22.5,15,Landmine,,0.7133956565
-Kristina,andromeda94,2026-05-28,44,Handstand Push Ups,1,,10,Užkabintos kojos,,0.604931639
-Kristina,andromeda94,2026-05-28,44,Handstand Push Ups,2,,12,Užkabintos kojos,,0.6522022635
 Kristina,andromeda94,2026-05-26,44,Single Leg Romanian Deadlift,1,15,10,Landmine,,0.3393913974
 Kristina,andromeda94,2026-05-26,44,Single Leg Romanian Deadlift,2,15,15,Landmine,,0.4145536527
 Kristina,andromeda94,2026-05-26,44,Roman Chair Side Bend,1,,20,,,0.5263951993
@@ -4081,26 +4070,6 @@ Kristina,andromeda94,2024-12-04,43,Preacher Curl,1,2,7,,,0.03899868945
 Kristina,andromeda94,2024-12-04,43,Preacher Curl,2,4.5,5,,,0.1022338375
 Kristina,andromeda94,2024-12-04,43,Preacher Curl,3,7,6,,,0.1988789621
 Kristina,andromeda94,2024-12-04,43,Preacher Curl,4,5.5,30,,,0.3022225375
-Johan,johannesschut,2026-05-28,89,Bench Press,1,40,6,,,0.01100070315
-Johan,johannesschut,2026-05-28,89,Bench Press,2,60,9,,,0.1469534916
-Johan,johannesschut,2026-05-28,89,Bench Press,3,60,6,,,0.09223676267
-Johan,johannesschut,2026-05-28,89,Bench Press,4,55,9,,,0.09941293347
-Johan,johannesschut,2026-05-28,89,Bench Press,5,55,9,,,0.09941293347
-Johan,johannesschut,2026-05-28,89,Bench Press,6,55,8,,,0.08379496359
-Johan,johannesschut,2026-05-28,89,Chin Ups,1,-52.5,10,,,0.0001778748724
-Johan,johannesschut,2026-05-28,89,Chin Ups,2,-20,5,,,0.02184041673
-Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,1,12.5,10,,,0.2440119026
-Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,2,17.5,5,,,0.3304975085
-Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,3,15,9,,,0.3194570903
-Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,4,15,7,,,0.2815880878
-Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,1,12.5,13,,,0.05824130273
-Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,2,20,7,,,0.1621424786
-Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,3,17.5,10,,,0.1477537722
-Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,4,17.5,8,,,0.1161851715
-Johan,johannesschut,2026-05-28,89,Decline Sit Up,1,5,10,,,0.2191474023
-Johan,johannesschut,2026-05-28,89,Decline Sit Up,2,5,10,,,0.2191474023
-Johan,johannesschut,2026-05-28,89,Machine Calf Raise,1,36.3,16,,,0.07652331174
-Johan,johannesschut,2026-05-28,89,Machine Calf Raise,2,36.3,13,,,0.06670652875
 Johan,johannesschut,2026-05-26,89,Bench Press,1,62.5,5,,,0.09623936122
 Johan,johannesschut,2026-05-26,89,Bench Press,2,60,9,,,0.1469534916
 Johan,johannesschut,2026-05-26,89,Bench Press,3,40,8,,,0.01598128718
@@ -5051,16 +5020,6 @@ Johan,johannesschut,2025-07-09,85,Squat,2,8,15,,,0.000001675693717
 Johan,johannesschut,2025-07-09,85,Decline Sit Up,1,,1,,,0.09469662738
 Johan,johannesschut,2025-07-09,85,Decline Sit Up,2,5,12,Decline 3,,0.2417164984
 Johan,johannesschut,2025-07-09,85,Lat Pulldown,1,45,10,,,0.1616435756
-Andrius,andriusp,2026-05-28,112.5,Hex Bar Deadlift,1,72,25,,,0.05809968543
-Andrius,andriusp,2026-05-28,112.5,Hex Bar Deadlift,2,72,25,,,0.05809968543
-Andrius,andriusp,2026-05-28,112.5,Hex Bar Deadlift,3,72,25,,,0.05809968543
-Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,1,55,6,,,0.1486606093
-Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,2,55,6,,,0.1486606093
-Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,3,55,6,,,0.1486606093
-Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,4,55,6,,,0.1486606093
-Andrius,andriusp,2026-05-28,112.5,Seated Calf Raise,1,45,20,,,0.1854724103
-Andrius,andriusp,2026-05-28,112.5,Seated Calf Raise,2,45,20,,,0.1854724103
-Andrius,andriusp,2026-05-28,112.5,Seated Calf Raise,3,45,20,,,0.1854724103
 Andrius,andriusp,2026-05-26,113.7,Lat Pulldown,1,67.5,5,,,0.1998124536
 Andrius,andriusp,2026-05-26,113.7,Lat Pulldown,2,67.5,5,,,0.1998124536
 Andrius,andriusp,2026-05-26,113.7,Lat Pulldown,3,67.5,5,,,0.1998124536
@@ -5695,20 +5654,6 @@ Andrius,andriusp,2025-03-07,117,Deadlift,3,25,18,,,0.000006175647342
 Andrius,andriusp,2025-03-07,117,Squat,1,5,10,,,0.0000000004105054814
 Andrius,andriusp,2025-03-07,117,Squat,2,12,16,,,0.0000001200886591
 Andrius,andriusp,2025-03-07,117,Dumbbell Bench Press,1,8,10,,,0.0008666889665
-Mantas,mantasp,2026-05-28,130.3,Cable Crunch,1,50,12,,,0.229128617
-Mantas,mantasp,2026-05-28,130.3,Cable Crunch,2,50,12,,,0.229128617
-Mantas,mantasp,2026-05-28,130.3,Dumbbell Bench Press,1,20,9,,,0.03417532512
-Mantas,mantasp,2026-05-28,130.3,Dumbbell Bench Press,2,20,9,,,0.03417532512
-Mantas,mantasp,2026-05-28,130.3,One Arm Dumbbell Preacher Curl,1,10,10,,,0.08126625293
-Mantas,mantasp,2026-05-28,130.3,One Arm Dumbbell Preacher Curl,2,12.5,4,Kairė 9,,0.08616293768
-Mantas,mantasp,2026-05-28,130.3,Chest Press,1,30,13,Incline,,0.01680848233
-Mantas,mantasp,2026-05-28,130.3,Chest Press,2,40,8,Incline,,0.02998298258
-Mantas,mantasp,2026-05-28,130.3,Lat Pulldown,1,50,15,Pull down,,0.1819577949
-Mantas,mantasp,2026-05-28,130.3,Lat Pulldown,2,70,11,Pull down,,0.43410882
-Mantas,mantasp,2026-05-28,130.3,Lat Pulldown,3,90,8,Pull down,,0.6395148186
-Mantas,mantasp,2026-05-28,130.3,Lying Leg Curl,1,41.25,7,,,0.103725649
-Mantas,mantasp,2026-05-28,130.3,Lying Leg Curl,2,33.75,15,,,0.1121773863
-Mantas,mantasp,2026-05-28,130.3,Decline Sit Up,1,,6,5 level,,0.2373745262
 Mantas,mantasp,2026-05-07,129.3,Cable Crunch,1,50,17,,,0.2986494665
 Mantas,mantasp,2026-05-07,129.3,Cable Crunch,2,50,15,,,0.2722826997
 Mantas,mantasp,2026-05-07,129.3,Decline Sit Up,1,,9,5 level,,0.3075229288
@@ -6825,10 +6770,6 @@ Mantas,mantasp,2025-03-07,118,Squat,1,5,10,,,0.0000000007387285659
 Mantas,mantasp,2025-03-07,118,Squat,2,1,16,,,0
 Mantas,mantasp,2025-03-07,118,Dumbbell Bench Press,1,6,13,,,0.0006411091518
 Mantas,mantasp,2025-03-07,118,Dumbbell Bench Press,2,7,14,,,0.001346444024
-Marija,marijasenkus,2026-05-21,56,Single Leg Romanian Deadlift,1,30,15,,,0.8358211801
-Marija,marijasenkus,2026-05-21,56,Single Leg Romanian Deadlift,2,32,15,,,0.8724864915
-Marija,marijasenkus,2026-05-21,56,Smith Machine Good Morning,1,27,20,5 vidurinis,,
-Marija,marijasenkus,2026-05-21,56,Pull Ups,1,-27,8,,,0.02998642906
 Marija,marijasenkus,2026-05-12,56,Machine Shoulder Press,1,15,6,Gravity,,0.2318951118
 Marija,marijasenkus,2026-05-12,56,Single Leg Romanian Deadlift,1,25,20,,,0.7859246528
 Marija,marijasenkus,2026-05-12,56,Smith Machine Good Morning,1,25,10,,,
@@ -6937,10 +6878,6 @@ Marija,marijasenkus,2026-01-28,56,Roman Chair Side Bend,1,10,20,Kaire,,0.6528750
 Marija,marijasenkus,2026-01-28,56,Roman Chair Side Bend,2,10,10,Desine,,0.4263042396
 Marija,marijasenkus,2026-01-28,56,Squat,1,20,15,,,0.06949295827
 Marija,marijasenkus,2026-01-21,56,Deadlift,1,50,8,,,0.2920425263
-Sandra,sandrakri,2026-05-27,72,Plate lifts,1,8.7,20,,,
-Sandra,sandrakri,2026-05-27,72,Plate lifts,2,10,12,,,
-Sandra,sandrakri,2026-05-27,72,Plate lifts,3,10,12,,,
-Sandra,sandrakri,2026-05-27,72,Plate lifts,4,10,15,,,
 Sandra,sandrakri,2026-05-21,72,Handstand kicks,1,,11,"30cm tar kopėčių, 7- to wall kicks",,
 Sandra,sandrakri,2026-05-21,72,Handstand kicks,2,,11,"30cm tar kopėčių, 7- to wall kicks",,
 Sandra,sandrakri,2026-05-21,72,Handstand kicks,3,,11,"30cm tar kopėčių, 7- to wall kicks",,
@@ -7369,12 +7306,6 @@ Sandra,sandrakri,2025-04-15,72,Squat,4,15,12,,,0.00820511765
 Sandra,sandrakri,2025-04-15,72,Decline Sit Up,1,,3,6 kampas,,0.09196038803
 Sandra,sandrakri,2025-04-15,72,Pull Ups,1,-55,3,,,0.000005457208939
 Sandra,sandrakri,2025-04-15,72,Pull Ups,2,-47,1,,,0.0001036187028
-Dzul,dzuljeta,2026-05-27,57.1,Hip Thrust,1,40,17,,,0.2679937525
-Dzul,dzuljeta,2026-05-27,57.1,Hip Thrust,2,40,20,,,0.3015851517
-Dzul,dzuljeta,2026-05-27,57.1,Single Leg Romanian Deadlift,1,10,15,,,0.1325517967
-Dzul,dzuljeta,2026-05-27,57.1,Single Leg Romanian Deadlift,2,10,15,,,0.1325517967
-Dzul,dzuljeta,2026-05-27,57.1,Pull Ups,1,-45,8,Competition,,0.00005155750371
-Dzul,dzuljeta,2026-05-27,57.1,Pull Ups,2,-45,8,Competition,,0.00005155750371
 Dzul,dzuljeta,2026-04-16,57.6,Dumbbell Lunge,1,8,20,,,0.3040510027
 Dzul,dzuljeta,2026-04-16,57.6,Dumbbell Lunge,2,10,5,,,0.2246849169
 Dzul,dzuljeta,2026-04-16,57.6,Hip Thrust,1,50,15,,,0.3705658728
@@ -8043,15 +7974,6 @@ Dzul,dzuljeta,2024-11-26,55,Deadlift,2,20,5,,,0.01273372016
 Dzul,dzuljeta,2024-11-26,55,Deadlift,3,25,10,,,0.04740374599
 Dzul,dzuljeta,2024-11-26,55,Deadlift,4,30,1,,,0.0334226125
 Dzul,dzuljeta,2024-11-26,55,Deadlift,5,30,4,,,0.04463331909
-Agne,agne_ram,2026-03-10,62.7,Kettlebell Snatch,1,8,10,,,
-Agne,agne_ram,2026-03-10,62.7,Kettlebell Snatch,2,8,10,,,
-Agne,agne_ram,2026-03-10,62.7,Dumbbell Sumo Squat,1,17.5,10,,,
-Agne,agne_ram,2026-03-10,62.7,Hip Thrust,1,75,9,,,0.5234967858
-Agne,agne_ram,2026-03-10,62.7,Hip Thrust,2,75,9,,,0.5234967858
-Agne,agne_ram,2026-03-10,62.7,Deadlift,1,45,8,,,0.1703090386
-Agne,agne_ram,2026-03-10,62.7,Deadlift,2,45,8,,,0.1703090386
-Agne,agne_ram,2026-03-10,62.7,Vertical Leg Press,1,60,10,,,0.185205738
-Agne,agne_ram,2026-03-10,62.7,Vertical Leg Press,2,60,10,,,0.185205738
 Agne,agne_ram,2026-03-03,62.7,Kettlebell Snatch,1,8,12,,,
 Agne,agne_ram,2026-03-03,62.7,Cable Kickback,1,15,12,,,0.357890402
 Agne,agne_ram,2026-03-03,62.7,Lat Pulldown,1,25,12,,,0.2868995809
@@ -8079,18 +8001,6 @@ Agne,agne_ram,2026-02-25,63.5,Decline Sit Up,1,,10,Aukstis 3,,0.155980415
 Agne,agne_ram,2026-02-25,63.5,Hip Abduction,1,35,8,,,0.1925657214
 Agne,agne_ram,2026-02-25,63.5,Chin Ups,1,-42.5,7,,,0.00001544624707
 Agne,agne_ram,2026-02-25,63.5,Bench Press,1,25,6,,,0.1694750837
-Laurynas,bebras,2026-03-12,60,Squat,1,45,8,,,0.1317865645
-Laurynas,bebras,2026-03-12,60,Squat,2,50,4,,,0.1210076494
-Laurynas,bebras,2026-03-12,60,Squat,3,50,7,,,0.1686730141
-Laurynas,bebras,2026-03-12,60,Squat,4,50,8,,,0.1888616949
-Laurynas,bebras,2026-03-12,60,Squat,5,50,6,,,0.1508024119
-Laurynas,bebras,2026-03-12,60,Deadlift,1,50,8,,,0.08813202745
-Laurynas,bebras,2026-03-12,60,Deadlift,2,70,4,,,0.1932806867
-Laurynas,bebras,2026-03-12,60,Deadlift,3,60,9,,,0.2011660596
-Laurynas,bebras,2026-03-12,60,Deadlift,4,60,5,,,0.1226981595
-Laurynas,bebras,2026-03-12,60,Standing Leg Curl,1,15,6,,,0.2498137326
-Laurynas,bebras,2026-03-12,60,Standing Leg Curl,2,15,6,,,0.2498137326
-Laurynas,bebras,2026-03-12,60,Standing Leg Curl,3,15,7,,,0.2580635127
 Laurynas,bebras,2026-03-09,60,Dips,1,,10,,,0.3334472045
 Laurynas,bebras,2026-03-09,60,Dips,2,10,9,,,0.475671439
 Laurynas,bebras,2026-03-09,60,Dips,3,10,8,,,0.4302258864
@@ -11056,12 +10966,6 @@ Laurynas,bebras,2024-11-22,56,Deadlift,2,30,5,,,0.012480047
 Laurynas,bebras,2024-11-22,56,Deadlift,3,40,2,,,0.02918782514
 Laurynas,bebras,2024-11-22,56,Deadlift,4,40,10,,,0.08383438156
 Laurynas,bebras,2024-11-22,56,Deadlift,5,45,5,,,0.06837664419
-Simona,simona,2026-05-27,74,Squat,1,42,7,,,0.1482512524
-Simona,simona,2026-05-27,74,Squat,2,42,9,,,0.1833353473
-Simona,simona,2026-05-27,74,Deadlift,1,42,10,,,0.1115343121
-Simona,simona,2026-05-27,74,Deadlift,2,40,14,,,0.1309290312
-Simona,simona,2026-05-27,74,Plate Lifts ,1,8.7,7,,,
-Simona,simona,2026-05-27,74,Plate Lifts ,2,8.7,10,,,
 Simona,simona,2026-05-19,74,Good Morning,1,30,10,,,0.3666367119
 Simona,simona,2026-05-19,74,Squat,1,40,10,,,0.1759580007
 Simona,simona,2026-05-19,74,Squat,2,40,15,,,0.2469270042
@@ -11213,13 +11117,6 @@ Simona,simona,2026-02-11,74,Deadlift,1,25,20,,,0.03743634623
 Simona,simona,2026-02-11,74,Decline Sit Up,1,,15,,,0.2120560529
 Simona,simona,2026-02-11,74,Decline Sit Up,2,5,8,,,0.159215611
 Simona,simona,2026-02-11,74,Decline Sit Up,3,,10,,TRUE,0.1614487898
-Henrikas,henrikas,2026-04-14,113,Hip Thrust,1,60,10,,,0.03595778635
-Henrikas,henrikas,2026-04-14,113,Hip Thrust,2,60,5,parejo nugara,TRUE,0.02000615363
-Henrikas,henrikas,2026-04-14,113,Hack Squat,1,20,5,nugara,,0.0004439973787
-Henrikas,henrikas,2026-04-14,113,Chest Press,1,60,5,nugara,,0.09704085772
-Henrikas,henrikas,2026-04-14,113,Hip Abduction,1,50,15,,,0.12331528
-Henrikas,henrikas,2026-04-14,113,Hip Abduction,2,50,15,,,0.12331528
-Henrikas,henrikas,2026-04-14,113,Hip Abduction,3,50,15,,,0.12331528
 Henrikas,henrikas,2026-04-08,113,Hip Abduction,1,45,15,,,0.09223713192
 Henrikas,henrikas,2026-04-08,113,Hip Adduction,1,25,15,,,0.0177599686
 Henrikas,henrikas,2026-04-08,113,Preacher Curl,1,25,10,,,0.09449238568
@@ -11246,11 +11143,6 @@ Henrikas,henrikas,2026-03-27,113,Chest Press,1,50,12,,,0.1095824999
 Henrikas,henrikas,2026-03-24,113,Decline Sit Up,1,,15,,,0.2886288054
 Henrikas,henrikas,2026-03-24,113,Hip Thrust,1,35,15,,,0.008373607944
 Henrikas,henrikas,2026-03-24,113,Squat,1,1,10,,,0
-Tomas,t.urba,2026-05-25,81.1,Decline Sit Up,1,,20,,,0.3043795996
-Tomas,t.urba,2026-05-25,81.1,Decline Sit Up,2,8,20,,,0.3665185581
-Tomas,t.urba,2026-05-25,81.1,Plate lifts,1,15,18,,,
-Tomas,t.urba,2026-05-25,81.1,Plate lifts,2,15,18,,,
-Tomas,t.urba,2026-05-25,81.1,Handstand Push Ups,1,,16,"3 pėdos nuo sienos, brick nuo žemės per L.",,0.5925502502
 Tomas,t.urba,2026-05-20,82.7,Roman Chair Side Bend,1,,8,,,0.1188489212
 Tomas,t.urba,2026-05-20,82.7,Roman Chair Side Bend,2,5,10,,,0.1945084853
 Tomas,t.urba,2026-05-20,82.7,Roman Chair Side Bend,3,9,15,,,0.332844369
@@ -11399,10 +11291,6 @@ Tomas,t.urba,2026-03-25,83,Roman Chair Side Bend,1,,10,,,0.1560887072
 Tomas,t.urba,2026-03-23,83,Deadlift,1,50,15,,,0.01800806593
 Tomas,t.urba,2026-03-23,83,Roman Chair Side Bend,1,5,10,,,0.1937622094
 Tomas,t.urba,2026-03-23,83,Decline Sit Up,1,5,3,,,0.1258122912
-Brigita,brigita_r,2026-05-25,57,Decline Sit Up,1,,15,,,0.1974573433
-Brigita,brigita_r,2026-05-25,57,Decline Sit Up,2,,15,,,0.1974573433
-Brigita,brigita_r,2026-05-25,57,Single Leg Romanian Deadlift,1,25,15,,,0.7027805534
-Brigita,brigita_r,2026-05-25,57,Single Leg Romanian Deadlift,2,25,15,,,0.7027805534
 Brigita,brigita_r,2026-05-20,57,Roman Chair Side Bend,1,3,10,,,0.3213643345
 Brigita,brigita_r,2026-05-20,57,Roman Chair Side Bend,2,5,10,,,0.3495334961
 Brigita,brigita_r,2026-05-20,57,Roman Chair Side Bend,3,5,12,,,0.3938868064
@@ -11509,9 +11397,6 @@ Brigita,brigita_r,2026-03-30,57,Squat,1,6,15,,,0.001934353891
 Brigita,brigita_r,2026-03-30,57,Decline Sit Up,1,3,9,,,0.1600135646
 Brigita,brigita_r,2026-03-30,57,Roman Chair Side Bend,1,2.5,9,,,0.2863140818
 Brigita,brigita_r,2026-03-30,57,Dumbbell Shoulder Press,1,6,9,,,0.1390912264
-Karolis,karolisb,2026-05-06,69,Lying Leg Curl,1,11,15,,,0.02772530705
-Karolis,karolisb,2026-05-06,69,Chest Press,1,30,7,Incline,,0.08139382266
-Karolis,karolisb,2026-05-06,69,Chest Press,2,24,8,Incline,,0.04973648501
 Karolis,karolisb,2026-05-04,69,Bench Press,1,42,1,,,0.04566329965
 Karolis,karolisb,2026-05-04,69,Bench Press,2,32,10,,,0.04883975364
 Karolis,karolisb,2026-05-04,69,Bench Press,3,35,8,,,0.05279281313
@@ -11549,18 +11434,6 @@ Karolis,karolisb,2026-03-04,71,Inverted Row,1,,10,"SQ13, 84cm",,0.3063439637
 Karolis,karolisb,2026-03-04,71,Inverted Row,2,,10,"SQ13, 84cm",,0.3063439637
 Karolis,karolisb,2026-03-04,71,Deadlift,1,30,20,,,0.006583193898
 Karolis,karolisb,2026-03-03,71,Bench Press,1,25,12,,,0.01639066756
-Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,1,30,15,,,0.0004978603005
-Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,2,35,20,,,0.00248911066
-Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,3,30,20,,,0.0009577051112
-Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,1,20,15,,,0.002098755338
-Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,2,25,8,,,0.002512415435
-Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,3,25,10,,,0.003659174688
-Simonas,simonasputrius,2026-05-27,121,plate wrist lift,1,10,20,,,
-Simonas,simonasputrius,2026-05-27,121,plate wrist lift,2,12,10,,,
-Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,1,30,10,gravity/2,,0.005862372568
-Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,2,30,6,gravity/2,,0.002674745631
-Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,1,6,12,,,0.02394564875
-Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,2,7,12,,,0.0352324254
 Simonas,simonasputrius,2026-05-25,121,Push Ups,1,,10,SQ8,,0.1140128622
 Simonas,simonasputrius,2026-05-25,121,Push Ups,2,,10,SQ8,,0.1140128622
 Simonas,simonasputrius,2026-05-25,121,Dumbbell Wrist Curl,1,8,20,,,0.08620314317
@@ -11775,9 +11648,6 @@ Simonas,simonasputrius,2026-01-14,120,Squat,3,20,8,,,0.0000006204410847
 Simonas,simonasputrius,2026-01-14,120,Dumbbell Shoulder Press,1,10,7,,,0.001235642393
 Simonas,simonasputrius,2026-01-14,120,Seated Dip Machine,1,60,10,,,0.1273541531
 Simonas,simonasputrius,2026-01-14,120,Reverse Grip Lat Pulldown,1,52.5,8,,,0.03493690785
-Indre,indre_ju,2026-05-21,68,Belt Squat,1,20,20,,,0.4288146899
-Indre,indre_ju,2026-05-21,68,Belt Squat,2,25,20,,,0.5976258601
-Indre,indre_ju,2026-05-21,68,Belt Squat,3,30,20,,,0.7365794028
 Indre,indre_ju,2026-05-19,68,Belt Squat,1,20,15,,,0.3575857248
 Indre,indre_ju,2026-05-19,68,Belt Squat,2,20,15,,,0.3575857248
 Indre,indre_ju,2026-05-19,68,Standing Leg Curl,1,5,10,Guma3,,0.007144178479
@@ -11952,7 +11822,6 @@ Indre,indre_ju,2026-01-20,68,Deadlift,1,20,10,,,0.00938644785
 Indre,indre_ju,2026-01-20,68,Pull Ups,1,-82,10,,,0
 Indre,indre_ju,2026-01-20,68,Dumbbell Shoulder Press,1,4,10,,,0.03203038056
 Indre,indre_ju,2026-01-20,68,Decline Sit Up,1,,20,"Level 3, guma 2",,0.2577677997
-Natalija,natali,2026-04-01,75,Deadlift,1,30,20,,,0.1080689987
 Natalija,natali,2026-03-23,75,Back Extension,1,,12,6 aukštis,,0.468371883
 Natalija,natali,2026-03-23,75,Decline Sit Up,1,,12,Aukštis 3,,0.2362858999
 Natalija,natali,2026-03-23,75,Pull Ups,1,-90,3,,,0
@@ -12005,16 +11874,6 @@ Natalija,natali,2026-01-29,75,Decline Sit Up,1,,10,Aukštis 1,,0.2107185117
 Natalija,natali,2026-01-29,75,Decline Sit Up,2,1,12,Aukštis 1,,0.24219097
 Natalija,natali,2026-01-20,75,Shoulder Press,1,9.5,10,,,0.03624782699
 Natalija,natali,2026-01-20,75,Squat,1,1,12,,,0.000007700117865
-Monika,monika,2026-05-04,52,Barbell Curl,1,17,1,,,0.3770894651
-Monika,monika,2026-05-04,52,Barbell Curl,2,13,3,,,0.2731182165
-Monika,monika,2026-05-04,52,Barbell Curl,3,12,6,,,0.278545638
-Monika,monika,2026-05-04,52,Seated Shoulder Press,1,23,1,,,0.4479120206
-Monika,monika,2026-05-04,52,Seated Shoulder Press,2,17,3,,,0.3163367346
-Monika,monika,2026-05-04,52,Seated Shoulder Press,3,20,1,,,0.3691735939
-Monika,monika,2026-05-04,52,Seated Shoulder Press,4,12,8,,,0.2363229934
-Monika,monika,2026-05-04,52,Machine Shoulder Press,1,10,6,Gravity aparatas,,0.141423214
-Monika,monika,2026-05-04,52,Pull Ups,1,-30,9,,,0.01298761118
-Monika,monika,2026-05-04,52,Pull Ups,2,-25,4,,,0.01655370063
 Monika,monika,2026-04-28,52,Hip Thrust,1,40,10,,,0.2176184537
 Monika,monika,2026-04-28,52,Smith Machine Squat,1,32,12,Pėdos priekis palei stovo šono priekį,,0.3125298073
 Monika,monika,2026-04-28,52,Barbell Curl,1,11,8,,,0.26975157
@@ -12050,3 +11909,240 @@ Monika,monika,2026-04-13,52,One Arm Dumbbell Preacher Curl,1,5,8,,,0.1907536509
 Monika,monika,2026-04-13,52,One Arm Dumbbell Preacher Curl,2,5,8,,,0.1907536509
 Monika,monika,2026-04-13,52,Dumbbell Shoulder Press,1,7,10,,,0.2572448196
 Monika,monika,2026-04-13,52,Dumbbell Shoulder Press,2,7,10,,,0.2572448196
+Adomas,adomasgaudi,2026-06-02,91.4,Plate lifts,1,30,23,,,
+Adomas,adomasgaudi,2026-06-02,91.4,Plate lifts,2,30,20,,,
+Adomas,adomasgaudi,2026-06-01,91.4,Plate lifts,1,30,20,50cm,,
+Adomas,adomasgaudi,2026-06-01,91.4,Plate lifts,2,30,15,50cm,,
+Adomas,adomasgaudi,2026-06-01,91.4,Handstand,1,,,,,
+Adomas,adomasgaudi,2026-06-01,91.4,Handstand Push Ups,1,,14,"B2 wall, L yoga, + Lyiga height, close to wall head",,0.5522573490941545
+Adomas,adomasgaudi,2026-06-01,91.4,Handstand Push Ups,2,,10,"B2 wall, L yoga, + Lyiga height, close to wall head + 10 shrugs",,0.4554189378149458
+Adomas,adomasgaudi,2026-06-01,91.4,Tricep plank,1,1,9,"4ft, 3rd step knees",,
+Adomas,adomasgaudi,2026-06-01,91.4,Tricep plank,2,1,5,"4.5ft, 5-6th step, full",,
+Adomas,adomasgaudi,2026-05-28,91.4,Plate lifts,1,25,30,"Fast warm, 50cm",,
+Adomas,adomasgaudi,2026-05-28,91.4,Plate lifts,2,30,6,60cm,,
+Adomas,adomasgaudi,2026-05-28,91.4,Plate lifts,3,30,13,"Slower, 50cm",,
+Kristina,andromeda94,2026-06-02,44,Landmine Romanian Deadlift,1,12.5,15,,,
+Kristina,andromeda94,2026-06-02,44,Landmine Romanian Deadlift,2,15,16,,,
+Kristina,andromeda94,2026-06-02,44,Plate lifts,1,10,15,,,
+Kristina,andromeda94,2026-06-02,44,Plate lifts,2,10,17,,,
+Kristina,andromeda94,2026-06-02,44,Plate lifts,3,10,17,43cm,,
+Kristina,andromeda94,2026-06-02,44,Roman Chair Side Bend,1,2.5,20,,,0.5759933768218592
+Kristina,andromeda94,2026-06-02,44,Roman Chair Side Bend,2,5,20,,,0.6231511201711202
+Kristina,andromeda94,2026-05-28,44,Plate lifts,1,8.7,13,,,
+Kristina,andromeda94,2026-05-28,44,Plate lifts,2,8.7,15,,,
+Kristina,andromeda94,2026-05-28,44,Roman Chair Side Bend,1,4,20,,,0.6046103553705117
+Kristina,andromeda94,2026-05-28,44,Single Leg Romanian Deadlift,1,12.5,20,Landmine,,0.364389959836751
+Kristina,andromeda94,2026-05-28,44,Single Leg Romanian Deadlift,2,15,17,Landmine,,0.4444718167668308
+Kristina,andromeda94,2026-05-28,44,Single Leg Romanian Deadlift,3,15,15,Landmine,,0.41455365272320904
+Kristina,andromeda94,2026-05-28,44,Handstand Push Ups,1,,10,Užkabintos kojos,,0.6049316390388224
+Kristina,andromeda94,2026-05-28,44,Handstand Push Ups,2,,12,Užkabintos kojos,,0.6522022634676027
+Johan,johannesschut,2026-06-01,89,Bench Press,1,40,6,,,0.011000703145139496
+Johan,johannesschut,2026-06-01,89,Bench Press,2,60,10,,,0.17053852039422382
+Johan,johannesschut,2026-06-01,89,Bench Press,3,60,7,,,0.10744722615279644
+Johan,johannesschut,2026-06-01,89,Bench Press,4,60,7,,,0.10744722615279644
+Johan,johannesschut,2026-06-01,89,Bench Press,5,55,9,,,0.09941293346858115
+Johan,johannesschut,2026-06-01,89,Bench Press,6,55,9,,,0.09941293346858115
+Johan,johannesschut,2026-06-01,89,Chin Ups,1,-45,10,,,0.0013843680473503586
+Johan,johannesschut,2026-06-01,89,Chin Ups,2,-25,6,,,0.014721547441225516
+Johan,johannesschut,2026-06-01,89,One Arm Dumbbell Preacher Curl,1,10,10,,,0.15786707224121974
+Johan,johannesschut,2026-06-01,89,One Arm Dumbbell Preacher Curl,2,17.5,6,,,0.3492134827700144
+Johan,johannesschut,2026-06-01,89,One Arm Dumbbell Preacher Curl,3,15,8,,,0.2994495510982886
+Johan,johannesschut,2026-06-01,89,One Arm Dumbbell Preacher Curl,4,15,8,,,0.2994495510982886
+Johan,johannesschut,2026-06-01,89,Seated Dumbbell Shoulder Press,1,12.5,10,,,0.04443173816628015
+Johan,johannesschut,2026-06-01,89,Seated Dumbbell Shoulder Press,2,20,8,,,0.18081077959578853
+Johan,johannesschut,2026-06-01,89,Seated Dumbbell Shoulder Press,3,17.5,12,,,0.17320752148615967
+Johan,johannesschut,2026-06-01,89,Seated Dumbbell Shoulder Press,4,17.5,10,,,0.14775377218050528
+Johan,johannesschut,2026-06-01,89,Decline Sit Up,1,5,12,,,0.24485863729056281
+Johan,johannesschut,2026-06-01,89,Decline Sit Up,2,6,10,,,0.22453855824751123
+Johan,johannesschut,2026-06-01,89,Machine Calf Raise,1,40.8,12,,,0.08066869860770684
+Johan,johannesschut,2026-06-01,89,Machine Calf Raise,2,40.8,11,,,0.07680366201792943
+Johan,johannesschut,2026-05-28,89,Bench Press,1,40,6,,,0.011000703145139496
+Johan,johannesschut,2026-05-28,89,Bench Press,2,60,9,,,0.14695349163188332
+Johan,johannesschut,2026-05-28,89,Bench Press,3,60,6,,,0.09223676267134745
+Johan,johannesschut,2026-05-28,89,Bench Press,4,55,9,,,0.09941293346858115
+Johan,johannesschut,2026-05-28,89,Bench Press,5,55,9,,,0.09941293346858115
+Johan,johannesschut,2026-05-28,89,Bench Press,6,55,8,,,0.08379496359214698
+Johan,johannesschut,2026-05-28,89,Chin Ups,1,-52.5,10,,,0.00017787487241875544
+Johan,johannesschut,2026-05-28,89,Chin Ups,2,-20,5,,,0.021840416734998036
+Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,1,12.5,10,,,0.24401190264874933
+Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,2,17.5,5,,,0.330497508496939
+Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,3,15,9,,,0.31945709034792646
+Johan,johannesschut,2026-05-28,89,One Arm Dumbbell Preacher Curl,4,15,7,,,0.2815880877630633
+Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,1,12.5,13,,,0.058241302727448374
+Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,2,20,7,,,0.16214247856891173
+Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,3,17.5,10,,,0.14775377218050528
+Johan,johannesschut,2026-05-28,89,Seated Dumbbell Shoulder Press,4,17.5,8,,,0.11618517151257828
+Johan,johannesschut,2026-05-28,89,Decline Sit Up,1,5,10,,,0.21914740233695823
+Johan,johannesschut,2026-05-28,89,Decline Sit Up,2,5,10,,,0.21914740233695823
+Johan,johannesschut,2026-05-28,89,Machine Calf Raise,1,36.3,16,,,0.07652331174017807
+Johan,johannesschut,2026-05-28,89,Machine Calf Raise,2,36.3,13,,,0.06670652874613045
+Andrius,andriusp,2026-05-28,112.5,Hex Bar Deadlift,1,72,25,,,0.058099685427565044
+Andrius,andriusp,2026-05-28,112.5,Hex Bar Deadlift,2,72,25,,,0.058099685427565044
+Andrius,andriusp,2026-05-28,112.5,Hex Bar Deadlift,3,72,25,,,0.058099685427565044
+Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,1,55,6,,,0.148660609304812
+Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,2,55,6,,,0.148660609304812
+Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,3,55,6,,,0.148660609304812
+Andrius,andriusp,2026-05-28,112.5,Machine Shoulder Press,4,55,6,,,0.148660609304812
+Andrius,andriusp,2026-05-28,112.5,Seated Calf Raise,1,45,20,,,0.18547241033218617
+Andrius,andriusp,2026-05-28,112.5,Seated Calf Raise,2,45,20,,,0.18547241033218617
+Andrius,andriusp,2026-05-28,112.5,Seated Calf Raise,3,45,20,,,0.18547241033218617
+Mantas,mantasp,2026-05-28,130.3,Cable Crunch,1,50,12,,,0.2291286170018122
+Mantas,mantasp,2026-05-28,130.3,Cable Crunch,2,50,12,,,0.2291286170018122
+Mantas,mantasp,2026-05-28,130.3,Dumbbell Bench Press,1,20,9,,,0.034175325121444375
+Mantas,mantasp,2026-05-28,130.3,Dumbbell Bench Press,2,20,9,,,0.034175325121444375
+Mantas,mantasp,2026-05-28,130.3,One Arm Dumbbell Preacher Curl,1,10,10,,,0.08126625292796656
+Mantas,mantasp,2026-05-28,130.3,One Arm Dumbbell Preacher Curl,2,12.5,4,Kairė 9,,0.08616293767679742
+Mantas,mantasp,2026-05-28,130.3,Chest Press,1,30,13,Incline,,0.016808482326292867
+Mantas,mantasp,2026-05-28,130.3,Chest Press,2,40,8,Incline,,0.029982982583452757
+Mantas,mantasp,2026-05-28,130.3,Lat Pulldown,1,50,15,Pull down,,0.1819577949059165
+Mantas,mantasp,2026-05-28,130.3,Lat Pulldown,2,70,11,Pull down,,0.4341088199697813
+Mantas,mantasp,2026-05-28,130.3,Lat Pulldown,3,90,8,Pull down,,0.6395148185521449
+Mantas,mantasp,2026-05-28,130.3,Lying Leg Curl,1,41.25,7,,,0.10372564898263917
+Mantas,mantasp,2026-05-28,130.3,Lying Leg Curl,2,33.75,15,,,0.11217738627110801
+Mantas,mantasp,2026-05-28,130.3,Decline Sit Up,1,,6,5 level,,0.23737452623770328
+Marija,marijasenkus,2026-06-01,56,Plate lifts,1,7.5,20,,,
+Marija,marijasenkus,2026-06-01,56,Plate lifts,2,10,20,"Kaires rankos ir pirstai, ir riesas lankstesnis",,
+Marija,marijasenkus,2026-06-01,56,Tricep plank,1,1,20,"Nuo keliu, 3 pedos ant trecio pakopa",,
+Marija,marijasenkus,2026-06-01,56,Tricep plank,2,1,20,"Nuo keliu, 3 pedos ant trecio pakopa",,
+Marija,marijasenkus,2026-06-01,56,Seated Cable Row,1,30,11,"Išlaikymas 35 s, 25kg",,0.4514202155111141
+Marija,marijasenkus,2026-06-01,56,Hip Adduction,1,20,10,,,0.0923150230377542
+Marija,marijasenkus,2026-06-01,56,Hip Adduction,2,17,30,,,0.15265191109305815
+Marija,marijasenkus,2026-06-01,56,Hip Adduction,3,20,30,,,0.21128215844001025
+Marija,marijasenkus,2026-06-01,56,Back Extension,1,,20,10 kg,,0.48285363939420733
+Marija,marijasenkus,2026-06-01,56,One Arm Dumbbell Preacher Curl,1,8,10,,,0.4233214923751546
+Marija,marijasenkus,2026-05-21,56,Single Leg Romanian Deadlift,1,30,15,,,0.8358211801068126
+Marija,marijasenkus,2026-05-21,56,Single Leg Romanian Deadlift,2,32,15,,,0.8724864915421318
+Marija,marijasenkus,2026-05-21,56,Smith Machine Good Morning,1,27,20,5 vidurinis,,
+Marija,marijasenkus,2026-05-21,56,Pull Ups,1,-27,8,,,0.02998642905805517
+Sandra,sandrakri,2026-05-27,72,Plate lifts,1,8.7,20,,,
+Sandra,sandrakri,2026-05-27,72,Plate lifts,2,10,12,,,
+Sandra,sandrakri,2026-05-27,72,Plate lifts,3,10,12,,,
+Sandra,sandrakri,2026-05-27,72,Plate lifts,4,10,15,,,
+Dzul,dzuljeta,2026-06-01,57.1,Hip Thrust,1,65,7,,,0.39971988844760814
+Dzul,dzuljeta,2026-06-01,57.1,Hip Thrust,2,55,14,,,0.4228039068807623
+Dzul,dzuljeta,2026-06-01,57.1,Dumbbell Lunge,1,4,15,,,0.06781728296227964
+Dzul,dzuljeta,2026-06-01,57.1,Smith Machine Deadlift,1,30,14,,,
+Dzul,dzuljeta,2026-06-01,57.1,Smith Machine Incline Close Grip Push Up,1,,5,Smith 3,,
+Dzul,dzuljeta,2026-06-01,57.1,Smith Machine Incline Close Grip Push Up,2,,10,Smith 4,,
+Dzul,dzuljeta,2026-06-01,57.1,Lat Pulldown,1,30,10,Gravity,,0.43197299592372107
+Dzul,dzuljeta,2026-05-27,57.1,Hip Thrust,1,40,17,,,0.26799375250578045
+Dzul,dzuljeta,2026-05-27,57.1,Hip Thrust,2,40,20,,,0.3015851516544543
+Dzul,dzuljeta,2026-05-27,57.1,Single Leg Romanian Deadlift,1,10,15,,,0.1325517966767437
+Dzul,dzuljeta,2026-05-27,57.1,Single Leg Romanian Deadlift,2,10,15,,,0.1325517966767437
+Dzul,dzuljeta,2026-05-27,57.1,Pull Ups,1,-45,8,Competition,,0.00005155750370680776
+Dzul,dzuljeta,2026-05-27,57.1,Pull Ups,2,-45,8,Competition,,0.00005155750370680776
+Agne,agne_ram,2026-03-10,62.7,Kettlebell Snatch,1,8,10,,,
+Agne,agne_ram,2026-03-10,62.7,Kettlebell Snatch,2,8,10,,,
+Agne,agne_ram,2026-03-10,62.7,Dumbbell Sumo Squat,1,17.5,10,,,
+Agne,agne_ram,2026-03-10,62.7,Hip Thrust,1,75,9,,,0.5234967858052528
+Agne,agne_ram,2026-03-10,62.7,Hip Thrust,2,75,9,,,0.5234967858052528
+Agne,agne_ram,2026-03-10,62.7,Deadlift,1,45,8,,,0.17030903857751384
+Agne,agne_ram,2026-03-10,62.7,Deadlift,2,45,8,,,0.17030903857751384
+Agne,agne_ram,2026-03-10,62.7,Vertical Leg Press,1,60,10,,,0.18520573795147388
+Agne,agne_ram,2026-03-10,62.7,Vertical Leg Press,2,60,10,,,0.18520573795147388
+Laurynas,bebras,2026-03-12,60,Squat,1,45,8,,,0.13178656452663767
+Laurynas,bebras,2026-03-12,60,Squat,2,50,4,,,0.12100764944389056
+Laurynas,bebras,2026-03-12,60,Squat,3,50,7,,,0.16867301414991567
+Laurynas,bebras,2026-03-12,60,Squat,4,50,8,,,0.1888616948723554
+Laurynas,bebras,2026-03-12,60,Squat,5,50,6,,,0.1508024119256489
+Laurynas,bebras,2026-03-12,60,Deadlift,1,50,8,,,0.0881320274535399
+Laurynas,bebras,2026-03-12,60,Deadlift,2,70,4,,,0.1932806866643662
+Laurynas,bebras,2026-03-12,60,Deadlift,3,60,9,,,0.20116605959169087
+Laurynas,bebras,2026-03-12,60,Deadlift,4,60,5,,,0.12269815948520374
+Laurynas,bebras,2026-03-12,60,Standing Leg Curl,1,15,6,,,0.24981373262932843
+Laurynas,bebras,2026-03-12,60,Standing Leg Curl,2,15,6,,,0.24981373262932843
+Laurynas,bebras,2026-03-12,60,Standing Leg Curl,3,15,7,,,0.2580635127119784
+Simona,simona,2026-06-02,74,Squat,1,42,13,,,0.24920005045086266
+Simona,simona,2026-06-02,74,Squat,2,42,3,,,0.09957368171650069
+Simona,simona,2026-06-02,74,Squat,3,42,7,,true,0.1482512523846623
+Simona,simona,2026-06-02,74,Squat,4,30,30,,,0.24692700417729405
+Simona,simona,2026-06-02,74,Plate Lifts ,1,8.7,12,,,
+Simona,simona,2026-06-02,74,Plate Lifts ,2,8.7,16,,,
+Simona,simona,2026-06-02,74,Pull Ups,1,-52,7,,,0.0001146134394735873
+Simona,simona,2026-06-02,74,Pull Ups,2,-52,7,,,0.0001146134394735873
+Simona,simona,2026-06-02,74,Dips,1,-60,10,,,0.000025379109668355833
+Simona,simona,2026-06-02,74,Dips,2,-60,7,,,0.000012385777118066516
+Simona,simona,2026-05-27,74,Squat,1,42,7,,,0.1482512523846623
+Simona,simona,2026-05-27,74,Squat,2,42,9,,,0.18333534732119477
+Simona,simona,2026-05-27,74,Deadlift,1,42,10,,,0.11153431208446514
+Simona,simona,2026-05-27,74,Deadlift,2,40,14,,,0.13092903118571564
+Simona,simona,2026-05-27,74,Plate Lifts ,1,8.7,7,,,
+Simona,simona,2026-05-27,74,Plate Lifts ,2,8.7,10,,,
+Henrikas,henrikas,2026-04-14,113,Hip Thrust,1,60,10,,,0.0359577863490696
+Henrikas,henrikas,2026-04-14,113,Hip Thrust,2,60,5,parejo nugara,true,0.020006153632698056
+Henrikas,henrikas,2026-04-14,113,Hack Squat,1,20,5,nugara,,0.0004439973787220652
+Henrikas,henrikas,2026-04-14,113,Chest Press,1,60,5,nugara,,0.09704085771715538
+Henrikas,henrikas,2026-04-14,113,Hip Abduction,1,50,15,,,0.1233152800226894
+Henrikas,henrikas,2026-04-14,113,Hip Abduction,2,50,15,,,0.1233152800226894
+Henrikas,henrikas,2026-04-14,113,Hip Abduction,3,50,15,,,0.1233152800226894
+Tomas,t.urba,2026-06-02,80.4,Deadlift,1,55,20,,,0.06676782480762898
+Tomas,t.urba,2026-06-02,80.4,Deadlift,2,55,16,,,0.04332800372876349
+Tomas,t.urba,2026-06-02,80.4,Plate lifts,1,10,20,,,
+Tomas,t.urba,2026-06-02,80.4,Plate lifts,2,15,16,Su kaire 18 reps,,
+Tomas,t.urba,2026-06-02,80.4,Plate lifts,3,15,18,Su dešine 19 reps,,
+Tomas,t.urba,2026-06-02,80.4,Lying Leg Raise,1,,20,,,0.36315957990682207
+Tomas,t.urba,2026-06-02,80.4,Bent Knee Hip Raise,1,,25,,,
+Tomas,t.urba,2026-06-02,80.4,Bent Knee Hip Raise,2,,25,,,
+Tomas,t.urba,2026-06-02,80.4,Lying Supine Dumbbell Curl,1,4,10,,,
+Tomas,t.urba,2026-06-02,80.4,Lying Supine Dumbbell Curl,2,5,15,Arba daugiau 🙂,,
+Tomas,t.urba,2026-06-02,80.4,Hip Adduction,1,20,20,,,0.042422542773321054
+Tomas,t.urba,2026-06-02,80.4,Hip Abduction,1,30,24,,,0.1377273381704599
+Tomas,t.urba,2026-05-25,81.1,Decline Sit Up,1,,20,,,0.304379599558903
+Tomas,t.urba,2026-05-25,81.1,Decline Sit Up,2,8,20,,,0.3665185580693313
+Tomas,t.urba,2026-05-25,81.1,Plate lifts,1,15,18,,,
+Tomas,t.urba,2026-05-25,81.1,Plate lifts,2,15,18,,,
+Tomas,t.urba,2026-05-25,81.1,Handstand Push Ups,1,,16,"3 pėdos nuo sienos, brick nuo žemės per L.",,0.5925502502206222
+Brigita,brigita_r,2026-06-02,57,Deadlift,1,30,8,,,0.06077256082932363
+Brigita,brigita_r,2026-06-02,57,Deadlift,2,40,5,,,0.11180697139652289
+Brigita,brigita_r,2026-06-02,57,Deadlift,3,35,15,,,0.17800493952949498
+Brigita,brigita_r,2026-06-02,57,Deadlift,4,35,15,,,0.17800493952949498
+Brigita,brigita_r,2026-06-02,57,Plate lifts,1,5,15,,,
+Brigita,brigita_r,2026-06-02,57,Plate lifts,2,8,25,,,
+Brigita,brigita_r,2026-06-02,57,Plate lifts,3,10,15,"Kaire 15
+Desine 20",,
+Brigita,brigita_r,2026-06-02,57,Plate lifts,4,10,15,"Kaire 17
+Desine 20",,
+Brigita,brigita_r,2026-06-02,57,Lying Supine Dumbbell Curl,1,3.5,10,,,
+Brigita,brigita_r,2026-06-02,57,Hip Abduction,1,15,20,,,0.06590804722808033
+Brigita,brigita_r,2026-06-02,57,Hip Adduction,1,15,15,,,0.06264680175868524
+Brigita,brigita_r,2026-05-25,57,Decline Sit Up,1,,15,,,0.19745734331985013
+Brigita,brigita_r,2026-05-25,57,Decline Sit Up,2,,15,,,0.19745734331985013
+Brigita,brigita_r,2026-05-25,57,Single Leg Romanian Deadlift,1,25,15,,,0.7027805533699426
+Brigita,brigita_r,2026-05-25,57,Single Leg Romanian Deadlift,2,25,15,,,0.7027805533699426
+Karolis,karolisb,2026-05-06,69,Lying Leg Curl,1,11,15,,,0.02772530705408504
+Karolis,karolisb,2026-05-06,69,Chest Press,1,30,7,Incline,,0.08139382266149
+Karolis,karolisb,2026-05-06,69,Chest Press,2,24,8,Incline,,0.04973648500911193
+Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,1,30,15,,,0.0004978603005294103
+Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,2,35,20,,,0.0024891106602014847
+Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,3,30,20,,,0.0009577051111825272
+Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,1,20,15,,,0.002098755338433774
+Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,2,25,8,,,0.002512415434846719
+Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,3,25,10,,,0.003659174687544376
+Simonas,simonasputrius,2026-05-27,121,plate wrist lift,1,10,20,,,
+Simonas,simonasputrius,2026-05-27,121,plate wrist lift,2,12,10,,,
+Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,1,30,10,gravity/2,,0.005862372567945754
+Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,2,30,6,gravity/2,,0.002674745631286015
+Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,1,6,12,,,0.023945648745448408
+Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,2,7,12,,,0.035232425396055575
+Indre,indre_ju,2026-06-02,68,Deadlift,1,22,30,,,0.061760242338252024
+Indre,indre_ju,2026-06-02,68,Deadlift,2,22,30,,,0.061760242338252024
+Indre,indre_ju,2026-06-02,68,Squat,1,17.5,20,,,0.03263011054101201
+Indre,indre_ju,2026-06-02,68,Squat,2,17.5,15,,,0.02285556096276229
+Indre,indre_ju,2026-06-02,68,Pull Ups,1,-60,10,,,1.9676954339881166e-7
+Indre,indre_ju,2026-06-02,68,Pull Ups,2,-67,10,Comp,,1.3386190196727479e-12
+Indre,indre_ju,2026-06-02,68,Dips,1,-87,10,,,1.2592146190566167e-12
+Indre,indre_ju,2026-06-02,68,Dips,2,-87,10,,,1.2592146190566167e-12
+Indre,indre_ju,2026-05-21,68,Belt Squat,1,20,20,,,0.4288146899346598
+Indre,indre_ju,2026-05-21,68,Belt Squat,2,25,20,,,0.5976258600707243
+Indre,indre_ju,2026-05-21,68,Belt Squat,3,30,20,,,0.7365794028201283
+Natalija,natali,2026-04-01,75,Deadlift,1,30,20,,,0.10806899867412369
+Monika,monika,2026-05-04,52,Barbell Curl,1,17,1,,,0.3770894650805596
+Monika,monika,2026-05-04,52,Barbell Curl,2,13,3,,,0.27311821646834056
+Monika,monika,2026-05-04,52,Barbell Curl,3,12,6,,,0.27854563804014015
+Monika,monika,2026-05-04,52,Seated Shoulder Press,1,23,1,,,0.4479120205783808
+Monika,monika,2026-05-04,52,Seated Shoulder Press,2,17,3,,,0.31633673455094896
+Monika,monika,2026-05-04,52,Seated Shoulder Press,3,20,1,,,0.3691735938694992
+Monika,monika,2026-05-04,52,Seated Shoulder Press,4,12,8,,,0.23632299338350687
+Monika,monika,2026-05-04,52,Machine Shoulder Press,1,10,6,Gravity aparatas,,0.14142321397299512
+Monika,monika,2026-05-04,52,Pull Ups,1,-30,9,,,0.012987611177297345
+Monika,monika,2026-05-04,52,Pull Ups,2,-25,4,,,0.016553700630845557
