@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.18", title: "Add a new exercise to a session", sp: 1, note: "Each session now has a “+ exercise” button (part of the quick-add UI) that opens an inline form with a searchable exercise picker — type to filter every known exercise (or enter a new name) and log a set for it on that day or today, without leaving the Workouts screen." },
       { version: "b.2.1.17", title: "Toggle the + set buttons", sp: 0.5, note: "A new “+ set buttons” checkbox in the Workouts controls shows or hides all the inline quick-add (+ set) buttons, so the list can stay clean when you're just reading it. Off by default and remembered on this device." },
       { version: "b.2.1.16", title: "Workouts default to By day", sp: 0.1, note: "The Workouts list now opens grouped By day instead of By week — flip to By week any time with the toggle." },
       { version: "b.2.1.15", title: "Edit hand-logged sets", sp: 1, note: "In Add → “Your added sets” each row now has a ✎ Edit button: tap it to change the exercise, weight, reps or date in place, then Save (or × to cancel). Fix a typo without deleting and re-adding. (Only hand-logged sets are editable — StrengthLevel data is read-only.)" },

@@ -3064,10 +3064,15 @@ function renderWorkoutsPage() {
       const tagBtn =
         `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
         `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`;
+      // "+ exercise" adds a brand-new exercise to this session (shown with the
+      // rest of the quick-add UI).
+      const addExBtn = showAddSets
+        ? `<div class="wo-addex-wrap"><button type="button" class="wo-addex" data-adddate="${escapeHtml(g.date)}" title="Add a new exercise to this session">+ exercise</button></div>`
+        : "";
       return (
         `<tr class="wo-row" data-index="${abs}"><td>` +
         `<div class="wo-date"><span class="caret">▸</span>${g.label}${tagBtn}</div>` +
-        `<div class="wo-did">${did}</div></td>` +
+        `<div class="wo-did">${did}${addExBtn}</div></td>` +
         `<td class="num">${g.totalSets}</td></tr>`
       );
     })
@@ -3106,6 +3111,13 @@ function onWorkoutRowClick(e: MouseEvent) {
         for (const b of inForm.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn"))
           b.classList.toggle("is-active", b === seg);
     }
+    return;
+  }
+  // "+ exercise" on a session → inline form with a searchable exercise picker,
+  // to add a brand-new exercise to that day.
+  const addExBtn = target.closest<HTMLButtonElement>(".wo-addex");
+  if (addExBtn) {
+    toggleInlineAddExerciseForm(addExBtn);
     return;
   }
   // "+ set" on an exercise → open a small inline form right here so the set is
@@ -3163,7 +3175,11 @@ function workoutGroupHtml(group: WorkoutGroup): string {
       return header + sets;
     })
     .join("");
-  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
+  // A trailing "+ exercise" row to add a brand-new exercise to this session.
+  const addExRow = showAddSets
+    ? `<tr class="set-ex-row wo-addex-host"><td colspan="4"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
+    : "";
+  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -4889,29 +4905,50 @@ function renderAddTab() {
     : `<tbody><tr><td class="muted">No hand-logged sets yet.</td></tr></tbody>`;
 }
 
+// The weight / reps / sets inputs + Add / cancel buttons shared by both inline
+// forms (add-a-set and add-a-new-exercise).
+const AF_FIELDS =
+  `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
+  `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+  `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />` +
+  `<button type="button" class="wo-af-go">Add</button>` +
+  `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
+  `<span class="wo-af-msg muted"></span>`;
+
+/** Day / Today chooser — only worth showing when the session you're viewing
+ * isn't today (so you can log to a past day or to today). */
+function afWhenToggle(date: string, today: string): string {
+  return date === today
+    ? ""
+    : `<span class="wo-af-when seg-toggle">` +
+        `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>` +
+        `<button type="button" class="seg-btn" data-when="today">Today</button>` +
+        `</span>`;
+}
+
 /** Compact inline "add set" form shown right under an exercise in the Workouts
  * view, so a set is logged on this screen without jumping to the Add page. The
  * athlete is the one the page is showing; the date is the session's date. */
 function inlineAddFormHtml(exerciseName: string, date: string): string {
   const today = todayIso();
-  // Let the user log against the day they're looking at OR today — only worth a
-  // toggle when those differ (looking at a past session). Defaults to that day.
-  const whenToggle =
-    date === today
-      ? ""
-      : `<span class="wo-af-when seg-toggle">` +
-        `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>` +
-        `<button type="button" class="seg-btn" data-when="today">Today</button>` +
-        `</span>`;
   return (
     `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
-    whenToggle +
-    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
-    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
-    `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />` +
-    `<button type="button" class="wo-af-go">Add</button>` +
-    `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
-    `<span class="wo-af-msg muted"></span>` +
+    afWhenToggle(date, today) +
+    AF_FIELDS +
+    `</span>`
+  );
+}
+
+/** Like the add-set form, but with a searchable exercise picker up front so a
+ * brand-new exercise can be added to a session (type to filter every known
+ * exercise; a new name is allowed too). */
+function inlineAddExerciseFormHtml(date: string): string {
+  const today = todayIso();
+  return (
+    `<span class="wo-addform wo-addform--new" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    afWhenToggle(date, today) +
+    `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" aria-label="Exercise" autocomplete="off" />` +
+    AF_FIELDS +
     `</span>`
   );
 }
@@ -4953,16 +4990,52 @@ function toggleInlineAddForm(btn: HTMLElement) {
   btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
 }
 
+/** Toggle the inline "add a new exercise" form for a "+ exercise" button. Same
+ * two contexts as toggleInlineAddForm, but the form leads with a searchable
+ * exercise picker. */
+function toggleInlineAddExerciseForm(btn: HTMLElement) {
+  const date = btn.dataset.adddate ?? "";
+  const hostRow = btn.closest("tr.set-ex-row");
+  if (hostRow) {
+    const next = hostRow.nextElementSibling;
+    if (next?.classList.contains("wo-addform-row")) {
+      next.remove();
+      return;
+    }
+    const tr = document.createElement("tr");
+    tr.className = "wo-addform-row";
+    tr.innerHTML = `<td colspan="4">${inlineAddExerciseFormHtml(date)}</td>`;
+    hostRow.insertAdjacentElement("afterend", tr);
+    tr.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+    return;
+  }
+  const sib = btn.nextElementSibling;
+  if (sib?.classList.contains("wo-addform")) {
+    sib.remove();
+    return;
+  }
+  btn.insertAdjacentHTML("afterend", inlineAddExerciseFormHtml(date));
+  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+}
+
 /** Log the set(s) from an inline form into the hand-logged sets, then refresh
  * the Workouts view in place (keeping the open weeks/days expanded). */
 function onInlineAddGo(form: HTMLElement) {
-  const exerciseName = form.dataset.addex ?? "";
+  // New-exercise form carries a search input; the per-exercise form carries the
+  // name on the button's data-addex.
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const exerciseName = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
   // Use whichever day the toggle has selected (the session day or today); with no
   // toggle (session already is today) both are the same.
   const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
   const date =
     (when === "today" ? form.dataset.todaydate : form.dataset.daydate) || form.dataset.daydate || todayIso();
   const msg = form.querySelector<HTMLElement>(".wo-af-msg");
+  if (exInput && !exerciseName) {
+    if (msg) msg.textContent = "Pick or type an exercise.";
+    exInput.focus();
+    return;
+  }
   const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
   const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
   const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));

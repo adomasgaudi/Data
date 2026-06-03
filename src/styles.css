@@ -1075,10 +1075,18 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
 .wo-addset:hover { border-color: var(--accent); color: var(--accent); }
+.wo-addex-wrap { margin-top: 0.35rem; }
+.wo-addex {
+  font: inherit; font-size: 0.7rem; font-weight: 700;
+  border: 1px dashed var(--line); border-radius: 999px; padding: 2px 10px;
+  background: var(--panel); color: var(--muted); cursor: pointer;
+}
+.wo-addex:hover { border-color: var(--accent); color: var(--accent); }
 .wo-addform {
   display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
   margin: 0.3rem 0 0.1rem 0.35rem; vertical-align: middle;
 }
+.wo-addform .wo-af-ex { width: 8.5rem; }
 .wo-addform input {
   width: 3.4rem; font: inherit; font-size: 0.8rem; padding: 2px 6px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
