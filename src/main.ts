@@ -1174,7 +1174,7 @@ interface WorkoutGroup {
 let workoutGroups: WorkoutGroup[] = [];
 let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
-let workoutViewMode: "day" | "week" = "week"; // By day / By week toggle
+let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default: day)
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
 let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
 /** Reflect workoutViewMode on the segmented toggle buttons. */
