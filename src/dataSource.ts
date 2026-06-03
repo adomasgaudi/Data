@@ -8,6 +8,7 @@
  */
 import { parseRows, sanityCheck, type ParseResult, type SanityWarning } from "./domain";
 import { canonicalizeExerciseNames, type ExerciseMerge } from "./aggregate";
+import { attachNoteLevel } from "./variants";
 import { parseCsv } from "./csv";
 import csvText from "./data/ud.csv?raw";
 
@@ -26,7 +27,11 @@ export async function loadData(): Promise<LoadedData> {
   // Fold variant spellings of the same exercise into one name. This is done in
   // the app (not the source sheet) because re-exports would otherwise bring the
   // same variants back. Raw names are preserved on each record.
-  const { records, merges } = canonicalizeExerciseNames(parsed.records);
+  const { records: canon, merges } = canonicalizeExerciseNames(parsed.records);
+  // Then read any squat-rack hole logged in the note (SQ8) and attach it to the
+  // set as a per-set LEVEL — without renaming the exercise, so every hole stays
+  // one exercise. Done after canonicalisation so it's consistent in every view.
+  const records = canon.map(attachNoteLevel);
   // Sanity-check the canonicalised records so warnings reference displayed names.
   return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records), rawCsv: csvText };
 }

@@ -51,6 +51,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
+import { levelLabel, levelCoeffKey, defaultLevelCoeff } from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
@@ -147,6 +148,7 @@ const els = {
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exPersetBest: $<HTMLButtonElement>("exPersetBest"),
   exCombineBar: $("exCombineBar"),
+  exLevels: $("exLevels"),
   exerciseFilter: $("exerciseFilter"),
   exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
@@ -189,6 +191,9 @@ const els = {
   addExerciseList: $("addExerciseList"),
   addArmPos: $<HTMLSelectElement>("addArmPos"),
   addArmPosField: $("addArmPosField"),
+  addVariant: $<HTMLInputElement>("addVariant"),
+  addVariantField: $("addVariantField"),
+  addVariantLabel: $("addVariantLabel"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
   addSets: $<HTMLInputElement>("addSets"),
@@ -433,6 +438,45 @@ function setCoeff(exerciseName: string, value: number) {
   }
 }
 
+// ---- Per-LEVEL bodyweight parts (the squat-rack scaling), editable + saved ----
+// A leverage level (a push-up at squat-rack hole 8) doesn't add weight — it
+// changes how much of your bodyweight you lift. Each (exercise, hole) therefore
+// has its OWN bodyweight-% : seeded from the lift's base coeff scaled by the
+// hole, then tuned by the owner. Stored on this device, keyed by levelCoeffKey.
+const LEVEL_COEFF_STORE_KEY = "colosseum.levelCoeffs.v1";
+const levelCoeffOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(LEVEL_COEFF_STORE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+
+/** Bodyweight-part for one set's hole: the owner's override, else a seeded
+ * default from the lift's base coeff scaled by the hole. */
+function levelCoeffFor(exerciseName: string, value: number): number {
+  const key = levelCoeffKey(exerciseName, value);
+  if (Object.prototype.hasOwnProperty.call(levelCoeffOverrides, key)) return levelCoeffOverrides[key]!;
+  return defaultLevelCoeff(coeffFor(exerciseName), value);
+}
+
+function setLevelCoeff(key: string, value: number) {
+  levelCoeffOverrides[key] = value;
+  try {
+    localStorage.setItem(LEVEL_COEFF_STORE_KEY, JSON.stringify(levelCoeffOverrides));
+  } catch {
+    /* storage may be unavailable — edits still apply this session */
+  }
+}
+
+/** The bodyweight-part that applies to a set: its hole's % if it has a level,
+ * else the exercise's plain coeff. The single place the two stores meet. */
+function coeffForRecord(r: SetRecord): number {
+  if (r.levelValue !== undefined) return levelCoeffFor(r.exerciseName, r.levelValue);
+  return coeffFor(r.exerciseName);
+}
+
 // ---- Last picked athlete: remembered across reloads ----
 const ATHLETE_STORE_KEY = "colosseum.lastAthlete.v1";
 
@@ -561,7 +605,9 @@ function computeRecord(r: SetRecord): SetRecord {
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
   const fromTable = els.bwSource.value !== "perset";
-  const coeff = coeffFor(r.exerciseName);
+  // A squat-rack level carries its own bodyweight-part, so an incline push-up at
+  // a high hole loads less of you than the floor version of the same exercise.
+  const coeff = coeffForRecord(r);
   // Assisted pull-ups: the logged weight is the machine dial value, which over-
   // reads ~2x. Use the halved real assistance for all strength maths, but keep
   // the logged value as origWeight so the displayed set still tells you what to
@@ -2276,6 +2322,7 @@ function renderExerciseDetail(exName: string) {
     strengthAsOf(),
   ).find((p) => p.exerciseName === exName);
   renderCombineBar(exName, username);
+  renderExerciseLevels(exName, username);
   // Stats start collapsed on every drill-in (the <details> persists across
   // exercises, so reset it). renderExerciseWeekly always fills the chips, so the
   // dropdown always has content to show.
@@ -2335,6 +2382,52 @@ function renderCombineBar(exName: string, username: string) {
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
     picker;
+}
+
+/**
+ * Drill-in "Squat-rack holes" panel. When this lift has sets logged at different
+ * holes, list each hole with its best set, its effort (bodyweight-inclusive est.
+ * 1RM — what should LINE UP across holes of equal effort when the scaling is
+ * right) and an EDITABLE bodyweight-% so the owner can compare the heights and
+ * tune each % on the spot. Hidden when the lift has no leveled sets. */
+function renderExerciseLevels(exName: string, username: string): void {
+  const formula = currentFormula();
+  // Best (bodyweight-inclusive) effort 1RM + best raw set per hole used.
+  const byHole = new Map<number, { best: SetRecord; eff1rm: number }>();
+  for (const r of computedRecords()) {
+    if (r.username !== username || r.exerciseName !== exName || r.levelValue === undefined) continue;
+    if (addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
+    const eff = estimate1RM(r.weight, r.reps, formula);
+    if (eff === null) continue;
+    const cur = byHole.get(r.levelValue);
+    if (!cur || eff > cur.eff1rm) byHole.set(r.levelValue, { best: r, eff1rm: eff });
+  }
+  if (byHole.size === 0) { els.exLevels.hidden = true; return; }
+  const rows = [...byHole.entries()]
+    .sort((a, b) => a[0] - b[0]) // by hole, low (hard) → high (easy)
+    .map(([hole, v]) => {
+      const coeff = levelCoeffFor(exName, hole);
+      const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
+      return (
+        `<tr>` +
+        `<td><strong>${escapeHtml(levelLabel(hole))}</strong></td>` +
+        `<td class="num">${wr(dispW, v.best.reps)}</td>` +
+        `<td class="num">${fmt(v.eff1rm)}</td>` +
+        `<td class="num"><input class="bw-input exl-bw" type="number" step="0.05" min="0" max="2" value="${coeff}" ` +
+        `data-levelkey="${escapeHtml(levelCoeffKey(exName, hole))}" aria-label="Bodyweight part for hole ${hole}" /></td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+  els.exLevels.hidden = false;
+  els.exLevels.innerHTML =
+    `<div class="exl-head"><strong>Squat-rack holes</strong> ` +
+    `<span class="muted">tune each BW % so equal-effort holes show the same effort 1RM</span></div>` +
+    `<table class="data-table exl-table"><thead><tr>` +
+    `<th>Hole</th><th class="num">Best</th>` +
+    `<th class="num" title="Bodyweight-inclusive estimated 1RM — should match across holes of equal effort when the % is right">Effort</th>` +
+    `<th class="num" title="Bodyweight part — how much of your weight this hole loads. Lower hole = harder = more. Edit to scale.">BW</th>` +
+    `</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -3511,9 +3604,11 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number
       ? "—"
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
   const rpeCell = rpeDropdownHtml(setId(s), rpeFor(s));
+  // A squat-rack hole stands in for the weight on these sets — show the tag.
+  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
-    `<td class="num wcell">${preview}${wr(s.weight, s.reps)}</td>` +
+    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
@@ -4604,6 +4699,21 @@ async function init() {
   // Expand/collapse rows.
   els.lbTable.addEventListener("click", onLeaderboardRowClick);
   els.athleteTable.addEventListener("click", onExerciseRowClick);
+  // Squat-rack holes panel: editing a hole's BW % rescales every set at that
+  // hole; re-render the drill-in so the effort 1RMs update live.
+  els.exLevels.addEventListener("change", (e) => {
+    const el = e.target as HTMLElement;
+    if (!el.classList.contains("exl-bw")) return;
+    const key = (el as HTMLInputElement).dataset.levelkey;
+    if (key === undefined) return;
+    let v = parseFloat((el as HTMLInputElement).value);
+    if (!Number.isFinite(v)) v = 0;
+    v = Math.min(2, Math.max(0, v));
+    setLevelCoeff(key, v);
+    renderLeaderboard();
+    renderPersonalRecords();
+    if (selectedExercise) renderExerciseDetail(selectedExercise);
+  });
   // Back link in the exercise drill-in (lives in the title, outside the table).
   els.athleteTitle.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".back-btn")) {
@@ -5150,6 +5260,9 @@ interface ManualEntry {
   exerciseName: string;
   weight: number | null;
   reps: number | null;
+  /** Squat-rack hole chosen on the Add form, stored per set — the difficulty
+   * selection that replaces added weight for incline push-ups. */
+  levelValue?: number;
 }
 const MANUAL_KEY = "colosseum.manualSets.v1";
 let manualEntries: ManualEntry[] = loadManual();
@@ -5186,6 +5299,9 @@ function manualToRecord(m: ManualEntry): SetRecord {
     notes: "",
     dropset: false,
     percentile: null,
+    ...(m.levelValue !== undefined
+      ? { levelDim: "sq" as const, levelValue: m.levelValue, levelLabel: levelLabel(m.levelValue) }
+      : {}),
   };
 }
 
@@ -5265,6 +5381,18 @@ function updateArmPosField(): void {
     els.addArmPos.innerHTML =
       `<option value="">— pick a position —</option>` +
       SITUP_ARM_POSITIONS.map((p) => `<option value="${p}">${p}</option>`).join("");
+}
+
+/* Push-ups (and the other lifts the owner does on the squat rack) are progressed
+ * by hole, not weight. For those a "Squat-rack hole" field appears, and its value
+ * is stored as the set's LEVEL — a per-set selection that picks a bodyweight-part
+ * instead of added kilos. The exercise name never changes (one exercise). */
+const usesSquatRackHole = (name: string): boolean =>
+  /push|inverted row|\brow\b|deadlift|good morning|\bdip\b|leg pull|pull[- ]?in|leg raise/i.test(name);
+
+/** Show the squat-rack-hole field only for exercises that use it. */
+function updateVariantField(): void {
+  els.addVariantField.hidden = !usesSquatRackHole(els.addExercise.value.trim());
 }
 
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
@@ -5455,6 +5583,11 @@ function onAddSubmit() {
   // Fold the chosen arm position into the name so it tracks as its own variant.
   const armPos = !els.addArmPosField.hidden ? els.addArmPos.value : "";
   if (armPos && isDeclineSitup(exerciseName)) exerciseName = `${exerciseName} (${armPos})`;
+  // A chosen squat-rack hole is stored PER SET (not in the name) — it's the
+  // difficulty selection that stands in for added weight on an incline push-up.
+  const holeRaw = parseFloat(els.addVariant.value);
+  const levelValue =
+    !els.addVariantField.hidden && Number.isFinite(holeRaw) ? Math.round(holeRaw) : undefined;
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
   const date = els.addDate.value || todayIso();
@@ -5478,6 +5611,7 @@ function onAddSubmit() {
       exerciseName,
       weight: Number.isFinite(weight) ? weight : null,
       reps,
+      ...(levelValue !== undefined ? { levelValue } : {}),
     });
   }
   saveManual();
@@ -5532,7 +5666,11 @@ async function importManual(file: File) {
 function setupAddTab() {
   renderAddTab();
   updateArmPosField();
-  els.addExercise.addEventListener("input", updateArmPosField);
+  updateVariantField();
+  els.addExercise.addEventListener("input", () => {
+    updateArmPosField();
+    updateVariantField();
+  });
   els.addSubmit.addEventListener("click", onAddSubmit);
   els.addExport.addEventListener("click", exportManual);
   els.addImport.addEventListener("click", () => els.addImportFile.click());
