@@ -559,10 +559,9 @@ main { padding-bottom: 5rem; }
 }
 .ex-combine-chip.is-primary { cursor: default; background: var(--accent); color: #fff; border-color: var(--accent); }
 .ex-combine-chip[data-remove]:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
-.ex-combine-add {
-  border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--text);
-  font: inherit; font-size: 0.78rem; padding: 0.2rem 0.4rem;
-}
+/* The "+ combine with…" custom dropdown, sized to sit inline with the chips. */
+.ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: 999px; }
+.ex-combine-dd .xdd-menu { min-width: max(100%, 12rem); }
 .ex-cat-chip {
   appearance: none; cursor: pointer;
   border: 1px solid var(--line); border-radius: 999px;

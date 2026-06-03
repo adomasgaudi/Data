@@ -2165,17 +2165,23 @@ function renderCombineBar(exName: string, username: string) {
   const chips = combinedWith
     .map((n) => `<button type="button" class="ex-combine-chip" data-remove="${escapeHtml(n)}" title="Remove">${escapeHtml(n)} ✕</button>`)
     .join("");
-  const select =
-    `<select class="ex-combine-add" aria-label="Combine with another exercise">` +
-    `<option value="">＋ combine with…</option>` +
-    addable.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
-    `</select>`;
+  // Custom HTML/CSS dropdown (the app's .xdd style), not a native <select>, so it
+  // looks the same on every phone/browser. Toggled + selected via delegated
+  // handlers on exCombineBar.
+  const menu = addable.length
+    ? addable.map((n) => `<button type="button" class="xdd-opt" role="option" data-combineadd="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")
+    : `<div class="xdd-group">No other lifts to combine</div>`;
+  const picker =
+    `<div class="xdd ex-combine-dd">` +
+    `<button type="button" class="xdd-btn ex-combine-btn">＋ combine with…<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
+    `</div>`;
   els.exCombineBar.hidden = false;
   els.exCombineBar.innerHTML =
     `<span class="ex-combine-lbl muted">Viewing together:</span>` +
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
-    select;
+    picker;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -4063,18 +4069,43 @@ async function init() {
     if (info?.dataset.exinfo) jumpToExerciseInfo(info.dataset.exinfo);
   });
   // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
-  els.exCombineBar.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-combine-add");
-    if (!sel || !sel.value || selectedExercise === null) return;
-    if (sel.value !== selectedExercise && !combinedWith.includes(sel.value)) combinedWith.push(sel.value);
-    renderExercisesPage();
-  });
   els.exCombineBar.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-combine-chip[data-remove]");
-    const name = chip?.dataset.remove;
-    if (!name) return;
-    combinedWith = combinedWith.filter((n) => n !== name);
-    renderExercisesPage();
+    const t = e.target as HTMLElement;
+    // Toggle the custom "+ combine with…" dropdown.
+    const btn = t.closest(".ex-combine-btn");
+    if (btn) {
+      const dd = btn.closest<HTMLElement>(".xdd");
+      const menu = dd?.querySelector<HTMLElement>(".xdd-menu");
+      if (dd && menu) {
+        const opening = menu.hasAttribute("hidden");
+        menu.toggleAttribute("hidden", !opening);
+        dd.classList.toggle("open", opening);
+      }
+      return;
+    }
+    // Pick an exercise to combine in.
+    const opt = t.closest<HTMLElement>("[data-combineadd]");
+    if (opt?.dataset.combineadd) {
+      const n = opt.dataset.combineadd;
+      if (selectedExercise !== null && n !== selectedExercise && !combinedWith.includes(n)) combinedWith.push(n);
+      renderExercisesPage();
+      return;
+    }
+    // Remove a combined chip.
+    const chip = t.closest<HTMLElement>(".ex-combine-chip[data-remove]");
+    if (chip?.dataset.remove) {
+      combinedWith = combinedWith.filter((n) => n !== chip.dataset.remove);
+      renderExercisesPage();
+    }
+  });
+  // Close the combine dropdown when clicking elsewhere.
+  document.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".ex-combine-dd")) return;
+    const menu = els.exCombineBar.querySelector<HTMLElement>(".ex-combine-dd .xdd-menu");
+    if (menu && !menu.hasAttribute("hidden")) {
+      menu.setAttribute("hidden", "");
+      menu.closest(".xdd")?.classList.remove("open");
+    }
   });
   els.workoutsTable.addEventListener("click", onWorkoutRowClick);
 
