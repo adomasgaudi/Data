@@ -44,6 +44,8 @@ import {
   effectiveLoad,
   linearFit,
   MAX_1RM_REPS,
+  strengthRetention,
+  STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
 import type { SetRecord } from "./domain";
@@ -203,6 +205,7 @@ const els = {
   calcCoeff: $<HTMLInputElement>("calcCoeff"),
   calcOut: $("calcOut"),
   calcCurveNote: $("calcCurveNote"),
+  decayCurveNote: $("decayCurveNote"),
   testAthlete: $<HTMLSelectElement>("testAthlete"),
   testExercise: $<HTMLSelectElement>("testExercise"),
   testPickHint: $("testPickHint"),
@@ -224,6 +227,7 @@ const els = {
 let data: LoadedData;
 let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
+let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
@@ -3891,6 +3895,56 @@ function renderTest() {
   );
   els.calcOut.innerHTML = rows.join("");
   renderCalcCurve(effLoad, bodyweightLoad, reps, addedWeight, calcTab);
+  renderDecayCurve();
+}
+
+/**
+ * Strength-fade explainer: % of a peak 1RM still available vs days since you last
+ * trained the lift (the detraining model in metrics.ts). Flat through the grace
+ * period, then a logarithmically-slowing decline to the floor. A few labelled
+ * milestone dots make the shape concrete. Static (no inputs) — drawn with the
+ * calculator so it sizes correctly when the Test tab is shown.
+ */
+function renderDecayCurve() {
+  const box = document.getElementById("decayCurveChart");
+  if (!box) return;
+  const maxDays = 540; // ~1.5 years out — long enough to see the tail flatten
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const linePts: SvgPoint[] = [];
+  for (let d = 0; d <= maxDays; d += 2) {
+    linePts.push({ x: d, y: r1(strengthRetention(d) * 100) });
+  }
+  // Milestone dots people can relate to.
+  const milestones: { d: number; label: string }[] = [
+    { d: STRENGTH_DECAY.graceDays, label: "2 weeks" },
+    { d: STRENGTH_DECAY.graceDays + STRENGTH_DECAY.tauDays, label: "+1 month" },
+    { d: 90, label: "3 months" },
+    { d: 180, label: "6 months" },
+    { d: 365, label: "1 year" },
+  ];
+  const dots: SvgPoint[] = milestones.map((m) => {
+    const pct = r1(strengthRetention(m.d) * 100);
+    return { x: m.d, y: pct, meta: `${m.label}: ${pct}% kept` };
+  });
+  const series: SvgSeries[] = [
+    { name: "Strength kept", color: "#284e86", type: "line", points: linePts, noLegend: true },
+    { name: "Milestones", color: "#b8902f", type: "scatter", points: dots },
+  ];
+  const config: SvgChartConfig = {
+    series,
+    xKind: "linear",
+    yBeginAtZero: true,
+    height: 300,
+    yUnit: "%",
+    formatX: (x) => `${Math.round(x)}`,
+    formatTipX: (x) => `${Math.round(x)} days off`,
+  };
+  if (!decayCurveSvg) decayCurveSvg = mountSvgChart(box, config);
+  else decayCurveSvg.update(config);
+  const floorPct = Math.round(STRENGTH_DECAY.floor * 100);
+  els.decayCurveNote.textContent =
+    `% of your peak 1RM kept after N days without training a lift. Flat for the first ` +
+    `${STRENGTH_DECAY.graceDays} days, ~10% lost a month later, then a slow logarithmic tail down to a ${floorPct}% floor.`;
 }
 
 /**
