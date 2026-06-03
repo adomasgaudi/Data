@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.15", title: "Edit hand-logged sets", sp: 1, note: "In Add → “Your added sets” each row now has a ✎ Edit button: tap it to change the exercise, weight, reps or date in place, then Save (or × to cancel). Fix a typo without deleting and re-adding. (Only hand-logged sets are editable — StrengthLevel data is read-only.)" },
       { version: "b.2.1.14", title: "Add to that day or today", sp: 0.5, note: "The inline “+ set” form now has a little day / Today toggle when you're looking at a past session, so you can browse what you did then but log the new set against today (or still backdate it to that day). Defaults to the day you tapped." },
       { version: "b.2.1.13", title: "Inline add on workouts", sp: 2, note: "The “+ set” buttons in the Workouts view (both the session summary and inside an expanded week/day) now open a small inline form right there — type weight, reps and how many sets and tap Add — instead of jumping to the Add page. The view updates in place and stays expanded." },
       { version: "b.2.1.12", title: "Multiple sets, custom athlete dropdown", sp: 1, note: "Add-set has a Sets box — type a number to log several identical sets at once. The Athlete picker on Add is now the app's own HTML/CSS dropdown (no native OS chrome) so it matches every other picker." },

@@ -4786,6 +4786,7 @@ interface ManualEntry {
 }
 const MANUAL_KEY = "colosseum.manualSets.v1";
 let manualEntries: ManualEntry[] = loadManual();
+let editingManualId: string | null = null; // which hand-logged set is being edited inline
 
 function loadManual(): ManualEntry[] {
   try {
@@ -4843,16 +4844,30 @@ function renderAddTab() {
     .join("");
   if (!els.addDate.value) els.addDate.value = todayIso();
 
-  // Recently-added list (newest first), each with a delete button.
+  // Recently-added list (newest first). Each row has Edit + Delete; the row being
+  // edited swaps its cells for inputs (exercise / weight × reps / date) + Save.
   const rows = [...manualEntries]
     .reverse()
-    .map(
-      (m) =>
+    .map((m) => {
+      if (m.id === editingManualId) {
+        return (
+          `<tr data-edit-row="${escapeHtml(m.id)}"><td>${escapeHtml(m.user)}</td>` +
+          `<td><input class="me-ex" value="${escapeHtml(m.exerciseName)}" /></td>` +
+          `<td class="num"><input class="me-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" value="${m.weight ?? ""}" />` +
+          `<span class="muted"> × </span><input class="me-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" value="${m.reps ?? ""}" /></td>` +
+          `<td class="num"><input class="me-date" type="date" value="${escapeHtml(m.date)}" /></td>` +
+          `<td class="num"><button type="button" class="manual-save" data-id="${escapeHtml(m.id)}">Save</button>` +
+          `<button type="button" class="manual-cancel" aria-label="Cancel">×</button></td></tr>`
+        );
+      }
+      return (
         `<tr><td>${escapeHtml(m.user)}</td><td>${escapeHtml(m.exerciseName)}</td>` +
         `<td class="num">${m.weight ?? "—"}${m.reps != null ? `×${m.reps}` : ""}</td>` +
         `<td class="num">${escapeHtml(m.date)}</td>` +
-        `<td class="num"><button type="button" class="manual-del" data-id="${escapeHtml(m.id)}" aria-label="Delete">×</button></td></tr>`,
-    )
+        `<td class="num"><button type="button" class="manual-edit" data-id="${escapeHtml(m.id)}" aria-label="Edit">✎</button>` +
+        `<button type="button" class="manual-del" data-id="${escapeHtml(m.id)}" aria-label="Delete">×</button></td></tr>`
+      );
+    })
     .join("");
   els.addCount.textContent = manualEntries.length ? `(${manualEntries.length})` : "";
   els.addTable.innerHTML = manualEntries.length
@@ -5073,15 +5088,58 @@ function setupAddTab() {
     els.addImportFile.value = ""; // allow re-importing the same file
   });
   els.addTable.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".manual-del");
-    if (!btn?.dataset.id) return;
-    manualEntries = manualEntries.filter((m) => m.id !== btn.dataset.id);
+    const t = e.target as HTMLElement;
+    const editBtn = t.closest<HTMLButtonElement>(".manual-edit");
+    if (editBtn?.dataset.id) {
+      editingManualId = editBtn.dataset.id; // open this row's inline editor
+      renderAddTab();
+      return;
+    }
+    if (t.closest(".manual-cancel")) {
+      editingManualId = null;
+      renderAddTab();
+      return;
+    }
+    const saveBtn = t.closest<HTMLButtonElement>(".manual-save");
+    if (saveBtn?.dataset.id) {
+      saveManualEdit(saveBtn.dataset.id, saveBtn.closest("tr")!);
+      return;
+    }
+    const delBtn = t.closest<HTMLButtonElement>(".manual-del");
+    if (!delBtn?.dataset.id) return;
+    manualEntries = manualEntries.filter((m) => m.id !== delBtn.dataset.id);
     saveManual();
     mergeManualSets();
     renderAddTab();
     renderAll();
     renderDataTab();
   });
+}
+
+/** Commit the inline edits for one hand-logged set (exercise / weight / reps /
+ * date) from its editor row, then refresh everywhere. */
+function saveManualEdit(id: string, row: HTMLElement) {
+  const entry = manualEntries.find((m) => m.id === id);
+  if (!entry) return;
+  const exerciseName = row.querySelector<HTMLInputElement>(".me-ex")!.value.trim();
+  const weight = parseFloat(row.querySelector<HTMLInputElement>(".me-weight")!.value);
+  const reps = Math.round(parseFloat(row.querySelector<HTMLInputElement>(".me-reps")!.value));
+  const date = row.querySelector<HTMLInputElement>(".me-date")!.value || entry.date;
+  if (!exerciseName || !Number.isFinite(reps) || reps < 1) {
+    els.addHint.textContent = "Need an exercise and reps (1 or more) to save.";
+    return;
+  }
+  entry.exerciseName = exerciseName;
+  entry.weight = Number.isFinite(weight) ? weight : null;
+  entry.reps = reps;
+  entry.date = date;
+  editingManualId = null;
+  saveManual();
+  mergeManualSets();
+  renderAddTab();
+  renderAll();
+  renderDataTab();
+  els.addHint.textContent = `Updated ${exerciseName} for ${entry.user}.`;
 }
 
 function setupChecklists() {
