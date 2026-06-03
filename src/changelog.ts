@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.26", sp: 1, note: "Per-set difficulty switched from RPE (1–10) to RIR — Reps In Reserve. The picker now offers 11 descriptive bands (0.1–0.3 “almost impossible” down to 30–100 “warm-up light”) instead of bare numbers; header, tooltip and graph all read RIR. Old RPE numbers don't carry over (stored under a new key)." },
       { version: "b.2.0.25", sp: 0.1, note: "Year heatmap day-of-month numbers turned down even more (barely-there): 8% black / 16% white on dark days." },
       { version: "b.2.0.24", sp: 0.1, note: "Year heatmap day-of-month numbers are now centred in the square and much more transparent — a faint hint rather than a label." },
       { version: "b.2.0.23", sp: 0.5, note: "Year heatmap squares now show a tiny day-of-month number in the corner; Workouts now defaults to By week + Muscle groups, and the year heatmap defaults to the Legs filter." },

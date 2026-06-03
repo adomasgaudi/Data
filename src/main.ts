@@ -436,23 +436,45 @@ function saveAlone() {
   }
 }
 
-// ---- Per-set difficulty grade (RPE 1–10), saved on this device. The source CSV
-// has no difficulty column, so the owner can grade how hard each set felt and it
-// persists across reloads, keyed by athlete|exercise|date|setNumber.
-const RPE_STORE_KEY = "colosseum.rpe.v1";
-let rpeGrades: Record<string, number> = (() => {
+// ---- Per-set difficulty grade (RIR — Reps In Reserve), saved on this device.
+// The source CSV has no difficulty column, so the owner can grade how many reps
+// were left in the tank on each set and it persists across reloads, keyed by
+// athlete|exercise|date|setNumber. Grades are stored as a band id (a range
+// string like "0.5-1.3"), not a single number, because the owner grades how it
+// FELT and that maps to a band, not an exact rep count.
+//
+// RIR ladder — the single source of truth. `id` is the stored value and also
+// the range shown in the cell; `desc` is the plain-language feel. Bands run
+// hardest (almost no reps left) → easiest (many reps in reserve). Contiguous,
+// non-overlapping.
+const RIR_BANDS: ReadonlyArray<{ id: string; desc: string }> = [
+  { id: "0.1–0.3", desc: "almost impossible — elite powerlifter grinding ~10s" },
+  { id: "0.3–0.5", desc: "extremely difficult — trained person, 2–4s grind" },
+  { id: "0.5–1.3", desc: "difficult — 1–2s grind, a 2nd rep seems improbable" },
+  { id: "1.3–1.5", desc: "maybe one more rep, but very hard" },
+  { id: "1.5–1.8", desc: "could do another rep, but hard" },
+  { id: "1.8–2.5", desc: "1 RIR for sure, maybe 2" },
+  { id: "2.5–4", desc: "2–3 reps in reserve" },
+  { id: "4–8", desc: "4–8 reps in reserve" },
+  { id: "8–15", desc: "8–15 reps in reserve" },
+  { id: "15–30", desc: "15–30 reps in reserve" },
+  { id: "30–100", desc: "30–100 reps in reserve (warm-up light)" },
+];
+const RIR_IDS = new Set(RIR_BANDS.map((b) => b.id));
+const RPE_STORE_KEY = "colosseum.rir.v1";
+let rpeGrades: Record<string, string> = (() => {
   try {
     const o = JSON.parse(localStorage.getItem(RPE_STORE_KEY) ?? "{}");
-    return o && typeof o === "object" ? (o as Record<string, number>) : {};
+    return o && typeof o === "object" ? (o as Record<string, string>) : {};
   } catch {
     return {};
   }
 })();
 /** Stable id for one set. */
 const setId = (r: SetRecord): string => `${r.username}|${r.exerciseName}|${r.date}|${r.setNumber}`;
-const rpeFor = (r: SetRecord): number | undefined => rpeGrades[setId(r)];
-function setRpe(id: string, v: number | null) {
-  if (v === null || !(v >= 1 && v <= 10)) delete rpeGrades[id];
+const rpeFor = (r: SetRecord): string | undefined => rpeGrades[setId(r)];
+function setRpe(id: string, v: string | null) {
+  if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
   else rpeGrades[id] = v;
   try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(rpeGrades)); } catch { /* ignore */ }
 }
@@ -2386,7 +2408,7 @@ function renderExerciseProgressChart(exName: string) {
       meta:
         (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
         ` · ${shortDate(s.date)}` +
-        (rpeFor(s) ? ` · RPE ${rpeFor(s)}` : ""),
+        (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : ""),
     });
     if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
   }
@@ -2605,11 +2627,13 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
       totalSets += sets;
     }
     const isToday = iso === todayIso();
+    // Days the athlete tagged "trained alone" get a red outline on the heatmap.
+    const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
     // Tint alternating months so each month's squares read as a distinct band.
     const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
-    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets — tap to jump` : " — rest"}`;
+    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
 
@@ -2848,6 +2872,7 @@ function onWorkoutRowClick(e: MouseEvent) {
     else aloneTags.add(key);
     saveAlone();
     renderWorkoutsPage();
+    renderWorkoutCalendar(); // refresh the year map so the red "alone" ring updates live
     return;
   }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
@@ -2924,7 +2949,7 @@ function insertDetail(row: HTMLTableRowElement, colspan: number, innerHtml: stri
 // and you change both. The note toggle is handled by toggleSetNote(), wired
 // into onWorkoutRowClick and onExerciseRowClick.
 const SETS_HEAD =
-  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="How hard it felt, 1 easy – 10 max">RPE</th></tr></thead>`;
+  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
 
 /** How many characters of a note to show inline before truncating with "…". */
 const NOTE_PREVIEW_LEN = 8;
@@ -3015,11 +3040,12 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
   const grade = rpeFor(s);
   const rpeCell =
-    `<select class="set-rpe${grade ? " is-set" : ""}" data-setid="${escapeHtml(setId(s))}" aria-label="How hard (RPE 1–10)">` +
+    `<select class="set-rpe${grade ? " is-set" : ""}" data-setid="${escapeHtml(setId(s))}" aria-label="Reps in reserve (RIR)">` +
     `<option value="">–</option>` +
-    Array.from({ length: 10 }, (_, i) => i + 1)
-      .map((n) => `<option value="${n}"${grade === n ? " selected" : ""}>${n}</option>`)
-      .join("") +
+    RIR_BANDS.map(
+      (b) =>
+        `<option value="${escapeHtml(b.id)}"${grade === b.id ? " selected" : ""} title="${escapeHtml(b.desc)}">${escapeHtml(b.id)} — ${escapeHtml(b.desc)}</option>`,
+    ).join("") +
     `</select>`;
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
@@ -3042,7 +3068,7 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula): string {
 function onSetRpeChange(e: Event): boolean {
   const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".set-rpe");
   if (!sel?.dataset.setid) return false;
-  const v = sel.value === "" ? null : Number(sel.value);
+  const v = sel.value === "" ? null : sel.value;
   setRpe(sel.dataset.setid, v);
   sel.classList.toggle("is-set", v !== null);
   // Refresh the drill-in graph so the new grade shows in the per-set tooltip.

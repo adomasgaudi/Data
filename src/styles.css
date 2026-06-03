@@ -922,6 +922,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hm-cell[data-date]:hover { outline: 2px solid var(--gold); outline-offset: -1px; }
 /* Today's cell is outlined in gold so it's easy to find in the year grid. */
 .hm-cell.is-today { box-shadow: 0 0 0 2px var(--gold); }
+/* Days tagged "trained alone" get a chroma-adjusted red ring (inset so it hugs
+   the square and stays crisp on any fill colour, light or dark). */
+.hm-cell.hm-alone { box-shadow: inset 0 0 0 2px #e23b3b; }
+/* If a day is both today and alone, show the gold today-ring AND the inner red. */
+.hm-cell.hm-alone.is-today { box-shadow: 0 0 0 2px var(--gold), inset 0 0 0 2px #e23b3b; }
 .hm-legend { display: flex; align-items: center; gap: 3px; font-size: 0.72rem; margin-top: 0.2rem; }
 .hm-legend .hm-cell { width: 12px; height: 12px; cursor: default; }
 .cal-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
@@ -1358,14 +1363,17 @@ select.subtle-select:hover, select.subtle-select:focus {
   font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0; margin-right: 0.5rem;
 }
 .back-btn:hover { text-decoration: underline; }
-/* Per-set difficulty (RPE) picker in the sets tables. */
+/* Per-set difficulty (RIR — reps in reserve) picker in the sets tables. The
+   chosen option text can be long, so the closed select is clamped to its cell
+   width; the open dropdown still shows each band in full. */
 .set-rpe {
   font: inherit; font-size: 0.78rem; color: var(--muted);
   background: var(--card); border: 1px solid var(--line); border-radius: 6px;
   padding: 1px 2px; cursor: pointer;
+  max-width: 100%; box-sizing: border-box;
 }
 .set-rpe.is-set { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
-.rpe-cell { width: 3.2em; }
+.rpe-cell { width: 4.6em; max-width: 4.6em; }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
