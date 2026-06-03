@@ -12,7 +12,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.3</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.4</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -947,6 +947,19 @@
           <div id="graphAdvBox" class="gd-box"></div>
         </section>
       </div>
+
+      <div id="tab-sitemap" class="tab-panel" hidden>
+        <section class="panel">
+          <div class="groups-head">
+            <h2>Site map</h2>
+            <p class="muted" style="margin: 0.25rem 0 0">
+              A mind map of everything in Colosseum — every tab and what lives inside it.
+              Drag sideways to pan if it's wider than the screen.
+            </p>
+          </div>
+          <div id="siteMapBox" class="sitemap-box"></div>
+        </section>
+      </div>
     </main>
 
     <!-- App-style bottom navigation. Workouts/Exercises drive the Athlete
@@ -983,6 +996,7 @@
         <button class="other-item" data-tab="cmplab" role="menuitem"><span class="other-ico">🔬</span> Compare (lab)</button>
         <button class="other-item" data-tab="graphadv" role="menuitem"><span class="other-ico">📈</span> Graph (advanced)</button>
         <button class="other-item" data-tab="graphdemo" role="menuitem"><span class="other-ico">🛟</span> Graph demo (safe)</button>
+        <button class="other-item" data-tab="sitemap" role="menuitem"><span class="other-ico">🗺️</span> Site map</button>
         <button class="other-item" data-tab="guide" role="menuitem"><span class="other-ico">📖</span> Guide</button>
       </div>
     </div>

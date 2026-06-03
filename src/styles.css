@@ -1037,6 +1037,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 .cmp-sets-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
 .cmp-sets-scroll table { margin: 0; }
 .cmp-setdot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
+/* Site map (mind map) — horizontal scroll when wider than the screen. */
+.sitemap-box { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
+.sitemap-svg { display: block; }
 .exercise-compare-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
   font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;

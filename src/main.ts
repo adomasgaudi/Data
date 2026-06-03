@@ -618,6 +618,123 @@ function renderChangelog() {
   }
 }
 
+// ---- Site map (mind map of the whole app) ----------------------------------
+interface MapNode { label: string; children?: MapNode[]; }
+
+const SITE_MAP: MapNode = {
+  label: "Colosseum",
+  children: [
+    { label: "Colosseum / Leaderboards", children: [
+      { label: "Exercise picker" },
+      { label: "Best per rep band" },
+      { label: "Rank: total / ×bodyweight" },
+      { label: "Filters: sex · bodyweight" },
+    ] },
+    { label: "Athlete", children: [
+      { label: "Profile & training stats" },
+      { label: "Training mix" },
+      { label: "Momentum (weekly trend)" },
+      { label: "Body composition (FFMI)" },
+    ] },
+    { label: "Exercises", children: [
+      { label: "List: by category / tier" },
+      { label: "Search · category show/hide" },
+      { label: "Drill-in: records · best sets" },
+      { label: "Weekly · targets" },
+      { label: "1RM trend chart" },
+      { label: "Per-set range (time axis, dashed reps)" },
+      { label: "Reps↔weight calculator" },
+      { label: "Compare graph + sets behind it" },
+    ] },
+    { label: "Workouts", children: [
+      { label: "By day / by week" },
+      { label: "Muscle-group view" },
+      { label: "Rest days · trained-alone tag" },
+      { label: "Calendar + sets chart" },
+    ] },
+    { label: "Stats / Group", children: [
+      { label: "Per-category leaderboards" },
+      { label: "Group view (compare people)" },
+    ] },
+    { label: "Data", children: [
+      { label: "Refresh from StrengthLevel (+ status)" },
+      { label: "Original CSV vs Processed table" },
+    ] },
+    { label: "Add", children: [
+      { label: "Hand-log a set" },
+      { label: "Export / import" },
+    ] },
+    { label: "Test", children: [
+      { label: "Weight↔reps curve" },
+    ] },
+    { label: "Settings", children: [
+      { label: "1RM formula · bodyweight source" },
+      { label: "Dark mode" },
+      { label: "Data health" },
+      { label: "Version history + SP-over-time" },
+    ] },
+  ],
+};
+
+const SITE_MAP_COLORS = ["#284e86", "#2e7d52", "#b8902f", "#6c4ab0", "#1f6f8b", "#c0563b", "#3a4a86", "#7a8b2e", "#a8447a"];
+
+/** Draw the site map as a tidy horizontal mind-map tree (root → tabs → features),
+ * laying leaves on their own rows and centring each parent on its children. */
+function renderSiteMap() {
+  const box = document.getElementById("siteMapBox");
+  if (!box) return;
+  const NODE_W = 210, NODE_H = 26, ROW_H = 34, GAP_X = 56, PAD = 14;
+  type Placed = { label: string; x: number; y: number; color: string };
+  const placed: Placed[] = [];
+  const edges: { x1: number; y1: number; x2: number; y2: number; color: string }[] = [];
+  let row = 0;
+  let maxDepth = 0;
+
+  const layout = (node: MapNode, depth: number, color: string): number => {
+    maxDepth = Math.max(maxDepth, depth);
+    const x = PAD + depth * (NODE_W + GAP_X);
+    let cy: number;
+    if (node.children?.length) {
+      const centers = node.children.map((c, i) =>
+        layout(c, depth + 1, depth === 0 ? SITE_MAP_COLORS[i % SITE_MAP_COLORS.length]! : color),
+      );
+      cy = (centers[0]! + centers[centers.length - 1]!) / 2;
+      const childX = PAD + (depth + 1) * (NODE_W + GAP_X);
+      node.children.forEach((_, i) =>
+        edges.push({ x1: x + NODE_W, y1: cy, x2: childX, y2: centers[i]!, color: depth === 0 ? SITE_MAP_COLORS[i % SITE_MAP_COLORS.length]! : color }),
+      );
+    } else {
+      cy = PAD + row * ROW_H + NODE_H / 2;
+      row++;
+    }
+    placed.push({ label: node.label, x, y: cy - NODE_H / 2, color });
+    return cy;
+  };
+  layout(SITE_MAP, 0, "#888");
+
+  const totalW = PAD * 2 + (maxDepth + 1) * NODE_W + maxDepth * GAP_X;
+  const totalH = PAD * 2 + row * ROW_H;
+  const edgesSvg = edges
+    .map((e) => {
+      const mx = (e.x1 + e.x2) / 2;
+      return `<path d="M${e.x1} ${e.y1} C${mx} ${e.y1}, ${mx} ${e.y2}, ${e.x2} ${e.y2}" fill="none" stroke="${e.color}" stroke-width="1.5" opacity="0.55"/>`;
+    })
+    .join("");
+  const nodesSvg = placed
+    .map(
+      (p) =>
+        `<g transform="translate(${p.x},${p.y})">` +
+        `<rect width="${NODE_W}" height="${NODE_H}" rx="6" fill="var(--card)" stroke="${p.color}" stroke-width="1.5"/>` +
+        `<text x="9" y="${NODE_H / 2 + 4}" font-size="11.5" fill="var(--text)">${escapeHtml(p.label)}</text>` +
+        `</g>`,
+    )
+    .join("");
+  box.innerHTML =
+    `<svg class="sitemap-svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" role="img" aria-label="Site structure mind map">` +
+    edgesSvg + nodesSvg +
+    `</svg>`;
+}
+
 function renderHealth() {
   const merges = data.merges;
   const total = data.issues.length + data.warnings.length;
@@ -4358,6 +4475,7 @@ function switchTopTab(name: string) {
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
+  if (name === "sitemap") renderSiteMap();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "graphdemo") {
