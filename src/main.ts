@@ -2705,6 +2705,7 @@ function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
+  if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // Category mode: tapping a category header collapses/expands its exercises.
@@ -3239,6 +3240,7 @@ function onWorkoutRowClick(e: MouseEvent) {
     return;
   }
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
+  if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
 
   // An exercise name in an expanded day -> jump to that exercise's drill-in on
@@ -3409,6 +3411,39 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
 }
 
 /**
+ * Plain-text explanation of a set's predicted RIR, numbers plugged in — the
+ * pRIR counterpart of oneRmFormulaText. Takes the COMPUTED record (bodyweight
+ * already folded into `weight`) plus the exercise's peak EFFECTIVE 1RM (the
+ * strength anchor), and walks the chain: the strongest set you've logged →
+ * the reps the curve predicts at this load → minus the reps you actually did.
+ * Returns "" when no prediction is possible (caller then renders a plain "—").
+ */
+function predictedRirText(c: SetRecord, peakEff1RM: number | null, formula: OneRepMaxFormula): string {
+  const effLoad = c.weight;
+  const r = c.reps;
+  if (peakEff1RM === null || effLoad === null || r === null || effLoad <= 0 || r <= 0) return "";
+  const predicted = repsForWeight(peakEff1RM, effLoad, formula);
+  if (predicted === null) return "";
+  const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
+  // Bar weight vs the body's share folded in by computeRecord (same split the
+  // 1RM reveal uses), so a bodyweight lift explains its effective load too.
+  const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
+  const bodyLoad = effLoad - added;
+  const hasBody = bodyLoad > 0.01;
+  const loadTxt = hasBody
+    ? `effective load ${f2(effLoad)} kg (bar ${f2(added)} + bodyweight share ${f2(bodyLoad)})`
+    : `${f2(effLoad)} kg`;
+  const curve = formula === "brzycki" ? "Brzycki" : formula === "nuzzo" ? "Nuzzo bench" : "Epley";
+  const rir = predicted - r;
+  return (
+    `Strength anchor: your best ${c.exerciseName} works out to a ${f2(peakEff1RM)} kg estimated 1RM` +
+    `${hasBody ? " (bodyweight included)" : ""} — the strongest set you've logged. ` +
+    `The ${curve} curve says at ${loadTxt} you should manage about ${f2(predicted)} reps; ` +
+    `you did ${r}, so predicted − actual = ${f2(predicted)} − ${r} = ${f2(rir)} reps in reserve.`
+  );
+}
+
+/**
  * One set as table rows: the W/1RM/Vol line. The 1RM cell is a button — tapping
  * it expands a sub-row showing the exact formula and numbers used. When the set
  * has a note (or is a dropset) a short truncated preview sits on the left of the
@@ -3427,10 +3462,11 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, peakEff1RM: number
   // this (effective) load, minus the reps you did. Effective frame on both sides
   // so bodyweight lifts line up.
   const predRir = predictedRir(peakEff1RM, computed.weight, s.reps, formula);
+  const prirText = predictedRirText(computed, peakEff1RM, formula);
   const prirCell =
     predRir === null
       ? "—"
-      : `<span class="prir" title="Your peak est. 1RM predicts about ${(predRir + (s.reps ?? 0)).toFixed(1)} reps at this weight; you did ${s.reps}.">${Math.round(predRir)}</span>`;
+      : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
   const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
   let preview = "";
   if (note) {
@@ -3458,7 +3494,11 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, peakEff1RM: number
     e1rm === null
       ? ""
       : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
-  return main + noteRow + formulaRow;
+  const prirRow =
+    predRir === null || !prirText
+      ? ""
+      : `<tr class="prir-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(prirText)}</td></tr>`;
+  return main + noteRow + formulaRow + prirRow;
 }
 
 /** The per-set RIR picker as a custom HTML/CSS dropdown (no native <select>, so it
@@ -3547,6 +3587,26 @@ function toggleE1rmFormula(target: HTMLElement): boolean {
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("e1rm-formula-row")) {
+    sib.toggleAttribute("hidden");
+    btn.classList.toggle("is-open");
+  }
+  return true;
+}
+
+/** Click on a pRIR cell button: expand/collapse the predicted-RIR explanation
+ * sub-row for that set. Mirrors toggleE1rmFormula — scan forward past the note /
+ * 1RM-formula rows to this set's prir-formula-row. Returns true if the click was
+ * on a pRIR button. Shared by the Workouts and Exercises sets tables. */
+function togglePrirFormula(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".prir-btn");
+  if (!btn) return false;
+  let sib = btn.closest("tr")?.nextElementSibling ?? null;
+  while (sib && !sib.classList.contains("prir-formula-row")) {
+    // Stop if we reach the next set's row rather than this set's explanation.
+    if (sib.classList.contains("set-row") || sib.querySelector(".prir-btn")) break;
+    sib = sib.nextElementSibling;
+  }
+  if (sib?.classList.contains("prir-formula-row")) {
     sib.toggleAttribute("hidden");
     btn.classList.toggle("is-open");
   }

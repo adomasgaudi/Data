@@ -1356,7 +1356,12 @@ sup.wr-bw { font-size: 0.85em; }
 .detail-table tbody tr:last-child td { border-bottom: none; }
 /* Predicted reps-in-reserve cell: a computed hint, so it reads quieter than the
    logged numbers next to it. */
-.prir { color: var(--muted); cursor: help; }
+.prir-btn {
+  border: none; background: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--muted); border-bottom: 1px dotted var(--muted);
+}
+.prir-btn:hover, .prir-btn.is-open { color: var(--accent); border-bottom-color: var(--accent); }
+.prir-formula-row td { font-size: 0.82em; line-height: 1.4; padding: 4px 9px; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }
