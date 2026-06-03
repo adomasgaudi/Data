@@ -8,6 +8,7 @@
     <!-- Apply the saved theme before first paint so there's no light-mode flash. -->
     <script>
       try { if (localStorage.getItem("colosseum.theme") === "dark") document.documentElement.setAttribute("data-theme", "dark"); } catch (e) {}
+      try { if (localStorage.getItem("colosseum.signedIn") === "1") document.documentElement.classList.add("signed-in"); } catch (e) {}
     </script>
   </head>
   <body>
@@ -21,7 +22,7 @@
     </div>
 
     <header class="topbar">
-      <h1>Colosseum <span class="version">b.2.0.21</span></h1>
+      <h1>Colosseum <span class="version">b.2.0.22</span></h1>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>

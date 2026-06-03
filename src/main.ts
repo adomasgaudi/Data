@@ -4805,13 +4805,22 @@ function setupBottomNav() {
   });
 }
 
-// Decorative landing gate: lock scrolling until the single "Sign in as admin"
-// button is pressed, which just reveals the app (no real auth — everyone is admin).
-document.body.classList.add("locked");
-document.getElementById("loginAdminBtn")?.addEventListener("click", () => {
+// Decorative landing gate. It's skipped entirely once you've signed in (the head
+// script hides it before paint via .signed-in); otherwise lock scrolling until the
+// single "Sign in as admin" button reveals the app and remembers you for next time.
+{
+  const signedIn = (() => { try { return localStorage.getItem("colosseum.signedIn") === "1"; } catch { return false; } })();
   const gate = document.getElementById("loginGate");
-  if (gate) gate.hidden = true;
-  document.body.classList.remove("locked");
-});
+  if (signedIn) {
+    if (gate) gate.hidden = true;
+  } else {
+    document.body.classList.add("locked");
+    document.getElementById("loginAdminBtn")?.addEventListener("click", () => {
+      try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
+      if (gate) gate.hidden = true;
+      document.body.classList.remove("locked");
+    });
+  }
+}
 
 void init();

@@ -57,6 +57,8 @@ body.locked { overflow: hidden; }
   background: var(--bg); padding: 1.5rem;
 }
 .login-gate[hidden] { display: none; }
+/* Already signed in (set before paint by the head script): never show the gate. */
+html.signed-in .login-gate { display: none; }
 .login-card {
   width: 100%; max-width: 340px; text-align: center; background: var(--card);
   border: 1px solid var(--line); border-radius: 16px; padding: 2.2rem 1.5rem;
