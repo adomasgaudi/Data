@@ -3266,8 +3266,7 @@ let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 // "ribbon" = one continuous strip flowing across years (default); "single" = one
 // calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
 let heatScope: "ribbon" | "single" | "all" = "ribbon";
-let heatFilter = "cat:Legs"; // "all" | "cat:<bodypart>" | "mus:<muscle>" | "fun:<pattern>" | "ex:<exercise>"
-let heatLastGroup = "cat:Legs"; // last non-"all" filter, for the group/all quick toggle
+let heatFilters: string[] = ["cat:Legs"]; // multi-select; empty = all exercises
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
 // instead of jumping to that day — so you can tag many days quickly in one go.
 let aloneTagMode = false;
@@ -3280,16 +3279,15 @@ function trainingDays(): Map<string, number> {
   return m;
 }
 
-/** Sets on a day that match the active {@link heatFilter} (all / one category /
- * one exercise). */
-function dayMatchCount(d: WorkoutDay): number {
-  if (heatFilter === "all" || heatFilter === "") return d.totalSets;
-  const sep = heatFilter.indexOf(":");
-  const kind = heatFilter.slice(0, sep);
-  const val = heatFilter.slice(sep + 1);
+/** Sets on a day matching one specific filter string. */
+function filterMatchSets(d: WorkoutDay, filter: string): number {
+  if (filter === "all" || filter === "") return d.totalSets;
+  const sep = filter.indexOf(":");
+  const kind = filter.slice(0, sep);
+  const val = filter.slice(sep + 1);
   const match = (name: string): boolean => {
-    if (kind === "cat") return exerciseCategory(name) === val; // coarse body part
-    if (kind === "mus") return muscleGroup(name) === val; // fine muscle group
+    if (kind === "cat") return exerciseCategory(name) === val;
+    if (kind === "mus") return muscleGroup(name) === val;
     if (kind === "fun") return tagsForExercise(name).some((t) => t.kind === "functional-pattern" && t.label === val);
     if (kind === "ex") return name === val;
     return false;
@@ -3297,12 +3295,47 @@ function dayMatchCount(d: WorkoutDay): number {
   return d.exercises.reduce((s, e) => (match(e.exerciseName) ? s + e.count : s), 0);
 }
 
-/** Training dates → matching set count, honouring the heatmap filter. */
-function filteredDayCounts(): Map<string, number> {
-  const m = new Map<string, number>();
+/** Hex color for a filter value (uses the category palette). */
+function filterColor(filter: string): string | null {
+  if (!filter || filter === "all") return null;
+  const i = filter.indexOf(":");
+  const kind = filter.slice(0, i);
+  const val = filter.slice(i + 1);
+  if (kind === "cat") return CATEGORY_COLORS[val as TrainingCategory] ?? null;
+  if (kind === "ex") return CATEGORY_COLORS[exerciseCategory(val) as TrainingCategory] ?? null;
+  return null;
+}
+
+/** Background color for a heatmap cell given intensity level and optional category hex. */
+function cellBgColor(level: number, catHex: string | null): string {
+  if (level === 0) return "";
+  if (level === 5) return "#f5c800"; // shining — always gold
+  const hex = catHex ?? "#1e4fa3"; // default blue
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  if (level === 4) return `rgb(${Math.round(r * 0.55)},${Math.round(g * 0.55)},${Math.round(b * 0.55)})`;
+  const t = level === 1 ? 0.28 : level === 2 ? 0.58 : 1.0;
+  return `rgb(${Math.round(255+(r-255)*t)},${Math.round(255+(g-255)*t)},${Math.round(255+(b-255)*t)})`;
+}
+
+/** Training dates → { sets, catHex } honouring the active heatFilters. */
+function filteredDayCounts(): Map<string, { sets: number; catHex: string | null }> {
+  const m = new Map<string, { sets: number; catHex: string | null }>();
   for (const d of athleteWorkouts) {
-    const c = dayMatchCount(d);
-    if (c > 0) m.set(d.date, c);
+    if (heatFilters.length === 0) {
+      if (d.totalSets > 0) m.set(d.date, { sets: d.totalSets, catHex: null });
+      continue;
+    }
+    let totalSets = 0;
+    let dominantFilter = "";
+    let dominantSets = 0;
+    for (const f of heatFilters) {
+      const n = filterMatchSets(d, f);
+      totalSets += n;
+      if (n > dominantSets) { dominantSets = n; dominantFilter = f; }
+    }
+    if (totalSets > 0) m.set(d.date, { sets: totalSets, catHex: filterColor(dominantFilter) });
   }
   return m;
 }
@@ -3314,7 +3347,7 @@ function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
   const y = Number(latest?.slice(0, 4));
   if (Number.isFinite(y)) heatYear = y;
-  heatFilter = "cat:Legs";
+  heatFilters = ["cat:Legs"];
   aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
@@ -3337,7 +3370,7 @@ function dataYears(trained: Map<string, number>): number[] {
 /** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
  * rows) — weeks are never broken mid-column — with month labels along the top
  * aligned to the week each month begins. `counts` is the filtered day→sets map. */
-function yearGridHtml(year: number, counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
   const cells: string[] = [];
@@ -3347,7 +3380,9 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
   for (let doy = 0; doy < daysInYear; doy++) {
     const d = new Date(year, 0, 1 + doy);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const sets = counts.get(iso) ?? 0;
+    const entry = counts.get(iso);
+    const sets = entry?.sets ?? 0;
+    const catHex = entry?.catHex ?? null;
     if (sets) {
       days++;
       totalSets += sets;
@@ -3358,8 +3393,10 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
     // Tint alternating months so each month's squares read as a distinct band.
     const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    const lvl = heatLevel(sets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
 
@@ -3385,7 +3422,7 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
  * where each year begins. `counts` is the filtered day→sets map. The strip runs
  * from the Monday on/before the first training day to the Sunday on/after the
  * later of the last training day and today, so it always reaches the present. */
-function ribbonGridHtml(counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
   const dates = [...trainingDays().keys()].sort(); // full range, filter-independent
   if (dates.length === 0) {
     return { html: `<div class="hm-empty muted">No training logged yet.</div>`, days: 0, totalSets: 0 };
@@ -3420,7 +3457,9 @@ function ribbonGridHtml(counts: Map<string, number>): { html: string; days: numb
       prevMonth = month;
     }
     const iso = `${d.getFullYear()}-${String(month + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const sets = counts.get(iso) ?? 0;
+    const entry = counts.get(iso);
+    const sets = entry?.sets ?? 0;
+    const catHex = entry?.catHex ?? null;
     if (sets) {
       days++;
       totalSets += sets;
@@ -3429,8 +3468,10 @@ function ribbonGridHtml(counts: Map<string, number>): { html: string; days: numb
     const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
     const mOdd = month % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    const lvl = heatLevel(sets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
   const html =
@@ -3448,52 +3489,47 @@ function heatScopeToggle(): string {
   return `<div class="cal-mode">${btn("ribbon", "Timeline")}${btn("single", "Single year")}${btn("all", "All years")}</div>`;
 }
 
-/** Human label for the active heatmap filter value. */
+/** Label for the filter button when 0/1/many filters active. */
 function heatFilterLabel(): string {
-  if (heatFilter === "all" || heatFilter === "") return "All exercises";
-  const i = heatFilter.indexOf(":");
-  return i >= 0 ? heatFilter.slice(i + 1) : heatFilter;
+  if (heatFilters.length === 0) return "All exercises";
+  if (heatFilters.length === 1) {
+    const i = heatFilters[0]!.indexOf(":");
+    return i >= 0 ? heatFilters[0]!.slice(i + 1) : heatFilters[0]!;
+  }
+  if (heatFilters.length <= 2) return heatFilters.map(f => { const i = f.indexOf(":"); return i >= 0 ? f.slice(i + 1) : f; }).join(", ");
+  return `${heatFilters.length} selected`;
 }
 
-/** Filter as a custom dropdown (no native <select>): all exercises, one training
- * category, or one exercise. Lives inside the re-rendered calendar HTML, so it's
- * handled by delegation in the workoutCalendar click handler (data-heatval). */
+/** Multi-select filter UI: checkmark chips for each category/exercise. */
 function heatFilterSelect(): string {
-  const exs = exerciseCountsForUser(activeRecords(), els.athlete.value); // most-trained first
+  const exs = exerciseCountsForUser(activeRecords(), els.athlete.value);
   const names = exs.map((e) => e.exerciseName);
   const cats = TRAINING_CATEGORIES.filter((c) => names.some((n) => exerciseCategory(n) === c));
   const muscles = MUSCLE_GROUP_TAGS.map((t) => t.label).filter((l) => names.some((n) => muscleGroup(n) === l));
   const funcs = FUNCTIONAL_PATTERN_TAGS.map((t) => t.label).filter((l) =>
     names.some((n) => tagsForExercise(n).some((t) => t.kind === "functional-pattern" && t.label === l)),
   );
+  const isActive = (val: string) => heatFilters.includes(val);
+  const dot = (val: string) => {
+    const col = filterColor(val);
+    return col ? `<span class="xdd-dot" style="background:${col}"></span>` : "";
+  };
   const opt = (val: string, label: string) =>
-    `<button type="button" class="xdd-opt${heatFilter === val ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${escapeHtml(label)}</button>`;
+    `<button type="button" class="xdd-opt${isActive(val) ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${dot(val)}${escapeHtml(label)}${isActive(val) ? ' <span class="xdd-check">✓</span>' : ""}</button>`;
   const section = (title: string, items: [string, string][]) =>
     items.length ? `<div class="xdd-group">${title}</div>${items.map(([v, l]) => opt(v, l)).join("")}` : "";
   const menu =
-    opt("all", "All exercises") +
+    `<button type="button" class="xdd-opt xdd-clear" data-heatclear="1" role="option">${heatFilters.length === 0 ? '<span class="xdd-check">✓</span> ' : ""}All exercises</button>` +
     section("Body part", cats.map((c) => [`cat:${c}`, c])) +
     section("Muscle group", muscles.map((m) => [`mus:${m}`, m])) +
     section("Functional", funcs.map((f) => [`fun:${f}`, f])) +
     section("Exercises", exs.map((e) => [`ex:${e.exerciseName}`, e.exerciseName]));
-  // Quick toggle: flip the heatmap between the selected group and All.
-  const isAll = heatFilter === "all" || heatFilter === "";
-  const toggle =
-    `<button type="button" class="heat-grp-toggle${isAll ? "" : " is-on"}" data-heattoggle="1" ` +
-    `title="Toggle between this group and all exercises">${isAll ? `Show ${escapeHtml(heatFilterLabel2(heatLastGroup))}` : "Show all"}</button>`;
   return (
     `<div class="xdd xdd-heat">` +
     `<button type="button" class="xdd-btn">${escapeHtml(heatFilterLabel())}<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
-    `</div>${toggle}`
+    `</div>`
   );
-}
-
-/** Label for a stored heatFilter value (used by the group/all quick toggle). */
-function heatFilterLabel2(filter: string): string {
-  if (filter === "all" || filter === "") return "all";
-  const i = filter.indexOf(":");
-  return i >= 0 ? filter.slice(i + 1) : filter;
 }
 
 /** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
@@ -3510,10 +3546,12 @@ function renderWorkoutCalendar() {
   const tagHint = aloneTagMode
     ? `<div class="cal-taghint">Tap trained days to add/remove the red “alone” ring. Tap “Done tagging” when finished.</div>`
     : "";
-  const legend =
-    `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1"></span>` +
-    `<span class="hm-cell lvl-2"></span><span class="hm-cell lvl-3"></span><span class="hm-cell lvl-4"></span>` +
-    `<span class="hm-cell lvl-5"></span> More</div>`;
+  const legend = heatFilters.length > 0
+    ? `<div class="hm-legend muted">${heatFilters.map(f => {
+        const i = f.indexOf(":"); const lbl = i >= 0 ? f.slice(i+1) : f; const col = filterColor(f);
+        return `<span class="hm-cat-chip" style="background:${col ?? "#888"}">${escapeHtml(lbl)}</span>`;
+      }).join("")} · Less <span class="hm-cell lvl-1" style="background:${cellBgColor(1, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-2" style="background:${cellBgColor(2, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-3" style="background:${cellBgColor(3, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-4" style="background:${cellBgColor(4, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-5" style="background:${cellBgColor(5, null)}"></span> More</div>`
+    : `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1" style="background:${cellBgColor(1,null)}"></span><span class="hm-cell lvl-2" style="background:${cellBgColor(2,null)}"></span><span class="hm-cell lvl-3" style="background:${cellBgColor(3,null)}"></span><span class="hm-cell lvl-4" style="background:${cellBgColor(4,null)}"></span><span class="hm-cell lvl-5" style="background:${cellBgColor(5,null)}"></span> More</div>`;
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
@@ -5349,15 +5387,21 @@ async function init() {
       dd.classList.toggle("open", opening);
       return;
     }
-    const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt");
-    if (heatOpt?.dataset.heatval !== undefined) {
-      heatFilter = heatOpt.dataset.heatval;
-      if (heatFilter !== "all" && heatFilter !== "") heatLastGroup = heatFilter; // remember for the toggle
+    if (target.closest("[data-heatclear]")) {
+      heatFilters = [];
+      // close the dropdown
+      const dd = target.closest<HTMLElement>(".xdd-heat");
+      dd?.querySelector<HTMLElement>(".xdd-menu")?.toggleAttribute("hidden", true);
+      dd?.classList.remove("open");
       return renderWorkoutCalendar();
     }
-    if (target.closest("[data-heattoggle]")) {
-      if (heatFilter === "all" || heatFilter === "") heatFilter = heatLastGroup;
-      else { heatLastGroup = heatFilter; heatFilter = "all"; }
+    const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt:not(.xdd-clear)");
+    if (heatOpt?.dataset.heatval !== undefined) {
+      const val = heatOpt.dataset.heatval;
+      const idx = heatFilters.indexOf(val);
+      if (idx >= 0) heatFilters.splice(idx, 1);
+      else heatFilters.push(val);
+      // Don't close the dropdown — let the user pick multiple
       return renderWorkoutCalendar();
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
