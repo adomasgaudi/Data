@@ -646,13 +646,13 @@ main { padding-bottom: 5rem; }
 .exl-table { margin: 0; font-size: 0.82rem; }
 .exl-table th, .exl-table td { padding: 4px 8px; }
 .exl-scale { width: 4.2rem; }
-/* Per-set edit: the ✎ button in the weight cell + the expandable edit row. */
-.set-edit {
-  margin-left: 0.4rem; padding: 0 4px; font: inherit; font-size: 0.85rem; line-height: 1;
-  background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0.6;
-}
-.set-edit:hover, .set-edit.is-open { color: var(--accent); opacity: 1; }
-.set-edit.is-edited { color: var(--accent); opacity: 1; }
+/* Per-set edit: tap anywhere on a set's row to open its edit panel (no pencil
+   button). The row shows it's tappable with a pointer cursor + hover tint. */
+.set-main { cursor: pointer; }
+.set-main:hover > td, .set-main.edit-open > td { background: var(--accent-soft); }
+/* A set that's been hand-edited carries a small gold stripe on the left so you
+   can spot your overrides at a glance (gold = edited; blue stays for links). */
+.set-main.is-edited > td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 .set-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; align-items: flex-end; padding: 0.3rem 0; }
 .set-edit-f { display: flex; flex-direction: column; gap: 2px; font-size: 0.72rem; color: var(--muted); }
 .set-edit-f input {
@@ -665,8 +665,10 @@ main { padding-bottom: 5rem; }
   background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
 }
 .set-edit-reset:hover { border-color: var(--accent); color: var(--accent); }
-/* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight). */
-.set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); margin-right: 3px; }
+/* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight).
+   It's a label, not a link, so it reads in muted grey — blue is reserved for
+   things you can actually tap through to. */
+.set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--muted); margin-right: 3px; }
 .ex-combine-lbl { font-size: 0.75rem; }
 .ex-combine-chip {
   border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft);

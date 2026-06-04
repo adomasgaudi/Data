@@ -3056,10 +3056,10 @@ function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
-  if (toggleSetEdit(target)) return; // ✎ → open/close this set's edit row
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+  if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
   // Category mode: tapping a category header collapses/expands its exercises.
   const catRow = target.closest("tr.ex-cat-row") as HTMLTableRowElement | null;
@@ -3630,7 +3630,6 @@ function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
-  if (toggleSetEdit(target)) return; // ✎ → open/close this set's edit row
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -3676,6 +3675,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+  if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
   // An exercise name in an expanded day -> jump to that exercise's drill-in on
   // the Exercises sub-tab (the SAME detail view the Exercises list opens, so
@@ -3950,12 +3950,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // A squat-rack hole stands in for the weight on these sets — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
   const edited = setOverrides[sid] !== undefined;
-  const editBtn =
-    `<button type="button" class="set-edit${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
-    `title="Edit this set (weight, reps, bodyweight, scale)" aria-label="Edit set">✎</button>`;
+  // The whole set row is the edit handle now — tap anywhere on it (except the
+  // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
+  // this set's edit panel. No separate ✎ pencil button.
   const main =
-    `<tr${note ? ' class="set-row has-note"' : ""}>` +
-    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}${editBtn}</td>` +
+    `<tr class="set-main${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
+    `title="Tap to edit this set (weight, reps, bodyweight, scale)">` +
+    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
@@ -4071,7 +4072,7 @@ function toggleE1rmFormula(target: HTMLElement): boolean {
   let sib = btn.closest("tr")?.nextElementSibling ?? null;
   while (sib && !sib.classList.contains("e1rm-formula-row")) {
     // Stop if we hit the next set's row rather than this set's formula row.
-    if (sib.classList.contains("set-row") || sib.querySelector(".e1rm-btn")) break;
+    if (sib.classList.contains("set-main") || sib.querySelector(".e1rm-btn")) break;
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("e1rm-formula-row")) {
@@ -4091,7 +4092,7 @@ function togglePrirFormula(target: HTMLElement): boolean {
   let sib = btn.closest("tr")?.nextElementSibling ?? null;
   while (sib && !sib.classList.contains("prir-formula-row")) {
     // Stop if we reach the next set's row rather than this set's explanation.
-    if (sib.classList.contains("set-row") || sib.querySelector(".prir-btn")) break;
+    if (sib.classList.contains("set-main") || sib.querySelector(".prir-btn")) break;
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("prir-formula-row")) {
@@ -4101,19 +4102,21 @@ function togglePrirFormula(target: HTMLElement): boolean {
   return true;
 }
 
-/** Click the ✎ edit button: expand/collapse this set's edit row (scan forward
- * past the note/formula/prir sub-rows to it). Shared by both sets tables. */
+/** Tap a set's main row to expand/collapse its edit panel (weight/reps/bw/scale).
+ * Runs LAST in the click flow so the inner 1RM / pRIR / note / RIR controls keep
+ * their own taps. Scans forward past the note/formula/prir sub-rows to this set's
+ * edit row. Shared by both sets tables. */
 function toggleSetEdit(target: HTMLElement): boolean {
-  const btn = target.closest<HTMLElement>(".set-edit");
-  if (!btn) return false;
-  let sib = btn.closest("tr")?.nextElementSibling ?? null;
+  const row = target.closest<HTMLElement>("tr.set-main");
+  if (!row) return false;
+  let sib = row.nextElementSibling;
   while (sib && !sib.classList.contains("set-edit-row")) {
-    if (sib.querySelector(".set-edit")) break; // reached the next set's main row
+    if (sib.classList.contains("set-main")) break; // reached the next set's main row
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("set-edit-row")) {
     sib.toggleAttribute("hidden");
-    btn.classList.toggle("is-open");
+    row.classList.toggle("edit-open");
   }
   return true;
 }
