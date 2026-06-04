@@ -102,6 +102,41 @@ const dateLabel = (t: number) => {
 const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] ?? c));
 const num = (v: number) => (Math.round(v * 10) / 10).toString();
 
+/** Blend a #rrggbb colour toward white by `amt` (0..1) → an rgb() string. */
+function lighten(hex: string, amt: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1]!, 16);
+  const ch = (c: number) => Math.round(c + (255 - c) * amt);
+  return `rgb(${ch((n >> 16) & 255)},${ch((n >> 8) & 255)},${ch(n & 255)})`;
+}
+
+/** Find the y-pixel segments where `threshold`+ range bars overlap, per x-column.
+ * Bars at (rounded) the same x pixel are swept over y; stretches covered by at
+ * least `threshold` bars are returned so they can be drawn as a "shining" core. */
+function denseOverlapSegments(
+  bars: { px: number; yTop: number; yBot: number }[],
+  threshold: number,
+): { px: number; yTop: number; yBot: number }[] {
+  const byX = new Map<number, { yTop: number; yBot: number }[]>();
+  for (const b of bars) (byX.get(b.px) ?? byX.set(b.px, []).get(b.px)!).push(b);
+  const out: { px: number; yTop: number; yBot: number }[] = [];
+  for (const [px, ivals] of byX) {
+    if (ivals.length < threshold) continue;
+    const events: { y: number; d: number }[] = [];
+    for (const iv of ivals) { events.push({ y: iv.yTop, d: 1 }); events.push({ y: iv.yBot, d: -1 }); }
+    events.sort((a, b) => a.y - b.y || b.d - a.d); // opens before closes at a tie
+    let cov = 0, start: number | null = null;
+    for (const e of events) {
+      const prev = cov;
+      cov += e.d;
+      if (prev < threshold && cov >= threshold) start = e.y;
+      else if (prev >= threshold && cov < threshold && start != null) { out.push({ px, yTop: start, yBot: e.y }); start = null; }
+    }
+  }
+  return out;
+}
+
 /** y extent across a set of series (range points count lo & hi; bars include 0). */
 function yExtent(series: SvgSeries[], beginAtZero?: boolean) {
   let yMin = Infinity, yMax = -Infinity;
@@ -183,6 +218,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const noteEl = container.querySelector<HTMLElement>(".svgc-note")!;
   const tipEl = container.querySelector<HTMLElement>(".svgc-tip")!;
   const clipId = `svgc-clip-${Math.random().toString(36).slice(2, 8)}`;
+  const glowId = `svgc-glow-${Math.random().toString(36).slice(2, 8)}`;
 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
@@ -316,6 +352,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // transparency so overlapping same-day sets read as a denser blob (depth).
         for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
       } else if (s.type === "range") {
+        const bars: { px: number; yTop: number; yBot: number }[] = [];
         for (const p of s.points) {
           const x = xPix(p.x);
           const yHi = ymap(p.hi ?? 0);
@@ -333,6 +370,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           }
           // Slight transparency so stacked/overlapping ranges show their density.
           body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}" stroke-opacity="0.55"${dash}/>`;
+          bars.push({ px: Math.round(x), yTop: Math.min(yHi, yLo), yBot: Math.max(yHi, yLo) });
+        }
+        // Where 3+ bars pile up, stacked transparency just turns muddy/dark — so
+        // instead those stretches "shine": a bright, glowing core drawn on top.
+        const shine = lighten(s.color, 0.7);
+        for (const seg of denseOverlapSegments(bars, 3)) {
+          if (seg.yBot - seg.yTop < 0.5) continue;
+          body += `<line x1="${seg.px.toFixed(1)}" y1="${seg.yTop.toFixed(1)}" x2="${seg.px.toFixed(1)}" y2="${seg.yBot.toFixed(1)}" stroke="${shine}" stroke-width="3" stroke-linecap="round" stroke-opacity="0.95" filter="url(#${glowId})"/>`;
         }
       } else {
         // bars: from baseline (0, clamped into plot) to the value. Each bar is as
@@ -385,7 +430,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     noteEl.hidden = !cfg.note;
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
-      `<defs><clipPath id="${clipId}"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath></defs>` +
+      `<defs><clipPath id="${clipId}"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath>` +
+      `<filter id="${glowId}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` +
       `<g clip-path="url(#${clipId})">${bands}${grid}${body}${inside() ? xLabels + yLabels : ""}</g>` +
       frame +
       (inside() ? "" : xLabels + yLabels) +
