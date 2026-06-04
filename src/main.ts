@@ -9,6 +9,7 @@ import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
   distinctExercises,
+  selectableExercises,
   distinctUsers,
   exerciseCountsForUser,
   setsForUserExercise,
@@ -6072,7 +6073,7 @@ function renderAddTab() {
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
   if (prev) els.addAthlete.value = prev;
-  els.addExerciseList.innerHTML = distinctExercises(data.records)
+  els.addExerciseList.innerHTML = selectableExercises(data.records)
     .map((e) => `<option value="${escapeHtml(e)}"></option>`)
     .join("");
   if (!els.addDate.value) els.addDate.value = todayIso();

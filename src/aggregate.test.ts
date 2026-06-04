@@ -9,6 +9,7 @@ import {
   personalRecords,
   bestSet,
   distinctExercises,
+  selectableExercises,
   distinctUsers,
   exerciseCountsForUser,
   setsForUserExercise,
@@ -738,5 +739,39 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
 
   it("is empty for no points", () => {
     expect(decayedStrengthSeries([], at(10))).toEqual([]);
+  });
+});
+
+describe("originals stay selectable when variants/groups exist (TASK 11)", () => {
+  const base = [
+    rec({ username: "ada", exerciseName: "Pull Ups" }),
+    rec({ username: "ada", exerciseName: "Pull Ups" }),
+    rec({ username: "ada", exerciseName: "Assisted Pull Up" }),
+    rec({ username: "ada", exerciseName: "Gravity Machine Pull Up" }),
+  ];
+  const groups = [
+    { id: "combine.pulls", derivedName: "Pull mix", members: { "Pull Ups": 1, "Assisted Pull Up": 1 } },
+  ];
+
+  it("original and both variants all appear in the selector list", () => {
+    const names = selectableExercises(base);
+    expect(names).toEqual(
+      expect.arrayContaining(["Pull Ups", "Assisted Pull Up", "Gravity Machine Pull Up"]),
+    );
+  });
+
+  it("creating a combined group never removes an original, and the group is also selectable", () => {
+    const withGroup = [...base, ...withSyntheticGroups(base, groups)];
+    const before = selectableExercises(base);
+    const after = new Set(selectableExercises(withGroup));
+    for (const n of before) expect(after.has(n)).toBe(true); // every original/variant survives
+    expect(after.has("Pull mix")).toBe(true); // …and the combined appears alongside them
+  });
+
+  it("the per-athlete selector keeps the original next to the variant", () => {
+    const names = exerciseCountsForUser(base, "ada").map((c) => c.exerciseName);
+    expect(names).toContain("Pull Ups");
+    expect(names).toContain("Assisted Pull Up");
+    expect(names).toContain("Gravity Machine Pull Up");
   });
 });

@@ -128,7 +128,23 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
   });
 }
 
-/** A frequency tier: an id ("S".."D") and the minimum set count that reaches it. */
+/**
+ * The exercise names a picker/selector should offer for a set of records.
+ *
+ * TASK 11 invariant — creating a dissolved / combined / comparison variant must
+ * NEVER replace or hide an original. Every distinct logged exerciseName is
+ * offered, alongside any variant or synthetic group name present in `records`;
+ * relationship membership (parent/child, group inclusion) never subtracts a name.
+ * So an original (e.g. "Pull Ups") and its variants ("Assisted Pull Up", "Gravity
+ * Machine Pull Up") are always selectable together. Most-logged first.
+ *
+ * It delegates to distinctExercises: the guarantee is that nothing here filters by
+ * identity/relationship. Pass logged records for originals+variants, or
+ * computedRecords() to also include synthetic group names.
+ */
+export function selectableExercises(records: readonly SetRecord[]): string[] {
+  return distinctExercises(records);
+}
 export interface FreqTier {
   tier: string;
   min: number;
