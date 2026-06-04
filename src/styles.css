@@ -91,6 +91,8 @@ html.signed-in .login-gate { display: none; }
 }
 .login-link:hover { filter: brightness(1.1); }
 .login-note { margin: 0.9rem 0 0; font-size: 0.72rem; }
+.login-err { margin: 0 0 0.6rem; font-size: 0.8rem; font-weight: 600; color: #c0392b; }
+.login-err[hidden] { display: none; }
 body {
   margin: 0;
   font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;

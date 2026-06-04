@@ -352,6 +352,8 @@ function showLoginPage(): void {
   document.documentElement.classList.remove("signed-in"); // override the "always hide" rule
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
+  const err = document.getElementById("loginErr");
+  if (err) err.hidden = true; // clear any stale "wrong password"
   document.body.classList.add("locked");
   (document.getElementById("loginUser") as HTMLInputElement | null)?.focus();
 }
@@ -362,8 +364,22 @@ function hideLoginPage(): void {
   try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
   document.documentElement.classList.add("signed-in"); // stays hidden from now on
 }
-/** "Log in" — decorative only (credentials ignored): enter admin view. */
-function logIn(): void { hideLoginPage(); setViewMode("admin"); }
+/** Admin password. NOTE: client-side only — the site is public and this code is
+ * readable, so it's a soft gate, not real security. */
+const ADMIN_PASSWORD = "ag";
+/** "Log in" — checks the admin password; on a match, enter admin view. */
+function logIn(): void {
+  const pass = (document.getElementById("loginPass") as HTMLInputElement | null)?.value ?? "";
+  const err = document.getElementById("loginErr");
+  if (pass !== ADMIN_PASSWORD) {
+    if (err) err.hidden = false; // show "wrong password"
+    (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
+    return;
+  }
+  if (err) err.hidden = true;
+  hideLoginPage();
+  setViewMode("admin");
+}
 /** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
 function viewAsSpectator(): void { hideLoginPage(); setViewMode("loggedout"); }
 
@@ -6372,6 +6388,10 @@ function setupBottomNav() {
   if (!signedIn) showLoginPage(); // first visit: show the page (non-blocking choice)
   document.getElementById("loginAdminBtn")?.addEventListener("click", logIn);
   document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
+  // Enter in the password field submits the admin login.
+  document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") logIn();
+  });
 }
 
 void init();
