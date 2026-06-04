@@ -40,7 +40,7 @@ export const CHANGELOG: Release[] = [
   },
   {
     version: "b.2.1",
-    title: "Version 2.1 — polish and roles",
+    title: "Fades, roles and per-set editing",
     sp: 0,
     note: "The big b.2.1 run: strength-fade modelling, predicted RIR, a roles/login system, technique scaling, exercise codes, and dozens of category fixes.",
     children: [
@@ -50,6 +50,7 @@ export const CHANGELOG: Release[] = [
         sp: 0,
         note: "Per-set editing, the timeline heatmap, multi-category codes, section cards, and the nested/collapsed version history.",
         children: [
+          { version: "b.2.2.2", title: "Descriptive chapter titles", sp: 0.1, note: "Chapter titles no longer repeat the version number (it's already shown on the left); they now describe the work — e.g. “Current strength and combined lifts”, “Bottom nav, Add and compare”." },
           { version: "b.2.2.1", title: "Renumbered history chapters", sp: 0.1, note: "Renamed the version-history chapter labels into a clean sequence — b.1.0 (was “0.x”), b.1.1, b.1.2, then b.2.0 / b.2.1 — so the chapters read as tidy version numbers." },
           { version: "b.2.2.0", title: "Nested collapsed history", sp: 3, note: "Version history is now three nested levels — releases under 20–30 SP groups under 80–130 SP chapters — and every row starts collapsed, showing just its title, so the page stays short." },
           { version: "b.2.1.61", title: "Timeline heatmap + sex filter", sp: 5, note: "Three things. (1) The Workouts heatmap has a new “Timeline” view — now the default — that draws your whole history as ONE continuous strip flowing across years (2025 → 2026 → 2027) instead of jumping one calendar year at a time; every January is labelled with its year so you can see where each year begins. “Single year” (with ‹ › nav) and “All years” (stacked) are still there. (2) The athlete picker gains an All / Men / Women filter above the name chips — pick a sex to narrow who shows, then choose the person. (3) Removed the redundant “Workouts” button from the bottom bar: it opened the very same heatmap as the “Workouts” tab in the athlete tab row, so the bottom bar is now just Exercises · Other (the heatmap still lives on the athlete “Workouts” tab)." },
@@ -151,7 +152,7 @@ export const CHANGELOG: Release[] = [
   },
   {
     version: "b.2.0",
-    title: "Version 2.0 — charts and lifts",
+    title: "Current strength and combined lifts",
     sp: 0,
     note: "The version-2 foundation: a current-strength line, the merged drill-in graph, RIR difficulty, the year-heatmap tags, combinable lifts and an app-wide active filter.",
     children: [
@@ -314,7 +315,7 @@ export const CHANGELOG: Release[] = [
   },
   {
     version: "b.1.1",
-    title: "Version 1 foundations",
+    title: "Bottom nav, Add and compare",
     sp: 0,
     note: "Bottom-nav redesign, the Add tab, the compare graph, per-set views, live hosting, and the b.x versioning reset.",
     children: [
