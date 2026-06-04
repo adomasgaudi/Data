@@ -59,7 +59,7 @@ import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
-import { GRAPH_METRICS } from "./graphMetrics";
+import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
 import { renderAnalyticsGraph } from "./analyticsGraph";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
@@ -7066,13 +7066,18 @@ function renderWaGraph(): void {
       })
     : 0;
   const noteEl = document.getElementById("waGraphNote");
-  if (noteEl)
-    noteEl.textContent =
-      waSelected.length === 0
-        ? "Pick exercises to plot — showing sample data."
-        : drawn === 0
-          ? "Not enough data for the selected metric(s)."
-          : "";
+  if (noteEl) {
+    if (waSelected.length === 0) {
+      noteEl.textContent = "Pick exercises to plot — showing sample data.";
+    } else {
+      // Compatibility / unavailable-state messages (TASK 42).
+      const recs = computedRecords().filter((r) => r.username === els.athlete.value && waSelected.includes(r.exerciseName));
+      const e1rmPoints = recs.filter((r) => addedWeight1RM(r, currentFormula()) != null).length;
+      const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
+      if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
+      noteEl.textContent = notes.join("  ·  ");
+    }
+  }
 }
 
 /** Build the metadata-filter controls: a multi-select per dimension that has any

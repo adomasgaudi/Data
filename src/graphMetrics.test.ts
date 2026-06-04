@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { SetRecord } from "./domain";
-import { GRAPH_METRICS, graphMetric } from "./graphMetrics";
+import { GRAPH_METRICS, graphMetric, graphCompatibilityNotes } from "./graphMetrics";
 import { DEFAULT_GRAPH_CONFIG } from "./graphConfig";
 
 function rec(p: Partial<SetRecord>): SetRecord {
@@ -38,14 +38,8 @@ describe("graph metric registry (TASK 26)", () => {
     expect(graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBe(2);
   });
 
-  it("migrated metrics now compute; not-yet-built ones still don't (groundwork)", () => {
-    // TASKS 31–36 migrated these:
-    for (const id of ["weight", "weightRange", "e1rm", "strength", "strengthDecay", "predicted"]) {
-      expect(graphMetric(id)!.compute, id).toBeTypeOf("function");
-    }
-    // Still registered-only:
-    expect(graphMetric("trend")!.compute).toBeUndefined();
-    expect(graphMetric("sets")!.compute).toBeUndefined();
+  it("every registered metric now has a compute (TASKS 31–41)", () => {
+    for (const m of GRAPH_METRICS) expect(m.compute, m.id).toBeTypeOf("function");
   });
 
   it("weight range is a range series with lo/hi (TASK 32)", () => {
@@ -79,5 +73,58 @@ describe("graph config layer (TASK 29)", () => {
       aggregation: "none", interval: "week", smoothing: 0, prediction: false, decay: false,
       formula: "epley", predictionDays: 90,
     });
+  });
+});
+
+describe("volume / reps / sets / frequency aggregates (TASKS 37–39)", () => {
+  const recs = [
+    rec({ date: "2024-01-01", weight: 100, reps: 5 }), // vol 500
+    rec({ date: "2024-01-01", weight: 100, reps: 3 }), // same day → vol 300, 2 sets
+    rec({ date: "2024-01-08", weight: 90, reps: 5 }), // vol 450, next week
+  ];
+  it("volume sums per day", () => {
+    const v = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(v.length).toBe(2); // two distinct days
+    expect(v[0]!.y).toBe(800); // 500 + 300 on day 1
+  });
+  it("reps sum per day, sets count per day", () => {
+    expect(graphMetric("reps")!.compute!(recs, DEFAULT_GRAPH_CONFIG)[0]!.y).toBe(8); // 5 + 3
+    expect(graphMetric("sets")!.compute!(recs, DEFAULT_GRAPH_CONFIG)[0]!.y).toBe(2);
+  });
+  it("frequency counts distinct training days per week", () => {
+    const f = graphMetric("frequency")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(f.reduce((n, p) => n + (p.y ?? 0), 0)).toBe(2); // 2 distinct days total
+  });
+  it("volume/reps/sets sit on the right axis (TASK 42)", () => {
+    for (const id of ["volume", "volumeLoad", "reps", "sets", "frequency"]) expect(graphMetric(id)!.axis).toBe("right");
+  });
+});
+
+describe("PR markers, trend, moving average (TASKS 40–41)", () => {
+  const recs = [
+    rec({ date: "2024-01-01", weight: 100, reps: 1 }),
+    rec({ date: "2024-02-01", weight: 90, reps: 1 }), // not a PR
+    rec({ date: "2024-03-01", weight: 110, reps: 1 }), // new PR
+  ];
+  it("PR markers fire only on new records (scatter)", () => {
+    const pr = graphMetric("pr")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(pr.map((p) => p.y)).toEqual([100, 110]); // 90 skipped
+    expect(graphMetric("pr")!.type).toBe("scatter");
+  });
+  it("trend + moving average produce points (and don't crash on little data)", () => {
+    expect(graphMetric("trend")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
+    expect(graphMetric("trend")!.compute!([rec({})], DEFAULT_GRAPH_CONFIG)).toEqual([]); // <2 → empty
+    expect(graphMetric("movingAvg")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, smoothing: 2 }).length).toBe(3);
+  });
+});
+
+describe("metric compatibility rules (TASK 42)", () => {
+  it("flags predicted with too little data, and decay without a strength metric", () => {
+    expect(graphCompatibilityNotes(["predicted"], DEFAULT_GRAPH_CONFIG, { e1rmPoints: 2 })[0]).toMatch(/at least 3/);
+    expect(graphCompatibilityNotes(["volume"], { ...DEFAULT_GRAPH_CONFIG, decay: true }, { e1rmPoints: 10 }).some((n) => /Decay/.test(n))).toBe(true);
+  });
+  it("notes the separate axis when mixing kg + counts, and is quiet when fine", () => {
+    expect(graphCompatibilityNotes(["e1rm", "volume"], DEFAULT_GRAPH_CONFIG, { e1rmPoints: 10 }).some((n) => /right axis/.test(n))).toBe(true);
+    expect(graphCompatibilityNotes(["e1rm"], DEFAULT_GRAPH_CONFIG, { e1rmPoints: 10 })).toEqual([]);
   });
 });

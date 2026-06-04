@@ -90,7 +90,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // little data to predict) we draw an empty chart — the caller shows a note.
   }
 
-  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, height: 300, insideLabels: true };
+  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true };
   const existing = charts.get(container);
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));
