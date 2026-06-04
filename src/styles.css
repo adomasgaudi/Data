@@ -1948,6 +1948,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Relocated panels inside the analysis host lose their own card styling to avoid
    nested card-in-card-in-card. */
 #waWorkoutsHost > .panel { border: none; box-shadow: none; padding: 0; margin: 0; background: none; border-radius: 0; }
+/* The "sets behind the graph" table is redundant in analysis — the workout
+   history section already shows the same data in a richer format. */
+#waWorkoutsHost #compareSets { display: none; }
 
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
 .wa-sel-header { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; }
