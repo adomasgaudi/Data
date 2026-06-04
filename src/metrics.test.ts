@@ -203,12 +203,13 @@ describe("Nuzzo bench curve", () => {
     }
   });
 
-  it("benchPctForReps never exceeds 100% and a single is the 1RM", () => {
+  it("benchPctForReps stays within the study range (15%–100%), a single = 1RM", () => {
     expect(benchPctForReps(1)).toBe(100);
+    expect(benchPctForReps(1000)).toBe(15); // very high reps clamp to the 15% floor
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 300 }), (r) => {
         const pct = benchPctForReps(r);
-        return pct <= 100 && pct >= 5;
+        return pct <= 100 && pct >= 15;
       }),
     );
   });

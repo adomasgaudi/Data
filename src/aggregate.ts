@@ -477,9 +477,10 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
  */
 export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
   if (isIsometric(record.exerciseName)) return null; // holds log seconds, not reps → no 1RM
-  // Above the cap, a rep→1RM estimate is guesswork, so we report NO value (null)
-  // rather than a clamped one — the set simply doesn't yield a 1RM, everywhere.
-  if (record.reps !== null && record.reps > MAX_1RM_REPS) return null;
+  // Above the cap, Epley/Brzycki are guesswork, so we report NO value (null)
+  // rather than a clamped one. The Nuzzo curve is data-derived across the study's
+  // full range (down to 15% of 1RM ≈ 127 reps), so it is EXEMPT from the cap.
+  if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
   const effective1RM = estimate1RM(record.weight, record.reps, formula);
   if (effective1RM === null) return null;
   const effectiveLoad = record.weight ?? 0;

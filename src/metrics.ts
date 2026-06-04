@@ -65,13 +65,14 @@ export function benchRepsAtPct(pct: number): number {
 /**
  * Inverse of benchRepsAtPct: the % of 1RM that `reps` reps to failure implies on
  * bench. The curve is monotonic, so a bounded bisection pins it down. Clamped to
- * the data's sensible span — about one rep ⇒ 100% (a true single is your 1RM),
- * and very high reps ⇒ the 5% floor — so it never returns a load above 100%.
+ * the STUDY's range — about one rep ⇒ 100% (a true single is your 1RM), and the
+ * lowest study point ⇒ a 15% floor (≈127 reps), so it stays within the data
+ * (Nuzzo et al. only go down to 15% of 1RM) and never returns a load above 100%.
  */
 export function benchPctForReps(reps: number): number {
   if (reps <= benchRepsAtPct(100)) return 100;
-  if (reps >= benchRepsAtPct(5)) return 5;
-  let lo = 5; // lighter load, more reps
+  if (reps >= benchRepsAtPct(15)) return 15;
+  let lo = 15; // lighter load, more reps — 15% is the study's lowest point
   let hi = 100; // heavier load, fewer reps
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2;
@@ -114,11 +115,12 @@ export function nuzzoRepsAtWeight(weight: number | null, oneRepMax: number | nul
 }
 
 /**
- * Above this many reps, every rep→1RM formula is guesswork (Epley/Brzycki were
- * fit on low-rep sets), so a 35-rep set would extrapolate to an absurd 1RM.
- * Sets above this many reps yield NO 1RM at all (addedWeight1RM returns null) —
- * we report "—" rather than a clamped value, so a high-rep set never masquerades
- * as a max anywhere. The Test-tab teaching calculator is exempt (explores freely).
+ * Above this many reps, the EPLEY/BRZYCKI formulas are guesswork (they were fit on
+ * low-rep sets), so a 35-rep set would extrapolate to an absurd 1RM. Sets above
+ * this many reps yield NO 1RM under those formulas (addedWeight1RM returns null) —
+ * we report "—" rather than a clamped value. The NUZZO curve is data-derived
+ * across the study's full range (down to 15% of 1RM ≈ 127 reps), so it is EXEMPT
+ * and estimates at any rep count. The Test-tab teaching calculator is exempt too.
  */
 export const MAX_1RM_REPS = 15;
 

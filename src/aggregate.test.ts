@@ -97,9 +97,14 @@ describe("addedWeight1RM", () => {
     expect(addedWeight1RM(rec({ weight: 72, origWeight: null, reps: 30 }), "epley")).toBeNull();
   });
 
-  it("yields NO 1RM above the rep cap (null, not a clamped value)", () => {
+  it("caps Epley/Brzycki above the rep cap, but Nuzzo works the full study range", () => {
+    // Epley/Brzycki extrapolate absurdly at high reps → no value above the cap.
     expect(addedWeight1RM(rec({ weight: 100, reps: 40 }), "epley")).toBeNull();
-    expect(addedWeight1RM(rec({ weight: 100, reps: 16 }), "nuzzo")).toBeNull();
+    expect(addedWeight1RM(rec({ weight: 100, reps: 16 }), "brzycki")).toBeNull();
+    // Nuzzo is data-derived down to 15% of 1RM, so it estimates at any rep count.
+    const nz = addedWeight1RM(rec({ weight: 100, reps: 40 }), "nuzzo");
+    expect(nz).not.toBeNull();
+    expect(nz!).toBeGreaterThan(100); // a 1RM is never below the weight lifted
   });
 
   it("excludes isometric holds (seconds-as-reps) from the 1RM", () => {
