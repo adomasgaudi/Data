@@ -292,17 +292,18 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
     // series
     let body = "";
-    let legend = "";
+    const keyHtml: string[] = [];
     // Legend keys become toggles only when there are 2+ of them (a single series
     // shouldn't be hide-able into a blank chart).
     const legendCount = cfg.series.filter((s) => !s.noLegend).length;
     const toggleable = legendCount >= 2;
     for (const s of geomSeries()) {
       if (!s.noLegend)
-        legend +=
+        keyHtml.push(
           `<span class="svgc-key${toggleable ? " is-toggle" : ""}${visible(s) ? "" : " is-off"}"` +
-          `${toggleable ? ` role="button" tabindex="0" data-series="${esc(s.name)}" title="Show/hide ${esc(s.name)}"` : ""}>` +
-          `<span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`;
+            `${toggleable ? ` role="button" tabindex="0" data-series="${esc(s.name)}" title="Show/hide ${esc(s.name)}"` : ""}>` +
+            `<span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`,
+        );
       if (!visible(s)) continue; // hidden: in the legend, but not drawn
       const ymap = yOf(s);
       if (s.type === "line") {
@@ -364,12 +365,22 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
     // Time-axis charts get an app-wide "realistic ⇄ compacted" toggle on the right
     // of the legend row. Compacted squeezes the empty gaps so all sets fit.
-    if (compactable() && !cfg.noCompactToggle)
-      legend +=
-        `<button type="button" class="svgc-compact${useCompact() ? " is-on" : ""}" aria-pressed="${useCompact()}" ` +
-        `title="${useCompact() ? "Showing compacted time (gaps squeezed). Tap for real time spacing." : "Showing real time (with the gaps). Tap to squeeze the gaps so all sets fit."}">` +
-        `${useCompact() ? "⇄ Compacted time" : "⇄ Realistic time"}</button>`;
-    legendEl.innerHTML = legend;
+    const compactBtn =
+      compactable() && !cfg.noCompactToggle
+        ? `<button type="button" class="svgc-compact${useCompact() ? " is-on" : ""}" aria-pressed="${useCompact()}" ` +
+          `title="${useCompact() ? "Showing compacted time (gaps squeezed). Tap for real time spacing." : "Showing real time (with the gaps). Tap to squeeze the gaps so all sets fit."}">` +
+          `${useCompact() ? "⇄ Compacted time" : "⇄ Realistic time"}</button>`
+        : "";
+    // Many keys get cramped in an inline row, so past a handful collapse them into
+    // a floating "Legend" dropdown (overlay — doesn't grow the chart). The compact
+    // toggle stays inline. Toggling series still works: the keys keep their
+    // data-series handlers inside the menu.
+    const keys = keyHtml.join("");
+    legendEl.innerHTML =
+      keyHtml.length > 6
+        ? `<details class="svgc-legend-fold"><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
+          `<div class="svgc-legend-menu">${keys}</div></details>${compactBtn}`
+        : keys + compactBtn;
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
     plotEl.innerHTML =

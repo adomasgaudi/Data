@@ -402,8 +402,25 @@ main { padding-bottom: 8.5rem; }
 /* Leaderboard dot-plot (dedicated SVG renderer). */
 .lb-chart { width: 100%; }
 .lb-svg .lb-rank1 { fill: var(--gold); font-weight: 700; }
-.svgc-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); max-height: 4.5rem; overflow-y: auto; }
+.svgc-legend { position: relative; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem 1rem; margin: 0 0 0.4rem; font-size: 0.82rem; color: var(--muted); }
 .svgc-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+/* Past a handful of series the legend collapses into a floating dropdown so it
+   doesn't crowd the chart. Summary stays in the row; the keys float as an overlay. */
+.svgc-legend-fold { position: relative; }
+.svgc-legend-sum {
+  cursor: pointer; list-style: none; user-select: none; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px;
+}
+.svgc-legend-sum::-webkit-details-marker { display: none; }
+.svgc-legend-sum::after { content: " ▾"; color: var(--muted); }
+.svgc-legend-fold[open] .svgc-legend-sum { border-color: var(--accent); background: var(--accent-soft); }
+.svgc-legend-menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+  display: flex; flex-direction: column; gap: 0.45rem; padding: 0.6rem 0.7rem;
+  min-width: 12rem; max-width: 92vw; max-height: 60vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+}
 /* When there are 2+ series, legend keys are clickable show/hide toggles. */
 .svgc-key.is-toggle { cursor: pointer; padding: 1px 6px; border-radius: 999px; border: 1px solid transparent; user-select: none; }
 .svgc-key.is-toggle:hover { border-color: var(--line); }
