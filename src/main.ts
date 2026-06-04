@@ -3373,10 +3373,14 @@ function dataYears(trained: Map<string, number>): number[] {
 function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
+  const numWeeks = Math.ceil((startDow + daysInYear) / 7);
   const cells: string[] = [];
   for (let i = 0; i < startDow; i++) cells.push(`<div class="hm-cell empty"></div>`);
   let days = 0;
   let totalSets = 0;
+  const weekSets: number[] = Array(numWeeks).fill(0);
+  const weekCatHex: (string | null)[] = Array(numWeeks).fill(null);
+  const weekCatMax: number[] = Array(numWeeks).fill(0);
   for (let doy = 0; doy < daysInYear; doy++) {
     const d = new Date(year, 0, 1 + doy);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -3386,6 +3390,9 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
     if (sets) {
       days++;
       totalSets += sets;
+      const wi = Math.floor((startDow + doy) / 7);
+      weekSets[wi] = (weekSets[wi] ?? 0) + sets;
+      if (catHex && sets > (weekCatMax[wi] ?? 0)) { weekCatMax[wi] = sets; weekCatHex[wi] = catHex; }
     }
     const isToday = iso === todayIso();
     // Days the athlete tagged "trained alone" get a red outline on the heatmap.
@@ -3401,17 +3408,23 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
   }
 
   // Month labels: place each at the week-column where its 1st falls.
-  const numWeeks = Math.ceil((startDow + daysInYear) / 7);
   const labels = Array.from({ length: 12 }, (_, m) => {
     const doyStart = Math.round((Date.UTC(year, m, 1) - Date.UTC(year, 0, 1)) / 86_400_000);
     const col = Math.floor((startDow + doyStart) / 7) + 1; // 1-based grid column
     return `<span class="hm-mlabel" style="grid-column-start:${col}">${MONTH_ABBR[m]}</span>`;
   }).join("");
 
+  const weekRow = weekSets.map((wSets, wi) => {
+    const lvl = heatLevel(wSets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, weekCatHex[wi] ?? null)}"` : "";
+    return `<div class="hm-cell hm-wcell lvl-${lvl}"${bgStyle} title="Week ${wi + 1}: ${wSets} sets"></div>`;
+  }).join("");
+
   const html =
     `<div class="hm-year"><div class="hm-cal">` +
     `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels}</div>` +
     `<div class="hm-grid">${cells.join("")}</div>` +
+    `<div class="hm-wrow" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${weekRow}</div>` +
     `</div></div>`;
   return { html, days, totalSets };
 }
@@ -3444,10 +3457,14 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
   let days = 0;
   let totalSets = 0;
   let prevMonth = -1;
+  const weekSets: number[] = Array(numWeeks).fill(0);
+  const weekCatHex: (string | null)[] = Array(numWeeks).fill(null);
+  const weekCatMax: number[] = Array(numWeeks).fill(0);
   for (let i = 0; i < totalDays; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const col = Math.floor(i / 7) + 1; // 1-based grid column (start is a Monday, so weeks align)
+    const wi = Math.floor(i / 7); // 0-based week index
+    const col = wi + 1; // 1-based grid column (start is a Monday, so weeks align)
     const month = d.getMonth();
     if (month !== prevMonth) {
       // Show the year on January and on the first label so each year's start is clear.
@@ -3463,6 +3480,8 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
     if (sets) {
       days++;
       totalSets += sets;
+      weekSets[wi] = (weekSets[wi] ?? 0) + sets;
+      if (catHex && sets > (weekCatMax[wi] ?? 0)) { weekCatMax[wi] = sets; weekCatHex[wi] = catHex; }
     }
     const isToday = iso === todayIso();
     const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
@@ -3474,10 +3493,16 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
       `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
+  const weekRow = weekSets.map((wSets, wi) => {
+    const lvl = heatLevel(wSets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, weekCatHex[wi] ?? null)}"` : "";
+    return `<div class="hm-cell hm-wcell lvl-${lvl}"${bgStyle} title="Week ${wi + 1}: ${wSets} sets"></div>`;
+  }).join("");
   const html =
     `<div class="hm-year"><div class="hm-cal">` +
     `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels.join("")}</div>` +
     `<div class="hm-grid">${cells.join("")}</div>` +
+    `<div class="hm-wrow" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${weekRow}</div>` +
     `</div></div>`;
   return { html, days, totalSets };
 }
