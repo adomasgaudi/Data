@@ -1100,13 +1100,14 @@ sup.wr-bw { font-size: 0.85em; }
   color: rgba(0, 0, 0, 0.08);
 }
 .hm-cell.empty .hm-dom { display: none; }
-.hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-5 .hm-dom { color: rgba(255, 255, 255, 0.16); }
+.hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-4 .hm-dom { color: rgba(255, 255, 255, 0.18); }
+.hm-cell.lvl-5 .hm-dom { color: rgba(0, 0, 0, 0.12); }
 .hm-cell.lvl-0 { background: var(--hm-rest-even); }
-.hm-cell.lvl-1 { background: #bcd6f2; }  /* 1 set — light blue */
-.hm-cell.lvl-2 { background: #6fa0db; }  /* 2–3 — darker blue */
-.hm-cell.lvl-3 { background: #284e86; }  /* 4–5 — dark blue */
-.hm-cell.lvl-4 { background: #e6c879; }  /* 6–9 — light gold */
-.hm-cell.lvl-5 { background: #b8902f; }  /* 10+ — dark gold */
+.hm-cell.lvl-1 { background: #b8d4f0; }
+.hm-cell.lvl-2 { background: #5b93d6; }
+.hm-cell.lvl-3 { background: #1e4fa3; border-color: rgba(255,255,255,0.55); box-shadow: 0 0 0 1.5px #1e4fa3; }
+.hm-cell.lvl-4 { background: #0e2d6b; border-color: rgba(255,255,255,0.7); box-shadow: 0 0 0 1.5px #0e2d6b, 0 0 0 3px rgba(120,170,255,0.65); }
+.hm-cell.lvl-5 { background: #f5c800; border-color: rgba(255,255,255,0.9); box-shadow: 0 0 6px 2px #ffd700, 0 0 14px 4px rgba(255,200,0,0.55); }
 /* Odd months: very light gray rest squares + a slightly darker outline. */
 .hm-cell.hm-modd { border-color: var(--hm-bd-odd); }
 .hm-cell.hm-modd.lvl-0 { background: var(--hm-rest-odd); }

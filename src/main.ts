@@ -3318,15 +3318,14 @@ function initHeatYear() {
   aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
-/** Intensity bucket for a day's set count: 0 rest, then 1+/2+/4+/6+/10+ sets
- * (light blue → dark blue → light gold → dark gold). */
+/** Intensity bucket for a day's set count: 0 rest, 1/2/4/10/20 sets. */
 function heatLevel(sets: number): number {
   if (sets <= 0) return 0;
-  if (sets < 2) return 1; // 1 set — light blue
-  if (sets < 4) return 2; // 2–3 — darker blue
-  if (sets < 6) return 3; // 4–5 — dark blue
-  if (sets < 10) return 4; // 6–9 — light gold
-  return 5; // 10+ — dark gold
+  if (sets < 2)  return 1; // 1 set — light
+  if (sets < 4)  return 2; // 2–3 — darker
+  if (sets < 10) return 3; // 4–9 — dark + outline
+  if (sets < 20) return 4; // 10–19 — deep + double outline
+  return 5;                // 20+  — shining
 }
 
 /** The years (descending) that have any training, for the ‹ › year nav. */
