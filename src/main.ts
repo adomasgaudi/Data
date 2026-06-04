@@ -6876,6 +6876,7 @@ let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "none";
 let waChipsFoldOpen = false;
 let waCogOpen = false;
+let waGraphFoldOpen = true;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
@@ -7172,10 +7173,14 @@ function renderWaGraph(): void {
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
     `</div>`;
+  const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
+  if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
   box.innerHTML =
-    `<h3 class="wa-section-title">Graph <span class="muted" style="font-weight:400">· universal (beta)</span></h3>` +
+    `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
+    `<summary class="wa-graph-fold-sum">Graph settings</summary>` +
     `<div class="wa-metric-row">${metricChips}</div>` +
     cfgUi +
+    `</details>` +
     `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
     `<div id="waGraphChart"></div>`;
   const chartBox = document.getElementById("waGraphChart");
