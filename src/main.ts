@@ -7492,6 +7492,7 @@ function showSubtab(name: string) {
  * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
 function updateBottomNav() {
   const athleteOpen = document.getElementById("tab-athlete")?.hidden === false;
+  const analysisOpen = document.getElementById("tab-analysis")?.hidden === false;
   const activeSub = !athleteOpen
     ? null
     : document.getElementById("sub-exercises")?.hidden === false
@@ -7499,7 +7500,10 @@ function updateBottomNav() {
       : "workouts";
   for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
     const nav = b.dataset.nav;
-    const active = nav === "other" ? !athleteOpen : athleteOpen && nav === activeSub;
+    let active: boolean;
+    if (nav === "analysis") active = analysisOpen;
+    else if (nav === "other") active = !athleteOpen && !analysisOpen;
+    else active = athleteOpen && nav === activeSub;
     b.classList.toggle("is-active", active);
   }
 }
@@ -7518,6 +7522,11 @@ function setupBottomNav() {
       const nav = b.dataset.nav;
       if (nav === "other") {
         setOtherSheetOpen(els.otherSheet.hidden);
+        return;
+      }
+      if (nav === "analysis") {
+        setOtherSheetOpen(false);
+        switchTopTab("analysis");
         return;
       }
       setOtherSheetOpen(false);
