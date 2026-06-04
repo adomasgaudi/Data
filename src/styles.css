@@ -1103,11 +1103,17 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-cell.lvl-3 .hm-dom, .hm-cell.lvl-4 .hm-dom { color: rgba(255, 255, 255, 0.18); }
 .hm-cell.lvl-5 .hm-dom { color: rgba(0, 0, 0, 0.12); }
 .hm-cell.lvl-0 { background: var(--hm-rest-even); }
-.hm-cell.lvl-1 { background: #b8d4f0; }
-.hm-cell.lvl-2 { background: #5b93d6; }
-.hm-cell.lvl-3 { background: #1e4fa3; border-color: rgba(255,255,255,0.55); box-shadow: 0 0 0 1.5px #1e4fa3; }
-.hm-cell.lvl-4 { background: #0e2d6b; border-color: rgba(255,255,255,0.7); box-shadow: 0 0 0 1.5px #0e2d6b, 0 0 0 3px rgba(120,170,255,0.65); }
-.hm-cell.lvl-5 { background: #f5c800; border-color: rgba(255,255,255,0.9); box-shadow: 0 0 6px 2px #ffd700, 0 0 14px 4px rgba(255,200,0,0.55); }
+.hm-cell.lvl-1 { /* bg set inline */ }
+.hm-cell.lvl-2 { /* bg set inline */ }
+.hm-cell.lvl-3 { border: 2px solid rgba(255,255,255,0.55); }
+.hm-cell.lvl-4 { border: 2px solid rgba(255,255,255,0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.25); }
+.hm-cell.lvl-5 { border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 0 6px 2px #ffd700, 0 0 14px 4px rgba(255,200,0,0.55); }
+/* Color dot in multi-select filter options */
+.xdd-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; flex-shrink: 0; }
+.xdd-check { margin-left: 4px; color: var(--accent); font-weight: 700; }
+.xdd-clear { font-style: italic; }
+/* Category chips in the heatmap legend */
+.hm-cat-chip { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.68rem; font-weight: 600; color: #fff; margin-right: 4px; }
 /* Odd months: very light gray rest squares + a slightly darker outline. */
 .hm-cell.hm-modd { border-color: var(--hm-bd-odd); }
 .hm-cell.hm-modd.lvl-0 { background: var(--hm-rest-odd); }
