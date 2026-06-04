@@ -1848,71 +1848,86 @@ function renderTrainBreakdown() {
  * So a darker muscle means "stronger here", not "trained more". Untrained or
  * unscored regions show light grey. Hover a region for the percentile.
  */
+/** Each muscle region is read off a specific STRENGTH FEAT (the owner's choice):
+ * the region's shade and number come from the athlete's best estimated 1RM on
+ * that lift. names[] lists the lifts that count for the region (best of any). */
+const MUSCLE_FEATS: { cat: TrainingCategory; label: string; feat: string; names: string[] }[] = [
+  { cat: "Legs", label: "Quads", feat: "Squat", names: ["Squat", "Smith Machine Squat", "Front Squat"] },
+  { cat: "Legs", label: "Glutes", feat: "Squat", names: ["Squat", "Smith Machine Squat", "Hip Thrust"] },
+  { cat: "Legs", label: "Hamstrings / lower back", feat: "Deadlift", names: ["Deadlift", "Romanian Deadlift", "Stiff Leg Deadlift"] },
+  { cat: "Back", label: "Back (lats)", feat: "Pull Ups", names: ["Pull Ups", "Chin Ups", "Lat Pulldown"] },
+  { cat: "Chest", label: "Chest", feat: "Push Ups", names: ["Push Ups", "Bench Press"] },
+  { cat: "Shoulders", label: "Shoulders", feat: "Shoulder Press", names: ["Shoulder Press", "Seated Shoulder Press", "Dumbbell Shoulder Press", "Overhead Press", "Military Press"] },
+  { cat: "Arms", label: "Triceps", feat: "Dips", names: ["Dips", "Seated Dip Machine"] },
+  { cat: "Arms", label: "Biceps", feat: "Pull Ups", names: ["Pull Ups", "Chin Ups", "Barbell Curl"] },
+  { cat: "Core", label: "Core (abs)", feat: "Decline Sit Ups", names: ["Decline Sit Up", "Decline Sit Ups", "Sit Ups", "Hanging Leg Raise"] },
+];
+
 function renderMuscleMap() {
-  // Best strength percentile per category for this athlete (percentile is 0..1
-  // in the data; ×100 for display). Falls back to grey where there's no score.
   const username = els.athlete.value;
-  const byCat = new Map<TrainingCategory, number>();
-  for (const r of activeRecords()) {
-    if (r.username !== username || r.percentile === null) continue;
-    const cat = exerciseCategory(r.exerciseName);
-    const cur = byCat.get(cat);
-    if (cur === undefined || r.percentile > cur) byCat.set(cat, r.percentile);
-  }
-  if (byCat.size === 0) {
-    els.muscleMapBody.innerHTML = `<p class="muted">No strength scores yet for this athlete.</p>`;
+  // Best estimated 1RM per exercise for this athlete, then the best for each
+  // region's feat list. Drives both the shade and the kg shown.
+  const prByEx = new Map<string, number>();
+  for (const pr of personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: true }),
+    currentFormula(),
+    strengthAsOf(),
+  )) prByEx.set(pr.exerciseName, pr.bestE1rm.e1rm);
+  const best1rm = (names: string[]): number | null => {
+    let best: number | null = null;
+    for (const n of names) { const v = prByEx.get(n); if (v != null && (best === null || v > best)) best = v; }
+    return best;
+  };
+  const byLabel = new Map<string, number | null>();
+  for (const f of MUSCLE_FEATS) byLabel.set(f.label, best1rm(f.names));
+  const maxFeat = Math.max(0, ...[...byLabel.values()].filter((v): v is number => v != null));
+  if (maxFeat === 0) {
+    els.muscleMapBody.innerHTML = `<p class="muted">No 1RM on the key lifts yet (squat, deadlift, pull-ups, push-ups, dips, shoulder press, decline sit-ups).</p>`;
     return;
   }
-  // Opacity scales with the strength percentile itself (0..1 → 0.15..1), so the
-  // shade reads as an absolute strength level, comparable across muscles.
-  const fillFor = (cat: TrainingCategory): string => {
-    const pct = byCat.get(cat);
-    if (pct === undefined) return `fill:#e7e6e1`; // no strength score → light grey
-    const op = 0.15 + 0.85 * Math.max(0, Math.min(1, pct));
+  const fillFor = (label: string, cat: TrainingCategory): string => {
+    const v = byLabel.get(label);
+    if (v == null) return `fill:#e7e6e1`; // no feat logged → light grey
+    const op = 0.2 + 0.8 * Math.max(0, Math.min(1, v / maxFeat));
     return `fill:${CATEGORY_COLORS[cat]};fill-opacity:${op.toFixed(2)}`;
   };
-  const title = (label: string, cat: TrainingCategory): string => {
-    const pct = byCat.get(cat);
-    return pct === undefined ? `${label}: no strength score` : `${label}: ${Math.round(pct * 100)}th percentile strength`;
+  const reg = (cat: TrainingCategory, label: string, shapes: string) => {
+    const v = byLabel.get(label);
+    const f = MUSCLE_FEATS.find((x) => x.label === label)!;
+    const t = v == null ? `${label}: no ${f.feat} logged` : `${label} — ${f.feat}: best 1RM ${fmt(v)} kg`;
+    return `<g style="${fillFor(label, cat)}"><title>${escapeHtml(t)}</title>${shapes}</g>`;
   };
-  // A region = one or more SVG shapes sharing a category's fill + tooltip.
-  const reg = (cat: TrainingCategory, label: string, shapes: string) =>
-    `<g style="${fillFor(cat)}"><title>${escapeHtml(title(label, cat))}</title>${shapes}</g>`;
 
-  // --- FRONT view (chest, abs, biceps, quads, front delts) ---
   const front =
     `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Front muscle map">` +
-    // head + neck (neutral)
     `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
     reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
     reg("Chest", "Chest", `<path d="M44 38 H76 Q80 54 60 58 Q40 54 44 38 Z"/>`) +
-    reg("Arms", "Arms (biceps)", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
+    reg("Arms", "Biceps", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
     reg("Core", "Core (abs)", `<rect x="48" y="60" width="24" height="34" rx="4"/>`) +
-    reg("Legs", "Legs (quads)", `<rect x="46" y="98" width="12" height="54" rx="5"/><rect x="62" y="98" width="12" height="54" rx="5"/>`) +
+    reg("Legs", "Quads", `<rect x="46" y="98" width="12" height="54" rx="5"/><rect x="62" y="98" width="12" height="54" rx="5"/>`) +
     `<g fill="#d9d7d0"><rect x="47" y="154" width="10" height="40" rx="4"/><rect x="63" y="154" width="10" height="40" rx="4"/></g>` +
     `</svg>`;
 
-  // --- BACK view (upper back/lats, rear delts, triceps, glutes, hamstrings) ---
   const back =
     `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Back muscle map">` +
     `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
-    reg("Shoulders", "Rear shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
-    reg("Back", "Back (lats/traps)", `<path d="M44 38 H76 L74 74 Q60 82 46 74 Z"/>`) +
-    reg("Arms", "Arms (triceps)", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
+    reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
+    reg("Back", "Back (lats)", `<path d="M44 38 H76 L74 74 Q60 82 46 74 Z"/>`) +
+    reg("Arms", "Triceps", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
     reg("Legs", "Glutes", `<path d="M47 92 Q60 86 73 92 Q74 104 60 104 Q46 104 47 92 Z"/>`) +
-    reg("Legs", "Legs (hamstrings)", `<rect x="46" y="106" width="12" height="48" rx="5"/><rect x="62" y="106" width="12" height="48" rx="5"/>`) +
+    reg("Legs", "Hamstrings / lower back", `<rect x="46" y="106" width="12" height="48" rx="5"/><rect x="62" y="106" width="12" height="48" rx="5"/>`) +
     `<g fill="#d9d7d0"><rect x="47" y="156" width="10" height="38" rx="4"/><rect x="63" y="156" width="10" height="38" rx="4"/></g>` +
     `</svg>`;
 
-  // Legend: the mapped categories, strongest first, with their percentile.
-  const mapped: TrainingCategory[] = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core"];
-  const legend = mapped
-    .filter((c) => byCat.get(c) !== undefined)
-    .sort((a, b) => (byCat.get(b) ?? 0) - (byCat.get(a) ?? 0))
+  // Legend: each region's feat + best 1RM, strongest first.
+  const legend = MUSCLE_FEATS
+    .filter((f) => byLabel.get(f.label) != null)
+    .sort((a, b) => (byLabel.get(b.label) ?? 0) - (byLabel.get(a.label) ?? 0))
     .map(
-      (c) =>
-        `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[c]}"></span>` +
-        `${c} <span class="muted">${pct(byCat.get(c) ?? 0)}</span></span>`,
+      (f) =>
+        `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[f.cat]}"></span>` +
+        `${escapeHtml(f.label)} <span class="muted">${f.feat} ${fmt(byLabel.get(f.label)!)}kg</span></span>`,
     )
     .join("");
 
@@ -1920,7 +1935,7 @@ function renderMuscleMap() {
     `<div class="mm-views"><figure><figcaption class="muted">Front</figcaption>${front}</figure>` +
     `<figure><figcaption class="muted">Back</figcaption>${back}</figure></div>` +
     `<div class="mm-legend">${legend}</div>` +
-    `<p class="muted mm-note">Shaded by strength — best StrengthLevel percentile per muscle group (darker = stronger). Hover a region for its score.</p>`;
+    `<p class="muted mm-note">Shaded by your best estimated 1RM on each muscle's key lift — squat (quads/glutes), deadlift (hams/lower back), pull-ups (back), push-ups (chest), shoulder press, dips (triceps), decline sit-ups (core). Darker = stronger; hover a region for the kg.</p>`;
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
