@@ -7297,6 +7297,7 @@ function renderWorkoutAnalysis(): void {
     // selector body stays compact.
     const foldTools =
       `<div class="wa-chips-tools">` +
+      `<button type="button" id="waSelectAll" class="wa-clear">Select all</button>` +
       `<button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button>` +
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
       searchActive +
@@ -7505,8 +7506,15 @@ function renderWaCompareGraph(): void {
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
-  const { series, note: noteTxt } = compareSeriesFor(waSelected, username, recs, formula, waCompareView);
-  if (note) note.textContent = noteTxt;
+  // Cap the overlay at the first 10 lifts too (Select-all can pick dozens) so the
+  // chart never lags; note the rest, mirroring the universal graph.
+  const cmpExercises = waSelected.slice(0, WA_GRAPH_MAX);
+  const cmpExcluded = waSelected.slice(WA_GRAPH_MAX);
+  const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, waCompareView);
+  if (note)
+    note.textContent = cmpExcluded.length
+      ? `Showing the first ${WA_GRAPH_MAX} of ${waSelected.length} — not shown: ${cmpExcluded.join(", ")}.  ·  ${noteTxt}`
+      : noteTxt;
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
   if (!waCompareSvg) waCompareSvg = mountSvgChart(box, config);
   else waCompareSvg.update(config);
@@ -7737,6 +7745,14 @@ function setupWorkoutAnalysis(): void {
     if (chip?.dataset.waex) {
       const n = chip.dataset.waex;
       waSelected = waSelected.includes(n) ? waSelected.filter((x) => x !== n) : [...waSelected, n];
+      renderWorkoutAnalysis();
+      return;
+    }
+    if (t.closest("#waSelectAll")) {
+      // Select every exercise currently shown in the picker (respects the active
+      // identity-includes / filters / search). History + calendar then show them
+      // all; the graph still caps at the first 10 (see renderWaGraph).
+      waSelected = waChipList().map((e) => e.name);
       renderWorkoutAnalysis();
       return;
     }
