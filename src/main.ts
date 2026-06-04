@@ -7305,9 +7305,13 @@ function renderWorkoutAnalysis(): void {
     const exOptions = selectableExercises(data.records)
       .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
       .join("");
+    // Create variant / group is now a small square "+" button with a FLOATING
+    // menu (absolute, so it never shifts the layout).
     const createForm =
-      `<details class="wa-tool-fold wa-create"${waCreateOpen ? " open" : ""}><summary class="wa-tool-sum">➕ Create variant / group</summary>` +
-      `<div class="wa-tool-body wa-create-body">` +
+      `<details class="wa-sq-fold wa-create"${waCreateOpen ? " open" : ""}>` +
+      `<summary class="wa-sq-sum" title="Create variant / group">+</summary>` +
+      `<div class="wa-sq-menu wa-create-body">` +
+      `<div class="wa-sq-title">Create variant / group</div>` +
       `<label class="wa-create-f">Type<select id="waNewType">` +
       `<option value="dissolved">Dissolved variant (1 parent)</option>` +
       `<option value="combined">Combined group (members)</option>` +
@@ -7327,21 +7331,24 @@ function renderWorkoutAnalysis(): void {
     if (prevCreate) waCreateOpen = prevCreate.open;
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
     if (prevFold) waChipsFoldOpen = prevFold.open;
-    // Settings (identity toggles + name mode) is now a labelled button sitting just
-    // above Create variant / group — both compact buttons that expand on tap.
+    // Settings (identity toggles + name mode) is a small square ⚙ button, also
+    // with a floating menu — so it doesn't push the layout either.
     const settingsFold =
-      `<details class="wa-tool-fold wa-settings-fold"${waCogOpen ? " open" : ""}>` +
-      `<summary class="wa-tool-sum">⚙ Settings</summary>` +
-      `<div class="wa-tool-body">${toggles}${nameToggle}</div>` +
+      `<details class="wa-sq-fold wa-settings-fold"${waCogOpen ? " open" : ""}>` +
+      `<summary class="wa-sq-sum" title="Settings">⚙</summary>` +
+      `<div class="wa-sq-menu"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>` +
       `</details>`;
-    sel.innerHTML =
-      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3></div>` +
-      filterUi +
-      assignUi +
-      `<div class="wa-sel-tools">${settingsFold}${createForm}</div>` +
+    // Filter + Exercises sit side by side, each half the width, as in-flow
+    // ("physical") expanding dropdowns that can both be open at once.
+    const exercisesFold =
       `<details class="wa-chips-fold"${waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
       foldTools +
       `<div id="waChips" class="wa-chips-wrap"></div></details>`;
+    sel.innerHTML =
+      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>` +
+      `<div class="wa-sq-row">${settingsFold}${createForm}</div></div>` +
+      `<div class="wa-fe-row">${filterUi}${exercisesFold}</div>` +
+      assignUi;
     renderWaChips();
   }
   renderWaGraph();

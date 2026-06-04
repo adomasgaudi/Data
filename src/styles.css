@@ -2074,18 +2074,30 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-graph-fold .wa-gcfg { padding: 0.3rem 0.7rem 0.5rem; }
 .wa-graph-fold-cur { font-weight: 400; }
 
-/* WorkoutAnalysis selector tools: Settings + Create variant are compact,
-   full-width buttons that expand on tap, stacked just above the Exercises list. */
-.wa-sel-tools { display: flex; flex-direction: column; gap: 0.4rem; margin: 0 0 0.6rem; }
-.wa-tool-fold { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); overflow: hidden; }
-.wa-tool-sum {
-  cursor: pointer; list-style: none; padding: 6px 12px; font-size: 0.82rem; font-weight: 600;
-  color: var(--accent); user-select: none;
+/* WorkoutAnalysis selector tools: Settings + Create variant are small SQUARE
+   icon buttons (top-right of the section) whose menus FLOAT — absolutely
+   positioned so opening them never shifts the page layout. */
+.wa-sq-row { display: flex; gap: 0.4rem; margin-left: auto; }
+.wa-sq-fold { position: relative; }
+.wa-sq-sum {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; font-size: 1.05rem; font-weight: 700; color: var(--accent);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; user-select: none;
 }
-.wa-tool-sum::-webkit-details-marker { display: none; }
-.wa-tool-fold[open] .wa-tool-sum { border-bottom: 1px solid var(--line); }
-.wa-tool-body { padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.wa-settings-fold .wa-tool-body { gap: 0.4rem; }
+.wa-sq-sum::-webkit-details-marker { display: none; }
+.wa-sq-fold[open] .wa-sq-sum { border-color: var(--accent); background: var(--accent-soft); }
+.wa-sq-menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0;
+  display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16); min-width: 13rem; max-width: 86vw;
+}
+.wa-sq-title { font-size: 0.78rem; font-weight: 700; color: var(--text); }
+
+/* Filter + Exercises side by side, each half the width, both in-flow ("physical")
+   expanding dropdowns that can be open at the same time. */
+.wa-fe-row { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0 0 0.6rem; }
+.wa-fe-row > .wa-filters, .wa-fe-row > .wa-chips-fold { flex: 1 1 0; min-width: 0; margin: 0; }
 
 /* WorkoutAnalysis create-exercise form (TASKS 13–15). */
 .wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
