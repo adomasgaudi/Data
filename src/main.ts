@@ -1617,8 +1617,10 @@ const CATEGORY_COLORS: Record<TrainingCategory, string> = {
   Shoulders: "#b8902f",
   Arms: "#9c5bb8",
   Core: "#c0603a",
+  Dynamic: "#d98326",
   Skill: "#5b8c3a",
   Mobility: "#7fa1d4",
+  Posture: "#9aa7bd",
   Cardio: "#6b7280",
   Other: "#cbd5e1",
 };
