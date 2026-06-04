@@ -56,6 +56,7 @@ import {
 } from "./metrics";
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import type { SetRecord } from "./domain";
+import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import {
   ATHLETES,
   type AthleteProfile,
@@ -6764,6 +6765,23 @@ let waAllView: "workouts" | "list" = "workouts";
 // Purely a CSS class on the content host — never re-renders or touches selection.
 type WaView = "overview" | "table" | "charts" | "stats";
 let waView: WaView = "overview";
+// Which exercise IDENTITY types the selector offers (TASK 12). Default: originals
+// only — the dissolved/combined/comparison types are opt-in, independently.
+const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
+/** Distinct selectable exercises for the current athlete, tagged by identity:
+ * their logged lifts are "original"; the synthetic group derived names they have
+ * are "combined" / "comparison_group". De-duplicated by name (originals win). */
+function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
+  const username = els.athlete.value;
+  const out = new Map<string, ExerciseIdentity>();
+  for (const c of exerciseCountsForUser(activeRecords(), username)) out.set(c.exerciseName, "original");
+  for (const r of computedRecords()) {
+    if (r.username !== username || r.exerciseName === "") continue;
+    const id = exerciseIdentity(r);
+    if (id !== "original" && !out.has(r.exerciseName)) out.set(r.exerciseName, id);
+  }
+  return [...out].map(([name, identity]) => ({ name, identity }));
+}
 function waMode(): WaMode {
   return waSelected.length === 0 ? "all" : waSelected.length === 1 ? "single" : "compare";
 }
@@ -6895,17 +6913,33 @@ function renderWorkoutAnalysis(): void {
   }
   const sel = document.getElementById("waExerciseSelector");
   if (sel) {
-    const names = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
-    const chips = names.length
-      ? names
-          .map((n) => {
-            const on = waSelected.includes(n);
-            return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(n)}" aria-pressed="${on}" title="${escapeHtml(n)}">${escapeHtml(exerciseCode(n))}</button>`;
+    // Identity-inclusion toggles (default: originals only). Each can be flipped
+    // independently; they filter the chips (suggestions/search) below.
+    const idLabels: [ExerciseIdentity, string][] = [
+      ["original", "Original"],
+      ["dissolved", "Dissolved"],
+      ["combined", "Combined"],
+      ["comparison_group", "Comparison groups"],
+    ];
+    const toggles = idLabels
+      .map(
+        ([id, label]) =>
+          `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
+      )
+      .join("");
+    // De-duplicated, identity-tagged list filtered by the enabled toggles.
+    const list = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+    const chips = list.length
+      ? list
+          .map(({ name, identity }) => {
+            const on = waSelected.includes(name);
+            return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(exerciseCode(name))}</button>`;
           })
           .join("")
-      : `<p class="muted wa-placeholder">No exercises for this athlete.</p>`;
+      : `<p class="muted wa-placeholder">No exercises match the selected types.</p>`;
     sel.innerHTML =
       `<h3 class="wa-section-title">Exercise selector</h3>` +
+      `<div class="wa-inc-row">${toggles}</div>` +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
       `<div class="wa-ex-chips">${chips}</div>`;
   }
@@ -6916,6 +6950,15 @@ function renderWorkoutAnalysis(): void {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
+  // Identity-inclusion checkboxes (fire "change", not "click").
+  panel.addEventListener("change", (e) => {
+    const box = (e.target as HTMLElement).closest<HTMLInputElement>(".wa-inc-box");
+    if (!box?.dataset.waident) return;
+    const id = box.dataset.waident as ExerciseIdentity;
+    if (box.checked) waIncludeIdentities.add(id);
+    else waIncludeIdentities.delete(id);
+    renderWorkoutAnalysis();
+  });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const chip = t.closest<HTMLElement>(".wa-ex-chip");

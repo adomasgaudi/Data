@@ -1928,3 +1928,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost[data-wa-view="charts"] :is(#workoutsTable, #workoutsPager, #athleteTable, #exercisesPager, #compareSets, #exerciseStats, #exerciseCalc) { display: none; }
 #waWorkoutsHost[data-wa-view="table"] :is(#workoutSets, #workoutCalendar, #exerciseProgress, #compareChart, #exerciseStats, #exerciseCalc) { display: none; }
 #waWorkoutsHost[data-wa-view="stats"] :is(#workoutSets, #workoutCalendar, #exerciseProgress, #workoutsTable, #workoutsPager, #athleteTable, #exercisesPager, #compareChart, #compareSets) { display: none; }
+
+/* WorkoutAnalysis exercise-identity inclusion toggles (TASK 12). */
+.wa-inc-row { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.6rem; }
+.wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
+.wa-inc input { cursor: pointer; }
