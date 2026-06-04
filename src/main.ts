@@ -113,6 +113,7 @@ const els = {
   authBtn: $<HTMLButtonElement>("authBtn"),
   viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
+  showAloneRings: $<HTMLInputElement>("showAloneRings"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -774,6 +775,11 @@ function saveTeamPicks(usernames: string[]) {
 // ---- "Done alone" workout tags: per (athlete, day), remembered across reloads.
 const ALONE_STORE_KEY = "colosseum.aloneTags.v1";
 let aloneTags = new Set<string>();
+// The red "trained alone" rings on the calendar are OFF by default — a Settings
+// toggle shows them. While actively tagging (paint mode) they always show so you
+// can see what you're marking.
+let showAloneRings = (() => { try { return localStorage.getItem("colosseum.showAloneRings") === "1"; } catch { return false; } })();
+const aloneRingsVisible = (): boolean => showAloneRings || aloneTagMode;
 
 /** Stable tag key for a workout: the athlete + the session's ISO day. */
 const aloneKey = (date: string): string => `${els.athlete.value}|${date}`;
@@ -3517,7 +3523,7 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
     const lvl = heatLevel(sets);
     const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
-      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone && aloneRingsVisible() ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
 
@@ -3604,7 +3610,7 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
     const lvl = heatLevel(sets);
     const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
-      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone && aloneRingsVisible() ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
   const weekRow = weekSets.map((wSets, wi) => {
@@ -5500,6 +5506,14 @@ async function init() {
     showLegsAll = els.showLegsAll.checked;
     try { localStorage.setItem("colosseum.legsAll", showLegsAll ? "1" : "0"); } catch { /* ignore */ }
     renderExercisesPage();
+  });
+
+  // The red "trained alone" rings on the calendar (off by default).
+  els.showAloneRings.checked = showAloneRings;
+  els.showAloneRings.addEventListener("change", () => {
+    showAloneRings = els.showAloneRings.checked;
+    try { localStorage.setItem("colosseum.showAloneRings", showAloneRings ? "1" : "0"); } catch { /* ignore */ }
+    renderWorkoutCalendar();
   });
 
   els.decayStrength.checked = decayStrength;
