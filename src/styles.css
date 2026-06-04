@@ -1846,3 +1846,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
   .data-table th, .data-table td { padding: 6px 8px; }
 }
+
+/* Workout-analysis view (TASK 1): labelled placeholder sections. */
+.wa-section { border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; margin: 0 0 0.85rem; background: var(--page); }
+.wa-section-title { margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 600; }
+.wa-placeholder { margin: 0; }

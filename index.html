@@ -1038,6 +1038,39 @@
           <div id="siteMapBox" class="sitemap-box"></div>
         </section>
       </div>
+
+      <!-- Unified workout-analysis view (TASK 1): an empty shell of labelled
+           placeholder sections. No functionality is wired in yet; existing views
+           are untouched. Reached via Other → “Workout analysis”. -->
+      <div id="tab-analysis" class="tab-panel" hidden>
+        <section class="panel">
+          <h2>Workout analysis</h2>
+          <p class="muted" style="margin: 0 0 1rem">
+            Work in progress — a single place to filter, pick exercises, and see the graph,
+            stats and table together. The sections below are placeholders for now.
+          </p>
+          <div id="waFilters" class="wa-section">
+            <h3 class="wa-section-title">Filters</h3>
+            <p class="muted wa-placeholder">Filters go here.</p>
+          </div>
+          <div id="waExerciseSelector" class="wa-section">
+            <h3 class="wa-section-title">Exercise selector</h3>
+            <p class="muted wa-placeholder">Exercise selector goes here.</p>
+          </div>
+          <div id="waGraph" class="wa-section">
+            <h3 class="wa-section-title">Graph</h3>
+            <p class="muted wa-placeholder">Graph area goes here.</p>
+          </div>
+          <div id="waStats" class="wa-section">
+            <h3 class="wa-section-title">Stats</h3>
+            <p class="muted wa-placeholder">Stats area goes here.</p>
+          </div>
+          <div id="waTable" class="wa-section">
+            <h3 class="wa-section-title">Table / list</h3>
+            <p class="muted wa-placeholder">Table / list area goes here.</p>
+          </div>
+        </section>
+      </div>
     </main>
 
     <!-- App-style bottom navigation. Workouts/Exercises drive the Athlete
@@ -1063,6 +1096,7 @@
         <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
         <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
         <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
+        <button class="other-item" data-tab="analysis" role="menuitem"><span class="other-ico">📈</span> Workout analysis</button>
         <button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
         <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
         <button class="other-item" data-tab="codes" role="menuitem"><span class="other-ico">🏷️</span> Exercise codes</button>
