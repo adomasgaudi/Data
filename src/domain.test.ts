@@ -1,5 +1,51 @@
 import { describe, it, expect } from "vitest";
-import { parseRows, sanityCheck, exerciseIdentity, EXERCISE_IDENTITIES, type SetRecord } from "./domain";
+import {
+  parseRows,
+  sanityCheck,
+  exerciseIdentity,
+  EXERCISE_IDENTITIES,
+  exerciseRelationship,
+  includedExercises,
+  EXERCISE_RELATIONSHIPS,
+  type SetRecord,
+} from "./domain";
+
+describe("exercise relationships", () => {
+  it("a plain lift has no relationship and no members", () => {
+    expect(exerciseRelationship({})).toBe("none");
+    expect(includedExercises({})).toEqual([]);
+  });
+  it("a dissolved lift can point to its original parent", () => {
+    const r: Partial<SetRecord> = { identity: "dissolved", parentExerciseId: "Bench Press", relationshipType: "dissolved_into" };
+    expect(exerciseRelationship(r)).toBe("dissolved_into");
+    expect(r.parentExerciseId).toBe("Bench Press");
+  });
+  it("a combined lift includes multiple member exercises", () => {
+    const r: Partial<SetRecord> = {
+      identity: "combined",
+      relationshipType: "combined_from",
+      includedExerciseIds: ["Squat", "Smith Machine Squat", "Hack Squat"],
+    };
+    expect(exerciseRelationship(r)).toBe("combined_from");
+    expect(includedExercises(r)).toEqual(["Squat", "Smith Machine Squat", "Hack Squat"]);
+  });
+  it("a comparison group includes multiple member exercises", () => {
+    const r: Partial<SetRecord> = {
+      identity: "comparison_group",
+      relationshipType: "comparison_of",
+      includedExerciseIds: ["Deadlift", "Romanian Deadlift"],
+    };
+    expect(exerciseRelationship(r)).toBe("comparison_of");
+    expect(includedExercises(r).length).toBe(2);
+  });
+  it("derives the relationship from identity when not set explicitly", () => {
+    expect(exerciseRelationship({ syntheticGroupId: "combine.sq-mix" })).toBe("combined_from");
+    expect(exerciseRelationship({ syntheticGroupId: "compare.dl-pattern" })).toBe("comparison_of");
+  });
+  it("exposes all relationship types", () => {
+    expect(EXERCISE_RELATIONSHIPS).toEqual(["none", "dissolved_into", "combined_from", "comparison_of"]);
+  });
+});
 
 describe("exerciseIdentity", () => {
   it("defaults a plain logged set to original (no migration needed)", () => {
