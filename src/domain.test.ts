@@ -1,5 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { parseRows, sanityCheck, type SetRecord } from "./domain";
+import { parseRows, sanityCheck, exerciseIdentity, EXERCISE_IDENTITIES, type SetRecord } from "./domain";
+
+describe("exerciseIdentity", () => {
+  it("defaults a plain logged set to original (no migration needed)", () => {
+    expect(exerciseIdentity({})).toBe("original");
+    expect(exerciseIdentity({ syntheticGroupId: "" })).toBe("original");
+  });
+  it("derives combined / comparison_group from the synthetic-group id", () => {
+    expect(exerciseIdentity({ syntheticGroupId: "combine.sq-mix" })).toBe("combined");
+    expect(exerciseIdentity({ syntheticGroupId: "compare.dl-pattern" })).toBe("comparison_group");
+  });
+  it("an explicit identity field wins over the derived one", () => {
+    expect(exerciseIdentity({ identity: "dissolved", syntheticGroupId: "combine.x" })).toBe("dissolved");
+    expect(exerciseIdentity({ identity: "original" })).toBe("original");
+  });
+  it("exposes all four identity types for future use", () => {
+    expect(EXERCISE_IDENTITIES).toEqual(["original", "dissolved", "combined", "comparison_group"]);
+  });
+});
 
 describe("parseRows", () => {
   it("coerces numeric strings and treats '' as null", () => {

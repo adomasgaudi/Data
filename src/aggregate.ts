@@ -4,7 +4,7 @@
  * inputs so it can be exhaustively unit- and property-tested; the 10K-row scale
  * is trivial for plain JS, so the only thing that matters is correctness.
  */
-import type { SetRecord } from "./domain";
+import type { SetRecord, ExerciseIdentity } from "./domain";
 import {
   estimate1RM,
   MAX_1RM_REPS,
@@ -555,8 +555,11 @@ export function withSyntheticGroups(
   for (const g of groups) {
     // scaleToGroup relabels to derivedName, scales the load, and preserves the
     // source lift in originalExerciseName. We only add the syntheticGroupId tag.
+    // Tag the identity from the group id (combine.* vs compare.*) so views can
+    // branch on it without re-parsing the id. Pure source lifts stay "original".
+    const identity: ExerciseIdentity = g.id.startsWith("compare.") ? "comparison_group" : "combined";
     for (const r of scaleToGroup(computedRecords, g.derivedName, g.members))
-      out.push({ ...r, syntheticGroupId: g.id });
+      out.push({ ...r, syntheticGroupId: g.id, identity });
   }
   return out;
 }

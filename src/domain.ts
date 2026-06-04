@@ -61,6 +61,38 @@ export interface SetRecord {
    * group this record was derived for (e.g. "combine.sq-mix", "compare.dl-pattern").
    * Pure logged records never carry it. Lets views/filters tell synthetics apart. */
   syntheticGroupId?: string;
+  /** What kind of exercise this record represents (see ExerciseIdentity). Absent
+   * on plain logged sets, which read as "original" via exerciseIdentity(). */
+  identity?: ExerciseIdentity;
+}
+
+/**
+ * The "identity" of an exercise record — how the lift it represents came to be.
+ * A small, open enum the views can branch on; everything real defaults to
+ * "original" so existing data needs no migration.
+ *   • original         — a genuinely logged lift (the default for every set).
+ *   • dissolved        — a lift whose sets have been folded into another identity
+ *                        (reserved for upcoming merge/split work; nothing emits it yet).
+ *   • combined         — a synthetic record merging several lifts into one series.
+ *   • comparison_group — a synthetic record standing in for a comparison group.
+ */
+export const EXERCISE_IDENTITIES = ["original", "dissolved", "combined", "comparison_group"] as const;
+export type ExerciseIdentity = (typeof EXERCISE_IDENTITIES)[number];
+
+/**
+ * The identity of a record. An explicit `identity` field wins; otherwise it's
+ * derived from the synthetic-group id (`combine.*` → combined, `compare.*` →
+ * comparison_group). A plain logged set is "original". Total and safe on existing
+ * data: a record with neither field reads as "original".
+ */
+export function exerciseIdentity(
+  r: Pick<SetRecord, "identity" | "syntheticGroupId">,
+): ExerciseIdentity {
+  if (r.identity) return r.identity;
+  const g = r.syntheticGroupId;
+  if (g?.startsWith("combine.")) return "combined";
+  if (g?.startsWith("compare.")) return "comparison_group";
+  return "original";
 }
 
 /** "" / null / undefined -> null; otherwise coerce to a finite number or fail. */
