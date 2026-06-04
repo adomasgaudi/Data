@@ -3567,6 +3567,7 @@ function renderWorkoutCalendar() {
       g.html +
       legend;
     els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    scrollHeatmapToEnd();
     return;
   }
 
@@ -3579,6 +3580,7 @@ function renderWorkoutCalendar() {
       .join("");
     els.workoutCalendar.innerHTML = controls + tagHint + blocks + legend;
     els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    scrollHeatmapToEnd();
     return;
   }
 
@@ -3598,6 +3600,16 @@ function renderWorkoutCalendar() {
     g.html +
     legend;
   els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+  scrollHeatmapToEnd();
+}
+
+/** Scroll every .hm-year container to its right edge so the most recent weeks are visible. */
+function scrollHeatmapToEnd() {
+  requestAnimationFrame(() => {
+    for (const el of els.workoutCalendar.querySelectorAll<HTMLElement>(".hm-year")) {
+      el.scrollLeft = el.scrollWidth;
+    }
+  });
 }
 
 /** Step the heatmap to an adjacent year that has data (‹ older / › newer). */
