@@ -941,11 +941,44 @@ function activeRecords(): SetRecord[] {
   return data.records.filter((r) => allow.has(r.exerciseName));
 }
 
+/** User-created exercise definitions (TASKS 13–15), saved on this device: a
+ * "dissolved" variant (one parent), a "combined" group or a "comparison_group"
+ * (each with member lifts). A def makes its NAME selectable and tags any logged
+ * sets of that name with the right identity + relationship, so it behaves like a
+ * normal exercise everywhere. The parent / member lifts are never changed. */
+interface UserExerciseDef {
+  name: string;
+  identity: ExerciseIdentity; // "dissolved" | "combined" | "comparison_group"
+  parent?: string; // dissolved → parentExerciseId
+  members?: string[]; // combined / comparison_group → includedExerciseIds
+}
+let userExerciseDefs: UserExerciseDef[] = (() => {
+  try { return JSON.parse(localStorage.getItem("colosseum.userExercises") ?? "[]") as UserExerciseDef[]; } catch { return []; }
+})();
+function saveUserExerciseDefs(): void {
+  try { localStorage.setItem("colosseum.userExercises", JSON.stringify(userExerciseDefs)); } catch { /* ignore */ }
+}
+/** Tag a logged record belonging to a user-defined exercise with its identity +
+ * relationship fields (so its sets carry the parent/members and read as that
+ * type). Plain records pass through untouched. */
+function tagUserExerciseDef(r: SetRecord, byName: Map<string, UserExerciseDef>): SetRecord {
+  const d = byName.get(r.exerciseName);
+  if (!d) return r;
+  if (d.identity === "dissolved")
+    return { ...r, identity: "dissolved", parentExerciseId: d.parent ?? "", relationshipType: "dissolved_into" };
+  if (d.identity === "combined")
+    return { ...r, identity: "combined", includedExerciseIds: d.members ?? [], relationshipType: "combined_from" };
+  if (d.identity === "comparison_group")
+    return { ...r, identity: "comparison_group", includedExerciseIds: d.members ?? [], relationshipType: "comparison_of" };
+  return r;
+}
+
 function computedRecords(): SetRecord[] {
-  // Active-filtered logged records with bodyweight folded in, PLUS the synthetic
-  // combinable/comparable group records derived from those computed loads (so the
-  // ratio scales the total bw-inclusive load). Pure lifts are never mutated.
-  const pure = activeRecords().map(applySetOverride).map(computeRecord);
+  // Active-filtered logged records with bodyweight folded in (and tagged with any
+  // user exercise-def identity), PLUS the synthetic combinable/comparable group
+  // records derived from those computed loads. Pure source lifts are never mutated.
+  const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
+  const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
   return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
 }
 
@@ -6780,6 +6813,10 @@ function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
     const id = exerciseIdentity(r);
     if (id !== "original" && !out.has(r.exerciseName)) out.set(r.exerciseName, id);
   }
+  // User-created defs (dissolved / combined / comparison) are selectable even
+  // before any sets are logged to them, and their declared identity always wins
+  // (a defined name's name was rejected if it shadowed an existing lift).
+  for (const d of userExerciseDefs) out.set(d.name, d.identity);
   return [...out].map(([name, identity]) => ({ name, identity }));
 }
 function waMode(): WaMode {
@@ -6937,9 +6974,26 @@ function renderWorkoutAnalysis(): void {
           })
           .join("")
       : `<p class="muted wa-placeholder">No exercises match the selected types.</p>`;
+    // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
+    const exOptions = selectableExercises(data.records)
+      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
+      .join("");
+    const createForm =
+      `<details class="wa-create"><summary>➕ Create variant / group</summary>` +
+      `<div class="wa-create-body">` +
+      `<label class="wa-create-f">Type<select id="waNewType">` +
+      `<option value="dissolved">Dissolved variant (1 parent)</option>` +
+      `<option value="combined">Combined group (members)</option>` +
+      `<option value="comparison_group">Comparison group (members)</option>` +
+      `</select></label>` +
+      `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
+      `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
+      `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>` +
+      `</div></details>`;
     sel.innerHTML =
       `<h3 class="wa-section-title">Exercise selector</h3>` +
       `<div class="wa-inc-row">${toggles}</div>` +
+      createForm +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
       `<div class="wa-ex-chips">${chips}</div>`;
   }
@@ -6973,6 +7027,11 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutAnalysis();
       return;
     }
+    // Create a user exercise def (dissolved variant / combined / comparison group).
+    if (t.closest("#waNewCreate")) {
+      createUserExerciseDef();
+      return;
+    }
     // Display-mode toggle (Overview/Table/Charts/Stats): presentation only —
     // flip the host class + active button, never re-render or touch selection.
     const viewBtn = t.closest<HTMLElement>(".wa-viewmodes .seg-btn");
@@ -7001,6 +7060,34 @@ function setupWorkoutAnalysis(): void {
       }
     }
   });
+}
+
+/** Validate the create form and store a new user exercise def (dissolved /
+ * combined / comparison_group), then surface it in the selector. */
+function createUserExerciseDef(): void {
+  const typeEl = document.getElementById("waNewType") as HTMLSelectElement | null;
+  const nameEl = document.getElementById("waNewName") as HTMLInputElement | null;
+  const memEl = document.getElementById("waNewMembers") as HTMLSelectElement | null;
+  const msg = document.getElementById("waNewMsg");
+  if (!typeEl || !nameEl || !memEl) return;
+  const setMsg = (s: string) => { if (msg) msg.textContent = s; };
+  const identity = typeEl.value as ExerciseIdentity;
+  const name = nameEl.value.trim();
+  const members = Array.from(memEl.selectedOptions).map((o) => o.value);
+  if (!name) return setMsg("Enter a name.");
+  // No duplicates — never shadow an existing exercise or another def.
+  if (new Set(selectableExercises(data.records)).has(name) || userExerciseDefs.some((d) => d.name === name))
+    return setMsg("That name already exists.");
+  if (members.length === 0)
+    return setMsg(identity === "dissolved" ? "Pick the parent exercise." : "Pick the member exercises.");
+  const def: UserExerciseDef =
+    identity === "dissolved"
+      ? { name, identity, parent: members[0]! }
+      : { name, identity, members };
+  userExerciseDefs.push(def);
+  saveUserExerciseDefs();
+  waIncludeIdentities.add(identity); // so the new one shows immediately
+  renderWorkoutAnalysis();
 }
 
 function switchTopTab(name: string) {
