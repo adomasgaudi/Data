@@ -1377,6 +1377,7 @@ function renderPersonalRecords() {
 // exercises row click handler maps an index back to.
 let exercisesView: string[] = [];
 let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
+let lastSingleExercise: string | null = null; // last drilled-in lift, so the "Single" tab can return to it
 // Extra exercises folded into the current drill-in so several lifts (e.g. Squat
 // + Smith Machine Squat) are viewed together as one. Reset on each new drill-in.
 let combinedWith: string[] = [];
@@ -2248,10 +2249,49 @@ function renderCompareSets(picks: string[], username: string, recs: SetRecord[],
 }
 
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
+/** Which of the four athlete-view tabs is currently showing, derived from state:
+ * the Workouts sub-panel, the single-exercise drill-in, or the list/compare. */
+function activeExerciseTab(): "workouts" | "list" | "compare" | "single" {
+  if (document.getElementById("sub-workouts")?.hidden === false) return "workouts";
+  if (selectedExercise !== null) return "single";
+  return exercisesTab === "compare" ? "compare" : "list";
+}
+
+/** Light up the matching tab button. Called after any state change that moves
+ * between Workouts / list / compare / drill-in. */
+function syncExerciseTabs() {
+  const active = activeExerciseTab();
+  for (const b of els.exercisesTabs.querySelectorAll<HTMLElement>(".ex-tab"))
+    b.classList.toggle("is-active", b.dataset.extab === active);
+}
+
+/** Switch the athlete view to one of the four tabs. */
+function selectExerciseTab(t: string) {
+  if (t === "workouts") {
+    showSubtab("workouts");
+    return;
+  }
+  showSubtab("exercises");
+  if (t === "single") {
+    // The drill-in needs an exercise: reopen the last one viewed, else the
+    // most-trained lift.
+    if (selectedExercise === null) {
+      const ranked = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+      const pick = lastSingleExercise && ranked.includes(lastSingleExercise) ? lastSingleExercise : ranked[0];
+      if (pick) { selectedExercise = pick; combinedWith = []; }
+    }
+  } else {
+    selectedExercise = null;
+    exercisesTab = t === "compare" ? "compare" : "list";
+  }
+  renderExercisesPage();
+}
+
 function renderExercisesPage() {
+  syncExerciseTabs();
   if (selectedExercise !== null) {
-    // Drill-in: hide the list-view chrome (tabs, filters, search, compare).
-    els.exercisesTabs.hidden = true;
+    lastSingleExercise = selectedExercise; // remember for the "Single" tab
+    // Drill-in: hide the list-view chrome (filters, search, compare).
     els.exFiltersBtn.hidden = true;
     els.exerciseFilter.hidden = true;
     els.exSearchBar.hidden = true;
@@ -2261,8 +2301,7 @@ function renderExercisesPage() {
     renderExerciseDetail(selectedExercise);
     return;
   }
-  // List view: the two in-page tabs decide what shows.
-  els.exercisesTabs.hidden = false;
+  // List view: the in-page tab (list vs compare) decides what shows.
   const onCompare = exercisesTab === "compare";
   els.exCombineBar.hidden = true; // drill-in only
   els.exFiltersBtn.hidden = onCompare; // filters/search only apply to the list
@@ -2459,8 +2498,18 @@ function renderExerciseDetail(exName: string) {
     coeff > 0
       ? `<span class="ex-bwpart">Bodyweight part: ${pct(coeff)}</span>`
       : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
+  // The exercise name is a dropdown: tap it to switch to another of this
+  // athlete's lifts without leaving the Single view (most-trained first).
+  const trainedForSwitch = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+  const switchMenu = (trainedForSwitch.includes(exName) ? trainedForSwitch : [exName, ...trainedForSwitch])
+    .map((n) => `<button type="button" class="xdd-opt${n === exName ? " is-active" : ""}" role="option" data-switchex="${escapeHtml(n)}">${escapeHtml(n)}</button>`)
+    .join("");
   els.athleteTitle.innerHTML =
-    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}${originBadge(exName)} ${bwPart}` +
+    `<button type="button" class="back-btn">‹ Exercises</button> ` +
+    `<span class="xdd ex-switch-dd">` +
+    `<button type="button" class="xdd-btn ex-switch-btn" title="Tap to switch exercise">${escapeHtml(exName)}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${switchMenu}</div>` +
+    `</span>${originBadge(exName)} ${bwPart}` +
     ` <button type="button" class="ex-info-btn" data-exinfo="${escapeHtml(exName)}" title="See this exercise's merges & data (all athletes)">ℹ Exercise info</button>`;
   els.exercisesPager.innerHTML = "";
   const username = els.athlete.value;
@@ -4954,13 +5003,45 @@ async function init() {
   });
   // Back link in the exercise drill-in (lives in the title, outside the table).
   els.athleteTitle.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".back-btn")) {
+    const t = e.target as HTMLElement;
+    if (t.closest(".back-btn")) {
       selectedExercise = null;
       renderExercisesPage();
       return;
     }
-    const info = (e.target as HTMLElement).closest<HTMLElement>(".ex-info-btn");
+    // Switch-exercise dropdown: toggle the menu …
+    const switchBtn = t.closest<HTMLElement>(".ex-switch-btn");
+    if (switchBtn) {
+      const dd = switchBtn.closest<HTMLElement>(".xdd");
+      const menu = dd?.querySelector<HTMLElement>(".xdd-menu");
+      if (dd && menu) {
+        const opening = menu.hasAttribute("hidden");
+        menu.toggleAttribute("hidden", !opening);
+        dd.classList.toggle("open", opening);
+      }
+      return;
+    }
+    // … and pick a lift to switch to.
+    const opt = t.closest<HTMLElement>(".xdd-opt[data-switchex]");
+    if (opt?.dataset.switchex) {
+      if (opt.dataset.switchex !== selectedExercise) {
+        selectedExercise = opt.dataset.switchex;
+        combinedWith = [];
+        renderExercisesPage();
+      }
+      return;
+    }
+    const info = t.closest<HTMLElement>(".ex-info-btn");
     if (info?.dataset.exinfo) jumpToExerciseInfo(info.dataset.exinfo);
+  });
+  // Close the switch-exercise dropdown when clicking elsewhere.
+  document.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".ex-switch-dd")) return;
+    const menu = els.athleteTitle.querySelector<HTMLElement>(".ex-switch-dd .xdd-menu");
+    if (menu && !menu.hasAttribute("hidden")) {
+      menu.setAttribute("hidden", "");
+      menu.closest(".xdd")?.classList.remove("open");
+    }
   });
   // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
   els.exCombineBar.addEventListener("click", (e) => {
@@ -5029,16 +5110,10 @@ async function init() {
   setupExerciseSort();
   setupExerciseSearch();
 
-  // Exercises in-page tabs: List & stats  ↔  Compare graph.
+  // Athlete-view tabs: Workouts | List & stats | Compare | Single.
   els.exercisesTabs.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-tab");
-    if (!btn?.dataset.extab) return;
-    const t = btn.dataset.extab === "compare" ? "compare" : "list";
-    if (t === exercisesTab) return;
-    exercisesTab = t;
-    for (const b of els.exercisesTabs.querySelectorAll<HTMLElement>(".ex-tab"))
-      b.classList.toggle("is-active", b.dataset.extab === t);
-    renderExercisesPage();
+    if (btn?.dataset.extab) selectExerciseTab(btn.dataset.extab);
   });
   // Kebab (⋯) opens the filters/sort menu; click-outside closes it.
   els.exFiltersBtn.addEventListener("click", (e) => {
@@ -6333,6 +6408,7 @@ function showSubtab(name: string) {
     const panel = document.getElementById(`sub-${n}`);
     if (panel) panel.hidden = n !== name;
   }
+  syncExerciseTabs(); // keep the Workouts | List | Compare | Single bar in step
   updateBottomNav();
 }
 
