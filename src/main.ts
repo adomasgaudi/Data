@@ -6809,6 +6809,10 @@ let waView: WaView = "overview";
 const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
 // Metadata filters active in the selector (TASK 19): dim → accepted values.
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
+// Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
+let waSearchQuery = "";
+let waGroupBy: "none" | ExerciseFilterDim = "none";
+const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
@@ -6981,23 +6985,20 @@ function renderWorkoutAnalysis(): void {
           `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
       )
       .join("");
-    // De-duplicated, identity-tagged list filtered by the enabled toggles…
+    // Metadata-filter controls (TASK 44): one multi-select per dimension that has
+    // values among the identity-included exercises.
     const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
-    // …then by the active metadata filters (TASK 19) via the shared engine.
-    const activeFilters = FILTER_DIMS.map((d) => ({ dim: d, values: waFilterValues[d] ?? [] }));
-    const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
-    const list = byIdentity.filter((e) => keep.has(e.name));
-    // Metadata-filter controls: one multi-select per dimension that has values
-    // among the current exercises (so empties don't clutter). Multiple combine.
     const filterUi = waFilterControls(byIdentity.map((e) => e.name));
-    const chips = list.length
-      ? list
-          .map(({ name, identity }) => {
-            const on = waSelected.includes(name);
-            return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(exerciseCode(name))}</button>`;
-          })
-          .join("")
-      : `<p class="muted wa-placeholder">No exercises match the selected types/filters.</p>`;
+    // Search box (TASK 43) + Group By (TASK 45). The chips themselves live in
+    // #waChips and are (re)filled by renderWaChips() so typing keeps focus.
+    const groupOpts =
+      `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
+      WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
+    const selControls =
+      `<div class="wa-sel-controls">` +
+      `<input id="waSearch" class="wa-search" type="search" placeholder="Search exercises…" value="${escapeHtml(waSearchQuery)}" autocomplete="off" />` +
+      `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
+      `</div>`;
     // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
     const exOptions = selectableExercises(data.records)
       .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
@@ -7021,12 +7022,61 @@ function renderWorkoutAnalysis(): void {
       `<h3 class="wa-section-title">Exercise selector</h3>` +
       `<div class="wa-inc-row">${toggles}</div>` +
       filterUi +
+      selControls +
       assignUi +
       createForm +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
-      `<div class="wa-ex-chips">${chips}</div>`;
+      `<div id="waChips" class="wa-chips-wrap"></div>`;
+    renderWaChips();
   }
   renderWaGraph();
+}
+
+/** One chip for an exercise (selected state + identity). */
+function waChipHtml(name: string, identity: ExerciseIdentity): string {
+  const on = waSelected.includes(name);
+  return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(exerciseCode(name))}</button>`;
+}
+
+/** The selector's current exercise list: identity-included, metadata-filtered
+ * (TASK 44) and search-narrowed (TASK 43). */
+function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+  const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+  const activeFilters = FILTER_DIMS.map((d) => ({ dim: d, values: waFilterValues[d] ?? [] }));
+  const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
+  const q = waSearchQuery.trim().toLowerCase();
+  return byIdentity.filter(
+    (e) => keep.has(e.name) && (!q || e.name.toLowerCase().includes(q) || exerciseCode(e.name).toLowerCase().includes(q)),
+  );
+}
+
+/** Fill #waChips — flat, or grouped under headers by the Group By dimension
+ * (TASK 45). Re-rendered alone on search/group changes so typing keeps focus. */
+function renderWaChips(): void {
+  const box = document.getElementById("waChips");
+  if (!box) return;
+  const list = waChipList();
+  if (list.length === 0) {
+    box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search / filters.</p>`;
+    return;
+  }
+  if (waGroupBy === "none") {
+    box.innerHTML = `<div class="wa-ex-chips">${list.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
+    return;
+  }
+  const groups = new Map<string, typeof list>();
+  for (const e of list) {
+    const key = waMeta(e.name, waGroupBy)[0] ?? "Unassigned";
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
+  }
+  box.innerHTML = [...groups.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(
+      ([g, items]) =>
+        `<div class="wa-group"><div class="wa-group-h">${escapeHtml(g)} <span class="muted">(${items.length})</span></div>` +
+        `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div></div>`,
+    )
+    .join("");
 }
 
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
@@ -7142,9 +7192,22 @@ function waAssignEditor(name: string): string {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
-  // Identity-inclusion checkboxes + metadata-filter selects (fire "change").
+  // Live search (TASK 43): re-fill only the chips so the input keeps focus.
+  panel.addEventListener("input", (e) => {
+    const s = (e.target as HTMLElement).closest<HTMLInputElement>("#waSearch");
+    if (!s) return;
+    waSearchQuery = s.value;
+    renderWaChips();
+  });
+  // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
   panel.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
+    const grp = target.closest<HTMLSelectElement>("#waGroupBy");
+    if (grp) {
+      waGroupBy = (grp.value === "none" ? "none" : grp.value) as typeof waGroupBy;
+      renderWaChips();
+      return;
+    }
     const box = target.closest<HTMLInputElement>(".wa-inc-box");
     if (box?.dataset.waident) {
       const id = box.dataset.waident as ExerciseIdentity;
