@@ -2764,15 +2764,20 @@ function renderExerciseLevels(exName: string, username: string): void {
     })
     .join("");
   els.exLevels.hidden = false;
+  // Tucked into a collapsed "settings" disclosure — it's scaling configuration,
+  // not day-to-day stats, so it shouldn't sit inline in the List & stats view.
   els.exLevels.innerHTML =
-    `<div class="exl-head"><strong>Squat-rack holes</strong> ` +
-    `<span class="muted">real weight and 1RM stay as logged; tune each Scale so equal-effort holes show the same Effort</span></div>` +
+    `<details class="exl-settings">` +
+    `<summary class="exl-settings-sum">⚙ Squat-rack hole scaling <span class="muted">(${byHole.size} hole${byHole.size === 1 ? "" : "s"})</span></summary>` +
+    `<div class="exl-settings-body">` +
+    `<div class="exl-head muted">Real weight and 1RM stay as logged; tune each Scale so equal-effort holes show the same Effort.</div>` +
     `<table class="data-table exl-table"><thead><tr>` +
     `<th>Hole</th><th class="num">Best</th>` +
     `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the hole">1RM</th>` +
     `<th class="num" title="Scaled effort 1RM = 1RM × Scale. Tune Scale so equal-effort holes line up here.">Effort</th>` +
     `<th class="num" title="Technique scaling factor for this hole — only affects the Effort column, never the real 1RM. Lower hole = harder = bigger.">Scale</th>` +
-    `</tr></thead><tbody>${rows}</tbody></table>`;
+    `</tr></thead><tbody>${rows}</tbody></table>` +
+    `</div></details>`;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this

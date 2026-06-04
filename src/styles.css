@@ -677,8 +677,15 @@ main { padding-bottom: 5rem; }
 .ex-combine { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0 0 0.85rem; }
 .ex-combine[hidden] { display: none; }
 /* Drill-in squat-rack-hole scaling panel. */
-.ex-levels { margin: 0 0 0.85rem; padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); }
+.ex-levels { margin: 0 0 0.85rem; }
 .ex-levels[hidden] { display: none; }
+/* Collapsed "settings" disclosure so the hole-scaling config isn't inline in stats. */
+.exl-settings { border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); overflow: hidden; }
+.exl-settings-sum { cursor: pointer; list-style: none; padding: 0.5rem 0.7rem; font-size: 0.82rem; font-weight: 700; user-select: none; }
+.exl-settings-sum::-webkit-details-marker { display: none; }
+.exl-settings-sum::before { content: "▸ "; color: var(--muted); }
+.exl-settings[open] .exl-settings-sum::before { content: "▾ "; }
+.exl-settings-body { padding: 0 0.7rem 0.6rem; }
 .exl-head { font-size: 0.78rem; margin-bottom: 0.4rem; }
 .exl-table { margin: 0; font-size: 0.82rem; }
 .exl-table th, .exl-table td { padding: 4px 8px; }
