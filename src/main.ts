@@ -95,6 +95,7 @@ const els = {
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
+  authBtn: $<HTMLButtonElement>("authBtn"),
   viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
@@ -264,35 +265,40 @@ function setTheme(dark: boolean) {
 
 /** Which view the dashboard is showing: "admin" (the default, full access) or
  * "user". Admin sees every "Other" destination; user sees only the Guide. */
-type ViewMode = "admin" | "user";
+// Three view types (none enforced yet): "admin" (full access), "user" (locked to
+// a chosen athlete) and "loggedout" (not signed in → Adomas only).
+type ViewMode = "admin" | "user" | "loggedout";
 let viewMode: ViewMode = (() => {
-  try { return localStorage.getItem("colosseum.viewMode") === "user" ? "user" : "admin"; } catch { return "admin"; }
+  try { const v = localStorage.getItem("colosseum.viewMode"); return v === "user" || v === "loggedout" ? v : "admin"; }
+  catch { return "admin"; }
 })();
 /** In user view, which athlete the dashboard is locked to (their username), as
  * chosen in Settings → "View as". null = not yet chosen → falls back to Adomas. */
 let viewUser: string | null = (() => {
   try { return localStorage.getItem("colosseum.viewUser.v1"); } catch { return null; }
 })();
-/** Top-tab panels a user (non-admin) is allowed to see; everything else in the
- * "Other" sheet is hidden for them, leaving just the Guide. */
+/** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
+ * sheet is hidden for them, leaving just the Guide. */
 const USER_VIEW_TABS = new Set(["athlete", "guide"]);
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
-  const lockedUser = mode === "user" ? userViewUsername() : null;
-  // Badge by the title shows who you're locked to; the Settings dropdown mirrors it.
-  els.viewBadge.hidden = mode !== "user";
-  if (mode === "user") els.viewBadge.textContent = `👤 ${nameForUsername(lockedUser)} (user view)`;
-  els.viewAsSelect.value = mode === "admin" ? "admin" : (lockedUser ?? "admin");
-  // The "Other" sheet: user view keeps only the Guide; admin shows everything.
+  const locked = lockedUsername(); // null in admin, else the locked athlete
+  // Badge by the title shows the state; the Settings dropdown + auth button mirror it.
+  els.viewBadge.hidden = mode === "admin";
+  if (mode === "user") els.viewBadge.textContent = `👤 ${nameForUsername(locked)} (user view)`;
+  else if (mode === "loggedout") els.viewBadge.textContent = `🔒 ${nameForUsername(locked)} (logged out)`;
+  els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
+  els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
+  // The "Other" sheet: non-admin keeps only the Guide; admin shows everything.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
-    item.hidden = mode === "user" && item.dataset.tab !== "guide";
+    item.hidden = mode !== "admin" && item.dataset.tab !== "guide";
   }
-  // In user view, lock the athlete to the chosen user (only their chip is
+  // Outside admin, lock the athlete to the locked user (only their chip is
   // pressable, see syncAthleteChips) and force the selection there.
-  if (mode === "user") {
-    if (lockedUser && els.athlete.value !== lockedUser) { els.athlete.value = lockedUser; renderAthlete(); }
-    // If we just entered user view while on an admin-only panel, drop back to the
+  if (mode !== "admin") {
+    if (locked && els.athlete.value !== locked) { els.athlete.value = locked; renderAthlete(); }
+    // If we entered a restricted view from an admin-only panel, drop back to the
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
     if (!USER_VIEW_TABS.has(current)) {
@@ -300,30 +306,67 @@ function setViewMode(mode: ViewMode) {
       showSubtab("workouts");
     }
   }
-  syncAthleteChips(); // lock the other athletes' chips in user view (unlock in admin)
+  syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
 }
 
-/** Settings → "View as": admin (everything) or lock to one athlete. */
+/** Settings → "View as": admin (everything), logged out (Adomas), or lock to one athlete. */
 function setViewAs(value: string) {
-  if (value === "admin") { setViewMode("admin"); return; }
+  if (value === "admin") return setViewMode("admin");
+  if (value === "loggedout") return setViewMode("loggedout");
   viewUser = value;
   try { localStorage.setItem("colosseum.viewUser.v1", value); } catch { /* ignore */ }
   setViewMode("user");
 }
 
-/** The athlete a non-admin "user" is locked to: the one chosen in Settings if
- * it's a real athlete, else Adomas as the default. Null only if no athletes. */
+/** The athlete the current view is locked to: null in admin, the chosen user in
+ * user view, Adomas when logged out. */
+function lockedUsername(): string | null {
+  if (viewMode === "admin") return null;
+  return viewMode === "loggedout" ? adomasUsername() : userViewUsername();
+}
+
+/** Adomas's username, resolved from the loaded options (the logged-out default). */
+function adomasUsername(): string | null {
+  const opts = [...els.athlete.options];
+  const a = opts.find((o) => o.value.toLowerCase().includes("adomas") || o.text.toLowerCase().includes("adomas"));
+  return a?.value ?? opts[0]?.value ?? null;
+}
+
+/** The athlete a "user" view is locked to: the one chosen in Settings if it's a
+ * real athlete, else Adomas as the default. */
 function userViewUsername(): string | null {
   const opts = [...els.athlete.options];
   if (viewUser && opts.some((o) => o.value === viewUser)) return viewUser;
-  const adomas = opts.find((o) => o.value.toLowerCase().includes("adomas") || o.text.toLowerCase().includes("adomas"));
-  return adomas?.value ?? opts[0]?.value ?? null;
+  return adomasUsername();
 }
 
 /** Display name for an athlete username (from the loaded options). */
 function nameForUsername(username: string | null): string {
   return [...els.athlete.options].find((o) => o.value === username)?.text ?? "User";
 }
+
+/* ---- Decorative auth (NOT enforced): log in / log out + the login page ----
+ * Logging in just enters admin view; logging out drops to the logged-out view
+ * (Adomas only). The login page (the gate) can be re-opened any time. The
+ * `signedIn` flag only governs the one-time first-visit gate, never the view. */
+function showLoginPage(): void {
+  document.documentElement.classList.remove("signed-in"); // override the "always hide" rule
+  const gate = document.getElementById("loginGate");
+  if (gate) gate.hidden = false;
+  document.body.classList.add("locked");
+  (document.getElementById("loginUser") as HTMLInputElement | null)?.focus();
+}
+function hideLoginPage(): void {
+  const gate = document.getElementById("loginGate");
+  if (gate) gate.hidden = true;
+  document.body.classList.remove("locked");
+  try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
+  document.documentElement.classList.add("signed-in"); // stays hidden from now on
+}
+/** "Log in" — decorative only (credentials ignored): enter admin view. */
+function logIn(): void { hideLoginPage(); setViewMode("admin"); }
+/** "Log out" — soft: drop to the logged-out (Adomas-only) view, no blocking gate. */
+function logOut(): void { setViewMode("loggedout"); }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
 // when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
@@ -1487,7 +1530,7 @@ function buildAthleteChips() {
  * In user view every chip but Adomas's is disabled, so the user can only pick him. */
 function syncAthleteChips() {
   const active = els.athlete.value;
-  const locked = viewMode === "user" ? userViewUsername() : null;
+  const locked = lockedUsername(); // null in admin; the locked athlete otherwise
   for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
@@ -4602,10 +4645,11 @@ async function init() {
   }
   buildAthleteChips(); // custom chip row mirrors the hidden <select>
 
-  // Settings → "View as": Admin, or lock the dashboard to one athlete.
+  // Settings → "View as": Admin, lock to one athlete, or logged out (Adomas only).
   els.viewAsSelect.innerHTML =
     `<option value="admin">Admin — everything</option>` +
-    users.map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`).join("");
+    users.map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`).join("") +
+    `<option value="loggedout">Logged out — Adomas only</option>`;
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).
@@ -4673,9 +4717,11 @@ async function init() {
     setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
   );
 
-  // Admin / "view as a user" picker: apply the saved choice, then react to changes.
+  // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
   setViewMode(viewMode);
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
+  // Log in / Log out button: logged out → open the login page; otherwise log out.
+  els.authBtn.addEventListener("click", () => { if (viewMode === "loggedout") showLoginPage(); else logOut(); });
 
   // "Legs (all)" category visibility in the By-category list (off by default).
   els.showLegsAll.checked = showLegsAll;
@@ -4725,8 +4771,9 @@ async function init() {
   els.athleteChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
     if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
-    // In user view only Adomas is selectable.
-    if (viewMode === "user" && btn.dataset.username !== userViewUsername()) return;
+    // Outside admin, only the locked athlete's chip is selectable.
+    const lock = lockedUsername();
+    if (lock && btn.dataset.username !== lock) return;
     els.athlete.value = btn.dataset.username;
     renderAthlete();
   });
@@ -6300,22 +6347,14 @@ function setupBottomNav() {
   });
 }
 
-// Decorative landing gate. It's skipped entirely once you've signed in (the head
-// script hides it before paint via .signed-in); otherwise lock scrolling until the
-// single "Sign in as admin" button reveals the app and remembers you for next time.
+// Decorative login page (NOT enforced). On the very first visit it shows once
+// (the .signed-in head flag skips it afterwards); from then on it's only opened
+// on demand via Settings → Log in. The two buttons just switch view — no real auth.
 {
   const signedIn = (() => { try { return localStorage.getItem("colosseum.signedIn") === "1"; } catch { return false; } })();
-  const gate = document.getElementById("loginGate");
-  if (signedIn) {
-    if (gate) gate.hidden = true;
-  } else {
-    document.body.classList.add("locked");
-    document.getElementById("loginAdminBtn")?.addEventListener("click", () => {
-      try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
-      if (gate) gate.hidden = true;
-      document.body.classList.remove("locked");
-    });
-  }
+  if (!signedIn) showLoginPage(); // first visit: show the page (non-blocking choice)
+  document.getElementById("loginAdminBtn")?.addEventListener("click", logIn);
+  document.getElementById("loginGuestBtn")?.addEventListener("click", () => { hideLoginPage(); logOut(); });
 }
 
 void init();

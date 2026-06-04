@@ -12,18 +12,23 @@
     </script>
   </head>
   <body>
-    <!-- Decorative landing gate: one button that reveals the app (admin). -->
+    <!-- Decorative login page (NOT enforced): log in as admin, or continue
+         logged out (Adomas only). Re-openable later from Settings → Log in. -->
     <div id="loginGate" class="login-gate">
       <div class="login-card">
         <h1 class="login-logo">🏛️ Colosseum</h1>
-        <p class="muted" style="margin:.3rem 0 1.4rem">Strength training dashboard</p>
-        <button id="loginAdminBtn" type="button" class="login-btn">Sign in as admin</button>
+        <p class="muted" style="margin:.3rem 0 1.2rem">Strength training dashboard</p>
+        <input id="loginUser" class="login-input" type="text" placeholder="Username" autocomplete="username" />
+        <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
+        <button id="loginAdminBtn" type="button" class="login-btn">Log in</button>
+        <button id="loginGuestBtn" type="button" class="login-link">Continue without logging in</button>
+        <p class="login-note muted">Decorative only — no real sign-in yet.</p>
       </div>
     </div>
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.1.43</span></h1>
+        <h1>Colosseum <span class="version">b.2.1.44</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -53,6 +58,7 @@
               <option value="admin">Admin — everything</option>
             </select>
           </label>
+          <button type="button" id="authBtn" class="settings-link">Log out</button>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
           </button>
