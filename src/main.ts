@@ -4743,27 +4743,31 @@ function renderCodesTab(): void {
     const shortOver = !!(shortOverrides[name] && shortOverrides[name]!.trim());
     const shortDef = defaultShort(name);
     const staticTag = isStatic(name) ? ` <span class="codes-static" title="Isometric hold">static</span>` : "";
+    // Code + Short share ONE cell, each on its own labelled line — so neither
+    // input gets squeezed into a sliver on a phone (the old 4-column layout did).
     return (
       `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}${staticTag}</td>` +
       `<td class="codes-cell">` +
+      `<div class="codes-field"><span class="codes-flabel">Code</span>` +
       `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
       `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +
       (overridden
         ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
         : `<span class="codes-def muted">default</span>`) +
-      `</td>` +
-      `<td class="codes-cell">` +
+      `</div>` +
+      `<div class="codes-field"><span class="codes-flabel">Short</span>` +
       `<input class="codes-input codes-short${shortOver ? " is-custom" : ""}" type="text" maxlength="40" spellcheck="false" autocomplete="off" ` +
       `value="${escapeHtml(shortFor(name))}" data-exshort="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />` +
       (shortOver
         ? `<button type="button" class="codes-reset" data-shortreset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(shortDef)})">↺</button>`
         : `<span class="codes-def muted">= code</span>`) +
+      `</div>` +
       `</td>` +
       `<td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
     );
   };
 
-  const head = `<thead><tr><th>Exercise</th><th>Code</th><th>Short</th><th class="num">Sets</th></tr></thead>`;
+  const head = `<thead><tr><th>Exercise</th><th>Code &amp; short</th><th class="num">Sets</th></tr></thead>`;
   // While searching, force every section open so matches aren't hidden in a
   // collapsed group.
   const searching = q.length > 0;
@@ -4772,7 +4776,7 @@ function renderCodesTab(): void {
       const list = byCat.get(cat)!;
       const collapsed = !searching && codesCollapsed.has(cat);
       const header =
-        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="4">` +
+        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="3">` +
         `<span class="codes-cat-caret">${collapsed ? "▸" : "▾"}</span>` +
         `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
         `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
