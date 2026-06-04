@@ -2426,28 +2426,19 @@ function compareToggleTier(tier: string) {
   renderCompareSection();
 }
 
-/** Draw the overlay on the SVG engine: one estimated-1RM line per ticked exercise
- * (trend view), or one floating weight→1RM bar per set (per-set view). */
-function renderCompareChart() {
-  const box = document.getElementById("compareChart");
-  if (!box) return;
-
-  const username = els.athlete.value;
-  const formula = currentFormula();
-  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
-  const picks = [...compareSelected];
+/** Build the compare overlay's series + note for a set of picks: one estimated-1RM
+ * line per exercise (trend view), or one floating weight→1RM bar per set (per-set
+ * view). Shared by the legacy Compare tab and the Analysis compare dropdown. */
+function compareSeriesFor(
+  picks: string[],
+  username: string,
+  recs: SetRecord[],
+  formula: OneRepMaxFormula,
+  view: "trend" | "perset",
+): { series: SvgSeries[]; note: string } {
   const ts = (d: string) => Date.parse(d);
-
-  if (picks.length === 0) {
-    els.compareNote.textContent = "Tick one or more exercises above to overlay them.";
-    els.compareSets.innerHTML = "";
-    if (compareSvg) compareSvg.update({ series: [] });
-    return;
-  }
-
-  let series: SvgSeries[];
-  if (compareView === "perset") {
-    series = picks.map((name, i) => {
+  if (view === "perset") {
+    const series = picks.map((name, i) => {
       const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
       const points = recs
         .filter((r) => r.username === username && r.exerciseName === name)
@@ -2460,21 +2451,40 @@ function renderCompareChart() {
         .filter((p): p is { x: number; lo: number; hi: number; meta: string } => p !== null);
       return { name, color, type: "range" as const, points };
     });
-    els.compareNote.textContent =
-      `Every set's weight → its own estimated 1RM (${formula}), one bar per set. Drag to pan · wheel to zoom · tap a bar.`;
-  } else {
-    series = picks.map((name, i) => {
-      const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
-      const raw = exerciseProgressByWeek(recs, username, name, formula)
-        .filter((p) => p.bestE1rm !== null)
-        .map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
-      // Current strength = best est. 1RM reached so far, then faded for time off
-      // the lift (sags through layoffs, pops back up when you train).
-      return { name, color, type: "line" as const, points: decayingStrengthPoints(raw) };
-    });
-    els.compareNote.textContent = `Current strength — best estimated 1RM (${formula}) reached up to each date, faded for time off the lift (sags during breaks, recovers when you train). Drag to pan · wheel to zoom · tap a point.`;
+    return { series, note: `Every set's weight → its own estimated 1RM (${formula}), one bar per set. Drag to pan · wheel to zoom · tap a bar.` };
+  }
+  const series = picks.map((name, i) => {
+    const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
+    const raw = exerciseProgressByWeek(recs, username, name, formula)
+      .filter((p) => p.bestE1rm !== null)
+      .map((p) => ({ x: ts(p.date), y: Math.round(p.bestE1rm! * 10) / 10 }));
+    // Current strength = best est. 1RM reached so far, then faded for time off
+    // the lift (sags through layoffs, pops back up when you train).
+    return { name, color, type: "line" as const, points: decayingStrengthPoints(raw) };
+  });
+  return { series, note: `Current strength — best estimated 1RM (${formula}) reached up to each date, faded for time off the lift (sags during breaks, recovers when you train). Drag to pan · wheel to zoom · tap a point.` };
+}
+
+/** Draw the overlay on the SVG engine: one estimated-1RM line per ticked exercise
+ * (trend view), or one floating weight→1RM bar per set (per-set view). */
+function renderCompareChart() {
+  const box = document.getElementById("compareChart");
+  if (!box) return;
+
+  const username = els.athlete.value;
+  const formula = currentFormula();
+  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
+  const picks = [...compareSelected];
+
+  if (picks.length === 0) {
+    els.compareNote.textContent = "Tick one or more exercises above to overlay them.";
+    els.compareSets.innerHTML = "";
+    if (compareSvg) compareSvg.update({ series: [] });
+    return;
   }
 
+  const { series, note } = compareSeriesFor(picks, username, recs, formula, compareView === "perset" ? "perset" : "trend");
+  els.compareNote.textContent = note;
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 320 };
   if (!compareSvg) compareSvg = mountSvgChart(box, config);
   else compareSvg.update(config);
@@ -3316,28 +3326,49 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     return aloneFilter === "alone" ? tagged : !tagged;
   };
   if (workoutViewMode === "week") {
-    return weeksForUser(activeRecords(), els.athlete.value)
-      .map((w) => ({
-        label: `Week of ${shortDate(w.weekStart)}`,
-        date: w.weekStart,
-        totalSets: w.totalSets,
-        exercises: w.exercises,
-        sets: w.sets,
-        rest: false,
-      }))
-      .filter(keep);
+    return scopeWorkoutGroups(
+      weeksForUser(activeRecords(), els.athlete.value)
+        .map((w) => ({
+          label: `Week of ${shortDate(w.weekStart)}`,
+          date: w.weekStart,
+          totalSets: w.totalSets,
+          exercises: w.exercises,
+          sets: w.sets,
+          rest: false,
+        }))
+        .filter(keep),
+    );
   }
   const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
-  return days
-    .map((d) => ({
-      label: d.date === todayIso() ? "Today" : `${dowLetter(d.date)} ${shortDate(d.date)}`,
-      date: d.date,
-      totalSets: d.totalSets,
-      exercises: d.exercises,
-      sets: d.sets,
-      rest: d.totalSets === 0,
-    }))
-    .filter(keep);
+  return scopeWorkoutGroups(
+    days
+      .map((d) => ({
+        label: d.date === todayIso() ? "Today" : `${dowLetter(d.date)} ${shortDate(d.date)}`,
+        date: d.date,
+        totalSets: d.totalSets,
+        exercises: d.exercises,
+        sets: d.sets,
+        rest: d.totalSets === 0,
+      }))
+      .filter(keep),
+  );
+}
+
+/** Narrow each group's sets/exercises to {@link waListExerciseFilter} (when set,
+ * in Analysis compare mode) and drop groups left with no matching sets — so the
+ * workout history reads as "every past set of just the picked lifts". */
+function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
+  if (waListExerciseFilter.length === 0) return groups;
+  const keepEx = new Set(waListExerciseFilter);
+  const out: WorkoutGroup[] = [];
+  for (const g of groups) {
+    if (g.rest) continue; // rest days carry no sets to show when scoped
+    const sets = g.sets.filter((s) => keepEx.has(s.exerciseName));
+    if (sets.length === 0) continue;
+    const exercises = g.exercises.filter((e) => keepEx.has(e.exerciseName));
+    out.push({ ...g, sets, exercises, totalSets: sets.length });
+  }
+  return out;
 }
 
 // ---- Workouts overview: a per-year heatmap of training days ----
@@ -3741,6 +3772,10 @@ function jumpToWorkoutDate(iso: string) {
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
   if (!row || !grp) return;
+  // Open any collapsed <details> ancestors (e.g. the Analysis "Workout history"
+  // fold) so the jumped-to row is actually visible, then expand + flash it.
+  for (let el: HTMLElement | null = row; el; el = el.parentElement)
+    if (el instanceof HTMLDetailsElement) el.open = true;
   insertDetail(row, 2, workoutGroupHtml(grp)); // expand it like a tap would
   row.scrollIntoView({ behavior: "smooth", block: "center" });
   row.classList.add("wo-flash");
@@ -6985,6 +7020,27 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
+// When the Analysis "compare" mode is showing the workout-history list scoped to
+// the picked lifts, this holds the RAW exercise names to keep (members expanded
+// for combined / comparison groups). Empty = no scoping (the normal full history).
+let waListExerciseFilter: string[] = [];
+// The Analysis compare-graph dropdown (own SVG instance + view toggle), shown
+// only with 2+ exercises picked.
+let waCompareSvg: SvgChart | null = null;
+let waCompareView: "trend" | "perset" = "trend";
+/** Expand selected names to the raw logged exercise names they cover: a combined
+ * or comparison group becomes its members; everything else is itself. */
+function expandToRawExercises(names: readonly string[]): string[] {
+  const byName = new Map(userExerciseDefs.map((d) => [d.name, d]));
+  const out = new Set<string>();
+  for (const n of names) {
+    const def = byName.get(n);
+    if (def && (def.identity === "combined" || def.identity === "comparison_group") && def.members?.length)
+      for (const m of def.members) out.add(m);
+    else out.add(n);
+  }
+  return [...out];
+}
 // "all" mode (nothing selected) always shows the workout history list + the year
 // calendar. (The old Workouts/Exercise-list toggle and the Overview/Table/Charts/
 // Stats layout switcher were removed — browsing exercises is the selector's job
@@ -7114,6 +7170,7 @@ function restoreAnalysisPanels(): void {
   if (analysisPanel !== "none") setAnalysisMainPanel("none");
   setAnalysisAthletePicker(false);
   setAnalysisCalendar(false);
+  waListExerciseFilter = []; // un-scope the workout history for the legacy tab
 }
 
 /** Render the analysis view from `waSelected`. The MODE drives the main content:
@@ -7133,28 +7190,34 @@ function renderWorkoutAnalysis(): void {
     // Single-exercise analytics: reuse the real drill-in for the chosen lift.
     selectedExercise = waSelected[0]!;
     combinedWith = [];
+    waListExerciseFilter = [];
     setAnalysisMainPanel("exercises");
     if (contentTitle) contentTitle.textContent = "Exercise analysis";
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
   } else if (mode === "compare") {
-    // Compare (2+): reuse the real Compare view, seeded with the picked lifts.
+    // Compare (2+): show the workout HISTORY scoped to the picked lifts — every
+    // past set of just those exercises (weights / reps / notes), with the compare
+    // overlay graph moved to a dropdown below (renderWaCompareGraph). The list is
+    // the relocated Workouts panel, filtered via waListExerciseFilter.
     selectedExercise = null;
-    exercisesTab = "compare";
-    compareSelected.clear();
-    for (const n of waSelected) compareSelected.add(n);
-    setAnalysisMainPanel("exercises");
-    if (contentTitle) contentTitle.textContent = "Compare exercises";
+    waListExerciseFilter = expandToRawExercises(waSelected);
+    setAnalysisMainPanel("workouts");
+    if (contentTitle) contentTitle.textContent = "Workout history — selected lifts";
     stats?.setAttribute("hidden", "");
-    renderExercisesPage();
+    workoutsPage = 0; // the scoped list is shorter; start at the top
+    renderWorkoutsPage();
+    renderWorkoutSetsChart();
   } else {
     // All (nothing selected): the live Workouts panel — its history list.
+    waListExerciseFilter = [];
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = "Workout history";
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     renderWorkoutSetsChart();
   }
+  renderWaCompareGraph(); // compare overlay dropdown (only shown in compare mode)
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing
   // selected it keeps the user's own calendar filter (saved/restored around a
@@ -7359,6 +7422,34 @@ function renderWaGraph(): void {
   }
 }
 
+/** The Analysis compare-graph dropdown: the multi-line overlay of the picked
+ * lifts, in its own collapsible below the workout history. Only meaningful with
+ * 2+ exercises selected; the fold is hidden otherwise. Reuses the legacy compare
+ * series builder, with its own SVG instance + view toggle. */
+function renderWaCompareGraph(): void {
+  const fold = document.getElementById("waCompareFold");
+  const box = document.getElementById("waCompareChart");
+  const note = document.getElementById("waCompareNote");
+  if (!fold || !box) return;
+  const show = waMode() === "compare" && waSelected.length >= 2;
+  fold.toggleAttribute("hidden", !show);
+  if (!show) {
+    if (waCompareSvg) waCompareSvg.update({ series: [] });
+    return;
+  }
+  // Light up the active view button.
+  for (const b of fold.querySelectorAll<HTMLElement>("[data-wacompareview]"))
+    b.classList.toggle("is-active", b.dataset.wacompareview === waCompareView);
+  const username = els.athlete.value;
+  const formula = currentFormula();
+  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
+  const { series, note: noteTxt } = compareSeriesFor(waSelected, username, recs, formula, waCompareView);
+  if (note) note.textContent = noteTxt;
+  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
+  if (!waCompareSvg) waCompareSvg = mountSvgChart(box, config);
+  else waCompareSvg.update(config);
+}
+
 /** Build the metadata-filter controls: a row of toggle CHIPS per dimension that
  * has any values among `names` (no ugly native multi-selects). Active values
  * reflect waFilterValues; tapping a chip toggles it. */
@@ -7512,6 +7603,13 @@ function setupWorkoutAnalysis(): void {
       if (waMetrics.has(id)) waMetrics.delete(id);
       else waMetrics.add(id);
       renderWaGraph();
+      return;
+    }
+    // Compare-graph dropdown view toggle (current strength ↔ per-set range).
+    const cmpView = t.closest<HTMLElement>("[data-wacompareview]");
+    if (cmpView?.dataset.wacompareview) {
+      waCompareView = cmpView.dataset.wacompareview === "perset" ? "perset" : "trend";
+      renderWaCompareGraph();
       return;
     }
     // Save taxonomy assignments (TASK 24) for the selected exercise.

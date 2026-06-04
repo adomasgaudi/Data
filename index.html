@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.3.27</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.3.28</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -1105,6 +1105,20 @@
                    leave), so all its history / filters / stats / toggles work as-is. -->
               <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
               <div id="waWorkoutsHost"></div>
+            </div>
+          </details>
+          <!-- Compare graph (only shown with 2+ exercises picked): a collapsible
+               below the workout history. The multi-line overlay of the picked
+               lifts, with its own SVG chart instance. -->
+          <details class="wa-fold" id="waCompareFold" hidden>
+            <summary class="wa-fold-sum">Compare graph</summary>
+            <div id="waCompare" class="wa-section">
+              <div id="waCompareView" class="cal-mode" role="group" aria-label="Compare chart view">
+                <button type="button" class="cal-mode-btn is-active" data-wacompareview="trend">Current strength</button>
+                <button type="button" class="cal-mode-btn" data-wacompareview="perset">Per-set range</button>
+              </div>
+              <div id="waCompareChart"></div>
+              <p class="muted" id="waCompareNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
             </div>
           </details>
         </section>
