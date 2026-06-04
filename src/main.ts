@@ -6814,11 +6814,16 @@ function renderWorkoutAnalysis(): void {
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
   } else if (mode === "compare") {
-    // Compare (2+) lands in TASK 5 — keep placeholders, mount nothing.
-    setAnalysisMainPanel("none");
-    if (contentTitle) contentTitle.textContent = "Table / list";
-    graph?.removeAttribute("hidden");
-    stats?.removeAttribute("hidden");
+    // Compare (2+): reuse the real Compare view, seeded with the picked lifts.
+    selectedExercise = null;
+    exercisesTab = "compare";
+    compareSelected.clear();
+    for (const n of waSelected) compareSelected.add(n);
+    setAnalysisMainPanel("exercises");
+    if (contentTitle) contentTitle.textContent = "Compare exercises";
+    graph?.setAttribute("hidden", ""); // the compare view carries its own chart/table
+    stats?.setAttribute("hidden", "");
+    renderExercisesPage();
   } else {
     // All: the live Workouts panel.
     setAnalysisMainPanel("workouts");
