@@ -1658,6 +1658,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .codes-reset:hover { border-color: var(--accent); color: var(--accent); }
 .codes-def { font-size: 0.75rem; }
+/* Category header rows splitting the codes list into groups. */
+.codes-cat > td {
+  background: var(--accent-soft); font-weight: 700; font-size: 0.82rem;
+  padding: 7px 10px; border-top: 1px solid var(--line);
+}
+.codes-cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; vertical-align: middle; }
 
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }

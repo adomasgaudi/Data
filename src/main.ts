@@ -4123,7 +4123,8 @@ function renderBwGroupBar(): void {
 // ---- Exercise codes tab: rename the short code shown for each lift ----
 let codesQuery = "";
 
-/** Render the editable exercise-code list (most-trained first, searchable). */
+/** Render the editable exercise-code list, GROUPED BY CATEGORY (most-trained
+ * first within each), searchable — so the codes aren't a confusing mix. */
 function renderCodesTab(): void {
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
@@ -4133,21 +4134,38 @@ function renderCodesTab(): void {
     .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q))
     .sort((a, b) => (counts.get(b)! - counts.get(a)!) || a.localeCompare(b));
 
+  // Bucket the (already most-trained-first) names by their training category.
+  const byCat = new Map<TrainingCategory, string[]>();
+  for (const name of names) {
+    const c = exerciseCategory(name);
+    const list = byCat.get(c);
+    if (list) list.push(name); else byCat.set(c, [name]);
+  }
+
+  const rowHtml = (name: string) => {
+    const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
+    const def = exerciseCode(name);
+    return (
+      `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}</td>` +
+      `<td class="codes-cell">` +
+      `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
+      `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +
+      (overridden
+        ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
+        : `<span class="codes-def muted">default</span>`) +
+      `</td><td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
+    );
+  };
+
   const head = `<thead><tr><th>Exercise</th><th>Code</th><th class="num">Sets</th></tr></thead>`;
-  const body = names
-    .map((name) => {
-      const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
-      const def = exerciseCode(name);
-      return (
-        `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}</td>` +
-        `<td class="codes-cell">` +
-        `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
-        `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +
-        (overridden
-          ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
-          : `<span class="codes-def muted">default</span>`) +
-        `</td><td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
-      );
+  const body = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
+    .map((cat) => {
+      const list = byCat.get(cat)!;
+      const header =
+        `<tr class="codes-cat"><td colspan="3">` +
+        `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
+        `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
+      return header + list.map(rowHtml).join("");
     })
     .join("");
   els.codesTable.innerHTML = names.length

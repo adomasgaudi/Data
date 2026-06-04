@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.50", title: "Codes grouped by category", sp: 0.5, note: "The Exercise codes list is now split into category sections (Legs, Chest, Back, Shoulders, Arms, Core…) with a coloured header for each, instead of one mixed list — much easier to find a lift. Still most-trained first within each category, and search still filters across all of them." },
       { version: "b.2.1.49", title: "Always per-set bodyweight", sp: 0.5, note: "Removed the “Bodyweight source” setting. The 1RM now always uses the bodyweight recorded with each set, falling back to your profile weight only when a set didn't record one — no toggle to get wrong. Also removed the “Log in” button next to the title (it lives in the sign-in screen / Settings)." },
       { version: "b.2.1.48", title: "Tidier settings menu", sp: 0.5, note: "Settings is decluttered: the calculation/display options (1RM formula, Bodyweight source, Current strength fade, Show “Legs (all)”) are tucked under a “Calculations & display” dropdown, and Dark mode now sits in a row next to the Log in/out button — grouped with the View-as security control." },
       { version: "b.2.1.47", title: "Top Log in when spectating", sp: 0.5, note: "When you're logged out (spectator), a “Log in” button now sits up top next to the “Adomas (logged out)” badge — so you can jump back to the sign-in screen without opening Settings." },
