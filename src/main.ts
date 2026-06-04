@@ -5257,6 +5257,9 @@ async function init() {
     if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
   });
   setupWorkoutAnalysis();
+  // Redirect legacy deep-links / bookmarks into the unified view (TASKS 49–52).
+  window.addEventListener("hashchange", handleAnalysisHash);
+  handleAnalysisHash();
   setupGroupsView();
   setupTeamView();
   setupChecklists();
@@ -7331,6 +7334,35 @@ function createUserExerciseDef(): void {
   saveUserExerciseDefs();
   waIncludeIdentities.add(identity); // so the new one shows immediately
   renderWorkoutAnalysis();
+}
+
+/**
+ * Open the unified WorkoutAnalysisView with preloaded state (TASKS 49–52). The
+ * mode follows the selection: none → all (workouts or list), one → single, 2+ →
+ * compare — so a redirected Single/Compare link lands in the right mode with the
+ * right exercises already selected.
+ */
+function openWorkoutAnalysis(opts: { exercises?: string[]; allView?: "workouts" | "list" } = {}): void {
+  if (opts.allView) waAllView = opts.allView;
+  if (opts.exercises) waSelected = opts.exercises.filter((n) => n.length > 0);
+  switchTopTab("analysis"); // re-renders the analysis view from the new state
+}
+
+/**
+ * Map legacy deep-links / bookmarks to the unified view (TASKS 49–52). No route
+ * is broken: an unrecognised hash is ignored. Recognised:
+ *   #workouts | #analysis        → all (Workouts)         (TASK 49)
+ *   #single=<exercise>           → single, that exercise  (TASK 50)
+ *   #compare=<a>,<b>             → compare, those lifts    (TASK 51)
+ *   #list                        → all (Exercise list)     (TASK 52)
+ */
+function handleAnalysisHash(): void {
+  const h = decodeURIComponent(location.hash.replace(/^#/, "")).trim();
+  if (!h) return;
+  if (h === "workouts" || h === "analysis") openWorkoutAnalysis({ allView: "workouts" });
+  else if (h === "list") openWorkoutAnalysis({ allView: "list" });
+  else if (h.startsWith("single=")) openWorkoutAnalysis({ exercises: [h.slice("single=".length)] });
+  else if (h.startsWith("compare=")) openWorkoutAnalysis({ exercises: h.slice("compare=".length).split(",").map((s) => s.trim()) });
 }
 
 /** Save the joint/movement/plane multi-selects for one exercise (TASK 24) into
