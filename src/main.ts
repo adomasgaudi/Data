@@ -97,8 +97,7 @@ import {
   type MuscleGroup,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, type Release } from "./changelog";
-import { SP_HISTORY } from "./spHistory";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -1100,7 +1099,7 @@ function renderChangelog() {
   const header =
     `<p class="cl-summary muted">${releaseCount} releases · <strong>${fmtSp(TOTAL_LOG_SP)} SP</strong> logged in total ` +
     `<span class="cl-effort-note">· whole-site effort grade ${WEBSITE_EXACT_SP} (≈ ${WEBSITE_SP})</span></p>` +
-    `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by commit date)</div>` +
+    `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by release)</div>` +
     `<div id="spHistoryChart"></div></div>`;
   // Effort per part — exact SP and the Fibonacci grade it snaps to.
   const sections =
@@ -1142,19 +1141,21 @@ function renderChangelog() {
   const rows = CHANGELOG.map((r) => renderNode(r, 0)).join("");
   els.changelog.innerHTML = header + sections + rows;
 
-  // SP-over-time line: cumulative story points across every release commit,
-  // plotted on a real time axis. The container is recreated on each render, so
-  // mount a fresh chart each time.
+  // SP-over-time line: cumulative story points across every release,
+  // derived from the CHANGELOG tree -- updates automatically when a release is
+  // added, no external script needed. Evenly spaced (one slot per release).
   const spBox = document.getElementById("spHistoryChart");
-  if (spBox && SP_HISTORY.length) {
-    let total = 0;
-    const points = SP_HISTORY.map((p) => {
-      total += p.sp;
-      return { x: Date.parse(p.date), y: total, meta: `${p.version} · +${fmtSp(p.sp)} → ${fmtSp(total)} SP` };
-    });
+  const timeline = buildSpTimeline();
+  if (spBox && timeline.length) {
+    const points = timeline.map((p, i) => ({
+      x: i,
+      y: p.cumulative,
+      meta: `${p.version} · +${fmtSp(p.sp)} → ${fmtSp(p.cumulative)} SP`,
+    }));
     mountSvgChart(spBox, {
       series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],
-      xKind: "time", compactable: true, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
+      xKind: "linear", compactable: false, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
+      formatX: () => "",
     });
   }
 }
@@ -5294,13 +5295,8 @@ async function init() {
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 
-  // Whole-site effort (SP) under the title — uses the SAME auto-summed total as
-  // the Version-history menu (TOTAL_LOG_SP), so the two can never disagree.
   const effortSummary = document.getElementById("effortSummary");
-  if (effortSummary)
-    effortSummary.innerHTML =
-      `<span class="effort-lbl">Effort</span>` +
-      `<span class="effort-total">${TOTAL_LOG_SP} SP</span>`;
+  if (effortSummary) effortSummary.textContent = `${TOTAL_LOG_SP} SP`;
 
   renderStatus();
   renderHealth();
