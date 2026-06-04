@@ -1770,6 +1770,9 @@ function renderAthlete() {
   renderWorkoutCalendar();
   renderWorkoutSetsChart();
   renderWorkoutsPage();
+  // Analysis hosts the legacy panels via relocation, but its OWN UI (the
+  // exercise selector, mode readout, etc.) needs an athlete-aware refresh too.
+  if (typeof renderWorkoutAnalysis === "function") renderWorkoutAnalysis();
 }
 
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
@@ -5360,6 +5363,9 @@ async function init() {
   // Redirect legacy deep-links / bookmarks into the unified view (TASKS 49–52).
   window.addEventListener("hashchange", handleAnalysisHash);
   handleAnalysisHash();
+  // Analysis is the default landing panel, so render it once at boot — without
+  // this, the panel shows up empty until the user taps Analysis (switchTopTab).
+  renderWorkoutAnalysis();
   setupGroupsView();
   setupTeamView();
   setupChecklists();
