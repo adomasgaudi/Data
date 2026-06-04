@@ -168,7 +168,6 @@ const els = {
   exCombineBar: $("exCombineBar"),
   exLevels: $("exLevels"),
   exerciseFilter: $("exerciseFilter"),
-  exercisesTabs: $("exercisesTabs"),
   exFiltersBtn: $<HTMLButtonElement>("exFiltersBtn"),
   exCatBar: $("exCatBar"),
   exSearchBar: $("exSearchBar"),
@@ -297,7 +296,7 @@ let viewUser: string | null = (() => {
 })();
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
-const USER_VIEW_TABS = new Set(["athlete", "guide"]);
+const USER_VIEW_TABS = new Set(["analysis", "athlete", "guide"]);
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
@@ -320,8 +319,7 @@ function setViewMode(mode: ViewMode) {
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
     if (!USER_VIEW_TABS.has(current)) {
-      switchTopTab("athlete");
-      showSubtab("workouts");
+      switchTopTab("analysis"); // single home for exercise views
     }
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
@@ -1561,7 +1559,6 @@ function renderPersonalRecords() {
 // exercises row click handler maps an index back to.
 let exercisesView: string[] = [];
 let selectedExercise: string | null = null; // null = exercise list; set = drill-in detail
-let lastSingleExercise: string | null = null; // last drilled-in lift, so the "Single" tab can return to it
 // Extra exercises folded into the current drill-in so several lifts (e.g. Squat
 // + Smith Machine Squat) are viewed together as one. Reset on each new drill-in.
 let combinedWith: string[] = [];
@@ -2467,48 +2464,8 @@ function renderCompareSets(picks: string[], username: string, recs: SetRecord[],
 }
 
 // ---- Exercises page: a list that drills into one exercise (like a tab change) ----
-/** Which of the four athlete-view tabs is currently showing, derived from state:
- * the Workouts sub-panel, the single-exercise drill-in, or the list/compare. */
-function activeExerciseTab(): "workouts" | "list" | "compare" | "single" {
-  if (document.getElementById("sub-workouts")?.hidden === false) return "workouts";
-  if (selectedExercise !== null) return "single";
-  return exercisesTab === "compare" ? "compare" : "list";
-}
-
-/** Light up the matching tab button. Called after any state change that moves
- * between Workouts / list / compare / drill-in. */
-function syncExerciseTabs() {
-  const active = activeExerciseTab();
-  for (const b of els.exercisesTabs.querySelectorAll<HTMLElement>(".ex-tab"))
-    b.classList.toggle("is-active", b.dataset.extab === active);
-}
-
-/** Switch the athlete view to one of the four tabs. */
-function selectExerciseTab(t: string) {
-  if (t === "workouts") {
-    showSubtab("workouts");
-    return;
-  }
-  showSubtab("exercises");
-  if (t === "single") {
-    // The drill-in needs an exercise: reopen the last one viewed, else the
-    // most-trained lift.
-    if (selectedExercise === null) {
-      const ranked = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
-      const pick = lastSingleExercise && ranked.includes(lastSingleExercise) ? lastSingleExercise : ranked[0];
-      if (pick) { selectedExercise = pick; combinedWith = []; }
-    }
-  } else {
-    selectedExercise = null;
-    exercisesTab = t === "compare" ? "compare" : "list";
-  }
-  renderExercisesPage();
-}
-
 function renderExercisesPage() {
-  syncExerciseTabs();
   if (selectedExercise !== null) {
-    lastSingleExercise = selectedExercise; // remember for the "Single" tab
     // Drill-in: hide the list-view chrome (filters, search, compare).
     els.exFiltersBtn.hidden = true;
     els.exerciseFilter.hidden = true;
@@ -3237,9 +3194,8 @@ function onExerciseRowClick(e: MouseEvent) {
   if (!row) return;
   const exName = exercisesView[Number(row.dataset.index)];
   if (exName === undefined) return;
-  selectedExercise = exName;
   combinedWith = []; // fresh drill-in: not combined with anything yet
-  renderExercisesPage();
+  openWorkoutAnalysis({ exercises: [exName] }); // → Analysis · single mode
 }
 
 // ---- Workouts page (one row per day or week, 20/page, expandable) ----
@@ -3896,10 +3852,8 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (exLink) {
     const exName = exLink.dataset.exname;
     if (exName) {
-      showSubtab("exercises");
-      selectedExercise = exName;
       combinedWith = [];
-      renderExercisesPage();
+      openWorkoutAnalysis({ exercises: [exName] }); // → Analysis · single mode
     }
     return;
   }
@@ -5596,7 +5550,7 @@ async function init() {
     const t = e.target as HTMLElement;
     if (t.closest(".back-btn")) {
       selectedExercise = null;
-      renderExercisesPage();
+      openWorkoutAnalysis({ exercises: [], allView: "list" }); // → Analysis · all (Exercise list)
       return;
     }
     // Switch-exercise dropdown: toggle the menu …
@@ -5615,9 +5569,8 @@ async function init() {
     const opt = t.closest<HTMLElement>(".xdd-opt[data-switchex]");
     if (opt?.dataset.switchex) {
       if (opt.dataset.switchex !== selectedExercise) {
-        selectedExercise = opt.dataset.switchex;
         combinedWith = [];
-        renderExercisesPage();
+        openWorkoutAnalysis({ exercises: [opt.dataset.switchex] }); // → Analysis · single mode
       }
       return;
     }
@@ -5700,11 +5653,6 @@ async function init() {
   setupExerciseSort();
   setupExerciseSearch();
 
-  // Athlete-view tabs: Workouts | List & stats | Compare | Single.
-  els.exercisesTabs.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-tab");
-    if (btn?.dataset.extab) selectExerciseTab(btn.dataset.extab);
-  });
   // Kebab (⋯) opens the filters/sort menu; click-outside closes it.
   els.exFiltersBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -7586,35 +7534,14 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   sel.addEventListener("change", sync);
 }
 
-/** Show one of the Athlete sub-views (Workouts / Exercises). Decoupled from the
- * nav buttons so it works whether called from the bottom nav or from code (e.g.
- * a list row jumping to Exercises). Does NOT switch the top tab — callers that
- * need the Athlete panel visible should switchTopTab("athlete") first. */
-function showSubtab(name: string) {
-  for (const n of ["workouts", "exercises"]) {
-    const panel = document.getElementById(`sub-${n}`);
-    if (panel) panel.hidden = n !== name;
-  }
-  syncExerciseTabs(); // keep the Workouts | List | Compare | Single bar in step
-  updateBottomNav();
-}
 
 /** Light up the right bottom-nav item: Workouts/Exercises when the Athlete tab
  * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
 function updateBottomNav() {
-  const athleteOpen = document.getElementById("tab-athlete")?.hidden === false;
   const analysisOpen = document.getElementById("tab-analysis")?.hidden === false;
-  const activeSub = !athleteOpen
-    ? null
-    : document.getElementById("sub-exercises")?.hidden === false
-      ? "exercises"
-      : "workouts";
   for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
     const nav = b.dataset.nav;
-    let active: boolean;
-    if (nav === "analysis") active = analysisOpen;
-    else if (nav === "other") active = !athleteOpen && !analysisOpen;
-    else active = athleteOpen && nav === activeSub;
+    const active = nav === "analysis" ? analysisOpen : nav === "other" ? !analysisOpen : false;
     b.classList.toggle("is-active", active);
   }
 }
@@ -7624,9 +7551,9 @@ function setOtherSheetOpen(open: boolean) {
   document.body.classList.toggle("sheet-open", open);
 }
 
-/** Bottom nav (Workouts | Exercises | Other) + the "Other" sheet of secondary
- * views. Workouts/Exercises drive the Athlete sub-views; Other opens the sheet,
- * whose items jump to their top-tab panel. */
+/** Bottom nav (Analysis · Other). Analysis is the single home for every
+ * exercise view (Workouts/List/Compare/Single live inside it now); "Other"
+ * opens the sheet of secondary views. */
 function setupBottomNav() {
   for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
     b.addEventListener("click", () => {
@@ -7635,14 +7562,9 @@ function setupBottomNav() {
         setOtherSheetOpen(els.otherSheet.hidden);
         return;
       }
-      if (nav === "analysis") {
-        setOtherSheetOpen(false);
-        switchTopTab("analysis");
-        return;
-      }
+      // Analysis (default and only other nav target).
       setOtherSheetOpen(false);
-      switchTopTab("athlete");
-      showSubtab(nav ?? "workouts");
+      switchTopTab("analysis");
     });
   }
   // Sheet items each open a top-tab panel and close the sheet.

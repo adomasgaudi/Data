@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.3.9</span></h1>
+        <h1>Colosseum <span class="version">b.2.3.10</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -131,7 +131,7 @@
 
       </div>
 
-      <div id="tab-athlete" class="tab-panel">
+      <div id="tab-athlete" class="tab-panel" hidden>
         <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
              start of the same row as the horizontally-scrolling name chips. -->
         <div class="ath-row">
@@ -161,16 +161,6 @@
             </details>
           </div>
         </details>
-
-        <!-- Athlete-view tabs, shared above both sub-panels so they stay visible
-             whichever shows: Workouts (the sessions view) | List & stats | Compare
-             | Single (the one-exercise drill-in). -->
-        <div id="exercisesTabs" class="ex-tabs ath-tabs" role="tablist">
-          <button type="button" class="ex-tab" data-extab="workouts" role="tab">Workouts</button>
-          <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
-          <button type="button" class="ex-tab" data-extab="compare" role="tab">Compare</button>
-          <button type="button" class="ex-tab" data-extab="single" role="tab">Single</button>
-        </div>
 
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel" id="workoutsPanel">
@@ -1064,7 +1054,7 @@
       <!-- Unified workout-analysis view (TASK 1): an empty shell of labelled
            placeholder sections. No functionality is wired in yet; existing views
            are untouched. Reached via Other → “Workout analysis”. -->
-      <div id="tab-analysis" class="tab-panel" hidden>
+      <div id="tab-analysis" class="tab-panel">
         <section class="panel">
           <h2>Workout analysis</h2>
           <p class="muted" style="margin: 0 0 1rem">
@@ -1099,15 +1089,11 @@
       </div>
     </main>
 
-    <!-- App-style bottom navigation. Workouts/Exercises drive the Athlete
-         sub-views; "Other" opens a sheet holding the remaining views. The old
-         top .tabs nav is hidden (CSS) — this is now the primary navigation. -->
+    <!-- App-style bottom navigation: Analysis is the single home for all
+         exercise views (the old Workouts/List/Compare/Single tab bar is gone);
+         "Other" opens a sheet of secondary views. -->
     <nav class="subtabs" role="tablist">
-      <button class="subtab is-active" data-nav="exercises" role="tab">
-        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8v8M9.5 6.5v11M14.5 6.5v11M17.5 8v8M9.5 12h5M4 10.5v3M20 10.5v3"/></svg>
-        <span>Exercises</span>
-      </button>
-      <button class="subtab" data-nav="analysis" role="tab">
+      <button class="subtab is-active" data-nav="analysis" role="tab">
         <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Analysis</span>
       </button>
