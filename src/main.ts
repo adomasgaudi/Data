@@ -7132,15 +7132,20 @@ function renderWorkoutAnalysis(): void {
     // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
     // selected exercise; saved metadata then drives the filters above.
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
+    const cogDropdown =
+      `<details class="wa-sel-cog">` +
+      `<summary class="wa-sel-cog-sum">⚙</summary>` +
+      `<div class="wa-sel-cog-menu">${toggles}</div>` +
+      `</details>`;
     sel.innerHTML =
-      `<h3 class="wa-section-title">Exercise selector</h3>` +
-      `<div class="wa-inc-row">${toggles}</div>` +
+      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>${cogDropdown}</div>` +
       filterUi +
       selControls +
       assignUi +
       createForm +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
-      `<div id="waChips" class="wa-chips-wrap"></div>`;
+      `<details class="wa-chips-fold"><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      `<div id="waChips" class="wa-chips-wrap"></div></details>`;
     renderWaChips();
   }
   renderWaGraph();

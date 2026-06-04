@@ -1944,10 +1944,32 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost[data-wa-view="table"] :is(#workoutSets, #workoutCalendar, #exerciseProgress, #compareChart, #exerciseStats, #exerciseCalc) { display: none; }
 #waWorkoutsHost[data-wa-view="stats"] :is(#workoutSets, #workoutCalendar, #exerciseProgress, #workoutsTable, #workoutsPager, #athleteTable, #exercisesPager, #compareChart, #compareSets) { display: none; }
 
-/* WorkoutAnalysis exercise-identity inclusion toggles (TASK 12). */
-.wa-inc-row { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin: 0 0 0.6rem; }
+/* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
+.wa-sel-header { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; }
+.wa-sel-header .wa-section-title { margin: 0; }
+.wa-sel-cog { position: relative; }
+.wa-sel-cog-sum {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center;
+  padding: 4px 10px; font-size: 1rem; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; user-select: none;
+}
+.wa-sel-cog-sum::-webkit-details-marker { display: none; }
+.wa-sel-cog[open] .wa-sel-cog-sum { color: var(--text); border-color: var(--accent); }
+.wa-sel-cog-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0;
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 13rem; white-space: nowrap;
+}
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
 .wa-inc input { cursor: pointer; }
+/* Collapsible exercise-chip grid. */
+.wa-chips-fold { border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); overflow: hidden; margin: 0 0 0.3rem; }
+.wa-chips-fold-sum { cursor: pointer; list-style: none; padding: 0.45rem 0.7rem; font-size: 0.82rem; font-weight: 700; user-select: none; }
+.wa-chips-fold-sum::-webkit-details-marker { display: none; }
+.wa-chips-fold-sum::before { content: "▸ "; color: var(--muted); }
+.wa-chips-fold[open] .wa-chips-fold-sum::before { content: "▾ "; }
+.wa-chips-fold .wa-chips-wrap { padding: 0 0.5rem 0.5rem; }
 
 /* WorkoutAnalysis create-exercise form (TASKS 13–15). */
 .wa-create { margin: 0 0 0.7rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; }
