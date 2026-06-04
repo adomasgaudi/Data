@@ -49,6 +49,9 @@ export const CHANGELOG: Release[] = [
     ],
     children: [
       { version: "b.2.1.59", title: "Edit any set", sp: 8, note: "Every set of every exercise is now editable — tap the ✎ in its weight cell to open an edit row and change the Weight, Reps, a per-set Bodyweight (just for that set, overriding the profile default) and the technique Scaling factor; RIR stays the dropdown in the row. The StrengthLevel data is never touched — your tweaks are saved on this device as a per-set override and flow everywhere (1RM, volume, leaderboard, graphs). “Reset set” clears a set's edits." },
+      { version: "b.2.1.58", title: "Multi-category + skills + statics", sp: 5, note: "Exercises can now appear under MORE THAN ONE category in the Exercise-codes list — a deadlift shows under Legs, Back and Core. Calisthenics skills count as both: a front lever is Skill + Back + Core, a muscle-up is Skill + Back + Arms, planche is Skill + Shoulders + Chest + Core, dragon flag is Skill + Core, handstand/L-sit map to Shoulders/Core — just like a squat isn't merely a “skill”. And isometric holds (handstand hold, L-sit, planche/front-lever holds, planks, wall sits, dead hangs) get a small “static” tag, while their dynamic versions (front-lever raise, handstand walk) don't. The muscle mapping is a starting point — tell me any you'd move." },
+      { version: "b.2.1.57", title: "More category fixes + auto SP total", sp: 3, note: "The version-history total now COMPUTES itself — a function sums every release's story points, so it updates on its own instead of waiting to be hand-edited. Plus a batch of category fixes: crunches were reading as Cardio (because “crunch” contains “run”) — now Core; Sled Leg Press and Bulgarian Split Squats are Legs (no longer Cardio/“sled” or Mobility/“split”); POS… drills are Posture (matching POST…), while STRETCH… stays Mobility; Cold shower and Meditation leave Mobility for Other; Lower-back machine is Back (erector spinae); Leg hops are Dynamic. (Kong → Skill and the Leg-angle raises → Core are best guesses — say if they're wrong.)" },
+      { version: "b.2.1.56", title: "Sections read as cards", sp: 1, note: "The page now has a faint off-white background so every panel reads as a distinct card (they were white-on-white before). “Stats & training mix” is its own bordered, collapsible card, and the athlete tab bar (Workouts | List & stats | Compare | Single) now joins the content beneath it into one clearly-outlined tabbed card. Dark mode keeps the same card pop." },
       { version: "b.2.1.55", title: "Technique scaling factor", sp: 8, note: "Reworked the squat-rack holes from a bodyweight-% into a technique SCALING FACTOR. The hole no longer changes your real logged weight or its 1RM — those stay exactly as recorded everywhere. Instead each hole carries a plain multiplier (default ×1, tuneable in the holes table) and the exercise graph gains a “Scaled effort” line = each set's real 1RM × its hole's factor, so sets done at different difficulties can be lined up for comparison while the originals are untouched. Groundwork for tagging other technique changes the same way." },
       { version: "b.2.1.54", title: "Category fixes + two new", sp: 3, note: "Re-categorised a batch of exercises and added two categories. New “Dynamic” (long jump, wall climbs) and “Posture” (the POST… posture drills). Stretches (POS…) now read as Mobility. Grip / forearm / loaded-carry / rotator-cuff work and a set of hand-marked holds (Plate lifts, Front support, Overhead hold, Person lift, Carry hold, Dead hang, Farmers Walk, Suitcase Carry, Grip, Hang…) are now Arms; Bent Knee Hip Raise is Core. These are curated, highest-priority fixes, so an olympic “hang clean” still reads Legs, not Arms." },
       { version: "b.2.1.53", title: "Tap the name to switch lift", sp: 1, note: "In the Single (drill-in) view the exercise name is now a dropdown — tap it to switch straight to another of that athlete's lifts (most-trained first) without going back to the list. Uses the app's own dropdown styling and closes when you tap elsewhere." },
@@ -402,6 +405,18 @@ for (const r of CHANGELOG) {
     r.sp = Math.round(r.children.reduce((s, c) => s + c.sp, 0) * 10) / 10;
   }
 }
+
+/**
+ * TOTAL story points across the whole shipped log — computed from the releases
+ * themselves, so it's never hand-maintained and can't drift. Each grouped minor
+ * already carries the sum of its children (the loop above), so summing the
+ * top-level non-`soon` entries totals every release exactly once. Add a release
+ * and this updates on its own. Rounded to one decimal so fractional SP can't
+ * show a binary floating-point tail.
+ */
+export const TOTAL_LOG_SP = Math.round(
+  CHANGELOG.filter((r) => !r.soon).reduce((sum, r) => sum + r.sp, 0) * 10,
+) / 10;
 
 /** The on-screen version: always the latest actual sub-version. When the newest
  * entry is a grouped minor, that's its first (newest) child, not the group name. */

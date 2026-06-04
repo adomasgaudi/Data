@@ -435,9 +435,14 @@ export const TRAINING_CATEGORIES: TrainingCategory[] = [
  *   • Core      bent-knee hip raise
  */
 export function categoryOverride(n: string): TrainingCategory | null {
-  if (/\b(?:long|broad|box) jump\b|wall climb|\bplyo/.test(n)) return "Dynamic";
-  if (/^post\b|posture/.test(n)) return "Posture";
-  if (/^pos\b/.test(n)) return "Mobility"; // POS prefix = stretching
+  if (/\b(?:long|broad|box) jump\b|wall climb|\bplyo|leg hop|\bhop\b/.test(n)) return "Dynamic";
+  if (/\bkong\b/.test(n)) return "Skill";
+  if (/^pos\b|^post\b|posture/.test(n)) return "Posture"; // POS/POST = posture (STRETCH… stays Mobility)
+  if (/cold shower|meditation/.test(n)) return "Other"; // recovery/mental, not a mobility drill
+  if (/crunch/.test(n)) return "Core"; // "crunch" contains "run" → keep it out of Cardio
+  if (/split squat|bulgarian/.test(n)) return "Legs"; // "split" must not read as a stretch
+  if (/leg press/.test(n)) return "Legs"; // e.g. "Sled Leg Press" — sled ≠ cardio here
+  if (/^leg (?:straight )?-?\d/.test(n)) return "Core"; // bodyweight leg-raise angles
   if (/grip|dead hang|\bhang \d|farmer|suitcase|\bcarry\b|plate ?(?:lift|pull|pinch)|pinch|internal rotation|external rotation|forearm|\bwrist\b|finger|front support|overhead hold|person lift/.test(n))
     return "Arms";
   if (/bent knee hip raise/.test(n)) return "Core";
@@ -458,7 +463,7 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
 
   if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
     return "Mobility";
-  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
+  if (/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
     return "Cardio";
   if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross", "pancake"))
     return n.includes("push") ? "Shoulders" : "Skill"; // handstand PUSH-up trains shoulders
@@ -471,7 +476,7 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
     return "Arms";
   if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up"))
     return "Chest";
-  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper"))
+  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "lower back", "erector"))
     return "Back";
   if (has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell"))
     return "Legs";
@@ -536,8 +541,8 @@ export const LIST_CATEGORIES: string[] = [
 export function exerciseCategories(exerciseName: string): string[] {
   const n = exerciseName.toLowerCase();
   const ov = categoryOverride(n);
-  // Non-muscle owner-fixes are the sole, defining bucket.
-  if (ov === "Mobility" || ov === "Dynamic" || ov === "Posture") return [ov];
+  // Terminal owner-fixes (non-muscle) are the sole, defining bucket.
+  if (ov === "Mobility" || ov === "Dynamic" || ov === "Posture" || ov === "Other") return [ov];
   const has = (...k: string[]) => k.some((s) => n.includes(s));
   const cats: string[] = [];
   const add = (c: string) => {
@@ -545,13 +550,26 @@ export function exerciseCategories(exerciseName: string): string[] {
   };
 
   // Non-strength buckets first (same precedence as exerciseCategory) — when one
-  // hits, it's the only sensible bucket, so return early.
-  if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
-    return ["Mobility"];
-  if (has("run", "bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
-    return ["Cardio"];
-  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross"))
-    return [n.includes("push") ? "Shoulders" : "Skill"];
+  // hits, it's the only sensible bucket, so return early. Skipped when an owner
+  // muscle-fix (Arms/Core/Legs…) applies, so e.g. "Bulgarian Split Squat" isn't
+  // swallowed by the "split" stretch keyword.
+  if (!ov) {
+    if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
+      return ["Mobility"];
+    if (/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
+      return ["Cardio"];
+  }
+  // Calisthenics SKILLS are skills AND the muscles they build (if you're strong
+  // enough) — like a squat isn't "just a skill". So a skill adds Skill plus its
+  // muscle group(s), then the keyword adds below can pile on more (e.g. a
+  // "balance squat" also picks up Legs). A handstand PUSH-up is shoulders.
+  if (!ov && has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross")) {
+    if (n.includes("push")) add("Shoulders");
+    else {
+      add("Skill");
+      for (const m of skillMuscles(n)) add(m);
+    }
+  }
 
   // Movement patterns (a squat/deadlift can belong to a pattern AND muscle
   // groups). Keyword sets come from FUNCTIONAL_PATTERN_TAGS so they live in one
@@ -571,7 +589,7 @@ export function exerciseCategories(exerciseName: string): string[] {
 
   // Muscle groups — independent keyword sets, so big compounds match several.
   if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up")) add("Chest");
-  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "deadlift", "shrug", "rack pull", "good morning"))
+  if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "deadlift", "shrug", "rack pull", "good morning", "lower back", "erector"))
     add("Back");
   if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military press", "behind the neck", "arnold", "shrug", "delt", "handstand push"))
     add("Shoulders");
@@ -579,15 +597,69 @@ export function exerciseCategories(exerciseName: string): string[] {
   if (has("crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "knee raise", "knee tuck", "woodchop", "pallof", "rollout", "twist", "leg pull", "bicycle", "mountain climber", "flag", "vacuum", "deadlift", "good morning"))
     add("Core");
 
-  // The owner's "also an arm" / Core fixes: make sure the override bucket is
-  // present (and primary) even when the keyword logic didn't add it.
-  if (ov && !cats.includes(ov)) {
+  // The owner's muscle-fix: make sure the override bucket is present (and first)
+  // when it's a real list bucket and the keyword logic didn't already add it
+  // (e.g. "Front support" → Arms, "Kong" → Skill). For Legs/Back overrides the
+  // muscle keywords already added the right sub-buckets, so nothing to force.
+  if (ov && LIST_CATEGORIES.includes(ov) && !cats.includes(ov)) {
     const i = cats.indexOf("Other");
     if (i >= 0) cats.splice(i, 1);
     cats.unshift(ov);
   }
   if (cats.length === 0) add("Other");
   return cats;
+}
+
+/** The muscle group(s) a calisthenics SKILL also builds (owner's mapping). Labels
+ * match LIST_CATEGORIES so exerciseCategories can add them directly. */
+function skillMuscles(n: string): string[] {
+  const m: string[] = [];
+  if (/front lever|back lever/.test(n)) m.push("Back", "Core");
+  if (/planche|maltese/.test(n)) m.push("Shoulders", "Chest", "Core");
+  if (/muscle ?up/.test(n)) m.push("Back", "Arms");
+  if (/dragon flag/.test(n)) m.push("Core");
+  if (/human flag/.test(n)) m.push("Core", "Shoulders");
+  if (/handstand|headstand|forearm stand/.test(n)) m.push("Shoulders");
+  if (/l-?sit|\blsit\b/.test(n)) m.push("Core");
+  if (/iron cross/.test(n)) m.push("Shoulders", "Chest", "Arms");
+  return m;
+}
+
+/** Map a fine LIST_CATEGORIES bucket back to its coarse TrainingCategory. */
+const LISTCAT_TO_TRAINING: Record<string, TrainingCategory> = {
+  "Squat pattern": "Legs", "Deadlift pattern": "Legs", "Deadlift accessory": "Legs",
+  "Legs (all)": "Legs", "Legs (quads/glutes/hams)": "Legs",
+  Chest: "Chest", Back: "Back", Shoulders: "Shoulders", Arms: "Arms", Core: "Core",
+  Dynamic: "Dynamic", Skill: "Skill", Mobility: "Mobility", Posture: "Posture", Cardio: "Cardio", Other: "Other",
+};
+
+/**
+ * Every COARSE training category an exercise belongs to — multi-membership, so a
+ * lift can appear under several headers (a deadlift is Legs, Back AND Core; a
+ * front lever is Skill, Back AND Core). Derived from {@link exerciseCategories}
+ * by folding its fine buckets up to the coarse TRAINING_CATEGORIES.
+ */
+export function trainingCategories(name: string): TrainingCategory[] {
+  const out: TrainingCategory[] = [];
+  for (const lc of exerciseCategories(name)) {
+    const tc = LISTCAT_TO_TRAINING[lc] ?? "Other";
+    if (!out.includes(tc)) out.push(tc);
+  }
+  return out.length ? out : ["Other"];
+}
+
+/**
+ * A "static" TAG (not a category): true for isometric HOLDS — handstand / L-sit /
+ * planche / front-lever holds, planks, wall sits, dead hangs… An exercise with a
+ * dynamic action word (raise, row, push, walk, press, kick, curl…) is NOT static
+ * even if it names a skill, so "Front lever raise" and "Handstand walk" are out
+ * while "Front Lever" and "Handstand hold" are in.
+ */
+export function isStatic(name: string): boolean {
+  const n = name.toLowerCase();
+  if (/raise|\brow|push|pull|kick|walk|step|press|curl|climb|hop|jump|muscle ?up|touch|negative|swing|circle|rotation|march|\bto\b/.test(n))
+    return false;
+  return /\bhold\b|l-?sit|\blsit\b|front lever|back lever|planche|handstand|headstand|forearm stand|wall sit|plank|dead hang|bar hang|iron cross|maltese|hollow|human flag|front support|isometric|\bstatic\b/.test(n);
 }
 
 /**

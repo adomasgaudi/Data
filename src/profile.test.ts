@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise } from "./profile";
+import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -162,7 +162,6 @@ describe("exerciseCategory", () => {
     expect(exerciseCategory("Bike machine Cardio")).toBe("Cardio");
   });
   it("falls back to Other for the noise", () => {
-    expect(exerciseCategory("Cold shower")).toBe("Mobility");
     expect(exerciseCategory("KG - track food")).toBe("Other");
   });
   it("applies the owner's curated category fixes", () => {
@@ -173,17 +172,61 @@ describe("exerciseCategory", () => {
       "Farmers Walk", "Grip 1.25", "Grip plate pull", "Hang 25mm edge",
     ])
       expect(exerciseCategory(nm), nm).toBe("Arms");
-    // POS = stretching (Mobility), POST = posture, dynamic locomotion, core fix.
-    expect(exerciseCategory("POS arm lift 120 internal rot")).toBe("Mobility");
-    expect(exerciseCategory("POS - sit back straight")).toBe("Mobility");
+    // POS / POST = posture; STRETCH… stays Mobility.
+    expect(exerciseCategory("POS arm lift 120 internal rot")).toBe("Posture");
+    expect(exerciseCategory("POS - sit back straight")).toBe("Posture");
     expect(exerciseCategory("POST Head towel hold")).toBe("Posture");
+    expect(exerciseCategory("Stretch split")).toBe("Mobility");
+    // Dynamic locomotion / plyometrics.
     expect(exerciseCategory("Long jump")).toBe("Dynamic");
     expect(exerciseCategory("Low wall climb 3")).toBe("Dynamic");
+    expect(exerciseCategory("Leg hop 40")).toBe("Dynamic");
+    // Core fixes — incl. "crunch" which contains "run" (was wrongly Cardio).
     expect(exerciseCategory("Bent Knee Hip Raise")).toBe("Core");
+    for (const nm of ["Machine Seated Crunch", "Cable Crunch", "Overhead Crunch", "Decline Crunch", "Bicycle Crunch", "Leg 130", "Leg straight 140"])
+      expect(exerciseCategory(nm), nm).toBe("Core");
+    // A leg press / split squat is Legs, never Cardio ("sled") or Mobility ("split").
+    expect(exerciseCategory("Sled Leg Press")).toBe("Legs");
+    expect(exerciseCategory("Bulgarian Split Squat")).toBe("Legs");
+    expect(exerciseCategories("Bulgarian Split Squat")).toContain("Legs (all)");
+    // Recovery / mental drills aren't Mobility.
+    expect(exerciseCategory("Cold shower")).toBe("Other");
+    expect(exerciseCategory("Meditation 10 breath")).toBe("Other");
+    // Erector-spinae work (lower-back machine) is a Back exercise…
+    expect(exerciseCategory("Lower back machine")).toBe("Back");
+    // …but a lower-back STRETCH is still Mobility (stretch wins).
+    expect(exerciseCategory("Lower back stretch")).toBe("Mobility");
   });
-  it("does not over-reach: an olympic 'hang clean' stays Legs, not Arms", () => {
-    expect(exerciseCategory("Hang Clean")).toBe("Legs");
+  it("does not over-reach", () => {
+    expect(exerciseCategory("Hang Clean")).toBe("Legs"); // olympic, not a grip "hang"
     expect(exerciseCategory("Bench Press")).toBe("Chest");
+    expect(exerciseCategory("bicycle")).toBe("Cardio"); // the bike, not Bicycle Crunch
+    expect(exerciseCategory("Stairs")).toBe("Cardio");
+  });
+});
+
+describe("trainingCategories (multi-membership) + skills as muscles", () => {
+  it("puts a compound under every category it trains", () => {
+    expect(trainingCategories("Deadlift")).toEqual(expect.arrayContaining(["Legs", "Back", "Core"]));
+  });
+  it("counts calisthenics skills as Skill AND their muscles", () => {
+    expect(trainingCategories("Muscle Ups")).toEqual(expect.arrayContaining(["Skill", "Back", "Arms"]));
+    expect(trainingCategories("Front Lever")).toEqual(expect.arrayContaining(["Skill", "Back", "Core"]));
+    expect(trainingCategories("Dragon flag")).toEqual(["Skill", "Core"]);
+    expect(trainingCategories("Handstand")).toEqual(expect.arrayContaining(["Skill", "Shoulders"]));
+    expect(trainingCategories("L-SIT")).toEqual(expect.arrayContaining(["Skill", "Core"]));
+    expect(trainingCategories("balance squat")).toEqual(expect.arrayContaining(["Skill", "Legs"]));
+  });
+});
+
+describe("isStatic (hold tag)", () => {
+  it("tags isometric holds", () => {
+    for (const n of ["Handstand", "L-SIT", "Tuck planche", "Front Lever", "Handstand hold", "Wall sit", "Dead hang", "Front support"])
+      expect(isStatic(n), n).toBe(true);
+  });
+  it("does NOT tag dynamic versions of the same skills", () => {
+    for (const n of ["Front lever raise", "Front lever row old", "Handstand walk", "Handstand kicks", "Planche press", "Muscle Ups", "Dragon flag"])
+      expect(isStatic(n), n).toBe(false);
   });
 });
 
@@ -251,10 +294,10 @@ describe("exerciseCategories (multi-membership)", () => {
     expect(calf).toContain("Legs (all)");
     expect(calf).not.toContain("Legs (quads/glutes/hams)");
   });
-  it("returns a single non-strength bucket for cardio/mobility/skill", () => {
+  it("returns a single bucket for cardio/mobility, but a skill also carries its muscles", () => {
     expect(exerciseCategories("Bike machine Cardio")).toEqual(["Cardio"]);
     expect(exerciseCategories("Stretch split")).toEqual(["Mobility"]);
-    expect(exerciseCategories("Handstand")).toEqual(["Skill"]);
+    expect(exerciseCategories("Handstand")).toEqual(["Skill", "Shoulders"]);
   });
   it("only ever returns names from LIST_CATEGORIES, and Other for noise", () => {
     for (const name of ["Deadlift", "Bench Press", "Standing Calf Raise", "Plank"])
