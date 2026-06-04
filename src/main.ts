@@ -7076,6 +7076,7 @@ let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "none";
 let waChipsFoldOpen = false;
 let waCogOpen = false;
+let waCreateOpen = false;
 // Selector chip labels: "code" (short tag, e.g. BPR) or "full" exercise name.
 let waChipNameMode: "code" | "full" = "code";
 let waGraphFoldOpen = false;
@@ -7283,24 +7284,27 @@ function renderWorkoutAnalysis(): void {
     const groupOpts =
       `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
       WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
-    // The exercise search moved to the always-on command bar at the bottom of the
-    // screen (type to filter these chips; "/" for commands). A live readout of the
-    // active query shows here so it's clear what the chip list is filtered by.
-    const searchHint = waSearchQuery.trim()
+    // The exercise search lives in the always-on command bar at the bottom. When a
+    // query is active we show a clearable readout (inside the Exercises fold); no
+    // placeholder hint otherwise.
+    const searchActive = waSearchQuery.trim()
       ? `<button type="button" id="waSearchClear" class="wa-search-active" title="Clear search">🔎 “${escapeHtml(waSearchQuery.trim())}” ✕</button>`
-      : `<span class="wa-search-hint muted">🔎 Search in the bar at the bottom</span>`;
-    const selControls =
-      `<div class="wa-sel-controls">` +
-      searchHint +
+      : "";
+    // Group by + Clear selection now live INSIDE the Exercises fold (below) so the
+    // selector body stays compact.
+    const foldTools =
+      `<div class="wa-chips-tools">` +
+      `<button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button>` +
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
+      searchActive +
       `</div>`;
     // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
     const exOptions = selectableExercises(data.records)
       .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
       .join("");
     const createForm =
-      `<details class="wa-create"><summary>➕ Create variant / group</summary>` +
-      `<div class="wa-create-body">` +
+      `<details class="wa-tool-fold wa-create"${waCreateOpen ? " open" : ""}><summary class="wa-tool-sum">➕ Create variant / group</summary>` +
+      `<div class="wa-tool-body wa-create-body">` +
       `<label class="wa-create-f">Type<select id="waNewType">` +
       `<option value="dissolved">Dissolved variant (1 parent)</option>` +
       `<option value="combined">Combined group (members)</option>` +
@@ -7313,24 +7317,27 @@ function renderWorkoutAnalysis(): void {
     // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
     // selected exercise; saved metadata then drives the filters above.
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
-    // Snapshot open state of cog / chip-fold before innerHTML wipes the DOM.
-    const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-sel-cog");
+    // Snapshot open state of the collapsibles before innerHTML wipes the DOM.
+    const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-settings-fold");
     if (prevCog) waCogOpen = prevCog.open;
+    const prevCreate = sel.querySelector<HTMLDetailsElement>(".wa-create");
+    if (prevCreate) waCreateOpen = prevCreate.open;
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
     if (prevFold) waChipsFoldOpen = prevFold.open;
-    const cogDropdown =
-      `<details class="wa-sel-cog"${waCogOpen ? " open" : ""}>` +
-      `<summary class="wa-sel-cog-sum">⚙</summary>` +
-      `<div class="wa-sel-cog-menu">${toggles}${nameToggle}</div>` +
+    // Settings (identity toggles + name mode) is now a labelled button sitting just
+    // above Create variant / group — both compact buttons that expand on tap.
+    const settingsFold =
+      `<details class="wa-tool-fold wa-settings-fold"${waCogOpen ? " open" : ""}>` +
+      `<summary class="wa-tool-sum">⚙ Settings</summary>` +
+      `<div class="wa-tool-body">${toggles}${nameToggle}</div>` +
       `</details>`;
     sel.innerHTML =
-      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>${cogDropdown}</div>` +
+      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3></div>` +
       filterUi +
-      selControls +
       assignUi +
-      createForm +
-      `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
+      `<div class="wa-sel-tools">${settingsFold}${createForm}</div>` +
       `<details class="wa-chips-fold"${waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      foldTools +
       `<div id="waChips" class="wa-chips-wrap"></div></details>`;
     renderWaChips();
   }

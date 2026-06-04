@@ -2074,13 +2074,26 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-graph-fold .wa-gcfg { padding: 0.3rem 0.7rem 0.5rem; }
 .wa-graph-fold-cur { font-weight: 400; }
 
+/* WorkoutAnalysis selector tools: Settings + Create variant are compact,
+   full-width buttons that expand on tap, stacked just above the Exercises list. */
+.wa-sel-tools { display: flex; flex-direction: column; gap: 0.4rem; margin: 0 0 0.6rem; }
+.wa-tool-fold { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); overflow: hidden; }
+.wa-tool-sum {
+  cursor: pointer; list-style: none; padding: 6px 12px; font-size: 0.82rem; font-weight: 600;
+  color: var(--accent); user-select: none;
+}
+.wa-tool-sum::-webkit-details-marker { display: none; }
+.wa-tool-fold[open] .wa-tool-sum { border-bottom: 1px solid var(--line); }
+.wa-tool-body { padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.wa-settings-fold .wa-tool-body { gap: 0.4rem; }
+
 /* WorkoutAnalysis create-exercise form (TASKS 13–15). */
-.wa-create { margin: 0 0 0.7rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; }
-.wa-create > summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); }
-.wa-create-body { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
 .wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
 .wa-create-f input, .wa-create-f select { font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-create-act { display: flex; align-items: center; gap: 0.5rem; }
+
+/* Controls moved inside the Exercises fold: Clear selection + Group by + search. */
+.wa-chips-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem 0.5rem 0.3rem; }
 
 /* WorkoutAnalysis metadata filters + taxonomy editor (TASKS 19, 24). */
 .wa-filters, .wa-assign { margin: 0 0 0.6rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; }
