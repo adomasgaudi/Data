@@ -2,12 +2,15 @@
  * Squat-rack LEVEL for push-up-style bodyweight lifts. An incline push-up done
  * with the hands on a squat-rack bar is easier the higher the bar; the owner
  * logs which hole in the note ("SQ8"). Rather than splitting that into separate
- * exercises, the hole is a per-set "quantified selection": like the weight on a
- * bar, but instead of added kilos it picks a BODYWEIGHT-PART. So "Push Ups" stays
- * ONE exercise; each set just carries which hole it was done at, and a per-hole
- * bodyweight-% (the scaling) turns that into the effective load. Pure + tested.
+ * exercises, the hole is a per-set "quantified selection". So "Push Ups" stays
+ * ONE exercise; each set just carries which hole it was done at.
  *
- * Lower hole = hands lower = nearer the floor = HARDER (more of your weight).
+ * The hole does NOT change the real logged weight or its 1RM — those stay as
+ * recorded. Instead each hole carries a per-set TECHNIQUE SCALING FACTOR (a plain
+ * multiplier, default 1) used only to produce a separate "scaled effort 1RM" for
+ * comparing sets done at different difficulties. Pure + tested.
+ *
+ * Lower hole = hands lower = nearer the floor = HARDER; higher = easier.
  */
 import type { SetRecord } from "./domain";
 
@@ -62,19 +65,19 @@ export function attachNoteLevel(record: SetRecord): SetRecord {
   return { ...record, levelDim: lv.dim, levelValue: lv.value, levelLabel: lv.label, notes: leftover };
 }
 
-/** Stable key for a per-exercise, per-hole bodyweight-% override, e.g.
- * "Push Ups|sq|8". Used by the on-device scaling store. */
-export function levelCoeffKey(exerciseName: string, value: number): string {
+/** Stable key for a per-exercise, per-hole scaling-factor override, e.g.
+ * "Push Ups|sq|8". Used by the on-device technique-scale store. */
+export function levelKey(exerciseName: string, value: number): string {
   return `${exerciseName}|sq|${value}`;
 }
 
 /**
- * A sensible DEFAULT bodyweight-part for a hole, given the lift's base coeff (its
- * floor / no-rack value). Only a starting point — the owner tunes each hole's %
- * by eye. Higher hole = hands higher = more upright = easier ⇒ less bodyweight;
- * lower/negative holes are nearer the floor / decline ⇒ harder. Clamped sane.
+ * A sensible DEFAULT technique scaling factor for a hole — only a starting point,
+ * the owner tunes each by eye so equal-effort holes line up. Hole 0 (floor) is the
+ * reference (×1); higher holes are easier ⇒ scaled down (<1); lower/negative holes
+ * are harder ⇒ scaled up (>1). Clamped sane.
  */
-export function defaultLevelCoeff(baseCoeff: number, value: number): number {
-  const x = baseCoeff * (1 - 0.06 * value);
-  return Math.max(0.1, Math.min(1, Math.round(x * 100) / 100));
+export function defaultLevelScale(value: number): number {
+  const x = 1 - 0.06 * value;
+  return Math.max(0.1, Math.min(3, Math.round(x * 100) / 100));
 }

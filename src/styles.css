@@ -618,7 +618,7 @@ main { padding-bottom: 5rem; }
 .exl-head { font-size: 0.78rem; margin-bottom: 0.4rem; }
 .exl-table { margin: 0; font-size: 0.82rem; }
 .exl-table th, .exl-table td { padding: 4px 8px; }
-.exl-bw { width: 4.2rem; }
+.exl-scale { width: 4.2rem; }
 /* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight). */
 .set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); margin-right: 3px; }
 .ex-combine-lbl { font-size: 0.75rem; }

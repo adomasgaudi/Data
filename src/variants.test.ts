@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLevelNote, attachNoteLevel, levelLabel, levelCoeffKey, defaultLevelCoeff } from "./variants";
+import { parseLevelNote, attachNoteLevel, levelLabel, levelKey, defaultLevelScale } from "./variants";
 import type { SetRecord } from "./domain";
 
 const rec = (notes: string, exerciseName = "Push Ups"): SetRecord => ({
@@ -60,13 +60,14 @@ describe("attachNoteLevel", () => {
 describe("level scaling helpers", () => {
   it("labels and keys a hole stably", () => {
     expect(levelLabel(8)).toBe("SQ8");
-    expect(levelCoeffKey("Push Ups", 8)).toBe("Push Ups|sq|8");
+    expect(levelKey("Push Ups", 8)).toBe("Push Ups|sq|8");
   });
 
-  it("seeds a higher hole as easier (less bodyweight), clamped sane", () => {
-    expect(defaultLevelCoeff(0.65, 8)).toBeLessThan(defaultLevelCoeff(0.65, 1));
-    expect(defaultLevelCoeff(0.65, -1)).toBeGreaterThan(defaultLevelCoeff(0.65, 1));
-    expect(defaultLevelCoeff(0.65, 20)).toBeGreaterThanOrEqual(0.1);
-    expect(defaultLevelCoeff(0.65, 8)).toBeLessThanOrEqual(1);
+  it("seeds a higher hole as easier (scaled down), the floor as the ×1 reference", () => {
+    expect(defaultLevelScale(0)).toBe(1); // hole 0 = reference
+    expect(defaultLevelScale(8)).toBeLessThan(defaultLevelScale(1)); // higher = easier = smaller
+    expect(defaultLevelScale(-1)).toBeGreaterThan(defaultLevelScale(1)); // lower = harder = bigger
+    expect(defaultLevelScale(20)).toBeGreaterThanOrEqual(0.1); // clamped
+    expect(defaultLevelScale(-40)).toBeLessThanOrEqual(3); // clamped
   });
 });

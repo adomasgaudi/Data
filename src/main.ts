@@ -51,7 +51,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { levelLabel, levelCoeffKey, defaultLevelCoeff } from "./variants";
+import { levelLabel, levelKey, defaultLevelScale } from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
@@ -582,43 +582,41 @@ function setCodeOverride(exerciseName: string, code: string) {
   saveCodeOverrides();
 }
 
-// ---- Per-LEVEL bodyweight parts (the squat-rack scaling), editable + saved ----
-// A leverage level (a push-up at squat-rack hole 8) doesn't add weight — it
-// changes how much of your bodyweight you lift. Each (exercise, hole) therefore
-// has its OWN bodyweight-% : seeded from the lift's base coeff scaled by the
-// hole, then tuned by the owner. Stored on this device, keyed by levelCoeffKey.
-const LEVEL_COEFF_STORE_KEY = "colosseum.levelCoeffs.v1";
-const levelCoeffOverrides: Record<string, number> = (() => {
+// ---- Per-LEVEL technique scaling factors (the squat-rack holes), editable ----
+// A hole (a push-up at squat-rack hole 8) doesn't change the real weight or its
+// 1RM — those stay as logged. Each (exercise, hole) instead carries a plain
+// SCALING FACTOR (default 1): the set's "scaled effort 1RM" = its real 1RM × this
+// factor, so equal-effort holes can be lined up for comparison. Saved on device.
+const LEVEL_SCALE_STORE_KEY = "colosseum.levelScales.v1";
+const levelScaleOverrides: Record<string, number> = (() => {
   try {
-    const raw = localStorage.getItem(LEVEL_COEFF_STORE_KEY);
+    const raw = localStorage.getItem(LEVEL_SCALE_STORE_KEY);
     return raw ? (JSON.parse(raw) as Record<string, number>) : {};
   } catch {
     return {};
   }
 })();
 
-/** Bodyweight-part for one set's hole: the owner's override, else a seeded
- * default from the lift's base coeff scaled by the hole. */
-function levelCoeffFor(exerciseName: string, value: number): number {
-  const key = levelCoeffKey(exerciseName, value);
-  if (Object.prototype.hasOwnProperty.call(levelCoeffOverrides, key)) return levelCoeffOverrides[key]!;
-  return defaultLevelCoeff(coeffFor(exerciseName), value);
+/** Technique scaling factor for one set's hole: the owner's override, else the
+ * seeded default (×1 at the floor, easier holes scaled down). */
+function levelScaleFor(exerciseName: string, value: number): number {
+  const key = levelKey(exerciseName, value);
+  if (Object.prototype.hasOwnProperty.call(levelScaleOverrides, key)) return levelScaleOverrides[key]!;
+  return defaultLevelScale(value);
 }
 
-function setLevelCoeff(key: string, value: number) {
-  levelCoeffOverrides[key] = value;
+function setLevelScale(key: string, value: number) {
+  levelScaleOverrides[key] = value;
   try {
-    localStorage.setItem(LEVEL_COEFF_STORE_KEY, JSON.stringify(levelCoeffOverrides));
+    localStorage.setItem(LEVEL_SCALE_STORE_KEY, JSON.stringify(levelScaleOverrides));
   } catch {
     /* storage may be unavailable — edits still apply this session */
   }
 }
 
-/** The bodyweight-part that applies to a set: its hole's % if it has a level,
- * else the exercise's plain coeff. The single place the two stores meet. */
-function coeffForRecord(r: SetRecord): number {
-  if (r.levelValue !== undefined) return levelCoeffFor(r.exerciseName, r.levelValue);
-  return coeffFor(r.exerciseName);
+/** The technique scaling factor for a set (1 when it has no level). */
+function scaleForRecord(r: SetRecord): number {
+  return r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelValue) : 1;
 }
 
 // ---- Last picked athlete: remembered across reloads ----
@@ -748,9 +746,9 @@ function computeRecord(r: SetRecord): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
-  // A squat-rack level carries its own bodyweight-part, so an incline push-up at
-  // a high hole loads less of you than the floor version of the same exercise.
-  const coeff = coeffForRecord(r);
+  // The exercise's base bodyweight-part — a squat-rack hole NO LONGER changes the
+  // real load/1RM (it only scales a separate "effort" 1RM, see scaleForRecord).
+  const coeff = coeffFor(r.exerciseName);
   // Assisted pull-ups: the logged weight is the machine dial value, which over-
   // reads ~2x. Use the halved real assistance for all strength maths, but keep
   // the logged value as origWeight so the displayed set still tells you what to
@@ -2542,29 +2540,29 @@ function renderCombineBar(exName: string, username: string) {
  * tune each % on the spot. Hidden when the lift has no leveled sets. */
 function renderExerciseLevels(exName: string, username: string): void {
   const formula = currentFormula();
-  // Best (bodyweight-inclusive) effort 1RM + best raw set per hole used.
-  const byHole = new Map<number, { best: SetRecord; eff1rm: number }>();
+  // Best set per hole by its REAL added-weight 1RM (unchanged by the hole now).
+  const byHole = new Map<number, { best: SetRecord; oneRm: number }>();
   for (const r of computedRecords()) {
     if (r.username !== username || r.exerciseName !== exName || r.levelValue === undefined) continue;
-    if (addedWeight1RM(r, formula) === null) continue; // same guard as the displayed 1RM
-    const eff = estimate1RM(r.weight, r.reps, formula);
-    if (eff === null) continue;
+    const rm = addedWeight1RM(r, formula);
+    if (rm === null) continue;
     const cur = byHole.get(r.levelValue);
-    if (!cur || eff > cur.eff1rm) byHole.set(r.levelValue, { best: r, eff1rm: eff });
+    if (!cur || rm > cur.oneRm) byHole.set(r.levelValue, { best: r, oneRm: rm });
   }
   if (byHole.size === 0) { els.exLevels.hidden = true; return; }
   const rows = [...byHole.entries()]
     .sort((a, b) => a[0] - b[0]) // by hole, low (hard) → high (easy)
     .map(([hole, v]) => {
-      const coeff = levelCoeffFor(exName, hole);
+      const scale = levelScaleFor(exName, hole);
       const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
       return (
         `<tr>` +
         `<td><strong>${escapeHtml(levelLabel(hole))}</strong></td>` +
         `<td class="num">${wr(dispW, v.best.reps)}</td>` +
-        `<td class="num">${fmt(v.eff1rm)}</td>` +
-        `<td class="num"><input class="bw-input exl-bw" type="number" step="0.05" min="0" max="2" value="${coeff}" ` +
-        `data-levelkey="${escapeHtml(levelCoeffKey(exName, hole))}" aria-label="Bodyweight part for hole ${hole}" /></td>` +
+        `<td class="num">${fmt(v.oneRm)}</td>` +
+        `<td class="num"><strong>${fmt(v.oneRm * scale)}</strong></td>` +
+        `<td class="num"><input class="bw-input exl-scale" type="number" step="0.05" min="0" max="5" value="${scale}" ` +
+        `data-levelkey="${escapeHtml(levelKey(exName, hole))}" aria-label="Scaling factor for hole ${hole}" /></td>` +
         `</tr>`
       );
     })
@@ -2572,11 +2570,12 @@ function renderExerciseLevels(exName: string, username: string): void {
   els.exLevels.hidden = false;
   els.exLevels.innerHTML =
     `<div class="exl-head"><strong>Squat-rack holes</strong> ` +
-    `<span class="muted">tune each BW % so equal-effort holes show the same effort 1RM</span></div>` +
+    `<span class="muted">real weight and 1RM stay as logged; tune each Scale so equal-effort holes show the same Effort</span></div>` +
     `<table class="data-table exl-table"><thead><tr>` +
     `<th>Hole</th><th class="num">Best</th>` +
-    `<th class="num" title="Bodyweight-inclusive estimated 1RM — should match across holes of equal effort when the % is right">Effort</th>` +
-    `<th class="num" title="Bodyweight part — how much of your weight this hole loads. Lower hole = harder = more. Edit to scale.">BW</th>` +
+    `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the hole">1RM</th>` +
+    `<th class="num" title="Scaled effort 1RM = 1RM × Scale. Tune Scale so equal-effort holes line up here.">Effort</th>` +
+    `<th class="num" title="Technique scaling factor for this hole — only affects the Effort column, never the real 1RM. Lower hole = harder = bigger.">Scale</th>` +
     `</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -2869,6 +2868,7 @@ function renderExerciseProgressChart(exName: string) {
   const seenInDay = new Map<string, number>();
   const rangePoints: SvgPoint[] = [];
   const strengthRaw: { x: number; y: number }[] = [];
+  const scaledRaw: { x: number; y: number }[] = []; // real 1RM × technique factor
   for (const s of sets) {
     const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
     const e1rm = addedWeight1RM(s, formula);
@@ -2890,8 +2890,11 @@ function renderExerciseProgressChart(exName: string) {
         (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : ""),
     });
     if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
+    if (e1rm !== null) scaledRaw.push({ x, y: e1rm * scaleForRecord(s) });
   }
   const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
+  const hasLevels = sets.some((s) => s.levelValue !== undefined);
+  const scaledPts = scaledRaw.slice().sort((a, b) => a.x - b.x).map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
   const strengthPts = decayingStrengthPoints(strengthSorted);
   // A dot for EVERY set's estimated 1RM (per the request), not a weekly summary.
   const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
@@ -2929,6 +2932,10 @@ function renderExerciseProgressChart(exName: string) {
     { name: "Per-set range", color: "#284e86", type: "range", axis: "left", points: rangePoints, hidden: true },
     { name: "Sets/week", color: "#6c4ab0", type: "bars", axis: "right", points: setsPts, hidden: true, fillOpacity: 0.18 },
   ];
+  // Scaled effort: each set's real 1RM × its hole's technique factor — only added
+  // when this exercise has holes, so equal-effort holes line up (originals stay).
+  if (hasLevels)
+    series.push({ name: "Scaled effort", color: "#1f8a8a", type: "scatter", axis: "left", points: scaledPts });
   if (trendPts.length)
     series.push({ name: "Trend (log)", color: "#c0603a", type: "line", axis: "left", points: trendPts, hidden: true });
 
@@ -2939,6 +2946,7 @@ function renderExerciseProgressChart(exName: string) {
   });
   els.exerciseProgressNote.textContent =
     "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far, faded for time off — sags during breaks, pops back up when you train, runs to today), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
+    (hasLevels ? " Scaled effort = each set's real 1RM × its squat-rack hole's technique factor (tune the factors in the holes table); the real 1RM is never changed." : "") +
     (exPersetBestOnly ? " Per-set views show each day's best set only." : "");
 }
 
@@ -4935,15 +4943,13 @@ async function init() {
   // hole; re-render the drill-in so the effort 1RMs update live.
   els.exLevels.addEventListener("change", (e) => {
     const el = e.target as HTMLElement;
-    if (!el.classList.contains("exl-bw")) return;
+    if (!el.classList.contains("exl-scale")) return;
     const key = (el as HTMLInputElement).dataset.levelkey;
     if (key === undefined) return;
     let v = parseFloat((el as HTMLInputElement).value);
-    if (!Number.isFinite(v)) v = 0;
-    v = Math.min(2, Math.max(0, v));
-    setLevelCoeff(key, v);
-    renderLeaderboard();
-    renderPersonalRecords();
+    if (!Number.isFinite(v)) v = 1;
+    v = Math.min(5, Math.max(0, v));
+    setLevelScale(key, v);
     if (selectedExercise) renderExerciseDetail(selectedExercise);
   });
   // Back link in the exercise drill-in (lives in the title, outside the table).
