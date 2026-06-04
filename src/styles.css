@@ -1720,8 +1720,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Category header rows splitting the codes list into groups. */
 .codes-cat > td {
   background: var(--accent-soft); font-weight: 700; font-size: 0.82rem;
-  padding: 7px 10px; border-top: 1px solid var(--line);
+  padding: 7px 10px; border-top: 1px solid var(--line); cursor: pointer; user-select: none;
 }
+.codes-cat:hover > td { filter: brightness(0.97); }
+.codes-cat-caret { display: inline-block; width: 0.9em; color: var(--muted); font-size: 0.8em; }
 .codes-cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; vertical-align: middle; }
 
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }

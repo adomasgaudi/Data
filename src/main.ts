@@ -4306,6 +4306,19 @@ function renderBwGroupBar(): void {
 
 // ---- Exercise codes tab: rename the short code shown for each lift ----
 let codesQuery = "";
+// Which category sections are collapsed in the Codes list, remembered on device.
+const CODES_COLLAPSED_KEY = "colosseum.codesCollapsed.v1";
+const codesCollapsed: Set<string> = (() => {
+  try {
+    const a = JSON.parse(localStorage.getItem(CODES_COLLAPSED_KEY) ?? "[]");
+    return new Set<string>(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+})();
+function saveCodesCollapsed() {
+  try { localStorage.setItem(CODES_COLLAPSED_KEY, JSON.stringify([...codesCollapsed])); } catch { /* storage may be unavailable */ }
+}
 
 /** Render the editable exercise-code list, GROUPED BY CATEGORY (most-trained
  * first within each), searchable — so the codes aren't a confusing mix. */
@@ -4347,14 +4360,20 @@ function renderCodesTab(): void {
   };
 
   const head = `<thead><tr><th>Exercise</th><th>Code</th><th class="num">Sets</th></tr></thead>`;
+  // While searching, force every section open so matches aren't hidden in a
+  // collapsed group.
+  const searching = q.length > 0;
   const body = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
     .map((cat) => {
       const list = byCat.get(cat)!;
+      const collapsed = !searching && codesCollapsed.has(cat);
       const header =
-        `<tr class="codes-cat"><td colspan="3">` +
+        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="3">` +
+        `<span class="codes-cat-caret">${collapsed ? "▸" : "▾"}</span>` +
         `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
         `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
-      return header + list.map(rowHtml).join("");
+      const rows = collapsed ? "" : list.map(rowHtml).join("");
+      return header + rows;
     })
     .join("");
   els.codesTable.innerHTML = names.length
@@ -4374,7 +4393,18 @@ function setupCodesTab(): void {
     renderAll();
   });
   els.codesTable.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-reset]");
+    const target = e.target as HTMLElement;
+    // Collapse / expand a category section.
+    const catRow = target.closest<HTMLElement>("tr.codes-cat");
+    if (catRow?.dataset.codescat) {
+      const cat = catRow.dataset.codescat;
+      if (codesCollapsed.has(cat)) codesCollapsed.delete(cat);
+      else codesCollapsed.add(cat);
+      saveCodesCollapsed();
+      renderCodesTab();
+      return;
+    }
+    const btn = target.closest<HTMLElement>("[data-reset]");
     if (!btn?.dataset.reset) return;
     setCodeOverride(btn.dataset.reset, ""); // blank clears the override
     renderCodesTab();
