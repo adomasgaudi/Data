@@ -402,6 +402,9 @@ main { padding-bottom: 5rem; }
 }
 .athlete-chip:hover { color: var(--text); border-color: var(--accent); }
 .athlete-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* User view: every athlete but Adomas is locked out. */
+.athlete-chip.is-locked { opacity: 0.4; cursor: not-allowed; }
+.athlete-chip.is-locked:hover { color: var(--muted); border-color: var(--line); }
 /* Collapsible "stats & training mix" so the page stays short by default. */
 .athlete-details { margin: 0 0 1.25rem; }
 .athlete-details-summary {

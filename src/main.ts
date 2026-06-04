@@ -281,15 +281,30 @@ function setViewMode(mode: ViewMode) {
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.hidden = mode === "user" && item.dataset.tab !== "guide";
   }
-  // If we just entered user view while on an admin-only panel, drop back to the
-  // athlete (Workouts) view so nothing restricted stays on screen.
+  // The user IS Adomas: in user view, lock the athlete to him (only his chip is
+  // pressable, see syncAthleteChips) and force the selection there.
   if (mode === "user") {
+    const u = userViewUsername();
+    if (u && els.athlete.value !== u) { els.athlete.value = u; renderAthlete(); }
+    // If we just entered user view while on an admin-only panel, drop back to the
+    // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
     if (!USER_VIEW_TABS.has(current)) {
       switchTopTab("athlete");
       showSubtab("workouts");
     }
   }
+  syncAthleteChips(); // lock the non-Adomas chips in user view (and unlock in admin)
+}
+
+/** The one athlete a non-admin "user" is locked to: Adomas. Resolved from the
+ * loaded options so it works whatever the exact username key is, or null if he
+ * isn't in the data. */
+function userViewUsername(): string | null {
+  const opt = [...els.athlete.options].find(
+    (o) => o.value.toLowerCase().includes("adomas") || o.text.toLowerCase().includes("adomas"),
+  );
+  return opt?.value ?? null;
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
@@ -1450,13 +1465,18 @@ function buildAthleteChips() {
   syncAthleteChips();
 }
 
-/** Mark the chip matching the selected athlete active (chips mirror the select). */
+/** Mark the chip matching the selected athlete active (chips mirror the select).
+ * In user view every chip but Adomas's is disabled, so the user can only pick him. */
 function syncAthleteChips() {
   const active = els.athlete.value;
+  const locked = viewMode === "user" ? userViewUsername() : null;
   for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
+    const disabled = locked !== null && btn.dataset.username !== locked;
+    btn.disabled = disabled;
+    btn.classList.toggle("is-locked", disabled);
     // Bring the selected chip into view in the horizontally-scrolling row so it's
     // visible in the sticky bar even if it was scrolled off to the side.
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -4684,6 +4704,8 @@ async function init() {
   els.athleteChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
     if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
+    // In user view only Adomas is selectable.
+    if (viewMode === "user" && btn.dataset.username !== userViewUsername()) return;
     els.athlete.value = btn.dataset.username;
     renderAthlete();
   });
