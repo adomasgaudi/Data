@@ -2115,6 +2115,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* The chip list inside the floating Exercises menu still scrolls if long. */
 .wa-fe-row .wa-fe-menu .wa-chips-wrap { max-height: 60vh; }
 
+/* Collapsible "see more" for the (sometimes huge) list of lifts the graph left
+   out — keeps the headline inline, hides the long name list until tapped. */
+.wa-excluded { display: inline; }
+.wa-excluded > summary {
+  cursor: pointer; display: inline; list-style: none; color: var(--accent); font-weight: 600;
+}
+.wa-excluded > summary::-webkit-details-marker { display: none; }
+.wa-excluded > summary::after { content: " ▸"; color: var(--muted); }
+.wa-excluded[open] > summary::after { content: " ▾"; }
+.wa-excluded-list {
+  margin-top: 0.35rem; max-height: 9rem; overflow-y: auto;
+  font-size: 0.8rem; line-height: 1.5; color: var(--muted);
+}
+
 /* WorkoutAnalysis create-exercise form (TASKS 13–15). */
 .wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
 .wa-create-f input, .wa-create-f select { font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }

@@ -7434,7 +7434,7 @@ function renderWaGraph(): void {
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
   box.innerHTML =
     `<div id="waGraphChart"></div>` +
-    `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
+    `<div class="muted wa-placeholder" id="waGraphNote"></div>` +
     `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
@@ -7474,15 +7474,20 @@ function renderWaGraph(): void {
       ).length;
       const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
       if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
-      // Over the cap: say we're showing the first 10 and which are left out.
-      if (graphExcluded.length)
-        notes.unshift(
-          `Graph limited to ${WA_GRAPH_MAX} exercises (it lags past that) — showing the first ${WA_GRAPH_MAX}. Not shown: ${graphExcluded.join(", ")}.`,
-        );
       // Make clear the opening view is an automatic pick the user can override.
       if (autoDefault && graphExercises.length)
         notes.unshift(`Showing your ${graphExercises.length} most-trained exercises by default — tap lifts above to choose your own.`);
-      noteEl.textContent = notes.join("  ·  ");
+      let html = notes.map(escapeHtml).join("  ·  ");
+      // Over the cap: keep the short headline inline but tuck the (potentially
+      // huge) list of left-out lifts behind a collapsible "see more".
+      if (graphExcluded.length) {
+        const lead = `Graph shows the first ${WA_GRAPH_MAX} of ${baseExercises.length} (more lag the chart)`;
+        const block =
+          `<details class="wa-excluded"><summary>${escapeHtml(lead)} — ${graphExcluded.length} not shown, see list</summary>` +
+          `<div class="wa-excluded-list">${graphExcluded.map(escapeHtml).join(", ")}</div></details>`;
+        html = html ? `${html}  ·  ${block}` : block;
+      }
+      noteEl.innerHTML = html;
     }
   }
 }
@@ -7513,10 +7518,14 @@ function renderWaCompareGraph(): void {
   const cmpExercises = waSelected.slice(0, WA_GRAPH_MAX);
   const cmpExcluded = waSelected.slice(WA_GRAPH_MAX);
   const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, waCompareView);
-  if (note)
-    note.textContent = cmpExcluded.length
-      ? `Showing the first ${WA_GRAPH_MAX} of ${waSelected.length} — not shown: ${cmpExcluded.join(", ")}.  ·  ${noteTxt}`
-      : noteTxt;
+  if (note) {
+    if (cmpExcluded.length)
+      note.innerHTML =
+        `<details class="wa-excluded"><summary>Showing the first ${WA_GRAPH_MAX} of ${waSelected.length} — ${cmpExcluded.length} not shown, see list</summary>` +
+        `<div class="wa-excluded-list">${cmpExcluded.map(escapeHtml).join(", ")}</div></details>` +
+        (noteTxt ? `  ·  ${escapeHtml(noteTxt)}` : "");
+    else note.textContent = noteTxt;
+  }
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
   if (!waCompareSvg) waCompareSvg = mountSvgChart(box, config);
   else waCompareSvg.update(config);
