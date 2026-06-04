@@ -83,7 +83,7 @@ import {
   type MuscleGroup,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, type Release } from "./changelog";
 import { SP_HISTORY } from "./spHistory";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -984,7 +984,7 @@ function renderChangelog() {
   const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
-  const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
+  const releaseCount = CHANGELOG.reduce((n, r) => n + countReleases(r), 0);
   const header =
     `<p class="cl-summary muted">${releaseCount} releases · <strong>${fmtSp(TOTAL_LOG_SP)} SP</strong> logged in total ` +
     `<span class="cl-effort-note">· whole-site effort grade ${WEBSITE_EXACT_SP} (≈ ${WEBSITE_SP})</span></p>` +
@@ -999,39 +999,35 @@ function renderChangelog() {
         `<span class="cv-ver">${c.sp}<span class="cv-fib">≈${fibSp(c.sp)}</span></span></span>`,
     ).join("") +
     `</div></div>`;
-  const rows = CHANGELOG.map((r) => {
-    // Grouped minor: list each folded patch under the bullets.
-    const children = r.children?.length
-      ? `<div class="cl-children">` +
-        r.children
-          .map(
-            (c) =>
-              `<div class="cl-child"><span class="cl-cver">${escapeHtml(c.version)}</span>` +
-              `<span class="cl-cmid"><span class="cl-ctitle">${escapeHtml(c.title)}</span>` +
-              `<span class="cl-cnote">${escapeHtml(c.note)}</span></span>` +
-              `<span class="cl-csp">SP ${fmtSp(c.sp)}</span></div>`,
-          )
-          .join("") +
-        `</div>`
-      : "";
-    // Planned entries show a "soon" tag instead of an SP chip.
+  // Render the tree recursively. Every node is a <details> that starts CLOSED,
+  // so the page opens as a short list of chapters; the one-line note and any
+  // nested groups/releases only show once you expand a row. `depth` drives the
+  // left indent so the nesting reads at a glance.
+  const renderNode = (r: Release, depth: number): string => {
     const spOrTag = r.soon
       ? `<span class="cl-soon">soon</span>`
       : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>`;
+    const body =
+      `<div class="cl-body">` +
+      (r.note ? `<p class="cl-bodynote">${escapeHtml(r.note)}</p>` : "") +
+      (r.details?.length
+        ? `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
+        : "") +
+      (r.children?.length ? r.children.map((c) => renderNode(c, depth + 1)).join("") : "") +
+      `</div>`;
     return (
-      `<details class="cl-row${r.soon ? " is-soon" : ""}">` +
+      `<details class="cl-row cl-d${depth}${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
       `<span class="cl-ver">${escapeHtml(r.version)}</span>` +
-      `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span>` +
-      `<span class="cl-note">${escapeHtml(r.note)}</span></span>` +
+      `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span></span>` +
       spOrTag +
       `<span class="cl-caret">▾</span>` +
       `</summary>` +
-      `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>` +
-      children +
+      body +
       `</details>`
     );
-  }).join("");
+  };
+  const rows = CHANGELOG.map((r) => renderNode(r, 0)).join("");
   els.changelog.innerHTML = header + sections + rows;
 
   // SP-over-time line: cumulative story points across every release commit,
