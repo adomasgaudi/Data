@@ -8,6 +8,9 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
 
 <!-- Add durable instructions here. Newest at the bottom is fine. -->
 
+- **Always push.** After finishing any change, commit and push to the working
+  branch (`claude/strength-training-dashboard-SdAlT`) without being asked — never
+  leave work only committed locally.
 - The repo owner is **not a programmer**. Explain things in plain language,
   avoid jargon, and when something needs to be opened/run, give click-by-click
   steps (and a double-clickable file where possible) rather than terminal
