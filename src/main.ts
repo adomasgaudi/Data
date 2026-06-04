@@ -61,6 +61,7 @@ import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim
 import { exerciseMetaValues, movementDisplay, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
 import { renderAnalyticsGraph } from "./analyticsGraph";
+import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
   ATHLETES,
@@ -1305,8 +1306,38 @@ function renderHealth() {
       );
   }
 
+  // TASK 61 — duplicate REVIEW list. Look-alike names to eyeball; nothing is
+  // merged automatically here (that stays an owner-confirmed act).
+  const dupes = duplicateAudit(data.records);
+  if (dupes.length) {
+    lines.push(`<h3 class="health-section">Possible duplicates to review (${dupes.length})</h3>`);
+    lines.push(
+      `<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">These names look like the same lift. Nothing is changed automatically — this is just a list to check. If two really are the same, tell me and I'll fold them.</p>`,
+    );
+    for (const c of dupes.slice(0, 40))
+      lines.push(
+        `<div class="health-item dup"><strong>${escapeHtml(c.suggested)}</strong> <span class="muted">?</span> ${c.names
+          .map((n) => escapeHtml(n))
+          .join(", ")} <span class="muted">(${c.sets} sets)</span></div>`,
+      );
+  }
+
+  // TASK 62 — relationship validation. Broken/empty custom-exercise links.
+  const relDefs: RelationshipDef[] = userExerciseDefs.map((d) => ({
+    name: d.name,
+    identity: d.identity,
+    ...(d.parent ? { parent: d.parent } : {}),
+    ...(d.members ? { members: d.members } : {}),
+  }));
+  const relIssues = relationshipAudit(relDefs, selectableExercises(data.records));
+  if (relIssues.length) {
+    lines.push(`<h3 class="health-section">Custom-exercise links to fix (${relIssues.length})</h3>`);
+    for (const i of relIssues.slice(0, 40))
+      lines.push(`<div class="health-item warn">${escapeHtml(i.detail)}</div>`);
+  }
+
   if (lines.length === 0) {
-    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly and no duplicate exercise names.</p>`;
+    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly, no duplicate names, and every custom-exercise link is valid.</p>`;
     return;
   }
   els.health.innerHTML = lines.join("");
