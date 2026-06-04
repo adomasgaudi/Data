@@ -1914,6 +1914,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-section:last-child { border-bottom: none; margin-bottom: 0; }
 .wa-section-title { margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 600; }
 .wa-placeholder { margin: 0; }
+/* Collapsible major sections of the Analysis view. The <summary> is the section
+   title, so the renderer-emitted inner .wa-section-title is hidden to avoid a
+   double heading (the selector's ⚙ cog, a sibling of that title, stays). */
+.wa-fold { border-bottom: 1px solid var(--line); }
+.wa-fold:last-of-type { border-bottom: none; }
+.wa-fold > summary.wa-fold-sum {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 0.6rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text);
+}
+.wa-fold-sum::-webkit-details-marker { display: none; }
+.wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--muted); font-weight: 400; }
+.wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
+.wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
+.wa-fold .wa-section-title { display: none; } /* the summary is the title now */
 
 /* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
 .wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }

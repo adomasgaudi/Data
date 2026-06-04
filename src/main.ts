@@ -7039,7 +7039,9 @@ function restoreAnalysisPanels(): void {
 function renderWorkoutAnalysis(): void {
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
-  const contentTitle = document.querySelector<HTMLElement>("#waTable .wa-section-title");
+  // The Workout-history section's collapsible summary doubles as its title, so it
+  // reflects the current mode (Exercise analysis / Compare / Exercise list / …).
+  const contentTitle = document.getElementById("waTableSummary");
   const stats = document.getElementById("waStats");
   if (mode === "single") {
     // Single-exercise analytics: reuse the real drill-in for the chosen lift.
