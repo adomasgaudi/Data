@@ -57,6 +57,8 @@ import {
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
+import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
+import { exerciseMetaValues, movementDisplay, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import {
   ATHLETES,
   type AthleteProfile,
@@ -6801,6 +6803,19 @@ let waView: WaView = "overview";
 // Which exercise IDENTITY types the selector offers (TASK 12). Default: originals
 // only — the dissolved/combined/comparison types are opt-in, independently.
 const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
+// Metadata filters active in the selector (TASK 19): dim → accepted values.
+const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
+// User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
+// metadata the filter engine reads so saved joints/movements/planes drive filtering.
+let userTaxonomy: UserAssignments = (() => {
+  try { return JSON.parse(localStorage.getItem("colosseum.userTaxonomy") ?? "{}") as UserAssignments; } catch { return {}; }
+})();
+function saveUserTaxonomy(): void {
+  try { localStorage.setItem("colosseum.userTaxonomy", JSON.stringify(userTaxonomy)); } catch { /* ignore */ }
+}
+/** Metadata provider for the filter engine: built-in taxonomy + the user's saved
+ * assignments. */
+const waMeta = (name: string, dim: ExerciseFilterDim): string[] => exerciseMetaValues(name, dim, userTaxonomy);
 /** Distinct selectable exercises for the current athlete, tagged by identity:
  * their logged lifts are "original"; the synthetic group derived names they have
  * are "combined" / "comparison_group". De-duplicated by name (originals win). */
@@ -6964,8 +6979,15 @@ function renderWorkoutAnalysis(): void {
           `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
       )
       .join("");
-    // De-duplicated, identity-tagged list filtered by the enabled toggles.
-    const list = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+    // De-duplicated, identity-tagged list filtered by the enabled toggles…
+    const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+    // …then by the active metadata filters (TASK 19) via the shared engine.
+    const activeFilters = FILTER_DIMS.map((d) => ({ dim: d, values: waFilterValues[d] ?? [] }));
+    const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
+    const list = byIdentity.filter((e) => keep.has(e.name));
+    // Metadata-filter controls: one multi-select per dimension that has values
+    // among the current exercises (so empties don't clutter). Multiple combine.
+    const filterUi = waFilterControls(byIdentity.map((e) => e.name));
     const chips = list.length
       ? list
           .map(({ name, identity }) => {
@@ -6973,7 +6995,7 @@ function renderWorkoutAnalysis(): void {
             return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(exerciseCode(name))}</button>`;
           })
           .join("")
-      : `<p class="muted wa-placeholder">No exercises match the selected types.</p>`;
+      : `<p class="muted wa-placeholder">No exercises match the selected types/filters.</p>`;
     // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
     const exOptions = selectableExercises(data.records)
       .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
@@ -6990,13 +7012,75 @@ function renderWorkoutAnalysis(): void {
       `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
       `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>` +
       `</div></details>`;
+    // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
+    // selected exercise; saved metadata then drives the filters above.
+    const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
     sel.innerHTML =
       `<h3 class="wa-section-title">Exercise selector</h3>` +
       `<div class="wa-inc-row">${toggles}</div>` +
+      filterUi +
+      assignUi +
       createForm +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
       `<div class="wa-ex-chips">${chips}</div>`;
   }
+}
+
+/** Build the metadata-filter controls: a multi-select per dimension that has any
+ * values among `names`. Selected values reflect waFilterValues. */
+function waFilterControls(names: readonly string[]): string {
+  const blocks: string[] = [];
+  for (const dim of FILTER_DIMS) {
+    const values = new Set<string>();
+    for (const n of names) for (const v of waMeta(n, dim)) values.add(v);
+    if (values.size === 0) continue;
+    const sorted = [...values].sort((a, b) => a.localeCompare(b));
+    const sel = new Set(waFilterValues[dim] ?? []);
+    const opts = sorted
+      .map((v) => `<option value="${escapeHtml(v)}"${sel.has(v) ? " selected" : ""}>${escapeHtml(v)}</option>`)
+      .join("");
+    blocks.push(
+      `<label class="wa-filter-f">${escapeHtml(FILTER_DIM_LABELS[dim])}` +
+        `<select class="wa-filter-sel" data-wadim="${dim}" multiple size="${Math.min(4, sorted.length)}">${opts}</select></label>`,
+    );
+  }
+  const active = FILTER_DIMS.reduce((n, d) => n + (waFilterValues[d]?.length ? 1 : 0), 0);
+  return (
+    `<details class="wa-filters"${active ? " open" : ""}><summary>🔎 Filters${active ? ` (${active})` : ""}</summary>` +
+    `<div class="wa-filters-body">${blocks.join("")}` +
+    `<button type="button" id="waFiltersClear" class="wa-clear">Clear filters</button></div></details>`
+  );
+}
+
+/** The TASK 24 assignment editor for one exercise: joint / movement / plane
+ * multi-selects prefilled with its current (saved-or-seeded) values + Save. */
+function waAssignEditor(name: string): string {
+  const sel = (cur: readonly string[], all: readonly string[], cls: string) => {
+    const have = new Set(cur);
+    const opts = all
+      .map((v) => `<option value="${escapeHtml(v)}"${have.has(v) ? " selected" : ""}>${escapeHtml(v)}</option>`)
+      .join("");
+    return `<select class="${cls}" multiple size="5">${opts}</select>`;
+  };
+  // Joint-specific display aliases (TASK 23): show generic movement → joint label.
+  const hints: string[] = [];
+  for (const j of waMeta(name, "joint"))
+    for (const m of waMeta(name, "movement")) {
+      const disp = movementDisplay(m, j);
+      if (disp !== m) hints.push(`${escapeHtml(j)}: ${escapeHtml(m)} → ${escapeHtml(disp)}`);
+    }
+  const hintLine = hints.length
+    ? `<p class="muted wa-alias-hint">Joint labels — ${hints.join(" · ")}</p>`
+    : "";
+  return (
+    `<details class="wa-assign"><summary>🏷 Taxonomy: ${escapeHtml(name)}</summary><div class="wa-assign-body">` +
+    `<label class="wa-create-f">Joints${sel(waMeta(name, "joint"), JOINTS, "wa-assign-joint")}</label>` +
+    `<label class="wa-create-f">Movements${sel(waMeta(name, "movement"), MOVEMENTS, "wa-assign-movement")}</label>` +
+    `<label class="wa-create-f">Planes${sel(waMeta(name, "plane"), PLANES, "wa-assign-plane")}</label>` +
+    `<div class="wa-create-act"><button type="button" id="waAssignSave" data-waassign="${escapeHtml(name)}" class="wa-clear">Save taxonomy</button> <span id="waAssignMsg" class="muted"></span></div>` +
+    hintLine +
+    `</div></details>`
+  );
 }
 
 /** Wire the analysis view's selector once: tapping an exercise chip toggles it in
@@ -7004,14 +7088,23 @@ function renderWorkoutAnalysis(): void {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
-  // Identity-inclusion checkboxes (fire "change", not "click").
+  // Identity-inclusion checkboxes + metadata-filter selects (fire "change").
   panel.addEventListener("change", (e) => {
-    const box = (e.target as HTMLElement).closest<HTMLInputElement>(".wa-inc-box");
-    if (!box?.dataset.waident) return;
-    const id = box.dataset.waident as ExerciseIdentity;
-    if (box.checked) waIncludeIdentities.add(id);
-    else waIncludeIdentities.delete(id);
-    renderWorkoutAnalysis();
+    const target = e.target as HTMLElement;
+    const box = target.closest<HTMLInputElement>(".wa-inc-box");
+    if (box?.dataset.waident) {
+      const id = box.dataset.waident as ExerciseIdentity;
+      if (box.checked) waIncludeIdentities.add(id);
+      else waIncludeIdentities.delete(id);
+      renderWorkoutAnalysis();
+      return;
+    }
+    const fsel = target.closest<HTMLSelectElement>(".wa-filter-sel");
+    if (fsel?.dataset.wadim) {
+      const dim = fsel.dataset.wadim as ExerciseFilterDim;
+      waFilterValues[dim] = Array.from(fsel.selectedOptions).map((o) => o.value);
+      renderWorkoutAnalysis();
+    }
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -7030,6 +7123,17 @@ function setupWorkoutAnalysis(): void {
     // Create a user exercise def (dissolved variant / combined / comparison group).
     if (t.closest("#waNewCreate")) {
       createUserExerciseDef();
+      return;
+    }
+    if (t.closest("#waFiltersClear")) {
+      for (const d of FILTER_DIMS) delete waFilterValues[d];
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Save taxonomy assignments (TASK 24) for the selected exercise.
+    const saveBtn = t.closest<HTMLElement>("#waAssignSave");
+    if (saveBtn?.dataset.waassign) {
+      saveTaxonomyAssignment(saveBtn.dataset.waassign);
       return;
     }
     // Display-mode toggle (Overview/Table/Charts/Stats): presentation only —
@@ -7087,6 +7191,24 @@ function createUserExerciseDef(): void {
   userExerciseDefs.push(def);
   saveUserExerciseDefs();
   waIncludeIdentities.add(identity); // so the new one shows immediately
+  renderWorkoutAnalysis();
+}
+
+/** Save the joint/movement/plane multi-selects for one exercise (TASK 24) into
+ * the user taxonomy, so the filters can use the saved metadata. */
+function saveTaxonomyAssignment(name: string): void {
+  const read = (cls: string) => {
+    const el = document.querySelector<HTMLSelectElement>(`.${cls}`);
+    return el ? Array.from(el.selectedOptions).map((o) => o.value) : [];
+  };
+  userTaxonomy[name] = {
+    joint: read("wa-assign-joint"),
+    movement: read("wa-assign-movement"),
+    plane: read("wa-assign-plane"),
+  };
+  saveUserTaxonomy();
+  const msg = document.getElementById("waAssignMsg");
+  if (msg) msg.textContent = "Saved.";
   renderWorkoutAnalysis();
 }
 
