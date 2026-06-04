@@ -263,9 +263,13 @@ main { padding-bottom: 8.5rem; }
 /* Persistent command / search bar, pinned just above the bottom nav. */
 .cmd-bar {
   position: fixed; left: 0; right: 0; z-index: 55;
-  bottom: calc(3.4rem + env(safe-area-inset-bottom, 0px));
+  /* Sit above the bottom nav normally, but ride just above the on-screen
+   * keyboard when it's open (--wa-kb-inset = keyboard height, from the
+   * VisualViewport API in setupWorkoutAnalysis). Stays put while scrolling. */
+  bottom: max(calc(3.4rem + env(safe-area-inset-bottom, 0px)), var(--wa-kb-inset, 0px));
   padding: 0.45rem 0.8rem; background: var(--panel);
   border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(20, 24, 38, 0.06);
+  transition: bottom 0.08s ease-out;
 }
 .cmd-input {
   width: 100%; font: inherit; font-size: 0.92rem; padding: 8px 14px;

@@ -7650,6 +7650,20 @@ function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
   // (Exercise search moved to the always-on command bar — see setupCommandBar.)
+  // Keep that command bar just above the on-screen keyboard as you scroll: the
+  // VisualViewport shrinks when the keyboard opens, so the gap between it and the
+  // layout viewport IS the keyboard height. Publish it as --wa-kb-inset; the CSS
+  // lifts the fixed command bar by that amount (0 when the keyboard is closed).
+  const vv = window.visualViewport;
+  if (vv) {
+    const updateKbInset = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--wa-kb-inset", `${Math.round(inset)}px`);
+    };
+    vv.addEventListener("resize", updateKbInset);
+    vv.addEventListener("scroll", updateKbInset);
+    updateKbInset();
+  }
   // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
   panel.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
