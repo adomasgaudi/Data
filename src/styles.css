@@ -708,6 +708,16 @@ main { padding-bottom: 5rem; }
 .xdd-caret { color: var(--muted); font-size: 0.7rem; }
 .xdd.open .xdd-caret { color: var(--accent); }
 .xdd-wide .xdd-btn { font-size: 1rem; padding: 8px 12px; }
+/* The Single-view title is itself a dropdown: render the button as the heading
+   text (no box), with a small caret, so tapping the exercise name switches it. */
+.ex-switch-dd { vertical-align: baseline; }
+.ex-switch-btn {
+  width: auto; padding: 0; border: none; background: none; color: inherit;
+  font: inherit; font-size: inherit; font-weight: inherit; gap: 0.15rem;
+}
+.ex-switch-btn:hover, .ex-switch-dd.open .ex-switch-btn { color: var(--accent); border: none; text-decoration: underline; }
+.ex-switch-btn .xdd-caret { font-size: 0.62em; }
+.ex-switch-dd .xdd-menu { font-weight: 400; }
 .xdd-menu {
   position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; min-width: 100%;
   max-height: 60vh; overflow-y: auto;

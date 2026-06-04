@@ -2500,8 +2500,18 @@ function renderExerciseDetail(exName: string) {
     coeff > 0
       ? `<span class="ex-bwpart">Bodyweight part: ${pct(coeff)}</span>`
       : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
+  // The exercise name is a dropdown: tap it to switch to another of this
+  // athlete's lifts without leaving the Single view (most-trained first).
+  const trainedForSwitch = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+  const switchMenu = (trainedForSwitch.includes(exName) ? trainedForSwitch : [exName, ...trainedForSwitch])
+    .map((n) => `<button type="button" class="xdd-opt${n === exName ? " is-active" : ""}" role="option" data-switchex="${escapeHtml(n)}">${escapeHtml(n)}</button>`)
+    .join("");
   els.athleteTitle.innerHTML =
-    `<button type="button" class="back-btn">‹ Exercises</button> ${escapeHtml(exName)}${originBadge(exName)} ${bwPart}` +
+    `<button type="button" class="back-btn">‹ Exercises</button> ` +
+    `<span class="xdd ex-switch-dd">` +
+    `<button type="button" class="xdd-btn ex-switch-btn" title="Tap to switch exercise">${escapeHtml(exName)}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${switchMenu}</div>` +
+    `</span>${originBadge(exName)} ${bwPart}` +
     ` <button type="button" class="ex-info-btn" data-exinfo="${escapeHtml(exName)}" title="See this exercise's merges & data (all athletes)">ℹ Exercise info</button>`;
   els.exercisesPager.innerHTML = "";
   const username = els.athlete.value;
@@ -4987,13 +4997,45 @@ async function init() {
   });
   // Back link in the exercise drill-in (lives in the title, outside the table).
   els.athleteTitle.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".back-btn")) {
+    const t = e.target as HTMLElement;
+    if (t.closest(".back-btn")) {
       selectedExercise = null;
       renderExercisesPage();
       return;
     }
-    const info = (e.target as HTMLElement).closest<HTMLElement>(".ex-info-btn");
+    // Switch-exercise dropdown: toggle the menu …
+    const switchBtn = t.closest<HTMLElement>(".ex-switch-btn");
+    if (switchBtn) {
+      const dd = switchBtn.closest<HTMLElement>(".xdd");
+      const menu = dd?.querySelector<HTMLElement>(".xdd-menu");
+      if (dd && menu) {
+        const opening = menu.hasAttribute("hidden");
+        menu.toggleAttribute("hidden", !opening);
+        dd.classList.toggle("open", opening);
+      }
+      return;
+    }
+    // … and pick a lift to switch to.
+    const opt = t.closest<HTMLElement>(".xdd-opt[data-switchex]");
+    if (opt?.dataset.switchex) {
+      if (opt.dataset.switchex !== selectedExercise) {
+        selectedExercise = opt.dataset.switchex;
+        combinedWith = [];
+        renderExercisesPage();
+      }
+      return;
+    }
+    const info = t.closest<HTMLElement>(".ex-info-btn");
     if (info?.dataset.exinfo) jumpToExerciseInfo(info.dataset.exinfo);
+  });
+  // Close the switch-exercise dropdown when clicking elsewhere.
+  document.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".ex-switch-dd")) return;
+    const menu = els.athleteTitle.querySelector<HTMLElement>(".ex-switch-dd .xdd-menu");
+    if (menu && !menu.hasAttribute("hidden")) {
+      menu.setAttribute("hidden", "");
+      menu.closest(".xdd")?.classList.remove("open");
+    }
   });
   // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
   els.exCombineBar.addEventListener("click", (e) => {
