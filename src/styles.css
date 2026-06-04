@@ -124,9 +124,9 @@ body {
 /* Per-section version chips under the title (Graphs b1.2, Workouts b1.1, …). */
 /* Effort (SP) dropdown under the title — collapsed by default. */
 .effort-line {
-  margin: 0; border-bottom: 1px solid var(--line);
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.45rem 1.5rem; font-size: 0.75rem; color: var(--muted);
+  margin: -0.25rem 0 0; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.05rem 1.5rem 0.28rem; font-size: 0.62rem; color: var(--muted);
 }
 .effort-lbl { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .effort-total { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }

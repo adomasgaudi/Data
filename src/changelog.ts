@@ -29,13 +29,33 @@ export interface Release {
 export const CHANGELOG: Release[] = [
   {
     version: "next",
-    title: "GitHub auto-save",
+    title: "Coming soon",
     sp: 0,
     soon: true,
-    note: "Coming soon: added sets save to GitHub automatically — no Export/Import needed.",
-    details: [
-      "Hand-logged sets will sync to the repo so they're there on any phone or browser.",
-      "Pending a safe way to authorise writes (the site is public): paste-a-token in the browser, or a small private helper.",
+    note: "Planned features, not built yet — expand to see what's coming.",
+    children: [
+      {
+        version: "",
+        title: "GitHub auto-save",
+        sp: 0,
+        soon: true,
+        note: "Added sets save to GitHub automatically — no Export/Import needed.",
+        details: [
+          "Hand-logged sets will sync to the repo so they're there on any phone or browser.",
+          "Pending a safe way to authorise writes (the site is public): paste-a-token in the browser, or a small private helper.",
+        ],
+      },
+      {
+        version: "",
+        title: "AI summaries",
+        sp: 0,
+        soon: true,
+        note: "AI-written plain-language summaries across the app — your training read back to you at a glance.",
+        details: [
+          "Auto recaps of what you trained, what's progressing, what's stalling, and a suggested next step.",
+          "Likely on a per-athlete overview, an exercise drill-in, and a workout recap — generated from your logged data.",
+        ],
+      },
     ],
   },
   {
@@ -50,6 +70,7 @@ export const CHANGELOG: Release[] = [
         sp: 0,
         note: "Per-set editing, the timeline heatmap, multi-category codes, section cards, and the nested/collapsed version history.",
         children: [
+          { version: "b.2.2.3", title: "Coming-soon AI + total + graph", sp: 1, note: "Added an “AI summaries” item to the Coming-soon list (alongside GitHub auto-save). The front-page Effort total now uses the SAME auto-summed figure as the version history (so they can't disagree) and sits smaller, closer under the title. The SP-over-time graph is regenerated to include every release." },
           { version: "b.2.2.2", title: "Descriptive chapter titles", sp: 0.1, note: "Chapter titles no longer repeat the version number (it's already shown on the left); they now describe the work — e.g. “Current strength and combined lifts”, “Bottom nav, Add and compare”." },
           { version: "b.2.2.1", title: "Renumbered history chapters", sp: 0.1, note: "Renamed the version-history chapter labels into a clean sequence — b.1.0 (was “0.x”), b.1.1, b.1.2, then b.2.0 / b.2.1 — so the chapters read as tidy version numbers." },
           { version: "b.2.2.0", title: "Nested collapsed history", sp: 3, note: "Version history is now three nested levels — releases under 20–30 SP groups under 80–130 SP chapters — and every row starts collapsed, showing just its title, so the page stays short." },

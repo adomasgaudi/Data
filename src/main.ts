@@ -5013,13 +5013,13 @@ async function init() {
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 
-  // Whole-site effort (SP) under the title — just the total and its Fibonacci
-  // grade. The per-part breakdown lives in Settings → Version history.
+  // Whole-site effort (SP) under the title — uses the SAME auto-summed total as
+  // the Version-history menu (TOTAL_LOG_SP), so the two can never disagree.
   const effortSummary = document.getElementById("effortSummary");
   if (effortSummary)
     effortSummary.innerHTML =
       `<span class="effort-lbl">Effort</span>` +
-      `<span class="effort-total">${WEBSITE_EXACT_SP} SP <span class="effort-fib">≈ ${WEBSITE_SP}</span></span>`;
+      `<span class="effort-total">${TOTAL_LOG_SP} SP</span>`;
 
   renderStatus();
   renderHealth();
