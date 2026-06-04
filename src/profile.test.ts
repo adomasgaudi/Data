@@ -165,6 +165,26 @@ describe("exerciseCategory", () => {
     expect(exerciseCategory("Cold shower")).toBe("Mobility");
     expect(exerciseCategory("KG - track food")).toBe("Other");
   });
+  it("applies the owner's curated category fixes", () => {
+    // Grip / forearm / loaded-carry / cuff work + hand-marked holds → Arms.
+    for (const nm of [
+      "Plate lifts", "Dumbbell internal rotation", "Front support", "Overhead hold", "Person lift",
+      "Sh external rotation vench", "Carry hold", "Dead hang", "Dumbbell Suitcase Carry",
+      "Farmers Walk", "Grip 1.25", "Grip plate pull", "Hang 25mm edge",
+    ])
+      expect(exerciseCategory(nm), nm).toBe("Arms");
+    // POS = stretching (Mobility), POST = posture, dynamic locomotion, core fix.
+    expect(exerciseCategory("POS arm lift 120 internal rot")).toBe("Mobility");
+    expect(exerciseCategory("POS - sit back straight")).toBe("Mobility");
+    expect(exerciseCategory("POST Head towel hold")).toBe("Posture");
+    expect(exerciseCategory("Long jump")).toBe("Dynamic");
+    expect(exerciseCategory("Low wall climb 3")).toBe("Dynamic");
+    expect(exerciseCategory("Bent Knee Hip Raise")).toBe("Core");
+  });
+  it("does not over-reach: an olympic 'hang clean' stays Legs, not Arms", () => {
+    expect(exerciseCategory("Hang Clean")).toBe("Legs");
+    expect(exerciseCategory("Bench Press")).toBe("Chest");
+  });
 });
 
 describe("muscleGroup (fine split)", () => {

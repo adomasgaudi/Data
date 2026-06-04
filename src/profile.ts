@@ -411,13 +411,38 @@ export type TrainingCategory =
   | "Shoulders"
   | "Arms"
   | "Core"
+  | "Dynamic"
   | "Skill"
   | "Mobility"
+  | "Posture"
   | "Cardio"
   | "Other";
 export const TRAINING_CATEGORIES: TrainingCategory[] = [
-  "Legs", "Chest", "Back", "Shoulders", "Arms", "Core", "Skill", "Mobility", "Cardio", "Other",
+  "Legs", "Chest", "Back", "Shoulders", "Arms", "Core", "Dynamic", "Skill", "Mobility", "Posture", "Cardio", "Other",
 ];
+
+/**
+ * Owner's curated category fixes, highest precedence — exercises the keyword
+ * logic gets wrong or that belong to the hand-made buckets. Returns the PRIMARY
+ * training category, or null to fall through to the keyword rules. `n` is the
+ * lowercased name. Kept in one place so exerciseCategory and exerciseCategories
+ * agree.
+ *   • Dynamic   explosive locomotion / plyometrics (long jump, wall climbs)
+ *   • Posture   posture drills (the "POST …" prefix the owner uses)
+ *   • Mobility  stretches (the "POS …" prefix)
+ *   • Arms      grip / forearm / loaded-carry / rotator-cuff work + the owner's
+ *               hand-marked holds (front support, overhead hold, person lift)
+ *   • Core      bent-knee hip raise
+ */
+export function categoryOverride(n: string): TrainingCategory | null {
+  if (/\b(?:long|broad|box) jump\b|wall climb|\bplyo/.test(n)) return "Dynamic";
+  if (/^post\b|posture/.test(n)) return "Posture";
+  if (/^pos\b/.test(n)) return "Mobility"; // POS prefix = stretching
+  if (/grip|dead hang|\bhang \d|farmer|suitcase|\bcarry\b|plate ?(?:lift|pull|pinch)|pinch|internal rotation|external rotation|forearm|\bwrist\b|finger|front support|overhead hold|person lift/.test(n))
+    return "Arms";
+  if (/bent knee hip raise/.test(n)) return "Core";
+  return null;
+}
 
 /**
  * Best-guess muscle/movement category for an exercise, by keyword — so the athlete
@@ -427,6 +452,8 @@ export const TRAINING_CATEGORIES: TrainingCategory[] = [
  */
 export function exerciseCategory(exerciseName: string): TrainingCategory {
   const n = exerciseName.toLowerCase();
+  const ov = categoryOverride(n);
+  if (ov) return ov; // owner's curated fixes win
   const has = (...k: string[]) => k.some((s) => n.includes(s));
 
   if (has("stretch", "split", "pancake", "pose", "tailor", "meditation", "breath", "cold shower", "mobility", "ankle", "posture", "head aware"))
@@ -497,8 +524,10 @@ export const LIST_CATEGORIES: string[] = [
   "Shoulders",
   "Arms",
   "Core",
+  "Dynamic",
   "Skill",
   "Mobility",
+  "Posture",
   "Cardio",
   "Other",
 ];
@@ -506,6 +535,9 @@ export const LIST_CATEGORIES: string[] = [
 /** Every {@link LIST_CATEGORIES} bucket an exercise belongs to (one or more). */
 export function exerciseCategories(exerciseName: string): string[] {
   const n = exerciseName.toLowerCase();
+  const ov = categoryOverride(n);
+  // Non-muscle owner-fixes are the sole, defining bucket.
+  if (ov === "Mobility" || ov === "Dynamic" || ov === "Posture") return [ov];
   const has = (...k: string[]) => k.some((s) => n.includes(s));
   const cats: string[] = [];
   const add = (c: string) => {
@@ -547,6 +579,13 @@ export function exerciseCategories(exerciseName: string): string[] {
   if (has("crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "knee raise", "knee tuck", "woodchop", "pallof", "rollout", "twist", "leg pull", "bicycle", "mountain climber", "flag", "vacuum", "deadlift", "good morning"))
     add("Core");
 
+  // The owner's "also an arm" / Core fixes: make sure the override bucket is
+  // present (and primary) even when the keyword logic didn't add it.
+  if (ov && !cats.includes(ov)) {
+    const i = cats.indexOf("Other");
+    if (i >= 0) cats.splice(i, 1);
+    cats.unshift(ov);
+  }
   if (cats.length === 0) add("Other");
   return cats;
 }
