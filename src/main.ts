@@ -94,7 +94,7 @@ const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
-  viewModeBtn: $<HTMLButtonElement>("viewModeBtn"),
+  viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
@@ -268,24 +268,30 @@ type ViewMode = "admin" | "user";
 let viewMode: ViewMode = (() => {
   try { return localStorage.getItem("colosseum.viewMode") === "user" ? "user" : "admin"; } catch { return "admin"; }
 })();
+/** In user view, which athlete the dashboard is locked to (their username), as
+ * chosen in Settings → "View as". null = not yet chosen → falls back to Adomas. */
+let viewUser: string | null = (() => {
+  try { return localStorage.getItem("colosseum.viewUser.v1"); } catch { return null; }
+})();
 /** Top-tab panels a user (non-admin) is allowed to see; everything else in the
  * "Other" sheet is hidden for them, leaving just the Guide. */
 const USER_VIEW_TABS = new Set(["athlete", "guide"]);
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
+  const lockedUser = mode === "user" ? userViewUsername() : null;
+  // Badge by the title shows who you're locked to; the Settings dropdown mirrors it.
   els.viewBadge.hidden = mode !== "user";
-  els.viewModeBtn.textContent = mode === "user" ? "🛡 Switch to admin view" : "👤 Switch to user view";
-  els.viewModeBtn.setAttribute("aria-pressed", String(mode === "user"));
+  if (mode === "user") els.viewBadge.textContent = `👤 ${nameForUsername(lockedUser)} (user view)`;
+  els.viewAsSelect.value = mode === "admin" ? "admin" : (lockedUser ?? "admin");
   // The "Other" sheet: user view keeps only the Guide; admin shows everything.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.hidden = mode === "user" && item.dataset.tab !== "guide";
   }
-  // The user IS Adomas: in user view, lock the athlete to him (only his chip is
+  // In user view, lock the athlete to the chosen user (only their chip is
   // pressable, see syncAthleteChips) and force the selection there.
   if (mode === "user") {
-    const u = userViewUsername();
-    if (u && els.athlete.value !== u) { els.athlete.value = u; renderAthlete(); }
+    if (lockedUser && els.athlete.value !== lockedUser) { els.athlete.value = lockedUser; renderAthlete(); }
     // If we just entered user view while on an admin-only panel, drop back to the
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
@@ -294,17 +300,29 @@ function setViewMode(mode: ViewMode) {
       showSubtab("workouts");
     }
   }
-  syncAthleteChips(); // lock the non-Adomas chips in user view (and unlock in admin)
+  syncAthleteChips(); // lock the other athletes' chips in user view (unlock in admin)
 }
 
-/** The one athlete a non-admin "user" is locked to: Adomas. Resolved from the
- * loaded options so it works whatever the exact username key is, or null if he
- * isn't in the data. */
+/** Settings → "View as": admin (everything) or lock to one athlete. */
+function setViewAs(value: string) {
+  if (value === "admin") { setViewMode("admin"); return; }
+  viewUser = value;
+  try { localStorage.setItem("colosseum.viewUser.v1", value); } catch { /* ignore */ }
+  setViewMode("user");
+}
+
+/** The athlete a non-admin "user" is locked to: the one chosen in Settings if
+ * it's a real athlete, else Adomas as the default. Null only if no athletes. */
 function userViewUsername(): string | null {
-  const opt = [...els.athlete.options].find(
-    (o) => o.value.toLowerCase().includes("adomas") || o.text.toLowerCase().includes("adomas"),
-  );
-  return opt?.value ?? null;
+  const opts = [...els.athlete.options];
+  if (viewUser && opts.some((o) => o.value === viewUser)) return viewUser;
+  const adomas = opts.find((o) => o.value.toLowerCase().includes("adomas") || o.text.toLowerCase().includes("adomas"));
+  return adomas?.value ?? opts[0]?.value ?? null;
+}
+
+/** Display name for an athlete username (from the loaded options). */
+function nameForUsername(username: string | null): string {
+  return [...els.athlete.options].find((o) => o.value === username)?.text ?? "User";
 }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
@@ -4584,6 +4602,11 @@ async function init() {
   }
   buildAthleteChips(); // custom chip row mirrors the hidden <select>
 
+  // Settings → "View as": Admin, or lock the dashboard to one athlete.
+  els.viewAsSelect.innerHTML =
+    `<option value="admin">Admin — everything</option>` +
+    users.map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`).join("");
+
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).
   // Defaults to Adomas + Squat.
@@ -4650,11 +4673,9 @@ async function init() {
     setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
   );
 
-  // Admin ↔ user view toggle (just shows a banner near the title for now).
+  // Admin / "view as a user" picker: apply the saved choice, then react to changes.
   setViewMode(viewMode);
-  els.viewModeBtn.addEventListener("click", () =>
-    setViewMode(viewMode === "user" ? "admin" : "user"),
-  );
+  els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
 
   // "Legs (all)" category visibility in the By-category list (off by default).
   els.showLegsAll.checked = showLegsAll;
@@ -5058,7 +5079,7 @@ async function init() {
   enhanceSelect(els.exercise, { wide: true });
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
-    els.formula, els.bwSource, els.rank, els.sexFilter,
+    els.formula, els.bwSource, els.rank, els.sexFilter, els.viewAsSelect,
     els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
