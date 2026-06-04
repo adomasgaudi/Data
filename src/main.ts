@@ -42,6 +42,8 @@ import {
   weightForReps,
   repsForWeight,
   predictedRir,
+  effortClass,
+  type EffortClass,
   setVolume,
   effectiveLoad,
   linearFit,
@@ -717,6 +719,24 @@ const RIR_BANDS: ReadonlyArray<{ id: string; word: string; desc: string }> = [
 /** Look up a band by its stored id. */
 const rirBand = (id: string | undefined) => RIR_BANDS.find((b) => b.id === id);
 const RIR_IDS = new Set(RIR_BANDS.map((b) => b.id));
+/** Representative RIR for a logged band id ("2.5–4" → 3.25), or null if unknown. */
+function rirBandMid(id: string | undefined): number | null {
+  if (!id) return null;
+  const [lo, hi] = id.split(/[–-]/).map((n) => parseFloat(n));
+  return lo !== undefined && Number.isFinite(lo) ? (hi !== undefined && Number.isFinite(hi) ? (lo + hi) / 2 : lo) : null;
+}
+/** Big compound leg lifts (squat / deadlift patterns, leg press) fatigue more, so
+ * they get the wider "mid" effort band — see effortClass(). */
+function isBigLegsLift(name: string): boolean {
+  const cats = exerciseCategories(name);
+  return cats.includes("Squat pattern") || cats.includes("Deadlift pattern") || /leg press|hack squat/i.test(name);
+}
+/** Effort class of a set from its RIR: prefer the logged grade, else the predicted
+ * RIR. Null when there's no RIR signal at all. */
+function setEffortClass(s: SetRecord, predRir: number | null): EffortClass | null {
+  const rir = rirBandMid(rpeFor(s)) ?? predRir;
+  return rir === null ? null : effortClass(rir, isBigLegsLift(s.exerciseName));
+}
 const RPE_STORE_KEY = "colosseum.rir.v1";
 let rpeGrades: Record<string, string> = (() => {
   try {
@@ -3864,13 +3884,19 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
   // A squat-rack hole stands in for the weight on these sets — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
+  // Effort tag from RIR (logged, else predicted): hard / mid / warm-up. Big leg
+  // lifts get a wider "mid" band (see effortClass).
+  const eff = setEffortClass(s, predRir);
+  const effTag = eff
+    ? `<span class="set-eff eff-${eff}" title="${eff === "hard" ? "Hard set — RIR under 3" : eff === "mid" ? `Mid set — RIR 3–${isBigLegsLift(s.exerciseName) ? 8 : 6} (working, not to failure)` : "Warm-up — well short of failure"}">${eff === "warmup" ? "Warm" : eff === "hard" ? "Hard" : "Mid"}</span>`
+    : "";
   const edited = setOverrides[sid] !== undefined;
   const editBtn =
     `<button type="button" class="set-edit${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
     `title="Edit this set (weight, reps, bodyweight, scale)" aria-label="Edit set">✎</button>`;
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
-    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}${editBtn}</td>` +
+    `<td class="num wcell">${effTag}${preview}${lvlTag}${wr(s.weight, s.reps)}${editBtn}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +

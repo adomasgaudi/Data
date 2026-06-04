@@ -3,6 +3,7 @@ import fc from "fast-check";
 import {
   epley1RM,
   brzycki1RM,
+  effortClass,
   setVolume,
   effectiveLoad,
   benchRepsAtPct,
@@ -115,6 +116,24 @@ describe("setVolume", () => {
   it("is null when either input is missing", () => {
     expect(setVolume(null, 5)).toBeNull();
     expect(setVolume(100, null)).toBeNull();
+  });
+});
+
+describe("effortClass", () => {
+  it("classifies hard / mid / warmup by RIR, with a wider mid band for big legs", () => {
+    // < 3 RIR is always hard
+    expect(effortClass(0, false)).toBe("hard");
+    expect(effortClass(2.9, true)).toBe("hard");
+    // 3 up to the mid ceiling is mid (6 other muscles, 8 big legs)
+    expect(effortClass(3, false)).toBe("mid");
+    expect(effortClass(5.9, false)).toBe("mid");
+    expect(effortClass(6, false)).toBe("warmup"); // other muscles tip to warmup at 6
+    expect(effortClass(6, true)).toBe("mid"); // big legs still mid at 6
+    expect(effortClass(7.9, true)).toBe("mid");
+    expect(effortClass(8, true)).toBe("warmup"); // big legs tip to warmup at 8
+  });
+  it("treats a non-finite RIR as a warmup (no effort signal)", () => {
+    expect(effortClass(NaN, false)).toBe("warmup");
   });
 });
 

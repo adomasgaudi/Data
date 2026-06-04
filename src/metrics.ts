@@ -205,6 +205,17 @@ export function predictedRir(
   return predicted - reps;
 }
 
+/** Effort class of a set from its reps-in-reserve (logged or predicted): a set
+ * near failure is "hard", a clearly-submaximal one is "mid", and a very light one
+ * is a "warmup". Big compound leg lifts fatigue more, so their "mid" band runs
+ * wider (up to 8 RIR) than other muscles (up to 6) before counting as a warmup. */
+export type EffortClass = "hard" | "mid" | "warmup";
+export function effortClass(rir: number, bigLegs: boolean): EffortClass {
+  if (!Number.isFinite(rir)) return "warmup";
+  if (rir < 3) return "hard";
+  return rir < (bigLegs ? 8 : 6) ? "mid" : "warmup";
+}
+
 /**
  * Ordinary least-squares line through points: returns slope and intercept, or
  * null if there are fewer than two points or all x are equal. Used to read a
