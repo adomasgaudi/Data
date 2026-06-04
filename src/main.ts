@@ -6764,41 +6764,71 @@ function waModeLabel(): string {
   return `compare — ${waSelected.length} exercises`;
 }
 
-// TASK 3: rather than duplicate the Workouts view, the live Workouts panel is
-// relocated into the analysis view while it's open and moved back to the athlete
-// Workouts tab when you leave — so all its history / date-filter / stats / toggles
-// keep working, and the old page is untouched. A node can only be in one place,
-// but the two are never visible at once (different top tabs).
-let woInAnalysis = false;
-/** The Workouts panel element, wherever it currently lives. */
-function workoutsSectionEl(): HTMLElement | null {
-  return document.querySelector<HTMLElement>("#sub-workouts > .panel, #waWorkoutsHost > .panel");
-}
-function mountWorkoutsInAnalysis(on: boolean): void {
-  const section = workoutsSectionEl();
+// TASK 3/4: rather than duplicate the existing views, the LIVE panels are
+// relocated into the analysis view by mode — the Workouts panel for "all", the
+// Exercises panel (drill-in) for "single" — and moved back to their athlete tabs
+// when you leave or the mode changes. A node lives in one place at a time, but the
+// homes are never visible at once (different top tabs), so the old pages still work.
+let analysisPanel: "none" | "workouts" | "exercises" = "none";
+/** Move the requested live panel into the analysis content host, returning the
+ * other(s) to their home sub-tab. Pure DOM shuffling — no logic duplicated. */
+function setAnalysisMainPanel(which: "none" | "workouts" | "exercises"): void {
   const host = document.getElementById("waWorkoutsHost");
-  const subWo = document.getElementById("sub-workouts");
-  if (!section || !host || !subWo) return;
-  if (on && !woInAnalysis) {
-    host.appendChild(section);
-    woInAnalysis = true;
-    document.getElementById("waWorkoutsEmpty")?.setAttribute("hidden", "");
-  } else if (!on && woInAnalysis) {
-    subWo.appendChild(section); // return it to the athlete Workouts tab
-    woInAnalysis = false;
-  }
+  const woPanel = document.getElementById("workoutsPanel");
+  const exPanel = document.getElementById("exercisesPanel");
+  const woHome = document.getElementById("sub-workouts");
+  const exHome = document.getElementById("sub-exercises");
+  if (!host || !woPanel || !exPanel || !woHome || !exHome) return;
+  // Return whatever isn't wanted to its home tab.
+  if (which !== "workouts" && woPanel.parentElement === host) woHome.appendChild(woPanel);
+  if (which !== "exercises" && exPanel.parentElement === host) exHome.appendChild(exPanel);
+  // Mount the wanted panel.
+  if (which === "workouts" && woPanel.parentElement !== host) host.appendChild(woPanel);
+  if (which === "exercises" && exPanel.parentElement !== host) host.appendChild(exPanel);
+  document.getElementById("waWorkoutsEmpty")?.toggleAttribute("hidden", which !== "none");
+  analysisPanel = which;
+}
+/** Restore both relocated panels to their home tabs (on leaving the analysis view). */
+function restoreAnalysisPanels(): void {
+  if (analysisPanel !== "none") setAnalysisMainPanel("none");
 }
 
-/** Render the analysis view from `waSelected`. Re-derives the mode, re-paints the
- * Filters readout + exercise-selector chips, and (TASK 3) hosts the live Workouts
- * panel — history, date filtering, workout stats and all its toggles — in the
- * Table/list area, so it shows the same workout-level information as the old page. */
+/** Render the analysis view from `waSelected`. The MODE drives the main content:
+ *   • all    → the live Workouts panel (history, filters, stats — TASK 3)
+ *   • single → the live Exercises drill-in for the picked lift (TASK 4):
+ *              its history, progression chart, records, stats and settings
+ *   • compare→ placeholder for now (TASK 5)
+ * It also re-paints the Filters mode readout and the exercise-selector chips. */
 function renderWorkoutAnalysis(): void {
-  mountWorkoutsInAnalysis(true);
-  // Refresh the relocated workouts panel for the current athlete/filters.
-  renderWorkoutsPage();
-  renderWorkoutCalendar();
-  renderWorkoutSetsChart();
+  const mode = waMode();
+  const contentTitle = document.querySelector<HTMLElement>("#waTable .wa-section-title");
+  const graph = document.getElementById("waGraph");
+  const stats = document.getElementById("waStats");
+  if (mode === "single") {
+    // Single-exercise analytics: reuse the real drill-in for the chosen lift.
+    selectedExercise = waSelected[0]!;
+    combinedWith = [];
+    setAnalysisMainPanel("exercises");
+    if (contentTitle) contentTitle.textContent = "Exercise analysis";
+    graph?.setAttribute("hidden", ""); // the drill-in carries its own graph/stats
+    stats?.setAttribute("hidden", "");
+    renderExercisesPage();
+  } else if (mode === "compare") {
+    // Compare (2+) lands in TASK 5 — keep placeholders, mount nothing.
+    setAnalysisMainPanel("none");
+    if (contentTitle) contentTitle.textContent = "Table / list";
+    graph?.removeAttribute("hidden");
+    stats?.removeAttribute("hidden");
+  } else {
+    // All: the live Workouts panel.
+    setAnalysisMainPanel("workouts");
+    if (contentTitle) contentTitle.textContent = "Workout history";
+    graph?.setAttribute("hidden", "");
+    stats?.setAttribute("hidden", "");
+    renderWorkoutsPage();
+    renderWorkoutCalendar();
+    renderWorkoutSetsChart();
+  }
   const filters = document.getElementById("waFilters");
   if (filters) {
     // Visible mode readout (debugging, per the task).
@@ -6862,9 +6892,9 @@ function switchTopTab(name: string) {
   if (name === "codes") renderCodesTab();
   if (name === "statsedit") renderStatsEdit();
   if (name === "analysis") renderWorkoutAnalysis();
-  // Leaving the analysis view → return the Workouts panel to the athlete tab so
-  // the old Workouts page keeps working.
-  if (name !== "analysis") mountWorkoutsInAnalysis(false);
+  // Leaving the analysis view → return the relocated panel(s) to their athlete
+  // tabs so the old Workouts / Single-exercise pages keep working.
+  if (name !== "analysis") restoreAnalysisPanels();
   updateBottomNav();
 }
 
