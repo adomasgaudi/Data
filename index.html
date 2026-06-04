@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.2.10</span></h1>
+        <h1>Colosseum <span class="version">b.2.2.11</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -328,8 +328,14 @@
             </details>
             <div id="exerciseProgress" class="exercise-progress" hidden>
               <div class="ex-prog-controls">
-                <button type="button" id="exPersetBest" class="ex-best-toggle" aria-pressed="false" hidden>Best set only</button>
-                <button type="button" id="exerciseProgressCenter" class="ex-best-toggle" title="Center on data" aria-label="Center on data">⌖ Center</button>
+                <details class="ex-prog-settings">
+                  <summary class="ex-prog-settings-sum">⚙ Settings</summary>
+                  <div class="ex-prog-settings-menu">
+                    <button type="button" id="exProgCompact" class="ex-best-toggle" aria-pressed="false">⇄ Realistic time</button>
+                    <button type="button" id="exPersetBest" class="ex-best-toggle" aria-pressed="false" hidden>Best set only</button>
+                    <button type="button" id="exerciseProgressCenter" class="ex-best-toggle" title="Center on data" aria-label="Center on data">⌖ Center on data</button>
+                  </div>
+                </details>
               </div>
               <div class="ex-prog-wrap">
                 <div id="exerciseProgressChart"></div>

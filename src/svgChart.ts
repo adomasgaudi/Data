@@ -27,6 +27,11 @@ function setCompactPref(on: boolean): void {
   for (const fn of [...compactSubs]) fn();
 }
 
+/** Read / set the app-wide "compacted time" preference (so a caller can surface
+ * the toggle in its own settings menu instead of the chart legend). */
+export const getTimeCompact = (): boolean => compactPref;
+export const setTimeCompact = (on: boolean): void => setCompactPref(on);
+
 export interface SvgPoint {
   x: number;
   y?: number; // line / bars
@@ -69,6 +74,9 @@ export interface SvgChartConfig {
    * row. Compacted mode squeezes the empty gaps so every session fits on screen
    * (see buildCompactor). The toggle is app-wide — all compactable charts follow. */
   compactable?: boolean;
+  /** Compactable charts only: suppress the in-legend "⇄ Realistic/Compacted"
+   * button (e.g. when the caller surfaces the toggle in its own settings menu). */
+  noCompactToggle?: boolean;
   /** Axis tick label for an x value. */
   formatX?: (x: number) => string;
   /** Tooltip header for an x value (defaults to formatX). */
@@ -354,7 +362,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
     // Time-axis charts get an app-wide "realistic ⇄ compacted" toggle on the right
     // of the legend row. Compacted squeezes the empty gaps so all sets fit.
-    if (compactable())
+    if (compactable() && !cfg.noCompactToggle)
       legend +=
         `<button type="button" class="svgc-compact${useCompact() ? " is-on" : ""}" aria-pressed="${useCompact()}" ` +
         `title="${useCompact() ? "Showing compacted time (gaps squeezed). Tap for real time spacing." : "Showing real time (with the gaps). Tap to squeeze the gaps so all sets fit."}">` +

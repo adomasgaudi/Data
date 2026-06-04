@@ -336,6 +336,22 @@ main { padding-bottom: 5rem; }
 }
 .ex-best-toggle:hover { color: var(--text); border-color: var(--accent); }
 .ex-best-toggle.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* ⚙ graph-settings dropdown (view toggles moved out of the cramped legend). */
+.ex-prog-settings { position: relative; }
+.ex-prog-settings-sum {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 12px; font-size: 0.8rem; font-weight: 600; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; user-select: none;
+}
+.ex-prog-settings-sum::-webkit-details-marker { display: none; }
+.ex-prog-settings[open] .ex-prog-settings-sum { color: var(--text); border-color: var(--accent); }
+.ex-prog-settings-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0;
+  display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 11rem;
+}
+.ex-prog-settings-menu .ex-best-toggle { text-align: left; }
 .svgc-plot { width: 100%; touch-action: none; user-select: none; cursor: grab; }
 .svgc-plot:active { cursor: grabbing; }
 /* touch-action MUST be on the SVG too — it's the actual touch target, so a phone
