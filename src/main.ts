@@ -7526,9 +7526,10 @@ function waAssignEditor(name: string): string {
 /** Wire the analysis view's selector once: tapping an exercise chip toggles it in
  * `waSelected` (which flips the mode), and "Clear" empties the selection. */
 // ---- Persistent command / search bar (always above the bottom nav) ----
-// Plain text filters the Analysis exercise selector; "/" opens a palette of
-// shortcut commands. Designed to speed up the common moves without hunting
-// through menus. New commands are easy to add to COMMAND_LIST below.
+// Plain text filters the Analysis exercise selector; a leading "." opens a
+// palette of shortcut commands (".": easy to reach on a phone keyboard).
+// Designed to speed up the common moves without hunting through menus. New
+// commands are easy to add to commandList() below.
 interface CmdSpec { cmd: string; desc: string; run: () => void }
 
 /** Jump to the Analysis tab and (re)render it. */
@@ -7545,21 +7546,21 @@ function openSelectorFolds(): void {
 
 function commandList(): CmdSpec[] {
   return [
-    { cmd: "/all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
-    { cmd: "/clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
-    { cmd: "/names", desc: "Toggle exercise labels: short code ↔ full name", run: () => { waChipNameMode = waChipNameMode === "code" ? "full" : "code"; goToAnalysis(); } },
-    { cmd: "/dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
-    { cmd: "/today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
-    { cmd: "/calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
-    { cmd: "/codes", desc: "Open the Exercise codes page", run: () => switchTopTab("codes") },
-    { cmd: "/add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
-    { cmd: "/data", desc: "Open the Data page", run: () => switchTopTab("data") },
-    { cmd: "/help", desc: "List every command (type / to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "/"; i.focus(); renderCmdPalette("/"); } } },
+    { cmd: ".all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
+    { cmd: ".clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
+    { cmd: ".names", desc: "Toggle exercise labels: short code ↔ full name", run: () => { waChipNameMode = waChipNameMode === "code" ? "full" : "code"; goToAnalysis(); } },
+    { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
+    { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
+    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
+    { cmd: ".codes", desc: "Open the Exercise codes page", run: () => switchTopTab("codes") },
+    { cmd: ".add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
+    { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
+    { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },
   ];
 }
 
 let cmdActiveIdx = 0;
-/** Render the slash-command palette filtered by the text after "/". */
+/** Render the command palette filtered by the text after the "." trigger. */
 function renderCmdPalette(value: string): void {
   const pal = document.getElementById("cmdPalette");
   if (!pal) return;
@@ -7567,7 +7568,7 @@ function renderCmdPalette(value: string): void {
   const matches = commandList().filter((c) => !q || c.cmd.slice(1).startsWith(q) || c.desc.toLowerCase().includes(q));
   if (matches.length === 0) {
     pal.hidden = false;
-    pal.innerHTML = `<div class="cmd-empty muted">No command matches “/${escapeHtml(q)}”</div>`;
+    pal.innerHTML = `<div class="cmd-empty muted">No command matches “.${escapeHtml(q)}”</div>`;
     return;
   }
   if (cmdActiveIdx >= matches.length) cmdActiveIdx = 0;
@@ -7591,8 +7592,8 @@ function runCommand(cmd: string): void {
   const input = document.getElementById("cmdInput") as HTMLInputElement | null;
   if (!spec) return;
   spec.run();
-  if (input && cmd !== "/help") input.value = "";
-  if (cmd !== "/help") { hideCmdPalette(); input?.blur(); }
+  if (input && cmd !== ".help") input.value = "";
+  if (cmd !== ".help") { hideCmdPalette(); input?.blur(); }
 }
 
 function setupCommandBar(): void {
@@ -7601,7 +7602,7 @@ function setupCommandBar(): void {
   if (!input || !pal) return;
   input.addEventListener("input", () => {
     const v = input.value;
-    if (v.startsWith("/")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
+    if (v.startsWith(".")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
     hideCmdPalette();
     // Plain text → filter the Analysis exercise selector chips.
     waSearchQuery = v;
