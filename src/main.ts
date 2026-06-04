@@ -59,6 +59,9 @@ import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
+import { GRAPH_METRICS } from "./graphMetrics";
+import { renderAnalyticsGraph } from "./analyticsGraph";
+import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
   ATHLETES,
   type AthleteProfile,
@@ -6806,6 +6809,9 @@ let waView: WaView = "overview";
 const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
 // Metadata filters active in the selector (TASK 19): dim → accepted values.
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
+// Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
+const waMetrics = new Set<string>(["e1rm"]);
+const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
 let userTaxonomy: UserAssignments = (() => {
@@ -6892,7 +6898,6 @@ function restoreAnalysisPanels(): void {
 function renderWorkoutAnalysis(): void {
   const mode = waMode();
   const contentTitle = document.querySelector<HTMLElement>("#waTable .wa-section-title");
-  const graph = document.getElementById("waGraph");
   const stats = document.getElementById("waStats");
   if (mode === "single") {
     // Single-exercise analytics: reuse the real drill-in for the chosen lift.
@@ -6900,7 +6905,6 @@ function renderWorkoutAnalysis(): void {
     combinedWith = [];
     setAnalysisMainPanel("exercises");
     if (contentTitle) contentTitle.textContent = "Exercise analysis";
-    graph?.setAttribute("hidden", ""); // the drill-in carries its own graph/stats
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
   } else if (mode === "compare") {
@@ -6911,7 +6915,6 @@ function renderWorkoutAnalysis(): void {
     for (const n of waSelected) compareSelected.add(n);
     setAnalysisMainPanel("exercises");
     if (contentTitle) contentTitle.textContent = "Compare exercises";
-    graph?.setAttribute("hidden", ""); // the compare view carries its own chart/table
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
   } else if (waAllView === "list") {
@@ -6921,14 +6924,12 @@ function renderWorkoutAnalysis(): void {
     exercisesTab = "list";
     setAnalysisMainPanel("exercises");
     if (contentTitle) contentTitle.textContent = "Exercise list";
-    graph?.setAttribute("hidden", "");
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
   } else {
     // All + Workouts: the live Workouts panel.
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = "Workout history";
-    graph?.setAttribute("hidden", "");
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     renderWorkoutCalendar();
@@ -7025,6 +7026,44 @@ function renderWorkoutAnalysis(): void {
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
       `<div class="wa-ex-chips">${chips}</div>`;
   }
+  renderWaGraph();
+}
+
+/** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
+ * the reusable graph, rendered from the current selection. Light to re-render, so
+ * metric/config changes don't disturb the hosted panels or the selection. */
+function renderWaGraph(): void {
+  const box = document.getElementById("waGraph");
+  if (!box) return;
+  const metricChips = GRAPH_METRICS.map(
+    (m) => `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}" data-wametric="${m.id}">${escapeHtml(m.label)}</button>`,
+  ).join("");
+  const c = waGraphConfig;
+  const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+  const cfgUi =
+    `<div class="wa-gcfg">` +
+    `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
+    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
+    `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
+    `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
+    `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
+    `</div>`;
+  const note = waSelected.length === 0 ? `<p class="muted wa-placeholder">Pick exercises to plot — showing sample data.</p>` : "";
+  box.innerHTML =
+    `<h3 class="wa-section-title">Graph <span class="muted" style="font-weight:400">· universal (beta)</span></h3>` +
+    `<div class="wa-metric-row">${metricChips}</div>` +
+    cfgUi +
+    note +
+    `<div id="waGraphChart"></div>`;
+  const chartBox = document.getElementById("waGraphChart");
+  if (chartBox)
+    renderAnalyticsGraph(chartBox, {
+      exercises: waSelected,
+      records: computedRecords().filter((r) => r.username === els.athlete.value),
+      metrics: [...waMetrics],
+      config: waGraphConfig,
+      codeOf: exerciseCode,
+    });
 }
 
 /** Build the metadata-filter controls: a multi-select per dimension that has any
@@ -7105,6 +7144,19 @@ function setupWorkoutAnalysis(): void {
       const dim = fsel.dataset.wadim as ExerciseFilterDim;
       waFilterValues[dim] = Array.from(fsel.selectedOptions).map((o) => o.value);
       renderWorkoutAnalysis();
+      return;
+    }
+    // Graph config controls (TASK 29) — update config, re-render just the graph.
+    const cfg = target.closest<HTMLElement>(".wa-cfg");
+    if (cfg?.dataset.wacfg) {
+      const key = cfg.dataset.wacfg;
+      const el = cfg as HTMLInputElement | HTMLSelectElement;
+      if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
+      else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
+      else if (key === "smoothing") waGraphConfig.smoothing = Math.max(0, Math.round(Number((el as HTMLInputElement).value) || 0));
+      else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
+      else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
+      renderWaGraph();
     }
   });
   panel.addEventListener("click", (e) => {
@@ -7129,6 +7181,15 @@ function setupWorkoutAnalysis(): void {
     if (t.closest("#waFiltersClear")) {
       for (const d of FILTER_DIMS) delete waFilterValues[d];
       renderWorkoutAnalysis();
+      return;
+    }
+    // Graph metric toggle (TASK 27): enable/disable a metric, re-render the graph.
+    const met = t.closest<HTMLElement>(".wa-metric");
+    if (met?.dataset.wametric) {
+      const id = met.dataset.wametric;
+      if (waMetrics.has(id)) waMetrics.delete(id);
+      else waMetrics.add(id);
+      renderWaGraph();
       return;
     }
     // Save taxonomy assignments (TASK 24) for the selected exercise.

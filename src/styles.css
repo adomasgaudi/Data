@@ -1955,3 +1955,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-filter-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--muted); min-width: 8.5rem; }
 .wa-filter-f select, .wa-assign-body select { font: inherit; font-size: 0.82rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-alias-hint { width: 100%; font-size: 0.78rem; margin: 0.2rem 0 0; }
+
+/* Universal Analytics Graph: metric toggles + config (TASKS 25–29). */
+.wa-metric-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.5rem; }
+.wa-metric { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-metric:hover { border-color: var(--accent); color: var(--accent); }
+.wa-metric.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wa-gcfg { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; margin: 0 0 0.6rem; }
+.wa-gcfg-f { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); }
+.wa-gcfg-f select, .wa-gcfg-f input { font: inherit; font-size: 0.8rem; padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.wa-gcfg-f input[type="number"] { width: 3.2rem; }
