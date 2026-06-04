@@ -81,7 +81,7 @@ import {
   type MuscleGroup,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, COMPONENTS, fibSp } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp } from "./changelog";
 import { SP_HISTORY } from "./spHistory";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -943,7 +943,8 @@ function renderChangelog() {
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
   const header =
-    `<p class="cl-summary muted">${releaseCount} releases · whole site <strong>${WEBSITE_EXACT_SP} SP</strong> (≈ ${WEBSITE_SP} on the Fibonacci scale)</p>` +
+    `<p class="cl-summary muted">${releaseCount} releases · <strong>${fmtSp(TOTAL_LOG_SP)} SP</strong> logged in total ` +
+    `<span class="cl-effort-note">· whole-site effort grade ${WEBSITE_EXACT_SP} (≈ ${WEBSITE_SP})</span></p>` +
     `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by commit date)</div>` +
     `<div id="spHistoryChart"></div></div>`;
   // Effort per part — exact SP and the Fibonacci grade it snaps to.

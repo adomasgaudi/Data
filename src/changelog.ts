@@ -48,6 +48,7 @@ export const CHANGELOG: Release[] = [
       "Trimmed version-history notes, a Browse-groups panel on the Index, and a 2–5 word title on every release.",
     ],
     children: [
+      { version: "b.2.1.57", title: "More category fixes + auto SP total", sp: 3, note: "The version-history total now COMPUTES itself — a function sums every release's story points, so it updates on its own instead of waiting to be hand-edited. Plus a batch of category fixes: crunches were reading as Cardio (because “crunch” contains “run”) — now Core; Sled Leg Press and Bulgarian Split Squats are Legs (no longer Cardio/“sled” or Mobility/“split”); POS… drills are Posture (matching POST…), while STRETCH… stays Mobility; Cold shower and Meditation leave Mobility for Other; Lower-back machine is Back (erector spinae); Leg hops are Dynamic. (Kong → Skill and the Leg-angle raises → Core are best guesses — say if they're wrong.)" },
       { version: "b.2.1.56", title: "Sections read as cards", sp: 1, note: "The page now has a faint off-white background so every panel reads as a distinct card (they were white-on-white before). “Stats & training mix” is its own bordered, collapsible card, and the athlete tab bar (Workouts | List & stats | Compare | Single) now joins the content beneath it into one clearly-outlined tabbed card. Dark mode keeps the same card pop." },
       { version: "b.2.1.55", title: "Technique scaling factor", sp: 8, note: "Reworked the squat-rack holes from a bodyweight-% into a technique SCALING FACTOR. The hole no longer changes your real logged weight or its 1RM — those stay exactly as recorded everywhere. Instead each hole carries a plain multiplier (default ×1, tuneable in the holes table) and the exercise graph gains a “Scaled effort” line = each set's real 1RM × its hole's factor, so sets done at different difficulties can be lined up for comparison while the originals are untouched. Groundwork for tagging other technique changes the same way." },
       { version: "b.2.1.54", title: "Category fixes + two new", sp: 3, note: "Re-categorised a batch of exercises and added two categories. New “Dynamic” (long jump, wall climbs) and “Posture” (the POST… posture drills). Stretches (POS…) now read as Mobility. Grip / forearm / loaded-carry / rotator-cuff work and a set of hand-marked holds (Plate lifts, Front support, Overhead hold, Person lift, Carry hold, Dead hang, Farmers Walk, Suitcase Carry, Grip, Hang…) are now Arms; Bent Knee Hip Raise is Core. These are curated, highest-priority fixes, so an olympic “hang clean” still reads Legs, not Arms." },
@@ -402,6 +403,18 @@ for (const r of CHANGELOG) {
     r.sp = Math.round(r.children.reduce((s, c) => s + c.sp, 0) * 10) / 10;
   }
 }
+
+/**
+ * TOTAL story points across the whole shipped log — computed from the releases
+ * themselves, so it's never hand-maintained and can't drift. Each grouped minor
+ * already carries the sum of its children (the loop above), so summing the
+ * top-level non-`soon` entries totals every release exactly once. Add a release
+ * and this updates on its own. Rounded to one decimal so fractional SP can't
+ * show a binary floating-point tail.
+ */
+export const TOTAL_LOG_SP = Math.round(
+  CHANGELOG.filter((r) => !r.soon).reduce((sum, r) => sum + r.sp, 0) * 10,
+) / 10;
 
 /** The on-screen version: always the latest actual sub-version. When the newest
  * entry is a grouped minor, that's its first (newest) child, not the group name. */

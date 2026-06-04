@@ -162,7 +162,6 @@ describe("exerciseCategory", () => {
     expect(exerciseCategory("Bike machine Cardio")).toBe("Cardio");
   });
   it("falls back to Other for the noise", () => {
-    expect(exerciseCategory("Cold shower")).toBe("Mobility");
     expect(exerciseCategory("KG - track food")).toBe("Other");
   });
   it("applies the owner's curated category fixes", () => {
@@ -173,17 +172,36 @@ describe("exerciseCategory", () => {
       "Farmers Walk", "Grip 1.25", "Grip plate pull", "Hang 25mm edge",
     ])
       expect(exerciseCategory(nm), nm).toBe("Arms");
-    // POS = stretching (Mobility), POST = posture, dynamic locomotion, core fix.
-    expect(exerciseCategory("POS arm lift 120 internal rot")).toBe("Mobility");
-    expect(exerciseCategory("POS - sit back straight")).toBe("Mobility");
+    // POS / POST = posture; STRETCH… stays Mobility.
+    expect(exerciseCategory("POS arm lift 120 internal rot")).toBe("Posture");
+    expect(exerciseCategory("POS - sit back straight")).toBe("Posture");
     expect(exerciseCategory("POST Head towel hold")).toBe("Posture");
+    expect(exerciseCategory("Stretch split")).toBe("Mobility");
+    // Dynamic locomotion / plyometrics.
     expect(exerciseCategory("Long jump")).toBe("Dynamic");
     expect(exerciseCategory("Low wall climb 3")).toBe("Dynamic");
+    expect(exerciseCategory("Leg hop 40")).toBe("Dynamic");
+    // Core fixes — incl. "crunch" which contains "run" (was wrongly Cardio).
     expect(exerciseCategory("Bent Knee Hip Raise")).toBe("Core");
+    for (const nm of ["Machine Seated Crunch", "Cable Crunch", "Overhead Crunch", "Decline Crunch", "Bicycle Crunch", "Leg 130", "Leg straight 140"])
+      expect(exerciseCategory(nm), nm).toBe("Core");
+    // A leg press / split squat is Legs, never Cardio ("sled") or Mobility ("split").
+    expect(exerciseCategory("Sled Leg Press")).toBe("Legs");
+    expect(exerciseCategory("Bulgarian Split Squat")).toBe("Legs");
+    expect(exerciseCategories("Bulgarian Split Squat")).toContain("Legs (all)");
+    // Recovery / mental drills aren't Mobility.
+    expect(exerciseCategory("Cold shower")).toBe("Other");
+    expect(exerciseCategory("Meditation 10 breath")).toBe("Other");
+    // Erector-spinae work (lower-back machine) is a Back exercise…
+    expect(exerciseCategory("Lower back machine")).toBe("Back");
+    // …but a lower-back STRETCH is still Mobility (stretch wins).
+    expect(exerciseCategory("Lower back stretch")).toBe("Mobility");
   });
-  it("does not over-reach: an olympic 'hang clean' stays Legs, not Arms", () => {
-    expect(exerciseCategory("Hang Clean")).toBe("Legs");
+  it("does not over-reach", () => {
+    expect(exerciseCategory("Hang Clean")).toBe("Legs"); // olympic, not a grip "hang"
     expect(exerciseCategory("Bench Press")).toBe("Chest");
+    expect(exerciseCategory("bicycle")).toBe("Cardio"); // the bike, not Bicycle Crunch
+    expect(exerciseCategory("Stairs")).toBe("Cardio");
   });
 });
 
