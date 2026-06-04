@@ -11975,6 +11975,18 @@ Brigita,brigita_r,2026-05-25,57,Single Leg Romanian Deadlift,2,25,15,,,0.7027805
 Indre,indre_ju,2026-05-21,68,Belt Squat,1,20,20,,,0.4288146899346598
 Indre,indre_ju,2026-05-21,68,Belt Squat,2,25,20,,,0.5976258600707243
 Indre,indre_ju,2026-05-21,68,Belt Squat,3,30,20,,,0.7365794028201283
+Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,1,30,15,,,0.0004978603005294103
+Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,2,35,20,,,0.0024891106602014847
+Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,3,30,20,,,0.0009577051111825272
+Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,1,20,15,,,0.002098755338433774
+Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,2,25,8,,,0.002512415434846719
+Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,3,25,10,,,0.003659174687544376
+Simonas,simonasputrius,2026-05-27,121,plate wrist lift,1,10,20,,,
+Simonas,simonasputrius,2026-05-27,121,plate wrist lift,2,12,10,,,
+Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,1,30,10,gravity/2,,0.005862372567945754
+Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,2,30,6,gravity/2,,0.002674745631286015
+Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,1,6,12,,,0.023945648745448408
+Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,2,7,12,,,0.035232425396055575
 Adomas,adomasgaudi,2026-06-02,91.4,Plate lifts,1,30,23,,,
 Adomas,adomasgaudi,2026-06-02,91.4,Plate lifts,2,30,20,,,
 Kristina,andromeda94,2026-06-02,44,Landmine Romanian Deadlift,1,12.5,15,,,
@@ -12042,6 +12054,13 @@ Sandra,sandrakri,2026-05-27,72,Plate lifts,1,8.7,20,,,
 Sandra,sandrakri,2026-05-27,72,Plate lifts,2,10,12,,,
 Sandra,sandrakri,2026-05-27,72,Plate lifts,3,10,12,,,
 Sandra,sandrakri,2026-05-27,72,Plate lifts,4,10,15,,,
+Dzul,dzuljeta,2026-06-03,57.1,Hip Thrust,1,50,20,,,0.44586800414086586
+Dzul,dzuljeta,2026-06-03,57.1,Hip Thrust,2,50,21,,,0.4601996014502098
+Dzul,dzuljeta,2026-06-03,57.1,Dumbbell Lunge,1,2.5,15,,,0.027881379981196497
+Dzul,dzuljeta,2026-06-03,57.1,Dumbbell Lunge,2,5,15,,,0.10470722549669685
+Dzul,dzuljeta,2026-06-03,57.1,Single Leg Romanian Deadlift,1,20,10,,,0.43218962420058776
+Dzul,dzuljeta,2026-06-03,57.1,Single Leg Romanian Deadlift,2,20,10,,,0.43218962420058776
+Dzul,dzuljeta,2026-06-03,57.1,Single Leg Romanian Deadlift,3,30,5,,,0.6183516865065899
 Dzul,dzuljeta,2026-06-01,57.1,Hip Thrust,1,65,7,,,0.39971988844760814
 Dzul,dzuljeta,2026-06-01,57.1,Hip Thrust,2,55,14,,,0.4228039068807623
 Dzul,dzuljeta,2026-06-01,57.1,Dumbbell Lunge,1,4,15,,,0.06781728296227964
@@ -12058,6 +12077,398 @@ Agne,agne_ram,2026-03-10,62.7,Deadlift,1,45,8,,,0.17030903857751384
 Agne,agne_ram,2026-03-10,62.7,Deadlift,2,45,8,,,0.17030903857751384
 Agne,agne_ram,2026-03-10,62.7,Vertical Leg Press,1,60,10,,,0.18520573795147388
 Agne,agne_ram,2026-03-10,62.7,Vertical Leg Press,2,60,10,,,0.18520573795147388
+Laurynas,bebras,2026-06-04,60,Dips,1,,10,,,0.32677306871103196
+Laurynas,bebras,2026-06-04,60,Dips,2,15,8,,,0.5097591239132615
+Laurynas,bebras,2026-06-04,60,Dips,3,15,7,,,0.4663570509867056
+Laurynas,bebras,2026-06-04,60,Dips,4,15,4,,,0.3516627963421427
+Laurynas,bebras,2026-06-04,60,Machine Bicep Curl,1,25,12,,,0.36226866913821376
+Laurynas,bebras,2026-06-04,60,Machine Bicep Curl,2,30,8,,,0.40689651285650585
+Laurynas,bebras,2026-06-04,60,Machine Bicep Curl,3,30,7,,,0.38221231006872497
+Laurynas,bebras,2026-06-04,60,Machine Bicep Curl,4,30,6,,,0.3591626565231696
+Laurynas,bebras,2026-06-04,60,Shoulder Press (Machine Plates),1,40,8,,,
+Laurynas,bebras,2026-06-04,60,Shoulder Press (Machine Plates),2,50,9,,,
+Laurynas,bebras,2026-06-04,60,Shoulder Press (Machine Plates),3,50,6,,,
+Laurynas,bebras,2026-06-04,60,Shoulder Press (Machine Plates),4,50,4,,,
+Laurynas,bebras,2026-06-04,60,Reverse Grip Lat Pulldown,1,52.5,6,,,0.42338731775029387
+Laurynas,bebras,2026-06-04,60,Reverse Grip Lat Pulldown,2,52.5,6,,,0.42338731775029387
+Laurynas,bebras,2026-06-04,60,Reverse Grip Lat Pulldown,3,52.5,4,,,0.3664844724669224
+Laurynas,bebras,2026-06-04,60,Dumbbell Bench Press,1,17.5,10,,,0.3271659274955257
+Laurynas,bebras,2026-06-04,60,Dumbbell Bench Press,2,22.5,8,,,0.4591839991358284
+Laurynas,bebras,2026-06-04,60,Dumbbell Bench Press,3,22.5,4,,,0.361814694078071
+Laurynas,bebras,2026-06-04,60,Dumbbell Bench Press,4,22.5,4,,,0.361814694078071
+Laurynas,bebras,2026-06-04,60,Overhead Crunch,1,6,10,,,
+Laurynas,bebras,2026-06-04,60,Overhead Crunch,2,6,8,,,
+Laurynas,bebras,2026-06-04,60,Overhead Crunch,3,6,6,,,
+Laurynas,bebras,2026-06-01,60,Squat,1,40,10,,,0.10927183820496869
+Laurynas,bebras,2026-06-01,60,Squat,2,60,6,,,0.2667863070314839
+Laurynas,bebras,2026-06-01,60,Squat,3,60,6,,,0.2667863070314839
+Laurynas,bebras,2026-06-01,60,Squat,4,60,4,,,0.22001215958557013
+Laurynas,bebras,2026-06-01,60,Squat,5,60,3,,,0.1999084096485239
+Laurynas,bebras,2026-06-01,60,Romanian Deadlift,1,50,10,,,0.29683251625754725
+Laurynas,bebras,2026-06-01,60,Romanian Deadlift,2,60,10,,,0.4522008009447724
+Laurynas,bebras,2026-06-01,60,Romanian Deadlift,3,65,8,,,0.4604736485424935
+Laurynas,bebras,2026-06-01,60,Romanian Deadlift,4,65,7,,,0.42879917799832284
+Laurynas,bebras,2026-06-01,60,Standing Leg Curl,1,15,7,,,0.25660750557427303
+Laurynas,bebras,2026-06-01,60,Standing Leg Curl,2,15,6,,,0.24840567514532483
+Laurynas,bebras,2026-06-01,60,Standing Leg Curl,3,15,7,,,0.25660750557427303
+Laurynas,bebras,2026-06-01,60,Seated Calf Raise,1,20,14,,,0.15172730575401852
+Laurynas,bebras,2026-06-01,60,Seated Calf Raise,2,20,16,,,0.16147771969815033
+Laurynas,bebras,2026-06-01,60,Seated Calf Raise,3,20,10,,,0.13281908409779317
+Laurynas,bebras,2026-06-01,60,Overhead Crunch,1,6,10,,,
+Laurynas,bebras,2026-06-01,60,Overhead Crunch,2,6,7,,,
+Laurynas,bebras,2026-06-01,60,Overhead Crunch,3,6,7,,,
+Laurynas,bebras,2026-05-26,60,Dips,1,,10,,,0.3274406998910364
+Laurynas,bebras,2026-05-26,60,Dips,2,10,10,,,0.5134923828188526
+Laurynas,bebras,2026-05-26,60,Dips,3,10,10,,,0.5134923828188526
+Laurynas,bebras,2026-05-26,60,Dips,4,12.5,9,,,0.5136169866085799
+Laurynas,bebras,2026-05-26,60,Machine Bicep Curl,1,25,12,,,0.3626959711525818
+Laurynas,bebras,2026-05-26,60,Machine Bicep Curl,2,30,10,,,0.4617344937246239
+Laurynas,bebras,2026-05-26,60,Machine Bicep Curl,3,30,9,,,0.4346207985988286
+Laurynas,bebras,2026-05-26,60,Machine Bicep Curl,4,30,6,,,0.3595877416240254
+Laurynas,bebras,2026-05-26,60,Shoulder Press (Machine Plates),1,40,8,,,
+Laurynas,bebras,2026-05-26,60,Shoulder Press (Machine Plates),2,50,11,,,
+Laurynas,bebras,2026-05-26,60,Inverted Row,1,,10,,,0.3976836493210256
+Laurynas,bebras,2026-05-26,60,Reverse Grip Lat Pulldown,1,45,10,,,0.4089077062553458
+Laurynas,bebras,2026-05-26,60,Reverse Grip Lat Pulldown,2,45,8,,,0.3456242354568031
+Laurynas,bebras,2026-05-26,60,Reverse Grip Lat Pulldown,3,45,5,,,0.2682114014103285
+Laurynas,bebras,2026-05-26,60,Dumbbell Bench Press,1,17.5,10,,,0.327573944780874
+Laurynas,bebras,2026-05-26,60,Dumbbell Bench Press,2,22.5,8,,,0.4596748447559176
+Laurynas,bebras,2026-05-26,60,Dumbbell Bench Press,3,22.5,4,,,0.36224925725855867
+Laurynas,bebras,2026-05-26,60,Dumbbell Bench Press,4,22.5,6,,,0.4079023180276146
+Laurynas,bebras,2026-05-26,60,Dumbbell Bench Press,5,22.5,5,,,0.3843488118787189
+Laurynas,bebras,2026-05-26,60,Overhead Crunch,1,5,11,,,
+Laurynas,bebras,2026-05-26,60,Overhead Crunch,2,5,10,,,
+Laurynas,bebras,2026-05-26,60,Overhead Crunch,3,6,4,,,
+Laurynas,bebras,2026-05-21,60,Dips,1,,7,,,0.22557661027998507
+Laurynas,bebras,2026-05-21,60,Dips,2,10,11,,,0.5459771347828458
+Laurynas,bebras,2026-05-21,60,Dips,3,10,6,,,0.34555479650278464
+Laurynas,bebras,2026-05-21,60,Dips,4,10,6,,,0.34555479650278464
+Laurynas,bebras,2026-05-21,60,Machine Bicep Curl,1,25,12,,,0.3629347116001285
+Laurynas,bebras,2026-05-21,60,Machine Bicep Curl,2,30,12,,,0.5008816701277765
+Laurynas,bebras,2026-05-21,60,Machine Bicep Curl,3,30,8,,,0.40760756632409506
+Laurynas,bebras,2026-05-21,60,Machine Bicep Curl,4,30,6,,,0.35982524502657165
+Laurynas,bebras,2026-05-21,60,Shoulder Press (Machine Plates),1,40,8,,,
+Laurynas,bebras,2026-05-21,60,Shoulder Press (Machine Plates),2,50,10,,,
+Laurynas,bebras,2026-05-21,60,Shoulder Press (Machine Plates),3,50,7,,,
+Laurynas,bebras,2026-05-21,60,Shoulder Press (Machine Plates),4,50,4,,,
+Laurynas,bebras,2026-05-21,60,Reverse Grip Lat Pulldown,1,45,6,,,0.2920702052513422
+Laurynas,bebras,2026-05-21,60,Reverse Grip Lat Pulldown,2,45,5,,,0.26845985742480266
+Laurynas,bebras,2026-05-21,60,Reverse Grip Lat Pulldown,3,45,4,,,0.24686097151622727
+Laurynas,bebras,2026-05-21,60,Dumbbell Bench Press,1,17.5,8,,,0.2828631349789753
+Laurynas,bebras,2026-05-21,60,Dumbbell Bench Press,2,22.5,7,,,0.43326788562207397
+Laurynas,bebras,2026-05-21,60,Dumbbell Bench Press,3,22.5,5,,,0.3846000722008442
+Laurynas,bebras,2026-05-21,60,Dumbbell Bench Press,4,22.5,5,,,0.3846000722008442
+Laurynas,bebras,2026-05-21,60,Overhead Crunch,1,5,11,,,
+Laurynas,bebras,2026-05-21,60,Overhead Crunch,2,5,7,,,
+Laurynas,bebras,2026-05-21,60,Overhead Crunch,3,5,11,,,
+Laurynas,bebras,2026-05-16,60,Dips,1,,7,,,0.22587231018742424
+Laurynas,bebras,2026-05-16,60,Dips,2,10,8,,,0.4242944299717044
+Laurynas,bebras,2026-05-16,60,Dips,3,10,8,,,0.4242944299717044
+Laurynas,bebras,2026-05-16,60,Dips,4,10,5,,,0.3114648037224159
+Laurynas,bebras,2026-05-16,60,Machine Bicep Curl,1,25,12,,,0.3631744205864728
+Laurynas,bebras,2026-05-16,60,Machine Bicep Curl,2,30,8,,,0.40786344095948934
+Laurynas,bebras,2026-05-16,60,Machine Bicep Curl,3,30,5,,,0.33854036227367906
+Laurynas,bebras,2026-05-16,60,Machine Bicep Curl,4,30,7,,,0.38314685988986047
+Laurynas,bebras,2026-05-16,60,Shoulder Press (Machine Plates),1,40,8,,,
+Laurynas,bebras,2026-05-16,60,Shoulder Press (Machine Plates),2,50,11,,,
+Laurynas,bebras,2026-05-16,60,Shoulder Press (Machine Plates),3,50,5,,,
+Laurynas,bebras,2026-05-16,60,Shoulder Press (Machine Plates),4,50,3,,,
+Laurynas,bebras,2026-05-16,60,Inverted Row,1,,8,,,0.3327925166209968
+Laurynas,bebras,2026-05-16,60,Inverted Row,2,,6,,,0.2775245975977433
+Laurynas,bebras,2026-05-16,60,Inverted Row,3,,4,,,0.2315986900641403
+Laurynas,bebras,2026-05-16,60,Reverse Grip Lat Pulldown,1,45,8,,,0.3462094123103261
+Laurynas,bebras,2026-05-16,60,Reverse Grip Lat Pulldown,2,45,6,,,0.29233429017867757
+Laurynas,bebras,2026-05-16,60,Reverse Grip Lat Pulldown,3,45,5,,,0.26870938195915317
+Laurynas,bebras,2026-05-16,60,Dumbbell Bench Press,1,17.5,10,,,0.32803085175838986
+Laurynas,bebras,2026-05-16,60,Dumbbell Bench Press,2,22.5,7,,,0.43353607313902026
+Laurynas,bebras,2026-05-16,60,Dumbbell Bench Press,3,22.5,8,,,0.4602242837520994
+Laurynas,bebras,2026-05-16,60,Dumbbell Bench Press,4,22.5,4,,,0.362735841316145
+Laurynas,bebras,2026-05-13,60,Squat,1,40,10,,,0.10979347388131369
+Laurynas,bebras,2026-05-13,60,Squat,2,60,7,,,0.2949621422374089
+Laurynas,bebras,2026-05-13,60,Squat,3,60,7,,,0.2949621422374089
+Laurynas,bebras,2026-05-13,60,Squat,4,60,6,,,0.26783273056435647
+Laurynas,bebras,2026-05-13,60,Squat,5,60,5,,,0.24322706127160637
+Laurynas,bebras,2026-05-13,60,Romanian Deadlift,1,50,10,,,0.2978149668915045
+Laurynas,bebras,2026-05-13,60,Romanian Deadlift,2,60,12,,,0.5001051977238082
+Laurynas,bebras,2026-05-13,60,Romanian Deadlift,3,60,8,,,0.38850622202309915
+Laurynas,bebras,2026-05-13,60,Romanian Deadlift,4,60,7,,,0.3593172929226675
+Laurynas,bebras,2026-05-13,60,Standing Leg Curl,1,15,7,,,0.2569406411443743
+Laurynas,bebras,2026-05-13,60,Standing Leg Curl,2,15,7,,,0.2569406411443743
+Laurynas,bebras,2026-05-13,60,Standing Leg Curl,3,15,4,,,0.23380783749700015
+Laurynas,bebras,2026-05-11,60,Dips,1,,7,,,0.22616936254047457
+Laurynas,bebras,2026-05-11,60,Dips,2,10,10,,,0.5148324952742794
+Laurynas,bebras,2026-05-11,60,Dips,3,10,9,,,0.4699831710660512
+Laurynas,bebras,2026-05-11,60,Dips,4,10,4,,,0.2803776548735676
+Laurynas,bebras,2026-05-11,60,Machine Bicep Curl,1,25,12,,,0.36341510122795967
+Laurynas,bebras,2026-05-11,60,Machine Bicep Curl,2,30,10,,,0.46254823784123167
+Laurynas,bebras,2026-05-11,60,Machine Bicep Curl,3,30,7,,,0.38339517456989886
+Laurynas,bebras,2026-05-11,60,Machine Bicep Curl,4,30,6,,,0.36030314892604054
+Laurynas,bebras,2026-05-11,60,Shoulder Press (Machine Plates),1,40,10,,,
+Laurynas,bebras,2026-05-11,60,Shoulder Press (Machine Plates),2,50,10,,,
+Laurynas,bebras,2026-05-11,60,Shoulder Press (Machine Plates),3,50,5,,,
+Laurynas,bebras,2026-05-11,60,Shoulder Press (Machine Plates),4,50,4,,,
+Laurynas,bebras,2026-05-11,60,Reverse Grip Lat Pulldown,1,45,7,,,0.3184014737670621
+Laurynas,bebras,2026-05-11,60,Reverse Grip Lat Pulldown,2,45,6,,,0.2925994978041958
+Laurynas,bebras,2026-05-11,60,Reverse Grip Lat Pulldown,3,45,4,,,0.24733247503913236
+Laurynas,bebras,2026-05-11,60,Dumbbell Bench Press,1,17.5,8,,,0.28327782512841515
+Laurynas,bebras,2026-05-11,60,Dumbbell Bench Press,2,22.5,7,,,0.4338053182129295
+Laurynas,bebras,2026-05-11,60,Dumbbell Bench Press,3,22.5,7,,,0.4338053182129295
+Laurynas,bebras,2026-05-11,60,Dumbbell Bench Press,4,22.5,5,,,0.3851056311126022
+Laurynas,bebras,2026-05-11,60,Dumbbell Bench Press,5,22.5,5,,,0.3851056311126022
+Laurynas,bebras,2026-05-11,60,Overhead Crunch,1,5,8,,,
+Laurynas,bebras,2026-05-11,60,Overhead Crunch,2,5,8,,,
+Laurynas,bebras,2026-05-11,60,Overhead Crunch,3,5,5,,,
+Laurynas,bebras,2026-05-07,60,Squat,1,40,10,,,0.10996015640521536
+Laurynas,bebras,2026-05-07,60,Squat,2,60,8,,,0.3251353248119028
+Laurynas,bebras,2026-05-07,60,Squat,3,60,7,,,0.2953179064387756
+Laurynas,bebras,2026-05-07,60,Squat,4,60,5,,,0.24353971217290596
+Laurynas,bebras,2026-05-07,60,Squat,5,60,4,,,0.2212178911815702
+Laurynas,bebras,2026-05-07,60,Standing Leg Curl,1,15,9,,,0.2755683521271663
+Laurynas,bebras,2026-05-07,60,Standing Leg Curl,2,15,7,,,0.25704689838167116
+Laurynas,bebras,2026-05-07,60,Standing Leg Curl,3,15,6,,,0.24883058790774792
+Laurynas,bebras,2026-05-07,60,Seated Calf Raise,1,25,16,,,0.22110802838505547
+Laurynas,bebras,2026-05-07,60,Seated Calf Raise,2,25,13,,,0.2012843996859996
+Laurynas,bebras,2026-05-07,60,Seated Calf Raise,3,25,12,,,0.1947777788125719
+Laurynas,bebras,2026-05-07,60,Overhead Crunch,1,4,11,,,
+Laurynas,bebras,2026-05-07,60,Overhead Crunch,2,4,12,,,
+Laurynas,bebras,2026-05-07,60,Overhead Crunch,3,4,6,,,
+Laurynas,bebras,2026-05-05,60,Dips,1,,7,,,0.22652761847808184
+Laurynas,bebras,2026-05-05,60,Dips,2,10,10,,,0.5153728082621094
+Laurynas,bebras,2026-05-05,60,Dips,3,10,6,,,0.346794460288603
+Laurynas,bebras,2026-05-05,60,Dips,4,10,4,,,0.280790768931464
+Laurynas,bebras,2026-05-05,60,Machine Bicep Curl,1,25,12,,,0.3637052049783348
+Laurynas,bebras,2026-05-05,60,Machine Bicep Curl,2,30,10,,,0.46287639999562047
+Laurynas,bebras,2026-05-05,60,Machine Bicep Curl,3,30,5,,,0.3390485184931214
+Laurynas,bebras,2026-05-05,60,Machine Bicep Curl,4,30,6,,,0.36059175378539327
+Laurynas,bebras,2026-05-05,60,Shoulder Press (Machine Plates),1,40,10,,,
+Laurynas,bebras,2026-05-05,60,Shoulder Press (Machine Plates),2,50,10,,,
+Laurynas,bebras,2026-05-05,60,Shoulder Press (Machine Plates),3,50,5,,,
+Laurynas,bebras,2026-05-05,60,Shoulder Press (Machine Plates),4,50,4,,,
+Laurynas,bebras,2026-05-05,60,Inverted Row,1,,6,,,0.2781216258190394
+Laurynas,bebras,2026-05-05,60,Inverted Row,2,,5,,,0.2540462838667696
+Laurynas,bebras,2026-05-05,60,Inverted Row,3,,4,,,0.23212499399135925
+Laurynas,bebras,2026-05-05,60,Reverse Grip Lat Pulldown,1,45,8,,,0.34685872255027933
+Laurynas,bebras,2026-05-05,60,Reverse Grip Lat Pulldown,2,45,7,,,0.31873890368602553
+Laurynas,bebras,2026-05-05,60,Reverse Grip Lat Pulldown,3,45,4,,,0.24761734326246754
+Laurynas,bebras,2026-05-05,60,Dumbbell Bench Press,1,17.5,8,,,0.28352830467946005
+Laurynas,bebras,2026-05-05,60,Dumbbell Bench Press,2,22.5,11,,,0.5394359764661312
+Laurynas,bebras,2026-05-05,60,Dumbbell Bench Press,3,22.5,6,,,0.4089988646660563
+Laurynas,bebras,2026-05-05,60,Dumbbell Bench Press,4,22.5,5,,,0.38541091951049145
+Laurynas,bebras,2026-05-05,60,Dumbbell Bench Press,5,22.5,5,,,0.38541091951049145
+Laurynas,bebras,2026-05-01,60,Squat,1,40,10,,,0.1101277863769384
+Laurynas,bebras,2026-05-01,60,Squat,2,60,6,,,0.2685025818240853
+Laurynas,bebras,2026-05-01,60,Squat,3,60,8,,,0.32551458448522674
+Laurynas,bebras,2026-05-01,60,Squat,4,60,6,,,0.2685025818240853
+Laurynas,bebras,2026-05-01,60,Deadlift,1,50,10,,,0.11529418458182913
+Laurynas,bebras,2026-05-01,60,Deadlift,2,60,10,,,0.22401592679362756
+Laurynas,bebras,2026-05-01,60,Deadlift,3,60,8,,,0.17475376180042504
+Laurynas,bebras,2026-05-01,60,Deadlift,4,60,6,,,0.13663074717081156
+Laurynas,bebras,2026-05-01,60,Standing Leg Curl,1,15,8,,,0.2659437816046332
+Laurynas,bebras,2026-05-01,60,Standing Leg Curl,2,15,5,,,0.24122994015380125
+Laurynas,bebras,2026-05-01,60,Standing Leg Curl,3,15,5,,,0.24122994015380125
+Laurynas,bebras,2026-05-01,60,Seated Calf Raise,1,25,11,,,0.18843566805425618
+Laurynas,bebras,2026-05-01,60,Seated Calf Raise,2,25,12,,,0.19489193309385472
+Laurynas,bebras,2026-05-01,60,Seated Calf Raise,3,25,14,,,0.20797157930746357
+Laurynas,bebras,2026-04-30,60,Dips,1,,10,,,0.3293986010377793
+Laurynas,bebras,2026-04-30,60,Dips,2,10,10,,,0.5158249398105914
+Laurynas,bebras,2026-04-30,60,Dips,3,10,8,,,0.4256611479862376
+Laurynas,bebras,2026-04-30,60,Dips,4,10,7,,,0.38485033521805867
+Laurynas,bebras,2026-04-30,60,Machine Bicep Curl,1,25,12,,,0.3639480342572635
+Laurynas,bebras,2026-04-30,60,Machine Bicep Curl,2,30,11,,,0.48270419256197095
+Laurynas,bebras,2026-04-30,60,Machine Bicep Curl,3,30,6,,,0.3608333297150106
+Laurynas,bebras,2026-04-30,60,Machine Bicep Curl,4,30,5,,,0.33928100971803765
+Laurynas,bebras,2026-04-30,60,Inverted Row,1,,6,,,0.2783948715318823
+Laurynas,bebras,2026-04-30,60,Inverted Row,2,,5,,,0.2543031720975715
+Laurynas,bebras,2026-04-30,60,Inverted Row,3,,5,,,0.2543031720975715
+Laurynas,bebras,2026-04-30,60,Reverse Grip Lat Pulldown,1,45,8,,,0.34715581970574827
+Laurynas,bebras,2026-04-30,60,Reverse Grip Lat Pulldown,2,45,6,,,0.29318692632421794
+Laurynas,bebras,2026-04-30,60,Reverse Grip Lat Pulldown,3,45,4,,,0.2478558658182962
+Laurynas,bebras,2026-04-30,60,Dumbbell Bench Press,1,17.5,10,,,0.32876974617871424
+Laurynas,bebras,2026-04-30,60,Dumbbell Bench Press,2,22.5,9,,,0.49037118261039053
+Laurynas,bebras,2026-04-30,60,Dumbbell Bench Press,3,22.5,5,,,0.3856664503576017
+Laurynas,bebras,2026-04-30,60,Dumbbell Bench Press,4,22.5,7,,,0.43440139539395867
+Laurynas,bebras,2026-04-30,60,Dumbbell Bench Press,5,22.5,4,,,0.3635226175616631
+Laurynas,bebras,2026-04-30,60,Overhead Crunch,1,4,11,,,
+Laurynas,bebras,2026-04-30,60,Overhead Crunch,2,4,8,,,
+Laurynas,bebras,2026-04-30,60,Overhead Crunch,3,4,6,,,
+Laurynas,bebras,2026-04-23,60,Dips,1,,8,,,0.2577114898971735
+Laurynas,bebras,2026-04-23,60,Dips,2,10,10,,,0.5164607892029401
+Laurynas,bebras,2026-04-23,60,Dips,3,10,6,,,0.3477352823591303
+Laurynas,bebras,2026-04-23,60,Dips,4,10,4,,,0.281623579010613
+Laurynas,bebras,2026-04-23,60,Machine Bicep Curl,1,25,12,,,0.3642896451456066
+Laurynas,bebras,2026-04-23,60,Machine Bicep Curl,2,30,9,,,0.43637684607646027
+Laurynas,bebras,2026-04-23,60,Machine Bicep Curl,3,30,7,,,0.3842973926685734
+Laurynas,bebras,2026-04-23,60,Machine Bicep Curl,4,30,7,,,0.3842973926685734
+Laurynas,bebras,2026-04-23,60,Machine Bicep Curl,5,30,10,,,0.46353732061349945
+Laurynas,bebras,2026-04-23,60,Shoulder Press (Machine Plates),1,40,10,,,
+Laurynas,bebras,2026-04-23,60,Shoulder Press (Machine Plates),2,50,7,,,
+Laurynas,bebras,2026-04-23,60,Shoulder Press (Machine Plates),3,50,8,,,
+Laurynas,bebras,2026-04-23,60,Shoulder Press (Machine Plates),4,50,3,,,
+Laurynas,bebras,2026-04-23,60,Shoulder Press (Machine Plates),5,50,6,,,
+Laurynas,bebras,2026-04-23,60,Inverted Row,1,,6,,,0.2787793893120187
+Laurynas,bebras,2026-04-23,60,Inverted Row,2,,5,,,0.25466469355089233
+Laurynas,bebras,2026-04-23,60,Inverted Row,3,,4,,,0.23270496955053235
+Laurynas,bebras,2026-04-23,60,Dumbbell Bench Press,1,15,8,,,0.2022387984379459
+Laurynas,bebras,2026-04-23,60,Dumbbell Bench Press,2,17.5,4,,,0.21397508210790184
+Laurynas,bebras,2026-04-23,60,Dumbbell Bench Press,3,22.5,9,,,0.49077213334844977
+Laurynas,bebras,2026-04-23,60,Dumbbell Bench Press,4,22.5,6,,,0.409633722894938
+Laurynas,bebras,2026-04-23,60,Dumbbell Bench Press,5,22.5,7,,,0.434783405422319
+Laurynas,bebras,2026-04-23,60,Dumbbell Bench Press,6,22.5,6,,,0.409633722894938
+Laurynas,bebras,2026-04-23,60,Overhead Crunch,1,3,11,,,
+Laurynas,bebras,2026-04-23,60,Overhead Crunch,2,3,10,,,
+Laurynas,bebras,2026-04-23,60,Overhead Crunch,3,3,8,,,
+Laurynas,bebras,2026-04-23,60,Reverse Grip Lat Pulldown,1,37.5,10,,,0.26090618492355067
+Laurynas,bebras,2026-04-23,60,Reverse Grip Lat Pulldown,2,60,4,,,0.49498311200197675
+Laurynas,bebras,2026-04-23,60,Reverse Grip Lat Pulldown,3,52.5,6,,,0.4261298266647221
+Laurynas,bebras,2026-04-23,60,Reverse Grip Lat Pulldown,4,45,6,,,0.2935636034963311
+Laurynas,bebras,2026-04-18,60,Squat,1,40,11,,,0.12079566586601914
+Laurynas,bebras,2026-04-18,60,Squat,2,55,9,,,0.2823001088131998
+Laurynas,bebras,2026-04-18,60,Squat,3,55,9,,,0.2823001088131998
+Laurynas,bebras,2026-04-18,60,Squat,4,55,7,,,0.22810249607881675
+Laurynas,bebras,2026-04-18,60,Squat,5,55,5,,,0.18523681327979896
+Laurynas,bebras,2026-04-18,60,Deadlift,1,50,10,,,0.11570481248793582
+Laurynas,bebras,2026-04-18,60,Deadlift,2,65,8,,,0.2314227841312782
+Laurynas,bebras,2026-04-18,60,Deadlift,3,65,9,,,0.260674411543836
+Laurynas,bebras,2026-04-18,60,Deadlift,4,60,7,,,0.15496971930798223
+Laurynas,bebras,2026-04-18,60,Standing Leg Curl,1,15,7,,,0.2573867567765941
+Laurynas,bebras,2026-04-18,60,Standing Leg Curl,2,15,6,,,0.24915925220441212
+Laurynas,bebras,2026-04-18,60,Standing Leg Curl,3,15,6,,,0.24915925220441212
+Laurynas,bebras,2026-04-18,60,Seated Calf Raise,1,25,18,,,0.23497793009611634
+Laurynas,bebras,2026-04-18,60,Seated Calf Raise,2,25,11,,,0.18867692791418672
+Laurynas,bebras,2026-04-18,60,Seated Calf Raise,3,25,11,,,0.18867692791418672
+Laurynas,bebras,2026-04-16,60,Dips,1,,8,,,0.25817431177231953
+Laurynas,bebras,2026-04-16,60,Dips,2,10,8,,,0.4268715160809372
+Laurynas,bebras,2026-04-16,60,Dips,3,10,8,,,0.4268715160809372
+Laurynas,bebras,2026-04-16,60,Dips,4,10,7,,,0.38601080203741844
+Laurynas,bebras,2026-04-16,60,Machine Bicep Curl,1,25,12,,,0.3646331887114894
+Laurynas,bebras,2026-04-16,60,Machine Bicep Curl,2,30,10,,,0.4639257011221781
+Laurynas,bebras,2026-04-16,60,Machine Bicep Curl,3,35,5,,,0.45169371789019847
+Laurynas,bebras,2026-04-16,60,Machine Bicep Curl,4,30,5,,,0.33993704273311204
+Laurynas,bebras,2026-04-16,60,Shoulder Press (Machine Plates),1,40,10,,,
+Laurynas,bebras,2026-04-16,60,Shoulder Press (Machine Plates),2,50,7,,,
+Laurynas,bebras,2026-04-16,60,Shoulder Press (Machine Plates),3,50,6,,,
+Laurynas,bebras,2026-04-16,60,Shoulder Press (Machine Plates),4,50,8,,,
+Laurynas,bebras,2026-04-16,60,Shoulder Press (Machine Plates),5,50,5,,,
+Laurynas,bebras,2026-04-16,60,Inverted Row,1,,6,,,0.27916622055048984
+Laurynas,bebras,2026-04-16,60,Inverted Row,2,,5,,,0.2550284164190497
+Laurynas,bebras,2026-04-16,60,Inverted Row,3,,4,,,0.23304611782810508
+Laurynas,bebras,2026-04-16,60,Dumbbell Bench Press,1,15,8,,,0.2024672716682666
+Laurynas,bebras,2026-04-16,60,Dumbbell Bench Press,2,17.5,4,,,0.21421423739600287
+Laurynas,bebras,2026-04-16,60,Dumbbell Bench Press,3,22.5,6,,,0.41000685363979816
+Laurynas,bebras,2026-04-16,60,Dumbbell Bench Press,4,22.5,5,,,0.38638740043430064
+Laurynas,bebras,2026-04-16,60,Dumbbell Bench Press,5,22.5,6,,,0.41000685363979816
+Laurynas,bebras,2026-04-16,60,Dumbbell Bench Press,6,22.5,4,,,0.36421943927902256
+Laurynas,bebras,2026-04-16,60,Overhead Crunch,1,3,10,,,
+Laurynas,bebras,2026-04-16,60,Overhead Crunch,2,3,6,,,
+Laurynas,bebras,2026-04-16,60,Overhead Crunch,3,3,5,,,
+Laurynas,bebras,2026-04-11,60,Squat,1,45,8,,,0.13078665784809235
+Laurynas,bebras,2026-04-11,60,Squat,2,50,9,,,0.21098290415603474
+Laurynas,bebras,2026-04-11,60,Squat,3,55,7,,,0.2284574979972548
+Laurynas,bebras,2026-04-11,60,Squat,4,55,5,,,0.18554063669500695
+Laurynas,bebras,2026-04-11,60,Squat,5,55,5,,,0.18554063669500695
+Laurynas,bebras,2026-04-11,60,Standing Leg Curl,1,15,9,,,0.276068684969056
+Laurynas,bebras,2026-04-11,60,Standing Leg Curl,2,15,5,,,0.24156648262857433
+Laurynas,bebras,2026-04-11,60,Standing Leg Curl,3,15,4,,,0.2343268107004734
+Laurynas,bebras,2026-04-11,60,Seated Calf Raise,1,25,16,,,0.22167056067204516
+Laurynas,bebras,2026-04-11,60,Seated Calf Raise,2,25,11,,,0.18880790776649375
+Laurynas,bebras,2026-04-11,60,Seated Calf Raise,3,25,9,,,0.1736659456680552
+Laurynas,bebras,2026-04-11,60,Dumbbell Bench Press,1,17.5,10,,,0.329659847082638
+Laurynas,bebras,2026-04-11,60,Dumbbell Bench Press,2,22.5,8,,,0.4621812808837841
+Laurynas,bebras,2026-04-11,60,Dumbbell Bench Press,3,22.5,5,,,0.3866468436733877
+Laurynas,bebras,2026-04-11,60,Dumbbell Bench Press,4,22.5,6,,,0.41027464342103703
+Laurynas,bebras,2026-04-11,60,Dumbbell Bench Press,5,22.5,5,,,0.3866468436733877
+Laurynas,bebras,2026-04-08,60,Dips,1,,10,,,0.3310896181199533
+Laurynas,bebras,2026-04-08,60,Dips,2,10,8,,,0.4275692724285835
+Laurynas,bebras,2026-04-08,60,Dips,3,10,8,,,0.4275692724285835
+Laurynas,bebras,2026-04-08,60,Dips,4,10,3,,,0.25398731831988136
+Laurynas,bebras,2026-04-08,60,Machine Bicep Curl,1,25,12,,,0.36502818755310673
+Laurynas,bebras,2026-04-08,60,Machine Bicep Curl,2,30,8,,,0.4098416185384195
+Laurynas,bebras,2026-04-08,60,Machine Bicep Curl,3,30,6,,,0.3619079220760199
+Laurynas,bebras,2026-04-08,60,Machine Bicep Curl,4,30,5,,,0.34031528489368934
+Laurynas,bebras,2026-04-08,60,Machine Bicep Curl,5,30,7,,,0.38505922609373283
+Laurynas,bebras,2026-04-08,60,Shoulder Press (Machine Plates),1,40,10,,,
+Laurynas,bebras,2026-04-08,60,Shoulder Press (Machine Plates),2,50,6,,,
+Laurynas,bebras,2026-04-08,60,Shoulder Press (Machine Plates),3,50,5,,,
+Laurynas,bebras,2026-04-08,60,Shoulder Press (Machine Plates),4,50,4,,,
+Laurynas,bebras,2026-04-08,60,Shoulder Press (Machine Plates),5,50,5,,,
+Laurynas,bebras,2026-04-08,60,Inverted Row,1,,8,,,0.3351303437966494
+Laurynas,bebras,2026-04-08,60,Inverted Row,2,,7,,,0.306130633307801
+Laurynas,bebras,2026-04-08,60,Inverted Row,3,,5,,,0.25544681024731203
+Laurynas,bebras,2026-04-08,60,Overhead Crunch,1,2.5,10,,,
+Laurynas,bebras,2026-04-08,60,Overhead Crunch,2,3,9,,,
+Laurynas,bebras,2026-04-08,60,Overhead Crunch,3,3,7,,,
+Laurynas,bebras,2026-04-02,60,Squat,1,45,8,,,0.13108369982003973
+Laurynas,bebras,2026-04-02,60,Squat,2,50,8,,,0.1879234127160859
+Laurynas,bebras,2026-04-02,60,Squat,3,50,8,,,0.1879234127160859
+Laurynas,bebras,2026-04-02,60,Squat,4,50,9,,,0.21141657894297683
+Laurynas,bebras,2026-04-02,60,Squat,5,50,8,,,0.1879234127160859
+Laurynas,bebras,2026-04-02,60,Standing Leg Curl,1,15,6,,,0.24943991012860467
+Laurynas,bebras,2026-04-02,60,Standing Leg Curl,2,15,5,,,0.24171968684855716
+Laurynas,bebras,2026-04-02,60,Standing Leg Curl,3,15,4,,,0.23447517762260903
+Laurynas,bebras,2026-04-02,60,Seated Calf Raise,1,25,15,,,0.21519492856560987
+Laurynas,bebras,2026-04-02,60,Seated Calf Raise,2,25,14,,,0.2085672220768988
+Laurynas,bebras,2026-04-02,60,Seated Calf Raise,3,25,13,,,0.20197992014655036
+Laurynas,bebras,2026-03-31,60,Dips,1,,10,,,0.3317124393111561
+Laurynas,bebras,2026-03-31,60,Dips,2,10,7,,,0.38735351995780143
+Laurynas,bebras,2026-03-31,60,Dips,3,10,6,,,0.3495653676827703
+Laurynas,bebras,2026-03-31,60,Dips,4,10,5,,,0.3148861473405978
+Laurynas,bebras,2026-03-31,60,Machine Bicep Curl,1,25,12,,,0.36542573491267555
+Laurynas,bebras,2026-03-31,60,Machine Bicep Curl,2,30,8,,,0.41026570667880174
+Laurynas,bebras,2026-03-31,60,Machine Bicep Curl,3,30,6,,,0.36230342859482995
+Laurynas,bebras,2026-03-31,60,Machine Bicep Curl,4,30,6,,,0.36230342859482995
+Laurynas,bebras,2026-03-31,60,Inverted Row,1,,9,,,0.36836622513915274
+Laurynas,bebras,2026-03-31,60,Inverted Row,2,,7,,,0.30660559484819944
+Laurynas,bebras,2026-03-31,60,Inverted Row,3,,6,,,0.28005915731960684
+Laurynas,bebras,2026-03-31,60,Dumbbell Bench Press,1,15,8,,,0.20299466603490135
+Laurynas,bebras,2026-03-31,60,Dumbbell Bench Press,2,17.5,4,,,0.21476626662316792
+Laurynas,bebras,2026-03-31,60,Dumbbell Bench Press,3,22.5,7,,,0.4360534206500141
+Laurynas,bebras,2026-03-31,60,Dumbbell Bench Press,4,22.5,6,,,0.41086751710857977
+Laurynas,bebras,2026-03-31,60,Dumbbell Bench Press,5,22.5,5,,,0.38722127456312716
+Laurynas,bebras,2026-03-31,60,Dumbbell Bench Press,6,22.5,4,,,0.365025492809
+Laurynas,bebras,2026-03-31,60,Overhead Crunch,1,2.5,10,,,
+Laurynas,bebras,2026-03-31,60,Overhead Crunch,2,2.5,10,,,
+Laurynas,bebras,2026-03-31,60,Overhead Crunch,3,2.5,7,,,
+Laurynas,bebras,2026-03-27,60,Squat,1,45,8,,,0.13128311688706493
+Laurynas,bebras,2026-03-27,60,Squat,2,50,9,,,0.2117076348735593
+Laurynas,bebras,2026-03-27,60,Squat,3,50,6,,,0.1502399853073236
+Laurynas,bebras,2026-03-27,60,Squat,4,50,6,,,0.1502399853073236
+Laurynas,bebras,2026-03-27,60,Squat,5,50,5,,,0.13448593405009815
+Laurynas,bebras,2026-03-27,60,Deadlift,1,50,8,,,0.08774683357199682
+Laurynas,bebras,2026-03-27,60,Deadlift,2,65,9,,,0.2619923150220428
+Laurynas,bebras,2026-03-27,60,Deadlift,3,65,5,,,0.1649251012345783
+Laurynas,bebras,2026-03-27,60,Standing Leg Curl,1,15,6,,,0.24954608130148187
+Laurynas,bebras,2026-03-27,60,Standing Leg Curl,2,15,8,,,0.26659889284916166
+Laurynas,bebras,2026-03-27,60,Standing Leg Curl,3,15,6,,,0.24954608130148187
+Laurynas,bebras,2026-03-27,60,Standing Leg Curl,4,15,6,,,0.24954608130148187
+Laurynas,bebras,2026-03-27,60,Seated Calf Raise,1,25,18,,,0.23548755901024465
+Laurynas,bebras,2026-03-27,60,Seated Calf Raise,2,25,14,,,0.2086922306492323
+Laurynas,bebras,2026-03-27,60,Seated Calf Raise,3,25,14,,,0.2086922306492323
+Laurynas,bebras,2026-03-27,60,Overhead Crunch,1,5,4,,,
+Laurynas,bebras,2026-03-27,60,Overhead Crunch,2,2.5,8,,,
+Laurynas,bebras,2026-03-27,60,Overhead Crunch,3,2.5,8,,,
+Laurynas,bebras,2026-03-24,60,Dips,1,,10,,,0.33226089671215503
+Laurynas,bebras,2026-03-24,60,Dips,2,10,9,,,0.47429185524390327
+Laurynas,bebras,2026-03-24,60,Dips,3,10,8,,,0.4288896440165178
+Laurynas,bebras,2026-03-24,60,Dips,4,10,7,,,0.3879465268537374
+Laurynas,bebras,2026-03-24,60,Machine Bicep Curl,1,25,12,,,0.3657756896191765
+Laurynas,bebras,2026-03-24,60,Machine Bicep Curl,2,35,6,,,0.4779681425669702
+Laurynas,bebras,2026-03-24,60,Machine Bicep Curl,3,30,7,,,0.38583022756277213
+Laurynas,bebras,2026-03-24,60,Machine Bicep Curl,4,30,3,,,0.30210750272622267
+Laurynas,bebras,2026-03-24,60,Shoulder Press (Machine Plates),1,40,6,,,
+Laurynas,bebras,2026-03-24,60,Shoulder Press (Machine Plates),2,50,6,,,
+Laurynas,bebras,2026-03-24,60,Shoulder Press (Machine Plates),3,50,5,,,
+Laurynas,bebras,2026-03-24,60,Shoulder Press (Machine Plates),4,50,5,,,
+Laurynas,bebras,2026-03-24,60,Inverted Row,1,,11,,,0.4261380359015321
+Laurynas,bebras,2026-03-24,60,Inverted Row,2,,7,,,0.3070238219687119
+Laurynas,bebras,2026-03-24,60,Inverted Row,3,,8,,,0.33607372046857076
+Laurynas,bebras,2026-03-24,60,Bench Press,1,30,10,,,0.11729261997165902
+Laurynas,bebras,2026-03-24,60,Bench Press,2,40,5,,,0.17413917013680874
+Laurynas,bebras,2026-03-24,60,Bench Press,3,50,3,,,0.2852424634052741
+Laurynas,bebras,2026-03-24,60,Bench Press,4,55,3,,,0.3686209239899723
+Laurynas,bebras,2026-03-24,60,Bench Press,5,60,2,,,0.4250839577062778
+Laurynas,bebras,2026-03-24,60,Overhead Crunch,1,2.5,10,,,
+Laurynas,bebras,2026-03-24,60,Overhead Crunch,2,2.5,9,,,
+Laurynas,bebras,2026-03-24,60,Overhead Crunch,3,2.5,7,,,
 Laurynas,bebras,2026-03-12,60,Squat,1,45,8,,,0.13178656452663767
 Laurynas,bebras,2026-03-12,60,Squat,2,50,4,,,0.12100764944389056
 Laurynas,bebras,2026-03-12,60,Squat,3,50,7,,,0.16867301414991567
@@ -12121,18 +12532,12 @@ Simonas,simonasputrius,2026-06-03,121,Push Ups,3,,1,SQ-1,,0.030656096544100633
 Simonas,simonasputrius,2026-06-03,121,Push Ups,4,,5,SQ7,,0.053670400000076314
 Simonas,simonasputrius,2026-06-03,121,Romanian Deadlift,1,40,18,,,0.004389784184863178
 Simonas,simonasputrius,2026-06-03,121,Romanian Deadlift,2,40,18,,,0.004389784184863178
-Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,1,30,15,,,0.0004978603005294103
-Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,2,35,20,,,0.0024891106602014847
-Simonas,simonasputrius,2026-05-27,121,Romanian Deadlift,3,30,20,,,0.0009577051111825272
-Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,1,20,15,,,0.002098755338433774
-Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,2,25,8,,,0.002512415434846719
-Simonas,simonasputrius,2026-05-27,121,Seated Shoulder Press,3,25,10,,,0.003659174687544376
-Simonas,simonasputrius,2026-05-27,121,plate wrist lift,1,10,20,,,
-Simonas,simonasputrius,2026-05-27,121,plate wrist lift,2,12,10,,,
-Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,1,30,10,gravity/2,,0.005862372567945754
-Simonas,simonasputrius,2026-05-27,121,Lat Pulldown,2,30,6,gravity/2,,0.002674745631286015
-Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,1,6,12,,,0.023945648745448408
-Simonas,simonasputrius,2026-05-27,121,One Arm Dumbbell Preacher Curl,2,7,12,,,0.035232425396055575
+Simonas,simonasputrius,2026-06-03,121,Romanian Deadlift,3,40,15,,,0.0029561513847868614
+Simonas,simonasputrius,2026-06-03,121,plate wrist lift,1,12,13,,,
+Simonas,simonasputrius,2026-06-03,121,plate wrist lift,2,12,15,,,
+Simonas,simonasputrius,2026-06-03,121,plate wrist lift,3,12,13,,,
+Simonas,simonasputrius,2026-06-03,121,Pull Ups,1,-97.5,9,guma 4,,5.45737758189691e-8
+Simonas,simonasputrius,2026-06-03,121,Pull Ups,2,-97.5,6,guma 4,,1.660081152095376e-8
 Indre,indre_ju,2026-06-02,68,Deadlift,1,22,30,,,0.061760242338252024
 Indre,indre_ju,2026-06-02,68,Deadlift,2,22,30,,,0.061760242338252024
 Indre,indre_ju,2026-06-02,68,Squat,1,17.5,20,,,0.03263011054101201
