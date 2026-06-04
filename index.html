@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.3.12</span></h1>
+        <h1>Colosseum <span class="version">b.2.3.13</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -131,6 +131,9 @@
 
       </div>
 
+      <!-- LEGACY athlete view, kept while we iterate on the Analysis tab.
+           Reachable via Other → "Legacy exercises". The four-tab bar below
+           still works end-to-end as a fallback while we finish Analysis parity. -->
       <div id="tab-athlete" class="tab-panel" hidden>
         <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
              start of the same row as the horizontally-scrolling name chips. -->
@@ -161,6 +164,18 @@
             </details>
           </div>
         </details>
+
+        <!-- Athlete-view tabs, shared above both sub-panels so they stay visible
+             whichever shows: Workouts (the sessions view) | List & stats | Compare
+             | Single (the one-exercise drill-in). RESTORED (b.2.3.13): we walked
+             back the single-home removal — the legacy view stays available behind
+             Other → "Legacy exercises" while we iterate on Analysis. -->
+        <div id="exercisesTabs" class="ex-tabs ath-tabs" role="tablist">
+          <button type="button" class="ex-tab" data-extab="workouts" role="tab">Workouts</button>
+          <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
+          <button type="button" class="ex-tab" data-extab="compare" role="tab">Compare</button>
+          <button type="button" class="ex-tab" data-extab="single" role="tab">Single</button>
+        </div>
 
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel" id="workoutsPanel">
@@ -1105,6 +1120,7 @@
       <div class="other-sheet-backdrop" data-other-close></div>
       <div class="other-sheet-card" role="menu" aria-label="Other views">
         <div class="other-sheet-grip"></div>
+        <button class="other-item" data-tab="athlete" role="menuitem"><span class="other-ico">🏃</span> Legacy exercises</button>
         <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
         <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
         <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
