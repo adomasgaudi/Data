@@ -70,7 +70,8 @@ export const CHANGELOG: Release[] = [
         sp: 0,
         note: "The Workout-analysis tab moves into the main nav, a set-tier timeline heatmap, and the data-hygiene batch: keyword-inferred exercise metadata plus duplicate and custom-link audits.",
         children: [
-          { version: "b.2.3.13", title: "Restore legacy exercises tab", sp: 1, note: "Walked back the single-home removal: the Workouts | List & stats | Compare | Single tab bar is back, but as a parallel route rather than the primary one. Reach the old four-tab athlete view via Other → “Legacy exercises” (kept while we iterate on Analysis). Bottom nav still shows just Analysis · More, and Analysis is still the default landing — but if Analysis doesn't yet do what you need, the legacy view is one tap away through Other." },
+          { version: "b.2.3.14", title: "Restore legacy exercises tab", sp: 1, note: "Walked back the single-home removal: the Workouts | List & stats | Compare | Single tab bar is back, but as a parallel route rather than the primary one. Reach the old four-tab athlete view via Other → “Legacy exercises” (kept while we iterate on Analysis). Bottom nav still shows just Analysis · More, and Analysis is still the default landing — but if Analysis doesn't yet do what you need, the legacy view is one tap away through Other." },
+          { version: "b.2.3.13", title: "Auto SP graph + nav fix", sp: 3, note: "The SP-over-time graph now computes itself from the changelog tree -- no script needed, it updates automatically when a release is added. Effort total moved inline next to the Colosseum title. Bottom nav stays visible on the version-history page." },
           { version: "b.2.3.12", title: "Flat layout + collapsible graph", sp: 1, note: "The Analysis view drops its triple-nested card styling — sections flow flat inside one panel with just a thin divider between them. The graph metric chips and config controls (Aggregate, Interval, Smoothing, Prediction, Decay) fold into a collapsible 'Graph settings' panel — the chart stays visible, only the controls fold. The 'sets behind the graph' table is hidden (the workout history section already shows that data). Exercise selector and cog remember their open state when you pick exercises." },
           { version: "b.2.3.11", title: "Analysis is the single home", sp: 8, note: "The Workouts | List & stats | Compare | Single tab bar above the athlete view is gone. Every exercise view now lives inside the unified Analysis view: tapping an exercise row, a Workouts-list lift, the Single back/switch dropdown, or any deep-link (#single=, #compare=, #all/#list) all route through Analysis and let the selection drive the mode (none → all · one → single · two-plus → compare). Bottom nav drops the Exercises button — it's just Analysis · More now — and Analysis is the default landing view. One way in, one place to be." },
           { version: "b.2.3.10", title: "Selector cog + collapsible chips", sp: 0.5, note: "The four Include-identity checkboxes (Original, Dissolved, Combined, Comparison groups) move into a ⚙ settings cog dropdown next to the Exercise selector title, and the exercise chip grid is wrapped in a collapsible panel so the selector takes up much less space when you're not picking exercises." },
@@ -565,3 +566,30 @@ export const COMPONENTS: Component[] = [
 /** Whole-site EXACT story points (sum of every part) and its Fibonacci grade. */
 export const WEBSITE_EXACT_SP = COMPONENTS.reduce((s, c) => s + c.sp, 0);
 export const WEBSITE_SP = fibSp(WEBSITE_EXACT_SP);
+
+export interface SpTimelinePoint {
+  version: string;
+  sp: number;
+  cumulative: number;
+}
+
+/** Walk the CHANGELOG tree oldest-first, collect every shipped leaf release, and
+ *  return a cumulative SP timeline. Updates automatically when a release is added
+ *  -- no external script needed. */
+export function buildSpTimeline(): SpTimelinePoint[] {
+  const leaves: { version: string; sp: number }[] = [];
+  function collect(r: Release) {
+    if (r.soon) return;
+    if (!r.children?.length) {
+      leaves.push({ version: r.version, sp: r.sp });
+    } else {
+      for (let i = r.children.length - 1; i >= 0; i--) collect(r.children[i]!);
+    }
+  }
+  for (let i = CHANGELOG.length - 1; i >= 0; i--) collect(CHANGELOG[i]!);
+  let cum = 0;
+  return leaves.map((l) => {
+    cum = Math.round((cum + l.sp) * 10) / 10;
+    return { version: l.version, sp: l.sp, cumulative: cum };
+  });
+}
