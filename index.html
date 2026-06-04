@@ -28,7 +28,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.1.47</span></h1>
+        <h1>Colosseum <span class="version">b.2.1.48</span></h1>
         <div class="view-row">
           <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
           <button id="topLoginBtn" class="view-login-btn" hidden>Log in</button>
@@ -38,30 +38,39 @@
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
-          <label>1RM formula
-            <select id="formula">
-              <option value="epley">Epley</option>
-              <option value="brzycki">Brzycki</option>
-              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
-            </select>
-          </label>
-          <label>Bodyweight source
-            <select id="bwSource">
-              <option value="table">Profile table</option>
-              <option value="perset">Per-set (logged)</option>
-            </select>
-          </label>
-          <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
-          <label class="check"><input type="checkbox" id="decayStrength" /> Current strength (fade with time off)</label>
-          <p class="settings-hint">Off = your all-time best 1RM. On = a “use it or lose it” estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing after that, never below half.</p>
-          <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
-          <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
+          <!-- Calculation & display settings, tucked under a collapsible to keep the menu short. -->
+          <details class="settings-group">
+            <summary class="settings-group-sum">Calculations &amp; display</summary>
+            <div class="settings-group-body">
+              <label>1RM formula
+                <select id="formula">
+                  <option value="epley">Epley</option>
+                  <option value="brzycki">Brzycki</option>
+                  <option value="nuzzo" selected>Nuzzo (bench curve)</option>
+                </select>
+              </label>
+              <label>Bodyweight source
+                <select id="bwSource">
+                  <option value="table">Profile table</option>
+                  <option value="perset">Per-set (logged)</option>
+                </select>
+              </label>
+              <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
+              <label class="check"><input type="checkbox" id="decayStrength" /> Current strength (fade with time off)</label>
+              <p class="settings-hint">Off = your all-time best 1RM. On = a “use it or lose it” estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing after that, never below half.</p>
+              <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
+            </div>
+          </details>
+          <!-- Night mode + security (who you're signed in as) grouped together. -->
           <label>View as
             <select id="viewAsSelect">
               <option value="admin">Admin — everything</option>
             </select>
           </label>
-          <button type="button" id="authBtn" class="settings-link">Log out</button>
+          <div class="settings-row">
+            <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
+            <button type="button" id="authBtn" class="settings-link">Log out</button>
+          </div>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
           </button>

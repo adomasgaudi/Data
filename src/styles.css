@@ -186,6 +186,19 @@ body {
   border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 0.83rem; cursor: pointer;
 }
 .settings-link:hover { border-color: var(--accent); color: var(--accent); }
+/* Collapsible group inside the Settings panel (calculation/display options). */
+.settings-group { border: 1px solid var(--line); border-radius: 8px; }
+.settings-group-sum {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 7px 10px; font-size: 0.82rem; font-weight: 600; color: var(--text);
+}
+.settings-group-sum::-webkit-details-marker { display: none; }
+.settings-group-sum::after { content: "▸"; float: right; color: var(--muted); font-size: 0.75rem; }
+.settings-group[open] > .settings-group-sum::after { content: "▾"; }
+.settings-group-body { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.1rem 10px 10px; }
+/* Night mode + Log in/out side by side. */
+.settings-row { display: flex; gap: 0.45rem; }
+.settings-row > .settings-link { flex: 1; justify-content: center; }
 /* "Refresh data" call-to-action in the Data tab. */
 .refresh-panel h2 { margin-top: 0; }
 .refresh-btn {
