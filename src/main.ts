@@ -7432,14 +7432,21 @@ function renderWaGraph(): void {
     `</details>`;
   const chartBox = document.getElementById("waGraphChart");
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
-  // Cap how many exercises the graph plots at once: past ~10 lines × several
-  // metrics the SVG redraw starts to lag, so plot the first 10 and note the rest.
-  const graphExercises = waSelected.slice(0, WA_GRAPH_MAX);
-  const graphExcluded = waSelected.slice(WA_GRAPH_MAX);
+  const athleteRecs = computedRecords().filter((r) => r.username === els.athlete.value);
+  // With nothing picked, default to the athlete's most-trained lifts so the graph
+  // opens as the SAME multi-colour per-exercise view (not one aggregate line) —
+  // an automatic initial selection. Either way we cap at 10: past ~10 lines ×
+  // several metrics the SVG redraw lags, so plot the first 10 and note the rest.
+  const autoDefault = waSelected.length === 0;
+  const baseExercises = autoDefault
+    ? exerciseCountsForUser(athleteRecs, els.athlete.value).map((e) => e.exerciseName)
+    : waSelected;
+  const graphExercises = baseExercises.slice(0, WA_GRAPH_MAX);
+  const graphExcluded = baseExercises.slice(WA_GRAPH_MAX);
   const drawn = chartBox
     ? renderAnalyticsGraph(chartBox, {
         exercises: graphExercises,
-        records: computedRecords().filter((r) => r.username === els.athlete.value),
+        records: athleteRecs,
         metrics: [...waMetrics],
         config: waGraphConfig,
         codeOf: exerciseCode,
@@ -7447,13 +7454,14 @@ function renderWaGraph(): void {
     : 0;
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {
-    if (waSelected.length === 0) {
-      // Whole-athlete view (real data). Only flag the genuine empty state.
-      noteEl.textContent = drawn === 0 ? "No data yet." : "All exercises — pick lifts above to focus on them.";
+    if (drawn === 0 && graphExercises.length === 0) {
+      noteEl.textContent = "No data yet.";
     } else {
-      // Compatibility / unavailable-state messages (TASK 42).
-      const recs = computedRecords().filter((r) => r.username === els.athlete.value && waSelected.includes(r.exerciseName));
-      const e1rmPoints = recs.filter((r) => addedWeight1RM(r, currentFormula()) != null).length;
+      // Compatibility / unavailable-state messages (TASK 42), scoped to whatever
+      // is actually plotted (the auto-default top 10, or the user's selection).
+      const e1rmPoints = athleteRecs.filter(
+        (r) => graphExercises.includes(r.exerciseName) && addedWeight1RM(r, currentFormula()) != null,
+      ).length;
       const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
       if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
       // Over the cap: say we're showing the first 10 and which are left out.
@@ -7461,6 +7469,9 @@ function renderWaGraph(): void {
         notes.unshift(
           `Graph limited to ${WA_GRAPH_MAX} exercises (it lags past that) — showing the first ${WA_GRAPH_MAX}. Not shown: ${graphExcluded.join(", ")}.`,
         );
+      // Make clear the opening view is an automatic pick the user can override.
+      if (autoDefault && graphExercises.length)
+        notes.unshift(`Showing your ${graphExercises.length} most-trained exercises by default — tap lifts above to choose your own.`);
       noteEl.textContent = notes.join("  ·  ");
     }
   }
