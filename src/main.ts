@@ -53,7 +53,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { levelLabel, levelKey, defaultLevelScale } from "./variants";
+import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
@@ -608,12 +608,12 @@ const levelScaleOverrides: Record<string, number> = (() => {
   }
 })();
 
-/** Technique scaling factor for one set's hole: the owner's override, else the
- * seeded default (×1 at the floor, easier holes scaled down). */
-function levelScaleFor(exerciseName: string, value: number): number {
-  const key = levelKey(exerciseName, value);
+/** Technique scaling factor for one set's level: the owner's override, else the
+ * seeded default (×1 at the floor/neutral, easier levels scaled down). */
+function levelScaleFor(exerciseName: string, dim: LevelDim, value: number): number {
+  const key = levelKey(exerciseName, dim, value);
   if (Object.prototype.hasOwnProperty.call(levelScaleOverrides, key)) return levelScaleOverrides[key]!;
-  return defaultLevelScale(value);
+  return defaultLevelScale(dim, value);
 }
 
 function setLevelScale(key: string, value: number) {
@@ -630,7 +630,7 @@ function setLevelScale(key: string, value: number) {
 function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
   if (o?.scale !== undefined) return o.scale;
-  return r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelValue) : 1;
+  return r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
 }
 
 // ---- Editable athlete stats (height / weight / age / sex / body-fat band) ----
@@ -2736,29 +2736,31 @@ function renderCombineBar(exName: string, username: string) {
  * tune each % on the spot. Hidden when the lift has no leveled sets. */
 function renderExerciseLevels(exName: string, username: string): void {
   const formula = currentFormula();
-  // Best set per hole by its REAL added-weight 1RM (unchanged by the hole now).
-  const byHole = new Map<number, { best: SetRecord; oneRm: number }>();
+  // Best set per LEVEL (squat-rack hole or cm) by its REAL added-weight 1RM.
+  const byLevel = new Map<string, { dim: LevelDim; value: number; label: string; best: SetRecord; oneRm: number }>();
   for (const r of computedRecords()) {
-    if (r.username !== username || r.exerciseName !== exName || r.levelValue === undefined) continue;
+    if (r.username !== username || r.exerciseName !== exName || r.levelDim === undefined || r.levelValue === undefined) continue;
     const rm = addedWeight1RM(r, formula);
     if (rm === null) continue;
-    const cur = byHole.get(r.levelValue);
-    if (!cur || rm > cur.oneRm) byHole.set(r.levelValue, { best: r, oneRm: rm });
+    const k = levelKey(exName, r.levelDim, r.levelValue);
+    const cur = byLevel.get(k);
+    if (!cur || rm > cur.oneRm)
+      byLevel.set(k, { dim: r.levelDim, value: r.levelValue, label: r.levelLabel ?? levelLabel(r.levelDim, r.levelValue), best: r, oneRm: rm });
   }
-  if (byHole.size === 0) { els.exLevels.hidden = true; return; }
-  const rows = [...byHole.entries()]
-    .sort((a, b) => a[0] - b[0]) // by hole, low (hard) → high (easy)
-    .map(([hole, v]) => {
-      const scale = levelScaleFor(exName, hole);
+  if (byLevel.size === 0) { els.exLevels.hidden = true; return; }
+  const rows = [...byLevel.values()]
+    .sort((a, b) => (a.dim === b.dim ? a.value - b.value : a.dim < b.dim ? -1 : 1))
+    .map((v) => {
+      const scale = levelScaleFor(exName, v.dim, v.value);
       const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
       return (
         `<tr>` +
-        `<td><strong>${escapeHtml(levelLabel(hole))}</strong></td>` +
+        `<td><strong>${escapeHtml(v.label)}</strong></td>` +
         `<td class="num">${wr(dispW, v.best.reps)}</td>` +
         `<td class="num">${fmt(v.oneRm)}</td>` +
         `<td class="num"><strong>${fmt(v.oneRm * scale)}</strong></td>` +
         `<td class="num"><input class="bw-input exl-scale" type="number" step="0.05" min="0" max="5" value="${scale}" ` +
-        `data-levelkey="${escapeHtml(levelKey(exName, hole))}" aria-label="Scaling factor for hole ${hole}" /></td>` +
+        `data-levelkey="${escapeHtml(levelKey(exName, v.dim, v.value))}" aria-label="Scaling factor for ${escapeHtml(v.label)}" /></td>` +
         `</tr>`
       );
     })
@@ -2768,14 +2770,14 @@ function renderExerciseLevels(exName: string, username: string): void {
   // not day-to-day stats, so it shouldn't sit inline in the List & stats view.
   els.exLevels.innerHTML =
     `<details class="exl-settings">` +
-    `<summary class="exl-settings-sum">⚙ Squat-rack hole scaling <span class="muted">(${byHole.size} hole${byHole.size === 1 ? "" : "s"})</span></summary>` +
+    `<summary class="exl-settings-sum">⚙ Technique scaling <span class="muted">(${byLevel.size} level${byLevel.size === 1 ? "" : "s"})</span></summary>` +
     `<div class="exl-settings-body">` +
-    `<div class="exl-head muted">Real weight and 1RM stay as logged; tune each Scale so equal-effort holes show the same Effort.</div>` +
+    `<div class="exl-head muted">For levels logged in the note (squat-rack hole SQ8, or a height like 43cm). Real weight and 1RM stay as logged; tune each Scale so equal-effort levels show the same Effort.</div>` +
     `<table class="data-table exl-table"><thead><tr>` +
-    `<th>Hole</th><th class="num">Best</th>` +
-    `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the hole">1RM</th>` +
-    `<th class="num" title="Scaled effort 1RM = 1RM × Scale. Tune Scale so equal-effort holes line up here.">Effort</th>` +
-    `<th class="num" title="Technique scaling factor for this hole — only affects the Effort column, never the real 1RM. Lower hole = harder = bigger.">Scale</th>` +
+    `<th>Level</th><th class="num">Best</th>` +
+    `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the level">1RM</th>` +
+    `<th class="num" title="Scaled effort 1RM = 1RM × Scale. Tune Scale so equal-effort levels line up here.">Effort</th>` +
+    `<th class="num" title="Technique scaling factor for this level — only affects the Effort column, never the real 1RM. Easier setup = smaller.">Scale</th>` +
     `</tr></thead><tbody>${rows}</tbody></table>` +
     `</div></details>`;
 }
@@ -4012,8 +4014,8 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
   const sid = setId(s);
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
-  // A squat-rack hole stands in for the weight on these sets — show the tag.
-  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
+  // A technique level (squat-rack hole / cm) logged in the note — show the tag.
+  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
   // Effort tag from RIR (logged, else predicted): hard / mid / warm-up. Big leg
   // lifts get a wider "mid" band (see effortClass).
   const eff = setEffortClass(s, predRir);
@@ -6048,7 +6050,7 @@ function manualToRecord(m: ManualEntry): SetRecord {
     dropset: false,
     percentile: null,
     ...(m.levelValue !== undefined
-      ? { levelDim: "sq" as const, levelValue: m.levelValue, levelLabel: levelLabel(m.levelValue) }
+      ? { levelDim: "sq" as const, levelValue: m.levelValue, levelLabel: levelLabel("sq", m.levelValue) }
       : {}),
   };
 }

@@ -26,11 +26,11 @@ describe("parseLevelNote", () => {
     expect(parseLevelNote("Dipsai ant sq 9")!.value).toBe(9);
   });
 
-  it("returns null when there is no hole", () => {
+  it("returns null when there is no recognised level", () => {
     expect(parseLevelNote("")).toBeNull();
     expect(parseLevelNote("felt strong")).toBeNull();
     expect(parseLevelNote("Squat rack po 2")).toBeNull(); // "po" intervenes
-    expect(parseLevelNote("10cm")).toBeNull();
+    expect(parseLevelNote("3 reps left")).toBeNull(); // a bare number with no unit
   });
 });
 
@@ -59,15 +59,28 @@ describe("attachNoteLevel", () => {
 
 describe("level scaling helpers", () => {
   it("labels and keys a hole stably", () => {
-    expect(levelLabel(8)).toBe("SQ8");
-    expect(levelKey("Push Ups", 8)).toBe("Push Ups|sq|8");
+    expect(levelLabel("sq", 8)).toBe("SQ8");
+    expect(levelLabel("cm", 43)).toBe("43cm");
+    expect(levelKey("Push Ups", "sq", 8)).toBe("Push Ups|sq|8");
+    expect(levelKey("Dips", "cm", 43)).toBe("Dips|cm|43");
   });
 
   it("seeds a higher hole as easier (scaled down), the floor as the ×1 reference", () => {
-    expect(defaultLevelScale(0)).toBe(1); // hole 0 = reference
-    expect(defaultLevelScale(8)).toBeLessThan(defaultLevelScale(1)); // higher = easier = smaller
-    expect(defaultLevelScale(-1)).toBeGreaterThan(defaultLevelScale(1)); // lower = harder = bigger
-    expect(defaultLevelScale(20)).toBeGreaterThanOrEqual(0.1); // clamped
-    expect(defaultLevelScale(-40)).toBeLessThanOrEqual(3); // clamped
+    expect(defaultLevelScale("sq", 0)).toBe(1); // hole 0 = reference
+    expect(defaultLevelScale("sq", 8)).toBeLessThan(defaultLevelScale("sq", 1)); // higher = easier = smaller
+    expect(defaultLevelScale("sq", -1)).toBeGreaterThan(defaultLevelScale("sq", 1)); // lower = harder = bigger
+    expect(defaultLevelScale("sq", 20)).toBeGreaterThanOrEqual(0.1); // clamped
+    expect(defaultLevelScale("sq", -40)).toBeLessThanOrEqual(3); // clamped
+    expect(defaultLevelScale("cm", 43)).toBe(1); // cm is ambiguous → neutral default
+  });
+
+  it("reads a centimetre note into a cm level and tags it", () => {
+    expect(parseLevelNote("43cm")).toEqual(expect.objectContaining({ dim: "cm", value: 43, label: "43cm" }));
+    expect(parseLevelNote("Pakelta 10 cm")).toEqual(expect.objectContaining({ dim: "cm", value: 10 }));
+    const out = attachNoteLevel(rec("43cm low"));
+    expect(out.levelDim).toBe("cm");
+    expect(out.levelValue).toBe(43);
+    expect(out.levelLabel).toBe("43cm");
+    expect(out.notes).toBe("low");
   });
 });

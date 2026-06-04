@@ -54,7 +54,7 @@ export interface SetRecord {
    * `levelDim` is the dimension (squat-rack hole), `levelValue` the setting and
    * `levelLabel` its short tag ("SQ8"). Parsed from the note at load, or chosen
    * on the Add form. */
-  levelDim?: "sq";
+  levelDim?: "sq" | "cm";
   levelValue?: number;
   levelLabel?: string;
   /** Set on SYNTHETIC records only: the id of the combinable/comparable registry
