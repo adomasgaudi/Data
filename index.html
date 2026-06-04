@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.1.51</span></h1>
+        <h1>Colosseum <span class="version">b.2.1.52</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -154,6 +154,16 @@
           </div>
         </details>
 
+        <!-- Athlete-view tabs, shared above both sub-panels so they stay visible
+             whichever shows: Workouts (the sessions view) | List & stats | Compare
+             | Single (the one-exercise drill-in). -->
+        <div id="exercisesTabs" class="ex-tabs ath-tabs" role="tablist">
+          <button type="button" class="ex-tab" data-extab="workouts" role="tab">Workouts</button>
+          <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
+          <button type="button" class="ex-tab" data-extab="compare" role="tab">Compare</button>
+          <button type="button" class="ex-tab" data-extab="single" role="tab">Single</button>
+        </div>
+
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel">
             <h2 id="workoutsTitle">Workouts</h2>
@@ -224,10 +234,6 @@
                  editable bodyweight-% so the heights can be scaled onto one curve. -->
             <div id="exLevels" class="ex-levels" hidden></div>
             <div class="ex-tabbar">
-              <div id="exercisesTabs" class="ex-tabs" role="tablist">
-                <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
-                <button type="button" class="ex-tab" data-extab="compare" role="tab">Compare graph</button>
-              </div>
               <div class="ex-filters-wrap">
                 <button type="button" id="exFiltersBtn" class="ex-filters-btn" aria-label="Filters &amp; sort" aria-haspopup="true">⋯</button>
                 <div id="exerciseFilter" class="ex-filters-menu" hidden>
