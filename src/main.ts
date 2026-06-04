@@ -614,8 +614,11 @@ function setLevelScale(key: string, value: number) {
   }
 }
 
-/** The technique scaling factor for a set (1 when it has no level). */
+/** The technique scaling factor for a set: a per-set override beats the per-hole
+ * factor, which beats 1 (no scaling). */
 function scaleForRecord(r: SetRecord): number {
+  const o = setOverrides[setId(r)];
+  if (o?.scale !== undefined) return o.scale;
   return r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelValue) : 1;
 }
 
@@ -730,6 +733,43 @@ function setRpe(id: string, v: string | null) {
   try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(rpeGrades)); } catch { /* ignore */ }
 }
 
+// ---- Per-set edits (weight / reps / bodyweight / scaling factor) -------------
+// Any set can be tweaked on this device without touching the read-only Strength-
+// Level data: an override keyed by setId is layered on at load. Bodyweight here
+// is JUST for that set (overrides the profile default); scale is the per-set
+// technique factor (beats the per-hole one). RIR keeps its own store above.
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; }
+const SET_OVR_KEY = "colosseum.setOverrides.v1";
+let setOverrides: Record<string, SetOverride> = (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem(SET_OVR_KEY) ?? "{}");
+    return o && typeof o === "object" ? (o as Record<string, SetOverride>) : {};
+  } catch { return {}; }
+})();
+const saveSetOverrides = () => {
+  try { localStorage.setItem(SET_OVR_KEY, JSON.stringify(setOverrides)); } catch { /* ignore */ }
+};
+/** Layer a set's on-device edits over the logged weight / reps / bodyweight. */
+function applySetOverride(r: SetRecord): SetRecord {
+  const o = setOverrides[setId(r)];
+  if (!o) return r;
+  return {
+    ...r,
+    weight: o.weight !== undefined ? o.weight : r.weight,
+    reps: o.reps !== undefined ? o.reps : r.reps,
+    bodyweight: o.bodyweight !== undefined ? o.bodyweight : r.bodyweight,
+  };
+}
+/** Set or clear one override field for a set (empty/NaN clears just that field). */
+function setSetOverrideField(id: string, field: keyof SetOverride, value: number | null) {
+  const o = setOverrides[id] ?? {};
+  if (value === null || !Number.isFinite(value)) delete o[field];
+  else o[field] = value;
+  if (Object.keys(o).length === 0) delete setOverrides[id];
+  else setOverrides[id] = o;
+  saveSetOverrides();
+}
+
 /**
  * Records with the bodyweight-lifted load baked into `weight`, so the existing
  * leaderboard / PR / progress maths produce bodyweight-aware estimated 1RMs.
@@ -827,7 +867,7 @@ function computedRecords(): SetRecord[] {
   // Active-filtered logged records with bodyweight folded in, PLUS the synthetic
   // combinable/comparable group records derived from those computed loads (so the
   // ratio scales the total bw-inclusive load). Pure lifts are never mutated.
-  const pure = activeRecords().map(computeRecord);
+  const pure = activeRecords().map(applySetOverride).map(computeRecord);
   return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
 }
 
@@ -3006,6 +3046,8 @@ function renderExerciseProgressChart(exName: string) {
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (resetSetEdit(target)) return; // "Reset set" in the edit row
+  if (toggleSetEdit(target)) return; // ✎ → open/close this set's edit row
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -3499,6 +3541,8 @@ function renderWorkoutsPage() {
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (resetSetEdit(target)) return; // "Reset set" in the edit row
+  if (toggleSetEdit(target)) return; // ✎ → open/close this set's edit row
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -3783,11 +3827,12 @@ function predictedRirText(c: SetRecord, anchorE1RM: number | null, formula: OneR
  * weight cell with a caret; tapping the row expands the full note. Both reveals
  * are independent sub-rows, so a set can show either or both.
  */
-function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
+function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
   // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
-  // what was actually loaded. `s` is a raw record; compute it here so the
-  // Workouts and Exercises sets tables match every other view.
+  // what was actually loaded. `raw` is a raw record; apply the on-device per-set
+  // edits, then compute it here so the sets tables match every other view.
+  const s = applySetOverride(raw);
   const computed = computeRecord(s);
   const e1rm = addedWeight1RM(computed, formula);
   const vol = setVolume(s.weight, s.reps);
@@ -3812,12 +3857,17 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number
     e1rm === null
       ? "—"
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
-  const rpeCell = rpeDropdownHtml(setId(s), rpeFor(s));
+  const sid = setId(s);
+  const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
   // A squat-rack hole stands in for the weight on these sets — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
+  const edited = setOverrides[sid] !== undefined;
+  const editBtn =
+    `<button type="button" class="set-edit${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
+    `title="Edit this set (weight, reps, bodyweight, scale)" aria-label="Edit set">✎</button>`;
   const main =
     `<tr${note ? ' class="set-row has-note"' : ""}>` +
-    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}</td>` +
+    `<td class="num wcell">${preview}${lvlTag}${wr(s.weight, s.reps)}${editBtn}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
@@ -3833,7 +3883,22 @@ function setRowsHtml(s: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number
     predRir === null || !prirText
       ? ""
       : `<tr class="prir-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(prirText)}</td></tr>`;
-  return main + noteRow + formulaRow + prirRow;
+  // Edit row: tweak this set's weight / reps / bodyweight / scaling factor. RIR is
+  // the dropdown in the row itself. Bodyweight is just for this set (placeholder
+  // shows the default). Blank a field to clear that one edit.
+  const dfltBw = raw.bodyweight ?? ATHLETES[s.username]?.weight ?? null;
+  const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
+    `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
+    `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
+  const editRow =
+    `<tr class="set-edit-row" hidden><td colspan="5"><div class="set-edit-grid">` +
+    efld("weight", "Weight (kg)", s.weight, 0.5) +
+    efld("reps", "Reps", s.reps, 1) +
+    efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
+    efld("scale", "Scale ×", Math.round(scaleForRecord(s) * 100) / 100, 0.05) +
+    `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
+    `</div></td></tr>`;
+  return main + noteRow + formulaRow + prirRow + editRow;
 }
 
 /** The per-set RIR picker as a custom HTML/CSS dropdown (no native <select>, so it
@@ -3946,6 +4011,47 @@ function togglePrirFormula(target: HTMLElement): boolean {
     btn.classList.toggle("is-open");
   }
   return true;
+}
+
+/** Click the ✎ edit button: expand/collapse this set's edit row (scan forward
+ * past the note/formula/prir sub-rows to it). Shared by both sets tables. */
+function toggleSetEdit(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit");
+  if (!btn) return false;
+  let sib = btn.closest("tr")?.nextElementSibling ?? null;
+  while (sib && !sib.classList.contains("set-edit-row")) {
+    if (sib.querySelector(".set-edit")) break; // reached the next set's main row
+    sib = sib.nextElementSibling;
+  }
+  if (sib?.classList.contains("set-edit-row")) {
+    sib.toggleAttribute("hidden");
+    btn.classList.toggle("is-open");
+  }
+  return true;
+}
+
+/** Click "Reset set": drop all this set's on-device edits and re-render. */
+function resetSetEdit(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-reset");
+  if (!btn?.dataset.setid) return false;
+  delete setOverrides[btn.dataset.setid];
+  saveSetOverrides();
+  renderAll();
+  return true;
+}
+
+/** A set-edit input changed: save the override (weight/reps/bodyweight/scale) and
+ * re-render so the new value flows everywhere (1RM, volume, leaderboard, graphs). */
+function onSetEditInput(e: Event): void {
+  const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-input");
+  if (!inp?.dataset.setid || !inp.dataset.field) return;
+  const field = inp.dataset.field as keyof SetOverride;
+  const txt = inp.value.trim();
+  let v: number | null = txt === "" ? null : parseFloat(txt);
+  if (v !== null && !Number.isFinite(v)) v = null;
+  if (v !== null && field === "reps") v = Math.round(v);
+  setSetOverrideField(inp.dataset.setid, field, v);
+  renderAll();
 }
 
 /**
@@ -5125,12 +5231,14 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
+    if ((e.target as HTMLElement).closest(".set-edit-input")) { onSetEditInput(e); return; }
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));
     repMaxCols = Number.isFinite(n) && n >= 1 && n <= 30 ? [n] : [1];
     if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
   });
+  els.workoutsTable.addEventListener("change", onSetEditInput); // per-set edits in the Workouts sets tables
   // Category picker bar: tap a category chip to show/hide it in the list.
   els.exCatBar.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-cat-chip");
