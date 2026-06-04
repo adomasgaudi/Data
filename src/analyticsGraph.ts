@@ -40,8 +40,9 @@ function movingAverage(points: GraphPoint[], win: number): GraphPoint[] {
   let sum = 0;
   const q: number[] = [];
   for (const p of points) {
-    q.push(p.y);
-    sum += p.y;
+    const y = p.y ?? 0;
+    q.push(y);
+    sum += y;
     if (q.length > win) sum -= q.shift()!;
     out.push({ x: p.x, y: Math.round((sum / q.length) * 10) / 10 });
   }
@@ -56,8 +57,9 @@ function mockSeries(): SvgSeries[] {
 
 const charts = new WeakMap<HTMLElement, SvgChart>();
 
-/** Render the universal graph into `container` from the given input. */
-export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGraphInput): void {
+/** Render the universal graph into `container`. Returns how many real (non-mock)
+ * series were drawn, so the caller can show a missing-data note. */
+export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGraphInput): number {
   const metrics = (input.metrics.length ? input.metrics : ["e1rm"]).map(graphMetric).filter((m): m is NonNullable<typeof m> => !!m);
   const inRange = (r: SetRecord) => (!input.dateFrom || r.date >= input.dateFrom) && (!input.dateTo || r.date <= input.dateTo);
   const records = input.records.filter(inRange);
@@ -72,23 +74,25 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       const exRecords = records.filter((r) => r.exerciseName === ex);
       for (const m of metrics) {
         if (!m.compute) continue; // registered-but-not-computed metric
-        let pts = m.compute(exRecords, input.config);
-        // Config-driven shaping (kept light at the foundation stage).
-        if (input.config.decay && (m.id === "strength" || m.id === "strengthDecay" || m.id === "e1rm")) {
-          pts = decayedStrengthSeries(pts, Date.now());
+        let pts: GraphPoint[] = m.compute(exRecords, input.config);
+        // Decay can also be applied to plain strength/1RM lines via the config.
+        if (input.config.decay && (m.id === "strength" || m.id === "e1rm")) {
+          pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
         }
-        if (input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
+        if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
         const color = SERIES_COLORS[ci % SERIES_COLORS.length]!;
         ci++;
         if (pts.length)
-          series.push({ name: `${code(ex)} · ${m.label}`, color, type: "line", points: pts, ...(m.axis ? { axis: m.axis } : {}) });
+          series.push({ name: `${code(ex)} · ${m.label}`, color, type: m.type ?? "line", points: pts as SvgPoint[], ...(m.axis ? { axis: m.axis } : {}) });
       }
     }
-    if (series.length === 0) series = mockSeries();
+    // With a selection but nothing to plot (only an un-computed metric, or too
+    // little data to predict) we draw an empty chart — the caller shows a note.
   }
 
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, height: 300, insideLabels: true };
   const existing = charts.get(container);
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));
+  return input.exercises.length === 0 ? 0 : series.length;
 }

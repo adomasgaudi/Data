@@ -38,9 +38,38 @@ describe("graph metric registry (TASK 26)", () => {
     expect(graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBe(2);
   });
 
-  it("registered-but-not-computed metrics have no compute yet (groundwork)", () => {
-    expect(graphMetric("predicted")!.compute).toBeUndefined();
+  it("migrated metrics now compute; not-yet-built ones still don't (groundwork)", () => {
+    // TASKS 31–36 migrated these:
+    for (const id of ["weight", "weightRange", "e1rm", "strength", "strengthDecay", "predicted"]) {
+      expect(graphMetric(id)!.compute, id).toBeTypeOf("function");
+    }
+    // Still registered-only:
     expect(graphMetric("trend")!.compute).toBeUndefined();
+    expect(graphMetric("sets")!.compute).toBeUndefined();
+  });
+
+  it("weight range is a range series with lo/hi (TASK 32)", () => {
+    const pts = graphMetric("weightRange")!.compute!([rec({ weight: 100, reps: 5 })], DEFAULT_GRAPH_CONFIG);
+    expect(pts[0]!.lo).toBe(100);
+    expect(pts[0]!.hi!).toBeGreaterThan(100); // up to the estimated 1RM
+    expect(graphMetric("weightRange")!.type).toBe("range");
+  });
+
+  it("strength score never drops (running max), decay can dip (TASKS 34–35)", () => {
+    const recs = [rec({ date: "2024-01-01", weight: 100, reps: 1 }), rec({ date: "2024-02-01", weight: 80, reps: 1 })];
+    const s = graphMetric("strength")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(s.map((p) => p.y)).toEqual([100, 100]); // running max holds at 100
+  });
+
+  it("predicted strength needs ≥3 points, else empty (TASK 36 missing-data)", () => {
+    const few = [rec({ date: "2024-01-01" }), rec({ date: "2024-02-01" })];
+    expect(graphMetric("predicted")!.compute!(few, DEFAULT_GRAPH_CONFIG)).toEqual([]);
+    const many = [
+      rec({ date: "2024-01-01", weight: 100, reps: 1 }),
+      rec({ date: "2024-02-01", weight: 105, reps: 1 }),
+      rec({ date: "2024-03-01", weight: 110, reps: 1 }),
+    ];
+    expect(graphMetric("predicted")!.compute!(many, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
   });
 });
 
@@ -48,6 +77,7 @@ describe("graph config layer (TASK 29)", () => {
   it("has a default config with all settings", () => {
     expect(DEFAULT_GRAPH_CONFIG).toEqual({
       aggregation: "none", interval: "week", smoothing: 0, prediction: false, decay: false,
+      formula: "epley", predictionDays: 90,
     });
   });
 });

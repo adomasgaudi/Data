@@ -7048,22 +7048,31 @@ function renderWaGraph(): void {
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
     `</div>`;
-  const note = waSelected.length === 0 ? `<p class="muted wa-placeholder">Pick exercises to plot — showing sample data.</p>` : "";
   box.innerHTML =
     `<h3 class="wa-section-title">Graph <span class="muted" style="font-weight:400">· universal (beta)</span></h3>` +
     `<div class="wa-metric-row">${metricChips}</div>` +
     cfgUi +
-    note +
+    `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
     `<div id="waGraphChart"></div>`;
   const chartBox = document.getElementById("waGraphChart");
-  if (chartBox)
-    renderAnalyticsGraph(chartBox, {
-      exercises: waSelected,
-      records: computedRecords().filter((r) => r.username === els.athlete.value),
-      metrics: [...waMetrics],
-      config: waGraphConfig,
-      codeOf: exerciseCode,
-    });
+  waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  const drawn = chartBox
+    ? renderAnalyticsGraph(chartBox, {
+        exercises: waSelected,
+        records: computedRecords().filter((r) => r.username === els.athlete.value),
+        metrics: [...waMetrics],
+        config: waGraphConfig,
+        codeOf: exerciseCode,
+      })
+    : 0;
+  const noteEl = document.getElementById("waGraphNote");
+  if (noteEl)
+    noteEl.textContent =
+      waSelected.length === 0
+        ? "Pick exercises to plot — showing sample data."
+        : drawn === 0
+          ? "Not enough data for the selected metric(s)."
+          : "";
 }
 
 /** Build the metadata-filter controls: a multi-select per dimension that has any

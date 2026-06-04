@@ -60,10 +60,11 @@ Status: ✅ available now in the universal graph · 🟡 partial · ❌ not migr
 - **Metrics registered (14):** Weight, Weight Range, Estimated 1RM, Strength
   Score, Strength Score With Decay, Predicted Strength, Volume, Volume Load,
   Reps, Sets, Frequency, Personal Records, Trend Line, Moving Average.
-- **Computed now:** weight, e1rm, strength, strengthDecay, volume, volumeLoad,
-  reps. **Registered-not-computed:** weightRange, predicted, sets, frequency, pr,
-  trend, movingAvg (Moving Average is available as a config *smoothing* applied to
-  any metric).
+- **Computed now (after TASKS 31–36):** weight (history, tooltips), weightRange
+  (range bars), e1rm (formula-aware), strength (running max), strengthDecay
+  (Ebbinghaus fade), predicted (log projection, empty under 3 points), volume,
+  volumeLoad, reps. **Registered-not-computed:** sets, frequency, pr, trend,
+  movingAvg (Moving Average is also available as a config *smoothing*).
 - **Config:** aggregation (none/max/avg/sum), interval (day/week/month),
   smoothing (moving-average window), prediction (flag), decay (applied).
 - **Multi-exercise / identity:** original, dissolved, combined, comparison all
