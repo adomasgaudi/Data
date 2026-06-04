@@ -97,6 +97,7 @@ const els = {
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
   viewBadge: $("viewBadge"),
+  topLoginBtn: $<HTMLButtonElement>("topLoginBtn"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
   settingsPanel: $("settingsPanel"),
@@ -290,6 +291,8 @@ function setViewMode(mode: ViewMode) {
   else if (mode === "loggedout") els.viewBadge.textContent = `🔒 ${nameForUsername(locked)} (logged out)`;
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
   els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
+  // When logged out, a "Log in" button sits up top next to the badge.
+  els.topLoginBtn.hidden = mode !== "loggedout";
   // The "Other" sheet: non-admin keeps only the Guide; admin shows everything.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.hidden = mode !== "admin" && item.dataset.tab !== "guide";
@@ -4722,6 +4725,7 @@ async function init() {
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
+  els.topLoginBtn.addEventListener("click", showLoginPage); // the top "Log in" when logged out
 
   // "Legs (all)" category visibility in the By-category list (off by default).
   els.showLegsAll.checked = showLegsAll;
