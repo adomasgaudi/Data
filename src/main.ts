@@ -5467,6 +5467,7 @@ async function init() {
     if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
   });
   setupWorkoutAnalysis();
+  setupCommandBar();
   // Redirect legacy deep-links / bookmarks into the unified view (TASKS 49–52).
   window.addEventListener("hashchange", handleAnalysisHash);
   handleAnalysisHash();
@@ -7264,9 +7265,15 @@ function renderWorkoutAnalysis(): void {
     const groupOpts =
       `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
       WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
+    // The exercise search moved to the always-on command bar at the bottom of the
+    // screen (type to filter these chips; "/" for commands). A live readout of the
+    // active query shows here so it's clear what the chip list is filtered by.
+    const searchHint = waSearchQuery.trim()
+      ? `<button type="button" id="waSearchClear" class="wa-search-active" title="Clear search">🔎 “${escapeHtml(waSearchQuery.trim())}” ✕</button>`
+      : `<span class="wa-search-hint muted">🔎 Search in the bar at the bottom</span>`;
     const selControls =
       `<div class="wa-sel-controls">` +
-      `<input id="waSearch" class="wa-search" type="search" placeholder="Search exercises…" value="${escapeHtml(waSearchQuery)}" autocomplete="off" />` +
+      searchHint +
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
       `</div>`;
     // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
@@ -7514,16 +7521,116 @@ function waAssignEditor(name: string): string {
 
 /** Wire the analysis view's selector once: tapping an exercise chip toggles it in
  * `waSelected` (which flips the mode), and "Clear" empties the selection. */
+// ---- Persistent command / search bar (always above the bottom nav) ----
+// Plain text filters the Analysis exercise selector; "/" opens a palette of
+// shortcut commands. Designed to speed up the common moves without hunting
+// through menus. New commands are easy to add to COMMAND_LIST below.
+interface CmdSpec { cmd: string; desc: string; run: () => void }
+
+/** Jump to the Analysis tab and (re)render it. */
+function goToAnalysis(): void {
+  if (document.getElementById("tab-analysis")?.hidden !== false) switchTopTab("analysis");
+  else renderWorkoutAnalysis();
+}
+/** Open the Exercise-selector fold + its chip list so search results are visible. */
+function openSelectorFolds(): void {
+  const sel = document.getElementById("waExerciseSelector");
+  sel?.closest("details")?.setAttribute("open", "");
+  document.querySelector<HTMLDetailsElement>(".wa-chips-fold")?.setAttribute("open", "");
+}
+
+function commandList(): CmdSpec[] {
+  return [
+    { cmd: "/all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
+    { cmd: "/clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
+    { cmd: "/names", desc: "Toggle exercise labels: short code ↔ full name", run: () => { waChipNameMode = waChipNameMode === "code" ? "full" : "code"; goToAnalysis(); } },
+    { cmd: "/dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
+    { cmd: "/today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
+    { cmd: "/calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
+    { cmd: "/codes", desc: "Open the Exercise codes page", run: () => switchTopTab("codes") },
+    { cmd: "/add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
+    { cmd: "/data", desc: "Open the Data page", run: () => switchTopTab("data") },
+    { cmd: "/help", desc: "List every command (type / to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "/"; i.focus(); renderCmdPalette("/"); } } },
+  ];
+}
+
+let cmdActiveIdx = 0;
+/** Render the slash-command palette filtered by the text after "/". */
+function renderCmdPalette(value: string): void {
+  const pal = document.getElementById("cmdPalette");
+  if (!pal) return;
+  const q = value.slice(1).trim().toLowerCase();
+  const matches = commandList().filter((c) => !q || c.cmd.slice(1).startsWith(q) || c.desc.toLowerCase().includes(q));
+  if (matches.length === 0) {
+    pal.hidden = false;
+    pal.innerHTML = `<div class="cmd-empty muted">No command matches “/${escapeHtml(q)}”</div>`;
+    return;
+  }
+  if (cmdActiveIdx >= matches.length) cmdActiveIdx = 0;
+  pal.hidden = false;
+  pal.innerHTML = matches
+    .map(
+      (c, i) =>
+        `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}" data-cmd="${escapeHtml(c.cmd)}" role="option">` +
+        `<span class="cmd-opt-cmd">${escapeHtml(c.cmd)}</span><span class="cmd-opt-desc">${escapeHtml(c.desc)}</span></button>`,
+    )
+    .join("");
+}
+function hideCmdPalette(): void {
+  const pal = document.getElementById("cmdPalette");
+  if (pal) { pal.hidden = true; pal.innerHTML = ""; }
+  cmdActiveIdx = 0;
+}
+/** Run a command by its "/name", then reset the bar. */
+function runCommand(cmd: string): void {
+  const spec = commandList().find((c) => c.cmd === cmd);
+  const input = document.getElementById("cmdInput") as HTMLInputElement | null;
+  if (!spec) return;
+  spec.run();
+  if (input && cmd !== "/help") input.value = "";
+  if (cmd !== "/help") { hideCmdPalette(); input?.blur(); }
+}
+
+function setupCommandBar(): void {
+  const input = document.getElementById("cmdInput") as HTMLInputElement | null;
+  const pal = document.getElementById("cmdPalette");
+  if (!input || !pal) return;
+  input.addEventListener("input", () => {
+    const v = input.value;
+    if (v.startsWith("/")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
+    hideCmdPalette();
+    // Plain text → filter the Analysis exercise selector chips.
+    waSearchQuery = v;
+    if (document.getElementById("tab-analysis")?.hidden !== false) {
+      switchTopTab("analysis"); // builds the selector with the new query
+      openSelectorFolds();
+    } else {
+      openSelectorFolds();
+      renderWaChips(); // light update so the input keeps focus
+    }
+  });
+  input.addEventListener("keydown", (e) => {
+    if (pal.hidden) return;
+    const opts = Array.from(pal.querySelectorAll<HTMLElement>(".cmd-opt"));
+    if (e.key === "ArrowDown") { e.preventDefault(); cmdActiveIdx = Math.min(cmdActiveIdx + 1, opts.length - 1); renderCmdPalette(input.value); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); cmdActiveIdx = Math.max(cmdActiveIdx - 1, 0); renderCmdPalette(input.value); }
+    else if (e.key === "Enter") { e.preventDefault(); const active = opts[cmdActiveIdx] ?? opts[0]; if (active?.dataset.cmd) runCommand(active.dataset.cmd); }
+    else if (e.key === "Escape") { hideCmdPalette(); input.blur(); }
+  });
+  pal.addEventListener("click", (e) => {
+    const opt = (e.target as HTMLElement).closest<HTMLElement>(".cmd-opt");
+    if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
+  });
+  // Close the palette on a click anywhere outside the bar.
+  document.addEventListener("click", (e) => {
+    if (!pal.hidden && !document.getElementById("cmdBar")?.contains(e.target as Node)) hideCmdPalette();
+  });
+}
+
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
-  // Live search (TASK 43): re-fill only the chips so the input keeps focus.
-  panel.addEventListener("input", (e) => {
-    const s = (e.target as HTMLElement).closest<HTMLInputElement>("#waSearch");
-    if (!s) return;
-    waSearchQuery = s.value;
-    renderWaChips();
-  });
+  // (Exercise search moved to the always-on command bar — see setupCommandBar.)
   // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
   panel.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
@@ -7575,6 +7682,13 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest("#waFiltersClear")) {
       for (const d of FILTER_DIMS) delete waFilterValues[d];
+      renderWorkoutAnalysis();
+      return;
+    }
+    if (t.closest("#waSearchClear")) {
+      waSearchQuery = "";
+      const cmd = document.getElementById("cmdInput") as HTMLInputElement | null;
+      if (cmd) cmd.value = "";
       renderWorkoutAnalysis();
       return;
     }
