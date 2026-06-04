@@ -599,6 +599,51 @@ function setCodeOverride(exerciseName: string, code: string) {
   saveCodeOverrides();
 }
 
+// ---- Exercise SHORT names (a middle tier between the tiny code and the full
+// name) ----. Same layering as codes: the default short name is just the
+// exercise's effective code (so a common lift reads as its code), but the owner
+// can type a longer, friendlier short name per lift (a rare lift can be as long
+// as its full name). shortFor() is the single read point.
+const SHORT_STORE_KEY = "colosseum.exerciseShortNames.v1";
+const shortOverrides: Record<string, string> = loadShortOverrides();
+
+function loadShortOverrides(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(SHORT_STORE_KEY);
+    const obj = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The default short name for an exercise: for now, the same as its (effective)
+ * code — so it follows any code override until the owner sets a distinct short. */
+function defaultShort(exerciseName: string): string {
+  return codeFor(exerciseName);
+}
+
+/** The short name shown for an exercise: the owner's override if set, else the
+ * default (the code). */
+function shortFor(exerciseName: string): string {
+  const o = shortOverrides[exerciseName];
+  return o && o.trim() ? o : defaultShort(exerciseName);
+}
+
+function saveShortOverrides() {
+  try { localStorage.setItem(SHORT_STORE_KEY, JSON.stringify(shortOverrides)); }
+  catch { /* storage may be unavailable — edits still apply this session */ }
+}
+
+/** Set or clear (blank or equal to the default code → back to default) one
+ * exercise's short-name override. */
+function setShortOverride(exerciseName: string, short: string) {
+  const trimmed = short.trim();
+  if (!trimmed || trimmed === defaultShort(exerciseName)) delete shortOverrides[exerciseName];
+  else shortOverrides[exerciseName] = trimmed;
+  saveShortOverrides();
+}
+
 // ---- Per-LEVEL technique scaling factors (the squat-rack holes), editable ----
 // A hole (a push-up at squat-rack hole 8) doesn't change the real weight or its
 // 1RM — those stay as logged. Each (exercise, hole) instead carries a plain
@@ -4635,9 +4680,10 @@ function renderCodesTab(): void {
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
   for (const name of Object.keys(codeOverrides)) if (!counts.has(name)) counts.set(name, 0); // keep edited-but-absent lifts visible
+  for (const name of Object.keys(shortOverrides)) if (!counts.has(name)) counts.set(name, 0);
   const q = codesQuery.trim().toLowerCase();
   const names = [...counts.keys()]
-    .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q))
+    .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q) || shortFor(n).toLowerCase().includes(q))
     .sort((a, b) => (counts.get(b)! - counts.get(a)!) || a.localeCompare(b));
 
   // Bucket the (already most-trained-first) names by training category. An
@@ -4655,6 +4701,8 @@ function renderCodesTab(): void {
   const rowHtml = (name: string) => {
     const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
     const def = exerciseCode(name);
+    const shortOver = !!(shortOverrides[name] && shortOverrides[name]!.trim());
+    const shortDef = defaultShort(name);
     const staticTag = isStatic(name) ? ` <span class="codes-static" title="Isometric hold">static</span>` : "";
     return (
       `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}${staticTag}</td>` +
@@ -4664,11 +4712,19 @@ function renderCodesTab(): void {
       (overridden
         ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
         : `<span class="codes-def muted">default</span>`) +
-      `</td><td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
+      `</td>` +
+      `<td class="codes-cell">` +
+      `<input class="codes-input codes-short${shortOver ? " is-custom" : ""}" type="text" maxlength="40" spellcheck="false" autocomplete="off" ` +
+      `value="${escapeHtml(shortFor(name))}" data-exshort="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />` +
+      (shortOver
+        ? `<button type="button" class="codes-reset" data-shortreset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(shortDef)})">↺</button>`
+        : `<span class="codes-def muted">= code</span>`) +
+      `</td>` +
+      `<td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
     );
   };
 
-  const head = `<thead><tr><th>Exercise</th><th>Code</th><th class="num">Sets</th></tr></thead>`;
+  const head = `<thead><tr><th>Exercise</th><th>Code</th><th>Short</th><th class="num">Sets</th></tr></thead>`;
   // While searching, force every section open so matches aren't hidden in a
   // collapsed group.
   const searching = q.length > 0;
@@ -4677,7 +4733,7 @@ function renderCodesTab(): void {
       const list = byCat.get(cat)!;
       const collapsed = !searching && codesCollapsed.has(cat);
       const header =
-        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="3">` +
+        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="4">` +
         `<span class="codes-cat-caret">${collapsed ? "▸" : "▾"}</span>` +
         `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
         `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
@@ -4696,7 +4752,13 @@ function setupCodesTab(): void {
   // Commit a typed code on blur/Enter (change), then refresh everywhere it shows.
   els.codesTable.addEventListener("change", (e) => {
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(".codes-input");
-    if (!input?.dataset.ex) return;
+    if (!input) return;
+    if (input.dataset.exshort) {
+      setShortOverride(input.dataset.exshort, input.value);
+      renderCodesTab();
+      return;
+    }
+    if (!input.dataset.ex) return;
     setCodeOverride(input.dataset.ex, input.value);
     renderCodesTab();
     renderAll();
@@ -4710,6 +4772,12 @@ function setupCodesTab(): void {
       if (codesCollapsed.has(cat)) codesCollapsed.delete(cat);
       else codesCollapsed.add(cat);
       saveCodesCollapsed();
+      renderCodesTab();
+      return;
+    }
+    const shortBtn = target.closest<HTMLElement>("[data-shortreset]");
+    if (shortBtn?.dataset.shortreset) {
+      setShortOverride(shortBtn.dataset.shortreset, ""); // blank clears the override
       renderCodesTab();
       return;
     }

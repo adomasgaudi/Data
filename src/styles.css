@@ -1796,6 +1796,25 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .codes-cat-caret { display: inline-block; width: 0.9em; color: var(--muted); font-size: 0.8em; }
 .codes-cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; vertical-align: middle; }
 
+/* The Short-name input: a middle tier between the tiny code and the full name. */
+.codes-short { width: 100%; font-weight: 600; letter-spacing: normal; }
+/* Fit the codes table on a phone (no sideways scroll) even with the extra Short
+   column: drop the table-wide min-width, fix the layout so the Short column
+   takes the slack, and let the exercise name wrap instead of forcing width. */
+#codesTable { min-width: 0; table-layout: fixed; }
+#codesTable th, #codesTable td { overflow-wrap: anywhere; padding: 7px 8px; vertical-align: top; }
+#codesTable th:nth-child(2), #codesTable td:nth-child(2) { width: 6.6em; }
+#codesTable th:nth-child(3), #codesTable td:nth-child(3) { width: 40%; }
+#codesTable th:nth-child(4), #codesTable td:nth-child(4) { width: 3.4em; }
+@media (max-width: 640px) {
+  #codesTable th, #codesTable td { padding: 6px 5px; font-size: 0.82rem; }
+  #codesTable th:nth-child(2), #codesTable td:nth-child(2) { width: 4.6em; }
+  .codes-input { width: 100%; font-size: 0.82rem; padding: 3px 5px; }
+  .codes-cell { gap: 0.3rem; }
+  .codes-reset { padding: 1px 6px; font-size: 0.7rem; }
+  .codes-def { font-size: 0.68rem; }
+}
+
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }
