@@ -1917,3 +1917,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .wa-ex-chip:hover { border-color: var(--accent); }
 .wa-ex-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* WorkoutAnalysis display-mode layouts (TASK 8). Scoped to the content host so
+   the old views are never affected — these ids only sit inside #waWorkoutsHost
+   while a panel is relocated there. Controls/selectors stay visible in all modes;
+   only the content blocks (charts / tables / stats) are shown or hidden. */
+.wa-controls-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 0.5rem; }
+.wa-ctl-lbl { font-size: 0.8rem; }
+.wa-viewmodes .seg-btn { padding: 4px 12px; font-size: 0.8rem; }
+#waWorkoutsHost[data-wa-view="charts"] :is(#workoutsTable, #workoutsPager, #athleteTable, #exercisesPager, #compareSets, #exerciseStats, #exerciseCalc) { display: none; }
+#waWorkoutsHost[data-wa-view="table"] :is(#workoutSets, #workoutCalendar, #exerciseProgress, #compareChart, #exerciseStats, #exerciseCalc) { display: none; }
+#waWorkoutsHost[data-wa-view="stats"] :is(#workoutSets, #workoutCalendar, #exerciseProgress, #workoutsTable, #workoutsPager, #athleteTable, #exercisesPager, #compareChart, #compareSets) { display: none; }

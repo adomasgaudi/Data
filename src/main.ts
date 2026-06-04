@@ -6757,6 +6757,10 @@ let waSelected: string[] = [];
 // In "all" mode (nothing selected) the content area can show either the Workouts
 // history or the full Exercise list (the migrated List view); toggled in-view.
 let waAllView: "workouts" | "list" = "workouts";
+// Presentation-only layout (TASK 8): which blocks of the hosted content show.
+// Purely a CSS class on the content host — never re-renders or touches selection.
+type WaView = "overview" | "table" | "charts" | "stats";
+let waView: WaView = "overview";
 function waMode(): WaMode {
   return waSelected.length === 0 ? "all" : waSelected.length === 1 ? "single" : "compare";
 }
@@ -6856,8 +6860,19 @@ function renderWorkoutAnalysis(): void {
     renderWorkoutCalendar();
     renderWorkoutSetsChart();
   }
+  // Presentation layout (Overview/Table/Charts/Stats) is a CSS class on the host.
+  const host = document.getElementById("waWorkoutsHost");
+  if (host) host.dataset.waView = waView;
   const filters = document.getElementById("waFilters");
   if (filters) {
+    // Display-mode toggle: shows/hides content blocks only — selection & filters
+    // stay put (it never re-renders the content).
+    const viewToggle =
+      `<div class="wa-viewmodes seg-toggle" role="group" aria-label="Display mode">` +
+      (["overview", "table", "charts", "stats"] as const)
+        .map((v) => `<button type="button" class="seg-btn${waView === v ? " is-active" : ""}" data-waview="${v}">${v[0]!.toUpperCase()}${v.slice(1)}</button>`)
+        .join("") +
+      `</div>`;
     // In "all" mode, a toggle picks the content: workout history or the full
     // exercise list. (Single/compare are driven by the selection itself.)
     const allToggle =
@@ -6870,6 +6885,7 @@ function renderWorkoutAnalysis(): void {
     // Visible mode readout (debugging, per the task).
     filters.innerHTML =
       `<h3 class="wa-section-title">Filters</h3>` +
+      `<div class="wa-controls-row"><span class="wa-ctl-lbl muted">Layout</span>${viewToggle}</div>` +
       allToggle +
       `<p class="wa-mode" data-wa-mode="${waMode()}">Mode: <strong>${escapeHtml(waModeLabel())}</strong> ` +
       `<span class="muted">· ${waSelected.length} selected</span></p>`;
@@ -6909,6 +6925,17 @@ function setupWorkoutAnalysis(): void {
     if (t.closest("#waClear")) {
       waSelected = [];
       renderWorkoutAnalysis();
+      return;
+    }
+    // Display-mode toggle (Overview/Table/Charts/Stats): presentation only —
+    // flip the host class + active button, never re-render or touch selection.
+    const viewBtn = t.closest<HTMLElement>(".wa-viewmodes .seg-btn");
+    if (viewBtn?.dataset.waview) {
+      waView = viewBtn.dataset.waview as WaView;
+      const host = document.getElementById("waWorkoutsHost");
+      if (host) host.dataset.waView = waView;
+      for (const b of panel.querySelectorAll<HTMLElement>(".wa-viewmodes .seg-btn"))
+        b.classList.toggle("is-active", b.dataset.waview === waView);
       return;
     }
     // All-mode content toggle: Workouts ↔ Exercise list.
