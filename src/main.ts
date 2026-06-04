@@ -6754,6 +6754,9 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
+// In "all" mode (nothing selected) the content area can show either the Workouts
+// history or the full Exercise list (the migrated List view); toggled in-view.
+let waAllView: "workouts" | "list" = "workouts";
 function waMode(): WaMode {
   return waSelected.length === 0 ? "all" : waSelected.length === 1 ? "single" : "compare";
 }
@@ -6779,12 +6782,21 @@ function setAnalysisMainPanel(which: "none" | "workouts" | "exercises"): void {
   const woHome = document.getElementById("sub-workouts");
   const exHome = document.getElementById("sub-exercises");
   if (!host || !woPanel || !exPanel || !woHome || !exHome) return;
+  // The exercise list's floating search bar lives outside the panel, so it must
+  // travel with it (else search would be stranded in the hidden athlete tab).
+  const exSearch = document.getElementById("exSearchBar");
   // Return whatever isn't wanted to its home tab.
   if (which !== "workouts" && woPanel.parentElement === host) woHome.appendChild(woPanel);
-  if (which !== "exercises" && exPanel.parentElement === host) exHome.appendChild(exPanel);
+  if (which !== "exercises" && exPanel.parentElement === host) {
+    exHome.appendChild(exPanel);
+    if (exSearch) exHome.appendChild(exSearch);
+  }
   // Mount the wanted panel.
   if (which === "workouts" && woPanel.parentElement !== host) host.appendChild(woPanel);
-  if (which === "exercises" && exPanel.parentElement !== host) host.appendChild(exPanel);
+  if (which === "exercises" && exPanel.parentElement !== host) {
+    host.appendChild(exPanel);
+    if (exSearch) host.appendChild(exSearch);
+  }
   document.getElementById("waWorkoutsEmpty")?.toggleAttribute("hidden", which !== "none");
   analysisPanel = which;
 }
@@ -6824,8 +6836,18 @@ function renderWorkoutAnalysis(): void {
     graph?.setAttribute("hidden", ""); // the compare view carries its own chart/table
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
+  } else if (waAllView === "list") {
+    // All + Exercise list: the live List view (the migrated List & stats) — its
+    // category-grouped table, sort, search, rep-max column and per-exercise stats.
+    selectedExercise = null;
+    exercisesTab = "list";
+    setAnalysisMainPanel("exercises");
+    if (contentTitle) contentTitle.textContent = "Exercise list";
+    graph?.setAttribute("hidden", "");
+    stats?.setAttribute("hidden", "");
+    renderExercisesPage();
   } else {
-    // All: the live Workouts panel.
+    // All + Workouts: the live Workouts panel.
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = "Workout history";
     graph?.setAttribute("hidden", "");
@@ -6836,10 +6858,19 @@ function renderWorkoutAnalysis(): void {
   }
   const filters = document.getElementById("waFilters");
   if (filters) {
+    // In "all" mode, a toggle picks the content: workout history or the full
+    // exercise list. (Single/compare are driven by the selection itself.)
+    const allToggle =
+      mode === "all"
+        ? `<div class="wa-allview seg-toggle" role="group" aria-label="All-mode content">` +
+          `<button type="button" class="seg-btn${waAllView === "workouts" ? " is-active" : ""}" data-waall="workouts">Workouts</button>` +
+          `<button type="button" class="seg-btn${waAllView === "list" ? " is-active" : ""}" data-waall="list">Exercise list</button>` +
+          `</div>`
+        : "";
     // Visible mode readout (debugging, per the task).
     filters.innerHTML =
       `<h3 class="wa-section-title">Filters</h3>` +
-      `<p class="muted wa-placeholder">Filters go here.</p>` +
+      allToggle +
       `<p class="wa-mode" data-wa-mode="${waMode()}">Mode: <strong>${escapeHtml(waModeLabel())}</strong> ` +
       `<span class="muted">· ${waSelected.length} selected</span></p>`;
   }
@@ -6878,6 +6909,23 @@ function setupWorkoutAnalysis(): void {
     if (t.closest("#waClear")) {
       waSelected = [];
       renderWorkoutAnalysis();
+      return;
+    }
+    // All-mode content toggle: Workouts ↔ Exercise list.
+    const allBtn = t.closest<HTMLElement>(".wa-allview .seg-btn");
+    if (allBtn?.dataset.waall) {
+      waAllView = allBtn.dataset.waall === "list" ? "list" : "workouts";
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Tapping an exercise row in the hosted List view drills in (the row handler
+    // set selectedExercise already) — reflect it in the analysis selection so the
+    // mode/selector stay in step, landing on the single-exercise drill-in.
+    if (t.closest("tr.ex-row") && document.getElementById("exercisesPanel")?.closest("#tab-analysis")) {
+      if (selectedExercise && waSelected.join("|") !== selectedExercise) {
+        waSelected = [selectedExercise];
+        renderWorkoutAnalysis();
+      }
     }
   });
 }

@@ -72,34 +72,37 @@ Legend: ✅ migrated · 🟡 partial · ❌ not yet · (R) = via live-panel relo
 | Comparison note | Compare | ✅ (R) | WorkoutAnalysis · compare | |
 | Compacted-time on the overlay | Compare | ✅ (R) | WorkoutAnalysis · compare | |
 
-## List View ("List & stats")  →  not yet migrated
+## List View ("List & stats")  →  `all` mode → "Exercise list" toggle (TASK 7)
+
+In `all` mode the content area has a **Workouts | Exercise list** toggle; "Exercise
+list" hosts the live List view (the floating search bar travels with it).
 
 | Feature | Source View | Migrated? | New Location | Notes |
 |---|---|---|---|---|
-| Exercise list (by category, with 1RM + best set) | List | 🟡 | WorkoutAnalysis selector (partial) | Selector chips let you pick a lift, but the full sortable list/table is not migrated. |
-| Sort: By sets / By tier / By category | List | ❌ | — | Lives only in the old List & stats tab. |
-| Show not-trained toggle | List | ❌ | — | |
-| Show cardio/mobility toggle | List | ❌ | — | |
-| Search exercises box | List | 🟡 | WorkoutAnalysis selector (partial) | Chips are tappable but there's no text search in the analysis selector yet. |
-| Editable rep-max column (working weight for N reps) | List | ❌ | — | |
-| Category show/hide chips | List | ❌ | — | |
-| Period filter | List | ❌ | — | The analysis selector has no period filter of its own yet. |
-| Tap exercise → drill-in | List | ✅ | WorkoutAnalysis selector | Tapping a chip enters single mode (the drill-in). |
+| Exercise list (by category, with 1RM + best set) | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | Whole List panel hosted. |
+| Sort: By sets / By tier / By category | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | In the ⋯ filters menu. |
+| Show not-trained toggle | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | |
+| Show cardio/mobility toggle | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | |
+| Search exercises box | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | Floating search bar relocated with the panel. |
+| Editable rep-max column (working weight for N reps) | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | |
+| Category show/hide chips | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | |
+| Period filter | List | ✅ (R) | WorkoutAnalysis · all → Exercise list | |
+| Tap exercise → drill-in | List | ✅ | WorkoutAnalysis | Drills into single mode; the selection chip syncs so the mode readout follows. |
+| Bulk selection | List | n/a | — | The List view has no bulk selection. |
 
 ---
 
 ## Gaps / follow-ups (what's still missing)
 
-- **List View** is the main un-migrated surface. The analysis **Exercise selector**
-  is only a partial substitute (no sort, no search box, no not-trained / cardio
-  toggles, no editable rep-max column, no period filter, no category show/hide).
-- The analysis view's own **Filters** section is still a placeholder (only the mode
-  readout) — date/period and other cross-cutting filters aren't wired into it yet;
-  in `all`/`single`/`compare` the relocated panels carry their own filters.
+- All four legacy views (Workouts, Single, Compare, List) are now reachable inside
+  WorkoutAnalysisView via relocation. The old pages remain as well (not deleted).
+- The analysis view's own **Filters** section holds the mode readout + the
+  `all`-mode Workouts/Exercise-list toggle; broader cross-cutting filters aren't
+  wired into it yet — in each mode the relocated panel carries its own filters.
 - **In-panel vs analysis-selector desync:** changing the lift via the drill-in's
   own name dropdown, or the compare chips, doesn't update the analysis selection
   chips (and so the mode readout) until the analysis chips are next touched.
 - Old views (**Workouts / Single / Compare / List**) are intentionally **not deleted**
   yet — they remain reachable via the athlete tab bar and must keep working.
 
-_Last updated for b.2.2.14 (after Tasks 1–5)._
+_Last updated for b.2.2.15 (after Tasks 1–7)._
