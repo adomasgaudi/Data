@@ -148,6 +148,20 @@ describe("buildCompactor", () => {
     // The real span is still much larger than the compacted span.
     expect(c.to(31 * MS_DAY) - c.to(0)).toBeLessThan((31 * MS_DAY) / 5);
   });
+  it("collapses every empty gap to one uniform day-slot, regardless of length", () => {
+    // Three training days with a 1-day and a 200-day gap: both become one slot.
+    const c = buildCompactor([0, 1, 201].map((d) => d * MS_DAY));
+    expect(c.to(1 * MS_DAY) - c.to(0)).toBeCloseTo(MS_DAY, 6); // the 1-day step
+    expect(c.to(201 * MS_DAY) - c.to(1 * MS_DAY)).toBeCloseTo(MS_DAY, 6); // the 200-day layoff, same width
+  });
+  it("buckets sub-day fan offsets onto their own day", () => {
+    // Same-day sets are drawn at day ± a fraction; rounding keeps them one slot.
+    const day3 = 3 * MS_DAY;
+    const c = buildCompactor([0, day3 - 0.3 * MS_DAY, day3 + 0.3 * MS_DAY, 9 * MS_DAY]);
+    // The two day-3 points land within the same compacted day-slot (< 1 day apart).
+    const span = c.to(day3 + 0.3 * MS_DAY) - c.to(day3 - 0.3 * MS_DAY);
+    expect(span).toBeLessThan(MS_DAY);
+  });
   it("is monotonic for arbitrary query points between sessions", () => {
     const days = [0, 5, 6, 7, 40].map((d) => d * MS_DAY);
     const c = buildCompactor(days);

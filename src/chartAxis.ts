@@ -83,34 +83,33 @@ export function timeBands(min: number, max: number): TimeBand[] {
 }
 
 /**
- * "Compacted time" axis: a monotonic remapping of real timestamps that squeezes
- * the long empty gaps (rest weeks, layoffs) so every training session is roughly
- * evenly spaced and all the sets fit on screen — at the cost of the x-axis no
- * longer being linear in real time. Built from the data's own timestamps: each
- * gap between consecutive distinct points is capped at the median gap, so a
- * normal training cadence is preserved while outliers (a month off) collapse.
+ * "Compacted time" axis: a monotonic remapping of real timestamps that drops the
+ * empty days entirely — every distinct training DAY becomes one evenly-spaced slot
+ * (like the workout list with rest days hidden, but as a graph). A month-long
+ * layoff collapses to a single step, so consecutive sessions sit side by side and
+ * the whole history fits on screen. Built from the data's own timestamps; with the
+ * legend filtered to one exercise it's that exercise's days that get compacted, so
+ * the days you didn't train it vanish.
  *
  * `to` maps a real timestamp → compacted coordinate (feed the chart these);
  * `from` inverts it (compacted coordinate → real timestamp) so axis ticks and
- * tooltips can still print real calendar dates. Both are piecewise-linear and
+ * tooltips still print real calendar dates. Both are piecewise-linear and
  * extrapolate at real (slope-1) rate outside the data range. With < 2 distinct
- * points there's nothing to compact, so both are the identity.
+ * days there's nothing to compact, so both are the identity.
  */
 export interface TimeCompactor {
   to(t: number): number;
   from(c: number): number;
 }
 export function buildCompactor(times: Iterable<number>): TimeCompactor {
-  const uniq = [...new Set([...times].filter((t) => Number.isFinite(t)))].sort((a, b) => a - b);
-  if (uniq.length < 2) return { to: (t) => t, from: (c) => c };
-  const gaps: number[] = [];
-  for (let i = 1; i < uniq.length; i++) gaps.push(uniq[i]! - uniq[i - 1]!);
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)]!;
-  const cap = Math.max(median, 1);
-  // Compacted coordinate of each distinct real timestamp.
-  const c: number[] = [0];
-  for (let i = 1; i < uniq.length; i++) c.push(c[i - 1]! + Math.min(uniq[i]! - uniq[i - 1]!, cap));
+  // Bucket to whole days (round, so a chart's intra-day fan offsets stay on their
+  // own day), then space the distinct days uniformly — one MS_DAY slot each.
+  const days = [
+    ...new Set([...times].filter((t) => Number.isFinite(t)).map((t) => Math.round(t / MS_DAY))),
+  ].sort((a, b) => a - b);
+  if (days.length < 2) return { to: (t) => t, from: (c) => c };
+  const real = days.map((d) => d * MS_DAY); // real start-of-day timestamps
+  const comp = days.map((_, i) => i * MS_DAY); // uniform: every training day is one slot
   // Piecewise-linear interpolation between two parallel monotonic arrays.
   const interp = (xs: number[], ys: number[], v: number): number => {
     if (v <= xs[0]!) return ys[0]! + (v - xs[0]!); // slope-1 extrapolation
@@ -122,7 +121,7 @@ export function buildCompactor(times: Iterable<number>): TimeCompactor {
     const f = span > 0 ? (v - xs[lo]!) / span : 0;
     return ys[lo]! + f * (ys[hi]! - ys[lo]!);
   };
-  return { to: (t) => interp(uniq, c, t), from: (cc) => interp(c, uniq, cc) };
+  return { to: (t) => interp(real, comp, t), from: (cc) => interp(comp, real, cc) };
 }
 
 /**
