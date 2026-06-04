@@ -67,6 +67,67 @@ export function bodyComposition(
   return { leanMass, ffmi, nffmi };
 }
 
+/**
+ * Body fat is never known exactly, so we carry it as a small DISTRIBUTION rather
+ * than one number: a 50% confidence band, a 95% band, and the average. All are
+ * fractions (0.35 = 35%). low95 ≤ low50 ≤ avg ≤ high50 ≤ high95.
+ */
+export interface BodyFatDist {
+  low95: number;
+  low50: number;
+  avg: number;
+  high50: number;
+  high95: number;
+}
+
+/** Clamp a body-fat fraction to a sane range (0–75%). */
+const clampBf = (x: number): number => Math.max(0, Math.min(0.75, x));
+
+/**
+ * A sensible DEFAULT body-fat distribution around a single estimate: a symmetric
+ * ±3 points at 50% and ±6 points at 95% confidence (so the error margins are
+ * equal either side of the average). Only a starting point — the owner edits the
+ * five numbers on the stats page.
+ */
+export function defaultBodyFatDist(bodyFat: number): BodyFatDist {
+  const avg = clampBf(bodyFat);
+  return {
+    low95: clampBf(avg - 0.06),
+    low50: clampBf(avg - 0.03),
+    avg,
+    high50: clampBf(avg + 0.03),
+    high95: clampBf(avg + 0.06),
+  };
+}
+
+/** Order + clamp five raw body-fat inputs into a valid distribution (sorted, so
+ * the bands never cross even if typed out of order). */
+export function normalizeBodyFatDist(d: BodyFatDist): BodyFatDist {
+  const [low95, low50, avg, high50, high95] = [d.low95, d.low50, d.avg, d.high50, d.high95]
+    .map(clampBf)
+    .sort((a, b) => a - b);
+  return { low95: low95!, low50: low50!, avg: avg!, high50: high50!, high95: high95! };
+}
+
+export interface NffmiRange {
+  avg: number; lo50: number; hi50: number; lo95: number; hi95: number; leanAvg: number;
+}
+
+/**
+ * nFFMI as a RANGE, propagating the body-fat distribution's uncertainty. nFFMI
+ * falls as body fat rises (less lean mass), so the HIGH-fat end gives the LOW
+ * nFFMI and vice-versa — the band is flipped and returned already ascending
+ * (lo ≤ avg ≤ hi). Returns null if the base inputs can't yield a real number.
+ */
+export function nffmiRange(weight: number, height: number, dist: BodyFatDist): NffmiRange | null {
+  const at = (bf: number) => bodyComposition({ weight, height, bodyFat: bf });
+  const a = at(dist.avg);
+  const lo95 = at(dist.high95), lo50 = at(dist.high50), hi50 = at(dist.low50), hi95 = at(dist.low95);
+  if (!a || !lo95 || !lo50 || !hi50 || !hi95) return null;
+  return { avg: a.nffmi, lo50: lo50.nffmi, hi50: hi50.nffmi, lo95: lo95.nffmi, hi95: hi95.nffmi, leanAvg: a.leanMass };
+}
+
+
 /** Fraction of bodyweight a movement lifts. Exact match on the data's exercise name. */
 export const EXERCISE_BW_COEFF: Record<string, number> = {
   Squat: 0.6,

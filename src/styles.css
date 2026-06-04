@@ -124,9 +124,9 @@ body {
 /* Per-section version chips under the title (Graphs b1.2, Workouts b1.1, …). */
 /* Effort (SP) dropdown under the title — collapsed by default. */
 .effort-line {
-  margin: 0; border-bottom: 1px solid var(--line);
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.45rem 1.5rem; font-size: 0.75rem; color: var(--muted);
+  margin: -0.25rem 0 0; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.05rem 1.5rem 0.28rem; font-size: 0.62rem; color: var(--muted);
 }
 .effort-lbl { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .effort-total { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -442,6 +442,10 @@ main { padding-bottom: 5rem; }
 /* User view: every athlete but Adomas is locked out. */
 .athlete-chip.is-locked { opacity: 0.4; cursor: not-allowed; }
 .athlete-chip.is-locked:hover { color: var(--muted); border-color: var(--line); }
+/* Hidden by the Men/Women athlete-picker filter. */
+.athlete-chip.is-sexhidden { display: none; }
+/* Men/Women athlete-picker filter sits just above the chip row. */
+.ath-sex { margin: 0 0 0.6rem; }
 /* Collapsible "stats & training mix" so the page stays short by default. */
 /* Its own card so it clearly reads as a collapsible section. */
 .athlete-details {
@@ -470,6 +474,27 @@ main { padding-bottom: 5rem; }
 }
 .nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
 .nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
+.nffmi-ci { font-size: 0.7rem; font-weight: 700; opacity: 0.85; }
+.profile-edit {
+  font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 0.4rem;
+}
+.profile-edit:hover { color: var(--accent); border-color: var(--accent); }
+/* Edit-athlete-stats page. */
+.statsedit-body { margin-top: 0.85rem; max-width: 560px; }
+.se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; }
+.se-lbl { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
+.se-field input, .se-field select { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.se-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.8rem; }
+.se-bf { margin: 0.4rem 0 0.6rem; }
+.se-bf-lead { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
+.se-bf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; }
+.se-bf-grid .se-lbl { font-size: 0.64rem; }
+.se-live { padding: 0.5rem 0.7rem; background: var(--accent-soft); border-radius: 8px; font-size: 0.86rem; margin-bottom: 0.7rem; }
+.se-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.se-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 7px 16px; }
+.se-reset { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; }
+.se-reset:disabled { opacity: 0.5; cursor: default; }
 .athlete-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .athlete-stats:empty { display: none; }
 .stat-chip {
@@ -642,13 +667,13 @@ main { padding-bottom: 5rem; }
 .exl-table { margin: 0; font-size: 0.82rem; }
 .exl-table th, .exl-table td { padding: 4px 8px; }
 .exl-scale { width: 4.2rem; }
-/* Per-set edit: the ✎ button in the weight cell + the expandable edit row. */
-.set-edit {
-  margin-left: 0.4rem; padding: 0 4px; font: inherit; font-size: 0.85rem; line-height: 1;
-  background: none; border: 0; color: var(--muted); cursor: pointer; opacity: 0.6;
-}
-.set-edit:hover, .set-edit.is-open { color: var(--accent); opacity: 1; }
-.set-edit.is-edited { color: var(--accent); opacity: 1; }
+/* Per-set edit: tap anywhere on a set's row to open its edit panel (no pencil
+   button). The row shows it's tappable with a pointer cursor + hover tint. */
+.set-main { cursor: pointer; }
+.set-main:hover > td, .set-main.edit-open > td { background: var(--accent-soft); }
+/* A set that's been hand-edited carries a small gold stripe on the left so you
+   can spot your overrides at a glance (gold = edited; blue stays for links). */
+.set-main.is-edited > td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 .set-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; align-items: flex-end; padding: 0.3rem 0; }
 .set-edit-f { display: flex; flex-direction: column; gap: 2px; font-size: 0.72rem; color: var(--muted); }
 .set-edit-f input {
@@ -661,8 +686,10 @@ main { padding-bottom: 5rem; }
   background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
 }
 .set-edit-reset:hover { border-color: var(--accent); color: var(--accent); }
-/* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight). */
-.set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); margin-right: 3px; }
+/* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight).
+   It's a label, not a link, so it reads in muted grey — blue is reserved for
+   things you can actually tap through to. */
+.set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--muted); margin-right: 3px; }
 /* Effort tag from RIR: hard / mid / warm-up. */
 .set-eff { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; }
 .eff-hard { color: #fff; background: #c0392b; }
@@ -1019,6 +1046,9 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-year { overflow-x: auto; padding-bottom: 6px; margin: 0 0 0.4rem; }
 .hm-months { display: grid; gap: 3px; margin-bottom: 4px; }
 .hm-mlabel { font-size: 0.72rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+/* In the continuous Timeline view, January carries the year — make it pop so the
+   year boundaries are easy to spot. */
+.hm-mlabel.hm-yr { color: var(--text); font-weight: 800; }
 .hm-grid {
   display: grid; grid-template-rows: repeat(7, 18px); grid-auto-flow: column; grid-auto-columns: 18px;
   gap: 3px;
@@ -1725,8 +1755,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Category header rows splitting the codes list into groups. */
 .codes-cat > td {
   background: var(--accent-soft); font-weight: 700; font-size: 0.82rem;
-  padding: 7px 10px; border-top: 1px solid var(--line);
+  padding: 7px 10px; border-top: 1px solid var(--line); cursor: pointer; user-select: none;
 }
+.codes-cat:hover > td { filter: brightness(0.97); }
+.codes-cat-caret { display: inline-block; width: 0.9em; color: var(--muted); font-size: 0.8em; }
 .codes-cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; vertical-align: middle; }
 
 .health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
@@ -1766,18 +1798,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-row.is-soon .cl-ver { color: var(--muted); }
 .cl-row.is-soon .cl-title { color: var(--muted); }
 .cl-caret { flex: none; color: var(--muted); font-size: 0.75rem; transition: transform 0.15s; }
-.cl-row[open] .cl-caret { transform: rotate(180deg); color: var(--accent); }
-.cl-details { margin: 0 0 0.6rem; padding: 0 0 0 6.5rem; }
+.cl-row[open] > .cl-sum .cl-caret { transform: rotate(180deg); color: var(--accent); }
+/* Expanded body: one-line note, optional bullets, then any nested rows. */
+.cl-body { padding: 0 0 0.4rem; }
+.cl-bodynote { font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.5rem; }
+.cl-details { margin: 0 0 0.6rem; padding: 0 0 0 1rem; }
 .cl-details li { font-size: 0.82rem; color: var(--muted); margin: 2px 0; }
-/* Folded sub-versions inside a grouped minor. */
-.cl-children { margin: 0 0 0.7rem; padding: 0 0 0 6.5rem; }
-.cl-child { display: flex; align-items: baseline; gap: 0.6rem; padding: 3px 0; border-top: 1px solid var(--line); }
-.cl-cver { flex: 0 0 4rem; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 0.78rem; color: var(--accent); }
-.cl-cmid { flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.cl-ctitle { font-size: 0.8rem; font-weight: 600; color: var(--text); }
-.cl-cnote { font-size: 0.8rem; color: var(--muted); }
-.cl-csp { flex: none; font-size: 0.68rem; font-weight: 700; color: var(--gold); }
-@media (max-width: 560px) { .cl-details, .cl-children { padding-left: 1.25rem; } }
+/* Nesting: each deeper level indents a little so the tree reads at a glance.
+   Top-level chapters read boldest; deeper rows step down in size/weight. */
+.cl-d0 > .cl-sum { padding: 11px 2px; }
+.cl-d0 > .cl-sum .cl-title { font-size: 0.92rem; font-weight: 700; }
+.cl-row .cl-row { margin-left: 0.9rem; border-bottom: none; border-top: 1px solid var(--line); }
+.cl-d2 > .cl-sum .cl-ver, .cl-d2 > .cl-sum .cl-title { font-weight: 600; }
+.cl-d2 > .cl-sum .cl-title { color: var(--muted); }
+@media (max-width: 560px) { .cl-row .cl-row { margin-left: 0.55rem; } .cl-ver { flex-basis: 4.2rem; } }
 .health-section { font-size: 0.95rem; margin: 1.25rem 0 0.25rem; }
 
 /* Keep wide tables usable on narrow screens: let the panel scroll sideways
@@ -1838,3 +1872,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
   .data-table th, .data-table td { padding: 6px 8px; }
 }
+
+/* Workout-analysis view (TASK 1): labelled placeholder sections. */
+.wa-section { border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; margin: 0 0 0.85rem; background: var(--page); }
+.wa-section-title { margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 600; }
+.wa-placeholder { margin: 0; }

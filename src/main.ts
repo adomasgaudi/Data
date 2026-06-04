@@ -57,8 +57,12 @@ import { levelLabel, levelKey, defaultLevelScale } from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
+  type AthleteProfile,
   EXERCISE_BW_COEFF,
-  bodyComposition,
+  type BodyFatDist,
+  defaultBodyFatDist,
+  normalizeBodyFatDist,
+  nffmiRange,
   defaultBwCoeff,
   realPullupWeight,
   exerciseCategory,
@@ -85,7 +89,7 @@ import {
   type MuscleGroup,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, type Release } from "./changelog";
 import { SP_HISTORY } from "./spHistory";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -130,6 +134,7 @@ const els = {
   changelog: $("changelog"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
+  athleteSexFilter: $("athleteSexFilter"),
   athleteProfile: $("athleteProfile"),
   athleteStats: $("athleteStats"),
   momentum: $("momentum"),
@@ -216,6 +221,7 @@ const els = {
   bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
   codesTable: $("codesTable"),
+  statsEditBody: $("statsEditBody"),
   codesSearch: $<HTMLInputElement>("codesSearch"),
   groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
@@ -499,7 +505,7 @@ function athletePassesColiseum(username: string): boolean {
   const bwMin = numInput(els.bwMin);
   const bwMax = numInput(els.bwMax);
   if (sex === "all" && bwMin === null && bwMax === null) return true;
-  const p = ATHLETES[username];
+  const p = athProfile(username);
   if (!p) return false; // a filter is active but we have nothing to match on
   if (sex !== "all" && p.sex !== sex) return false;
   if (bwMin !== null && p.weight < bwMin) return false;
@@ -624,6 +630,53 @@ function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
   if (o?.scale !== undefined) return o.scale;
   return r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelValue) : 1;
+}
+
+// ---- Editable athlete stats (height / weight / age / sex / body-fat band) ----
+// Stored on this device, layered over the profile.ts ATHLETES baseline. Body fat
+// is kept as a 5-point distribution so any value derived from it (nFFMI) carries
+// equal error margins. athProfile() is the single accessor every view reads.
+interface AthleteStatsOverride {
+  weight?: number;
+  height?: number;
+  age?: number | null;
+  sex?: "m" | "f";
+  bf?: BodyFatDist;
+}
+const ATHLETE_STATS_KEY = "colosseum.athleteStats.v1";
+const athleteOverrides: Record<string, AthleteStatsOverride> = (() => {
+  try {
+    const raw = localStorage.getItem(ATHLETE_STATS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, AthleteStatsOverride>) : {};
+  } catch {
+    return {};
+  }
+})();
+function saveAthleteOverrides() {
+  try { localStorage.setItem(ATHLETE_STATS_KEY, JSON.stringify(athleteOverrides)); } catch { /* storage may be unavailable */ }
+}
+
+/** Effective profile for an athlete: the ATHLETES baseline with any on-device
+ * edits layered on top. bodyFat is the band's average when a band is set. */
+function athProfile(username: string): AthleteProfile | undefined {
+  const base = ATHLETES[username];
+  const ov = athleteOverrides[username];
+  if (!base && !ov) return undefined;
+  return {
+    height: ov?.height ?? base?.height ?? 0,
+    weight: ov?.weight ?? base?.weight ?? 0,
+    bodyFat: ov?.bf?.avg ?? base?.bodyFat ?? 0,
+    age: ov && "age" in ov ? (ov.age ?? null) : (base?.age ?? null),
+    sex: ov?.sex ?? base?.sex ?? "m",
+  };
+}
+
+/** The body-fat distribution for an athlete: their edited band, else a sensible
+ * symmetric default around the baseline estimate. */
+function bfDistFor(username: string): BodyFatDist {
+  const ov = athleteOverrides[username];
+  if (ov?.bf) return ov.bf;
+  return defaultBodyFatDist(athProfile(username)?.bodyFat ?? 0);
 }
 
 // ---- Last picked athlete: remembered across reloads ----
@@ -822,7 +875,7 @@ function computeRecord(r: SetRecord): SetRecord {
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
   // default only when the set didn't record one.
-  const bw = r.bodyweight ?? ATHLETES[r.username]?.weight ?? null;
+  const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
   // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
   return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
 }
@@ -1003,7 +1056,7 @@ function renderChangelog() {
   const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
-  const releaseCount = CHANGELOG.reduce((n, r) => n + (r.soon ? 0 : (r.children?.length ?? 1)), 0);
+  const releaseCount = CHANGELOG.reduce((n, r) => n + countReleases(r), 0);
   const header =
     `<p class="cl-summary muted">${releaseCount} releases · <strong>${fmtSp(TOTAL_LOG_SP)} SP</strong> logged in total ` +
     `<span class="cl-effort-note">· whole-site effort grade ${WEBSITE_EXACT_SP} (≈ ${WEBSITE_SP})</span></p>` +
@@ -1018,39 +1071,35 @@ function renderChangelog() {
         `<span class="cv-ver">${c.sp}<span class="cv-fib">≈${fibSp(c.sp)}</span></span></span>`,
     ).join("") +
     `</div></div>`;
-  const rows = CHANGELOG.map((r) => {
-    // Grouped minor: list each folded patch under the bullets.
-    const children = r.children?.length
-      ? `<div class="cl-children">` +
-        r.children
-          .map(
-            (c) =>
-              `<div class="cl-child"><span class="cl-cver">${escapeHtml(c.version)}</span>` +
-              `<span class="cl-cmid"><span class="cl-ctitle">${escapeHtml(c.title)}</span>` +
-              `<span class="cl-cnote">${escapeHtml(c.note)}</span></span>` +
-              `<span class="cl-csp">SP ${fmtSp(c.sp)}</span></div>`,
-          )
-          .join("") +
-        `</div>`
-      : "";
-    // Planned entries show a "soon" tag instead of an SP chip.
+  // Render the tree recursively. Every node is a <details> that starts CLOSED,
+  // so the page opens as a short list of chapters; the one-line note and any
+  // nested groups/releases only show once you expand a row. `depth` drives the
+  // left indent so the nesting reads at a glance.
+  const renderNode = (r: Release, depth: number): string => {
     const spOrTag = r.soon
       ? `<span class="cl-soon">soon</span>`
       : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>`;
+    const body =
+      `<div class="cl-body">` +
+      (r.note ? `<p class="cl-bodynote">${escapeHtml(r.note)}</p>` : "") +
+      (r.details?.length
+        ? `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
+        : "") +
+      (r.children?.length ? r.children.map((c) => renderNode(c, depth + 1)).join("") : "") +
+      `</div>`;
     return (
-      `<details class="cl-row${r.soon ? " is-soon" : ""}">` +
+      `<details class="cl-row cl-d${depth}${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
       `<span class="cl-ver">${escapeHtml(r.version)}</span>` +
-      `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span>` +
-      `<span class="cl-note">${escapeHtml(r.note)}</span></span>` +
+      `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span></span>` +
       spOrTag +
       `<span class="cl-caret">▾</span>` +
       `</summary>` +
-      `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>` +
-      children +
+      body +
       `</details>`
     );
-  }).join("");
+  };
+  const rows = CHANGELOG.map((r) => renderNode(r, 0)).join("");
   els.changelog.innerHTML = header + sections + rows;
 
   // SP-over-time line: cumulative story points across every release commit,
@@ -1245,7 +1294,7 @@ function renderLeaderboard() {
   });
   const entries = leaderboard(filtered, exercise, formula, strengthAsOf());
   const perBw = (username: string, e1rm: number): number | null => {
-    const bw = ATHLETES[username]?.weight;
+    const bw = athProfile(username)?.weight;
     return bw ? e1rm / bw : null;
   };
 
@@ -1604,8 +1653,12 @@ function buildAthleteChips() {
   syncAthleteChips();
 }
 
+// Athlete-picker sex filter: "all" shows everyone, "m"/"f" narrows the chips.
+let athleteSexFilter: "all" | "m" | "f" = "all";
+
 /** Mark the chip matching the selected athlete active (chips mirror the select).
- * In user view every chip but Adomas's is disabled, so the user can only pick him. */
+ * In user view every chip but Adomas's is disabled, so the user can only pick him.
+ * The Men/Women filter additionally hides chips of the other sex. */
 function syncAthleteChips() {
   const active = els.athlete.value;
   const locked = lockedUsername(); // null in admin; the locked athlete otherwise
@@ -1613,6 +1666,11 @@ function syncAthleteChips() {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
+    // Hide chips that don't match the chosen sex (the active one stays visible
+    // so you can always see who's currently selected).
+    const sex = athProfile(btn.dataset.username ?? "")?.sex;
+    const sexHidden = athleteSexFilter !== "all" && sex !== athleteSexFilter && !on;
+    btn.classList.toggle("is-sexhidden", sexHidden);
     const disabled = locked !== null && btn.dataset.username !== locked;
     btn.disabled = disabled;
     btn.classList.toggle("is-locked", disabled);
@@ -1646,28 +1704,36 @@ function renderAthlete() {
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
  * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
-  const p = ATHLETES[els.athlete.value];
+  const username = els.athlete.value;
+  const p = athProfile(username);
+  const editBtn = `<button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button>`;
   if (!p) {
-    els.athleteProfile.textContent = "No profile on file";
+    els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
-  const specs = [`${p.weight} kg`, `${p.height} cm`, `${pct(p.bodyFat)} body fat`];
+  // Body fat is a band, not a point — show its average with the 95% spread, so
+  // any value derived from it reads with its uncertainty.
+  const dist = bfDistFor(username);
+  const bfLine = `${pct(dist.avg)} body fat <span class="muted">(95% ${pct(dist.low95)}–${pct(dist.high95)})</span>`;
+  const specs = [`${p.weight} kg`, `${p.height} cm`, bfLine];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
 
-  const comp = bodyComposition(p);
-  if (!comp) {
-    els.athleteProfile.innerHTML = specLine;
+  const range = nffmiRange(p.weight, p.height, dist);
+  if (!range) {
+    els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  // nFFMI = lean-mass index normalised to 1.8 m. Lead with it; show the lean
-  // mass it implies in the tooltip so the number is traceable to the specs.
+  // nFFMI = lean-mass index normalised to 1.8 m, shown with the ± error margin
+  // the body-fat band implies (half the 95% width).
+  const ci = (range.hi95 - range.lo95) / 2;
   const badge =
-    `<span class="nffmi-badge" title="Normalised fat-free mass index — lean mass ` +
-    `${comp.leanMass.toFixed(1)} kg ÷ height², scaled to 1.8 m. ~22 trained, ~25 natural ceiling.">` +
-    `<span class="nffmi-val">${comp.nffmi.toFixed(1)}</span>` +
-    `<span class="nffmi-lbl">nFFMI</span></span>`;
-  els.athleteProfile.innerHTML = badge + specLine;
+    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling. 95% band ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} from the body-fat uncertainty.">` +
+    `<span class="nffmi-val">${range.avg.toFixed(1)}</span>` +
+    `<span class="nffmi-lbl">nFFMI</span>` +
+    (ci >= 0.05 ? `<span class="nffmi-ci">±${ci.toFixed(1)}</span>` : "") +
+    `</span>`;
+  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn;
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).
@@ -1802,71 +1868,86 @@ function renderTrainBreakdown() {
  * So a darker muscle means "stronger here", not "trained more". Untrained or
  * unscored regions show light grey. Hover a region for the percentile.
  */
+/** Each muscle region is read off a specific STRENGTH FEAT (the owner's choice):
+ * the region's shade and number come from the athlete's best estimated 1RM on
+ * that lift. names[] lists the lifts that count for the region (best of any). */
+const MUSCLE_FEATS: { cat: TrainingCategory; label: string; feat: string; names: string[] }[] = [
+  { cat: "Legs", label: "Quads", feat: "Squat", names: ["Squat", "Smith Machine Squat", "Front Squat"] },
+  { cat: "Legs", label: "Glutes", feat: "Squat", names: ["Squat", "Smith Machine Squat", "Hip Thrust"] },
+  { cat: "Legs", label: "Hamstrings / lower back", feat: "Deadlift", names: ["Deadlift", "Romanian Deadlift", "Stiff Leg Deadlift"] },
+  { cat: "Back", label: "Back (lats)", feat: "Pull Ups", names: ["Pull Ups", "Chin Ups", "Lat Pulldown"] },
+  { cat: "Chest", label: "Chest", feat: "Push Ups", names: ["Push Ups", "Bench Press"] },
+  { cat: "Shoulders", label: "Shoulders", feat: "Shoulder Press", names: ["Shoulder Press", "Seated Shoulder Press", "Dumbbell Shoulder Press", "Overhead Press", "Military Press"] },
+  { cat: "Arms", label: "Triceps", feat: "Dips", names: ["Dips", "Seated Dip Machine"] },
+  { cat: "Arms", label: "Biceps", feat: "Pull Ups", names: ["Pull Ups", "Chin Ups", "Barbell Curl"] },
+  { cat: "Core", label: "Core (abs)", feat: "Decline Sit Ups", names: ["Decline Sit Up", "Decline Sit Ups", "Sit Ups", "Hanging Leg Raise"] },
+];
+
 function renderMuscleMap() {
-  // Best strength percentile per category for this athlete (percentile is 0..1
-  // in the data; ×100 for display). Falls back to grey where there's no score.
   const username = els.athlete.value;
-  const byCat = new Map<TrainingCategory, number>();
-  for (const r of activeRecords()) {
-    if (r.username !== username || r.percentile === null) continue;
-    const cat = exerciseCategory(r.exerciseName);
-    const cur = byCat.get(cat);
-    if (cur === undefined || r.percentile > cur) byCat.set(cat, r.percentile);
-  }
-  if (byCat.size === 0) {
-    els.muscleMapBody.innerHTML = `<p class="muted">No strength scores yet for this athlete.</p>`;
+  // Best estimated 1RM per exercise for this athlete, then the best for each
+  // region's feat list. Drives both the shade and the kg shown.
+  const prByEx = new Map<string, number>();
+  for (const pr of personalRecords(
+    filterRecords(computedRecords(), { usernames: [username], excludeDropsets: true }),
+    currentFormula(),
+    strengthAsOf(),
+  )) prByEx.set(pr.exerciseName, pr.bestE1rm.e1rm);
+  const best1rm = (names: string[]): number | null => {
+    let best: number | null = null;
+    for (const n of names) { const v = prByEx.get(n); if (v != null && (best === null || v > best)) best = v; }
+    return best;
+  };
+  const byLabel = new Map<string, number | null>();
+  for (const f of MUSCLE_FEATS) byLabel.set(f.label, best1rm(f.names));
+  const maxFeat = Math.max(0, ...[...byLabel.values()].filter((v): v is number => v != null));
+  if (maxFeat === 0) {
+    els.muscleMapBody.innerHTML = `<p class="muted">No 1RM on the key lifts yet (squat, deadlift, pull-ups, push-ups, dips, shoulder press, decline sit-ups).</p>`;
     return;
   }
-  // Opacity scales with the strength percentile itself (0..1 → 0.15..1), so the
-  // shade reads as an absolute strength level, comparable across muscles.
-  const fillFor = (cat: TrainingCategory): string => {
-    const pct = byCat.get(cat);
-    if (pct === undefined) return `fill:#e7e6e1`; // no strength score → light grey
-    const op = 0.15 + 0.85 * Math.max(0, Math.min(1, pct));
+  const fillFor = (label: string, cat: TrainingCategory): string => {
+    const v = byLabel.get(label);
+    if (v == null) return `fill:#e7e6e1`; // no feat logged → light grey
+    const op = 0.2 + 0.8 * Math.max(0, Math.min(1, v / maxFeat));
     return `fill:${CATEGORY_COLORS[cat]};fill-opacity:${op.toFixed(2)}`;
   };
-  const title = (label: string, cat: TrainingCategory): string => {
-    const pct = byCat.get(cat);
-    return pct === undefined ? `${label}: no strength score` : `${label}: ${Math.round(pct * 100)}th percentile strength`;
+  const reg = (cat: TrainingCategory, label: string, shapes: string) => {
+    const v = byLabel.get(label);
+    const f = MUSCLE_FEATS.find((x) => x.label === label)!;
+    const t = v == null ? `${label}: no ${f.feat} logged` : `${label} — ${f.feat}: best 1RM ${fmt(v)} kg`;
+    return `<g style="${fillFor(label, cat)}"><title>${escapeHtml(t)}</title>${shapes}</g>`;
   };
-  // A region = one or more SVG shapes sharing a category's fill + tooltip.
-  const reg = (cat: TrainingCategory, label: string, shapes: string) =>
-    `<g style="${fillFor(cat)}"><title>${escapeHtml(title(label, cat))}</title>${shapes}</g>`;
 
-  // --- FRONT view (chest, abs, biceps, quads, front delts) ---
   const front =
     `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Front muscle map">` +
-    // head + neck (neutral)
     `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
     reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
     reg("Chest", "Chest", `<path d="M44 38 H76 Q80 54 60 58 Q40 54 44 38 Z"/>`) +
-    reg("Arms", "Arms (biceps)", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
+    reg("Arms", "Biceps", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
     reg("Core", "Core (abs)", `<rect x="48" y="60" width="24" height="34" rx="4"/>`) +
-    reg("Legs", "Legs (quads)", `<rect x="46" y="98" width="12" height="54" rx="5"/><rect x="62" y="98" width="12" height="54" rx="5"/>`) +
+    reg("Legs", "Quads", `<rect x="46" y="98" width="12" height="54" rx="5"/><rect x="62" y="98" width="12" height="54" rx="5"/>`) +
     `<g fill="#d9d7d0"><rect x="47" y="154" width="10" height="40" rx="4"/><rect x="63" y="154" width="10" height="40" rx="4"/></g>` +
     `</svg>`;
 
-  // --- BACK view (upper back/lats, rear delts, triceps, glutes, hamstrings) ---
   const back =
     `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Back muscle map">` +
     `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
-    reg("Shoulders", "Rear shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
-    reg("Back", "Back (lats/traps)", `<path d="M44 38 H76 L74 74 Q60 82 46 74 Z"/>`) +
-    reg("Arms", "Arms (triceps)", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
+    reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
+    reg("Back", "Back (lats)", `<path d="M44 38 H76 L74 74 Q60 82 46 74 Z"/>`) +
+    reg("Arms", "Triceps", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
     reg("Legs", "Glutes", `<path d="M47 92 Q60 86 73 92 Q74 104 60 104 Q46 104 47 92 Z"/>`) +
-    reg("Legs", "Legs (hamstrings)", `<rect x="46" y="106" width="12" height="48" rx="5"/><rect x="62" y="106" width="12" height="48" rx="5"/>`) +
+    reg("Legs", "Hamstrings / lower back", `<rect x="46" y="106" width="12" height="48" rx="5"/><rect x="62" y="106" width="12" height="48" rx="5"/>`) +
     `<g fill="#d9d7d0"><rect x="47" y="156" width="10" height="38" rx="4"/><rect x="63" y="156" width="10" height="38" rx="4"/></g>` +
     `</svg>`;
 
-  // Legend: the mapped categories, strongest first, with their percentile.
-  const mapped: TrainingCategory[] = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core"];
-  const legend = mapped
-    .filter((c) => byCat.get(c) !== undefined)
-    .sort((a, b) => (byCat.get(b) ?? 0) - (byCat.get(a) ?? 0))
+  // Legend: each region's feat + best 1RM, strongest first.
+  const legend = MUSCLE_FEATS
+    .filter((f) => byLabel.get(f.label) != null)
+    .sort((a, b) => (byLabel.get(b.label) ?? 0) - (byLabel.get(a.label) ?? 0))
     .map(
-      (c) =>
-        `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[c]}"></span>` +
-        `${c} <span class="muted">${pct(byCat.get(c) ?? 0)}</span></span>`,
+      (f) =>
+        `<span class="mm-leg"><span class="mm-swatch" style="background:${CATEGORY_COLORS[f.cat]}"></span>` +
+        `${escapeHtml(f.label)} <span class="muted">${f.feat} ${fmt(byLabel.get(f.label)!)}kg</span></span>`,
     )
     .join("");
 
@@ -1874,13 +1955,13 @@ function renderMuscleMap() {
     `<div class="mm-views"><figure><figcaption class="muted">Front</figcaption>${front}</figure>` +
     `<figure><figcaption class="muted">Back</figcaption>${back}</figure></div>` +
     `<div class="mm-legend">${legend}</div>` +
-    `<p class="muted mm-note">Shaded by strength — best StrengthLevel percentile per muscle group (darker = stronger). Hover a region for its score.</p>`;
+    `<p class="muted mm-note">Shaded by your best estimated 1RM on each muscle's key lift — squat (quads/glutes), deadlift (hams/lower back), pull-ups (back), push-ups (chest), shoulder press, dips (triceps), decline sit-ups (core). Darker = stronger; hover a region for the kg.</p>`;
 }
 
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
 function athleteContext(): string {
   const username = els.athlete.value;
-  const p = ATHLETES[username];
+  const p = athProfile(username);
   const counts = exerciseCountsForUser(activeRecords(), username);
   const workouts = workoutsForUser(activeRecords(), username);
   const totalSets = counts.reduce((s, c) => s + c.count, 0);
@@ -3070,10 +3151,10 @@ function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
-  if (toggleSetEdit(target)) return; // ✎ → open/close this set's edit row
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+  if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
   // Category mode: tapping a category header collapses/expands its exercises.
   const catRow = target.closest("tr.ex-cat-row") as HTMLTableRowElement | null;
@@ -3170,7 +3251,9 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 
 // ---- Workouts overview: a per-year heatmap of training days ----
 let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
-let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
+// "ribbon" = one continuous strip flowing across years (default); "single" = one
+// calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
+let heatScope: "ribbon" | "single" | "all" = "ribbon";
 let heatFilter = "cat:Legs"; // "all" | "cat:<bodypart>" | "mus:<muscle>" | "fun:<pattern>" | "ex:<exercise>"
 let heatLastGroup = "cat:Legs"; // last non-"all" filter, for the group/all quick toggle
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
@@ -3285,11 +3368,73 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
   return { html, days, totalSets };
 }
 
-/** Single-year / All-years toggle. */
+/** The whole training history as ONE continuous heatmap that flows across year
+ * boundaries (weeks as columns, Mon→Sun rows) — no year breaks. Month labels run
+ * along the top; January (and the very first month) carry the year so you can see
+ * where each year begins. `counts` is the filtered day→sets map. The strip runs
+ * from the Monday on/before the first training day to the Sunday on/after the
+ * later of the last training day and today, so it always reaches the present. */
+function ribbonGridHtml(counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+  const dates = [...trainingDays().keys()].sort(); // full range, filter-independent
+  if (dates.length === 0) {
+    return { html: `<div class="hm-empty muted">No training logged yet.</div>`, days: 0, totalSets: 0 };
+  }
+  const mk = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y!, m! - 1, d!);
+  };
+  const start = mk(dates[0]!);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to the Monday of that week
+  const lastIso = dates[dates.length - 1]!;
+  const end = mk(lastIso > todayIso() ? lastIso : todayIso());
+  end.setDate(end.getDate() + (6 - ((end.getDay() + 6) % 7))); // forward to the Sunday of that week
+  const totalDays = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const numWeeks = Math.ceil(totalDays / 7);
+
+  const cells: string[] = [];
+  const labels: string[] = [];
+  let days = 0;
+  let totalSets = 0;
+  let prevMonth = -1;
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const col = Math.floor(i / 7) + 1; // 1-based grid column (start is a Monday, so weeks align)
+    const month = d.getMonth();
+    if (month !== prevMonth) {
+      // Show the year on January and on the first label so each year's start is clear.
+      const withYear = month === 0 || labels.length === 0;
+      const text = withYear ? `${MONTH_ABBR[month]} ${d.getFullYear()}` : MONTH_ABBR[month]!;
+      labels.push(`<span class="hm-mlabel${month === 0 ? " hm-yr" : ""}" style="grid-column-start:${col}">${text}</span>`);
+      prevMonth = month;
+    }
+    const iso = `${d.getFullYear()}-${String(month + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const sets = counts.get(iso) ?? 0;
+    if (sets) {
+      days++;
+      totalSets += sets;
+    }
+    const isToday = iso === todayIso();
+    const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
+    const mOdd = month % 2 === 1 ? " hm-modd" : "";
+    const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    cells.push(
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+    );
+  }
+  const html =
+    `<div class="hm-year"><div class="hm-cal">` +
+    `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels.join("")}</div>` +
+    `<div class="hm-grid">${cells.join("")}</div>` +
+    `</div></div>`;
+  return { html, days, totalSets };
+}
+
+/** Heatmap scope toggle: Timeline (one flowing strip) / Single year / All years. */
 function heatScopeToggle(): string {
-  const btn = (s: "single" | "all", label: string) =>
+  const btn = (s: "ribbon" | "single" | "all", label: string) =>
     `<button type="button" class="cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}">${label}</button>`;
-  return `<div class="cal-mode">${btn("single", "Single year")}${btn("all", "All years")}</div>`;
+  return `<div class="cal-mode">${btn("ribbon", "Timeline")}${btn("single", "Single year")}${btn("all", "All years")}</div>`;
 }
 
 /** Human label for the active heatmap filter value. */
@@ -3360,6 +3505,21 @@ function renderWorkoutCalendar() {
     `<span class="hm-cell lvl-5"></span> More</div>`;
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
+
+  if (heatScope === "ribbon") {
+    const g = ribbonGridHtml(counts);
+    const oldest = years[years.length - 1]!;
+    const newest = years[0]!;
+    const span = oldest === newest ? `${newest}` : `${oldest}–${newest}`;
+    els.workoutCalendar.innerHTML =
+      controls +
+      tagHint +
+      `<div class="cal-head"><strong>${span}</strong>${count(g)}</div>` +
+      g.html +
+      legend;
+    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    return;
+  }
 
   if (heatScope === "all") {
     const blocks = years
@@ -3565,7 +3725,6 @@ function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
-  if (toggleSetEdit(target)) return; // ✎ → open/close this set's edit row
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -3611,6 +3770,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+  if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
   // An exercise name in an expanded day -> jump to that exercise's drill-in on
   // the Exercises sub-tab (the SAME detail view the Exercises list opens, so
@@ -3891,12 +4051,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     ? `<span class="set-eff eff-${eff}" title="${eff === "hard" ? "Hard set — RIR under 3" : eff === "mid" ? `Mid set — RIR 3–${isBigLegsLift(s.exerciseName) ? 8 : 6} (working, not to failure)` : "Warm-up — well short of failure"}">${eff === "warmup" ? "Warm" : eff === "hard" ? "Hard" : "Mid"}</span>`
     : "";
   const edited = setOverrides[sid] !== undefined;
-  const editBtn =
-    `<button type="button" class="set-edit${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
-    `title="Edit this set (weight, reps, bodyweight, scale)" aria-label="Edit set">✎</button>`;
+  // The whole set row is the edit handle now — tap anywhere on it (except the
+  // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
+  // this set's edit panel. No separate ✎ pencil button.
   const main =
-    `<tr${note ? ' class="set-row has-note"' : ""}>` +
-    `<td class="num wcell">${effTag}${preview}${lvlTag}${wr(s.weight, s.reps)}${editBtn}</td>` +
+    `<tr class="set-main${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
+    `title="Tap to edit this set (weight, reps, bodyweight, scale)">` +
+    `<td class="num wcell">${effTag}${preview}${lvlTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
@@ -3915,7 +4076,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // Edit row: tweak this set's weight / reps / bodyweight / scaling factor. RIR is
   // the dropdown in the row itself. Bodyweight is just for this set (placeholder
   // shows the default). Blank a field to clear that one edit.
-  const dfltBw = raw.bodyweight ?? ATHLETES[s.username]?.weight ?? null;
+  const dfltBw = raw.bodyweight ?? athProfile(s.username)?.weight ?? null;
   const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
     `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
@@ -4012,7 +4173,7 @@ function toggleE1rmFormula(target: HTMLElement): boolean {
   let sib = btn.closest("tr")?.nextElementSibling ?? null;
   while (sib && !sib.classList.contains("e1rm-formula-row")) {
     // Stop if we hit the next set's row rather than this set's formula row.
-    if (sib.classList.contains("set-row") || sib.querySelector(".e1rm-btn")) break;
+    if (sib.classList.contains("set-main") || sib.querySelector(".e1rm-btn")) break;
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("e1rm-formula-row")) {
@@ -4032,7 +4193,7 @@ function togglePrirFormula(target: HTMLElement): boolean {
   let sib = btn.closest("tr")?.nextElementSibling ?? null;
   while (sib && !sib.classList.contains("prir-formula-row")) {
     // Stop if we reach the next set's row rather than this set's explanation.
-    if (sib.classList.contains("set-row") || sib.querySelector(".prir-btn")) break;
+    if (sib.classList.contains("set-main") || sib.querySelector(".prir-btn")) break;
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("prir-formula-row")) {
@@ -4042,19 +4203,21 @@ function togglePrirFormula(target: HTMLElement): boolean {
   return true;
 }
 
-/** Click the ✎ edit button: expand/collapse this set's edit row (scan forward
- * past the note/formula/prir sub-rows to it). Shared by both sets tables. */
+/** Tap a set's main row to expand/collapse its edit panel (weight/reps/bw/scale).
+ * Runs LAST in the click flow so the inner 1RM / pRIR / note / RIR controls keep
+ * their own taps. Scans forward past the note/formula/prir sub-rows to this set's
+ * edit row. Shared by both sets tables. */
 function toggleSetEdit(target: HTMLElement): boolean {
-  const btn = target.closest<HTMLElement>(".set-edit");
-  if (!btn) return false;
-  let sib = btn.closest("tr")?.nextElementSibling ?? null;
+  const row = target.closest<HTMLElement>("tr.set-main");
+  if (!row) return false;
+  let sib = row.nextElementSibling;
   while (sib && !sib.classList.contains("set-edit-row")) {
-    if (sib.querySelector(".set-edit")) break; // reached the next set's main row
+    if (sib.classList.contains("set-main")) break; // reached the next set's main row
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("set-edit-row")) {
     sib.toggleAttribute("hidden");
-    btn.classList.toggle("is-open");
+    row.classList.toggle("edit-open");
   }
   return true;
 }
@@ -4332,6 +4495,19 @@ function renderBwGroupBar(): void {
 
 // ---- Exercise codes tab: rename the short code shown for each lift ----
 let codesQuery = "";
+// Which category sections are collapsed in the Codes list, remembered on device.
+const CODES_COLLAPSED_KEY = "colosseum.codesCollapsed.v1";
+const codesCollapsed: Set<string> = (() => {
+  try {
+    const a = JSON.parse(localStorage.getItem(CODES_COLLAPSED_KEY) ?? "[]");
+    return new Set<string>(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+})();
+function saveCodesCollapsed() {
+  try { localStorage.setItem(CODES_COLLAPSED_KEY, JSON.stringify([...codesCollapsed])); } catch { /* storage may be unavailable */ }
+}
 
 /** Render the editable exercise-code list, GROUPED BY CATEGORY (most-trained
  * first within each), searchable — so the codes aren't a confusing mix. */
@@ -4373,14 +4549,20 @@ function renderCodesTab(): void {
   };
 
   const head = `<thead><tr><th>Exercise</th><th>Code</th><th class="num">Sets</th></tr></thead>`;
+  // While searching, force every section open so matches aren't hidden in a
+  // collapsed group.
+  const searching = q.length > 0;
   const body = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
     .map((cat) => {
       const list = byCat.get(cat)!;
+      const collapsed = !searching && codesCollapsed.has(cat);
       const header =
-        `<tr class="codes-cat"><td colspan="3">` +
+        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="3">` +
+        `<span class="codes-cat-caret">${collapsed ? "▸" : "▾"}</span>` +
         `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
         `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
-      return header + list.map(rowHtml).join("");
+      const rows = collapsed ? "" : list.map(rowHtml).join("");
+      return header + rows;
     })
     .join("");
   els.codesTable.innerHTML = names.length
@@ -4400,11 +4582,128 @@ function setupCodesTab(): void {
     renderAll();
   });
   els.codesTable.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-reset]");
+    const target = e.target as HTMLElement;
+    // Collapse / expand a category section.
+    const catRow = target.closest<HTMLElement>("tr.codes-cat");
+    if (catRow?.dataset.codescat) {
+      const cat = catRow.dataset.codescat;
+      if (codesCollapsed.has(cat)) codesCollapsed.delete(cat);
+      else codesCollapsed.add(cat);
+      saveCodesCollapsed();
+      renderCodesTab();
+      return;
+    }
+    const btn = target.closest<HTMLElement>("[data-reset]");
     if (!btn?.dataset.reset) return;
     setCodeOverride(btn.dataset.reset, ""); // blank clears the override
     renderCodesTab();
     renderAll();
+  });
+}
+
+// ---- Edit athlete stats page ----
+let statsEditUser = ""; // which athlete the editor is showing
+
+/** Open the stats editor for one athlete (from the ✎ Edit button on the card). */
+function openStatsEditor(username: string): void {
+  statsEditUser = username;
+  switchTopTab("statsedit");
+}
+
+/** Render the editable stats form for `statsEditUser` (defaults to the selected
+ * athlete). Body-fat is five % inputs (95/50 band + average); a live nFFMI range
+ * shows how the band propagates. */
+function renderStatsEdit(): void {
+  const users = distinctUsers(data.records);
+  if (!statsEditUser || !users.some((u) => u.username === statsEditUser))
+    statsEditUser = els.athlete.value || users[0]?.username || "";
+  const username = statsEditUser;
+  const p = athProfile(username);
+  const dist = bfDistFor(username);
+  const edited = !!athleteOverrides[username];
+  const opt = (u: { username: string; user: string }) =>
+    `<option value="${escapeHtml(u.username)}"${u.username === username ? " selected" : ""}>${escapeHtml(u.user)}</option>`;
+  const num = (cls: string, label: string, value: number | null, step = "1", hint = "") =>
+    `<label class="se-field"><span class="se-lbl">${label}</span>` +
+    `<input class="${cls}" type="number" step="${step}" inputmode="decimal" value="${value ?? ""}" />` +
+    (hint ? `<span class="se-hint muted">${hint}</span>` : "") + `</label>`;
+  const bfPct = (v: number) => Math.round(v * 1000) / 10; // fraction → %
+  const range = p ? nffmiRange(p.weight, p.height, dist) : null;
+  const live = range
+    ? `nFFMI <strong>${range.avg.toFixed(1)}</strong> <span class="muted">· 95% ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} · 50% ${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}</span>`
+    : `<span class="muted">Enter weight & height for nFFMI</span>`;
+
+  els.statsEditBody.innerHTML =
+    `<label class="se-field se-pick"><span class="se-lbl">Athlete</span><select id="seAthlete">${users.map(opt).join("")}</select></label>` +
+    `<div class="se-grid">` +
+    num("se-weight", "Weight (kg)", p?.weight ?? null, "0.5") +
+    num("se-height", "Height (cm)", p?.height ?? null, "1") +
+    num("se-age", "Age", p?.age ?? null, "1") +
+    `<label class="se-field"><span class="se-lbl">Sex</span><select class="se-sex">` +
+    `<option value="m"${p?.sex === "m" ? " selected" : ""}>Male</option>` +
+    `<option value="f"${p?.sex === "f" ? " selected" : ""}>Female</option></select></label>` +
+    `</div>` +
+    `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high)</div><div class="se-bf-grid">` +
+    num("se-bf-low95", "95% low", bfPct(dist.low95), "0.5") +
+    num("se-bf-low50", "50% low", bfPct(dist.low50), "0.5") +
+    num("se-bf-avg", "average", bfPct(dist.avg), "0.5") +
+    num("se-bf-high50", "50% high", bfPct(dist.high50), "0.5") +
+    num("se-bf-high95", "95% high", bfPct(dist.high95), "0.5") +
+    `</div></div>` +
+    `<div class="se-live">${live}</div>` +
+    `<div class="se-actions">` +
+    `<button type="button" class="se-save">Save</button>` +
+    `<button type="button" class="se-reset"${edited ? "" : " disabled"}>Reset to default</button>` +
+    `<span class="se-msg muted">${edited ? "Edited on this device." : "Using the built-in defaults."}</span>` +
+    `</div>`;
+}
+
+/** Read the form, store the override, refresh everything. */
+function saveStatsEdit(): void {
+  const username = statsEditUser;
+  if (!username) return;
+  const root = els.statsEditBody;
+  const numOf = (cls: string): number | undefined => {
+    const v = parseFloat(root.querySelector<HTMLInputElement>(`.${cls}`)?.value ?? "");
+    return Number.isFinite(v) ? v : undefined;
+  };
+  const ageRaw = root.querySelector<HTMLInputElement>(".se-age")?.value ?? "";
+  const ageVal = ageRaw.trim() === "" ? null : Math.round(parseFloat(ageRaw));
+  const bf = (cls: string, fallback: number) => {
+    const v = numOf(cls);
+    return v === undefined ? fallback : v / 100; // % → fraction
+  };
+  const d = bfDistFor(username);
+  const ov: AthleteStatsOverride = {
+    age: ageVal,
+    sex: (root.querySelector<HTMLSelectElement>(".se-sex")?.value as "m" | "f") ?? "m",
+    bf: normalizeBodyFatDist({
+      low95: bf("se-bf-low95", d.low95), low50: bf("se-bf-low50", d.low50),
+      avg: bf("se-bf-avg", d.avg), high50: bf("se-bf-high50", d.high50), high95: bf("se-bf-high95", d.high95),
+    }),
+  };
+  const w = numOf("se-weight"); if (w !== undefined) ov.weight = w;
+  const h = numOf("se-height"); if (h !== undefined) ov.height = h;
+  athleteOverrides[username] = ov;
+  saveAthleteOverrides();
+  renderStatsEdit();
+  renderAll();
+}
+
+function setupStatsEdit(): void {
+  els.statsEditBody.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.id === "seAthlete") { statsEditUser = (t as HTMLSelectElement).value; renderStatsEdit(); }
+  });
+  els.statsEditBody.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest(".se-save")) saveStatsEdit();
+    else if (t.closest(".se-reset")) {
+      delete athleteOverrides[statsEditUser];
+      saveAthleteOverrides();
+      renderStatsEdit();
+      renderAll();
+    }
   });
 }
 
@@ -4573,7 +4872,7 @@ function prefillTestFromPick() {
   }
   els.calcWeight.value = String(best.weight);
   els.calcReps.value = String(best.reps);
-  els.calcBw.value = String(best.bodyweight ?? ATHLETES[username]?.weight ?? els.calcBw.value);
+  els.calcBw.value = String(best.bodyweight ?? athProfile(username)?.weight ?? els.calcBw.value);
   els.calcCoeff.value = String(coeffFor(exName));
   const label = els.testAthlete.selectedOptions[0]?.textContent ?? username;
   els.testPickHint.textContent =
@@ -4924,13 +5223,13 @@ async function init() {
   els.changelogVer.textContent = CURRENT_VERSION;
   renderChangelog();
 
-  // Whole-site effort (SP) under the title — just the total and its Fibonacci
-  // grade. The per-part breakdown lives in Settings → Version history.
+  // Whole-site effort (SP) under the title — uses the SAME auto-summed total as
+  // the Version-history menu (TOTAL_LOG_SP), so the two can never disagree.
   const effortSummary = document.getElementById("effortSummary");
   if (effortSummary)
     effortSummary.innerHTML =
       `<span class="effort-lbl">Effort</span>` +
-      `<span class="effort-total">${WEBSITE_EXACT_SP} SP <span class="effort-fib">≈ ${WEBSITE_SP}</span></span>`;
+      `<span class="effort-total">${TOTAL_LOG_SP} SP</span>`;
 
   renderStatus();
   renderHealth();
@@ -4940,6 +5239,11 @@ async function init() {
   renderDataTab();
   setupAddTab();
   setupCodesTab();
+  setupStatsEdit();
+  els.athleteProfile.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-editstats]");
+    if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
+  });
   setupGroupsView();
   setupTeamView();
   setupChecklists();
@@ -5000,6 +5304,15 @@ async function init() {
   els.excludeDropsets.addEventListener("change", renderAll);
   els.athlete.addEventListener("change", renderAthlete);
   // Clicking a custom chip drives the hidden <select> (single source of truth).
+  els.athleteSexFilter.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
+    const v = btn?.dataset.athsex;
+    if (v !== "all" && v !== "m" && v !== "f") return;
+    athleteSexFilter = v;
+    for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
+      b.classList.toggle("is-active", b.dataset.athsex === v);
+    syncAthleteChips(); // re-apply the visible/hidden chip set
+  });
   els.athleteChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
     if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
@@ -5033,7 +5346,8 @@ async function init() {
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
-      heatScope = scopeBtn.dataset.heatScope === "all" ? "all" : "single";
+      const v = scopeBtn.dataset.heatScope;
+      heatScope = v === "all" ? "all" : v === "single" ? "single" : "ribbon";
       return renderWorkoutCalendar();
     }
     const nav = target.closest<HTMLElement>(".cal-nav");
@@ -5492,7 +5806,7 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     const coeff = coeffFor(r.exerciseName);
     const realAdded = realPullupWeight(r.exerciseName, logged);
     const perSet = r.bodyweight !== null && r.bodyweight !== undefined;
-    const bw = r.bodyweight ?? ATHLETES[r.username]?.weight ?? null;
+    const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
     const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)
     const cappedReps = r.reps === null ? null : Math.min(r.reps, MAX_1RM_REPS);
     const overCap = r.reps !== null && r.reps > MAX_1RM_REPS;
@@ -5748,7 +6062,7 @@ function manualToRecord(m: ManualEntry): SetRecord {
     user: m.user,
     username: m.username,
     date: m.date,
-    bodyweight: ATHLETES[m.username]?.weight ?? null,
+    bodyweight: athProfile(m.username)?.weight ?? null,
     exerciseName: m.exerciseName,
     setNumber: 1,
     weight: m.weight,
@@ -6469,6 +6783,7 @@ function switchTopTab(name: string) {
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "codes") renderCodesTab();
+  if (name === "statsedit") renderStatsEdit();
   updateBottomNav();
 }
 
