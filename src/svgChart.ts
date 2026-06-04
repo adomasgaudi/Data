@@ -307,12 +307,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const ymap = yOf(s);
       if (s.type === "line") {
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
-        body += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
-        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="2.4" fill="${s.color}"/>`;
+        body += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-opacity="0.9"/>`;
+        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="2.4" fill="${s.color}" fill-opacity="0.6"/>`;
       } else if (s.type === "scatter") {
         // Dots only, no connecting line — for values that jump around (e.g. a
-        // day's est-1RM) where a line would imply a trend that isn't there.
-        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.8"/>`;
+        // day's est-1RM) where a line would imply a trend that isn't there. Slight
+        // transparency so overlapping same-day sets read as a denser blob (depth).
+        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
       } else if (s.type === "range") {
         for (const p of s.points) {
           const x = xPix(p.x);
@@ -329,7 +330,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             dash = ` stroke-dasharray="${d.toFixed(2)} ${d.toFixed(2)}"`;
             cap = "butt";
           }
-          body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}"${dash}/>`;
+          // Slight transparency so stacked/overlapping ranges show their density.
+          body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}" stroke-opacity="0.55"${dash}/>`;
         }
       } else {
         // bars: from baseline (0, clamped into plot) to the value. Each bar is as

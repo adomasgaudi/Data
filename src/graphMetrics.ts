@@ -34,16 +34,44 @@ export interface GraphMetricDef {
 const ts = (d: string): number => Date.parse(d);
 const added = (r: SetRecord): number | null => (r.origWeight !== undefined ? r.origWeight : r.weight);
 
+const HOUR = 3_600_000;
+const EVENING_START_H = 17; // assume an evening workout (5pm) when no clock time is logged
+
+/** Synthetic per-set timestamps. Logged sets carry only a date, so every set in a
+ * day parses to midnight and stacks on one x (points hide behind each other).
+ * Spread each day's sets one hour apart from an evening 5pm start, in logged set
+ * order, so the sets of a session read as distinct times along the graph. */
+function setTimes(records: readonly SetRecord[]): Map<SetRecord, number> {
+  const byDay = new Map<number, SetRecord[]>();
+  for (const r of records) {
+    const t = ts(r.date);
+    if (!Number.isFinite(t)) continue;
+    const day = Math.floor(t / DAY);
+    (byDay.get(day) ?? byDay.set(day, []).get(day)!).push(r);
+  }
+  const out = new Map<SetRecord, number>();
+  for (const [day, rs] of byDay) {
+    const ordered = [...rs].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0));
+    const base = day * DAY + EVENING_START_H * HOUR;
+    ordered.forEach((r, i) => out.set(r, base + i * HOUR));
+  }
+  return out;
+}
+
 /** One point per set for a numeric selector, dropping nulls, sorted by date. */
 function perSet(
   records: readonly SetRecord[],
   sel: (r: SetRecord) => number | null | undefined,
   metaOf?: (r: SetRecord) => string,
 ): GraphPoint[] {
+  const times = setTimes(records);
   const out: GraphPoint[] = [];
   for (const r of records) {
     const y = sel(r);
-    if (y != null && Number.isFinite(y)) out.push(metaOf ? { x: ts(r.date), y, meta: metaOf(r) } : { x: ts(r.date), y });
+    if (y != null && Number.isFinite(y)) {
+      const x = times.get(r) ?? ts(r.date);
+      out.push(metaOf ? { x, y, meta: metaOf(r) } : { x, y });
+    }
   }
   return out.sort((a, b) => a.x - b.x);
 }
@@ -155,6 +183,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   {
     id: "weight",
     label: "Weight",
+    type: "scatter",
     compute: (rs) => perSet(rs, (r) => added(r), (r) => `${added(r)}kg × ${r.reps ?? "?"}`),
   },
   {
@@ -162,12 +191,13 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     label: "Weight Range",
     type: "range",
     compute: (rs, cfg) => {
+      const times = setTimes(rs);
       const out: GraphPoint[] = [];
       for (const r of rs) {
         const lo = added(r);
         const hi = addedWeight1RM(r, cfg.formula);
         if (lo == null || hi == null) continue;
-        out.push({ x: ts(r.date), lo, hi, meta: `${lo}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, meta: `${lo}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
       }
       return out.sort((a, b) => a.x - b.x);
     },
@@ -175,17 +205,20 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   {
     id: "e1rm",
     label: "Estimated 1RM",
+    type: "scatter",
     compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`),
   },
   { id: "strength", label: "Strength Score", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
   { id: "strengthDecay", label: "Strength Score With Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
-  // scale when shown alongside weight/1RM (TASK 42).
-  { id: "volume", label: "Volume", axis: "right", compute: (rs) => byDaySum(rs, (r) => setVolume(r.weight, r.reps)) },
-  { id: "volumeLoad", label: "Volume Load", axis: "right", compute: (rs) => byDaySum(rs, (r) => setVolume(added(r), r.reps)) },
-  { id: "reps", label: "Reps", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
-  { id: "sets", label: "Sets", axis: "right", compute: (rs) => setsPerDay(rs) },
+  // scale when shown alongside weight/1RM (TASK 42). These are raw per-day totals
+  // that bounce around with what you chose to do, so they read as scatter (a dot
+  // per day) — only Frequency is a smoothed cadence, so it stays a line.
+  { id: "volume", label: "Volume", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => setVolume(r.weight, r.reps)) },
+  { id: "volumeLoad", label: "Volume Load", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => setVolume(added(r), r.reps)) },
+  { id: "reps", label: "Reps", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
+  { id: "sets", label: "Sets", type: "scatter", axis: "right", compute: (rs) => setsPerDay(rs) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },
   { id: "pr", label: "Personal Records", type: "scatter", compute: (rs, cfg) => prMarkers(rs, cfg.formula) },
   { id: "trend", label: "Trend Line", compute: (rs, cfg) => trendLine(rs, cfg.formula) },
