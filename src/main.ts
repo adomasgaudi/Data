@@ -6931,7 +6931,7 @@ let waChipsFoldOpen = false;
 let waCogOpen = false;
 // Selector chip labels: "code" (short tag, e.g. BPR) or "full" exercise name.
 let waChipNameMode: "code" | "full" = "code";
-let waGraphFoldOpen = true;
+let waGraphFoldOpen = false;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
@@ -7212,16 +7212,18 @@ function renderWaGraph(): void {
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
-  // GRAPH-3: the metric chips are an ALWAYS-VISIBLE row (flip what's plotted in
-  // one tap, no menu). Only the advanced options (formula/aggregation/interval/
-  // smoothing/prediction/decay) live inside the "Graph settings" disclosure. The
-  // graph + its chips sit at the TOP of the Analysis content in every mode.
+  // GRAPH-3: the metric chips + advanced options (formula/aggregation/interval/
+  // smoothing/prediction/decay) all live inside the collapsible "Graph options"
+  // disclosure, so the section stays compact — just the chart shows by default.
+  // The summary names what's currently plotted so you can see it while collapsed.
+  const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
+  const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
   box.innerHTML =
-    `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
     `<div id="waGraphChart"></div>` +
     `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
     `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
-    `<summary class="wa-graph-fold-sum">Graph settings</summary>` +
+    `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
+    `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
     cfgUi +
     `</details>`;
   const chartBox = document.getElementById("waGraphChart");
