@@ -1872,3 +1872,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-section { border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; margin: 0 0 0.85rem; background: var(--page); }
 .wa-section-title { margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 600; }
 .wa-placeholder { margin: 0; }
+
+/* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
+.wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }
+.wa-mode[data-wa-mode="single"] strong { color: var(--accent); }
+.wa-mode[data-wa-mode="compare"] strong { color: var(--gold); }
+.wa-ex-actions { margin: 0 0 0.5rem; }
+.wa-clear { font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-clear:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
+.wa-clear[disabled] { opacity: 0.5; cursor: default; }
+.wa-ex-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.wa-ex-chip {
+  font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg); color: var(--text);
+}
+.wa-ex-chip:hover { border-color: var(--accent); }
+.wa-ex-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }

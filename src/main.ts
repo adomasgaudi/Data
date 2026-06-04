@@ -5218,6 +5218,7 @@ async function init() {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-editstats]");
     if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
   });
+  setupWorkoutAnalysis();
   setupGroupsView();
   setupTeamView();
   setupChecklists();
@@ -6744,6 +6745,75 @@ function setupTeamView() {
  * The old top `.tabs` bar is hidden (CSS) in favour of the bottom nav, but its
  * buttons stay in the DOM as the is-active source of truth; this drives both.
  */
+// ---- WorkoutAnalysisView: shared exercise-selection state + derived mode ----
+// The unified analysis view (TASK 2). The MODE is derived from how many exercises
+// are picked — none = all, one = single, many = compare — so there's no separate
+// mode flag to keep in sync. `waSelected` lives at module scope, so it survives
+// re-renders and navigating away/back; nothing here touches the existing pages.
+type WaMode = "all" | "single" | "compare";
+let waSelected: string[] = [];
+function waMode(): WaMode {
+  return waSelected.length === 0 ? "all" : waSelected.length === 1 ? "single" : "compare";
+}
+function waModeLabel(): string {
+  const m = waMode();
+  if (m === "all") return "all — every exercise";
+  if (m === "single") return `single — ${waSelected[0]}`;
+  return `compare — ${waSelected.length} exercises`;
+}
+
+/** Render the analysis view from `waSelected`. Re-derives the mode and re-paints
+ * the Filters readout + the exercise-selector chips; the Graph/Stats/Table
+ * placeholders are left untouched for later tasks. */
+function renderWorkoutAnalysis(): void {
+  const filters = document.getElementById("waFilters");
+  if (filters) {
+    // Visible mode readout (debugging, per the task).
+    filters.innerHTML =
+      `<h3 class="wa-section-title">Filters</h3>` +
+      `<p class="muted wa-placeholder">Filters go here.</p>` +
+      `<p class="wa-mode" data-wa-mode="${waMode()}">Mode: <strong>${escapeHtml(waModeLabel())}</strong> ` +
+      `<span class="muted">· ${waSelected.length} selected</span></p>`;
+  }
+  const sel = document.getElementById("waExerciseSelector");
+  if (sel) {
+    const names = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+    const chips = names.length
+      ? names
+          .map((n) => {
+            const on = waSelected.includes(n);
+            return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(n)}" aria-pressed="${on}" title="${escapeHtml(n)}">${escapeHtml(exerciseCode(n))}</button>`;
+          })
+          .join("")
+      : `<p class="muted wa-placeholder">No exercises for this athlete.</p>`;
+    sel.innerHTML =
+      `<h3 class="wa-section-title">Exercise selector</h3>` +
+      `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
+      `<div class="wa-ex-chips">${chips}</div>`;
+  }
+}
+
+/** Wire the analysis view's selector once: tapping an exercise chip toggles it in
+ * `waSelected` (which flips the mode), and "Clear" empties the selection. */
+function setupWorkoutAnalysis(): void {
+  const panel = document.getElementById("tab-analysis");
+  if (!panel) return;
+  panel.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const chip = t.closest<HTMLElement>(".wa-ex-chip");
+    if (chip?.dataset.waex) {
+      const n = chip.dataset.waex;
+      waSelected = waSelected.includes(n) ? waSelected.filter((x) => x !== n) : [...waSelected, n];
+      renderWorkoutAnalysis();
+      return;
+    }
+    if (t.closest("#waClear")) {
+      waSelected = [];
+      renderWorkoutAnalysis();
+    }
+  });
+}
+
 function switchTopTab(name: string) {
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab, .guide-btn"));
   for (const t of tabs) t.classList.toggle("is-active", t.dataset.tab === name);
@@ -6758,6 +6828,7 @@ function switchTopTab(name: string) {
   if (name === "team") renderTeamView();
   if (name === "codes") renderCodesTab();
   if (name === "statsedit") renderStatsEdit();
+  if (name === "analysis") renderWorkoutAnalysis();
   updateBottomNav();
 }
 
