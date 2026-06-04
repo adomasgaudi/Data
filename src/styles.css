@@ -1984,6 +1984,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
 .wa-inc input { cursor: pointer; }
+/* Chip-label mode (Code / Full name) — a small segmented toggle in the ⚙ menu. */
+.wa-name-mode { display: flex; align-items: center; gap: 0.3rem; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.wa-name-mode-lbl { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-right: 0.15rem; }
+.wa-name-opt { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-name-opt:hover { border-color: var(--accent); color: var(--accent); }
+.wa-name-opt.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Full-name chips can be long — let them wrap to their natural width. */
+.wa-ex-chip.is-full { white-space: normal; text-align: left; border-radius: 10px; }
 /* Collapsible exercise-chip grid. */
 .wa-chips-fold { border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); overflow: hidden; margin: 0 0 0.3rem; }
 .wa-chips-fold-sum { cursor: pointer; list-style: none; padding: 0.45rem 0.7rem; font-size: 0.82rem; font-weight: 700; user-select: none; }

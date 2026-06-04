@@ -6929,6 +6929,8 @@ let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "none";
 let waChipsFoldOpen = false;
 let waCogOpen = false;
+// Selector chip labels: "code" (short tag, e.g. BPR) or "full" exercise name.
+let waChipNameMode: "code" | "full" = "code";
 let waGraphFoldOpen = true;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
@@ -7079,6 +7081,11 @@ function renderWorkoutAnalysis(): void {
           `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
       )
       .join("");
+    // Chip label mode: show the short code (e.g. BPR) or the full exercise name.
+    const nameToggle =
+      `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
+      `<button type="button" class="wa-name-opt${waChipNameMode === "code" ? " is-on" : ""}" data-waname="code">Code</button>` +
+      `<button type="button" class="wa-name-opt${waChipNameMode === "full" ? " is-on" : ""}" data-waname="full">Full name</button></div>`;
     // Metadata-filter controls (TASK 44): one multi-select per dimension that has
     // values among the identity-included exercises.
     const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
@@ -7120,7 +7127,7 @@ function renderWorkoutAnalysis(): void {
     const cogDropdown =
       `<details class="wa-sel-cog"${waCogOpen ? " open" : ""}>` +
       `<summary class="wa-sel-cog-sum">⚙</summary>` +
-      `<div class="wa-sel-cog-menu">${toggles}</div>` +
+      `<div class="wa-sel-cog-menu">${toggles}${nameToggle}</div>` +
       `</details>`;
     sel.innerHTML =
       `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>${cogDropdown}</div>` +
@@ -7139,7 +7146,8 @@ function renderWorkoutAnalysis(): void {
 /** One chip for an exercise (selected state + identity). */
 function waChipHtml(name: string, identity: ExerciseIdentity): string {
   const on = waSelected.includes(name);
-  return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(exerciseCode(name))}</button>`;
+  const label = waChipNameMode === "full" ? name : exerciseCode(name);
+  return `<button type="button" class="wa-ex-chip${waChipNameMode === "full" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
@@ -7368,6 +7376,13 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest("#waFiltersClear")) {
       for (const d of FILTER_DIMS) delete waFilterValues[d];
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Chip label mode: show short codes or full exercise names in the selector.
+    const nameOpt = t.closest<HTMLElement>(".wa-name-opt");
+    if (nameOpt?.dataset.waname) {
+      waChipNameMode = nameOpt.dataset.waname as "code" | "full";
       renderWorkoutAnalysis();
       return;
     }
