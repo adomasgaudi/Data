@@ -6874,6 +6874,8 @@ const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "none";
+let waChipsFoldOpen = false;
+let waCogOpen = false;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
@@ -7080,15 +7082,25 @@ function renderWorkoutAnalysis(): void {
     // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
     // selected exercise; saved metadata then drives the filters above.
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
+    // Snapshot open state of cog / chip-fold before innerHTML wipes the DOM.
+    const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-sel-cog");
+    if (prevCog) waCogOpen = prevCog.open;
+    const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
+    if (prevFold) waChipsFoldOpen = prevFold.open;
+    const cogDropdown =
+      `<details class="wa-sel-cog"${waCogOpen ? " open" : ""}>` +
+      `<summary class="wa-sel-cog-sum">⚙</summary>` +
+      `<div class="wa-sel-cog-menu">${toggles}</div>` +
+      `</details>`;
     sel.innerHTML =
-      `<h3 class="wa-section-title">Exercise selector</h3>` +
-      `<div class="wa-inc-row">${toggles}</div>` +
+      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>${cogDropdown}</div>` +
       filterUi +
       selControls +
       assignUi +
       createForm +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
-      `<div id="waChips" class="wa-chips-wrap"></div>`;
+      `<details class="wa-chips-fold"${waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      `<div id="waChips" class="wa-chips-wrap"></div></details>`;
     renderWaChips();
   }
   renderWaGraph();
