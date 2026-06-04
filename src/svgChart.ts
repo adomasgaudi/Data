@@ -134,8 +134,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const useCompact = () => compactable() && compactPref;
   let compactor: TimeCompactor = { to: (t) => t, from: (c) => c };
   function rebuildCompactor() {
+    // Only the VISIBLE series drive compaction: filter the legend to one exercise
+    // and it's that exercise's training days that compact (the days you didn't do
+    // it disappear). Fall back to all series if everything is hidden.
     const xs: number[] = [];
-    for (const s of cfg.series) for (const p of s.points) xs.push(p.x);
+    for (const s of cfg.series) if (visible(s)) for (const p of s.points) xs.push(p.x);
+    if (xs.length === 0) for (const s of cfg.series) for (const p of s.points) xs.push(p.x);
     compactor = buildCompactor(xs);
   }
   // The series used for ALL geometry (extents, drawing, tooltip): the raw series
@@ -550,6 +554,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (hidden.has(name)) hidden.delete(name);
     else hidden.add(name);
     hideTip();
+    // Visible set changed → recompute which days compact, and re-frame to them.
+    if (useCompact()) { rebuildCompactor(); resetView(); }
     draw();
   };
   legendEl.addEventListener("click", (e) => {
@@ -569,6 +575,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   if (cfg.compactable) {
     const sub = () => {
       if (!container.isConnected) { compactSubs.delete(sub); return; }
+      rebuildCompactor(); // visible set may have changed while in realistic mode
       resetView();
       hideTip();
       draw();
