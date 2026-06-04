@@ -97,11 +97,9 @@ const els = {
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
   viewBadge: $("viewBadge"),
-  topLoginBtn: $<HTMLButtonElement>("topLoginBtn"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
   settingsPanel: $("settingsPanel"),
-  bwSource: $<HTMLSelectElement>("bwSource"),
   exercise: $<HTMLSelectElement>("exercise"),
   rank: $<HTMLSelectElement>("rank"),
   sexFilter: $<HTMLSelectElement>("sexFilter"),
@@ -291,8 +289,6 @@ function setViewMode(mode: ViewMode) {
   else if (mode === "loggedout") els.viewBadge.textContent = `🔒 ${nameForUsername(locked)} (logged out)`;
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
   els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
-  // When logged out, a "Log in" button sits up top next to the badge.
-  els.topLoginBtn.hidden = mode !== "loggedout";
   // The "Other" sheet: non-admin keeps only the Guide; admin shows everything.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.hidden = mode !== "admin" && item.dataset.tab !== "guide";
@@ -736,7 +732,6 @@ function computeRecord(r: SetRecord): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
-  const fromTable = els.bwSource.value !== "perset";
   // A squat-rack level carries its own bodyweight-part, so an incline push-up at
   // a high hole loads less of you than the floor version of the same exercise.
   const coeff = coeffForRecord(r);
@@ -749,7 +744,9 @@ function computeRecord(r: SetRecord): SetRecord {
     if (realAdded === r.weight) return r;
     return { ...r, weight: realAdded, origWeight: r.weight };
   }
-  const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
+  // Always use the bodyweight recorded with the set; fall back to the profile
+  // default only when the set didn't record one.
+  const bw = r.bodyweight ?? ATHLETES[r.username]?.weight ?? null;
   // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
   return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
 }
@@ -4725,7 +4722,6 @@ async function init() {
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
-  els.topLoginBtn.addEventListener("click", showLoginPage); // the top "Log in" when logged out
 
   // "Legs (all)" category visibility in the By-category list (off by default).
   els.showLegsAll.checked = showLegsAll;
@@ -4768,7 +4764,6 @@ async function init() {
   });
 
   els.formula.addEventListener("change", renderAll);
-  els.bwSource.addEventListener("change", renderAll);
   els.excludeDropsets.addEventListener("change", renderAll);
   els.athlete.addEventListener("change", renderAthlete);
   // Clicking a custom chip drives the hidden <select> (single source of truth).
@@ -5130,7 +5125,7 @@ async function init() {
   enhanceSelect(els.exercise, { wide: true });
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
-    els.formula, els.bwSource, els.rank, els.sexFilter, els.viewAsSelect,
+    els.formula, els.rank, els.sexFilter, els.viewAsSelect,
     els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
@@ -5231,14 +5226,14 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     "eff_load", "reps", "capped", "epley", "brzycki", "nuzzo", "added_1RM",
     "volume", "dropset", "percentile", "category", "tier", "notes",
   ];
-  const fromTable = els.bwSource.value !== "perset";
   const rows = computedRecords().map((r) => {
     // r.weight is already the effective (bw-inclusive) load; r.origWeight is what
     // was logged. Recompute the named intermediates for full transparency.
     const logged = r.origWeight !== undefined ? r.origWeight : r.weight;
     const coeff = coeffFor(r.exerciseName);
     const realAdded = realPullupWeight(r.exerciseName, logged);
-    const bw = fromTable ? (ATHLETES[r.username]?.weight ?? null) : r.bodyweight;
+    const perSet = r.bodyweight !== null && r.bodyweight !== undefined;
+    const bw = r.bodyweight ?? ATHLETES[r.username]?.weight ?? null;
     const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)
     const cappedReps = r.reps === null ? null : Math.min(r.reps, MAX_1RM_REPS);
     const overCap = r.reps !== null && r.reps > MAX_1RM_REPS;
@@ -5252,7 +5247,7 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
         dataNum(logged),
         realAdded === logged ? "" : dataNum(realAdded),
         dataNum(bw),
-        coeff > 0 ? (fromTable ? "table" : "per-set") : "—",
+        coeff > 0 ? (perSet ? "per-set" : "default") : "—",
         dataNum(effLoad),
         dataNum(r.reps),
         cappedReps !== r.reps ? dataNum(cappedReps) : "",

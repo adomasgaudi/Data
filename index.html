@@ -28,11 +28,8 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.1.48</span></h1>
-        <div class="view-row">
-          <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
-          <button id="topLoginBtn" class="view-login-btn" hidden>Log in</button>
-        </div>
+        <h1>Colosseum <span class="version">b.2.1.49</span></h1>
+        <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
         <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
@@ -49,13 +46,7 @@
                   <option value="nuzzo" selected>Nuzzo (bench curve)</option>
                 </select>
               </label>
-              <label>Bodyweight source
-                <select id="bwSource">
-                  <option value="table">Profile table</option>
-                  <option value="perset">Per-set (logged)</option>
-                </select>
-              </label>
-              <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats.</p>
+              <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats — using the bodyweight recorded with each set, or your profile weight when a set didn't record one.</p>
               <label class="check"><input type="checkbox" id="decayStrength" /> Current strength (fade with time off)</label>
               <p class="settings-hint">Off = your all-time best 1RM. On = a “use it or lose it” estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing after that, never below half.</p>
               <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
