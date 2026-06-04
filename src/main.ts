@@ -7039,6 +7039,9 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
+/** Max exercises plotted on the analysis graph at once — past this the SVG
+ * redraw lags, so extra selections are listed but not drawn (see renderWaGraph). */
+const WA_GRAPH_MAX = 10;
 // When the Analysis "compare" mode is showing the workout-history list scoped to
 // the picked lifts, this holds the RAW exercise names to keep (members expanded
 // for combined / comparison groups). Empty = no scoping (the normal full history).
@@ -7429,9 +7432,13 @@ function renderWaGraph(): void {
     `</details>`;
   const chartBox = document.getElementById("waGraphChart");
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  // Cap how many exercises the graph plots at once: past ~10 lines × several
+  // metrics the SVG redraw starts to lag, so plot the first 10 and note the rest.
+  const graphExercises = waSelected.slice(0, WA_GRAPH_MAX);
+  const graphExcluded = waSelected.slice(WA_GRAPH_MAX);
   const drawn = chartBox
     ? renderAnalyticsGraph(chartBox, {
-        exercises: waSelected,
+        exercises: graphExercises,
         records: computedRecords().filter((r) => r.username === els.athlete.value),
         metrics: [...waMetrics],
         config: waGraphConfig,
@@ -7449,6 +7456,11 @@ function renderWaGraph(): void {
       const e1rmPoints = recs.filter((r) => addedWeight1RM(r, currentFormula()) != null).length;
       const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
       if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
+      // Over the cap: say we're showing the first 10 and which are left out.
+      if (graphExcluded.length)
+        notes.unshift(
+          `Graph limited to ${WA_GRAPH_MAX} exercises (it lags past that) — showing the first ${WA_GRAPH_MAX}. Not shown: ${graphExcluded.join(", ")}.`,
+        );
       noteEl.textContent = notes.join("  ·  ");
     }
   }
