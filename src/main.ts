@@ -6788,10 +6788,41 @@ function waModeLabel(): string {
   return `compare — ${waSelected.length} exercises`;
 }
 
-/** Render the analysis view from `waSelected`. Re-derives the mode and re-paints
- * the Filters readout + the exercise-selector chips; the Graph/Stats/Table
- * placeholders are left untouched for later tasks. */
+// TASK 3: rather than duplicate the Workouts view, the live Workouts panel is
+// relocated into the analysis view while it's open and moved back to the athlete
+// Workouts tab when you leave — so all its history / date-filter / stats / toggles
+// keep working, and the old page is untouched. A node can only be in one place,
+// but the two are never visible at once (different top tabs).
+let woInAnalysis = false;
+/** The Workouts panel element, wherever it currently lives. */
+function workoutsSectionEl(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("#sub-workouts > .panel, #waWorkoutsHost > .panel");
+}
+function mountWorkoutsInAnalysis(on: boolean): void {
+  const section = workoutsSectionEl();
+  const host = document.getElementById("waWorkoutsHost");
+  const subWo = document.getElementById("sub-workouts");
+  if (!section || !host || !subWo) return;
+  if (on && !woInAnalysis) {
+    host.appendChild(section);
+    woInAnalysis = true;
+    document.getElementById("waWorkoutsEmpty")?.setAttribute("hidden", "");
+  } else if (!on && woInAnalysis) {
+    subWo.appendChild(section); // return it to the athlete Workouts tab
+    woInAnalysis = false;
+  }
+}
+
+/** Render the analysis view from `waSelected`. Re-derives the mode, re-paints the
+ * Filters readout + exercise-selector chips, and (TASK 3) hosts the live Workouts
+ * panel — history, date filtering, workout stats and all its toggles — in the
+ * Table/list area, so it shows the same workout-level information as the old page. */
 function renderWorkoutAnalysis(): void {
+  mountWorkoutsInAnalysis(true);
+  // Refresh the relocated workouts panel for the current athlete/filters.
+  renderWorkoutsPage();
+  renderWorkoutCalendar();
+  renderWorkoutSetsChart();
   const filters = document.getElementById("waFilters");
   if (filters) {
     // Visible mode readout (debugging, per the task).
@@ -6855,6 +6886,9 @@ function switchTopTab(name: string) {
   if (name === "codes") renderCodesTab();
   if (name === "statsedit") renderStatsEdit();
   if (name === "analysis") renderWorkoutAnalysis();
+  // Leaving the analysis view → return the Workouts panel to the athlete tab so
+  // the old Workouts page keeps working.
+  if (name !== "analysis") mountWorkoutsInAnalysis(false);
   updateBottomNav();
 }
 
