@@ -474,6 +474,27 @@ main { padding-bottom: 5rem; }
 }
 .nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
 .nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
+.nffmi-ci { font-size: 0.7rem; font-weight: 700; opacity: 0.85; }
+.profile-edit {
+  font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 0.4rem;
+}
+.profile-edit:hover { color: var(--accent); border-color: var(--accent); }
+/* Edit-athlete-stats page. */
+.statsedit-body { margin-top: 0.85rem; max-width: 560px; }
+.se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; }
+.se-lbl { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
+.se-field input, .se-field select { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.se-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.8rem; }
+.se-bf { margin: 0.4rem 0 0.6rem; }
+.se-bf-lead { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
+.se-bf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; }
+.se-bf-grid .se-lbl { font-size: 0.64rem; }
+.se-live { padding: 0.5rem 0.7rem; background: var(--accent-soft); border-radius: 8px; font-size: 0.86rem; margin-bottom: 0.7rem; }
+.se-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.se-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 7px 16px; }
+.se-reset { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; }
+.se-reset:disabled { opacity: 0.5; cursor: default; }
 .athlete-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .athlete-stats:empty { display: none; }
 .stat-chip {

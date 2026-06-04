@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
+import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -141,6 +141,39 @@ describe("bodyComposition (FFMI / nFFMI)", () => {
     expect(bodyComposition({ height: 180, weight: 0, bodyFat: 0.2 })).toBeNull();
     expect(bodyComposition({ height: 180, weight: 80, bodyFat: 1 })).toBeNull();
     expect(bodyComposition({ height: 180, weight: 80, bodyFat: -0.1 })).toBeNull();
+  });
+});
+
+describe("body-fat distribution + nFFMI range", () => {
+  it("seeds a symmetric default band around the estimate", () => {
+    const d = defaultBodyFatDist(0.2);
+    expect(d.avg).toBe(0.2);
+    expect(d.low50).toBeCloseTo(0.17, 6);
+    expect(d.high50).toBeCloseTo(0.23, 6);
+    expect(d.low95).toBeCloseTo(0.14, 6);
+    expect(d.high95).toBeCloseTo(0.26, 6);
+  });
+  it("clamps to a sane 0–75% band", () => {
+    expect(defaultBodyFatDist(0.02).low95).toBe(0);
+    expect(defaultBodyFatDist(0.9).avg).toBe(0.75);
+  });
+  it("normalizes (sorts) out-of-order inputs so bands never cross", () => {
+    const d = normalizeBodyFatDist({ low95: 0.3, low50: 0.1, avg: 0.25, high50: 0.05, high95: 0.2 });
+    expect([d.low95, d.low50, d.avg, d.high50, d.high95]).toEqual([0.05, 0.1, 0.2, 0.25, 0.3]);
+  });
+  it("flips body-fat band into an ASCENDING nFFMI range (more fat ⇒ lower nFFMI)", () => {
+    const r = nffmiRange(80, 180, defaultBodyFatDist(0.2))!;
+    expect(r).not.toBeNull();
+    expect(r.avg).toBeCloseTo(bodyComposition({ height: 180, weight: 80, bodyFat: 0.2 })!.nffmi, 6);
+    expect(r.lo95).toBeLessThan(r.lo50);
+    expect(r.lo50).toBeLessThan(r.avg);
+    expect(r.avg).toBeLessThan(r.hi50);
+    expect(r.hi50).toBeLessThan(r.hi95);
+    // the high-nFFMI end comes from the LOW-fat end of the band
+    expect(r.hi95).toBeCloseTo(bodyComposition({ height: 180, weight: 80, bodyFat: 0.14 })!.nffmi, 6);
+  });
+  it("returns null on impossible inputs", () => {
+    expect(nffmiRange(0, 180, defaultBodyFatDist(0.2))).toBeNull();
   });
 });
 

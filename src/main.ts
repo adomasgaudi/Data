@@ -55,8 +55,12 @@ import { levelLabel, levelKey, defaultLevelScale } from "./variants";
 import type { SetRecord } from "./domain";
 import {
   ATHLETES,
+  type AthleteProfile,
   EXERCISE_BW_COEFF,
-  bodyComposition,
+  type BodyFatDist,
+  defaultBodyFatDist,
+  normalizeBodyFatDist,
+  nffmiRange,
   defaultBwCoeff,
   realPullupWeight,
   exerciseCategory,
@@ -215,6 +219,7 @@ const els = {
   bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
   codesTable: $("codesTable"),
+  statsEditBody: $("statsEditBody"),
   codesSearch: $<HTMLInputElement>("codesSearch"),
   groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
@@ -498,7 +503,7 @@ function athletePassesColiseum(username: string): boolean {
   const bwMin = numInput(els.bwMin);
   const bwMax = numInput(els.bwMax);
   if (sex === "all" && bwMin === null && bwMax === null) return true;
-  const p = ATHLETES[username];
+  const p = athProfile(username);
   if (!p) return false; // a filter is active but we have nothing to match on
   if (sex !== "all" && p.sex !== sex) return false;
   if (bwMin !== null && p.weight < bwMin) return false;
@@ -623,6 +628,53 @@ function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
   if (o?.scale !== undefined) return o.scale;
   return r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelValue) : 1;
+}
+
+// ---- Editable athlete stats (height / weight / age / sex / body-fat band) ----
+// Stored on this device, layered over the profile.ts ATHLETES baseline. Body fat
+// is kept as a 5-point distribution so any value derived from it (nFFMI) carries
+// equal error margins. athProfile() is the single accessor every view reads.
+interface AthleteStatsOverride {
+  weight?: number;
+  height?: number;
+  age?: number | null;
+  sex?: "m" | "f";
+  bf?: BodyFatDist;
+}
+const ATHLETE_STATS_KEY = "colosseum.athleteStats.v1";
+const athleteOverrides: Record<string, AthleteStatsOverride> = (() => {
+  try {
+    const raw = localStorage.getItem(ATHLETE_STATS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, AthleteStatsOverride>) : {};
+  } catch {
+    return {};
+  }
+})();
+function saveAthleteOverrides() {
+  try { localStorage.setItem(ATHLETE_STATS_KEY, JSON.stringify(athleteOverrides)); } catch { /* storage may be unavailable */ }
+}
+
+/** Effective profile for an athlete: the ATHLETES baseline with any on-device
+ * edits layered on top. bodyFat is the band's average when a band is set. */
+function athProfile(username: string): AthleteProfile | undefined {
+  const base = ATHLETES[username];
+  const ov = athleteOverrides[username];
+  if (!base && !ov) return undefined;
+  return {
+    height: ov?.height ?? base?.height ?? 0,
+    weight: ov?.weight ?? base?.weight ?? 0,
+    bodyFat: ov?.bf?.avg ?? base?.bodyFat ?? 0,
+    age: ov && "age" in ov ? (ov.age ?? null) : (base?.age ?? null),
+    sex: ov?.sex ?? base?.sex ?? "m",
+  };
+}
+
+/** The body-fat distribution for an athlete: their edited band, else a sensible
+ * symmetric default around the baseline estimate. */
+function bfDistFor(username: string): BodyFatDist {
+  const ov = athleteOverrides[username];
+  if (ov?.bf) return ov.bf;
+  return defaultBodyFatDist(athProfile(username)?.bodyFat ?? 0);
 }
 
 // ---- Last picked athlete: remembered across reloads ----
@@ -803,7 +855,7 @@ function computeRecord(r: SetRecord): SetRecord {
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
   // default only when the set didn't record one.
-  const bw = r.bodyweight ?? ATHLETES[r.username]?.weight ?? null;
+  const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
   // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
   return { ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight };
 }
@@ -1222,7 +1274,7 @@ function renderLeaderboard() {
   });
   const entries = leaderboard(filtered, exercise, formula, strengthAsOf());
   const perBw = (username: string, e1rm: number): number | null => {
-    const bw = ATHLETES[username]?.weight;
+    const bw = athProfile(username)?.weight;
     return bw ? e1rm / bw : null;
   };
 
@@ -1596,7 +1648,7 @@ function syncAthleteChips() {
     btn.setAttribute("aria-checked", on ? "true" : "false");
     // Hide chips that don't match the chosen sex (the active one stays visible
     // so you can always see who's currently selected).
-    const sex = ATHLETES[btn.dataset.username ?? ""]?.sex;
+    const sex = athProfile(btn.dataset.username ?? "")?.sex;
     const sexHidden = athleteSexFilter !== "all" && sex !== athleteSexFilter && !on;
     btn.classList.toggle("is-sexhidden", sexHidden);
     const disabled = locked !== null && btn.dataset.username !== locked;
@@ -1632,28 +1684,36 @@ function renderAthlete() {
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
  * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
-  const p = ATHLETES[els.athlete.value];
+  const username = els.athlete.value;
+  const p = athProfile(username);
+  const editBtn = `<button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button>`;
   if (!p) {
-    els.athleteProfile.textContent = "No profile on file";
+    els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
-  const specs = [`${p.weight} kg`, `${p.height} cm`, `${pct(p.bodyFat)} body fat`];
+  // Body fat is a band, not a point — show its average with the 95% spread, so
+  // any value derived from it reads with its uncertainty.
+  const dist = bfDistFor(username);
+  const bfLine = `${pct(dist.avg)} body fat <span class="muted">(95% ${pct(dist.low95)}–${pct(dist.high95)})</span>`;
+  const specs = [`${p.weight} kg`, `${p.height} cm`, bfLine];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
 
-  const comp = bodyComposition(p);
-  if (!comp) {
-    els.athleteProfile.innerHTML = specLine;
+  const range = nffmiRange(p.weight, p.height, dist);
+  if (!range) {
+    els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  // nFFMI = lean-mass index normalised to 1.8 m. Lead with it; show the lean
-  // mass it implies in the tooltip so the number is traceable to the specs.
+  // nFFMI = lean-mass index normalised to 1.8 m, shown with the ± error margin
+  // the body-fat band implies (half the 95% width).
+  const ci = (range.hi95 - range.lo95) / 2;
   const badge =
-    `<span class="nffmi-badge" title="Normalised fat-free mass index — lean mass ` +
-    `${comp.leanMass.toFixed(1)} kg ÷ height², scaled to 1.8 m. ~22 trained, ~25 natural ceiling.">` +
-    `<span class="nffmi-val">${comp.nffmi.toFixed(1)}</span>` +
-    `<span class="nffmi-lbl">nFFMI</span></span>`;
-  els.athleteProfile.innerHTML = badge + specLine;
+    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling. 95% band ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} from the body-fat uncertainty.">` +
+    `<span class="nffmi-val">${range.avg.toFixed(1)}</span>` +
+    `<span class="nffmi-lbl">nFFMI</span>` +
+    (ci >= 0.05 ? `<span class="nffmi-ci">±${ci.toFixed(1)}</span>` : "") +
+    `</span>`;
+  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn;
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).
@@ -1866,7 +1926,7 @@ function renderMuscleMap() {
 /** Compact, data-only block about the selected athlete for the AI to summarise. */
 function athleteContext(): string {
   const username = els.athlete.value;
-  const p = ATHLETES[username];
+  const p = athProfile(username);
   const counts = exerciseCountsForUser(activeRecords(), username);
   const workouts = workoutsForUser(activeRecords(), username);
   const totalSets = counts.reduce((s, c) => s + c.count, 0);
@@ -3975,7 +4035,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // Edit row: tweak this set's weight / reps / bodyweight / scaling factor. RIR is
   // the dropdown in the row itself. Bodyweight is just for this set (placeholder
   // shows the default). Blank a field to clear that one edit.
-  const dfltBw = raw.bodyweight ?? ATHLETES[s.username]?.weight ?? null;
+  const dfltBw = raw.bodyweight ?? athProfile(s.username)?.weight ?? null;
   const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
     `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
@@ -4500,6 +4560,112 @@ function setupCodesTab(): void {
   });
 }
 
+// ---- Edit athlete stats page ----
+let statsEditUser = ""; // which athlete the editor is showing
+
+/** Open the stats editor for one athlete (from the ✎ Edit button on the card). */
+function openStatsEditor(username: string): void {
+  statsEditUser = username;
+  switchTopTab("statsedit");
+}
+
+/** Render the editable stats form for `statsEditUser` (defaults to the selected
+ * athlete). Body-fat is five % inputs (95/50 band + average); a live nFFMI range
+ * shows how the band propagates. */
+function renderStatsEdit(): void {
+  const users = distinctUsers(data.records);
+  if (!statsEditUser || !users.some((u) => u.username === statsEditUser))
+    statsEditUser = els.athlete.value || users[0]?.username || "";
+  const username = statsEditUser;
+  const p = athProfile(username);
+  const dist = bfDistFor(username);
+  const edited = !!athleteOverrides[username];
+  const opt = (u: { username: string; user: string }) =>
+    `<option value="${escapeHtml(u.username)}"${u.username === username ? " selected" : ""}>${escapeHtml(u.user)}</option>`;
+  const num = (cls: string, label: string, value: number | null, step = "1", hint = "") =>
+    `<label class="se-field"><span class="se-lbl">${label}</span>` +
+    `<input class="${cls}" type="number" step="${step}" inputmode="decimal" value="${value ?? ""}" />` +
+    (hint ? `<span class="se-hint muted">${hint}</span>` : "") + `</label>`;
+  const bfPct = (v: number) => Math.round(v * 1000) / 10; // fraction → %
+  const range = p ? nffmiRange(p.weight, p.height, dist) : null;
+  const live = range
+    ? `nFFMI <strong>${range.avg.toFixed(1)}</strong> <span class="muted">· 95% ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} · 50% ${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}</span>`
+    : `<span class="muted">Enter weight & height for nFFMI</span>`;
+
+  els.statsEditBody.innerHTML =
+    `<label class="se-field se-pick"><span class="se-lbl">Athlete</span><select id="seAthlete">${users.map(opt).join("")}</select></label>` +
+    `<div class="se-grid">` +
+    num("se-weight", "Weight (kg)", p?.weight ?? null, "0.5") +
+    num("se-height", "Height (cm)", p?.height ?? null, "1") +
+    num("se-age", "Age", p?.age ?? null, "1") +
+    `<label class="se-field"><span class="se-lbl">Sex</span><select class="se-sex">` +
+    `<option value="m"${p?.sex === "m" ? " selected" : ""}>Male</option>` +
+    `<option value="f"${p?.sex === "f" ? " selected" : ""}>Female</option></select></label>` +
+    `</div>` +
+    `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high)</div><div class="se-bf-grid">` +
+    num("se-bf-low95", "95% low", bfPct(dist.low95), "0.5") +
+    num("se-bf-low50", "50% low", bfPct(dist.low50), "0.5") +
+    num("se-bf-avg", "average", bfPct(dist.avg), "0.5") +
+    num("se-bf-high50", "50% high", bfPct(dist.high50), "0.5") +
+    num("se-bf-high95", "95% high", bfPct(dist.high95), "0.5") +
+    `</div></div>` +
+    `<div class="se-live">${live}</div>` +
+    `<div class="se-actions">` +
+    `<button type="button" class="se-save">Save</button>` +
+    `<button type="button" class="se-reset"${edited ? "" : " disabled"}>Reset to default</button>` +
+    `<span class="se-msg muted">${edited ? "Edited on this device." : "Using the built-in defaults."}</span>` +
+    `</div>`;
+}
+
+/** Read the form, store the override, refresh everything. */
+function saveStatsEdit(): void {
+  const username = statsEditUser;
+  if (!username) return;
+  const root = els.statsEditBody;
+  const numOf = (cls: string): number | undefined => {
+    const v = parseFloat(root.querySelector<HTMLInputElement>(`.${cls}`)?.value ?? "");
+    return Number.isFinite(v) ? v : undefined;
+  };
+  const ageRaw = root.querySelector<HTMLInputElement>(".se-age")?.value ?? "";
+  const ageVal = ageRaw.trim() === "" ? null : Math.round(parseFloat(ageRaw));
+  const bf = (cls: string, fallback: number) => {
+    const v = numOf(cls);
+    return v === undefined ? fallback : v / 100; // % → fraction
+  };
+  const d = bfDistFor(username);
+  const ov: AthleteStatsOverride = {
+    age: ageVal,
+    sex: (root.querySelector<HTMLSelectElement>(".se-sex")?.value as "m" | "f") ?? "m",
+    bf: normalizeBodyFatDist({
+      low95: bf("se-bf-low95", d.low95), low50: bf("se-bf-low50", d.low50),
+      avg: bf("se-bf-avg", d.avg), high50: bf("se-bf-high50", d.high50), high95: bf("se-bf-high95", d.high95),
+    }),
+  };
+  const w = numOf("se-weight"); if (w !== undefined) ov.weight = w;
+  const h = numOf("se-height"); if (h !== undefined) ov.height = h;
+  athleteOverrides[username] = ov;
+  saveAthleteOverrides();
+  renderStatsEdit();
+  renderAll();
+}
+
+function setupStatsEdit(): void {
+  els.statsEditBody.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.id === "seAthlete") { statsEditUser = (t as HTMLSelectElement).value; renderStatsEdit(); }
+  });
+  els.statsEditBody.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest(".se-save")) saveStatsEdit();
+    else if (t.closest(".se-reset")) {
+      delete athleteOverrides[statsEditUser];
+      saveAthleteOverrides();
+      renderStatsEdit();
+      renderAll();
+    }
+  });
+}
+
 /** Expanded info panel for one exercise on the Index page: category / muscle /
  * tier, bodyweight part, merged spellings, total sets, who trains it, the best
  * estimated 1RM ever logged (any athlete) and the date span. */
@@ -4665,7 +4831,7 @@ function prefillTestFromPick() {
   }
   els.calcWeight.value = String(best.weight);
   els.calcReps.value = String(best.reps);
-  els.calcBw.value = String(best.bodyweight ?? ATHLETES[username]?.weight ?? els.calcBw.value);
+  els.calcBw.value = String(best.bodyweight ?? athProfile(username)?.weight ?? els.calcBw.value);
   els.calcCoeff.value = String(coeffFor(exName));
   const label = els.testAthlete.selectedOptions[0]?.textContent ?? username;
   els.testPickHint.textContent =
@@ -5032,6 +5198,11 @@ async function init() {
   renderDataTab();
   setupAddTab();
   setupCodesTab();
+  setupStatsEdit();
+  els.athleteProfile.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-editstats]");
+    if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
+  });
   setupGroupsView();
   setupTeamView();
   setupChecklists();
@@ -5594,7 +5765,7 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     const coeff = coeffFor(r.exerciseName);
     const realAdded = realPullupWeight(r.exerciseName, logged);
     const perSet = r.bodyweight !== null && r.bodyweight !== undefined;
-    const bw = r.bodyweight ?? ATHLETES[r.username]?.weight ?? null;
+    const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
     const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)
     const cappedReps = r.reps === null ? null : Math.min(r.reps, MAX_1RM_REPS);
     const overCap = r.reps !== null && r.reps > MAX_1RM_REPS;
@@ -5850,7 +6021,7 @@ function manualToRecord(m: ManualEntry): SetRecord {
     user: m.user,
     username: m.username,
     date: m.date,
-    bodyweight: ATHLETES[m.username]?.weight ?? null,
+    bodyweight: athProfile(m.username)?.weight ?? null,
     exerciseName: m.exerciseName,
     setNumber: 1,
     weight: m.weight,
@@ -6571,6 +6742,7 @@ function switchTopTab(name: string) {
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "codes") renderCodesTab();
+  if (name === "statsedit") renderStatsEdit();
   updateBottomNav();
 }
 
