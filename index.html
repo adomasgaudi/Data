@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.3.15</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.3.16</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -1068,6 +1068,9 @@
       <div id="tab-analysis" class="tab-panel">
         <section class="panel">
           <h2>Analysis</h2>
+          <!-- The athlete picker (.ath-row) is relocated here at the top of the
+               Analysis view while it's open, and returned to #tab-athlete on leave. -->
+          <div id="waAthleteHost"></div>
           <div id="waFilters" class="wa-section">
             <h3 class="wa-section-title">Filters</h3>
             <p class="muted wa-placeholder">Filters go here.</p>
