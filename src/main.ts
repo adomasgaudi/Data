@@ -6913,13 +6913,10 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
-// In "all" mode (nothing selected) the content area can show either the Workouts
-// history or the full Exercise list (the migrated List view); toggled in-view.
-let waAllView: "workouts" | "list" = "workouts";
-// Presentation-only layout (TASK 8): which blocks of the hosted content show.
-// Purely a CSS class on the content host — never re-renders or touches selection.
-type WaView = "overview" | "table" | "charts" | "stats";
-let waView: WaView = "overview";
+// "all" mode (nothing selected) always shows the workout history list + the year
+// calendar. (The old Workouts/Exercise-list toggle and the Overview/Table/Charts/
+// Stats layout switcher were removed — browsing exercises is the selector's job
+// and a lift's stats live in single mode, so there was nothing left to toggle.)
 // Which exercise IDENTITY types the selector offers (TASK 12). Default: originals
 // only — the dissolved/combined/comparison types are opt-in, independently.
 const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
@@ -7061,17 +7058,9 @@ function renderWorkoutAnalysis(): void {
     if (contentTitle) contentTitle.textContent = "Compare exercises";
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
-  } else if (waAllView === "list") {
-    // All + Exercise list: the live List view (the migrated List & stats) — its
-    // category-grouped table, sort, search, rep-max column and per-exercise stats.
-    selectedExercise = null;
-    exercisesTab = "list";
-    setAnalysisMainPanel("exercises");
-    if (contentTitle) contentTitle.textContent = "Exercise list";
-    stats?.setAttribute("hidden", "");
-    renderExercisesPage();
   } else {
-    // All + Workouts: the live Workouts panel.
+    // All (nothing selected): always the live Workouts panel — its history list
+    // AND the year calendar/heatmap, both present (no layout toggle to hide them).
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = "Workout history";
     stats?.setAttribute("hidden", "");
@@ -7079,34 +7068,13 @@ function renderWorkoutAnalysis(): void {
     renderWorkoutCalendar();
     renderWorkoutSetsChart();
   }
-  // Presentation layout (Overview/Table/Charts/Stats) is a CSS class on the host.
-  const host = document.getElementById("waWorkoutsHost");
-  if (host) host.dataset.waView = waView;
   const filters = document.getElementById("waFilters");
   if (filters) {
-    // Display-mode toggle: shows/hides content blocks only — selection & filters
-    // stay put (it never re-renders the content).
-    const viewToggle =
-      `<div class="wa-viewmodes seg-toggle" role="group" aria-label="Display mode">` +
-      (["overview", "table", "charts", "stats"] as const)
-        .map((v) => `<button type="button" class="seg-btn${waView === v ? " is-active" : ""}" data-waview="${v}">${v[0]!.toUpperCase()}${v.slice(1)}</button>`)
-        .join("") +
-      `</div>`;
-    // In "all" mode, a toggle picks the content: workout history or the full
-    // exercise list. (Single/compare are driven by the selection itself.)
-    const allToggle =
-      mode === "all"
-        ? `<div class="wa-allview seg-toggle" role="group" aria-label="All-mode content">` +
-          `<button type="button" class="seg-btn${waAllView === "workouts" ? " is-active" : ""}" data-waall="workouts">Workouts</button>` +
-          `<button type="button" class="seg-btn${waAllView === "list" ? " is-active" : ""}" data-waall="list">Exercise list</button>` +
-          `</div>`
-        : "";
-    // Visible mode readout (debugging, per the task).
+    // The layout (Overview/Table/Charts/Stats) and Workouts/Exercise-list toggles
+    // are gone — only the mode readout remains here; the real metadata filters
+    // live in the exercise selector below.
     filters.innerHTML =
-      `<h3 class="wa-section-title">Filters</h3>` +
-      `<div class="wa-controls-row"><span class="wa-ctl-lbl muted">Layout</span>${viewToggle}</div>` +
-      allToggle +
-      `<p class="wa-mode" data-wa-mode="${waMode()}">Mode: <strong>${escapeHtml(waModeLabel())}</strong> ` +
+      `<p class="wa-mode" data-wa-mode="${waMode()}">Showing: <strong>${escapeHtml(waModeLabel())}</strong> ` +
       `<span class="muted">· ${waSelected.length} selected</span></p>`;
   }
   const sel = document.getElementById("waExerciseSelector");
@@ -7434,24 +7402,6 @@ function setupWorkoutAnalysis(): void {
       saveTaxonomyAssignment(saveBtn.dataset.waassign);
       return;
     }
-    // Display-mode toggle (Overview/Table/Charts/Stats): presentation only —
-    // flip the host class + active button, never re-render or touch selection.
-    const viewBtn = t.closest<HTMLElement>(".wa-viewmodes .seg-btn");
-    if (viewBtn?.dataset.waview) {
-      waView = viewBtn.dataset.waview as WaView;
-      const host = document.getElementById("waWorkoutsHost");
-      if (host) host.dataset.waView = waView;
-      for (const b of panel.querySelectorAll<HTMLElement>(".wa-viewmodes .seg-btn"))
-        b.classList.toggle("is-active", b.dataset.waview === waView);
-      return;
-    }
-    // All-mode content toggle: Workouts ↔ Exercise list.
-    const allBtn = t.closest<HTMLElement>(".wa-allview .seg-btn");
-    if (allBtn?.dataset.waall) {
-      waAllView = allBtn.dataset.waall === "list" ? "list" : "workouts";
-      renderWorkoutAnalysis();
-      return;
-    }
     // Tapping an exercise row in the hosted List view drills in (the row handler
     // set selectedExercise already) — reflect it in the analysis selection so the
     // mode/selector stay in step, landing on the single-exercise drill-in.
@@ -7498,8 +7448,7 @@ function createUserExerciseDef(): void {
  * compare — so a redirected Single/Compare link lands in the right mode with the
  * right exercises already selected.
  */
-function openWorkoutAnalysis(opts: { exercises?: string[]; allView?: "workouts" | "list" } = {}): void {
-  if (opts.allView) waAllView = opts.allView;
+function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
   if (opts.exercises) waSelected = opts.exercises.filter((n) => n.length > 0);
   switchTopTab("analysis"); // re-renders the analysis view from the new state
 }
@@ -7507,16 +7456,14 @@ function openWorkoutAnalysis(opts: { exercises?: string[]; allView?: "workouts" 
 /**
  * Map legacy deep-links / bookmarks to the unified view (TASKS 49–52). No route
  * is broken: an unrecognised hash is ignored. Recognised:
- *   #workouts | #analysis        → all (Workouts)         (TASK 49)
- *   #single=<exercise>           → single, that exercise  (TASK 50)
- *   #compare=<a>,<b>             → compare, those lifts    (TASK 51)
- *   #list                        → all (Exercise list)     (TASK 52)
+ *   #workouts | #analysis | #list → all (Workouts + calendar)
+ *   #single=<exercise>            → single, that exercise
+ *   #compare=<a>,<b>              → compare, those lifts
  */
 function handleAnalysisHash(): void {
   const h = decodeURIComponent(location.hash.replace(/^#/, "")).trim();
   if (!h) return;
-  if (h === "workouts" || h === "analysis") openWorkoutAnalysis({ allView: "workouts" });
-  else if (h === "list") openWorkoutAnalysis({ allView: "list" });
+  if (h === "workouts" || h === "analysis" || h === "list") openWorkoutAnalysis();
   else if (h.startsWith("single=")) openWorkoutAnalysis({ exercises: [h.slice("single=".length)] });
   else if (h.startsWith("compare=")) openWorkoutAnalysis({ exercises: h.slice("compare=".length).split(",").map((s) => s.trim()) });
 }
