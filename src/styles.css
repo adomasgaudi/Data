@@ -2009,10 +2009,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
 /* WorkoutAnalysis metadata filters + taxonomy editor (TASKS 19, 24). */
 .wa-filters, .wa-assign { margin: 0 0 0.6rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; }
-.wa-filters > summary, .wa-assign > summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--accent); }
-.wa-filters-body, .wa-assign-body { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem; align-items: flex-start; }
-.wa-filter-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem; color: var(--muted); min-width: 8.5rem; }
-.wa-filter-f select, .wa-assign-body select { font: inherit; font-size: 0.82rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.wa-filters > summary, .wa-assign > summary { cursor: pointer; list-style: none; font-size: 0.85rem; font-weight: 600; color: var(--accent); }
+.wa-filters > summary::-webkit-details-marker { display: none; }
+.wa-filters-body { margin-top: 0.6rem; }
+.wa-assign-body { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem; align-items: flex-start; }
+.wa-assign-body select { font: inherit; font-size: 0.82rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+/* Metadata filter: a labelled row of toggle chips per dimension (no native
+   multi-selects — much cleaner, and tappable on mobile). */
+.wa-filter-dim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.5rem; margin: 0 0 0.5rem; }
+.wa-filter-lbl { flex: 0 0 5.5rem; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.wa-filter-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; flex: 1 1 auto; min-width: 0; }
+.wa-fchip { font: inherit; font-size: 0.74rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-fchip:hover { border-color: var(--accent); color: var(--accent); }
+.wa-fchip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wa-filters .wa-clear { margin-top: 0.2rem; }
 .wa-alias-hint { width: 100%; font-size: 0.78rem; margin: 0.2rem 0 0; }
 
 /* Universal Analytics Graph: metric toggles + config (TASKS 25–29). */

@@ -6918,8 +6918,10 @@ let waSelected: string[] = [];
 // Stats layout switcher were removed — browsing exercises is the selector's job
 // and a lift's stats live in single mode, so there was nothing left to toggle.)
 // Which exercise IDENTITY types the selector offers (TASK 12). Default: originals
-// only — the dissolved/combined/comparison types are opt-in, independently.
-const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
+// All identity types are included by default (originals + dissolved variants +
+// combined + comparison groups), so every kind of lift shows in the selector
+// unless the owner unticks one.
+const waIncludeIdentities = new Set<ExerciseIdentity>(["original", "dissolved", "combined", "comparison_group"]);
 // Metadata filters active in the selector (TASK 19): dim → accepted values.
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
@@ -6964,13 +6966,6 @@ function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
 function waMode(): WaMode {
   return waSelected.length === 0 ? "all" : waSelected.length === 1 ? "single" : "compare";
 }
-function waModeLabel(): string {
-  const m = waMode();
-  if (m === "all") return "all — every exercise";
-  if (m === "single") return `single — ${waSelected[0]}`;
-  return `compare — ${waSelected.length} exercises`;
-}
-
 // TASK 3/4: rather than duplicate the existing views, the LIVE panels are
 // relocated into the analysis view by mode — the Workouts panel for "all", the
 // Exercises panel (drill-in) for "single" — and moved back to their athlete tabs
@@ -7068,18 +7063,9 @@ function renderWorkoutAnalysis(): void {
     renderWorkoutCalendar();
     renderWorkoutSetsChart();
   }
-  const filters = document.getElementById("waFilters");
-  if (filters) {
-    // The layout (Overview/Table/Charts/Stats) and Workouts/Exercise-list toggles
-    // are gone — only the mode readout remains here; the real metadata filters
-    // live in the exercise selector below.
-    filters.innerHTML =
-      `<p class="wa-mode" data-wa-mode="${waMode()}">Showing: <strong>${escapeHtml(waModeLabel())}</strong> ` +
-      `<span class="muted">· ${waSelected.length} selected</span></p>`;
-  }
   const sel = document.getElementById("waExerciseSelector");
   if (sel) {
-    // Identity-inclusion toggles (default: originals only). Each can be flipped
+    // Identity-inclusion toggles (all on by default). Each can be flipped
     // independently; they filter the chips (suggestions/search) below.
     const idLabels: [ExerciseIdentity, string][] = [
       ["original", "Original"],
@@ -7257,8 +7243,9 @@ function renderWaGraph(): void {
   }
 }
 
-/** Build the metadata-filter controls: a multi-select per dimension that has any
- * values among `names`. Selected values reflect waFilterValues. */
+/** Build the metadata-filter controls: a row of toggle CHIPS per dimension that
+ * has any values among `names` (no ugly native multi-selects). Active values
+ * reflect waFilterValues; tapping a chip toggles it. */
 function waFilterControls(names: readonly string[]): string {
   const blocks: string[] = [];
   for (const dim of FILTER_DIMS) {
@@ -7267,19 +7254,23 @@ function waFilterControls(names: readonly string[]): string {
     if (values.size === 0) continue;
     const sorted = [...values].sort((a, b) => a.localeCompare(b));
     const sel = new Set(waFilterValues[dim] ?? []);
-    const opts = sorted
-      .map((v) => `<option value="${escapeHtml(v)}"${sel.has(v) ? " selected" : ""}>${escapeHtml(v)}</option>`)
+    const chips = sorted
+      .map(
+        (v) =>
+          `<button type="button" class="wa-fchip${sel.has(v) ? " is-on" : ""}" data-wadim="${dim}" data-wafval="${escapeHtml(v)}" aria-pressed="${sel.has(v)}">${escapeHtml(v)}</button>`,
+      )
       .join("");
     blocks.push(
-      `<label class="wa-filter-f">${escapeHtml(FILTER_DIM_LABELS[dim])}` +
-        `<select class="wa-filter-sel" data-wadim="${dim}" multiple size="${Math.min(4, sorted.length)}">${opts}</select></label>`,
+      `<div class="wa-filter-dim"><span class="wa-filter-lbl">${escapeHtml(FILTER_DIM_LABELS[dim])}</span>` +
+        `<div class="wa-filter-chips">${chips}</div></div>`,
     );
   }
+  if (blocks.length === 0) return "";
   const active = FILTER_DIMS.reduce((n, d) => n + (waFilterValues[d]?.length ? 1 : 0), 0);
   return (
-    `<details class="wa-filters"${active ? " open" : ""}><summary>🔎 Filters${active ? ` (${active})` : ""}</summary>` +
+    `<details class="wa-filters"${active ? " open" : ""}><summary class="wa-filters-sum">🔎 Filter${active ? ` · ${active} active` : ""}</summary>` +
     `<div class="wa-filters-body">${blocks.join("")}` +
-    `<button type="button" id="waFiltersClear" class="wa-clear">Clear filters</button></div></details>`
+    `<button type="button" id="waFiltersClear" class="wa-clear"${active ? "" : " disabled"}>Clear filters</button></div></details>`
   );
 }
 
@@ -7343,13 +7334,6 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutAnalysis();
       return;
     }
-    const fsel = target.closest<HTMLSelectElement>(".wa-filter-sel");
-    if (fsel?.dataset.wadim) {
-      const dim = fsel.dataset.wadim as ExerciseFilterDim;
-      waFilterValues[dim] = Array.from(fsel.selectedOptions).map((o) => o.value);
-      renderWorkoutAnalysis();
-      return;
-    }
     // Graph config controls (TASK 29) — update config, re-render just the graph.
     const cfg = target.closest<HTMLElement>(".wa-cfg");
     if (cfg?.dataset.wacfg) {
@@ -7384,6 +7368,17 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest("#waFiltersClear")) {
       for (const d of FILTER_DIMS) delete waFilterValues[d];
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Metadata-filter chip: toggle one value of one dimension on/off.
+    const fchip = t.closest<HTMLElement>(".wa-fchip");
+    if (fchip?.dataset.wadim && fchip.dataset.wafval !== undefined) {
+      const dim = fchip.dataset.wadim as ExerciseFilterDim;
+      const val = fchip.dataset.wafval;
+      const cur = new Set(waFilterValues[dim] ?? []);
+      if (cur.has(val)) cur.delete(val); else cur.add(val);
+      if (cur.size) waFilterValues[dim] = [...cur]; else delete waFilterValues[dim];
       renderWorkoutAnalysis();
       return;
     }
