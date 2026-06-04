@@ -61,6 +61,8 @@ import {
   realPullupWeight,
   exerciseCategory,
   exerciseCategories,
+  trainingCategories,
+  isStatic,
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
@@ -4210,19 +4212,24 @@ function renderCodesTab(): void {
     .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q))
     .sort((a, b) => (counts.get(b)! - counts.get(a)!) || a.localeCompare(b));
 
-  // Bucket the (already most-trained-first) names by their training category.
+  // Bucket the (already most-trained-first) names by training category. An
+  // exercise can belong to several categories, so it appears under each — a
+  // deadlift shows under Legs, Back and Core; a front lever under Skill, Back
+  // and Core.
   const byCat = new Map<TrainingCategory, string[]>();
   for (const name of names) {
-    const c = exerciseCategory(name);
-    const list = byCat.get(c);
-    if (list) list.push(name); else byCat.set(c, [name]);
+    for (const c of trainingCategories(name)) {
+      const list = byCat.get(c);
+      if (list) list.push(name); else byCat.set(c, [name]);
+    }
   }
 
   const rowHtml = (name: string) => {
     const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
     const def = exerciseCode(name);
+    const staticTag = isStatic(name) ? ` <span class="codes-static" title="Isometric hold">static</span>` : "";
     return (
-      `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}</td>` +
+      `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}${staticTag}</td>` +
       `<td class="codes-cell">` +
       `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
       `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +

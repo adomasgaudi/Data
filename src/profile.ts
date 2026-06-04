@@ -558,8 +558,17 @@ export function exerciseCategories(exerciseName: string): string[] {
       return ["Mobility"];
     if (/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "skateboard", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"))
       return ["Cardio"];
-    if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross"))
-      return [n.includes("push") ? "Shoulders" : "Skill"];
+  }
+  // Calisthenics SKILLS are skills AND the muscles they build (if you're strong
+  // enough) — like a squat isn't "just a skill". So a skill adds Skill plus its
+  // muscle group(s), then the keyword adds below can pile on more (e.g. a
+  // "balance squat" also picks up Legs). A handstand PUSH-up is shoulders.
+  if (!ov && has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "l-sit", "l sit", "lsit", "balance", "muscle up", "iron cross")) {
+    if (n.includes("push")) add("Shoulders");
+    else {
+      add("Skill");
+      for (const m of skillMuscles(n)) add(m);
+    }
   }
 
   // Movement patterns (a squat/deadlift can belong to a pattern AND muscle
@@ -599,6 +608,58 @@ export function exerciseCategories(exerciseName: string): string[] {
   }
   if (cats.length === 0) add("Other");
   return cats;
+}
+
+/** The muscle group(s) a calisthenics SKILL also builds (owner's mapping). Labels
+ * match LIST_CATEGORIES so exerciseCategories can add them directly. */
+function skillMuscles(n: string): string[] {
+  const m: string[] = [];
+  if (/front lever|back lever/.test(n)) m.push("Back", "Core");
+  if (/planche|maltese/.test(n)) m.push("Shoulders", "Chest", "Core");
+  if (/muscle ?up/.test(n)) m.push("Back", "Arms");
+  if (/dragon flag/.test(n)) m.push("Core");
+  if (/human flag/.test(n)) m.push("Core", "Shoulders");
+  if (/handstand|headstand|forearm stand/.test(n)) m.push("Shoulders");
+  if (/l-?sit|\blsit\b/.test(n)) m.push("Core");
+  if (/iron cross/.test(n)) m.push("Shoulders", "Chest", "Arms");
+  return m;
+}
+
+/** Map a fine LIST_CATEGORIES bucket back to its coarse TrainingCategory. */
+const LISTCAT_TO_TRAINING: Record<string, TrainingCategory> = {
+  "Squat pattern": "Legs", "Deadlift pattern": "Legs", "Deadlift accessory": "Legs",
+  "Legs (all)": "Legs", "Legs (quads/glutes/hams)": "Legs",
+  Chest: "Chest", Back: "Back", Shoulders: "Shoulders", Arms: "Arms", Core: "Core",
+  Dynamic: "Dynamic", Skill: "Skill", Mobility: "Mobility", Posture: "Posture", Cardio: "Cardio", Other: "Other",
+};
+
+/**
+ * Every COARSE training category an exercise belongs to — multi-membership, so a
+ * lift can appear under several headers (a deadlift is Legs, Back AND Core; a
+ * front lever is Skill, Back AND Core). Derived from {@link exerciseCategories}
+ * by folding its fine buckets up to the coarse TRAINING_CATEGORIES.
+ */
+export function trainingCategories(name: string): TrainingCategory[] {
+  const out: TrainingCategory[] = [];
+  for (const lc of exerciseCategories(name)) {
+    const tc = LISTCAT_TO_TRAINING[lc] ?? "Other";
+    if (!out.includes(tc)) out.push(tc);
+  }
+  return out.length ? out : ["Other"];
+}
+
+/**
+ * A "static" TAG (not a category): true for isometric HOLDS — handstand / L-sit /
+ * planche / front-lever holds, planks, wall sits, dead hangs… An exercise with a
+ * dynamic action word (raise, row, push, walk, press, kick, curl…) is NOT static
+ * even if it names a skill, so "Front lever raise" and "Handstand walk" are out
+ * while "Front Lever" and "Handstand hold" are in.
+ */
+export function isStatic(name: string): boolean {
+  const n = name.toLowerCase();
+  if (/raise|\brow|push|pull|kick|walk|step|press|curl|climb|hop|jump|muscle ?up|touch|negative|swing|circle|rotation|march|\bto\b/.test(n))
+    return false;
+  return /\bhold\b|l-?sit|\blsit\b|front lever|back lever|planche|handstand|headstand|forearm stand|wall sit|plank|dead hang|bar hang|iron cross|maltese|hollow|human flag|front support|isometric|\bstatic\b/.test(n);
 }
 
 /**

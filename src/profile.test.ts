@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise } from "./profile";
+import { bodyComposition, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -205,6 +205,31 @@ describe("exerciseCategory", () => {
   });
 });
 
+describe("trainingCategories (multi-membership) + skills as muscles", () => {
+  it("puts a compound under every category it trains", () => {
+    expect(trainingCategories("Deadlift")).toEqual(expect.arrayContaining(["Legs", "Back", "Core"]));
+  });
+  it("counts calisthenics skills as Skill AND their muscles", () => {
+    expect(trainingCategories("Muscle Ups")).toEqual(expect.arrayContaining(["Skill", "Back", "Arms"]));
+    expect(trainingCategories("Front Lever")).toEqual(expect.arrayContaining(["Skill", "Back", "Core"]));
+    expect(trainingCategories("Dragon flag")).toEqual(["Skill", "Core"]);
+    expect(trainingCategories("Handstand")).toEqual(expect.arrayContaining(["Skill", "Shoulders"]));
+    expect(trainingCategories("L-SIT")).toEqual(expect.arrayContaining(["Skill", "Core"]));
+    expect(trainingCategories("balance squat")).toEqual(expect.arrayContaining(["Skill", "Legs"]));
+  });
+});
+
+describe("isStatic (hold tag)", () => {
+  it("tags isometric holds", () => {
+    for (const n of ["Handstand", "L-SIT", "Tuck planche", "Front Lever", "Handstand hold", "Wall sit", "Dead hang", "Front support"])
+      expect(isStatic(n), n).toBe(true);
+  });
+  it("does NOT tag dynamic versions of the same skills", () => {
+    for (const n of ["Front lever raise", "Front lever row old", "Handstand walk", "Handstand kicks", "Planche press", "Muscle Ups", "Dragon flag"])
+      expect(isStatic(n), n).toBe(false);
+  });
+});
+
 describe("muscleGroup (fine split)", () => {
   it("splits the legs into the prime mover", () => {
     expect(muscleGroup("Squat")).toBe("Quads");
@@ -269,10 +294,10 @@ describe("exerciseCategories (multi-membership)", () => {
     expect(calf).toContain("Legs (all)");
     expect(calf).not.toContain("Legs (quads/glutes/hams)");
   });
-  it("returns a single non-strength bucket for cardio/mobility/skill", () => {
+  it("returns a single bucket for cardio/mobility, but a skill also carries its muscles", () => {
     expect(exerciseCategories("Bike machine Cardio")).toEqual(["Cardio"]);
     expect(exerciseCategories("Stretch split")).toEqual(["Mobility"]);
-    expect(exerciseCategories("Handstand")).toEqual(["Skill"]);
+    expect(exerciseCategories("Handstand")).toEqual(["Skill", "Shoulders"]);
   });
   it("only ever returns names from LIST_CATEGORIES, and Other for noise", () => {
     for (const name of ["Deadlift", "Bench Press", "Standing Calf Raise", "Plank"])

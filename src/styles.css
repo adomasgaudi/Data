@@ -1687,6 +1687,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .codes-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .codes-input.is-custom { border-color: var(--accent); color: var(--accent); }
+/* "static" hold tag in the codes list (a tag, not a category). */
+.codes-static {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  color: #5b6b86; background: rgba(91, 107, 134, 0.12); border-radius: 999px; padding: 1px 6px; vertical-align: middle;
+}
 .codes-reset {
   font: inherit; font-size: 0.75rem; cursor: pointer; color: var(--muted);
   background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
