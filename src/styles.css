@@ -465,8 +465,9 @@ main { padding-bottom: 5rem; }
 .athlete-chip.is-locked:hover { color: var(--muted); border-color: var(--line); }
 /* Hidden by the Men/Women athlete-picker filter. */
 .athlete-chip.is-sexhidden { display: none; }
-/* Compact All/M/W filter, pinned at the start of the athlete row. */
-.ath-sex { flex: 0 0 auto; margin: 0; align-self: center; }
+/* Compact M/W toggle, pinned (opaque, on top) at the start of the athlete row so
+   the scrolling name chips clip beside it and never show behind it. */
+.ath-sex { flex: 0 0 auto; margin: 0; align-self: center; position: relative; z-index: 2; background: var(--bg); }
 /* Collapsible "stats & training mix" so the page stays short by default. */
 /* Its own card so it clearly reads as a collapsible section. */
 .athlete-details {

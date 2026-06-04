@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.2.25</span></h1>
+        <h1>Colosseum <span class="version">b.2.2.26</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -132,13 +132,12 @@
       </div>
 
       <div id="tab-athlete" class="tab-panel">
-        <!-- Athlete picker: a compact All/M/W sex filter sits inline at the start
-             of the same row as the horizontally-scrolling name chips. -->
+        <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
+             start of the same row as the horizontally-scrolling name chips. -->
         <div class="ath-row">
-          <div id="athleteSexFilter" class="seg-toggle ath-sex" role="group" aria-label="Filter athletes by sex">
-            <button type="button" class="seg-btn is-active" data-athsex="all">All</button>
-            <button type="button" class="seg-btn" data-athsex="m" aria-label="Men only" title="Men only">M</button>
-            <button type="button" class="seg-btn" data-athsex="f" aria-label="Women only" title="Women only">W</button>
+          <div id="athleteSexFilter" class="seg-toggle ath-sex" role="group" aria-label="Filter athletes by sex (off = all)">
+            <button type="button" class="seg-btn" data-athsex="m" aria-label="Men only" title="Men only (tap again for all)">M</button>
+            <button type="button" class="seg-btn" data-athsex="f" aria-label="Women only" title="Women only (tap again for all)">W</button>
           </div>
           <!-- Custom athlete picker (HTML/CSS chips). The hidden <select> keeps the
                selected username as the single source of truth the rest of the app

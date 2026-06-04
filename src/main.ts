@@ -5317,10 +5317,11 @@ async function init() {
   els.athleteSexFilter.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
     const v = btn?.dataset.athsex;
-    if (v !== "all" && v !== "m" && v !== "f") return;
-    athleteSexFilter = v;
+    if (v !== "m" && v !== "f") return;
+    // A 2-state toggle: tapping the active side again clears back to "all".
+    athleteSexFilter = athleteSexFilter === v ? "all" : v;
     for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
-      b.classList.toggle("is-active", b.dataset.athsex === v);
+      b.classList.toggle("is-active", b.dataset.athsex === athleteSexFilter);
     syncAthleteChips(); // re-apply the visible/hidden chip set
   });
   els.athleteChips.addEventListener("click", (e) => {
