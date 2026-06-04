@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.2.9</span></h1>
+        <h1>Colosseum <span class="version">b.2.3.9</span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -132,18 +132,19 @@
       </div>
 
       <div id="tab-athlete" class="tab-panel">
-        <!-- Sex filter for the athlete picker: All / Men / Women narrows which
-             chips show, then you pick a person. Driven by ATHLETES[username].sex. -->
-        <div id="athleteSexFilter" class="seg-toggle ath-sex" role="group" aria-label="Filter athletes by sex">
-          <button type="button" class="seg-btn is-active" data-athsex="all">All</button>
-          <button type="button" class="seg-btn" data-athsex="m">Men</button>
-          <button type="button" class="seg-btn" data-athsex="f">Women</button>
+        <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
+             start of the same row as the horizontally-scrolling name chips. -->
+        <div class="ath-row">
+          <div id="athleteSexFilter" class="seg-toggle ath-sex" role="group" aria-label="Filter athletes by sex (off = all)">
+            <button type="button" class="seg-btn" data-athsex="m" aria-label="Men only" title="Men only (tap again for all)">M</button>
+            <button type="button" class="seg-btn" data-athsex="f" aria-label="Women only" title="Women only (tap again for all)">W</button>
+          </div>
+          <!-- Custom athlete picker (HTML/CSS chips). The hidden <select> keeps the
+               selected username as the single source of truth the rest of the app
+               reads via els.athlete.value. AI-NOTE: keep chips + select in sync via
+               syncAthleteChips(); a chip click sets the select and fires change. -->
+          <div id="athleteChips" class="athlete-chips" role="radiogroup" aria-label="Athlete"></div>
         </div>
-        <!-- Custom athlete picker (HTML/CSS chips). The hidden <select> keeps the
-             selected username as the single source of truth the rest of the app
-             reads via els.athlete.value. AI-NOTE: keep chips + select in sync via
-             syncAthleteChips(); a chip click sets the select and fires change. -->
-        <div id="athleteChips" class="athlete-chips" role="radiogroup" aria-label="Athlete"></div>
         <select id="athlete" class="athlete-select-hidden" aria-hidden="true" tabindex="-1"></select>
 
         <details id="athleteDetails" class="athlete-details">
@@ -172,7 +173,7 @@
         </div>
 
         <div id="sub-workouts" class="subtab-panel">
-          <section class="panel">
+          <section class="panel" id="workoutsPanel">
             <h2 id="workoutsTitle">Workouts</h2>
             <details id="workoutSets" class="workout-sets">
               <summary class="workout-sets-summary">Sets over time <span class="ws-caret">▾</span></summary>
@@ -232,7 +233,7 @@
         </div>
 
         <div id="sub-exercises" class="subtab-panel" hidden>
-          <section class="panel">
+          <section class="panel" id="exercisesPanel">
             <h2 id="athleteTitle">Exercises</h2>
             <!-- Drill-in only: combine this lift with others (e.g. Squat + Smith
                  Machine Squat) to view them as one. -->
@@ -328,8 +329,14 @@
             </details>
             <div id="exerciseProgress" class="exercise-progress" hidden>
               <div class="ex-prog-controls">
-                <button type="button" id="exPersetBest" class="ex-best-toggle" aria-pressed="false" hidden>Best set only</button>
-                <button type="button" id="exerciseProgressCenter" class="ex-best-toggle" title="Center on data" aria-label="Center on data">⌖ Center</button>
+                <details class="ex-prog-settings">
+                  <summary class="ex-prog-settings-sum">⚙ Settings</summary>
+                  <div class="ex-prog-settings-menu">
+                    <button type="button" id="exProgCompact" class="ex-best-toggle" aria-pressed="false">⇄ Realistic time</button>
+                    <button type="button" id="exPersetBest" class="ex-best-toggle" aria-pressed="false" hidden>Best set only</button>
+                    <button type="button" id="exerciseProgressCenter" class="ex-best-toggle" title="Center on data" aria-label="Center on data">⌖ Center on data</button>
+                  </div>
+                </details>
               </div>
               <div class="ex-prog-wrap">
                 <div id="exerciseProgressChart"></div>
@@ -1081,8 +1088,12 @@
             <p class="muted wa-placeholder">Stats area goes here.</p>
           </div>
           <div id="waTable" class="wa-section">
-            <h3 class="wa-section-title">Table / list</h3>
-            <p class="muted wa-placeholder">Table / list area goes here.</p>
+            <h3 class="wa-section-title">Workout history</h3>
+            <!-- TASK 3: the live Workouts panel is relocated here while this view
+                 is open (and returned to the athlete Workouts tab when you leave),
+                 so all its history / date-filter / stats / toggles work as-is. -->
+            <p class="muted wa-placeholder" id="waWorkoutsEmpty">Workout history loads here.</p>
+            <div id="waWorkoutsHost"></div>
           </div>
         </section>
       </div>
@@ -1096,9 +1107,13 @@
         <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8v8M9.5 6.5v11M14.5 6.5v11M17.5 8v8M9.5 12h5M4 10.5v3M20 10.5v3"/></svg>
         <span>Exercises</span>
       </button>
+      <button class="subtab" data-nav="analysis" role="tab">
+        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>Analysis</span>
+      </button>
       <button class="subtab" data-nav="other" role="tab">
         <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-        <span>Other</span>
+        <span>More</span>
       </button>
     </nav>
 
@@ -1111,8 +1126,7 @@
         <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
         <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
         <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
-        <button class="other-item" data-tab="analysis" role="menuitem"><span class="other-ico">📈</span> Workout analysis</button>
-        <button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
+<button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
         <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
         <button class="other-item" data-tab="codes" role="menuitem"><span class="other-ico">🏷️</span> Exercise codes</button>
         <button class="other-item" data-tab="statsedit" role="menuitem"><span class="other-ico">📝</span> Edit athlete stats</button>

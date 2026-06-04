@@ -9,6 +9,7 @@ import {
   personalRecords,
   bestSet,
   distinctExercises,
+  selectableExercises,
   distinctUsers,
   exerciseCountsForUser,
   setsForUserExercise,
@@ -97,9 +98,14 @@ describe("addedWeight1RM", () => {
     expect(addedWeight1RM(rec({ weight: 72, origWeight: null, reps: 30 }), "epley")).toBeNull();
   });
 
-  it("yields NO 1RM above the rep cap (null, not a clamped value)", () => {
+  it("caps Epley/Brzycki above the rep cap, but Nuzzo works the full study range", () => {
+    // Epley/Brzycki extrapolate absurdly at high reps → no value above the cap.
     expect(addedWeight1RM(rec({ weight: 100, reps: 40 }), "epley")).toBeNull();
-    expect(addedWeight1RM(rec({ weight: 100, reps: 16 }), "nuzzo")).toBeNull();
+    expect(addedWeight1RM(rec({ weight: 100, reps: 16 }), "brzycki")).toBeNull();
+    // Nuzzo is data-derived down to 15% of 1RM, so it estimates at any rep count.
+    const nz = addedWeight1RM(rec({ weight: 100, reps: 40 }), "nuzzo");
+    expect(nz).not.toBeNull();
+    expect(nz!).toBeGreaterThan(100); // a 1RM is never below the weight lifted
   });
 
   it("excludes isometric holds (seconds-as-reps) from the 1RM", () => {
@@ -733,5 +739,39 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
 
   it("is empty for no points", () => {
     expect(decayedStrengthSeries([], at(10))).toEqual([]);
+  });
+});
+
+describe("originals stay selectable when variants/groups exist (TASK 11)", () => {
+  const base = [
+    rec({ username: "ada", exerciseName: "Pull Ups" }),
+    rec({ username: "ada", exerciseName: "Pull Ups" }),
+    rec({ username: "ada", exerciseName: "Assisted Pull Up" }),
+    rec({ username: "ada", exerciseName: "Gravity Machine Pull Up" }),
+  ];
+  const groups = [
+    { id: "combine.pulls", derivedName: "Pull mix", members: { "Pull Ups": 1, "Assisted Pull Up": 1 } },
+  ];
+
+  it("original and both variants all appear in the selector list", () => {
+    const names = selectableExercises(base);
+    expect(names).toEqual(
+      expect.arrayContaining(["Pull Ups", "Assisted Pull Up", "Gravity Machine Pull Up"]),
+    );
+  });
+
+  it("creating a combined group never removes an original, and the group is also selectable", () => {
+    const withGroup = [...base, ...withSyntheticGroups(base, groups)];
+    const before = selectableExercises(base);
+    const after = new Set(selectableExercises(withGroup));
+    for (const n of before) expect(after.has(n)).toBe(true); // every original/variant survives
+    expect(after.has("Pull mix")).toBe(true); // …and the combined appears alongside them
+  });
+
+  it("the per-athlete selector keeps the original next to the variant", () => {
+    const names = exerciseCountsForUser(base, "ada").map((c) => c.exerciseName);
+    expect(names).toContain("Pull Ups");
+    expect(names).toContain("Assisted Pull Up");
+    expect(names).toContain("Gravity Machine Pull Up");
   });
 });

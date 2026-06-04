@@ -4,11 +4,12 @@
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
 import { niceTicks, MS_DAY } from "./chartAxis";
-import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
+import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
   distinctExercises,
+  selectableExercises,
   distinctUsers,
   exerciseCountsForUser,
   setsForUserExercise,
@@ -53,8 +54,15 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { levelLabel, levelKey, defaultLevelScale } from "./variants";
+import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import type { SetRecord } from "./domain";
+import { exerciseIdentity, type ExerciseIdentity } from "./domain";
+import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
+import { exerciseMetaValues, movementDisplay, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
+import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
+import { renderAnalyticsGraph } from "./analyticsGraph";
+import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
+import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
   ATHLETES,
   type AthleteProfile,
@@ -156,6 +164,7 @@ const els = {
   exerciseProgressNote: $("exerciseProgressNote"),
   exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
   exPersetBest: $<HTMLButtonElement>("exPersetBest"),
+  exProgCompact: $<HTMLButtonElement>("exProgCompact"),
   exCombineBar: $("exCombineBar"),
   exLevels: $("exLevels"),
   exerciseFilter: $("exerciseFilter"),
@@ -607,12 +616,12 @@ const levelScaleOverrides: Record<string, number> = (() => {
   }
 })();
 
-/** Technique scaling factor for one set's hole: the owner's override, else the
- * seeded default (×1 at the floor, easier holes scaled down). */
-function levelScaleFor(exerciseName: string, value: number): number {
-  const key = levelKey(exerciseName, value);
+/** Technique scaling factor for one set's level: the owner's override, else the
+ * seeded default (×1 at the floor/neutral, easier levels scaled down). */
+function levelScaleFor(exerciseName: string, dim: LevelDim, value: number): number {
+  const key = levelKey(exerciseName, dim, value);
   if (Object.prototype.hasOwnProperty.call(levelScaleOverrides, key)) return levelScaleOverrides[key]!;
-  return defaultLevelScale(value);
+  return defaultLevelScale(dim, value);
 }
 
 function setLevelScale(key: string, value: number) {
@@ -629,7 +638,7 @@ function setLevelScale(key: string, value: number) {
 function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
   if (o?.scale !== undefined) return o.scale;
-  return r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelValue) : 1;
+  return r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
 }
 
 // ---- Editable athlete stats (height / weight / age / sex / body-fat band) ----
@@ -938,11 +947,44 @@ function activeRecords(): SetRecord[] {
   return data.records.filter((r) => allow.has(r.exerciseName));
 }
 
+/** User-created exercise definitions (TASKS 13–15), saved on this device: a
+ * "dissolved" variant (one parent), a "combined" group or a "comparison_group"
+ * (each with member lifts). A def makes its NAME selectable and tags any logged
+ * sets of that name with the right identity + relationship, so it behaves like a
+ * normal exercise everywhere. The parent / member lifts are never changed. */
+interface UserExerciseDef {
+  name: string;
+  identity: ExerciseIdentity; // "dissolved" | "combined" | "comparison_group"
+  parent?: string; // dissolved → parentExerciseId
+  members?: string[]; // combined / comparison_group → includedExerciseIds
+}
+let userExerciseDefs: UserExerciseDef[] = (() => {
+  try { return JSON.parse(localStorage.getItem("colosseum.userExercises") ?? "[]") as UserExerciseDef[]; } catch { return []; }
+})();
+function saveUserExerciseDefs(): void {
+  try { localStorage.setItem("colosseum.userExercises", JSON.stringify(userExerciseDefs)); } catch { /* ignore */ }
+}
+/** Tag a logged record belonging to a user-defined exercise with its identity +
+ * relationship fields (so its sets carry the parent/members and read as that
+ * type). Plain records pass through untouched. */
+function tagUserExerciseDef(r: SetRecord, byName: Map<string, UserExerciseDef>): SetRecord {
+  const d = byName.get(r.exerciseName);
+  if (!d) return r;
+  if (d.identity === "dissolved")
+    return { ...r, identity: "dissolved", parentExerciseId: d.parent ?? "", relationshipType: "dissolved_into" };
+  if (d.identity === "combined")
+    return { ...r, identity: "combined", includedExerciseIds: d.members ?? [], relationshipType: "combined_from" };
+  if (d.identity === "comparison_group")
+    return { ...r, identity: "comparison_group", includedExerciseIds: d.members ?? [], relationshipType: "comparison_of" };
+  return r;
+}
+
 function computedRecords(): SetRecord[] {
-  // Active-filtered logged records with bodyweight folded in, PLUS the synthetic
-  // combinable/comparable group records derived from those computed loads (so the
-  // ratio scales the total bw-inclusive load). Pure lifts are never mutated.
-  const pure = activeRecords().map(applySetOverride).map(computeRecord);
+  // Active-filtered logged records with bodyweight folded in (and tagged with any
+  // user exercise-def identity), PLUS the synthetic combinable/comparable group
+  // records derived from those computed loads. Pure source lifts are never mutated.
+  const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
+  const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
   return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
 }
 
@@ -1264,8 +1306,38 @@ function renderHealth() {
       );
   }
 
+  // TASK 61 — duplicate REVIEW list. Look-alike names to eyeball; nothing is
+  // merged automatically here (that stays an owner-confirmed act).
+  const dupes = duplicateAudit(data.records);
+  if (dupes.length) {
+    lines.push(`<h3 class="health-section">Possible duplicates to review (${dupes.length})</h3>`);
+    lines.push(
+      `<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">These names look like the same lift. Nothing is changed automatically — this is just a list to check. If two really are the same, tell me and I'll fold them.</p>`,
+    );
+    for (const c of dupes.slice(0, 40))
+      lines.push(
+        `<div class="health-item dup"><strong>${escapeHtml(c.suggested)}</strong> <span class="muted">?</span> ${c.names
+          .map((n) => escapeHtml(n))
+          .join(", ")} <span class="muted">(${c.sets} sets)</span></div>`,
+      );
+  }
+
+  // TASK 62 — relationship validation. Broken/empty custom-exercise links.
+  const relDefs: RelationshipDef[] = userExerciseDefs.map((d) => ({
+    name: d.name,
+    identity: d.identity,
+    ...(d.parent ? { parent: d.parent } : {}),
+    ...(d.members ? { members: d.members } : {}),
+  }));
+  const relIssues = relationshipAudit(relDefs, selectableExercises(data.records));
+  if (relIssues.length) {
+    lines.push(`<h3 class="health-section">Custom-exercise links to fix (${relIssues.length})</h3>`);
+    for (const i of relIssues.slice(0, 40))
+      lines.push(`<div class="health-item warn">${escapeHtml(i.detail)}</div>`);
+  }
+
   if (lines.length === 0) {
-    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly and no duplicate exercise names.</p>`;
+    els.health.innerHTML = `<p class="muted">No issues — every row validated cleanly, no duplicate names, and every custom-exercise link is valid.</p>`;
     return;
   }
   els.health.innerHTML = lines.join("");
@@ -2735,43 +2807,50 @@ function renderCombineBar(exName: string, username: string) {
  * tune each % on the spot. Hidden when the lift has no leveled sets. */
 function renderExerciseLevels(exName: string, username: string): void {
   const formula = currentFormula();
-  // Best set per hole by its REAL added-weight 1RM (unchanged by the hole now).
-  const byHole = new Map<number, { best: SetRecord; oneRm: number }>();
+  // Best set per LEVEL (squat-rack hole or cm) by its REAL added-weight 1RM.
+  const byLevel = new Map<string, { dim: LevelDim; value: number; label: string; best: SetRecord; oneRm: number }>();
   for (const r of computedRecords()) {
-    if (r.username !== username || r.exerciseName !== exName || r.levelValue === undefined) continue;
+    if (r.username !== username || r.exerciseName !== exName || r.levelDim === undefined || r.levelValue === undefined) continue;
     const rm = addedWeight1RM(r, formula);
     if (rm === null) continue;
-    const cur = byHole.get(r.levelValue);
-    if (!cur || rm > cur.oneRm) byHole.set(r.levelValue, { best: r, oneRm: rm });
+    const k = levelKey(exName, r.levelDim, r.levelValue);
+    const cur = byLevel.get(k);
+    if (!cur || rm > cur.oneRm)
+      byLevel.set(k, { dim: r.levelDim, value: r.levelValue, label: r.levelLabel ?? levelLabel(r.levelDim, r.levelValue), best: r, oneRm: rm });
   }
-  if (byHole.size === 0) { els.exLevels.hidden = true; return; }
-  const rows = [...byHole.entries()]
-    .sort((a, b) => a[0] - b[0]) // by hole, low (hard) → high (easy)
-    .map(([hole, v]) => {
-      const scale = levelScaleFor(exName, hole);
+  if (byLevel.size === 0) { els.exLevels.hidden = true; return; }
+  const rows = [...byLevel.values()]
+    .sort((a, b) => (a.dim === b.dim ? a.value - b.value : a.dim < b.dim ? -1 : 1))
+    .map((v) => {
+      const scale = levelScaleFor(exName, v.dim, v.value);
       const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
       return (
         `<tr>` +
-        `<td><strong>${escapeHtml(levelLabel(hole))}</strong></td>` +
+        `<td><strong>${escapeHtml(v.label)}</strong></td>` +
         `<td class="num">${wr(dispW, v.best.reps)}</td>` +
         `<td class="num">${fmt(v.oneRm)}</td>` +
         `<td class="num"><strong>${fmt(v.oneRm * scale)}</strong></td>` +
         `<td class="num"><input class="bw-input exl-scale" type="number" step="0.05" min="0" max="5" value="${scale}" ` +
-        `data-levelkey="${escapeHtml(levelKey(exName, hole))}" aria-label="Scaling factor for hole ${hole}" /></td>` +
+        `data-levelkey="${escapeHtml(levelKey(exName, v.dim, v.value))}" aria-label="Scaling factor for ${escapeHtml(v.label)}" /></td>` +
         `</tr>`
       );
     })
     .join("");
   els.exLevels.hidden = false;
+  // Tucked into a collapsed "settings" disclosure — it's scaling configuration,
+  // not day-to-day stats, so it shouldn't sit inline in the List & stats view.
   els.exLevels.innerHTML =
-    `<div class="exl-head"><strong>Squat-rack holes</strong> ` +
-    `<span class="muted">real weight and 1RM stay as logged; tune each Scale so equal-effort holes show the same Effort</span></div>` +
+    `<details class="exl-settings">` +
+    `<summary class="exl-settings-sum">⚙ Technique scaling <span class="muted">(${byLevel.size} level${byLevel.size === 1 ? "" : "s"})</span></summary>` +
+    `<div class="exl-settings-body">` +
+    `<div class="exl-head muted">For levels logged in the note (squat-rack hole SQ8, or a height like 43cm). Real weight and 1RM stay as logged; tune each Scale so equal-effort levels show the same Effort.</div>` +
     `<table class="data-table exl-table"><thead><tr>` +
-    `<th>Hole</th><th class="num">Best</th>` +
-    `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the hole">1RM</th>` +
-    `<th class="num" title="Scaled effort 1RM = 1RM × Scale. Tune Scale so equal-effort holes line up here.">Effort</th>` +
-    `<th class="num" title="Technique scaling factor for this hole — only affects the Effort column, never the real 1RM. Lower hole = harder = bigger.">Scale</th>` +
-    `</tr></thead><tbody>${rows}</tbody></table>`;
+    `<th>Level</th><th class="num">Best</th>` +
+    `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the level">1RM</th>` +
+    `<th class="num" title="Scaled effort 1RM = 1RM × Scale. Tune Scale so equal-effort levels line up here.">Effort</th>` +
+    `<th class="num" title="Technique scaling factor for this level — only affects the Effort column, never the real 1RM. Easier setup = smaller.">Scale</th>` +
+    `</tr></thead><tbody>${rows}</tbody></table>` +
+    `</div></details>`;
 }
 
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
@@ -3013,34 +3092,31 @@ function decayingStrengthPoints<T extends { x: number; y: number }>(points: T[])
 }
 const CURRENT_STRENGTH_COLOR = "#2e7d52";
 
-/** Fit y = a + b·ln(day+1) (a logarithmic curve — diminishing returns) by least
- * squares on (ln(day+1), y). Returns null if it can't be fit. */
-function logFit(pts: { x: number; y: number }[]): { a: number; b: number } | null {
-  const f = linearFit(pts.map((p) => ({ x: Math.log(p.x + 1), y: p.y })));
-  return f ? { a: f.intercept, b: f.slope } : null;
+/** Reflect the app-wide compacted-time state on the ⚙ menu's toggle button. */
+function syncExProgCompactBtn(): void {
+  const on = getTimeCompact();
+  els.exProgCompact.textContent = on ? "⇄ Compacted time" : "⇄ Realistic time";
+  els.exProgCompact.classList.toggle("is-active", on);
+  els.exProgCompact.setAttribute("aria-pressed", String(on));
 }
 
-/** One combined per-exercise graph (drill-in). Every "view" is a series you can
- * switch on/off by tapping its legend key: Per-set range (each set's weight→1RM,
- * dashes = reps), Current strength (best 1RM so far, faded for time off — a
- * connected line that sags during breaks and pops back when you train), Est.
- * 1RM/wk dots, Sets/week bars, and an optional logarithmic Trend. kg on the left
- * axis (so the bars and lines share one scale); weekly set-count on the right. */
+/** One combined per-exercise graph (drill-in). Two views you can switch on/off by
+ * tapping the legend: Est. 1RM (a dot for every set) and Current strength (best
+ * 1RM so far, faded for time off). When the lift has squat-rack holes a "Scaled
+ * effort" view is added too. View settings live in the ⚙ menu. */
 function renderExerciseProgressChart(exName: string) {
   const box = document.getElementById("exerciseProgressChart");
   if (!box) return;
-  // Same records the Records card/table use (honour "Exclude dropsets").
-  const recs = filterRecords(remapCombined(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
   const formula = currentFormula();
   const username = els.athlete.value;
-  const ts = (d: string) => Date.parse(d);
   const mount = (config: SvgChartConfig) => {
     if (!exerciseSvg) exerciseSvg = mountSvgChart(box, config);
     else exerciseSvg.update(config);
   };
-  els.exPersetBest.hidden = false; // "Best set only" filters the per-set range view
+  els.exPersetBest.hidden = false; // "Best set only" filters the per-set views
   els.exPersetBest.classList.toggle("is-active", exPersetBestOnly);
   els.exPersetBest.setAttribute("aria-pressed", String(exPersetBestOnly));
+  syncExProgCompactBtn();
 
   // ---- Per-set range: one weight→1RM bar per set on a real time axis; same-day
   // sets fan out within the day. Optionally only each day's best set. ----
@@ -3061,12 +3137,12 @@ function renderExerciseProgressChart(exName: string) {
   const perDay = new Map<string, number>();
   for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
   const seenInDay = new Map<string, number>();
-  const rangePoints: SvgPoint[] = [];
-  const strengthRaw: { x: number; y: number }[] = [];
+  const strengthRaw: { x: number; y: number; meta: string }[] = [];
   const scaledRaw: { x: number; y: number }[] = []; // real 1RM × technique factor
   for (const s of sets) {
     const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
     const e1rm = addedWeight1RM(s, formula);
+    if (e1rm === null) continue;
     const reps = s.reps ?? 0;
     const base = Date.parse(s.date);
     const total = perDay.get(s.date) ?? 1;
@@ -3074,75 +3150,42 @@ function renderExerciseProgressChart(exName: string) {
     seenInDay.set(s.date, idx + 1);
     const frac = total > 1 ? (idx / (total - 1) - 0.5) * 0.7 : 0;
     const x = base + frac * MS_DAY;
-    rangePoints.push({
-      x,
-      lo: added,
-      hi: e1rm ?? added,
-      dashes: reps,
-      meta:
-        (e1rm === null ? `${fmt(added)}×${reps} (no 1RM est.)` : `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM`) +
-        ` · ${shortDate(s.date)}` +
-        (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : ""),
-    });
-    if (e1rm !== null) strengthRaw.push({ x, y: e1rm });
-    if (e1rm !== null) scaledRaw.push({ x, y: e1rm * scaleForRecord(s) });
+    const meta = `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM · ${shortDate(s.date)}` + (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : "");
+    strengthRaw.push({ x, y: e1rm, meta });
+    scaledRaw.push({ x, y: e1rm * scaleForRecord(s) });
   }
   const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
   const hasLevels = sets.some((s) => s.levelValue !== undefined);
   const scaledPts = scaledRaw.slice().sort((a, b) => a.x - b.x).map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
-  const strengthPts = decayingStrengthPoints(strengthSorted);
+  const strengthPts = decayingStrengthPoints(strengthSorted.map((p) => ({ x: p.x, y: p.y })));
   // A dot for EVERY set's estimated 1RM (per the request), not a weekly summary.
-  const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
+  const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10, meta: p.meta }));
 
-  // ---- Weekly set counts (the only thing still aggregated by week) ----
-  const weekly = exerciseProgressByWeek(recs, username, exName, formula);
-  const setsPts = weekly.map((p) => ({ x: ts(p.date), y: p.sets }));
-
-  if (rangePoints.length === 0 && e1rmPts.length === 0) {
+  if (e1rmPts.length === 0) {
     els.exerciseProgress.hidden = true;
     els.exerciseProgressNote.textContent = "";
     return;
   }
   els.exerciseProgress.hidden = false;
 
-  // ---- Logarithmic trend (diminishing returns) over every set's 1RM ----
-  let trendPts: { x: number; y: number }[] = [];
-  if (strengthSorted.length >= 3) {
-    const t0 = strengthSorted[0]!.x;
-    const lf = logFit(strengthSorted.map((p) => ({ x: (p.x - t0) / MS_DAY, y: p.y })));
-    const lastDay = (strengthSorted[strengthSorted.length - 1]!.x - t0) / MS_DAY;
-    if (lf && lastDay > 0) {
-      const N = 32;
-      for (let i = 0; i <= N; i++) {
-        const dd = (lastDay * i) / N;
-        trendPts.push({ x: t0 + dd * MS_DAY, y: Math.round((lf.a + lf.b * Math.log(dd + 1)) * 10) / 10 });
-      }
-    }
-  }
-
   const series: SvgSeries[] = [
-    // kg series share the LEFT axis so the dots, bars and strength line align.
+    // kg series share the LEFT axis so the dots and strength line align.
     { name: "Est. 1RM (per set)", color: "#b8902f", type: "scatter", axis: "left", points: e1rmPts },
     { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "left", points: strengthPts },
-    { name: "Per-set range", color: "#284e86", type: "range", axis: "left", points: rangePoints, hidden: true },
-    { name: "Sets/week", color: "#6c4ab0", type: "bars", axis: "right", points: setsPts, hidden: true, fillOpacity: 0.18 },
   ];
   // Scaled effort: each set's real 1RM × its hole's technique factor — only added
   // when this exercise has holes, so equal-effort holes line up (originals stay).
   if (hasLevels)
     series.push({ name: "Scaled effort", color: "#1f8a8a", type: "scatter", axis: "left", points: scaledPts });
-  if (trendPts.length)
-    series.push({ name: "Trend (log)", color: "#c0603a", type: "line", axis: "left", points: trendPts, hidden: true });
 
   mount({
-    series, xKind: "time", compactable: true, yBeginAtZero: true, rightBeginAtZero: true,
-    rightHeadroom: 5, // sets/week axis is 5× tall (baseline still 0), so the bars stay low and clear of the 1RM data
-    yUnit: "kg", rightUnit: "sets", insideLabels: true, height: 320,
+    series, xKind: "time", compactable: true, noCompactToggle: true, yBeginAtZero: true,
+    yUnit: "kg", insideLabels: true, height: 320,
   });
   els.exerciseProgressNote.textContent =
-    "One graph — tap a label to show/hide each view: Est. 1RM (a dot for every set), Current strength (best 1RM so far, faded for time off — sags during breaks, pops back up when you train, runs to today), Per-set range (weight→1RM, dashes = reps), Sets/week and a logarithmic Trend." +
+    "Tap a label to show/hide a view: Est. 1RM (a dot for every set) and Current strength (best 1RM so far, faded for time off). Use ⚙ for graph settings." +
     (hasLevels ? " Scaled effort = each set's real 1RM × its squat-rack hole's technique factor (tune the factors in the holes table); the real 1RM is never changed." : "") +
-    (exPersetBestOnly ? " Per-set views show each day's best set only." : "");
+    (exPersetBestOnly ? " Showing each day's best set only." : "");
 }
 
 
@@ -3254,8 +3297,7 @@ let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 // "ribbon" = one continuous strip flowing across years (default); "single" = one
 // calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
 let heatScope: "ribbon" | "single" | "all" = "ribbon";
-let heatFilter = "cat:Legs"; // "all" | "cat:<bodypart>" | "mus:<muscle>" | "fun:<pattern>" | "ex:<exercise>"
-let heatLastGroup = "cat:Legs"; // last non-"all" filter, for the group/all quick toggle
+let heatFilters: string[] = ["cat:Legs"]; // multi-select; empty = all exercises
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
 // instead of jumping to that day — so you can tag many days quickly in one go.
 let aloneTagMode = false;
@@ -3268,16 +3310,15 @@ function trainingDays(): Map<string, number> {
   return m;
 }
 
-/** Sets on a day that match the active {@link heatFilter} (all / one category /
- * one exercise). */
-function dayMatchCount(d: WorkoutDay): number {
-  if (heatFilter === "all" || heatFilter === "") return d.totalSets;
-  const sep = heatFilter.indexOf(":");
-  const kind = heatFilter.slice(0, sep);
-  const val = heatFilter.slice(sep + 1);
+/** Sets on a day matching one specific filter string. */
+function filterMatchSets(d: WorkoutDay, filter: string): number {
+  if (filter === "all" || filter === "") return d.totalSets;
+  const sep = filter.indexOf(":");
+  const kind = filter.slice(0, sep);
+  const val = filter.slice(sep + 1);
   const match = (name: string): boolean => {
-    if (kind === "cat") return exerciseCategory(name) === val; // coarse body part
-    if (kind === "mus") return muscleGroup(name) === val; // fine muscle group
+    if (kind === "cat") return exerciseCategory(name) === val;
+    if (kind === "mus") return muscleGroup(name) === val;
     if (kind === "fun") return tagsForExercise(name).some((t) => t.kind === "functional-pattern" && t.label === val);
     if (kind === "ex") return name === val;
     return false;
@@ -3285,12 +3326,47 @@ function dayMatchCount(d: WorkoutDay): number {
   return d.exercises.reduce((s, e) => (match(e.exerciseName) ? s + e.count : s), 0);
 }
 
-/** Training dates → matching set count, honouring the heatmap filter. */
-function filteredDayCounts(): Map<string, number> {
-  const m = new Map<string, number>();
+/** Hex color for a filter value (uses the category palette). */
+function filterColor(filter: string): string | null {
+  if (!filter || filter === "all") return null;
+  const i = filter.indexOf(":");
+  const kind = filter.slice(0, i);
+  const val = filter.slice(i + 1);
+  if (kind === "cat") return CATEGORY_COLORS[val as TrainingCategory] ?? null;
+  if (kind === "ex") return CATEGORY_COLORS[exerciseCategory(val) as TrainingCategory] ?? null;
+  return null;
+}
+
+/** Background color for a heatmap cell given intensity level and optional category hex. */
+function cellBgColor(level: number, catHex: string | null): string {
+  if (level === 0) return "";
+  if (level === 5) return "#f5c800"; // shining — always gold
+  const hex = catHex ?? "#1e4fa3"; // default blue
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  if (level === 4) return `rgb(${Math.round(r * 0.55)},${Math.round(g * 0.55)},${Math.round(b * 0.55)})`;
+  const t = level === 1 ? 0.28 : level === 2 ? 0.58 : 1.0;
+  return `rgb(${Math.round(255+(r-255)*t)},${Math.round(255+(g-255)*t)},${Math.round(255+(b-255)*t)})`;
+}
+
+/** Training dates → { sets, catHex } honouring the active heatFilters. */
+function filteredDayCounts(): Map<string, { sets: number; catHex: string | null }> {
+  const m = new Map<string, { sets: number; catHex: string | null }>();
   for (const d of athleteWorkouts) {
-    const c = dayMatchCount(d);
-    if (c > 0) m.set(d.date, c);
+    if (heatFilters.length === 0) {
+      if (d.totalSets > 0) m.set(d.date, { sets: d.totalSets, catHex: null });
+      continue;
+    }
+    let totalSets = 0;
+    let dominantFilter = "";
+    let dominantSets = 0;
+    for (const f of heatFilters) {
+      const n = filterMatchSets(d, f);
+      totalSets += n;
+      if (n > dominantSets) { dominantSets = n; dominantFilter = f; }
+    }
+    if (totalSets > 0) m.set(d.date, { sets: totalSets, catHex: filterColor(dominantFilter) });
   }
   return m;
 }
@@ -3302,19 +3378,18 @@ function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
   const y = Number(latest?.slice(0, 4));
   if (Number.isFinite(y)) heatYear = y;
-  heatFilter = "cat:Legs";
+  heatFilters = ["cat:Legs"];
   aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
-/** Intensity bucket for a day's set count: 0 rest, then 1+/2+/4+/6+/10+ sets
- * (light blue → dark blue → light gold → dark gold). */
+/** Intensity bucket for a day's set count: 0 rest, 1/2/4/10/20 sets. */
 function heatLevel(sets: number): number {
   if (sets <= 0) return 0;
-  if (sets < 2) return 1; // 1 set — light blue
-  if (sets < 4) return 2; // 2–3 — darker blue
-  if (sets < 6) return 3; // 4–5 — dark blue
-  if (sets < 10) return 4; // 6–9 — light gold
-  return 5; // 10+ — dark gold
+  if (sets < 2)  return 1; // 1 set — light
+  if (sets < 4)  return 2; // 2–3 — darker
+  if (sets < 10) return 3; // 4–9 — dark + outline
+  if (sets < 20) return 4; // 10–19 — deep + double outline
+  return 5;                // 20+  — shining
 }
 
 /** The years (descending) that have any training, for the ‹ › year nav. */
@@ -3326,20 +3401,29 @@ function dataYears(trained: Map<string, number>): number[] {
 /** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
  * rows) — weeks are never broken mid-column — with month labels along the top
  * aligned to the week each month begins. `counts` is the filtered day→sets map. */
-function yearGridHtml(year: number, counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
+  const numWeeks = Math.ceil((startDow + daysInYear) / 7);
   const cells: string[] = [];
   for (let i = 0; i < startDow; i++) cells.push(`<div class="hm-cell empty"></div>`);
   let days = 0;
   let totalSets = 0;
+  const weekSets: number[] = Array(numWeeks).fill(0);
+  const weekCatHex: (string | null)[] = Array(numWeeks).fill(null);
+  const weekCatMax: number[] = Array(numWeeks).fill(0);
   for (let doy = 0; doy < daysInYear; doy++) {
     const d = new Date(year, 0, 1 + doy);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const sets = counts.get(iso) ?? 0;
+    const entry = counts.get(iso);
+    const sets = entry?.sets ?? 0;
+    const catHex = entry?.catHex ?? null;
     if (sets) {
       days++;
       totalSets += sets;
+      const wi = Math.floor((startDow + doy) / 7);
+      weekSets[wi] = (weekSets[wi] ?? 0) + sets;
+      if (catHex && sets > (weekCatMax[wi] ?? 0)) { weekCatMax[wi] = sets; weekCatHex[wi] = catHex; }
     }
     const isToday = iso === todayIso();
     // Days the athlete tagged "trained alone" get a red outline on the heatmap.
@@ -3347,23 +3431,31 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
     // Tint alternating months so each month's squares read as a distinct band.
     const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    const lvl = heatLevel(sets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
 
   // Month labels: place each at the week-column where its 1st falls.
-  const numWeeks = Math.ceil((startDow + daysInYear) / 7);
   const labels = Array.from({ length: 12 }, (_, m) => {
     const doyStart = Math.round((Date.UTC(year, m, 1) - Date.UTC(year, 0, 1)) / 86_400_000);
     const col = Math.floor((startDow + doyStart) / 7) + 1; // 1-based grid column
     return `<span class="hm-mlabel" style="grid-column-start:${col}">${MONTH_ABBR[m]}</span>`;
   }).join("");
 
+  const weekRow = weekSets.map((wSets, wi) => {
+    const lvl = heatLevel(wSets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, weekCatHex[wi] ?? null)}"` : "";
+    return `<div class="hm-cell hm-wcell lvl-${lvl}"${bgStyle} title="Week ${wi + 1}: ${wSets} sets"></div>`;
+  }).join("");
+
   const html =
     `<div class="hm-year"><div class="hm-cal">` +
     `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels}</div>` +
     `<div class="hm-grid">${cells.join("")}</div>` +
+    `<div class="hm-wrow" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${weekRow}</div>` +
     `</div></div>`;
   return { html, days, totalSets };
 }
@@ -3374,7 +3466,7 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
  * where each year begins. `counts` is the filtered day→sets map. The strip runs
  * from the Monday on/before the first training day to the Sunday on/after the
  * later of the last training day and today, so it always reaches the present. */
-function ribbonGridHtml(counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
   const dates = [...trainingDays().keys()].sort(); // full range, filter-independent
   if (dates.length === 0) {
     return { html: `<div class="hm-empty muted">No training logged yet.</div>`, days: 0, totalSets: 0 };
@@ -3396,10 +3488,14 @@ function ribbonGridHtml(counts: Map<string, number>): { html: string; days: numb
   let days = 0;
   let totalSets = 0;
   let prevMonth = -1;
+  const weekSets: number[] = Array(numWeeks).fill(0);
+  const weekCatHex: (string | null)[] = Array(numWeeks).fill(null);
+  const weekCatMax: number[] = Array(numWeeks).fill(0);
   for (let i = 0; i < totalDays; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const col = Math.floor(i / 7) + 1; // 1-based grid column (start is a Monday, so weeks align)
+    const wi = Math.floor(i / 7); // 0-based week index
+    const col = wi + 1; // 1-based grid column (start is a Monday, so weeks align)
     const month = d.getMonth();
     if (month !== prevMonth) {
       // Show the year on January and on the first label so each year's start is clear.
@@ -3409,23 +3505,35 @@ function ribbonGridHtml(counts: Map<string, number>): { html: string; days: numb
       prevMonth = month;
     }
     const iso = `${d.getFullYear()}-${String(month + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const sets = counts.get(iso) ?? 0;
+    const entry = counts.get(iso);
+    const sets = entry?.sets ?? 0;
+    const catHex = entry?.catHex ?? null;
     if (sets) {
       days++;
       totalSets += sets;
+      weekSets[wi] = (weekSets[wi] ?? 0) + sets;
+      if (catHex && sets > (weekCatMax[wi] ?? 0)) { weekCatMax[wi] = sets; weekCatHex[wi] = catHex; }
     }
     const isToday = iso === todayIso();
     const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
     const mOdd = month % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    const lvl = heatLevel(sets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
-      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+      `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
   }
+  const weekRow = weekSets.map((wSets, wi) => {
+    const lvl = heatLevel(wSets);
+    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, weekCatHex[wi] ?? null)}"` : "";
+    return `<div class="hm-cell hm-wcell lvl-${lvl}"${bgStyle} title="Week ${wi + 1}: ${wSets} sets"></div>`;
+  }).join("");
   const html =
     `<div class="hm-year"><div class="hm-cal">` +
     `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels.join("")}</div>` +
     `<div class="hm-grid">${cells.join("")}</div>` +
+    `<div class="hm-wrow" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${weekRow}</div>` +
     `</div></div>`;
   return { html, days, totalSets };
 }
@@ -3437,52 +3545,47 @@ function heatScopeToggle(): string {
   return `<div class="cal-mode">${btn("ribbon", "Timeline")}${btn("single", "Single year")}${btn("all", "All years")}</div>`;
 }
 
-/** Human label for the active heatmap filter value. */
+/** Label for the filter button when 0/1/many filters active. */
 function heatFilterLabel(): string {
-  if (heatFilter === "all" || heatFilter === "") return "All exercises";
-  const i = heatFilter.indexOf(":");
-  return i >= 0 ? heatFilter.slice(i + 1) : heatFilter;
+  if (heatFilters.length === 0) return "All exercises";
+  if (heatFilters.length === 1) {
+    const i = heatFilters[0]!.indexOf(":");
+    return i >= 0 ? heatFilters[0]!.slice(i + 1) : heatFilters[0]!;
+  }
+  if (heatFilters.length <= 2) return heatFilters.map(f => { const i = f.indexOf(":"); return i >= 0 ? f.slice(i + 1) : f; }).join(", ");
+  return `${heatFilters.length} selected`;
 }
 
-/** Filter as a custom dropdown (no native <select>): all exercises, one training
- * category, or one exercise. Lives inside the re-rendered calendar HTML, so it's
- * handled by delegation in the workoutCalendar click handler (data-heatval). */
+/** Multi-select filter UI: checkmark chips for each category/exercise. */
 function heatFilterSelect(): string {
-  const exs = exerciseCountsForUser(activeRecords(), els.athlete.value); // most-trained first
+  const exs = exerciseCountsForUser(activeRecords(), els.athlete.value);
   const names = exs.map((e) => e.exerciseName);
   const cats = TRAINING_CATEGORIES.filter((c) => names.some((n) => exerciseCategory(n) === c));
   const muscles = MUSCLE_GROUP_TAGS.map((t) => t.label).filter((l) => names.some((n) => muscleGroup(n) === l));
   const funcs = FUNCTIONAL_PATTERN_TAGS.map((t) => t.label).filter((l) =>
     names.some((n) => tagsForExercise(n).some((t) => t.kind === "functional-pattern" && t.label === l)),
   );
+  const isActive = (val: string) => heatFilters.includes(val);
+  const dot = (val: string) => {
+    const col = filterColor(val);
+    return col ? `<span class="xdd-dot" style="background:${col}"></span>` : "";
+  };
   const opt = (val: string, label: string) =>
-    `<button type="button" class="xdd-opt${heatFilter === val ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${escapeHtml(label)}</button>`;
+    `<button type="button" class="xdd-opt${isActive(val) ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${dot(val)}${escapeHtml(label)}${isActive(val) ? ' <span class="xdd-check">✓</span>' : ""}</button>`;
   const section = (title: string, items: [string, string][]) =>
     items.length ? `<div class="xdd-group">${title}</div>${items.map(([v, l]) => opt(v, l)).join("")}` : "";
   const menu =
-    opt("all", "All exercises") +
+    `<button type="button" class="xdd-opt xdd-clear" data-heatclear="1" role="option">${heatFilters.length === 0 ? '<span class="xdd-check">✓</span> ' : ""}All exercises</button>` +
     section("Body part", cats.map((c) => [`cat:${c}`, c])) +
     section("Muscle group", muscles.map((m) => [`mus:${m}`, m])) +
     section("Functional", funcs.map((f) => [`fun:${f}`, f])) +
     section("Exercises", exs.map((e) => [`ex:${e.exerciseName}`, e.exerciseName]));
-  // Quick toggle: flip the heatmap between the selected group and All.
-  const isAll = heatFilter === "all" || heatFilter === "";
-  const toggle =
-    `<button type="button" class="heat-grp-toggle${isAll ? "" : " is-on"}" data-heattoggle="1" ` +
-    `title="Toggle between this group and all exercises">${isAll ? `Show ${escapeHtml(heatFilterLabel2(heatLastGroup))}` : "Show all"}</button>`;
   return (
     `<div class="xdd xdd-heat">` +
     `<button type="button" class="xdd-btn">${escapeHtml(heatFilterLabel())}<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
-    `</div>${toggle}`
+    `</div>`
   );
-}
-
-/** Label for a stored heatFilter value (used by the group/all quick toggle). */
-function heatFilterLabel2(filter: string): string {
-  if (filter === "all" || filter === "") return "all";
-  const i = filter.indexOf(":");
-  return i >= 0 ? filter.slice(i + 1) : filter;
 }
 
 /** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
@@ -3499,10 +3602,12 @@ function renderWorkoutCalendar() {
   const tagHint = aloneTagMode
     ? `<div class="cal-taghint">Tap trained days to add/remove the red “alone” ring. Tap “Done tagging” when finished.</div>`
     : "";
-  const legend =
-    `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1"></span>` +
-    `<span class="hm-cell lvl-2"></span><span class="hm-cell lvl-3"></span><span class="hm-cell lvl-4"></span>` +
-    `<span class="hm-cell lvl-5"></span> More</div>`;
+  const legend = heatFilters.length > 0
+    ? `<div class="hm-legend muted">${heatFilters.map(f => {
+        const i = f.indexOf(":"); const lbl = i >= 0 ? f.slice(i+1) : f; const col = filterColor(f);
+        return `<span class="hm-cat-chip" style="background:${col ?? "#888"}">${escapeHtml(lbl)}</span>`;
+      }).join("")} · Less <span class="hm-cell lvl-1" style="background:${cellBgColor(1, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-2" style="background:${cellBgColor(2, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-3" style="background:${cellBgColor(3, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-4" style="background:${cellBgColor(4, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-5" style="background:${cellBgColor(5, null)}"></span> More</div>`
+    : `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1" style="background:${cellBgColor(1,null)}"></span><span class="hm-cell lvl-2" style="background:${cellBgColor(2,null)}"></span><span class="hm-cell lvl-3" style="background:${cellBgColor(3,null)}"></span><span class="hm-cell lvl-4" style="background:${cellBgColor(4,null)}"></span><span class="hm-cell lvl-5" style="background:${cellBgColor(5,null)}"></span> More</div>`;
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
@@ -3518,6 +3623,7 @@ function renderWorkoutCalendar() {
       g.html +
       legend;
     els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    scrollHeatmapToEnd();
     return;
   }
 
@@ -3530,6 +3636,7 @@ function renderWorkoutCalendar() {
       .join("");
     els.workoutCalendar.innerHTML = controls + tagHint + blocks + legend;
     els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    scrollHeatmapToEnd();
     return;
   }
 
@@ -3549,6 +3656,16 @@ function renderWorkoutCalendar() {
     g.html +
     legend;
   els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+  scrollHeatmapToEnd();
+}
+
+/** Scroll every .hm-year container to its right edge so the most recent weeks are visible. */
+function scrollHeatmapToEnd() {
+  requestAnimationFrame(() => {
+    for (const el of els.workoutCalendar.querySelectorAll<HTMLElement>(".hm-year")) {
+      el.scrollLeft = el.scrollWidth;
+    }
+  });
 }
 
 /** Step the heatmap to an adjacent year that has data (‹ older / › newer). */
@@ -4042,8 +4159,8 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
   const sid = setId(s);
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
-  // A squat-rack hole stands in for the weight on these sets — show the tag.
-  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Squat-rack hole">${escapeHtml(s.levelLabel)}</span>` : "";
+  // A technique level (squat-rack hole / cm) logged in the note — show the tag.
+  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
   // Effort tag from RIR (logged, else predicted): hard / mid / warm-up. Big leg
   // lifts get a wider "mid" band (see effortClass).
   const eff = setEffortClass(s, predRir);
@@ -5245,6 +5362,9 @@ async function init() {
     if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
   });
   setupWorkoutAnalysis();
+  // Redirect legacy deep-links / bookmarks into the unified view (TASKS 49–52).
+  window.addEventListener("hashchange", handleAnalysisHash);
+  handleAnalysisHash();
   setupGroupsView();
   setupTeamView();
   setupChecklists();
@@ -5308,10 +5428,11 @@ async function init() {
   els.athleteSexFilter.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
     const v = btn?.dataset.athsex;
-    if (v !== "all" && v !== "m" && v !== "f") return;
-    athleteSexFilter = v;
+    if (v !== "m" && v !== "f") return;
+    // A 2-state toggle: tapping the active side again clears back to "all".
+    athleteSexFilter = athleteSexFilter === v ? "all" : v;
     for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
-      b.classList.toggle("is-active", b.dataset.athsex === v);
+      b.classList.toggle("is-active", b.dataset.athsex === athleteSexFilter);
     syncAthleteChips(); // re-apply the visible/hidden chip set
   });
   els.athleteChips.addEventListener("click", (e) => {
@@ -5334,15 +5455,21 @@ async function init() {
       dd.classList.toggle("open", opening);
       return;
     }
-    const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt");
-    if (heatOpt?.dataset.heatval !== undefined) {
-      heatFilter = heatOpt.dataset.heatval;
-      if (heatFilter !== "all" && heatFilter !== "") heatLastGroup = heatFilter; // remember for the toggle
+    if (target.closest("[data-heatclear]")) {
+      heatFilters = [];
+      // close the dropdown
+      const dd = target.closest<HTMLElement>(".xdd-heat");
+      dd?.querySelector<HTMLElement>(".xdd-menu")?.toggleAttribute("hidden", true);
+      dd?.classList.remove("open");
       return renderWorkoutCalendar();
     }
-    if (target.closest("[data-heattoggle]")) {
-      if (heatFilter === "all" || heatFilter === "") heatFilter = heatLastGroup;
-      else { heatLastGroup = heatFilter; heatFilter = "all"; }
+    const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt:not(.xdd-clear)");
+    if (heatOpt?.dataset.heatval !== undefined) {
+      const val = heatOpt.dataset.heatval;
+      const idx = heatFilters.indexOf(val);
+      if (idx >= 0) heatFilters.splice(idx, 1);
+      else heatFilters.push(val);
+      // Don't close the dropdown — let the user pick multiple
       return renderWorkoutCalendar();
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
@@ -5391,6 +5518,12 @@ async function init() {
   els.exPersetBest.addEventListener("click", () => {
     exPersetBestOnly = !exPersetBestOnly;
     if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
+  });
+  // Compacted/realistic time toggle, surfaced in the ⚙ menu (the chart legend's
+  // own button is suppressed for this graph via noCompactToggle).
+  els.exProgCompact.addEventListener("click", () => {
+    setTimeCompact(!getTimeCompact());
+    syncExProgCompactBtn();
   });
   els.summariseBtn.addEventListener("click", runSummary);
   els.workoutViewToggle.addEventListener("click", (e) => {
@@ -6072,7 +6205,7 @@ function manualToRecord(m: ManualEntry): SetRecord {
     dropset: false,
     percentile: null,
     ...(m.levelValue !== undefined
-      ? { levelDim: "sq" as const, levelValue: m.levelValue, levelLabel: levelLabel(m.levelValue) }
+      ? { levelDim: "sq" as const, levelValue: m.levelValue, levelLabel: levelLabel("sq", m.levelValue) }
       : {}),
   };
 }
@@ -6094,7 +6227,7 @@ function renderAddTab() {
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
   if (prev) els.addAthlete.value = prev;
-  els.addExerciseList.innerHTML = distinctExercises(data.records)
+  els.addExerciseList.innerHTML = selectableExercises(data.records)
     .map((e) => `<option value="${escapeHtml(e)}"></option>`)
     .join("");
   if (!els.addDate.value) els.addDate.value = todayIso();
@@ -6778,6 +6911,54 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
+// In "all" mode (nothing selected) the content area can show either the Workouts
+// history or the full Exercise list (the migrated List view); toggled in-view.
+let waAllView: "workouts" | "list" = "workouts";
+// Presentation-only layout (TASK 8): which blocks of the hosted content show.
+// Purely a CSS class on the content host — never re-renders or touches selection.
+type WaView = "overview" | "table" | "charts" | "stats";
+let waView: WaView = "overview";
+// Which exercise IDENTITY types the selector offers (TASK 12). Default: originals
+// only — the dissolved/combined/comparison types are opt-in, independently.
+const waIncludeIdentities = new Set<ExerciseIdentity>(["original"]);
+// Metadata filters active in the selector (TASK 19): dim → accepted values.
+const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
+// Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
+let waSearchQuery = "";
+let waGroupBy: "none" | ExerciseFilterDim = "none";
+const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
+// Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
+const waMetrics = new Set<string>(["e1rm"]);
+const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+// User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
+// metadata the filter engine reads so saved joints/movements/planes drive filtering.
+let userTaxonomy: UserAssignments = (() => {
+  try { return JSON.parse(localStorage.getItem("colosseum.userTaxonomy") ?? "{}") as UserAssignments; } catch { return {}; }
+})();
+function saveUserTaxonomy(): void {
+  try { localStorage.setItem("colosseum.userTaxonomy", JSON.stringify(userTaxonomy)); } catch { /* ignore */ }
+}
+/** Metadata provider for the filter engine: built-in taxonomy + the user's saved
+ * assignments. */
+const waMeta = (name: string, dim: ExerciseFilterDim): string[] => exerciseMetaValues(name, dim, userTaxonomy);
+/** Distinct selectable exercises for the current athlete, tagged by identity:
+ * their logged lifts are "original"; the synthetic group derived names they have
+ * are "combined" / "comparison_group". De-duplicated by name (originals win). */
+function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
+  const username = els.athlete.value;
+  const out = new Map<string, ExerciseIdentity>();
+  for (const c of exerciseCountsForUser(activeRecords(), username)) out.set(c.exerciseName, "original");
+  for (const r of computedRecords()) {
+    if (r.username !== username || r.exerciseName === "") continue;
+    const id = exerciseIdentity(r);
+    if (id !== "original" && !out.has(r.exerciseName)) out.set(r.exerciseName, id);
+  }
+  // User-created defs (dissolved / combined / comparison) are selectable even
+  // before any sets are logged to them, and their declared identity always wins
+  // (a defined name's name was rejected if it shadowed an existing lift).
+  for (const d of userExerciseDefs) out.set(d.name, d.identity);
+  return [...out].map(([name, identity]) => ({ name, identity }));
+}
 function waMode(): WaMode {
   return waSelected.length === 0 ? "all" : waSelected.length === 1 ? "single" : "compare";
 }
@@ -6788,35 +6969,336 @@ function waModeLabel(): string {
   return `compare — ${waSelected.length} exercises`;
 }
 
-/** Render the analysis view from `waSelected`. Re-derives the mode and re-paints
- * the Filters readout + the exercise-selector chips; the Graph/Stats/Table
- * placeholders are left untouched for later tasks. */
+// TASK 3/4: rather than duplicate the existing views, the LIVE panels are
+// relocated into the analysis view by mode — the Workouts panel for "all", the
+// Exercises panel (drill-in) for "single" — and moved back to their athlete tabs
+// when you leave or the mode changes. A node lives in one place at a time, but the
+// homes are never visible at once (different top tabs), so the old pages still work.
+let analysisPanel: "none" | "workouts" | "exercises" = "none";
+/** Move the requested live panel into the analysis content host, returning the
+ * other(s) to their home sub-tab. Pure DOM shuffling — no logic duplicated. */
+function setAnalysisMainPanel(which: "none" | "workouts" | "exercises"): void {
+  const host = document.getElementById("waWorkoutsHost");
+  const woPanel = document.getElementById("workoutsPanel");
+  const exPanel = document.getElementById("exercisesPanel");
+  const woHome = document.getElementById("sub-workouts");
+  const exHome = document.getElementById("sub-exercises");
+  if (!host || !woPanel || !exPanel || !woHome || !exHome) return;
+  // The exercise list's floating search bar lives outside the panel, so it must
+  // travel with it (else search would be stranded in the hidden athlete tab).
+  const exSearch = document.getElementById("exSearchBar");
+  // Return whatever isn't wanted to its home tab.
+  if (which !== "workouts" && woPanel.parentElement === host) woHome.appendChild(woPanel);
+  if (which !== "exercises" && exPanel.parentElement === host) {
+    exHome.appendChild(exPanel);
+    if (exSearch) exHome.appendChild(exSearch);
+  }
+  // Mount the wanted panel.
+  if (which === "workouts" && woPanel.parentElement !== host) host.appendChild(woPanel);
+  if (which === "exercises" && exPanel.parentElement !== host) {
+    host.appendChild(exPanel);
+    if (exSearch) host.appendChild(exSearch);
+  }
+  document.getElementById("waWorkoutsEmpty")?.toggleAttribute("hidden", which !== "none");
+  analysisPanel = which;
+}
+/** Restore both relocated panels to their home tabs (on leaving the analysis view). */
+function restoreAnalysisPanels(): void {
+  if (analysisPanel !== "none") setAnalysisMainPanel("none");
+}
+
+/** Render the analysis view from `waSelected`. The MODE drives the main content:
+ *   • all    → the live Workouts panel (history, filters, stats — TASK 3)
+ *   • single → the live Exercises drill-in for the picked lift (TASK 4):
+ *              its history, progression chart, records, stats and settings
+ *   • compare→ placeholder for now (TASK 5)
+ * It also re-paints the Filters mode readout and the exercise-selector chips. */
 function renderWorkoutAnalysis(): void {
+  const mode = waMode();
+  const contentTitle = document.querySelector<HTMLElement>("#waTable .wa-section-title");
+  const stats = document.getElementById("waStats");
+  if (mode === "single") {
+    // Single-exercise analytics: reuse the real drill-in for the chosen lift.
+    selectedExercise = waSelected[0]!;
+    combinedWith = [];
+    setAnalysisMainPanel("exercises");
+    if (contentTitle) contentTitle.textContent = "Exercise analysis";
+    stats?.setAttribute("hidden", "");
+    renderExercisesPage();
+  } else if (mode === "compare") {
+    // Compare (2+): reuse the real Compare view, seeded with the picked lifts.
+    selectedExercise = null;
+    exercisesTab = "compare";
+    compareSelected.clear();
+    for (const n of waSelected) compareSelected.add(n);
+    setAnalysisMainPanel("exercises");
+    if (contentTitle) contentTitle.textContent = "Compare exercises";
+    stats?.setAttribute("hidden", "");
+    renderExercisesPage();
+  } else if (waAllView === "list") {
+    // All + Exercise list: the live List view (the migrated List & stats) — its
+    // category-grouped table, sort, search, rep-max column and per-exercise stats.
+    selectedExercise = null;
+    exercisesTab = "list";
+    setAnalysisMainPanel("exercises");
+    if (contentTitle) contentTitle.textContent = "Exercise list";
+    stats?.setAttribute("hidden", "");
+    renderExercisesPage();
+  } else {
+    // All + Workouts: the live Workouts panel.
+    setAnalysisMainPanel("workouts");
+    if (contentTitle) contentTitle.textContent = "Workout history";
+    stats?.setAttribute("hidden", "");
+    renderWorkoutsPage();
+    renderWorkoutCalendar();
+    renderWorkoutSetsChart();
+  }
+  // Presentation layout (Overview/Table/Charts/Stats) is a CSS class on the host.
+  const host = document.getElementById("waWorkoutsHost");
+  if (host) host.dataset.waView = waView;
   const filters = document.getElementById("waFilters");
   if (filters) {
+    // Display-mode toggle: shows/hides content blocks only — selection & filters
+    // stay put (it never re-renders the content).
+    const viewToggle =
+      `<div class="wa-viewmodes seg-toggle" role="group" aria-label="Display mode">` +
+      (["overview", "table", "charts", "stats"] as const)
+        .map((v) => `<button type="button" class="seg-btn${waView === v ? " is-active" : ""}" data-waview="${v}">${v[0]!.toUpperCase()}${v.slice(1)}</button>`)
+        .join("") +
+      `</div>`;
+    // In "all" mode, a toggle picks the content: workout history or the full
+    // exercise list. (Single/compare are driven by the selection itself.)
+    const allToggle =
+      mode === "all"
+        ? `<div class="wa-allview seg-toggle" role="group" aria-label="All-mode content">` +
+          `<button type="button" class="seg-btn${waAllView === "workouts" ? " is-active" : ""}" data-waall="workouts">Workouts</button>` +
+          `<button type="button" class="seg-btn${waAllView === "list" ? " is-active" : ""}" data-waall="list">Exercise list</button>` +
+          `</div>`
+        : "";
     // Visible mode readout (debugging, per the task).
     filters.innerHTML =
       `<h3 class="wa-section-title">Filters</h3>` +
-      `<p class="muted wa-placeholder">Filters go here.</p>` +
+      `<div class="wa-controls-row"><span class="wa-ctl-lbl muted">Layout</span>${viewToggle}</div>` +
+      allToggle +
       `<p class="wa-mode" data-wa-mode="${waMode()}">Mode: <strong>${escapeHtml(waModeLabel())}</strong> ` +
       `<span class="muted">· ${waSelected.length} selected</span></p>`;
   }
   const sel = document.getElementById("waExerciseSelector");
   if (sel) {
-    const names = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
-    const chips = names.length
-      ? names
-          .map((n) => {
-            const on = waSelected.includes(n);
-            return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(n)}" aria-pressed="${on}" title="${escapeHtml(n)}">${escapeHtml(exerciseCode(n))}</button>`;
-          })
-          .join("")
-      : `<p class="muted wa-placeholder">No exercises for this athlete.</p>`;
+    // Identity-inclusion toggles (default: originals only). Each can be flipped
+    // independently; they filter the chips (suggestions/search) below.
+    const idLabels: [ExerciseIdentity, string][] = [
+      ["original", "Original"],
+      ["dissolved", "Dissolved"],
+      ["combined", "Combined"],
+      ["comparison_group", "Comparison groups"],
+    ];
+    const toggles = idLabels
+      .map(
+        ([id, label]) =>
+          `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
+      )
+      .join("");
+    // Metadata-filter controls (TASK 44): one multi-select per dimension that has
+    // values among the identity-included exercises.
+    const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+    const filterUi = waFilterControls(byIdentity.map((e) => e.name));
+    // Search box (TASK 43) + Group By (TASK 45). The chips themselves live in
+    // #waChips and are (re)filled by renderWaChips() so typing keeps focus.
+    const groupOpts =
+      `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
+      WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
+    const selControls =
+      `<div class="wa-sel-controls">` +
+      `<input id="waSearch" class="wa-search" type="search" placeholder="Search exercises…" value="${escapeHtml(waSearchQuery)}" autocomplete="off" />` +
+      `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
+      `</div>`;
+    // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
+    const exOptions = selectableExercises(data.records)
+      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
+      .join("");
+    const createForm =
+      `<details class="wa-create"><summary>➕ Create variant / group</summary>` +
+      `<div class="wa-create-body">` +
+      `<label class="wa-create-f">Type<select id="waNewType">` +
+      `<option value="dissolved">Dissolved variant (1 parent)</option>` +
+      `<option value="combined">Combined group (members)</option>` +
+      `<option value="comparison_group">Comparison group (members)</option>` +
+      `</select></label>` +
+      `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
+      `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
+      `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>` +
+      `</div></details>`;
+    // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
+    // selected exercise; saved metadata then drives the filters above.
+    const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
     sel.innerHTML =
       `<h3 class="wa-section-title">Exercise selector</h3>` +
+      `<div class="wa-inc-row">${toggles}</div>` +
+      filterUi +
+      selControls +
+      assignUi +
+      createForm +
       `<div class="wa-ex-actions"><button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button></div>` +
-      `<div class="wa-ex-chips">${chips}</div>`;
+      `<div id="waChips" class="wa-chips-wrap"></div>`;
+    renderWaChips();
   }
+  renderWaGraph();
+}
+
+/** One chip for an exercise (selected state + identity). */
+function waChipHtml(name: string, identity: ExerciseIdentity): string {
+  const on = waSelected.includes(name);
+  return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(exerciseCode(name))}</button>`;
+}
+
+/** The selector's current exercise list: identity-included, metadata-filtered
+ * (TASK 44) and search-narrowed (TASK 43). */
+function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+  const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+  const activeFilters = FILTER_DIMS.map((d) => ({ dim: d, values: waFilterValues[d] ?? [] }));
+  const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
+  const q = waSearchQuery.trim().toLowerCase();
+  return byIdentity.filter(
+    (e) => keep.has(e.name) && (!q || e.name.toLowerCase().includes(q) || exerciseCode(e.name).toLowerCase().includes(q)),
+  );
+}
+
+/** Fill #waChips — flat, or grouped under headers by the Group By dimension
+ * (TASK 45). Re-rendered alone on search/group changes so typing keeps focus. */
+function renderWaChips(): void {
+  const box = document.getElementById("waChips");
+  if (!box) return;
+  const list = waChipList();
+  if (list.length === 0) {
+    box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search / filters.</p>`;
+    return;
+  }
+  if (waGroupBy === "none") {
+    box.innerHTML = `<div class="wa-ex-chips">${list.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
+    return;
+  }
+  const groups = new Map<string, typeof list>();
+  for (const e of list) {
+    const key = waMeta(e.name, waGroupBy)[0] ?? "Unassigned";
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
+  }
+  box.innerHTML = [...groups.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(
+      ([g, items]) =>
+        `<div class="wa-group"><div class="wa-group-h">${escapeHtml(g)} <span class="muted">(${items.length})</span></div>` +
+        `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div></div>`,
+    )
+    .join("");
+}
+
+/** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
+ * the reusable graph, rendered from the current selection. Light to re-render, so
+ * metric/config changes don't disturb the hosted panels or the selection. */
+function renderWaGraph(): void {
+  const box = document.getElementById("waGraph");
+  if (!box) return;
+  const metricChips = GRAPH_METRICS.map(
+    (m) => `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}" data-wametric="${m.id}">${escapeHtml(m.label)}</button>`,
+  ).join("");
+  const c = waGraphConfig;
+  const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+  const cfgUi =
+    `<div class="wa-gcfg">` +
+    `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
+    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
+    `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
+    `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
+    `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
+    `</div>`;
+  box.innerHTML =
+    `<h3 class="wa-section-title">Graph <span class="muted" style="font-weight:400">· universal (beta)</span></h3>` +
+    `<div class="wa-metric-row">${metricChips}</div>` +
+    cfgUi +
+    `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
+    `<div id="waGraphChart"></div>`;
+  const chartBox = document.getElementById("waGraphChart");
+  waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  const drawn = chartBox
+    ? renderAnalyticsGraph(chartBox, {
+        exercises: waSelected,
+        records: computedRecords().filter((r) => r.username === els.athlete.value),
+        metrics: [...waMetrics],
+        config: waGraphConfig,
+        codeOf: exerciseCode,
+      })
+    : 0;
+  const noteEl = document.getElementById("waGraphNote");
+  if (noteEl) {
+    if (waSelected.length === 0) {
+      noteEl.textContent = "Pick exercises to plot — showing sample data.";
+    } else {
+      // Compatibility / unavailable-state messages (TASK 42).
+      const recs = computedRecords().filter((r) => r.username === els.athlete.value && waSelected.includes(r.exerciseName));
+      const e1rmPoints = recs.filter((r) => addedWeight1RM(r, currentFormula()) != null).length;
+      const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
+      if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
+      noteEl.textContent = notes.join("  ·  ");
+    }
+  }
+}
+
+/** Build the metadata-filter controls: a multi-select per dimension that has any
+ * values among `names`. Selected values reflect waFilterValues. */
+function waFilterControls(names: readonly string[]): string {
+  const blocks: string[] = [];
+  for (const dim of FILTER_DIMS) {
+    const values = new Set<string>();
+    for (const n of names) for (const v of waMeta(n, dim)) values.add(v);
+    if (values.size === 0) continue;
+    const sorted = [...values].sort((a, b) => a.localeCompare(b));
+    const sel = new Set(waFilterValues[dim] ?? []);
+    const opts = sorted
+      .map((v) => `<option value="${escapeHtml(v)}"${sel.has(v) ? " selected" : ""}>${escapeHtml(v)}</option>`)
+      .join("");
+    blocks.push(
+      `<label class="wa-filter-f">${escapeHtml(FILTER_DIM_LABELS[dim])}` +
+        `<select class="wa-filter-sel" data-wadim="${dim}" multiple size="${Math.min(4, sorted.length)}">${opts}</select></label>`,
+    );
+  }
+  const active = FILTER_DIMS.reduce((n, d) => n + (waFilterValues[d]?.length ? 1 : 0), 0);
+  return (
+    `<details class="wa-filters"${active ? " open" : ""}><summary>🔎 Filters${active ? ` (${active})` : ""}</summary>` +
+    `<div class="wa-filters-body">${blocks.join("")}` +
+    `<button type="button" id="waFiltersClear" class="wa-clear">Clear filters</button></div></details>`
+  );
+}
+
+/** The TASK 24 assignment editor for one exercise: joint / movement / plane
+ * multi-selects prefilled with its current (saved-or-seeded) values + Save. */
+function waAssignEditor(name: string): string {
+  const sel = (cur: readonly string[], all: readonly string[], cls: string) => {
+    const have = new Set(cur);
+    const opts = all
+      .map((v) => `<option value="${escapeHtml(v)}"${have.has(v) ? " selected" : ""}>${escapeHtml(v)}</option>`)
+      .join("");
+    return `<select class="${cls}" multiple size="5">${opts}</select>`;
+  };
+  // Joint-specific display aliases (TASK 23): show generic movement → joint label.
+  const hints: string[] = [];
+  for (const j of waMeta(name, "joint"))
+    for (const m of waMeta(name, "movement")) {
+      const disp = movementDisplay(m, j);
+      if (disp !== m) hints.push(`${escapeHtml(j)}: ${escapeHtml(m)} → ${escapeHtml(disp)}`);
+    }
+  const hintLine = hints.length
+    ? `<p class="muted wa-alias-hint">Joint labels — ${hints.join(" · ")}</p>`
+    : "";
+  return (
+    `<details class="wa-assign"><summary>🏷 Taxonomy: ${escapeHtml(name)}</summary><div class="wa-assign-body">` +
+    `<label class="wa-create-f">Joints${sel(waMeta(name, "joint"), JOINTS, "wa-assign-joint")}</label>` +
+    `<label class="wa-create-f">Movements${sel(waMeta(name, "movement"), MOVEMENTS, "wa-assign-movement")}</label>` +
+    `<label class="wa-create-f">Planes${sel(waMeta(name, "plane"), PLANES, "wa-assign-plane")}</label>` +
+    `<div class="wa-create-act"><button type="button" id="waAssignSave" data-waassign="${escapeHtml(name)}" class="wa-clear">Save taxonomy</button> <span id="waAssignMsg" class="muted"></span></div>` +
+    hintLine +
+    `</div></details>`
+  );
 }
 
 /** Wire the analysis view's selector once: tapping an exercise chip toggles it in
@@ -6824,6 +7306,50 @@ function renderWorkoutAnalysis(): void {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
+  // Live search (TASK 43): re-fill only the chips so the input keeps focus.
+  panel.addEventListener("input", (e) => {
+    const s = (e.target as HTMLElement).closest<HTMLInputElement>("#waSearch");
+    if (!s) return;
+    waSearchQuery = s.value;
+    renderWaChips();
+  });
+  // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
+  panel.addEventListener("change", (e) => {
+    const target = e.target as HTMLElement;
+    const grp = target.closest<HTMLSelectElement>("#waGroupBy");
+    if (grp) {
+      waGroupBy = (grp.value === "none" ? "none" : grp.value) as typeof waGroupBy;
+      renderWaChips();
+      return;
+    }
+    const box = target.closest<HTMLInputElement>(".wa-inc-box");
+    if (box?.dataset.waident) {
+      const id = box.dataset.waident as ExerciseIdentity;
+      if (box.checked) waIncludeIdentities.add(id);
+      else waIncludeIdentities.delete(id);
+      renderWorkoutAnalysis();
+      return;
+    }
+    const fsel = target.closest<HTMLSelectElement>(".wa-filter-sel");
+    if (fsel?.dataset.wadim) {
+      const dim = fsel.dataset.wadim as ExerciseFilterDim;
+      waFilterValues[dim] = Array.from(fsel.selectedOptions).map((o) => o.value);
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Graph config controls (TASK 29) — update config, re-render just the graph.
+    const cfg = target.closest<HTMLElement>(".wa-cfg");
+    if (cfg?.dataset.wacfg) {
+      const key = cfg.dataset.wacfg;
+      const el = cfg as HTMLInputElement | HTMLSelectElement;
+      if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
+      else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
+      else if (key === "smoothing") waGraphConfig.smoothing = Math.max(0, Math.round(Number((el as HTMLInputElement).value) || 0));
+      else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
+      else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
+      renderWaGraph();
+    }
+  });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
@@ -6836,8 +7362,136 @@ function setupWorkoutAnalysis(): void {
     if (t.closest("#waClear")) {
       waSelected = [];
       renderWorkoutAnalysis();
+      return;
+    }
+    // Create a user exercise def (dissolved variant / combined / comparison group).
+    if (t.closest("#waNewCreate")) {
+      createUserExerciseDef();
+      return;
+    }
+    if (t.closest("#waFiltersClear")) {
+      for (const d of FILTER_DIMS) delete waFilterValues[d];
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Graph metric toggle (TASK 27): enable/disable a metric, re-render the graph.
+    const met = t.closest<HTMLElement>(".wa-metric");
+    if (met?.dataset.wametric) {
+      const id = met.dataset.wametric;
+      if (waMetrics.has(id)) waMetrics.delete(id);
+      else waMetrics.add(id);
+      renderWaGraph();
+      return;
+    }
+    // Save taxonomy assignments (TASK 24) for the selected exercise.
+    const saveBtn = t.closest<HTMLElement>("#waAssignSave");
+    if (saveBtn?.dataset.waassign) {
+      saveTaxonomyAssignment(saveBtn.dataset.waassign);
+      return;
+    }
+    // Display-mode toggle (Overview/Table/Charts/Stats): presentation only —
+    // flip the host class + active button, never re-render or touch selection.
+    const viewBtn = t.closest<HTMLElement>(".wa-viewmodes .seg-btn");
+    if (viewBtn?.dataset.waview) {
+      waView = viewBtn.dataset.waview as WaView;
+      const host = document.getElementById("waWorkoutsHost");
+      if (host) host.dataset.waView = waView;
+      for (const b of panel.querySelectorAll<HTMLElement>(".wa-viewmodes .seg-btn"))
+        b.classList.toggle("is-active", b.dataset.waview === waView);
+      return;
+    }
+    // All-mode content toggle: Workouts ↔ Exercise list.
+    const allBtn = t.closest<HTMLElement>(".wa-allview .seg-btn");
+    if (allBtn?.dataset.waall) {
+      waAllView = allBtn.dataset.waall === "list" ? "list" : "workouts";
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Tapping an exercise row in the hosted List view drills in (the row handler
+    // set selectedExercise already) — reflect it in the analysis selection so the
+    // mode/selector stay in step, landing on the single-exercise drill-in.
+    if (t.closest("tr.ex-row") && document.getElementById("exercisesPanel")?.closest("#tab-analysis")) {
+      if (selectedExercise && waSelected.join("|") !== selectedExercise) {
+        waSelected = [selectedExercise];
+        renderWorkoutAnalysis();
+      }
     }
   });
+}
+
+/** Validate the create form and store a new user exercise def (dissolved /
+ * combined / comparison_group), then surface it in the selector. */
+function createUserExerciseDef(): void {
+  const typeEl = document.getElementById("waNewType") as HTMLSelectElement | null;
+  const nameEl = document.getElementById("waNewName") as HTMLInputElement | null;
+  const memEl = document.getElementById("waNewMembers") as HTMLSelectElement | null;
+  const msg = document.getElementById("waNewMsg");
+  if (!typeEl || !nameEl || !memEl) return;
+  const setMsg = (s: string) => { if (msg) msg.textContent = s; };
+  const identity = typeEl.value as ExerciseIdentity;
+  const name = nameEl.value.trim();
+  const members = Array.from(memEl.selectedOptions).map((o) => o.value);
+  if (!name) return setMsg("Enter a name.");
+  // No duplicates — never shadow an existing exercise or another def.
+  if (new Set(selectableExercises(data.records)).has(name) || userExerciseDefs.some((d) => d.name === name))
+    return setMsg("That name already exists.");
+  if (members.length === 0)
+    return setMsg(identity === "dissolved" ? "Pick the parent exercise." : "Pick the member exercises.");
+  const def: UserExerciseDef =
+    identity === "dissolved"
+      ? { name, identity, parent: members[0]! }
+      : { name, identity, members };
+  userExerciseDefs.push(def);
+  saveUserExerciseDefs();
+  waIncludeIdentities.add(identity); // so the new one shows immediately
+  renderWorkoutAnalysis();
+}
+
+/**
+ * Open the unified WorkoutAnalysisView with preloaded state (TASKS 49–52). The
+ * mode follows the selection: none → all (workouts or list), one → single, 2+ →
+ * compare — so a redirected Single/Compare link lands in the right mode with the
+ * right exercises already selected.
+ */
+function openWorkoutAnalysis(opts: { exercises?: string[]; allView?: "workouts" | "list" } = {}): void {
+  if (opts.allView) waAllView = opts.allView;
+  if (opts.exercises) waSelected = opts.exercises.filter((n) => n.length > 0);
+  switchTopTab("analysis"); // re-renders the analysis view from the new state
+}
+
+/**
+ * Map legacy deep-links / bookmarks to the unified view (TASKS 49–52). No route
+ * is broken: an unrecognised hash is ignored. Recognised:
+ *   #workouts | #analysis        → all (Workouts)         (TASK 49)
+ *   #single=<exercise>           → single, that exercise  (TASK 50)
+ *   #compare=<a>,<b>             → compare, those lifts    (TASK 51)
+ *   #list                        → all (Exercise list)     (TASK 52)
+ */
+function handleAnalysisHash(): void {
+  const h = decodeURIComponent(location.hash.replace(/^#/, "")).trim();
+  if (!h) return;
+  if (h === "workouts" || h === "analysis") openWorkoutAnalysis({ allView: "workouts" });
+  else if (h === "list") openWorkoutAnalysis({ allView: "list" });
+  else if (h.startsWith("single=")) openWorkoutAnalysis({ exercises: [h.slice("single=".length)] });
+  else if (h.startsWith("compare=")) openWorkoutAnalysis({ exercises: h.slice("compare=".length).split(",").map((s) => s.trim()) });
+}
+
+/** Save the joint/movement/plane multi-selects for one exercise (TASK 24) into
+ * the user taxonomy, so the filters can use the saved metadata. */
+function saveTaxonomyAssignment(name: string): void {
+  const read = (cls: string) => {
+    const el = document.querySelector<HTMLSelectElement>(`.${cls}`);
+    return el ? Array.from(el.selectedOptions).map((o) => o.value) : [];
+  };
+  userTaxonomy[name] = {
+    joint: read("wa-assign-joint"),
+    movement: read("wa-assign-movement"),
+    plane: read("wa-assign-plane"),
+  };
+  saveUserTaxonomy();
+  const msg = document.getElementById("waAssignMsg");
+  if (msg) msg.textContent = "Saved.";
+  renderWorkoutAnalysis();
 }
 
 function switchTopTab(name: string) {
@@ -6855,6 +7509,9 @@ function switchTopTab(name: string) {
   if (name === "codes") renderCodesTab();
   if (name === "statsedit") renderStatsEdit();
   if (name === "analysis") renderWorkoutAnalysis();
+  // Leaving the analysis view → return the relocated panel(s) to their athlete
+  // tabs so the old Workouts / Single-exercise pages keep working.
+  if (name !== "analysis") restoreAnalysisPanels();
   updateBottomNav();
 }
 
@@ -6946,6 +7603,7 @@ function showSubtab(name: string) {
  * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
 function updateBottomNav() {
   const athleteOpen = document.getElementById("tab-athlete")?.hidden === false;
+  const analysisOpen = document.getElementById("tab-analysis")?.hidden === false;
   const activeSub = !athleteOpen
     ? null
     : document.getElementById("sub-exercises")?.hidden === false
@@ -6953,7 +7611,10 @@ function updateBottomNav() {
       : "workouts";
   for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
     const nav = b.dataset.nav;
-    const active = nav === "other" ? !athleteOpen : athleteOpen && nav === activeSub;
+    let active: boolean;
+    if (nav === "analysis") active = analysisOpen;
+    else if (nav === "other") active = !athleteOpen && !analysisOpen;
+    else active = athleteOpen && nav === activeSub;
     b.classList.toggle("is-active", active);
   }
 }
@@ -6972,6 +7633,11 @@ function setupBottomNav() {
       const nav = b.dataset.nav;
       if (nav === "other") {
         setOtherSheetOpen(els.otherSheet.hidden);
+        return;
+      }
+      if (nav === "analysis") {
+        setOtherSheetOpen(false);
+        switchTopTab("analysis");
         return;
       }
       setOtherSheetOpen(false);

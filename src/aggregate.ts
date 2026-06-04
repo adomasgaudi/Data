@@ -4,7 +4,7 @@
  * inputs so it can be exhaustively unit- and property-tested; the 10K-row scale
  * is trivial for plain JS, so the only thing that matters is correctness.
  */
-import type { SetRecord } from "./domain";
+import type { SetRecord, ExerciseIdentity, ExerciseRelationship } from "./domain";
 import {
   estimate1RM,
   MAX_1RM_REPS,
@@ -128,7 +128,23 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
   });
 }
 
-/** A frequency tier: an id ("S".."D") and the minimum set count that reaches it. */
+/**
+ * The exercise names a picker/selector should offer for a set of records.
+ *
+ * TASK 11 invariant — creating a dissolved / combined / comparison variant must
+ * NEVER replace or hide an original. Every distinct logged exerciseName is
+ * offered, alongside any variant or synthetic group name present in `records`;
+ * relationship membership (parent/child, group inclusion) never subtracts a name.
+ * So an original (e.g. "Pull Ups") and its variants ("Assisted Pull Up", "Gravity
+ * Machine Pull Up") are always selectable together. Most-logged first.
+ *
+ * It delegates to distinctExercises: the guarantee is that nothing here filters by
+ * identity/relationship. Pass logged records for originals+variants, or
+ * computedRecords() to also include synthetic group names.
+ */
+export function selectableExercises(records: readonly SetRecord[]): string[] {
+  return distinctExercises(records);
+}
 export interface FreqTier {
   tier: string;
   min: number;
@@ -477,9 +493,10 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
  */
 export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
   if (isIsometric(record.exerciseName)) return null; // holds log seconds, not reps → no 1RM
-  // Above the cap, a rep→1RM estimate is guesswork, so we report NO value (null)
-  // rather than a clamped one — the set simply doesn't yield a 1RM, everywhere.
-  if (record.reps !== null && record.reps > MAX_1RM_REPS) return null;
+  // Above the cap, Epley/Brzycki are guesswork, so we report NO value (null)
+  // rather than a clamped one. The Nuzzo curve is data-derived across the study's
+  // full range (down to 15% of 1RM ≈ 127 reps), so it is EXEMPT from the cap.
+  if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
   const effective1RM = estimate1RM(record.weight, record.reps, formula);
   if (effective1RM === null) return null;
   const effectiveLoad = record.weight ?? 0;
@@ -554,8 +571,15 @@ export function withSyntheticGroups(
   for (const g of groups) {
     // scaleToGroup relabels to derivedName, scales the load, and preserves the
     // source lift in originalExerciseName. We only add the syntheticGroupId tag.
+    // Tag the identity + relationship from the group id (combine.* vs compare.*)
+    // so views can branch on it without re-parsing the id. The member lift names
+    // are recorded as includedExerciseIds. Pure source lifts stay "original".
+    const isCompare = g.id.startsWith("compare.");
+    const identity: ExerciseIdentity = isCompare ? "comparison_group" : "combined";
+    const relationshipType: ExerciseRelationship = isCompare ? "comparison_of" : "combined_from";
+    const includedExerciseIds = Object.keys(g.members);
     for (const r of scaleToGroup(computedRecords, g.derivedName, g.members))
-      out.push({ ...r, syntheticGroupId: g.id });
+      out.push({ ...r, syntheticGroupId: g.id, identity, relationshipType, includedExerciseIds });
   }
   return out;
 }
