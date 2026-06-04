@@ -442,6 +442,10 @@ main { padding-bottom: 5rem; }
 /* User view: every athlete but Adomas is locked out. */
 .athlete-chip.is-locked { opacity: 0.4; cursor: not-allowed; }
 .athlete-chip.is-locked:hover { color: var(--muted); border-color: var(--line); }
+/* Hidden by the Men/Women athlete-picker filter. */
+.athlete-chip.is-sexhidden { display: none; }
+/* Men/Women athlete-picker filter sits just above the chip row. */
+.ath-sex { margin: 0 0 0.6rem; }
 /* Collapsible "stats & training mix" so the page stays short by default. */
 /* Its own card so it clearly reads as a collapsible section. */
 .athlete-details {
@@ -1014,6 +1018,9 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-year { overflow-x: auto; padding-bottom: 6px; margin: 0 0 0.4rem; }
 .hm-months { display: grid; gap: 3px; margin-bottom: 4px; }
 .hm-mlabel { font-size: 0.72rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+/* In the continuous Timeline view, January carries the year — make it pop so the
+   year boundaries are easy to spot. */
+.hm-mlabel.hm-yr { color: var(--text); font-weight: 800; }
 .hm-grid {
   display: grid; grid-template-rows: repeat(7, 18px); grid-auto-flow: column; grid-auto-columns: 18px;
   gap: 3px;

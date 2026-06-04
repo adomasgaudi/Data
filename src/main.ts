@@ -128,6 +128,7 @@ const els = {
   changelog: $("changelog"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
+  athleteSexFilter: $("athleteSexFilter"),
   athleteProfile: $("athleteProfile"),
   athleteStats: $("athleteStats"),
   momentum: $("momentum"),
@@ -1584,8 +1585,12 @@ function buildAthleteChips() {
   syncAthleteChips();
 }
 
+// Athlete-picker sex filter: "all" shows everyone, "m"/"f" narrows the chips.
+let athleteSexFilter: "all" | "m" | "f" = "all";
+
 /** Mark the chip matching the selected athlete active (chips mirror the select).
- * In user view every chip but Adomas's is disabled, so the user can only pick him. */
+ * In user view every chip but Adomas's is disabled, so the user can only pick him.
+ * The Men/Women filter additionally hides chips of the other sex. */
 function syncAthleteChips() {
   const active = els.athlete.value;
   const locked = lockedUsername(); // null in admin; the locked athlete otherwise
@@ -1593,6 +1598,11 @@ function syncAthleteChips() {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
+    // Hide chips that don't match the chosen sex (the active one stays visible
+    // so you can always see who's currently selected).
+    const sex = ATHLETES[btn.dataset.username ?? ""]?.sex;
+    const sexHidden = athleteSexFilter !== "all" && sex !== athleteSexFilter && !on;
+    btn.classList.toggle("is-sexhidden", sexHidden);
     const disabled = locked !== null && btn.dataset.username !== locked;
     btn.disabled = disabled;
     btn.classList.toggle("is-locked", disabled);
@@ -3150,7 +3160,9 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 
 // ---- Workouts overview: a per-year heatmap of training days ----
 let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
-let heatScope: "single" | "all" = "single"; // one year (scroll/nav) vs every year
+// "ribbon" = one continuous strip flowing across years (default); "single" = one
+// calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
+let heatScope: "ribbon" | "single" | "all" = "ribbon";
 let heatFilter = "cat:Legs"; // "all" | "cat:<bodypart>" | "mus:<muscle>" | "fun:<pattern>" | "ex:<exercise>"
 let heatLastGroup = "cat:Legs"; // last non-"all" filter, for the group/all quick toggle
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
@@ -3265,11 +3277,73 @@ function yearGridHtml(year: number, counts: Map<string, number>): { html: string
   return { html, days, totalSets };
 }
 
-/** Single-year / All-years toggle. */
+/** The whole training history as ONE continuous heatmap that flows across year
+ * boundaries (weeks as columns, Mon→Sun rows) — no year breaks. Month labels run
+ * along the top; January (and the very first month) carry the year so you can see
+ * where each year begins. `counts` is the filtered day→sets map. The strip runs
+ * from the Monday on/before the first training day to the Sunday on/after the
+ * later of the last training day and today, so it always reaches the present. */
+function ribbonGridHtml(counts: Map<string, number>): { html: string; days: number; totalSets: number } {
+  const dates = [...trainingDays().keys()].sort(); // full range, filter-independent
+  if (dates.length === 0) {
+    return { html: `<div class="hm-empty muted">No training logged yet.</div>`, days: 0, totalSets: 0 };
+  }
+  const mk = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y!, m! - 1, d!);
+  };
+  const start = mk(dates[0]!);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to the Monday of that week
+  const lastIso = dates[dates.length - 1]!;
+  const end = mk(lastIso > todayIso() ? lastIso : todayIso());
+  end.setDate(end.getDate() + (6 - ((end.getDay() + 6) % 7))); // forward to the Sunday of that week
+  const totalDays = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const numWeeks = Math.ceil(totalDays / 7);
+
+  const cells: string[] = [];
+  const labels: string[] = [];
+  let days = 0;
+  let totalSets = 0;
+  let prevMonth = -1;
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const col = Math.floor(i / 7) + 1; // 1-based grid column (start is a Monday, so weeks align)
+    const month = d.getMonth();
+    if (month !== prevMonth) {
+      // Show the year on January and on the first label so each year's start is clear.
+      const withYear = month === 0 || labels.length === 0;
+      const text = withYear ? `${MONTH_ABBR[month]} ${d.getFullYear()}` : MONTH_ABBR[month]!;
+      labels.push(`<span class="hm-mlabel${month === 0 ? " hm-yr" : ""}" style="grid-column-start:${col}">${text}</span>`);
+      prevMonth = month;
+    }
+    const iso = `${d.getFullYear()}-${String(month + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const sets = counts.get(iso) ?? 0;
+    if (sets) {
+      days++;
+      totalSets += sets;
+    }
+    const isToday = iso === todayIso();
+    const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
+    const mOdd = month % 2 === 1 ? " hm-modd" : "";
+    const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    cells.push(
+      `<div class="hm-cell lvl-${heatLevel(sets)}${isToday ? " is-today" : ""}${isAlone ? " hm-alone" : ""}${mOdd}"${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
+    );
+  }
+  const html =
+    `<div class="hm-year"><div class="hm-cal">` +
+    `<div class="hm-months" style="grid-template-columns:repeat(${numWeeks},var(--hm-col))">${labels.join("")}</div>` +
+    `<div class="hm-grid">${cells.join("")}</div>` +
+    `</div></div>`;
+  return { html, days, totalSets };
+}
+
+/** Heatmap scope toggle: Timeline (one flowing strip) / Single year / All years. */
 function heatScopeToggle(): string {
-  const btn = (s: "single" | "all", label: string) =>
+  const btn = (s: "ribbon" | "single" | "all", label: string) =>
     `<button type="button" class="cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}">${label}</button>`;
-  return `<div class="cal-mode">${btn("single", "Single year")}${btn("all", "All years")}</div>`;
+  return `<div class="cal-mode">${btn("ribbon", "Timeline")}${btn("single", "Single year")}${btn("all", "All years")}</div>`;
 }
 
 /** Human label for the active heatmap filter value. */
@@ -3340,6 +3414,21 @@ function renderWorkoutCalendar() {
     `<span class="hm-cell lvl-5"></span> More</div>`;
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
+
+  if (heatScope === "ribbon") {
+    const g = ribbonGridHtml(counts);
+    const oldest = years[years.length - 1]!;
+    const newest = years[0]!;
+    const span = oldest === newest ? `${newest}` : `${oldest}–${newest}`;
+    els.workoutCalendar.innerHTML =
+      controls +
+      tagHint +
+      `<div class="cal-head"><strong>${span}</strong>${count(g)}</div>` +
+      g.html +
+      legend;
+    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    return;
+  }
 
   if (heatScope === "all") {
     const blocks = years
@@ -5004,6 +5093,15 @@ async function init() {
   els.excludeDropsets.addEventListener("change", renderAll);
   els.athlete.addEventListener("change", renderAthlete);
   // Clicking a custom chip drives the hidden <select> (single source of truth).
+  els.athleteSexFilter.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
+    const v = btn?.dataset.athsex;
+    if (v !== "all" && v !== "m" && v !== "f") return;
+    athleteSexFilter = v;
+    for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
+      b.classList.toggle("is-active", b.dataset.athsex === v);
+    syncAthleteChips(); // re-apply the visible/hidden chip set
+  });
   els.athleteChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
     if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
@@ -5037,7 +5135,8 @@ async function init() {
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
-      heatScope = scopeBtn.dataset.heatScope === "all" ? "all" : "single";
+      const v = scopeBtn.dataset.heatScope;
+      heatScope = v === "all" ? "all" : v === "single" ? "single" : "ribbon";
       return renderWorkoutCalendar();
     }
     const nav = target.closest<HTMLElement>(".cal-nav");
