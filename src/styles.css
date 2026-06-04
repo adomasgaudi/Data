@@ -1767,8 +1767,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-row-hidden { opacity: 0.5; }
 .bw-allhidden { margin: 0; padding: 9px 12px; font-size: 0.82rem; }
 
-/* Exercise codes tab: editable per-lift code with a reset-to-default control. */
-.codes-cell { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+/* Exercise codes tab: editable per-lift code + short name. The two editors stack
+   in ONE cell, each on its own labelled line, so neither is squeezed on a phone. */
+.codes-cell { display: flex; flex-direction: column; gap: 0.4rem; align-items: stretch; }
+.codes-field { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.codes-flabel {
+  flex: none; width: 3em; font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--muted);
+}
 .codes-input {
   width: 6.5em; font: inherit; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.02em;
   background: var(--bg); color: var(--text);
@@ -1796,21 +1802,21 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .codes-cat-caret { display: inline-block; width: 0.9em; color: var(--muted); font-size: 0.8em; }
 .codes-cat-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; vertical-align: middle; }
 
-/* The Short-name input: a middle tier between the tiny code and the full name. */
-.codes-short { width: 100%; font-weight: 600; letter-spacing: normal; }
-/* Fit the codes table on a phone (no sideways scroll) even with the extra Short
-   column: drop the table-wide min-width, fix the layout so the Short column
-   takes the slack, and let the exercise name wrap instead of forcing width. */
+/* The Short-name input: a middle tier between the tiny code and the full name.
+   Grows to fill the editor column rather than being pinned to a tiny width. */
+.codes-short { flex: 1 1 7em; width: auto; min-width: 5em; font-weight: 600; letter-spacing: normal; }
+/* Fit the codes table on a phone (no sideways scroll): drop the table-wide
+   min-width, fix the layout so the editor column takes the slack, and let the
+   exercise name wrap instead of forcing width. */
 #codesTable { min-width: 0; table-layout: fixed; }
 #codesTable th, #codesTable td { overflow-wrap: anywhere; padding: 7px 8px; vertical-align: top; }
-#codesTable th:nth-child(2), #codesTable td:nth-child(2) { width: 6.6em; }
-#codesTable th:nth-child(3), #codesTable td:nth-child(3) { width: 40%; }
-#codesTable th:nth-child(4), #codesTable td:nth-child(4) { width: 3.4em; }
+#codesTable th:nth-child(2), #codesTable td:nth-child(2) { width: 56%; }
+#codesTable th:nth-child(3), #codesTable td:nth-child(3) { width: 3.4em; }
 @media (max-width: 640px) {
   #codesTable th, #codesTable td { padding: 6px 5px; font-size: 0.82rem; }
-  #codesTable th:nth-child(2), #codesTable td:nth-child(2) { width: 4.6em; }
-  .codes-input { width: 100%; font-size: 0.82rem; padding: 3px 5px; }
-  .codes-cell { gap: 0.3rem; }
+  #codesTable th:nth-child(2), #codesTable td:nth-child(2) { width: 60%; }
+  .codes-input { font-size: 0.82rem; padding: 3px 5px; }
+  .codes-field { gap: 0.3rem; }
   .codes-reset { padding: 1px 6px; font-size: 0.7rem; }
   .codes-def { font-size: 0.68rem; }
 }
