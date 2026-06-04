@@ -7339,12 +7339,14 @@ function renderWorkoutAnalysis(): void {
       `<summary class="wa-sq-sum" title="Settings">⚙</summary>` +
       `<div class="wa-sq-menu"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>` +
       `</details>`;
-    // Filter + Exercises sit side by side, each half the width, as in-flow
-    // ("physical") expanding dropdowns that can both be open at once.
+    // Filter + Exercises sit side by side; their summaries stay in the row while
+    // the expanded bodies FLOAT (overlay) like Settings/Create, so opening them
+    // never pushes the layout down. Body wrapped in .wa-fe-menu for that float.
     const exercisesFold =
       `<details class="wa-chips-fold"${waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      `<div class="wa-fe-menu">` +
       foldTools +
-      `<div id="waChips" class="wa-chips-wrap"></div></details>`;
+      `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
     sel.innerHTML =
       `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>` +
       `<div class="wa-sq-row">${settingsFold}${createForm}</div></div>` +
@@ -7546,7 +7548,7 @@ function waFilterControls(names: readonly string[]): string {
   const active = FILTER_DIMS.reduce((n, d) => n + (waFilterValues[d]?.length ? 1 : 0), 0);
   return (
     `<details class="wa-filters"${active ? " open" : ""}><summary class="wa-filters-sum">🔎 Filter${active ? ` · ${active} active` : ""}</summary>` +
-    `<div class="wa-filters-body">${blocks.join("")}` +
+    `<div class="wa-filters-body wa-fe-menu">${blocks.join("")}` +
     `<button type="button" id="waFiltersClear" class="wa-clear"${active ? "" : " disabled"}>Clear filters</button></div></details>`
   );
 }

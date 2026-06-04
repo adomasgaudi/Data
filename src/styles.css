@@ -2094,10 +2094,26 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .wa-sq-title { font-size: 0.78rem; font-weight: 700; color: var(--text); }
 
-/* Filter + Exercises side by side, each half the width, both in-flow ("physical")
-   expanding dropdowns that can be open at the same time. */
+/* Filter + Exercises side by side, each half the width. Their summaries stay in
+   the row; the expanded bodies FLOAT (overlay) like the Settings/Create square
+   menus, so opening them never pushes the page down. */
 .wa-fe-row { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0 0 0.6rem; }
-.wa-fe-row > .wa-filters, .wa-fe-row > .wa-chips-fold { flex: 1 1 0; min-width: 0; margin: 0; }
+.wa-fe-row > .wa-filters, .wa-fe-row > .wa-chips-fold {
+  flex: 1 1 0; min-width: 0; margin: 0; position: relative; overflow: visible;
+}
+/* The floating menu body shared by Filter and Exercises. */
+.wa-fe-row .wa-fe-menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px);
+  width: max-content; min-width: 100%; max-width: 92vw;
+  margin-top: 0; padding: 0.7rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+}
+/* Spread outward: Filter anchors left, Exercises anchors right. */
+.wa-fe-row > .wa-filters .wa-fe-menu { left: 0; right: auto; }
+.wa-fe-row > .wa-chips-fold .wa-fe-menu { right: 0; left: auto; }
+/* The chip list inside the floating Exercises menu still scrolls if long. */
+.wa-fe-row .wa-fe-menu .wa-chips-wrap { max-height: 60vh; }
 
 /* WorkoutAnalysis create-exercise form (TASKS 13–15). */
 .wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
