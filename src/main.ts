@@ -3346,6 +3346,9 @@ let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 // calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
 let heatScope: "ribbon" | "single" | "all" = "ribbon";
 let heatFilters: string[] = ["cat:Legs"]; // multi-select; empty = all exercises
+// When the Analysis view forces the calendar to the selected exercises, the
+// user's own "all-mode" filter is parked here and restored when the selection clears.
+let heatFiltersSaved: string[] | null = null;
 // When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
 // instead of jumping to that day — so you can tag many days quickly in one go.
 let aloneTagMode = false;
@@ -3427,6 +3430,7 @@ function initHeatYear() {
   const y = Number(latest?.slice(0, 4));
   if (Number.isFinite(y)) heatYear = y;
   heatFilters = ["cat:Legs"];
+  heatFiltersSaved = null; // don't carry a parked filter across athletes
   aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
@@ -6999,7 +7003,7 @@ let waChipsFoldOpen = false;
 let waCogOpen = false;
 // Selector chip labels: "code" (short tag, e.g. BPR) or "full" exercise name.
 let waChipNameMode: "code" | "full" = "code";
-let waGraphFoldOpen = true;
+let waGraphFoldOpen = false;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
@@ -7086,10 +7090,30 @@ function setAnalysisAthletePicker(inAnalysis: boolean): void {
     home.insertBefore(row, home.firstChild);
   }
 }
+/** Move the training-year heatmap (#workoutCalendar) into the Analysis view (its
+ * own always-on section), or back into #workoutsPanel. It lives inside the
+ * Workouts panel in the legacy view, so we pull it out so it shows in every
+ * Analysis mode (not just "all"), and hand it back on leave. */
+function setAnalysisCalendar(inAnalysis: boolean): void {
+  const cal = document.getElementById("workoutCalendar");
+  const host = document.getElementById("waCalendarHost");
+  const woPanel = document.getElementById("workoutsPanel");
+  const woSets = document.getElementById("workoutSets");
+  if (!cal || !host || !woPanel) return;
+  const analysisVisible = document.getElementById("tab-analysis")?.hidden === false;
+  if (inAnalysis && analysisVisible) {
+    if (cal.parentElement !== host) host.appendChild(cal);
+  } else if (!inAnalysis && cal.parentElement === host) {
+    // Return it to its original spot in the Workouts panel: right after #workoutSets.
+    if (woSets && woSets.parentElement === woPanel) woSets.insertAdjacentElement("afterend", cal);
+    else woPanel.insertBefore(cal, woPanel.firstChild);
+  }
+}
 /** Restore both relocated panels to their home tabs (on leaving the analysis view). */
 function restoreAnalysisPanels(): void {
   if (analysisPanel !== "none") setAnalysisMainPanel("none");
   setAnalysisAthletePicker(false);
+  setAnalysisCalendar(false);
 }
 
 /** Render the analysis view from `waSelected`. The MODE drives the main content:
@@ -7124,14 +7148,28 @@ function renderWorkoutAnalysis(): void {
     stats?.setAttribute("hidden", "");
     renderExercisesPage();
   } else {
-    // All (nothing selected): always the live Workouts panel — its history list
-    // AND the year calendar/heatmap, both present (no layout toggle to hide them).
+    // All (nothing selected): the live Workouts panel — its history list.
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = "Workout history";
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
-    renderWorkoutCalendar();
     renderWorkoutSetsChart();
+  }
+  // The training-year calendar shows in EVERY mode (own always-on section). With
+  // exercises selected it highlights just those lifts' squares; with nothing
+  // selected it keeps the user's own calendar filter (saved/restored around a
+  // selection so picking a lift doesn't lose it). Only while Analysis is the
+  // visible tab — otherwise the legacy view's own calendar would be hijacked.
+  if (document.getElementById("tab-analysis")?.hidden === false) {
+    if ((mode === "single" || mode === "compare") && waSelected.length) {
+      if (heatFiltersSaved === null) heatFiltersSaved = heatFilters;
+      heatFilters = waSelected.map((n) => `ex:${n}`);
+    } else if (heatFiltersSaved !== null) {
+      heatFilters = heatFiltersSaved;
+      heatFiltersSaved = null;
+    }
+    setAnalysisCalendar(true);
+    renderWorkoutCalendar();
   }
   const sel = document.getElementById("waExerciseSelector");
   if (sel) {
@@ -7280,16 +7318,18 @@ function renderWaGraph(): void {
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
-  // GRAPH-3: the metric chips are an ALWAYS-VISIBLE row (flip what's plotted in
-  // one tap, no menu). Only the advanced options (formula/aggregation/interval/
-  // smoothing/prediction/decay) live inside the "Graph settings" disclosure. The
-  // graph + its chips sit at the TOP of the Analysis content in every mode.
+  // GRAPH-3: the metric chips + advanced options (formula/aggregation/interval/
+  // smoothing/prediction/decay) all live inside the collapsible "Graph options"
+  // disclosure, so the section stays compact — just the chart shows by default.
+  // The summary names what's currently plotted so you can see it while collapsed.
+  const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
+  const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
   box.innerHTML =
-    `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
     `<div id="waGraphChart"></div>` +
     `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
     `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
-    `<summary class="wa-graph-fold-sum">Graph settings</summary>` +
+    `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
+    `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
     cfgUi +
     `</details>`;
   const chartBox = document.getElementById("waGraphChart");
