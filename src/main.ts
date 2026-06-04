@@ -365,8 +365,8 @@ function hideLoginPage(): void {
 }
 /** "Log in" — decorative only (credentials ignored): enter admin view. */
 function logIn(): void { hideLoginPage(); setViewMode("admin"); }
-/** "Log out" — soft: drop to the logged-out (Adomas-only) view, no blocking gate. */
-function logOut(): void { setViewMode("loggedout"); }
+/** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
+function viewAsSpectator(): void { hideLoginPage(); setViewMode("loggedout"); }
 
 // Display a number at no more than 3 significant figures: 2 by default, but 3
 // when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
@@ -4720,8 +4720,8 @@ async function init() {
   // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
   setViewMode(viewMode);
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
-  // Log in / Log out button: logged out → open the login page; otherwise log out.
-  els.authBtn.addEventListener("click", () => { if (viewMode === "loggedout") showLoginPage(); else logOut(); });
+  // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
+  els.authBtn.addEventListener("click", showLoginPage);
 
   // "Legs (all)" category visibility in the By-category list (off by default).
   els.showLegsAll.checked = showLegsAll;
@@ -6354,7 +6354,7 @@ function setupBottomNav() {
   const signedIn = (() => { try { return localStorage.getItem("colosseum.signedIn") === "1"; } catch { return false; } })();
   if (!signedIn) showLoginPage(); // first visit: show the page (non-blocking choice)
   document.getElementById("loginAdminBtn")?.addEventListener("click", logIn);
-  document.getElementById("loginGuestBtn")?.addEventListener("click", () => { hideLoginPage(); logOut(); });
+  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
 }
 
 void init();

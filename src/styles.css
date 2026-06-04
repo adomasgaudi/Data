@@ -80,6 +80,11 @@ html.signed-in .login-gate { display: none; }
   color: #fff; background: var(--accent); border: 0; border-radius: 10px; cursor: pointer;
 }
 .login-btn:hover { filter: brightness(1.08); }
+/* "View as spectator": the big, prominent alternative to logging in. */
+.login-btn--spectator {
+  margin-top: 0.7rem; padding: 1rem; font-size: 1.1rem;
+  color: var(--accent); background: var(--accent-soft); border: 2px solid var(--accent);
+}
 .login-link {
   width: 100%; margin: 0.7rem 0 0; padding: 0.3rem; font: inherit; font-size: 0.85rem;
   color: var(--accent); background: none; border: 0; cursor: pointer; text-decoration: underline;
