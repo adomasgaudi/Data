@@ -17,7 +17,6 @@ import { graphMetric, type GraphPoint } from "./graphMetrics";
 import type { GraphConfig } from "./graphConfig";
 
 const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a8a", "#c0603a", "#7a6f9b"];
-const DAY = 86_400_000;
 
 export interface AnalyticsGraphInput {
   exercises: readonly string[];
@@ -49,50 +48,51 @@ function movingAverage(points: GraphPoint[], win: number): GraphPoint[] {
   return out;
 }
 
-function mockSeries(): SvgSeries[] {
-  const base = Date.parse("2025-01-01");
-  const pts: SvgPoint[] = Array.from({ length: 8 }, (_, i) => ({ x: base + i * 14 * DAY, y: 80 + i * 2 }));
-  return [{ name: "Sample (mock)", color: SERIES_COLORS[0]!, type: "line", points: pts }];
-}
-
 const charts = new WeakMap<HTMLElement, SvgChart>();
 
-/** Render the universal graph into `container`. Returns how many real (non-mock)
- * series were drawn, so the caller can show a missing-data note. */
+/** Render the universal graph into `container`. Returns how many series were
+ * drawn, so the caller can show a missing-data note (0 = nothing to plot). */
 export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGraphInput): number {
-  const metrics = (input.metrics.length ? input.metrics : ["e1rm"]).map(graphMetric).filter((m): m is NonNullable<typeof m> => !!m);
+  const isAll = input.exercises.length === 0;
+  // Metric defaults: a single lift reads best as Estimated 1RM; the whole-athlete
+  // "all" view defaults to total VOLUME (a 1RM across mixed lifts is meaningless,
+  // but total training volume per day/week is a useful whole-athlete trend).
+  const defaultMetric = isAll ? "volume" : "e1rm";
+  const metrics = (input.metrics.length ? input.metrics : [defaultMetric]).map(graphMetric).filter((m): m is NonNullable<typeof m> => !!m);
   const inRange = (r: SetRecord) => (!input.dateFrom || r.date >= input.dateFrom) && (!input.dateTo || r.date <= input.dateTo);
   const records = input.records.filter(inRange);
   const code = input.codeOf ?? ((n) => n);
 
-  let series: SvgSeries[] = [];
-  if (input.exercises.length === 0) {
-    series = mockSeries(); // TASK 25: works with mock data
-  } else {
-    let ci = 0;
-    for (const ex of input.exercises) {
-      const exRecords = records.filter((r) => r.exerciseName === ex);
-      for (const m of metrics) {
-        if (!m.compute) continue; // registered-but-not-computed metric
-        let pts: GraphPoint[] = m.compute(exRecords, input.config);
-        // Decay can also be applied to plain strength/1RM lines via the config.
-        if (input.config.decay && (m.id === "strength" || m.id === "e1rm")) {
-          pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
-        }
-        if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
-        const color = SERIES_COLORS[ci % SERIES_COLORS.length]!;
-        ci++;
-        if (pts.length)
-          series.push({ name: `${code(ex)} · ${m.label}`, color, type: m.type ?? "line", points: pts as SvgPoint[], ...(m.axis ? { axis: m.axis } : {}) });
+  // "all" → one whole-athlete series per metric over EVERY logged set; otherwise
+  // a series per (selected exercise × metric). Same compute path either way — no
+  // mock data in the shipped view.
+  const groups: { label: string; records: SetRecord[] }[] = isAll
+    ? [{ label: "All exercises", records: [...records] }]
+    : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
+
+  const series: SvgSeries[] = [];
+  let ci = 0;
+  for (const g of groups) {
+    for (const m of metrics) {
+      if (!m.compute) continue; // registered-but-not-computed metric
+      let pts: GraphPoint[] = m.compute(g.records, input.config);
+      // Decay can also be applied to plain strength/1RM lines via the config.
+      if (input.config.decay && (m.id === "strength" || m.id === "e1rm")) {
+        pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
       }
+      if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
+      const color = SERIES_COLORS[ci % SERIES_COLORS.length]!;
+      ci++;
+      // One group → label by metric only; several → prefix the exercise.
+      const name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
+      if (pts.length)
+        series.push({ name, color, type: m.type ?? "line", points: pts as SvgPoint[], ...(m.axis ? { axis: m.axis } : {}) });
     }
-    // With a selection but nothing to plot (only an un-computed metric, or too
-    // little data to predict) we draw an empty chart — the caller shows a note.
   }
 
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true };
   const existing = charts.get(container);
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));
-  return input.exercises.length === 0 ? 0 : series.length;
+  return series.length;
 }

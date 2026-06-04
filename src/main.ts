@@ -7248,14 +7248,18 @@ function renderWaGraph(): void {
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
+  // GRAPH-3: the metric chips are an ALWAYS-VISIBLE row (flip what's plotted in
+  // one tap, no menu). Only the advanced options (formula/aggregation/interval/
+  // smoothing/prediction/decay) live inside the "Graph settings" disclosure. The
+  // graph + its chips sit at the TOP of the Analysis content in every mode.
   box.innerHTML =
+    `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
+    `<div id="waGraphChart"></div>` +
+    `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
     `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph settings</summary>` +
-    `<div class="wa-metric-row">${metricChips}</div>` +
     cfgUi +
-    `</details>` +
-    `<p class="muted wa-placeholder" id="waGraphNote"></p>` +
-    `<div id="waGraphChart"></div>`;
+    `</details>`;
   const chartBox = document.getElementById("waGraphChart");
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
   const drawn = chartBox
@@ -7270,7 +7274,8 @@ function renderWaGraph(): void {
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {
     if (waSelected.length === 0) {
-      noteEl.textContent = "Pick exercises to plot — showing sample data.";
+      // Whole-athlete view (real data). Only flag the genuine empty state.
+      noteEl.textContent = drawn === 0 ? "No data yet." : "All exercises — pick lifts above to focus on them.";
     } else {
       // Compatibility / unavailable-state messages (TASK 42).
       const recs = computedRecords().filter((r) => r.username === els.athlete.value && waSelected.includes(r.exerciseName));
