@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.3.19</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.3.20</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -1062,37 +1062,28 @@
         </section>
       </div>
 
-      <!-- Unified workout-analysis view (TASK 1): an empty shell of labelled
-           placeholder sections. No functionality is wired in yet; existing views
-           are untouched. Reached via Other → “Workout analysis”. -->
+      <!-- Unified Analysis view: the single home for every exercise view. Each
+           wa-section below is populated live by renderWorkoutAnalysis() —
+           athlete picker, filters, exercise selector, the one universal graph,
+           and the relocated workout/drill-in/list/compare panels. -->
       <div id="tab-analysis" class="tab-panel">
         <section class="panel">
           <h2>Analysis</h2>
           <!-- The athlete picker (.ath-row) is relocated here at the top of the
                Analysis view while it's open, and returned to #tab-athlete on leave. -->
           <div id="waAthleteHost"></div>
-          <div id="waFilters" class="wa-section">
-            <h3 class="wa-section-title">Filters</h3>
-            <p class="muted wa-placeholder">Filters go here.</p>
-          </div>
-          <div id="waExerciseSelector" class="wa-section">
-            <h3 class="wa-section-title">Exercise selector</h3>
-            <p class="muted wa-placeholder">Exercise selector goes here.</p>
-          </div>
-          <div id="waGraph" class="wa-section">
-            <h3 class="wa-section-title">Graph</h3>
-            <p class="muted wa-placeholder">Graph area goes here.</p>
-          </div>
-          <div id="waStats" class="wa-section">
-            <h3 class="wa-section-title">Stats</h3>
-            <p class="muted wa-placeholder">Stats area goes here.</p>
-          </div>
+          <!-- Filters / selector / graph are rebuilt in full by JS on every
+               render; they start empty so there's no flash of stale copy. -->
+          <div id="waFilters" class="wa-section"></div>
+          <div id="waExerciseSelector" class="wa-section"></div>
+          <div id="waGraph" class="wa-section"></div>
+          <div id="waStats" class="wa-section" hidden></div>
           <div id="waTable" class="wa-section">
             <h3 class="wa-section-title">Workout history</h3>
-            <!-- TASK 3: the live Workouts panel is relocated here while this view
-                 is open (and returned to the athlete Workouts tab when you leave),
-                 so all its history / date-filter / stats / toggles work as-is. -->
-            <p class="muted wa-placeholder" id="waWorkoutsEmpty">Workout history loads here.</p>
+            <!-- The live Workouts / drill-in / list / compare panel is relocated
+                 here while the view is open (and returned to its home tab on
+                 leave), so all its history / filters / stats / toggles work as-is. -->
+            <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
             <div id="waWorkoutsHost"></div>
           </div>
         </section>
