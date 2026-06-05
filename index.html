@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.3.46</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.3.47</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -185,7 +185,9 @@
               </div>
             </details>
             <div id="workoutCalendar" class="wo-calendar"></div>
-            <div class="wo-controls">
+            <details class="wo-controls-fold">
+              <summary class="wo-controls-sum">⚙ Display options</summary>
+              <div class="wo-controls">
               <span class="inline-label">View
                 <span id="workoutViewToggle" class="seg-toggle" role="group" aria-label="View by day or week">
                   <button type="button" class="seg-btn is-active" data-view="day">By day</button>
@@ -228,7 +230,8 @@
                 title="Filter by the ‘alone’ tag — tap to cycle: show all sessions / only the ones you tagged trained alone / only the ones you didn’t">
                 Alone: Both
               </button>
-            </div>
+              </div>
+            </details>
             <table id="workoutsTable" class="data-table"></table>
             <div id="workoutsPager" class="pager"></div>
           </section>
