@@ -4703,6 +4703,7 @@ function toggleSetNote(target: HTMLElement): boolean {
 
 // ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
 let scaleEditState: { ex: string; note: string } | null = null;
+let scaleEditDirty = false; // an edit was made while the popover was open
 function renderScaleEditor(): void {
   const pop = document.getElementById("scaleEditPop");
   if (!pop || !scaleEditState) return;
@@ -4736,9 +4737,19 @@ function openScaleEditor(ex: string, note: string, anchor: HTMLElement): void {
   positionScaleEditor(anchor);
 }
 function closeScaleEditor(): void {
+  const wasDirty = scaleEditDirty;
   scaleEditState = null;
+  scaleEditDirty = false;
   const pop = document.getElementById("scaleEditPop");
   if (pop) pop.hidden = true;
+  // Sync the table/graphs ONCE, on close (not on every chip tap), preserving the
+  // scroll position so the page doesn't jump.
+  if (wasDirty) {
+    const y = window.scrollY;
+    refreshExerciseInfo();
+    renderAll();
+    window.scrollTo(0, y);
+  }
 }
 /** Click on a set row's editable ×chip: open/close the floating modifier editor
  * for that note. Returns true if it handled the click (so the row doesn't edit). */
@@ -6096,9 +6107,15 @@ async function init() {
     if (!input?.dataset.varEx || input.dataset.varNote === undefined) return;
     const v = Number(input.value);
     if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
-    refreshExerciseInfo();
-    renderAll();
-    requestAnimationFrame(renderScaleEditor); // keep the floating editor in sync + open
+    if (scaleEditState) {
+      // Editing in the floating popover: only update the popover now; the heavy
+      // re-render (which collapses the expanded day) is deferred until it closes.
+      scaleEditDirty = true;
+      requestAnimationFrame(renderScaleEditor);
+    } else {
+      refreshExerciseInfo();
+      renderAll();
+    }
   });
   // Close button on the floating modifier editor.
   document.addEventListener("click", (e) => {
@@ -6109,9 +6126,15 @@ async function init() {
     const lvl = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-lvl");
     if (!lvl?.dataset.vecdimEx || lvl.dataset.vecdimNote === undefined || !lvl.dataset.vecdimDim || lvl.dataset.vecdimLevel === undefined) return;
     setNoteVecDim(lvl.dataset.vecdimEx, lvl.dataset.vecdimNote, lvl.dataset.vecdimDim, lvl.dataset.vecdimLevel);
-    refreshExerciseInfo();
-    renderAll();
-    requestAnimationFrame(renderScaleEditor); // re-render the floating editor (deferred so it stays open)
+    if (scaleEditState) {
+      // In the floating popover: keep it open, update it only; defer the heavy
+      // re-render (which would collapse the expanded day + scroll up) until close.
+      scaleEditDirty = true;
+      requestAnimationFrame(renderScaleEditor);
+    } else {
+      refreshExerciseInfo();
+      renderAll();
+    }
   });
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
