@@ -1879,6 +1879,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Model suggestion line under a note (LIFT-DM2): where the ×number came from. */
 .ex-var-model { padding: 0.1rem 0.55rem 0.3rem; font-size: 0.72rem; }
 .ex-var-vec { opacity: 0.85; }
+/* Per-note attribute picker (LIFT-DM3): one dropdown per dimension. */
+.ex-var-picker { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; padding: 0.1rem 0.55rem 0.45rem; }
+.ex-var-dim { display: flex; flex-direction: column; gap: 1px; }
+.ex-var-dim-lbl { font-size: 0.66rem; font-weight: 600; color: var(--muted); text-transform: capitalize; }
+.ex-var-dim-sel { font: inherit; font-size: 0.76rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.ex-var-dim.is-picked .ex-var-dim-sel { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.ex-var-x { font-size: 0.86rem; font-weight: 700; color: var(--accent); }
 /* Per-note "not comparable" toggle + state. */
 .ex-var-nc-btn { font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 0.4rem; white-space: nowrap; }
 .ex-var-nc-btn:hover { border-color: var(--accent); color: var(--accent); }

@@ -1,47 +1,80 @@
 import { describe, it, expect } from "vitest";
 import { resolveNote, matchTokens, normalizeNote } from "./variationModel";
-import { DEFAULT_VARIATION_CONFIG, FAMILIES, type VariationConfig } from "./variationConfig";
+import { DEFAULT_VARIATION_CONFIG, familyOf, type VariationConfig } from "./variationConfig";
 
-const flagTypes = (note: string) => resolveNote("HSPU", note).flags.map((f) => f.type);
+// The resolver is engine-only; the live config (variationConfig.ts) evolves freely.
+// So the spec's acceptance is checked against a FIXED in-test config that mirrors
+// the original spec shape — the engine behaviour is what's under test here.
+const SPEC: VariationConfig = {
+  FAMILIES: {
+    HSPU: {
+      dims: {
+        support: { free: 1.0, wall: 0.85, band_light: 0.78, band_heavy: 0.62 },
+        lean: { neutral: 1.0, fwd_small: 0.95, fwd_big: 0.88 },
+        rom: { full: 1.0, to_block: 0.7, partial: 0.6 },
+        elevation: { floor: 1.0, deficit_15: 1.15 },
+      },
+      defaults: { support: "free", lean: "neutral", rom: "full", elevation: "floor" },
+    },
+  },
+  TOKENS: {
+    HSPU: {
+      wall: { support: "wall" },
+      freestanding: { support: "free" },
+      "yoga block": { rom: "to_block", support: "wall" },
+      limited: { rom: "partial" },
+      "guma heavy": { support: "band_heavy" },
+      guma: { support: "band_light" },
+      "forward lean": { lean: "fwd_big" },
+    },
+  },
+};
+const r = (note: string) => resolveNote("HSPU", note, SPEC);
 
 describe("resolveNote (factored variation difficulty)", () => {
   it("a single explicit token sets its dimension", () => {
-    expect(resolveNote("HSPU", "wall").scalar).toBe(0.85);
-    expect(resolveNote("HSPU", "wall").vec.support).toBe("wall");
+    expect(r("wall").scalar).toBe(0.85);
+    expect(r("wall").vec.support).toBe("wall");
   });
 
   it("an implication sets multiple dimensions (yoga block ⇒ wall too)", () => {
-    const r = resolveNote("HSPU", "yoga block");
-    expect(r.scalar).toBe(0.595); // 0.70 (rom) × 0.85 (support) × 1 × 1
-    expect(r.vec.support).toBe("wall"); // implied even though "wall" wasn't written
-    expect(r.vec.rom).toBe("to_block");
+    const res = r("yoga block");
+    expect(res.scalar).toBe(0.595); // 0.70 (rom) × 0.85 (support) × 1 × 1
+    expect(res.vec.support).toBe("wall"); // implied even though "wall" wasn't written
+    expect(res.vec.rom).toBe("to_block");
   });
 
   it("an empty note is all-defaults, scalar 1", () => {
-    const r = resolveNote("HSPU", "");
-    expect(r.scalar).toBe(1);
-    expect(r.vec).toEqual(FAMILIES.HSPU!.defaults);
-    expect(r.flags).toHaveLength(0);
+    const res = r("");
+    expect(res.scalar).toBe(1);
+    expect(res.vec).toEqual(SPEC.FAMILIES.HSPU!.defaults);
+    expect(res.flags).toHaveLength(0);
   });
 
   it("an unknown token produces an unreviewed flag with the fragments", () => {
-    const r = resolveNote("HSPU", "M yoga");
-    expect(r.flags.some((f) => f.type === "unreviewed")).toBe(true);
-    const frag = r.flags.find((f) => f.type === "unreviewed")!.detail;
-    expect(frag).toContain("yoga");
-    expect(frag).toContain("m");
+    const res = r("xyzzy nonsense");
+    expect(res.flags.some((f) => f.type === "unreviewed")).toBe(true);
+    const frag = res.flags.find((f) => f.type === "unreviewed")!.detail;
+    expect(frag).toContain("xyzzy");
+    expect(frag).toContain("nonsense");
   });
 
   it("longest-match-first: 'guma heavy' beats 'guma'", () => {
-    expect(resolveNote("HSPU", "guma heavy").vec.support).toBe("band_heavy");
-    expect(resolveNote("HSPU", "guma heavy").scalar).toBe(0.62);
-    expect(resolveNote("HSPU", "guma").vec.support).toBe("band_light");
+    expect(r("guma heavy").vec.support).toBe("band_heavy");
+    expect(r("guma heavy").scalar).toBe(0.62);
+    expect(r("guma").vec.support).toBe("band_light");
   });
 
   it("two tokens on one dimension flag a conflict, last-applied wins", () => {
-    expect(flagTypes("wall freestanding")).toContain("conflict");
-    // both touch `support`; vec keeps one of the two levels, never a default
-    expect(["wall", "free"]).toContain(resolveNote("HSPU", "wall freestanding").vec.support);
+    expect(r("wall freestanding").flags.map((f) => f.type)).toContain("conflict");
+    expect(["wall", "free"]).toContain(r("wall freestanding").vec.support);
+  });
+
+  it("punctuation-only leftovers are ignored (peeled '+'/',' from cm levels)", () => {
+    // "15cm + yoga block" is peeled to "+ yoga block" upstream → the "+" is no flag.
+    const res = r("+ yoga block");
+    expect(res.scalar).toBe(0.595);
+    expect(res.flags.some((f) => f.type === "unreviewed")).toBe(false);
   });
 
   it("priority controls which token wins a tie and is applied last", () => {
@@ -49,29 +82,19 @@ describe("resolveNote (factored variation difficulty)", () => {
       FAMILIES: { F: { dims: { d: { a: 0.5, b: 0.9 } }, defaults: { d: "a" } } },
       TOKENS: { F: { x: { d: "a" }, y: { d: "b", priority: 10 } } },
     };
-    // y has higher priority → applied last → wins, even though both match.
     expect(resolveNote("F", "x y", cfg).vec.d).toBe("b");
     expect(resolveNote("F", "x y", cfg).scalar).toBe(0.9);
   });
 
   it("unknown family is a no-op scalar 1 with a flag", () => {
-    const r = resolveNote("NOPE", "wall");
-    expect(r.scalar).toBe(1);
-    expect(r.flags[0]!.type).toBe("unknown_family");
-  });
-
-  it("config is external — passing a different config changes the result", () => {
-    expect(resolveNote("HSPU", "wall", DEFAULT_VARIATION_CONFIG).scalar).toBe(0.85);
-    const cfg: VariationConfig = {
-      FAMILIES: { HSPU: { dims: { support: { free: 1, wall: 0.5 } }, defaults: { support: "free" } } },
-      TOKENS: { HSPU: { wall: { support: "wall" } } },
-    };
-    expect(resolveNote("HSPU", "wall", cfg).scalar).toBe(0.5);
+    const res = resolveNote("NOPE", "wall", SPEC);
+    expect(res.scalar).toBe(1);
+    expect(res.flags[0]!.type).toBe("unknown_family");
   });
 });
 
 describe("matchTokens", () => {
-  const table = DEFAULT_VARIATION_CONFIG.TOKENS.HSPU!;
+  const table = SPEC.TOKENS.HSPU!;
 
   it("is case-insensitive and whitespace-normalised", () => {
     expect(matchTokens("  WALL  ", table).matched.map((m) => m.phrase)).toEqual(["wall"]);
@@ -79,9 +102,9 @@ describe("matchTokens", () => {
   });
 
   it("consumes spans so a substring token can't re-match", () => {
-    const r = matchTokens("guma heavy", table);
-    expect(r.matched.map((m) => m.phrase)).toEqual(["guma heavy"]);
-    expect(r.fragments).toHaveLength(0);
+    const res = matchTokens("guma heavy", table);
+    expect(res.matched.map((m) => m.phrase)).toEqual(["guma heavy"]);
+    expect(res.fragments).toHaveLength(0);
   });
 
   it("respects word boundaries (no match inside a longer word)", () => {
@@ -89,8 +112,27 @@ describe("matchTokens", () => {
   });
 
   it("returns leftover fragments for unmatched words", () => {
-    const r = matchTokens("wall plus something", table);
-    expect(r.matched.map((m) => m.phrase)).toContain("wall");
-    expect(r.fragments).toEqual(["plus", "something"]);
+    const res = matchTokens("wall plus something", table);
+    expect(res.matched.map((m) => m.phrase)).toContain("wall");
+    expect(res.fragments).toEqual(["plus", "something"]);
+  });
+});
+
+describe("live HSPU config (variationConfig.ts) on real notes", () => {
+  it("maps the handstand push-up family", () => {
+    expect(familyOf("Handstand Push Ups")).toBe("HSPU");
+  });
+
+  it("resolves real logged notes into setups (numbers are placeholders)", () => {
+    // "15cm + yoga block" is peeled to "+ yoga block" upstream.
+    const yoga = resolveNote("HSPU", "+ yoga block", DEFAULT_VARIATION_CONFIG);
+    expect(yoga.vec.support).toBe("wall");
+    expect(yoga.vec.rom).toBe("block_med");
+    // "uninterupted no wall" → conflict on support (yoga implies wall? no — just
+    // the explicit "no wall" applies), continuity uninterrupted.
+    const uninterrupted = resolveNote("HSPU", "uninterupted", DEFAULT_VARIATION_CONFIG);
+    expect(uninterrupted.vec.continuity).toBe("uninterrupted");
+    // a band token
+    expect(resolveNote("HSPU", "guma 5", DEFAULT_VARIATION_CONFIG).vec.band).toBe("light");
   });
 });

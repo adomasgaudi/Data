@@ -56,7 +56,7 @@ import {
 } from "./metrics";
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf } from "./variationConfig";
+import { familyOf, FAMILIES } from "./variationConfig";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
@@ -741,27 +741,68 @@ const variationKey = (exerciseName: string, note: string): string => `${exercise
 /** Notes that LOOK like a difficulty-changing variation (vs a passing thought),
  * used only to flag "review needed" until the owner sets a difficulty. */
 const VARIATION_HINT = /\b(incline|incl|decline|decl|knee|knees|diamond|wide|narrow|close|archer|deficit|pike|assist|assisted|band|banded|pause|paused|tempo|slow|explosive|elevated|raised|feet|weighted|weight|ring|rings|clap|pseudo|planche|negative|eccentric|deep|spoto|pin|deload|single|one\s*arm|1\s*arm)\b/i;
-/** The owner's PINNED scalar for a note, or undefined when not pinned. The pin
- * always wins over the suggestion until cleared (LIFT-DM2). */
+// Per-note ATTRIBUTE-VECTOR overrides (LIFT-DM3): for a lift with a difficulty
+// model, the owner picks each dimension's level (how far from the wall, how deep
+// the range, what band…) instead of a number; we store only the dims they change,
+// layered on top of what the note's tokens resolved to. Keyed exercise|normNote.
+const VARIATION_VEC_KEY = "colosseum.variationVecs.v1";
+const variationVecOverrides: Record<string, Record<string, string>> = (() => {
+  try {
+    const raw = localStorage.getItem(VARIATION_VEC_KEY);
+    const obj = raw ? (JSON.parse(raw) as Record<string, Record<string, string>>) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+})();
+function noteVecOverride(exerciseName: string, note: string): Record<string, string> {
+  return variationVecOverrides[variationKey(exerciseName, note)] ?? {};
+}
+function noteHasVecOverride(exerciseName: string, note: string): boolean {
+  return Object.keys(noteVecOverride(exerciseName, note)).length > 0;
+}
+function saveVariationVecs(): void {
+  try { localStorage.setItem(VARIATION_VEC_KEY, JSON.stringify(variationVecOverrides)); }
+  catch { /* storage may be unavailable — edits still apply this session */ }
+}
+function setNoteVecDim(exerciseName: string, note: string, dim: string, level: string): void {
+  const k = variationKey(exerciseName, note);
+  const cur = variationVecOverrides[k] ?? {};
+  cur[dim] = level;
+  variationVecOverrides[k] = cur;
+  saveVariationVecs();
+}
+function clearNoteVec(exerciseName: string, note: string): void {
+  delete variationVecOverrides[variationKey(exerciseName, note)];
+  saveVariationVecs();
+}
+/** The product of a vector's per-dimension factors for a family. */
+function scalarFromVec(family: string, vec: Record<string, string>): number {
+  const fam = FAMILIES[family];
+  if (!fam) return 1;
+  let s = 1;
+  for (const dim of Object.keys(fam.dims)) {
+    const f = fam.dims[dim]![vec[dim] ?? ""];
+    if (typeof f === "number") s *= f;
+  }
+  return Math.round(s * 1e6) / 1e6;
+}
+/** The owner's PINNED scalar for a note (non-model lifts), or undefined. */
 function notePin(exerciseName: string, note: string): number | undefined {
   const k = variationKey(exerciseName, note);
   return Object.prototype.hasOwnProperty.call(variationScaleOverrides, k) ? variationScaleOverrides[k] : undefined;
 }
-/** The SUGGESTED scalar from the factored variation model (LIFT-DM1), when the
- * exercise has a family/model; else 1. Derived live from the config, so editing
- * the config re-resolves every past set with no re-entry. */
-function suggestedNoteScalar(exerciseName: string, note: string): number {
-  const fam = familyOf(exerciseName);
-  return fam ? resolveNote(fam, note).scalar : 1;
-}
-/** This note's effective relative-difficulty factor: the pin if set, else the
- * model's suggestion (which is 1 when there's no model). */
+/** This note's EFFECTIVE relative-difficulty factor. Model lift → product of the
+ * resolved-plus-picked attribute vector; otherwise the pin, else 1. */
 function variationScaleFor(exerciseName: string, note: string): number {
-  return notePin(exerciseName, note) ?? suggestedNoteScalar(exerciseName, note);
+  const fam = familyOf(exerciseName);
+  if (fam) return scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+  return notePin(exerciseName, note) ?? 1;
 }
-/** Whether the owner has reviewed this note (pinned any difficulty, even ×1). */
+/** Whether the owner has reviewed this note: pinned a number (non-model) or picked
+ * any attribute (model lift). */
 function variationReviewed(exerciseName: string, note: string): boolean {
-  return notePin(exerciseName, note) !== undefined;
+  return notePin(exerciseName, note) !== undefined || noteHasVecOverride(exerciseName, note);
 }
 /** A set's note-variation factor (1 when it has no note). */
 function noteVariationScale(r: SetRecord): number {
@@ -5355,37 +5396,62 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
     );
   const fam = familyOf(name);
   const entries = [...byNote.values()].sort((a, b) => b.count - a.count);
-  const needReview = entries.filter(
-    (e) => VARIATION_HINT.test(e.display) && !variationReviewed(name, e.display) && !isNoteNotComparable(name, e.display),
-  ).length;
+  let needReview = 0;
   const rowsHtml = entries
     .map((e) => {
       const notCmp = isNoteNotComparable(name, e.display);
-      const reviewed = variationReviewed(name, e.display);
-      const handled = reviewed || notCmp; // pinned a difficulty OR marked not comparable
-      const scale = variationScaleFor(name, e.display); // pin if set, else the model's suggestion
+      const reviewed = variationReviewed(name, e.display); // pinned a number OR picked attributes
+      const handled = reviewed || notCmp;
+      const scale = variationScaleFor(name, e.display);
       const resolved = fam ? resolveNote(fam, e.display) : null;
-      // When this lift has a difficulty model, show where the suggested ×number
-      // comes from (the resolved setup), and whether it's pinned or suggested.
-      const modelHint = !notCmp && resolved
-        ? `<div class="ex-var-model muted">${reviewed ? "pinned" : "suggested"} ×${resolved.scalar}` +
-          `<span class="ex-var-vec"> · ${Object.entries(resolved.vec).map(([d, l]) => `${escapeHtml(d)}=${escapeHtml(l)}`).join(", ")}</span></div>`
+      const override = fam ? noteVecOverride(name, e.display) : {};
+      const effVec = resolved ? { ...resolved.vec, ...override } : {};
+      // Flags: real resolver flags (unreviewed fragments / conflicting tokens) for
+      // model lifts; the keyword heuristic only for lifts without a model.
+      const realFlags = (resolved?.flags ?? []).filter((f) => f.type === "unreviewed" || f.type === "conflict");
+      const needsReview = fam ? realFlags.length > 0 && !handled : VARIATION_HINT.test(e.display) && !handled;
+      if (needsReview) needReview++;
+      const review = !needsReview
+        ? ""
+        : fam
+          ? realFlags
+              .map((f) => `<span class="ex-var-review" title="${escapeHtml(f.detail)}">⚠ ${f.type === "conflict" ? "conflict" : "review"}</span>`)
+              .join(" ")
+          : `<span class="ex-var-review" title="Looks like a variation — pick its attributes, or mark it not comparable.">⚠ review</span>`;
+      const reset = (fam ? noteHasVecOverride(name, e.display) : reviewed) && !notCmp
+        ? `<button type="button" class="ex-var-reset" data-varreset-ex="${escapeHtml(name)}" data-varreset-note="${escapeHtml(e.display)}" title="${fam ? "Clear your picks — back to what the note implies" : "Reset to ×1 (mark un-reviewed)"}">↺</button>`
         : "";
-      const flag = VARIATION_HINT.test(e.display) && !handled;
-      const review = flag
-        ? `<span class="ex-var-review" title="Looks like a variation that may change difficulty — set its relative difficulty, or mark it not comparable.">⚠ review</span>`
-        : "";
-      const reset = reviewed && !notCmp
-        ? `<button type="button" class="ex-var-reset" data-varreset-ex="${escapeHtml(name)}" data-varreset-note="${escapeHtml(e.display)}" title="${fam ? "Unpin — go back to the model's suggested value" : "Reset to ×1 (mark un-reviewed)"}">↺</button>`
-        : "";
-      // Each note can either get a difficulty, OR be marked NOT COMPARABLE (its
-      // sets keep reps/sets but get no 1RM/volume).
+      // Each note can get a difficulty, OR be marked NOT COMPARABLE (sets keep
+      // reps/sets, drop 1RM & volume).
       const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark these sets not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘ ${notCmp ? "not comparable" : "not comparable?"}</button>`;
+      // Model lift → a row of dimension dropdowns (pick the setup); the × is the
+      // resulting product, read-only. No model → the plain × number input.
+      const picker =
+        fam && !notCmp
+          ? `<div class="ex-var-picker">` +
+            Object.keys(FAMILIES[fam]!.dims)
+              .map((dim) => {
+                const levels = FAMILIES[fam]!.dims[dim]!;
+                const cur = effVec[dim];
+                const picked = override[dim] !== undefined;
+                const opts = Object.keys(levels)
+                  .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(l)} ×${levels[l]}</option>`)
+                  .join("");
+                return (
+                  `<label class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span>` +
+                  `<select class="ex-var-dim-sel" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(e.display)}" data-vecdim-dim="${escapeHtml(dim)}">${opts}</select></label>`
+                );
+              })
+              .join("") +
+            `</div>`
+          : "";
       const editArea = notCmp
         ? `<span class="ex-var-edit">${ncBtn}</span>`
-        : `<span class="ex-var-edit"><label class="ex-var-lbl">×</label>` +
-          `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(e.display)}" aria-label="Relative difficulty for note ${escapeHtml(e.display)}" />` +
-          reset + ncBtn + `</span>`;
+        : fam
+          ? `<span class="ex-var-edit"><span class="ex-var-x" title="Resulting difficulty (product of the picks)">×${scale}</span>${reset}${ncBtn}</span>`
+          : `<span class="ex-var-edit"><label class="ex-var-lbl">×</label>` +
+            `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(e.display)}" aria-label="Relative difficulty for note ${escapeHtml(e.display)}" />` +
+            reset + ncBtn + `</span>`;
       // Who & when: every (athlete, day) that logged this note — tap one to jump
       // to that athlete's Analysis for this lift, scrolled to that date.
       const sessions = [...e.sessions.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -5395,12 +5461,12 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
             `<button type="button" class="ex-var-jump" data-jumpuser="${escapeHtml(s.username)}" data-jumpex="${escapeHtml(name)}" data-jumpdate="${escapeHtml(s.date)}" title="Go to ${escapeHtml(s.user)}'s ${escapeHtml(name)} on ${escapeHtml(shortDate(s.date))}">${escapeHtml(s.user)} · ${escapeHtml(shortDate(s.date))}</button>`,
         )
         .join("");
-      const sessFold = `<details class="ex-var-sessions"${flag ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
+      const sessFold = `<details class="ex-var-sessions"${needsReview ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
       const ncNote = notCmp
         ? `<div class="ex-var-nc-note muted">Not comparable — reps &amp; sets still count, but no 1RM or volume for these sets.</div>`
-        : modelHint;
+        : picker;
       return (
-        `<div class="ex-var-block${flag ? " needs-review" : ""}${notCmp ? " is-nc" : scale !== 1 ? " is-scaled" : ""}">` +
+        `<div class="ex-var-block${needsReview ? " needs-review" : ""}${notCmp ? " is-nc" : scale !== 1 ? " is-scaled" : ""}">` +
         `<div class="ex-var-row">` +
         `<span class="ex-var-note">${escapeHtml(e.display)} ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
         editArea +
@@ -5955,6 +6021,14 @@ async function init() {
     refreshExerciseInfo();
     renderAll();
   });
+  // Per-note ATTRIBUTE picker (model lifts): pick a dimension's level (DM3).
+  document.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-var-dim-sel");
+    if (!sel?.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.vecdimDim) return;
+    setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.vecdimDim, sel.value);
+    refreshExerciseInfo();
+    renderAll();
+  });
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
@@ -5984,7 +6058,9 @@ async function init() {
   document.addEventListener("click", (e) => {
     const rb = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-reset");
     if (!rb?.dataset.varresetEx || rb.dataset.varresetNote === undefined) return;
-    clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
+    // Model lift → clear the attribute picks; otherwise clear the number pin.
+    if (familyOf(rb.dataset.varresetEx)) clearNoteVec(rb.dataset.varresetEx, rb.dataset.varresetNote);
+    else clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
     refreshExerciseInfo();
     renderAll();
   });

@@ -32,15 +32,28 @@ export interface VariationConfig {
   TOKENS: Record<string, Record<string, TokenDef>>;
 }
 
+// Handstand push-up model, derived from the real logged notes. DIMENSIONS are the
+// independent ways the lift is made easier/harder; LEVELS each carry a placeholder
+// difficulty factor (×1 = the hardest/reference, <1 easier, >1 harder) for the
+// owner to calibrate. Vertical depth in centimetres ("15cm", "+3cm") is NOT here —
+// it's already captured as a per-set cm LEVEL by the squat-rack/cm system upstream.
 export const FAMILIES: Record<string, FamilyDef> = {
   HSPU: {
     dims: {
-      support: { free: 1.0, wall: 0.85, band_light: 0.78, band_heavy: 0.62 },
-      lean: { neutral: 1.0, fwd_small: 0.95, fwd_big: 0.88 },
-      rom: { full: 1.0, to_block: 0.7, partial: 0.6 },
-      elevation: { floor: 1.0, deficit_15: 1.15 },
+      // How much help from the wall (further from wall ≈ freestanding ≈ harder).
+      support: { free: 1.0, wall: 0.85 },
+      // Assistance band ("guma"); higher number = more assistance here (calibrate).
+      band: { none: 1.0, light: 0.85, medium: 0.75, heavy: 0.62 },
+      // Range of motion / depth aid (a block shortens it; parallettes/brick deepen it).
+      rom: { full: 1.0, block_large: 0.7, block_med: 0.78, block_small: 0.85, partial: 0.6, deep: 1.12 },
+      // Leg shape: an L-sit is harder; hooked/tucked legs take some load off.
+      legs: { straight: 1.0, tucked: 0.95, lsit: 1.1, hooked: 0.8 },
+      // Torso lean forward (toward a planche line) is harder.
+      lean: { neutral: 1.0, forward: 0.92 },
+      // Reps done unbroken (no pause at the bottom) reads slightly harder.
+      continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
-    defaults: { support: "free", lean: "neutral", rom: "full", elevation: "floor" },
+    defaults: { support: "free", band: "none", rom: "full", legs: "straight", lean: "neutral", continuity: "paused" },
   },
   PUSHUP: {
     dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
@@ -50,14 +63,36 @@ export const FAMILIES: Record<string, FamilyDef> = {
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
   HSPU: {
+    // support / wall (a higher-priority "no wall" beats a bare "wall" in the note)
     wall: { support: "wall" },
+    "no wall": { support: "free", priority: 5 },
     freestanding: { support: "free" },
-    "yoga block": { rom: "to_block", support: "wall" }, // implication: also against the wall
+    "navel to wall": { support: "wall" },
+    "close to wall": { support: "wall" },
+    // band assistance — "guma N"; longest-match-first means "guma 5" beats "guma"
+    "guma 3": { band: "heavy" },
+    "guma 4": { band: "medium" },
+    "guma 5": { band: "light" },
+    "guma 6": { band: "light" },
+    guma: { band: "light" },
+    // range of motion / depth aids (a block implies you're also against the wall)
+    "l yoga": { rom: "block_large", support: "wall" },
+    "m yoga": { rom: "block_med", support: "wall" },
+    "yoga block": { rom: "block_med", support: "wall" },
+    yoga: { rom: "block_med", support: "wall" },
+    paraletes: { rom: "deep" },
+    parallettes: { rom: "deep" },
+    brick: { rom: "deep" },
     limited: { rom: "partial" },
-    "15kg elev": { elevation: "deficit_15" },
-    "guma heavy": { support: "band_heavy" },
-    guma: { support: "band_light" },
-    "forward lean": { lean: "fwd_big" },
+    // legs
+    "l sit": { legs: "lsit" },
+    "l-sit": { legs: "lsit" },
+    lsit: { legs: "lsit" },
+    "užkabintos kojos": { legs: "hooked", support: "wall" }, // hooked legs (assisted)
+    // lean / continuity
+    "forward lean": { lean: "forward" },
+    uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
+    uninterrupted: { continuity: "uninterrupted" },
   },
   PUSHUP: {
     /* token → { incline: "lN" } — the owner fills this in. */

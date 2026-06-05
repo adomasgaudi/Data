@@ -95,7 +95,9 @@ export function matchTokens(note: string, tokenTable: Record<string, TokenDef>):
     const e = s + wm[0].length;
     let anyFree = false;
     for (let i = s; i < e; i++) if (!consumed[i]) { anyFree = true; break; }
-    if (anyFree) fragments.push(wm[0]);
+    // Skip punctuation-only leftovers (e.g. the "+" / "," left when a "15cm"
+    // level was peeled out of the note upstream) — they're not real words.
+    if (anyFree && (/[a-z0-9]/i.test(wm[0]) || /[^\x00-\x7f]/.test(wm[0]))) fragments.push(wm[0]);
   }
   return { matched, fragments };
 }
