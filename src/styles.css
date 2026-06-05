@@ -563,9 +563,9 @@ main { padding-bottom: 8.5rem; }
 .profile-edit:hover { color: var(--accent); border-color: var(--accent); }
 /* Edit-athlete-stats page. */
 .statsedit-body { margin-top: 0.85rem; max-width: 560px; }
-.se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; }
+.se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; min-width: 0; }
 .se-lbl { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
-.se-field input, .se-field select { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.se-field input, .se-field select { width: 100%; min-width: 0; font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
 .se-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.8rem; }
 .se-bf { margin: 0.4rem 0 0.6rem; }
 .se-bf-lead { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
