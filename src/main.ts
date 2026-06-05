@@ -2811,7 +2811,7 @@ function renderExerciseDetail(exName: string) {
     .map((n) => `<button type="button" class="xdd-opt${n === exName ? " is-active" : ""}" role="option" data-switchex="${escapeHtml(n)}">${escapeHtml(n)}</button>`)
     .join("");
   els.athleteTitle.innerHTML =
-    `<button type="button" class="back-btn">‹ Exercises</button> ` +
+    `<button type="button" class="back-btn">‹ Back</button> ` +
     `<span class="xdd ex-switch-dd">` +
     `<button type="button" class="xdd-btn ex-switch-btn" title="Tap to switch exercise">${escapeHtml(exName)}<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${switchMenu}</div>` +
@@ -5834,8 +5834,10 @@ async function init() {
   els.athleteTitle.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     if (t.closest(".back-btn")) {
+      // Back to the unfiltered Workout-analysis view (clear the selection) — not
+      // the old standalone Exercises list.
       selectedExercise = null;
-      renderExercisesPage();
+      openWorkoutAnalysis({ exercises: [] });
       return;
     }
     // Switch-exercise dropdown: toggle the menu …
