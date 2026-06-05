@@ -231,6 +231,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
   let ry = { yMin: 0, yMax: 1 };
+  let lastTap: { t: number; x: number } | null = null; // for double-tap-to-reset
+  /** Re-fit the view to the data (undo any pan/zoom). */
+  const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
   const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
@@ -600,7 +603,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      if (wasTap) showTip(e.clientX);
+      if (wasTap) {
+        const now = Date.now();
+        if (lastTap && now - lastTap.t < 300 && Math.abs(e.clientX - lastTap.x) < 24) {
+          lastTap = null;
+          fitView(); // double-tap → re-fit to the data (undo accidental pan/zoom)
+        } else {
+          lastTap = { t: now, x: e.clientX };
+          showTip(e.clientX);
+        }
+      }
     }
   };
   plotEl.addEventListener("pointerdown", (e) => {
@@ -625,6 +637,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (e.pointerType === "mouse") showTip(e.clientX);
   });
   plotEl.addEventListener("pointerleave", hideTip);
+  // Double-click (desktop) / double-tap (mobile, handled in onUp) re-fits the view.
+  plotEl.addEventListener("dblclick", () => { if (interactive()) fitView(); });
   plotEl.addEventListener(
     "wheel",
     (e) => {
