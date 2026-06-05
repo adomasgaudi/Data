@@ -4628,12 +4628,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
  * are handled by delegation in the sets-table handler (onSetRpeClick). */
 function rpeDropdownHtml(sid: string, grade: string | undefined): string {
   const band = rirBand(grade);
-  const label = band ? `${band.id} ${band.word}` : "–";
+  const label = band ? band.id : "–";
   const optHtml = (val: string, text: string, title: string, active: boolean) =>
     `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
+  // Just the number range — no explanations (the why stays as a hover tooltip).
   const menu =
-    optHtml("", "– none", "Clear the grade", !band) +
-    RIR_BANDS.map((b) => optHtml(b.id, `${b.id} — ${b.desc}`, b.desc, grade === b.id)).join("");
+    optHtml("", "–", "Clear the grade", !band) +
+    RIR_BANDS.map((b) => optHtml(b.id, b.id, b.desc, grade === b.id)).join("");
   return (
     `<div class="xdd xdd-rpe${band ? " is-set" : ""}" data-setid="${escapeHtml(sid)}">` +
     `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve (RIR)">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
