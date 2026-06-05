@@ -1388,6 +1388,23 @@ sup.wr-bw { font-size: 0.85em; }
 #recordsTable td:first-child { width: 100%; } /* exercise column takes the slack */
 .rec-row .ex-fullname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48vw; }
 .wo-controls { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
+/* All the workout-history display controls collapse behind one compact button;
+   the panel floats (overlay) when open so it never pushes the list down. */
+.wo-controls-fold { position: relative; margin-bottom: 0.6rem; }
+.wo-controls-sum {
+  cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center;
+  font-size: 0.82rem; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px;
+}
+.wo-controls-sum::-webkit-details-marker { display: none; }
+.wo-controls-sum::after { content: " ▾"; color: var(--muted); }
+.wo-controls-fold[open] .wo-controls-sum { border-color: var(--accent); background: var(--accent-soft); }
+.wo-controls-fold[open] .wo-controls {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+  max-width: 92vw; margin: 0; padding: 0.8rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+}
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
