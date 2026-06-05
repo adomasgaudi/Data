@@ -246,6 +246,12 @@ body {
   box-shadow: 0 -2px 12px rgba(20, 24, 38, 0.06);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+/* When the keyboard is open, hide the bottom nav so only the search bar floats
+   above it (the nav would otherwise ride up with the keyboard too). */
+html.kb-open .subtabs { display: none; }
+/* Athlete picker relocated above the Analysis card — give it a little breathing
+   room so it doesn't crowd the header or the card. */
+.wa-athlete-top:not(:empty) { margin: 0.4rem 0 0.6rem; }
 .subtab {
   flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 3px;

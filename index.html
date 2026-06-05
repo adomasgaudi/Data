@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.4.8</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.4.10</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -1073,11 +1073,12 @@
            athlete picker, filters, exercise selector, the one universal graph,
            and the relocated workout/drill-in/list/compare panels. -->
       <div id="tab-analysis" class="tab-panel">
+        <!-- The athlete picker (.ath-row) is relocated here — ABOVE the Analysis
+             card, at the very top — while the view is open, and returned to
+             #tab-athlete on leave. -->
+        <div id="waAthleteHost" class="wa-athlete-top"></div>
         <section class="panel">
           <h2>Analysis</h2>
-          <!-- The athlete picker (.ath-row) is relocated here at the top of the
-               Analysis view while it's open, and returned to #tab-athlete on leave. -->
-          <div id="waAthleteHost"></div>
           <!-- Every major section is a collapsible disclosure so the layout is
                easy to see and explore (fold the graph/filters to watch what the
                layout buttons change). The renderers fill the inner #waXxx divs in

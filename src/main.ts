@@ -7835,6 +7835,10 @@ function setupWorkoutAnalysis(): void {
     const updateKbInset = () => {
       const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       document.documentElement.style.setProperty("--wa-kb-inset", `${Math.round(inset)}px`);
+      // Keyboard open → hide the bottom nav so ONLY the search bar rides above the
+      // keyboard (the nav otherwise floats up too). 80px guards against browser-
+      // chrome jitter being mistaken for a keyboard.
+      document.documentElement.classList.toggle("kb-open", inset > 80);
     };
     vv.addEventListener("resize", updateKbInset);
     vv.addEventListener("scroll", updateKbInset);

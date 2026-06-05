@@ -67,6 +67,8 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.4.10", title: "Athlete picker on top", sp: 1, note: "The athlete picker (the M/W toggle and the Adomas / Agne / Andrius name chips) now sits at the very top of the Analysis screen, above the Analysis card, instead of tucked inside it — so choosing who you're looking at is the first thing you see." },
+  { version: "b.2.4.9", title: "Only the search bar floats", sp: 1, note: "When the keyboard opens, only the search bar rides up just above it now — the Analysis / More bottom nav no longer floats up with it (it's hidden while you type), so the area above the keyboard isn't cluttered." },
   { version: "b.2.4.8", title: "Weight Range: one colour, white dividers", sp: 0.5, note: "The rep sections on the Weight Range bars no longer alternate light/dark. Each bar is now one solid colour with a thin white strip dividing the reps — so a bar reads as a single range, just marked at each rep boundary." },
   { version: "b.2.4.7", title: "Dropdown pinned to panel width", sp: 0.5, note: "Follow-up fix: the Exercises / Filter floating menu is now pinned to both edges of the selector panel, so it's exactly the panel's width and can no longer spill off the left edge of the screen (the previous fix still let a very wide chip grid overhang). The chip grid just wraps inside it." },
   { version: "b.2.4.6", title: "Back button → Analysis", sp: 1, note: "The “‹ Back” button in a single-exercise drill-in now returns to the unfiltered Workout-analysis view (clearing the lift selection) instead of opening the old standalone Exercises list, which is no longer part of this flow." },
