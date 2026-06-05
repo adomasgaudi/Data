@@ -7275,21 +7275,30 @@ function setAnalysisMainPanel(which: "none" | "workouts" | "exercises"): void {
   document.getElementById("waWorkoutsEmpty")?.toggleAttribute("hidden", which !== "none");
   analysisPanel = which;
 }
-/** Move the athlete picker (.ath-row) to the top of the analysis view, or back to
- * its home #tab-athlete. The hidden #athlete select stays put (source of truth);
- * only the visible chips + sex toggle travel. */
+/** Move the athlete picker (.ath-row) AND the legacy "Stats & training mix"
+ * (#athleteDetails) to the top of the analysis view, or back to their home
+ * #tab-athlete. The hidden #athlete select stays put (source of truth); only the
+ * visible chips + sex toggle + the stats disclosure travel. */
 function setAnalysisAthletePicker(inAnalysis: boolean): void {
   const row = document.querySelector<HTMLElement>(".ath-row");
   const host = document.getElementById("waAthleteHost");
   const home = document.getElementById("tab-athlete");
   if (!row || !host || !home) return;
-  // Only steal the picker into Analysis when that tab is actually showing — the
-  // renderer also runs on athlete change while the legacy Athlete tab is open.
+  // Only steal them into Analysis when that tab is actually showing — the renderer
+  // also runs on athlete change while the legacy Athlete tab is open.
   const analysisVisible = document.getElementById("tab-analysis")?.hidden === false;
+  const stats = document.getElementById("athleteDetails");
+  const statsHost = document.getElementById("waStatsHost");
+  const sel = document.getElementById("athlete"); // stats returns just after this
   if (inAnalysis && analysisVisible) {
     if (row.parentElement !== host) host.appendChild(row);
-  } else if (!inAnalysis && row.parentElement === host) {
-    home.insertBefore(row, home.firstChild);
+    if (stats && statsHost && stats.parentElement !== statsHost) statsHost.appendChild(stats);
+  } else if (!inAnalysis) {
+    if (row.parentElement === host) home.insertBefore(row, home.firstChild);
+    if (stats && statsHost && stats.parentElement === statsHost) {
+      if (sel && sel.parentElement === home) sel.insertAdjacentElement("afterend", stats);
+      else home.appendChild(stats);
+    }
   }
 }
 /** Move the training-year heatmap (#workoutCalendar) into the Analysis view (its
