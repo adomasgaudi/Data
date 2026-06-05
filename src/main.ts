@@ -3425,6 +3425,45 @@ function filterColor(filter: string): string | null {
   return null;
 }
 
+// "Colour by" for the all-exercises calendar (only when no filter is active):
+// paint each day by the dominant group in a chosen dimension; the day's set count
+// still drives the intensity (opacity). "none" = the classic single-colour scale.
+type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
+let heatColorBy: HeatColorDim = "none";
+const HEAT_COLOR_DIMS: HeatColorDim[] = ["none", "cat", "mus", "fun", "ex"];
+const HEAT_COLOR_LABELS: Record<HeatColorDim, string> = {
+  none: "One colour", cat: "Body part", mus: "Muscle group", fun: "Function", ex: "Exercise",
+};
+
+/** The group value an exercise falls under for a colour dimension (or null). */
+function exerciseGroupValue(name: string, dim: HeatColorDim): string | null {
+  if (dim === "cat") return exerciseCategory(name);
+  if (dim === "mus") return muscleGroup(name);
+  if (dim === "fun") return tagsForExercise(name).find((t) => t.kind === "functional-pattern")?.label ?? null;
+  if (dim === "ex") return name;
+  return null;
+}
+/** A stable #rrggbb colour for a group value: the category palette for body parts,
+ * otherwise a hash-derived hue so every value gets its own distinct colour. */
+function heatGroupColor(dim: HeatColorDim, value: string): string | null {
+  if (!value) return null;
+  if (dim === "cat") return CATEGORY_COLORS[value as TrainingCategory] ?? hashHueHex(value);
+  return hashHueHex(value);
+}
+function hashHueHex(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return hslToHex(((h % 360) + 360) % 360, 60, 45);
+}
+function hslToHex(h: number, s: number, l: number): string {
+  const sa = s / 100, la = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sa * Math.min(la, 1 - la);
+  const f = (n: number) => Math.round(255 * (la - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
+  const to2 = (v: number) => v.toString(16).padStart(2, "0");
+  return `#${to2(f(0))}${to2(f(8))}${to2(f(4))}`;
+}
+
 /** Background color for a heatmap cell given intensity level and optional category hex. */
 function cellBgColor(level: number, catHex: string | null): string {
   if (level === 0) return "";
@@ -3439,11 +3478,22 @@ function cellBgColor(level: number, catHex: string | null): string {
 }
 
 /** Training dates → { sets, catHex } honouring the active heatFilters. */
-function filteredDayCounts(): Map<string, { sets: number; catHex: string | null }> {
-  const m = new Map<string, { sets: number; catHex: string | null }>();
+function filteredDayCounts(): Map<string, { sets: number; catHex: string | null; label?: string | null }> {
+  const m = new Map<string, { sets: number; catHex: string | null; label?: string | null }>();
   for (const d of athleteWorkouts) {
     if (heatFilters.length === 0) {
-      if (d.totalSets > 0) m.set(d.date, { sets: d.totalSets, catHex: null });
+      if (d.totalSets <= 0) continue;
+      if (heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
+      // No filter but a colour dimension is chosen: paint by the day's DOMINANT
+      // group in that dimension (intensity still = total sets).
+      const tally = new Map<string, number>();
+      for (const e of d.exercises) {
+        const v = exerciseGroupValue(e.exerciseName, heatColorBy);
+        if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
+      }
+      let domV = "", domN = 0;
+      for (const [v, n] of tally) if (n > domN) { domN = n; domV = v; }
+      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(heatColorBy, domV) : null, label: domV || null });
       continue;
     }
     let totalSets = 0;
@@ -3490,7 +3540,7 @@ function dataYears(trained: Map<string, number>): number[] {
 /** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
  * rows) — weeks are never broken mid-column — with month labels along the top
  * aligned to the week each month begins. `counts` is the filtered day→sets map. */
-function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
+function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: string | null; label?: string | null }>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
   const numWeeks = Math.ceil((startDow + daysInYear) / 7);
@@ -3507,6 +3557,7 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
     const entry = counts.get(iso);
     const sets = entry?.sets ?? 0;
     const catHex = entry?.catHex ?? null;
+    const lbl = entry?.label ?? null;
     if (sets) {
       days++;
       totalSets += sets;
@@ -3519,7 +3570,7 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
     const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
     // Tint alternating months so each month's squares read as a distinct band.
     const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
-    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${lbl ? ` · ${escapeHtml(lbl)}` : ""}${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
     const lvl = heatLevel(sets);
     const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
@@ -3555,7 +3606,7 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
  * where each year begins. `counts` is the filtered day→sets map. The strip runs
  * from the Monday on/before the first training day to the Sunday on/after the
  * later of the last training day and today, so it always reaches the present. */
-function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | null }>): { html: string; days: number; totalSets: number } {
+function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | null; label?: string | null }>): { html: string; days: number; totalSets: number } {
   const dates = [...trainingDays().keys()].sort(); // full range, filter-independent
   if (dates.length === 0) {
     return { html: `<div class="hm-empty muted">No training logged yet.</div>`, days: 0, totalSets: 0 };
@@ -3597,6 +3648,7 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
     const entry = counts.get(iso);
     const sets = entry?.sets ?? 0;
     const catHex = entry?.catHex ?? null;
+    const lbl = entry?.label ?? null;
     if (sets) {
       days++;
       totalSets += sets;
@@ -3606,7 +3658,7 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
     const isToday = iso === todayIso();
     const isAlone = sets > 0 && aloneTags.has(aloneKey(iso));
     const mOdd = month % 2 === 1 ? " hm-modd" : "";
-    const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
+    const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${lbl ? ` · ${escapeHtml(lbl)}` : ""}${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
     const lvl = heatLevel(sets);
     const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
     cells.push(
@@ -3677,6 +3729,23 @@ function heatFilterSelect(): string {
   );
 }
 
+/** A compact colour key for the active "Colour by" dimension: the groups present,
+ * most-trained first, each with its colour (capped, with "+N more"). */
+function heatColorLegend(): string {
+  const tally = new Map<string, number>();
+  for (const d of athleteWorkouts) for (const e of d.exercises) {
+    const v = exerciseGroupValue(e.exerciseName, heatColorBy);
+    if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
+  }
+  const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 12);
+  const chips = top
+    .map(([v]) => `<span class="hm-cat-chip" style="background:${heatGroupColor(heatColorBy, v) ?? "#888"}">${escapeHtml(v)}</span>`)
+    .join("");
+  const more = sorted.length > top.length ? ` <span class="muted">+${sorted.length - top.length} more</span>` : "";
+  return `<div class="hm-legend muted">${chips}${more} <span class="muted">· lighter = fewer sets</span></div>`;
+}
+
 /** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
  * years stacked; filterable to one category or exercise. Tap a day to jump. */
 function renderWorkoutCalendar() {
@@ -3687,11 +3756,21 @@ function renderWorkoutCalendar() {
     `<button type="button" class="cal-tagmode${aloneTagMode ? " is-on" : ""}" data-tagmode="alone" ` +
     `title="${aloneTagMode ? "Done — stop tagging" : "Tag many days as trained-alone: tap this, then tap each day"}">` +
     `${aloneTagMode ? "Done tagging" : "Tag alone"}</button>`;
-  const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}${tagBtn}</div>`;
+  // With no exercise filter, offer a "Colour by" picker (one colour, or by body
+  // part / muscle / function / exercise) — intensity still tracks set count.
+  const colorByUi =
+    heatFilters.length === 0
+      ? `<label class="cal-colorby">Colour <select class="cal-colorby-sel">` +
+        HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
+        `</select></label>`
+      : "";
+  const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}${colorByUi}${tagBtn}</div>`;
   const tagHint = aloneTagMode
     ? `<div class="cal-taghint">Tap trained days to add/remove the red “alone” ring. Tap “Done tagging” when finished.</div>`
     : "";
-  const legend = heatFilters.length > 0
+  const legend = heatFilters.length === 0 && heatColorBy !== "none"
+    ? heatColorLegend()
+    : heatFilters.length > 0
     ? `<div class="hm-legend muted">${heatFilters.map(f => {
         const i = f.indexOf(":"); const lbl = i >= 0 ? f.slice(i+1) : f; const col = filterColor(f);
         return `<span class="hm-cat-chip" style="background:${col ?? "#888"}">${escapeHtml(lbl)}</span>`;
@@ -5626,6 +5705,11 @@ async function init() {
     }
     // Otherwise, tapping a trained day in the heatmap jumps to it in the list below.
     if (cell?.dataset.date) jumpToWorkoutDate(cell.dataset.date);
+  });
+  // "Colour by" dimension picker (only shown when no exercise filter is active).
+  els.workoutCalendar.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".cal-colorby-sel");
+    if (sel) { heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
   });
   // Close the heatmap filter menu on any click outside it.
   document.addEventListener("click", (e) => {

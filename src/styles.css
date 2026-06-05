@@ -1104,6 +1104,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 .cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
 .cal-mode-btn:hover { color: var(--text); }
 .cal-mode-btn.is-active { color: #fff; background: var(--accent); }
+/* "Colour by" picker for the all-exercises calendar. */
+.cal-colorby { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); }
+.cal-colorby-sel { font: inherit; font-size: 0.8rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
 /* Segmented toggle (e.g. Workouts View: By day / By week). */
 .seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg-btn { padding: 6px 12px; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
