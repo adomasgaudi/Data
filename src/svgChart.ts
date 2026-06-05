@@ -39,6 +39,10 @@ export interface SvgPoint {
   hi?: number; // range top
   /** For range bars: split the line into exactly this many dashes (e.g. reps). */
   dashes?: number;
+  /** For range bars: the y-value at each rep, lo→hi. Splits the bar into one
+   * section per rep (each ending at that rep's 1RM-equivalent), drawn as
+   * alternating-shade segments with a divider tick between them. */
+  bands?: number[];
   /** Extra text shown in the tooltip (e.g. "120×5"). */
   meta?: string;
 }
@@ -362,18 +366,36 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           const yHi = ymap(p.hi ?? 0);
           const yLo = ymap(p.lo ?? 0);
           const L = Math.abs(yLo - yHi);
-          const n = p.dashes && p.dashes > 1 ? Math.round(p.dashes) : 0;
-          // n dashes + (n-1) equal gaps span exactly the line, so the dash count
-          // reads as the rep count at a glance.
-          let dash = "";
-          let cap = "round";
-          if (n > 1 && L > 3) {
-            const d = L / (2 * n - 1);
-            dash = ` stroke-dasharray="${d.toFixed(2)} ${d.toFixed(2)}"`;
-            cap = "butt";
+          if (p.bands && p.bands.length >= 2 && L > 2) {
+            // Sectioned by rep: one segment per rep, each ending at that rep's
+            // 1RM-equivalent (bands[0] = the weight itself, last = full 1RM).
+            // Alternating shade makes the rep sections readable up the bar; a thin
+            // divider tick marks each rep boundary.
+            const bs = p.bands;
+            for (let i = 0; i < bs.length - 1; i++) {
+              const y1 = ymap(bs[i]!);
+              const y2 = ymap(bs[i + 1]!);
+              const op = i % 2 === 0 ? 0.62 : 0.34;
+              body += `<line x1="${x.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${s.color}" stroke-width="5" stroke-linecap="butt" stroke-opacity="${op}"/>`;
+            }
+            for (let i = 1; i < bs.length - 1; i++) {
+              const yb = ymap(bs[i]!);
+              body += `<line x1="${(x - 3).toFixed(1)}" y1="${yb.toFixed(1)}" x2="${(x + 3).toFixed(1)}" y2="${yb.toFixed(1)}" stroke="${lighten(s.color, 0.85)}" stroke-width="1.2" stroke-opacity="0.9"/>`;
+            }
+          } else {
+            const n = p.dashes && p.dashes > 1 ? Math.round(p.dashes) : 0;
+            // n dashes + (n-1) equal gaps span exactly the line, so the dash count
+            // reads as the rep count at a glance.
+            let dash = "";
+            let cap = "round";
+            if (n > 1 && L > 3) {
+              const d = L / (2 * n - 1);
+              dash = ` stroke-dasharray="${d.toFixed(2)} ${d.toFixed(2)}"`;
+              cap = "butt";
+            }
+            // Slight transparency so stacked/overlapping ranges show their density.
+            body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}" stroke-opacity="0.55"${dash}/>`;
           }
-          // Slight transparency so stacked/overlapping ranges show their density.
-          body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}" stroke-opacity="0.55"${dash}/>`;
           bars.push({ px: Math.round(x), yTop: Math.min(yHi, yLo), yBot: Math.max(yHi, yLo) });
         }
         // Where 3+ bars pile up, stacked transparency just turns muddy/dark — so

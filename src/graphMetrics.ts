@@ -18,6 +18,10 @@ export interface GraphPoint {
   y?: number; // line/scatter value
   lo?: number; // range bottom
   hi?: number; // range top
+  /** Range bars only: the y-value at each rep done, from rep 1 (= the weight
+   * lifted) up to the full estimated 1RM at the last rep. Splits the bar into one
+   * section per rep, each ending at that rep's 1RM-equivalent. */
+  bands?: number[];
   meta?: string; // tooltip text
 }
 export interface GraphMetricDef {
@@ -197,7 +201,17 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
         const lo = added(r);
         const hi = addedWeight1RM(r, cfg.formula);
         if (lo == null || hi == null) continue;
-        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, meta: `${lo}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
+        // Section the bar by rep: the value at each rep k is what THIS weight done
+        // for k reps estimates as a 1RM, from k=1 (the weight itself) up to the
+        // logged rep count (the full estimated 1RM at the top). Splits the bar into
+        // one section per rep so each set reads as its rep-by-rep 1RM ladder.
+        const reps = r.reps ?? 0;
+        const bands: number[] = [];
+        for (let k = 1; k <= reps; k++) {
+          const v = addedWeight1RM({ ...r, reps: k }, cfg.formula);
+          if (v != null) bands.push(r1(v));
+        }
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${lo}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
       }
       return out.sort((a, b) => a.x - b.x);
     },
