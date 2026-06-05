@@ -848,6 +848,30 @@ function setEffortClass(s: SetRecord, predRir: number | null): EffortClass | nul
   const rir = rirBandMid(rpeFor(s)) ?? predRir;
   return rir === null ? null : effortClass(rir, isBigLegsLift(s.exerciseName));
 }
+// "Hard sets only" lens (persisted): drop easy / warm-up sets (high reps in
+// reserve) from the graphs AND the training calendar, keeping only hard working
+// sets — plus sets with no RIR signal at all, which we can't call easy.
+let waHardOnly = (() => { try { return localStorage.getItem("colosseum.hardSetsOnly") === "1"; } catch { return false; } })();
+function saveHardOnly() { try { localStorage.setItem("colosseum.hardSetsOnly", waHardOnly ? "1" : "0"); } catch { /* ignore */ } }
+/** Set-ids the effort model classifies as easy (mid / warm-up), built once from
+ * the computed records. Hard sets and sets with no RIR signal are NOT included. */
+function easySetIds(): Set<string> {
+  const ids = new Set<string>();
+  const formula = currentFormula();
+  const sm = currentStrengthByUserExercise(formula);
+  for (const r of computedRecords()) {
+    const eff = setEffortClass(r, predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, formula));
+    if (eff === "mid" || eff === "warmup") ids.add(setId(r));
+  }
+  return ids;
+}
+/** Apply the "hard sets only" lens to a record list (no-op when off). Keyed by
+ * setId, so it works identically on raw or computed records. */
+function applyHardSetsFilter<T extends SetRecord>(records: readonly T[], easy?: Set<string>): T[] {
+  if (!waHardOnly) return [...records];
+  const e = easy ?? easySetIds();
+  return records.filter((r) => !e.has(setId(r)));
+}
 const RPE_STORE_KEY = "colosseum.rir.v1";
 let rpeGrades: Record<string, string> = (() => {
   try {
@@ -3390,11 +3414,21 @@ let heatFiltersSaved: string[] | null = null;
 // instead of jumping to that day — so you can tag many days quickly in one go.
 let aloneTagMode = false;
 
-/** Map of this athlete's training dates (ISO) → total sets that day (unfiltered).
- * Used for the list of years; colouring uses {@link filteredDayCounts}. */
+/** The workout days the heatmap (year analysis) draws from: the athlete's full
+ * history, or — when the "Hard sets only" lens is on — a rebuild that drops easy
+ * / warm-up sets so the calendar reflects only hard training. The Workouts
+ * session list keeps using the unfiltered athleteWorkouts. */
+function heatWorkoutDays(): WorkoutDay[] {
+  if (!waHardOnly) return athleteWorkouts;
+  const easy = easySetIds();
+  return workoutsForUser(activeRecords().filter((r) => !easy.has(setId(r))), els.athlete.value);
+}
+
+/** Map of this athlete's training dates (ISO) → total sets that day (respecting
+ * the Hard-sets lens). Used for the list of years; colouring uses {@link filteredDayCounts}. */
 function trainingDays(): Map<string, number> {
   const m = new Map<string, number>();
-  for (const d of athleteWorkouts) if (d.totalSets > 0) m.set(d.date, d.totalSets);
+  for (const d of heatWorkoutDays()) if (d.totalSets > 0) m.set(d.date, d.totalSets);
   return m;
 }
 
@@ -3480,7 +3514,7 @@ function cellBgColor(level: number, catHex: string | null): string {
 /** Training dates → { sets, catHex } honouring the active heatFilters. */
 function filteredDayCounts(): Map<string, { sets: number; catHex: string | null; label?: string | null }> {
   const m = new Map<string, { sets: number; catHex: string | null; label?: string | null }>();
-  for (const d of athleteWorkouts) {
+  for (const d of heatWorkoutDays()) {
     if (heatFilters.length === 0) {
       if (d.totalSets <= 0) continue;
       if (heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
@@ -7507,6 +7541,7 @@ function renderWaGraph(): void {
     `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
+    `<label class="wa-inc" title="Drop easy / warm-up sets (high reps-in-reserve) — keep only hard working sets. Also applies to the training calendar."><input type="checkbox" id="waHardOnly"${waHardOnly ? " checked" : ""} /> Hard sets only</label>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
@@ -7526,7 +7561,7 @@ function renderWaGraph(): void {
     `</details>`;
   const chartBox = document.getElementById("waGraphChart");
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
-  const athleteRecs = computedRecords().filter((r) => r.username === els.athlete.value);
+  const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => r.username === els.athlete.value));
   // With nothing picked, default to the athlete's most-trained lifts so the graph
   // opens as the SAME multi-colour per-exercise view (not one aggregate line) —
   // an automatic initial selection. Either way we cap at 10: past ~10 lines ×
@@ -7596,7 +7631,7 @@ function renderWaCompareGraph(): void {
     b.classList.toggle("is-active", b.dataset.wacompareview === waCompareView);
   const username = els.athlete.value;
   const formula = currentFormula();
-  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
+  const recs = filterRecords(applyHardSetsFilter(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
   // Cap the overlay at the first 10 lifts too (Select-all can pick dozens) so the
   // chart never lags; note the rest, mirroring the universal graph.
   const cmpExercises = waSelected.slice(0, WA_GRAPH_MAX);
@@ -7819,6 +7854,17 @@ function setupWorkoutAnalysis(): void {
       if (box.checked) waIncludeIdentities.add(id);
       else waIncludeIdentities.delete(id);
       renderWorkoutAnalysis();
+      return;
+    }
+    // "Hard sets only" lens — re-render the graph(s) AND the training calendar,
+    // since this filter applies to both.
+    const hard = target.closest<HTMLInputElement>("#waHardOnly");
+    if (hard) {
+      waHardOnly = hard.checked;
+      saveHardOnly();
+      renderWaGraph();
+      renderWaCompareGraph();
+      renderWorkoutCalendar();
       return;
     }
     // Graph config controls (TASK 29) — update config, re-render just the graph.
