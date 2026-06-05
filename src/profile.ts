@@ -144,6 +144,48 @@ export function bodyMassRanges(weight: number, dist: BodyFatDist): BodyMass {
   };
 }
 
+export interface NaturalPotential {
+  /** Likely lifetime natural LEAN mass (kg) at the drug-free nFFMI ceiling band. */
+  leanLimit: MassRange;
+  /** Ideal bodyweight (kg) at that lean ceiling, carried at a sport-typical body
+   * fat: lean & light for calisthenics, a bit heavier for power/weightlifting. */
+  idealCalisthenics: MassRange;
+  idealPower: MassRange;
+  /** The assumed sport body-fat fractions (so the UI can explain them). */
+  caliBf: number;
+  powerBf: number;
+  /** The nFFMI ceiling used (avg of the band). */
+  ceilingNffmi: number;
+}
+/**
+ * A likely LIFETIME NATURAL ceiling, from the well-documented drug-free nFFMI
+ * cap (~25 for men, ~21.5 for women; Kouri et al.) applied at this person's
+ * height. Lean limit = (nFFMI − 6.1·(1.8−h))·h² across a small ceiling band
+ * (exceptional genetics sit a touch higher). The "ideal" sport weights put that
+ * same lean ceiling at the body fat those athletes typically carry — leaner for
+ * calisthenics (better strength-to-weight), a bit fuller for power/weightlifting.
+ * Estimates only: genetics, frame and training history all move the real number.
+ */
+export function naturalPotential(height: number, sex: "m" | "f"): NaturalPotential | null {
+  const h = height / 100;
+  if (!(h > 0)) return null;
+  const ceil = sex === "f" ? { lo: 20.5, avg: 21.5, hi: 22.5 } : { lo: 24, avg: 25, hi: 26 };
+  const lean = (nffmi: number) => Math.max(0, (nffmi - 6.1 * (1.8 - h)) * h * h);
+  const leanLimit: MassRange = {
+    lo95: lean(ceil.lo),
+    lo50: lean((ceil.lo + ceil.avg) / 2),
+    avg: lean(ceil.avg),
+    hi50: lean((ceil.avg + ceil.hi) / 2),
+    hi95: lean(ceil.hi),
+  };
+  const caliBf = sex === "f" ? 0.16 : 0.08;
+  const powerBf = sex === "f" ? 0.22 : 0.14;
+  const atBf = (r: MassRange, bf: number): MassRange => ({
+    lo95: r.lo95 / (1 - bf), lo50: r.lo50 / (1 - bf), avg: r.avg / (1 - bf), hi50: r.hi50 / (1 - bf), hi95: r.hi95 / (1 - bf),
+  });
+  return { leanLimit, idealCalisthenics: atBf(leanLimit, caliBf), idealPower: atBf(leanLimit, powerBf), caliBf, powerBf, ceilingNffmi: ceil.avg };
+}
+
 
 /** Fraction of bodyweight a movement lifts. Exact match on the data's exercise name. */
 export const EXERCISE_BW_COEFF: Record<string, number> = {
