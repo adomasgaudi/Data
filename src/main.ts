@@ -7310,12 +7310,13 @@ function restoreAnalysisPanels(): void {
   waListExerciseFilter = []; // un-scope the workout history for the legacy tab
 }
 
-/** Render the analysis view from `waSelected`. The MODE drives the main content:
- *   • all    → the live Workouts panel (history, filters, stats — TASK 3)
- *   • single → the live Exercises drill-in for the picked lift (TASK 4):
- *              its history, progression chart, records, stats and settings
- *   • compare→ placeholder for now (TASK 5)
- * It also re-paints the Filters mode readout and the exercise-selector chips. */
+/** Render the analysis view from `waSelected`. Selecting lifts is only a FILTER on
+ * one shared view, never a different page — so the main content is always the
+ * Workouts history list:
+ *   • all            → the full history
+ *   • single/compare → the same history, scoped to the picked lift(s)
+ * The universal graph (and, for compare, the overlay dropdown) sit above it. It
+ * also re-paints the Filters mode readout and the exercise-selector chips. */
 function renderWorkoutAnalysis(): void {
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
@@ -7323,24 +7324,18 @@ function renderWorkoutAnalysis(): void {
   // reflects the current mode (Exercise analysis / Compare / Exercise list / …).
   const contentTitle = document.getElementById("waTableSummary");
   const stats = document.getElementById("waStats");
-  if (mode === "single") {
-    // Single-exercise analytics: reuse the real drill-in for the chosen lift.
-    selectedExercise = waSelected[0]!;
-    combinedWith = [];
-    waListExerciseFilter = [];
-    setAnalysisMainPanel("exercises");
-    if (contentTitle) contentTitle.textContent = "Exercise analysis";
-    stats?.setAttribute("hidden", "");
-    renderExercisesPage();
-  } else if (mode === "compare") {
-    // Compare (2+): show the workout HISTORY scoped to the picked lifts — every
-    // past set of just those exercises (weights / reps / notes), with the compare
-    // overlay graph moved to a dropdown below (renderWaCompareGraph). The list is
-    // the relocated Workouts panel, filtered via waListExerciseFilter.
+  if (mode === "single" || mode === "compare") {
+    // Selecting one OR more lifts is just a FILTER on the same all-exercises view —
+    // not a different page. Both show the workout HISTORY scoped to the picked
+    // lifts (every past set, in the same compact/expandable session rows), with the
+    // overlay graph in a dropdown below (renderWaCompareGraph, compare only). The
+    // list is the relocated Workouts panel, filtered via waListExerciseFilter.
     selectedExercise = null;
+    combinedWith = [];
     waListExerciseFilter = expandToRawExercises(waSelected);
     setAnalysisMainPanel("workouts");
-    if (contentTitle) contentTitle.textContent = "Workout history — selected lifts";
+    if (contentTitle)
+      contentTitle.textContent = mode === "single" ? `Workout history — ${waSelected[0]}` : "Workout history — selected lifts";
     stats?.setAttribute("hidden", "");
     workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
