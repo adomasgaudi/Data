@@ -3726,14 +3726,6 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
   return { html, days, totalSets };
 }
 
-/** Heatmap scope toggle: Timeline (one flowing strip) / Single year / All years. */
-function heatScopeToggle(): string {
-  const btn = (s: "ribbon" | "single" | "all", label: string) =>
-    `<button type="button" class="cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}">${label}</button>`;
-  return `<div class="cal-mode">${btn("ribbon", "Timeline")}${btn("single", "Single year")}${btn("all", "All years")}</div>`;
-}
-
-
 /** Interactive under-calendar controls: a "Group by" picker, an "All" reset, and
  * a clickable colour pill for every group in the current colour dimension
  * (most-trained first, capped). Tapping a pill filters the calendar to just that
@@ -3773,17 +3765,25 @@ function renderWorkoutCalendar() {
   const years = dataYears(trainingDays()); // year list from ALL training (filter-independent)
   if (!years.includes(heatYear)) heatYear = years[0]!;
   const counts = filteredDayCounts(); // colouring honours the filter
-  const tagBtn =
-    `<button type="button" class="cal-tagmode${aloneTagMode ? " is-on" : ""}" data-tagmode="alone" ` +
-    `title="${aloneTagMode ? "Done — stop tagging" : "Tag many days as trained-alone: tap this, then tap each day"}">` +
-    `${aloneTagMode ? "Done tagging" : "Tag alone"}</button>`;
-  const controls = `<div class="heat-controls">${heatScopeToggle()}${tagBtn}</div>`;
-  const tagHint = aloneTagMode
-    ? `<div class="cal-taghint">Tap trained days to add/remove the red “alone” ring. Tap “Done tagging” when finished.</div>`
-    : "";
+  // Scope (Timeline / Year / All) + the Tag-alone arm button live in ONE compact
+  // ⚙ settings dropdown BELOW the calendar — a tight DJ-console row of tiny toggle
+  // buttons, no explanatory text. Its open state survives the full re-render.
+  const calSettingsOpen = els.workoutCalendar.querySelector<HTMLDetailsElement>(".cal-settings")?.open ?? false;
+  const scopeBtns = ([["ribbon", "Time"], ["single", "Year"], ["all", "All"]] as const)
+    .map(([s, l]) =>
+      `<button type="button" class="wo-dj-btn cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}" ` +
+      `title="${s === "ribbon" ? "Timeline — one continuous strip" : s === "single" ? "Single year" : "All years stacked"}">${l}</button>`)
+    .join("");
+  const tagDjBtn =
+    `<button type="button" class="wo-dj-btn cal-tagmode${aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
+    `title="${aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${aloneTagMode ? "Done" : "Tag"}</button>`;
+  const calSettings =
+    `<details class="wo-controls-fold cal-settings"${calSettingsOpen ? " open" : ""}><summary class="wo-controls-sum">⚙</summary>` +
+    `<div class="wo-controls wo-dj">${scopeBtns}${tagDjBtn}</div></details>`;
   // Interactive pills (Group by · All · one pill per group) are the calendar's
-  // slicer now — colour by body part by default, tap a part to see only it.
-  const legend = heatPillControls();
+  // slicer now — colour by body part by default, tap a part to see only it. The
+  // ⚙ settings button rides on the same bottom row as the pills.
+  const legend = `<div class="cal-bottom">${heatPillControls()}${calSettings}</div>`;
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
@@ -3793,8 +3793,6 @@ function renderWorkoutCalendar() {
     const newest = years[0]!;
     const span = oldest === newest ? `${newest}` : `${oldest}–${newest}`;
     els.workoutCalendar.innerHTML =
-      controls +
-      tagHint +
       `<div class="cal-head"><strong>${span}</strong>${count(g)}</div>` +
       g.html +
       legend;
@@ -3810,7 +3808,7 @@ function renderWorkoutCalendar() {
         return `<div class="hm-block"><div class="cal-head"><strong>${y}</strong>${count(g)}</div>${g.html}</div>`;
       })
       .join("");
-    els.workoutCalendar.innerHTML = controls + tagHint + blocks + legend;
+    els.workoutCalendar.innerHTML = blocks + legend;
     els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
     scrollHeatmapToEnd();
     return;
@@ -3821,8 +3819,6 @@ function renderWorkoutCalendar() {
   const olderExists = idx < years.length - 1; // a smaller (older) year exists
   const newerExists = idx > 0; // a larger (newer) year exists
   els.workoutCalendar.innerHTML =
-    controls +
-    tagHint +
     `<div class="cal-head">` +
     `<button type="button" class="cal-nav" data-heat="prev" aria-label="Previous year"${olderExists ? "" : " disabled"}>‹</button>` +
     `<strong>${heatYear}</strong>` +

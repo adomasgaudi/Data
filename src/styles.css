@@ -1448,6 +1448,13 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-dj-btn[hidden] { display: none; }
 .wo-dj-sel { font: inherit; font-size: 0.7rem; padding: 4px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); }
+/* Calendar bottom row: the slicer pills + a compact ⚙ settings dropdown (scope +
+   tag-alone) side by side. The scope/tag controls reuse the DJ-console buttons. */
+.cal-bottom { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.4rem; }
+.cal-bottom .hm-pills { flex: 1 1 auto; min-width: 0; margin: 0; }
+.cal-settings { flex: none; margin: 0; }
+.cal-settings .wo-controls-sum { padding: 3px 9px; }
+.cal-settings.wo-controls-fold[open] .wo-controls { left: auto; right: 0; }
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
