@@ -2066,6 +2066,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost #exerciseProgress,
 #waWorkoutsHost #compareChart,
 #waWorkoutsHost #workoutSets { display: none; }
+/* Workout history must NOT scroll sideways in Analysis. Drop the 460px table
+   floor so the tables fit the screen, let cells wrap, and cram the per-set detail
+   table (tighter padding + an ellipsised RIR pill) instead of overflowing. */
+#waWorkoutsHost .data-table { min-width: 0; }
+#waWorkoutsHost .data-table td, #waWorkoutsHost .data-table th { overflow-wrap: anywhere; }
+#waWorkoutsHost .detail-table { width: 100%; }
+#waWorkoutsHost .detail-table th, #waWorkoutsHost .detail-table td { padding: 5px 6px; }
+#waWorkoutsHost .detail-table .xdd-rpe { max-width: 100%; }
+#waWorkoutsHost .detail-table .set-rpe-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
 .wa-sel-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.4rem; }
