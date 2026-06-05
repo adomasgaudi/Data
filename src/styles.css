@@ -1876,6 +1876,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-session-list { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.2rem; }
 .ex-var-jump { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
 .ex-var-jump:hover { border-color: var(--accent); }
+/* Model suggestion line under a note (LIFT-DM2): where the ×number came from. */
+.ex-var-model { padding: 0.1rem 0.55rem 0.3rem; font-size: 0.72rem; }
+.ex-var-vec { opacity: 0.85; }
+/* Per-note "not comparable" toggle + state. */
+.ex-var-nc-btn { font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 0.4rem; white-space: nowrap; }
+.ex-var-nc-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ex-var-nc-btn.is-on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.ex-var-block.is-nc { border-color: var(--accent); }
+.ex-var-nc-note { padding: 0.1rem 0.55rem 0.35rem; font-size: 0.72rem; }
 /* Index row "ℹ More info" button. */
 .bw-moreinfo { font: inherit; font-size: 0.82rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 0 7px; line-height: 1.5; margin-left: 0.3rem; }
 .bw-moreinfo:hover { border-color: var(--accent); background: var(--accent-soft); }

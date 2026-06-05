@@ -55,6 +55,8 @@ import {
   type OneRepMaxFormula,
 } from "./metrics";
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
+import { resolveNote } from "./variationModel";
+import { familyOf } from "./variationConfig";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
@@ -567,13 +569,14 @@ function setCoeff(exerciseName: string, value: number) {
   }
 }
 
-// ---- "Not comparable" exercises (owner-marked) ----
-// Some lifts can't be measured by 1RM or volume — e.g. a static handstand
-// push-up where you push against the floor and nothing moves. Marking one here
-// drops its 1RM and volume everywhere (those numbers are meaningless) while its
-// REPS and SETS still count alongside everything else. Saved on this device.
-const NOT_COMPARABLE_KEY = "colosseum.notComparable.v1";
-const notComparableSet: Set<string> = (() => {
+// ---- "Not comparable" NOTES (owner-marked, per note — not whole exercises) ----
+// A specific variation can be unmeasurable by 1RM/volume — e.g. a static
+// handstand push-up where you push against the floor and nothing moves. Marking
+// that NOTE drops 1RM & volume on the sets carrying it (those numbers are
+// meaningless) while their REPS and SETS still count. Other sets of the same lift
+// are untouched. Keyed exercise|normNote (defined where normNote is). Saved here.
+const NOT_COMPARABLE_KEY = "colosseum.notComparableNotes.v1";
+const notComparableNotes: Set<string> = (() => {
   try {
     const a = JSON.parse(localStorage.getItem(NOT_COMPARABLE_KEY) ?? "[]");
     return new Set<string>(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []);
@@ -581,13 +584,14 @@ const notComparableSet: Set<string> = (() => {
     return new Set<string>();
   }
 })();
-function isNotComparable(exerciseName: string): boolean {
-  return notComparableSet.has(exerciseName);
+function isNoteNotComparable(exerciseName: string, note: string): boolean {
+  return notComparableNotes.has(`${exerciseName}|${normNote(note)}`);
 }
-function setNotComparable(exerciseName: string, on: boolean): void {
-  if (on) notComparableSet.add(exerciseName);
-  else notComparableSet.delete(exerciseName);
-  try { localStorage.setItem(NOT_COMPARABLE_KEY, JSON.stringify([...notComparableSet])); }
+function setNoteNotComparable(exerciseName: string, note: string, on: boolean): void {
+  const k = `${exerciseName}|${normNote(note)}`;
+  if (on) notComparableNotes.add(k);
+  else notComparableNotes.delete(k);
+  try { localStorage.setItem(NOT_COMPARABLE_KEY, JSON.stringify([...notComparableNotes])); }
   catch { /* storage may be unavailable — edits still apply this session */ }
 }
 
@@ -704,13 +708,14 @@ function setLevelScale(key: string, value: number) {
   }
 }
 
-/** The technique scaling factor for a set: a per-set override beats the per-hole
- * factor × the per-note variation factor, which beats 1 (no scaling). */
+/** The technique scaling factor for a set: per-set override × squat-rack-hole
+ * factor × per-note variation factor (LIFT-DM2 — all multiplicative now, each
+ * defaulting to ×1, so they compose instead of one replacing the others). */
 function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
-  if (o?.scale !== undefined) return o.scale;
+  const perSet = o?.scale ?? 1;
   const level = r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
-  return level * noteVariationScale(r);
+  return perSet * level * noteVariationScale(r);
 }
 
 // ---- Per-NOTE variation difficulty (the owner tags meaningful notes) ----
@@ -736,14 +741,27 @@ const variationKey = (exerciseName: string, note: string): string => `${exercise
 /** Notes that LOOK like a difficulty-changing variation (vs a passing thought),
  * used only to flag "review needed" until the owner sets a difficulty. */
 const VARIATION_HINT = /\b(incline|incl|decline|decl|knee|knees|diamond|wide|narrow|close|archer|deficit|pike|assist|assisted|band|banded|pause|paused|tempo|slow|explosive|elevated|raised|feet|weighted|weight|ring|rings|clap|pseudo|planche|negative|eccentric|deep|spoto|pin|deload|single|one\s*arm|1\s*arm)\b/i;
-/** This note's relative-difficulty factor: the owner's value, else 1 (no effect). */
-function variationScaleFor(exerciseName: string, note: string): number {
+/** The owner's PINNED scalar for a note, or undefined when not pinned. The pin
+ * always wins over the suggestion until cleared (LIFT-DM2). */
+function notePin(exerciseName: string, note: string): number | undefined {
   const k = variationKey(exerciseName, note);
-  return Object.prototype.hasOwnProperty.call(variationScaleOverrides, k) ? variationScaleOverrides[k]! : 1;
+  return Object.prototype.hasOwnProperty.call(variationScaleOverrides, k) ? variationScaleOverrides[k] : undefined;
 }
-/** Whether the owner has reviewed this note (set any difficulty, even ×1). */
+/** The SUGGESTED scalar from the factored variation model (LIFT-DM1), when the
+ * exercise has a family/model; else 1. Derived live from the config, so editing
+ * the config re-resolves every past set with no re-entry. */
+function suggestedNoteScalar(exerciseName: string, note: string): number {
+  const fam = familyOf(exerciseName);
+  return fam ? resolveNote(fam, note).scalar : 1;
+}
+/** This note's effective relative-difficulty factor: the pin if set, else the
+ * model's suggestion (which is 1 when there's no model). */
+function variationScaleFor(exerciseName: string, note: string): number {
+  return notePin(exerciseName, note) ?? suggestedNoteScalar(exerciseName, note);
+}
+/** Whether the owner has reviewed this note (pinned any difficulty, even ×1). */
 function variationReviewed(exerciseName: string, note: string): boolean {
-  return Object.prototype.hasOwnProperty.call(variationScaleOverrides, variationKey(exerciseName, note));
+  return notePin(exerciseName, note) !== undefined;
 }
 /** A set's note-variation factor (1 when it has no note). */
 function noteVariationScale(r: SetRecord): number {
@@ -1021,7 +1039,7 @@ function setSetOverrideField(id: string, field: keyof SetOverride, value: number
  * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
 function computeRecord(r: SetRecord): SetRecord {
   const out = computeRecordBase(r);
-  return isNotComparable(out.exerciseName) ? { ...out, notComparable: true } : out;
+  return out.notes && isNoteNotComparable(out.exerciseName, out.notes) ? { ...out, notComparable: true } : out;
 }
 function computeRecordBase(r: SetRecord): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
@@ -4550,7 +4568,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     efld("weight", "Weight (kg)", s.weight, 0.5) +
     efld("reps", "Reps", s.reps, 1) +
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
-    efld("scale", "Scale ×", Math.round(scaleForRecord(s) * 100) / 100, 0.05) +
+    efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
     `</div></td></tr>`;
   return main + noteRow + formulaRow + prirRow + editRow;
@@ -5297,7 +5315,6 @@ function exerciseEditHtml(name: string): string {
   const codeDef = exerciseCode(name);
   const short = shortFor(name);
   const coeff = coeffFor(name);
-  const nc = isNotComparable(name);
   return (
     `<div class="ex-edit"><div class="ex-info-section-hd">Edit this exercise</div>` +
     `<div class="ex-edit-grid">` +
@@ -5308,14 +5325,7 @@ function exerciseEditHtml(name: string): string {
     `<label class="ex-edit-f"><span class="ex-edit-lbl">Bodyweight part</span>` +
     `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></label>` +
     `</div>` +
-    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset. Saved on this device.</p>` +
-    `<div class="ex-nc">` +
-    `<button type="button" class="ex-nc-toggle${nc ? " is-on" : ""}" data-ncex="${escapeHtml(name)}" aria-pressed="${nc}">` +
-    `${nc ? "✓ Not comparable" : "Mark “not comparable”"}</button>` +
-    `<span class="muted ex-nc-help">${nc
-      ? "On: this lift's reps &amp; sets still count, but no 1RM or volume is calculated (those are meaningless here — e.g. a static push against the floor)."
-      : "For lifts you can't measure by 1RM/volume (e.g. a static hold pushing against the ground). Reps &amp; sets keep counting; the 1RM and volume are dropped."}</span>` +
-    `</div>` +
+    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset. Saved on this device. <em>(“Not comparable” is now per note — set it on each variation below.)</em></p>` +
     `</div>`
   );
 }
@@ -5343,19 +5353,39 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty</div>` +
       `<p class="muted">No notes logged for this lift yet. Log a note like “incline” or “knee” on a set and it'll appear here, so you can set its relative difficulty.</p></div>`
     );
+  const fam = familyOf(name);
   const entries = [...byNote.values()].sort((a, b) => b.count - a.count);
-  const needReview = entries.filter((e) => VARIATION_HINT.test(e.display) && !variationReviewed(name, e.display)).length;
+  const needReview = entries.filter(
+    (e) => VARIATION_HINT.test(e.display) && !variationReviewed(name, e.display) && !isNoteNotComparable(name, e.display),
+  ).length;
   const rowsHtml = entries
     .map((e) => {
+      const notCmp = isNoteNotComparable(name, e.display);
       const reviewed = variationReviewed(name, e.display);
-      const scale = variationScaleFor(name, e.display);
-      const flag = VARIATION_HINT.test(e.display) && !reviewed;
+      const handled = reviewed || notCmp; // pinned a difficulty OR marked not comparable
+      const scale = variationScaleFor(name, e.display); // pin if set, else the model's suggestion
+      const resolved = fam ? resolveNote(fam, e.display) : null;
+      // When this lift has a difficulty model, show where the suggested ×number
+      // comes from (the resolved setup), and whether it's pinned or suggested.
+      const modelHint = !notCmp && resolved
+        ? `<div class="ex-var-model muted">${reviewed ? "pinned" : "suggested"} ×${resolved.scalar}` +
+          `<span class="ex-var-vec"> · ${Object.entries(resolved.vec).map(([d, l]) => `${escapeHtml(d)}=${escapeHtml(l)}`).join(", ")}</span></div>`
+        : "";
+      const flag = VARIATION_HINT.test(e.display) && !handled;
       const review = flag
-        ? `<span class="ex-var-review" title="Looks like a variation that may change difficulty — set its relative difficulty (or ×1 to confirm no effect).">⚠ review</span>`
+        ? `<span class="ex-var-review" title="Looks like a variation that may change difficulty — set its relative difficulty, or mark it not comparable.">⚠ review</span>`
         : "";
-      const reset = reviewed
-        ? `<button type="button" class="ex-var-reset" data-varreset-ex="${escapeHtml(name)}" data-varreset-note="${escapeHtml(e.display)}" title="Reset to ×1 (mark un-reviewed)">↺</button>`
+      const reset = reviewed && !notCmp
+        ? `<button type="button" class="ex-var-reset" data-varreset-ex="${escapeHtml(name)}" data-varreset-note="${escapeHtml(e.display)}" title="${fam ? "Unpin — go back to the model's suggested value" : "Reset to ×1 (mark un-reviewed)"}">↺</button>`
         : "";
+      // Each note can either get a difficulty, OR be marked NOT COMPARABLE (its
+      // sets keep reps/sets but get no 1RM/volume).
+      const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark these sets not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘ ${notCmp ? "not comparable" : "not comparable?"}</button>`;
+      const editArea = notCmp
+        ? `<span class="ex-var-edit">${ncBtn}</span>`
+        : `<span class="ex-var-edit"><label class="ex-var-lbl">×</label>` +
+          `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(e.display)}" aria-label="Relative difficulty for note ${escapeHtml(e.display)}" />` +
+          reset + ncBtn + `</span>`;
       // Who & when: every (athlete, day) that logged this note — tap one to jump
       // to that athlete's Analysis for this lift, scrolled to that date.
       const sessions = [...e.sessions.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -5366,14 +5396,16 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
         )
         .join("");
       const sessFold = `<details class="ex-var-sessions"${flag ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
+      const ncNote = notCmp
+        ? `<div class="ex-var-nc-note muted">Not comparable — reps &amp; sets still count, but no 1RM or volume for these sets.</div>`
+        : modelHint;
       return (
-        `<div class="ex-var-block${flag ? " needs-review" : ""}${scale !== 1 ? " is-scaled" : ""}">` +
+        `<div class="ex-var-block${flag ? " needs-review" : ""}${notCmp ? " is-nc" : scale !== 1 ? " is-scaled" : ""}">` +
         `<div class="ex-var-row">` +
         `<span class="ex-var-note">${escapeHtml(e.display)} ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
-        `<span class="ex-var-edit"><label class="ex-var-lbl">×</label>` +
-        `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(e.display)}" aria-label="Relative difficulty for note ${escapeHtml(e.display)}" />` +
-        reset +
-        `</span></div>` +
+        editArea +
+        `</div>` +
+        ncNote +
         sessFold +
         `</div>`
       );
@@ -5382,7 +5414,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   const badge = needReview ? ` <span class="ex-var-needbadge">${needReview} to review</span>` : "";
   return (
     `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty${badge}</div>` +
-    `<p class="muted ex-vars-help">Each distinct note logged for this lift. Set a relative difficulty so easier/harder variations line up on one scale (×1 = no effect, &lt;1 easier, &gt;1 harder). It rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise. ⚠ flags notes that look like a variation and haven't been reviewed.</p>` +
+    `<p class="muted ex-vars-help">Each distinct note logged for this lift. The ×number is its relative difficulty (×1 = no effect, &lt;1 easier, &gt;1 harder); it rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise.${fam ? " This lift has a difficulty model, so the value is <strong>suggested</strong> from the note's setup (support, range, lean…); type your own to pin it (↺ unpins)." : ""} Or mark a note <strong>⊘ not comparable</strong> — its sets keep counting reps &amp; sets but get no 1RM or volume (e.g. a static hold). ⚠ flags variation-like notes you haven't handled yet.</p>` +
     rowsHtml +
     `</div>`
   );
@@ -5941,11 +5973,11 @@ async function init() {
       return;
     }
   });
-  // "Not comparable" toggle on the More-info page (click).
+  // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLElement>(".ex-nc-toggle");
-    if (!b?.dataset.ncex) return;
-    setNotComparable(b.dataset.ncex, !isNotComparable(b.dataset.ncex));
+    const b = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-nc-btn");
+    if (!b?.dataset.ncEx || b.dataset.ncNote === undefined) return;
+    setNoteNotComparable(b.dataset.ncEx, b.dataset.ncNote, !isNoteNotComparable(b.dataset.ncEx, b.dataset.ncNote));
     refreshExerciseInfo();
     renderAll();
   });
