@@ -8034,7 +8034,7 @@ function renderWorkoutAnalysis(): void {
 /** One chip for an exercise (selected state + identity). */
 function waChipHtml(name: string, identity: ExerciseIdentity): string {
   const on = waSelected.includes(name);
-  const label = waChipNameMode === "full" ? name : exerciseCode(name);
+  const label = waChipNameMode === "full" ? name : codeFor(name);
   return `<button type="button" class="wa-ex-chip${waChipNameMode === "full" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
 }
 
@@ -8046,7 +8046,7 @@ function waChipList(): { name: string; identity: ExerciseIdentity }[] {
   const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
   const q = waSearchQuery.trim().toLowerCase();
   return byIdentity.filter(
-    (e) => keep.has(e.name) && (!q || e.name.toLowerCase().includes(q) || exerciseCode(e.name).toLowerCase().includes(q)),
+    (e) => keep.has(e.name) && (!q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q)),
   );
 }
 
@@ -8145,7 +8145,7 @@ function renderWaGraph(): void {
         records: athleteRecs,
         metrics: [...waMetrics],
         config: waGraphConfig,
-        codeOf: exerciseCode,
+        codeOf: codeFor,
       })
     : 0;
   // Relocate the chart's legend up into the top bar so it sits beside Graph options
