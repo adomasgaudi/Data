@@ -7431,10 +7431,12 @@ function renderWorkoutAnalysis(): void {
       `<div class="wa-fe-menu">` +
       foldTools +
       `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
+    // Everything — Filter, Exercises, Settings (⚙), Create (+) — sits on ONE
+    // compact tools row beside the title (they all open as floating menus, so the
+    // layout never shifts). Taxonomy editor (single mode) drops below.
     sel.innerHTML =
       `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>` +
-      `<div class="wa-sq-row">${settingsFold}${createForm}</div></div>` +
-      `<div class="wa-fe-row">${filterUi}${exercisesFold}</div>` +
+      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>` +
       assignUi;
     renderWaChips();
   }
@@ -7500,6 +7502,10 @@ function renderWaGraph(): void {
   ).join("");
   const c = waGraphConfig;
   const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+  // The app-wide "realistic ⇄ compacted time" toggle now lives HERE in Graph
+  // options (not on the chart's own legend row), so all the graph settings sit in
+  // one place. It flips the shared pref; every time chart redraws on change.
+  const compact = getTimeCompact();
   const cfgUi =
     `<div class="wa-gcfg">` +
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
@@ -7507,6 +7513,7 @@ function renderWaGraph(): void {
     `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
+    `<button type="button" class="wa-name-opt${compact ? " is-on" : ""}" data-watime="1" title="${compact ? "Showing compacted time (gaps squeezed). Tap for real spacing." : "Showing real time spacing. Tap to squeeze gaps so all sets fit."}">${compact ? "⇄ Compacted time" : "⇄ Realistic time"}</button>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
@@ -7516,14 +7523,17 @@ function renderWaGraph(): void {
   // The summary names what's currently plotted so you can see it while collapsed.
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
+  // Graph options sits ABOVE the chart (with the legend + realistic-time toggle),
+  // so all the graph's settings are together at the top and the chart fills the
+  // space below. Collapsed by default; the summary names what's plotted.
   box.innerHTML =
-    `<div id="waGraphChart"></div>` +
-    `<div class="muted wa-placeholder" id="waGraphNote"></div>` +
     `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
     cfgUi +
-    `</details>`;
+    `</details>` +
+    `<div id="waGraphChart"></div>` +
+    `<div class="muted wa-placeholder" id="waGraphNote"></div>`;
   const chartBox = document.getElementById("waGraphChart");
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
   const athleteRecs = computedRecords().filter((r) => r.username === els.athlete.value);
@@ -7897,6 +7907,12 @@ function setupWorkoutAnalysis(): void {
       const id = met.dataset.wametric;
       if (waMetrics.has(id)) waMetrics.delete(id);
       else waMetrics.add(id);
+      renderWaGraph();
+      return;
+    }
+    // Realistic ⇄ compacted time toggle (moved here from the chart's legend row).
+    if (t.closest<HTMLElement>("[data-watime]")) {
+      setTimeCompact(!getTimeCompact());
       renderWaGraph();
       return;
     }

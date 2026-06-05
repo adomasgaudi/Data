@@ -214,6 +214,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   container.classList.add("svgc");
   container.innerHTML = `<div class="svgc-legend"></div><div class="svgc-plot"></div><div class="svgc-note muted"></div><div class="svgc-tip" hidden></div>`;
   const legendEl = container.querySelector<HTMLElement>(".svgc-legend")!;
+  // The collapsed "Legend (N)" dropdown is rebuilt on every draw; remember whether
+  // it's open so toggling a series (which redraws) doesn't snap it shut. It only
+  // closes on a click outside the legend.
+  let legendOpen = false;
   const plotEl = container.querySelector<HTMLElement>(".svgc-plot")!;
   const noteEl = container.querySelector<HTMLElement>(".svgc-note")!;
   const tipEl = container.querySelector<HTMLElement>(".svgc-tip")!;
@@ -423,9 +427,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const keys = keyHtml.join("");
     legendEl.innerHTML =
       keyHtml.length > 6
-        ? `<details class="svgc-legend-fold"><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
+        ? `<details class="svgc-legend-fold"${legendOpen ? " open" : ""}><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
           `<div class="svgc-legend-menu">${keys}</div></details>${compactBtn}`
         : keys + compactBtn;
+    // Sync the remembered open state when the user opens/closes it directly.
+    const fold = legendEl.querySelector<HTMLDetailsElement>(".svgc-legend-fold");
+    if (fold) fold.addEventListener("toggle", () => { legendOpen = fold.open; });
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
     plotEl.innerHTML =
@@ -635,6 +642,17 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const key = (e.target as HTMLElement).closest<HTMLElement>(".svgc-key.is-toggle");
     if (key?.dataset.series) { e.preventDefault(); toggleSeries(key.dataset.series); }
   });
+  // Close the floating legend only when clicking OUTSIDE it (so toggling several
+  // series in a row keeps it open). Drops itself once the chart is detached.
+  const onDocClick = (e: MouseEvent) => {
+    if (!container.isConnected) { document.removeEventListener("click", onDocClick); return; }
+    if (!legendOpen) return;
+    if (legendEl.contains(e.target as Node)) return;
+    legendOpen = false;
+    const fold = legendEl.querySelector<HTMLDetailsElement>(".svgc-legend-fold");
+    if (fold) fold.open = false;
+  };
+  document.addEventListener("click", onDocClick);
 
   // Follow the app-wide compacted-time preference: when it flips on any chart,
   // every compactable chart re-frames and redraws. Stale subs (after a re-mount
