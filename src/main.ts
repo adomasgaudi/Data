@@ -5240,7 +5240,32 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${groupHtml}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${groupHtml}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+}
+
+/** Inline editors for an exercise's identity & physical model — moved here from
+ * the Codes tab (code / short name) and the Index page (bodyweight part) so the
+ * More-info page is the one place to edit a lift. Reuses the same stores, so
+ * edits show everywhere. (Tags, group membership, category/tier and taxonomy are
+ * next — see the roadmap.) */
+function exerciseEditHtml(name: string): string {
+  const code = codeFor(name);
+  const codeDef = exerciseCode(name);
+  const short = shortFor(name);
+  const coeff = coeffFor(name);
+  return (
+    `<div class="ex-edit"><div class="ex-info-section-hd">Edit this exercise</div>` +
+    `<div class="ex-edit-grid">` +
+    `<label class="ex-edit-f"><span class="ex-edit-lbl">Code</span>` +
+    `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" /></label>` +
+    `<label class="ex-edit-f"><span class="ex-edit-lbl">Short name</span>` +
+    `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" /></label>` +
+    `<label class="ex-edit-f"><span class="ex-edit-lbl">Bodyweight part</span>` +
+    `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></label>` +
+    `</div>` +
+    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset. Saved on this device.</p>` +
+    `</div>`
+  );
 }
 
 /** The note-variation difficulty editor: every distinct note logged for this lift,
@@ -5845,6 +5870,24 @@ async function init() {
     if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
     refreshExerciseInfo();
     renderAll();
+  });
+  // Inline identity/model editors on the More-info page (code / short / bw part).
+  document.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement;
+    const code = t.closest<HTMLInputElement>(".ex-edit-code");
+    if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); refreshExerciseInfo(); renderAll(); return; }
+    const short = t.closest<HTMLInputElement>(".ex-edit-short");
+    if (short?.dataset.editex) { setShortOverride(short.dataset.editex, short.value); refreshExerciseInfo(); return; }
+    const coeff = t.closest<HTMLInputElement>(".ex-edit-coeff");
+    if (coeff?.dataset.editex) {
+      let v = parseFloat(coeff.value);
+      if (!Number.isFinite(v)) v = 0;
+      v = Math.min(2, Math.max(0, v));
+      setCoeff(coeff.dataset.editex, v);
+      refreshExerciseInfo();
+      renderAll();
+      return;
+    }
   });
   document.addEventListener("click", (e) => {
     const rb = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-reset");
