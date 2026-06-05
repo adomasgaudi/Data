@@ -1800,8 +1800,14 @@ function buildAthleteChips() {
   syncAthleteChips();
 }
 
-// Athlete-picker sex filter: "all" shows everyone, "m"/"f" narrows the chips.
-let athleteSexFilter: "all" | "m" | "f" = "all";
+// Athlete-picker sex filter: always "m" OR "f" (no "both"/all). It auto-switches
+// to the selected athlete's sex, and tapping M/W narrows the chips to that sex.
+let athleteSexFilter: "m" | "f" = "m";
+/** Light up the M / W toggle button matching the current filter. */
+function syncSexToggle() {
+  for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
+    b.classList.toggle("is-active", b.dataset.athsex === athleteSexFilter);
+}
 
 /** Mark the chip matching the selected athlete active (chips mirror the select).
  * In user view every chip but Adomas's is disabled, so the user can only pick him.
@@ -1816,7 +1822,7 @@ function syncAthleteChips() {
     // Hide chips that don't match the chosen sex (the active one stays visible
     // so you can always see who's currently selected).
     const sex = athProfile(btn.dataset.username ?? "")?.sex;
-    const sexHidden = athleteSexFilter !== "all" && sex !== athleteSexFilter && !on;
+    const sexHidden = sex !== athleteSexFilter && !on;
     btn.classList.toggle("is-sexhidden", sexHidden);
     const disabled = locked !== null && btn.dataset.username !== locked;
     btn.disabled = disabled;
@@ -1830,6 +1836,10 @@ function syncAthleteChips() {
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
   saveLastAthlete(els.athlete.value); // remember across reloads
+  // The M/W toggle auto-follows whoever is selected (it's always Men or Women).
+  const sex = athProfile(els.athlete.value)?.sex;
+  if (sex === "m" || sex === "f") athleteSexFilter = sex;
+  syncSexToggle();
   syncAthleteChips();
   workoutsPage = 0;
   selectedExercise = null;
@@ -5663,10 +5673,9 @@ async function init() {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
     const v = btn?.dataset.athsex;
     if (v !== "m" && v !== "f") return;
-    // A 2-state toggle: tapping the active side again clears back to "all".
-    athleteSexFilter = athleteSexFilter === v ? "all" : v;
-    for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
-      b.classList.toggle("is-active", b.dataset.athsex === athleteSexFilter);
+    // Always Men OR Women (no "both") — tapping a side just narrows to that sex.
+    athleteSexFilter = v;
+    syncSexToggle();
     syncAthleteChips(); // re-apply the visible/hidden chip set
   });
   els.athleteChips.addEventListener("click", (e) => {
