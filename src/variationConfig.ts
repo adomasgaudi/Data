@@ -51,12 +51,14 @@ export const FAMILIES: Record<string, FamilyDef> = {
       rom: { "+23cm": 0.6, "+15cm": 0.72, "+5cm": 0.88, "0cm": 1.0, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35 },
       // Leg shape: an L-sit is harder; hooked/tucked legs take some load off.
       legs: { straight: 1.0, tucked: 0.95, lsit: 1.1, hooked: 0.8 },
-      // Torso lean forward (toward a planche line) is harder.
-      lean: { neutral: 1.0, forward: 0.92 },
+      // Forward lean, measured in cm (e.g. the block height used to lean). 0cm =
+      // straight/neutral (×1); leaning further forward shifts toward a pike → easier
+      // here (calibrate). Same 5/15/23cm steps as a yoga block's sides.
+      lean: { "0cm": 1.0, "5cm": 0.96, "15cm": 0.9, "23cm": 0.85 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
-    defaults: { support: "free", band: "none", rom: "0cm", legs: "straight", lean: "neutral", continuity: "paused" },
+    defaults: { support: "free", band: "none", rom: "0cm", legs: "straight", lean: "0cm", continuity: "paused" },
   },
   PUSHUP: {
     dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
@@ -94,7 +96,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     lsit: { legs: "lsit" },
     "užkabintos kojos": { legs: "hooked", support: "wall" }, // hooked legs (assisted)
     // lean / continuity
-    "forward lean": { lean: "forward" },
+    "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
     uninterrupted: { continuity: "uninterrupted" },
   },
