@@ -4095,18 +4095,12 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
   if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
-  // An exercise name in an expanded day -> jump to that exercise's drill-in on
-  // the Exercises sub-tab (the SAME detail view the Exercises list opens, so
-  // both routes land in one place).
+  // An exercise name in an expanded day -> filter the Analysis view to just that
+  // exercise (single mode), so the graph/stats/history all scope to it.
   const exLink = target.closest(".wo-exlink") as HTMLElement | null;
   if (exLink) {
     const exName = exLink.dataset.exname;
-    if (exName) {
-      showSubtab("exercises");
-      selectedExercise = exName;
-      combinedWith = [];
-      renderExercisesPage();
-    }
+    if (exName) openWorkoutAnalysis({ exercises: [exName] });
     return;
   }
 
