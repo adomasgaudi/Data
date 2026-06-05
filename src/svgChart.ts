@@ -368,19 +368,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           const L = Math.abs(yLo - yHi);
           if (p.bands && p.bands.length >= 2 && L > 2) {
             // Sectioned by rep: one segment per rep, each ending at that rep's
-            // 1RM-equivalent (bands[0] = the weight itself, last = full 1RM).
-            // Alternating shade makes the rep sections readable up the bar; a thin
-            // divider tick marks each rep boundary.
+            // 1RM-equivalent (bands[0] = the weight itself, last = full 1RM). All
+            // sections share ONE colour (so the bar reads as a single range); a thin
+            // white strip divides each rep boundary so the sections are still legible.
             const bs = p.bands;
-            for (let i = 0; i < bs.length - 1; i++) {
-              const y1 = ymap(bs[i]!);
-              const y2 = ymap(bs[i + 1]!);
-              const op = i % 2 === 0 ? 0.62 : 0.34;
-              body += `<line x1="${x.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${s.color}" stroke-width="5" stroke-linecap="butt" stroke-opacity="${op}"/>`;
-            }
+            const y0 = ymap(bs[0]!);
+            const yN = ymap(bs[bs.length - 1]!);
+            body += `<line x1="${x.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yN.toFixed(1)}" stroke="${s.color}" stroke-width="5" stroke-linecap="butt" stroke-opacity="0.55"/>`;
             for (let i = 1; i < bs.length - 1; i++) {
               const yb = ymap(bs[i]!);
-              body += `<line x1="${(x - 3).toFixed(1)}" y1="${yb.toFixed(1)}" x2="${(x + 3).toFixed(1)}" y2="${yb.toFixed(1)}" stroke="${lighten(s.color, 0.85)}" stroke-width="1.2" stroke-opacity="0.9"/>`;
+              body += `<line x1="${(x - 3).toFixed(1)}" y1="${yb.toFixed(1)}" x2="${(x + 3).toFixed(1)}" y2="${yb.toFixed(1)}" stroke="#ffffff" stroke-width="1.3"/>`;
             }
           } else {
             const n = p.dashes && p.dashes > 1 ? Math.round(p.dashes) : 0;
