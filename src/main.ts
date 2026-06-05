@@ -566,6 +566,30 @@ function setCoeff(exerciseName: string, value: number) {
   }
 }
 
+// ---- "Not comparable" exercises (owner-marked) ----
+// Some lifts can't be measured by 1RM or volume — e.g. a static handstand
+// push-up where you push against the floor and nothing moves. Marking one here
+// drops its 1RM and volume everywhere (those numbers are meaningless) while its
+// REPS and SETS still count alongside everything else. Saved on this device.
+const NOT_COMPARABLE_KEY = "colosseum.notComparable.v1";
+const notComparableSet: Set<string> = (() => {
+  try {
+    const a = JSON.parse(localStorage.getItem(NOT_COMPARABLE_KEY) ?? "[]");
+    return new Set<string>(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+})();
+function isNotComparable(exerciseName: string): boolean {
+  return notComparableSet.has(exerciseName);
+}
+function setNotComparable(exerciseName: string, on: boolean): void {
+  if (on) notComparableSet.add(exerciseName);
+  else notComparableSet.delete(exerciseName);
+  try { localStorage.setItem(NOT_COMPARABLE_KEY, JSON.stringify([...notComparableSet])); }
+  catch { /* storage may be unavailable — edits still apply this session */ }
+}
+
 // ---- Exercise code overrides (the short codes shown in lists/tooltips) ----
 // Same layering as the coefficients: profile.ts derives a default code, the
 // owner's edits in the Codes tab are stored here and win. codeFor() is the single
@@ -992,7 +1016,13 @@ function setSetOverrideField(id: string, field: keyof SetOverride, value: number
  * `weight` becomes the effective (bw-inclusive) load; `origWeight` keeps the
  * logged bar weight for display. The single source of truth for this transform.
  */
+/** Public computeRecord: the bodyweight-aware compute, then tag the owner's
+ * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
 function computeRecord(r: SetRecord): SetRecord {
+  const out = computeRecordBase(r);
+  return isNotComparable(out.exerciseName) ? { ...out, notComparable: true } : out;
+}
+function computeRecordBase(r: SetRecord): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
@@ -4437,7 +4467,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const s = applySetOverride(raw);
   const computed = computeRecord(s);
   const e1rm = addedWeight1RM(computed, formula);
-  const vol = setVolume(s.weight, s.reps);
+  // "Not comparable" lifts keep their reps (shown in the W column) but get no
+  // volume — it's as meaningless as their 1RM here.
+  const vol = computed.notComparable ? null : setVolume(s.weight, s.reps);
   // Predicted RIR: what your CURRENT (faded) strength for this lift says you
   // should manage at this (effective) load, minus the reps you did. Effective
   // frame on both sides so bodyweight lifts line up.
@@ -5253,6 +5285,7 @@ function exerciseEditHtml(name: string): string {
   const codeDef = exerciseCode(name);
   const short = shortFor(name);
   const coeff = coeffFor(name);
+  const nc = isNotComparable(name);
   return (
     `<div class="ex-edit"><div class="ex-info-section-hd">Edit this exercise</div>` +
     `<div class="ex-edit-grid">` +
@@ -5264,6 +5297,13 @@ function exerciseEditHtml(name: string): string {
     `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></label>` +
     `</div>` +
     `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset. Saved on this device.</p>` +
+    `<div class="ex-nc">` +
+    `<button type="button" class="ex-nc-toggle${nc ? " is-on" : ""}" data-ncex="${escapeHtml(name)}" aria-pressed="${nc}">` +
+    `${nc ? "✓ Not comparable" : "Mark “not comparable”"}</button>` +
+    `<span class="muted ex-nc-help">${nc
+      ? "On: this lift's reps &amp; sets still count, but no 1RM or volume is calculated (those are meaningless here — e.g. a static push against the floor)."
+      : "For lifts you can't measure by 1RM/volume (e.g. a static hold pushing against the ground). Reps &amp; sets keep counting; the 1RM and volume are dropped."}</span>` +
+    `</div>` +
     `</div>`
   );
 }
@@ -5888,6 +5928,14 @@ async function init() {
       renderAll();
       return;
     }
+  });
+  // "Not comparable" toggle on the More-info page (click).
+  document.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(".ex-nc-toggle");
+    if (!b?.dataset.ncex) return;
+    setNotComparable(b.dataset.ncex, !isNotComparable(b.dataset.ncex));
+    refreshExerciseInfo();
+    renderAll();
   });
   document.addEventListener("click", (e) => {
     const rb = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-reset");

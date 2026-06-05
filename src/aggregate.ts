@@ -492,6 +492,7 @@ export function distinctUsers(records: readonly SetRecord[]): UserRef[] {
  * a 1RM is never below the load lifted, addedWeight1RM is never below addedWeight.
  */
 export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
+  if (record.notComparable) return null; // owner-marked: reps/sets count, but no 1RM
   if (isIsometric(record.exerciseName)) return null; // holds log seconds, not reps → no 1RM
   // Above the cap, Epley/Brzycki are guesswork, so we report NO value (null)
   // rather than a clamped one. The Nuzzo curve is data-derived across the study's

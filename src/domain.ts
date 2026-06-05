@@ -57,6 +57,10 @@ export interface SetRecord {
   levelDim?: "sq" | "cm";
   levelValue?: number;
   levelLabel?: string;
+  /** Set when the exercise is marked "not comparable" (e.g. a static push against
+   * the ground): its reps/sets still count, but no 1RM or volume is computed —
+   * those numbers are meaningless. Tagged from a per-exercise override at compute. */
+  notComparable?: boolean;
   /** Set on SYNTHETIC records only: the id of the combinable/comparable registry
    * group this record was derived for (e.g. "combine.sq-mix", "compare.dl-pattern").
    * Pure logged records never carry it. Lets views/filters tell synthetics apart. */

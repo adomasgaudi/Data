@@ -1847,6 +1847,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-edit-f input { font: inherit; font-size: 0.86rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); min-width: 0; }
 .ex-edit-f input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ex-edit-help { font-size: 0.74rem; margin: 0.35rem 0 0; }
+/* "Not comparable" toggle. */
+.ex-nc { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.5rem 0 0; }
+.ex-nc-toggle { font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.ex-nc-toggle:hover { border-color: var(--accent); }
+.ex-nc-toggle.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ex-nc-help { flex: 1 1 12rem; min-width: 0; font-size: 0.74rem; }
 /* Note-variation difficulty editor (inside the More-info overlay / Index row). */
 .ex-info-section-hd { font-size: 0.86rem; font-weight: 700; margin: 0.7rem 0 0.3rem; }
 .ex-vars-help { font-size: 0.76rem; margin: 0 0 0.5rem; }
