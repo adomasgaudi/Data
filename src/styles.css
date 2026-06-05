@@ -1396,6 +1396,11 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-controls { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
 /* All the workout-history display controls collapse behind one compact button;
    the panel floats (overlay) when open so it never pushes the list down. */
+/* Workout-history title + Display options on one line, tight against the list. */
+.wo-head-row { display: flex; align-items: center; gap: 0.5rem 0.9rem; flex-wrap: wrap; margin: 0 0 0.4rem; }
+.wo-head-row #workoutsTitle { margin: 0; }
+.wo-head-row .wo-controls-fold { margin: 0; }
+#workoutsPanel .data-table { margin-top: 0; }
 .wo-controls-fold { position: relative; margin-bottom: 0.6rem; }
 .wo-controls-sum {
   cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center;

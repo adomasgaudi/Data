@@ -3998,7 +3998,9 @@ function renderWorkoutsPage() {
     `${escapeHtml(athleteLabel())} — workouts ` +
     `<span class="muted">(${active} ${byWeek ? "weeks" : "sessions"} · tap to expand)</span>`;
 
-  const head = `<thead><tr><th>${byWeek ? "Week" : "Session"}</th><th class="num">Sets</th></tr></thead>`;
+  // No column header row — the "Session / Sets" labels were redundant noise above
+  // a list whose rows are self-explanatory (a date + its set count).
+  const head = "";
   const start = workoutsPage * workoutsPageSize;
   const rows = workoutGroups
     .slice(start, start + workoutsPageSize)

@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.4.13</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.4.14</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -176,18 +176,11 @@
 
         <div id="sub-workouts" class="subtab-panel">
           <section class="panel" id="workoutsPanel">
-            <h2 id="workoutsTitle">Workouts</h2>
-            <details id="workoutSets" class="workout-sets">
-              <summary class="workout-sets-summary">Sets over time <span class="ws-caret">▾</span></summary>
-              <div class="workout-sets-body">
-                <div id="workoutSetsChart"></div>
-                <p class="muted" id="workoutSetsNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
-              </div>
-            </details>
-            <div id="workoutCalendar" class="wo-calendar"></div>
-            <details class="wo-controls-fold">
-              <summary class="wo-controls-sum">⚙ Display options</summary>
-              <div class="wo-controls">
+            <div class="wo-head-row">
+              <h2 id="workoutsTitle">Workouts</h2>
+              <details class="wo-controls-fold">
+                <summary class="wo-controls-sum">⚙ Display options</summary>
+                <div class="wo-controls">
               <span class="inline-label">View
                 <span id="workoutViewToggle" class="seg-toggle" role="group" aria-label="View by day or week">
                   <button type="button" class="seg-btn is-active" data-view="day">By day</button>
@@ -232,6 +225,15 @@
               </button>
               </div>
             </details>
+            </div>
+            <details id="workoutSets" class="workout-sets">
+              <summary class="workout-sets-summary">Sets over time <span class="ws-caret">▾</span></summary>
+              <div class="workout-sets-body">
+                <div id="workoutSetsChart"></div>
+                <p class="muted" id="workoutSetsNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
+              </div>
+            </details>
+            <div id="workoutCalendar" class="wo-calendar"></div>
             <table id="workoutsTable" class="data-table"></table>
             <div id="workoutsPager" class="pager"></div>
           </section>
