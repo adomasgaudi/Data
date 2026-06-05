@@ -197,16 +197,13 @@ const els = {
   workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
-  workoutViewToggle: $("workoutViewToggle"),
-  workoutShowToggle: $("workoutShowToggle"),
-  workoutNameToggle: $("workoutNameToggle"),
-  workoutNameLabel: $("workoutNameLabel"),
-  workoutGroupDimLabel: $("workoutGroupDimLabel"),
+  workoutViewToggle: $<HTMLButtonElement>("workoutViewToggle"),
+  workoutShowToggle: $<HTMLButtonElement>("workoutShowToggle"),
+  workoutNameToggle: $<HTMLButtonElement>("workoutNameToggle"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
-  workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
-  restToggle: $<HTMLInputElement>("restToggle"),
-  restToggleLabel: $("restToggleLabel"),
-  addSetsToggle: $<HTMLInputElement>("addSetsToggle"),
+  workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
+  restToggle: $<HTMLButtonElement>("restToggle"),
+  addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -1736,22 +1733,28 @@ let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
 let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
 // Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
-// default (cleaner list); toggled + remembered via the "+ set buttons" checkbox.
+// default (cleaner list); toggled + remembered via the "+ set buttons" button.
 let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
-/** Reflect workoutViewMode on the segmented toggle buttons. */
-function syncWorkoutViewToggle(): void {
-  for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.view === workoutViewMode);
-}
-/** Reflect workoutShowMode on its toggle, and show the group-dimension picker
- * only in group view. */
-function syncWorkoutShowToggle(): void {
-  for (const b of els.workoutShowToggle.querySelectorAll<HTMLElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.show === workoutShowMode);
-  els.workoutGroupDimLabel.hidden = workoutShowMode !== "groups";
-  els.workoutNameLabel.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
-  for (const b of els.workoutNameToggle.querySelectorAll<HTMLElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.name === workoutNameMode);
+let showRestDays = false; // "Rest" toggle: include rest days in the day view
+// Short labels for the compact "Alone filter" DJ button (cycles through these).
+const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
+/** Reflect every workout display toggle on its single button: the label shows the
+ * current value, and on/off toggles light up. The grouping select + name button
+ * only apply to their relevant mode. */
+function syncWorkoutToggles(): void {
+  els.workoutViewToggle.textContent = workoutViewMode === "day" ? "Day" : "Week";
+  els.workoutShowToggle.textContent = workoutShowMode === "exercises" ? "Exer" : "Group";
+  els.workoutGrouping.hidden = workoutShowMode !== "groups";
+  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
+  els.workoutNameToggle.textContent = workoutNameMode === "code" ? "Code" : "Full";
+  els.workoutsPageBtn.textContent = String(workoutsPageSize);
+  els.restToggle.hidden = workoutViewMode === "week"; // rest days only make sense per day
+  els.restToggle.classList.toggle("is-active", showRestDays);
+  els.restToggle.setAttribute("aria-pressed", showRestDays ? "true" : "false");
+  els.addSetsToggle.classList.toggle("is-active", showAddSets);
+  els.addSetsToggle.setAttribute("aria-pressed", showAddSets ? "true" : "false");
+  els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
+  els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -3449,7 +3452,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         .filter(keep),
     );
   }
-  const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
+  const days = showRestDays ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
   return scopeWorkoutGroups(
     days
       .map((d) => ({
@@ -3486,7 +3489,7 @@ let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
 // "ribbon" = one continuous strip flowing across years (default); "single" = one
 // calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
 let heatScope: "ribbon" | "single" | "all" = "ribbon";
-let heatFilters: string[] = ["cat:Legs"]; // multi-select; empty = all exercises
+let heatFilters: string[] = []; // multi-select; empty = all exercises (default)
 // When the Analysis view forces the calendar to the selected exercises, the
 // user's own "all-mode" filter is parked here and restored when the selection clears.
 let heatFiltersSaved: string[] | null = null;
@@ -3543,7 +3546,7 @@ function filterColor(filter: string): string | null {
 // paint each day by the dominant group in a chosen dimension; the day's set count
 // still drives the intensity (opacity). "none" = the classic single-colour scale.
 type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
-let heatColorBy: HeatColorDim = "none";
+let heatColorBy: HeatColorDim = "cat"; // default: colour every exercise by body part
 const HEAT_COLOR_DIMS: HeatColorDim[] = ["none", "cat", "mus", "fun", "ex"];
 const HEAT_COLOR_LABELS: Record<HeatColorDim, string> = {
   none: "One colour", cat: "Body part", mus: "Muscle group", fun: "Function", ex: "Exercise",
@@ -3630,7 +3633,7 @@ function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
   const y = Number(latest?.slice(0, 4));
   if (Number.isFinite(y)) heatYear = y;
-  heatFilters = ["cat:Legs"];
+  heatFilters = []; // default to all exercises (coloured by body part)
   heatFiltersSaved = null; // don't carry a parked filter across athletes
   aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
@@ -3800,64 +3803,38 @@ function heatScopeToggle(): string {
   return `<div class="cal-mode">${btn("ribbon", "Timeline")}${btn("single", "Single year")}${btn("all", "All years")}</div>`;
 }
 
-/** Label for the filter button when 0/1/many filters active. */
-function heatFilterLabel(): string {
-  if (heatFilters.length === 0) return "All exercises";
-  if (heatFilters.length === 1) {
-    const i = heatFilters[0]!.indexOf(":");
-    return i >= 0 ? heatFilters[0]!.slice(i + 1) : heatFilters[0]!;
-  }
-  if (heatFilters.length <= 2) return heatFilters.map(f => { const i = f.indexOf(":"); return i >= 0 ? f.slice(i + 1) : f; }).join(", ");
-  return `${heatFilters.length} selected`;
-}
 
-/** Multi-select filter UI: checkmark chips for each category/exercise. */
-function heatFilterSelect(): string {
-  const exs = exerciseCountsForUser(activeRecords(), els.athlete.value);
-  const names = exs.map((e) => e.exerciseName);
-  const cats = TRAINING_CATEGORIES.filter((c) => names.some((n) => exerciseCategory(n) === c));
-  const muscles = MUSCLE_GROUP_TAGS.map((t) => t.label).filter((l) => names.some((n) => muscleGroup(n) === l));
-  const funcs = FUNCTIONAL_PATTERN_TAGS.map((t) => t.label).filter((l) =>
-    names.some((n) => tagsForExercise(n).some((t) => t.kind === "functional-pattern" && t.label === l)),
-  );
-  const isActive = (val: string) => heatFilters.includes(val);
-  const dot = (val: string) => {
-    const col = filterColor(val);
-    return col ? `<span class="xdd-dot" style="background:${col}"></span>` : "";
-  };
-  const opt = (val: string, label: string) =>
-    `<button type="button" class="xdd-opt${isActive(val) ? " is-active" : ""}" data-heatval="${escapeHtml(val)}" role="option">${dot(val)}${escapeHtml(label)}${isActive(val) ? ' <span class="xdd-check">✓</span>' : ""}</button>`;
-  const section = (title: string, items: [string, string][]) =>
-    items.length ? `<div class="xdd-group">${title}</div>${items.map(([v, l]) => opt(v, l)).join("")}` : "";
-  const menu =
-    `<button type="button" class="xdd-opt xdd-clear" data-heatclear="1" role="option">${heatFilters.length === 0 ? '<span class="xdd-check">✓</span> ' : ""}All exercises</button>` +
-    section("Body part", cats.map((c) => [`cat:${c}`, c])) +
-    section("Muscle group", muscles.map((m) => [`mus:${m}`, m])) +
-    section("Functional", funcs.map((f) => [`fun:${f}`, f])) +
-    section("Exercises", exs.map((e) => [`ex:${e.exerciseName}`, e.exerciseName]));
-  return (
-    `<div class="xdd xdd-heat">` +
-    `<button type="button" class="xdd-btn">${escapeHtml(heatFilterLabel())}<span class="xdd-caret">▾</span></button>` +
-    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
-    `</div>`
-  );
-}
-
-/** A compact colour key for the active "Colour by" dimension: the groups present,
- * most-trained first, each with its colour (capped, with "+N more"). */
-function heatColorLegend(): string {
+/** Interactive under-calendar controls: a "Group by" picker, an "All" reset, and
+ * a clickable colour pill for every group in the current colour dimension
+ * (most-trained first, capped). Tapping a pill filters the calendar to just that
+ * group; tapping "All" (or the active pill again) clears back to everything. This
+ * is the primary way to slice the calendar — the old dropdown is retired. */
+function heatPillControls(): string {
+  const groupBy =
+    `<label class="hm-groupby">Group by <select class="hm-groupby-sel">` +
+    HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
+    `</select></label>`;
+  const allOn = heatFilters.length === 0;
+  const allPill = `<button type="button" class="hm-pill hm-pill-all${allOn ? " is-on" : ""}" data-heatall="1">All</button>`;
+  if (heatColorBy === "none")
+    return `<div class="hm-pills">${groupBy}${allPill}<span class="muted hm-pill-hint">· one colour, lighter = fewer sets</span></div>`;
+  // Tally the groups present for this athlete, most-trained first.
   const tally = new Map<string, number>();
   for (const d of athleteWorkouts) for (const e of d.exercises) {
     const v = exerciseGroupValue(e.exerciseName, heatColorBy);
     if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
   }
-  const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]);
-  const top = sorted.slice(0, 12);
-  const chips = top
-    .map(([v]) => `<span class="hm-cat-chip" style="background:${heatGroupColor(heatColorBy, v) ?? "#888"}">${escapeHtml(v)}</span>`)
-    .join("");
-  const more = sorted.length > top.length ? ` <span class="muted">+${sorted.length - top.length} more</span>` : "";
-  return `<div class="hm-legend muted">${chips}${more} <span class="muted">· lighter = fewer sets</span></div>`;
+  const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
+  const cap = 16;
+  const shown = sorted.slice(0, cap);
+  const pill = (v: string) => {
+    const val = `${heatColorBy}:${v}`;
+    const on = heatFilters.includes(val);
+    const col = heatGroupColor(heatColorBy, v) ?? "#888";
+    return `<button type="button" class="hm-pill${on ? " is-on" : ""}" data-heatpill="${escapeHtml(val)}" style="--pc:${col}"><span class="hm-pill-dot"></span>${escapeHtml(v)}</button>`;
+  };
+  const more = sorted.length > cap ? `<span class="muted hm-pill-hint">+${sorted.length - cap} more</span>` : "";
+  return `<div class="hm-pills">${groupBy}${allPill}${shown.map(pill).join("")}${more}</div>`;
 }
 
 /** Workouts overview: a GitHub-style heatmap. Single-year (‹ › to change) or all
@@ -3870,26 +3847,13 @@ function renderWorkoutCalendar() {
     `<button type="button" class="cal-tagmode${aloneTagMode ? " is-on" : ""}" data-tagmode="alone" ` +
     `title="${aloneTagMode ? "Done — stop tagging" : "Tag many days as trained-alone: tap this, then tap each day"}">` +
     `${aloneTagMode ? "Done tagging" : "Tag alone"}</button>`;
-  // With no exercise filter, offer a "Colour by" picker (one colour, or by body
-  // part / muscle / function / exercise) — intensity still tracks set count.
-  const colorByUi =
-    heatFilters.length === 0
-      ? `<label class="cal-colorby">Colour <select class="cal-colorby-sel">` +
-        HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
-        `</select></label>`
-      : "";
-  const controls = `<div class="heat-controls">${heatScopeToggle()}${heatFilterSelect()}${colorByUi}${tagBtn}</div>`;
+  const controls = `<div class="heat-controls">${heatScopeToggle()}${tagBtn}</div>`;
   const tagHint = aloneTagMode
     ? `<div class="cal-taghint">Tap trained days to add/remove the red “alone” ring. Tap “Done tagging” when finished.</div>`
     : "";
-  const legend = heatFilters.length === 0 && heatColorBy !== "none"
-    ? heatColorLegend()
-    : heatFilters.length > 0
-    ? `<div class="hm-legend muted">${heatFilters.map(f => {
-        const i = f.indexOf(":"); const lbl = i >= 0 ? f.slice(i+1) : f; const col = filterColor(f);
-        return `<span class="hm-cat-chip" style="background:${col ?? "#888"}">${escapeHtml(lbl)}</span>`;
-      }).join("")} · Less <span class="hm-cell lvl-1" style="background:${cellBgColor(1, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-2" style="background:${cellBgColor(2, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-3" style="background:${cellBgColor(3, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-4" style="background:${cellBgColor(4, filterColor(heatFilters[0]!))}"></span><span class="hm-cell lvl-5" style="background:${cellBgColor(5, null)}"></span> More</div>`
-    : `<div class="hm-legend muted">Less <span class="hm-cell lvl-0"></span><span class="hm-cell lvl-1" style="background:${cellBgColor(1,null)}"></span><span class="hm-cell lvl-2" style="background:${cellBgColor(2,null)}"></span><span class="hm-cell lvl-3" style="background:${cellBgColor(3,null)}"></span><span class="hm-cell lvl-4" style="background:${cellBgColor(4,null)}"></span><span class="hm-cell lvl-5" style="background:${cellBgColor(5,null)}"></span> More</div>`;
+  // Interactive pills (Group by · All · one pill per group) are the calendar's
+  // slicer now — colour by body part by default, tap a part to see only it.
+  const legend = heatPillControls();
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
@@ -3963,7 +3927,7 @@ function shiftHeatYear(delta: number) {
 
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
 function jumpToWorkoutDate(iso: string) {
-  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutViewToggle(); } // calendar is per-day
+  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutToggles(); } // calendar is per-day
   const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
   workoutsPage = Math.floor(idx / workoutsPageSize);
@@ -4062,7 +4026,7 @@ function setDisplay(s: SetRecord): string {
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const byWeek = workoutViewMode === "week";
-  els.restToggleLabel.hidden = byWeek; // rest days only make sense per day
+  syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — workouts ` +
@@ -5863,6 +5827,18 @@ async function init() {
       // Don't close the dropdown — let the user pick multiple
       return renderWorkoutCalendar();
     }
+    // Under-calendar pills: "All" resets, a group pill filters to just that group
+    // (tapping the active one clears back to all).
+    if (target.closest("[data-heatall]")) {
+      heatFilters = [];
+      return renderWorkoutCalendar();
+    }
+    const pill = target.closest<HTMLElement>("[data-heatpill]");
+    if (pill?.dataset.heatpill) {
+      const val = pill.dataset.heatpill;
+      heatFilters = heatFilters.includes(val) ? [] : [val];
+      return renderWorkoutCalendar();
+    }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
       const v = scopeBtn.dataset.heatScope;
@@ -5891,10 +5867,11 @@ async function init() {
     // Otherwise, tapping a trained day in the heatmap jumps to it in the list below.
     if (cell?.dataset.date) jumpToWorkoutDate(cell.dataset.date);
   });
-  // "Colour by" dimension picker (only shown when no exercise filter is active).
+  // "Group by" dimension picker under the calendar — changing it clears the
+  // filter so the pills regenerate for the new grouping.
   els.workoutCalendar.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".cal-colorby-sel");
-    if (sel) { heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".hm-groupby-sel");
+    if (sel) { heatColorBy = sel.value as HeatColorDim; heatFilters = []; renderWorkoutCalendar(); }
   });
   // Close the heatmap filter menu on any click outside it.
   document.addEventListener("click", (e) => {
@@ -5922,51 +5899,39 @@ async function init() {
     syncExProgCompactBtn();
   });
   els.summariseBtn.addEventListener("click", runSummary);
-  els.workoutViewToggle.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
-    const v = btn?.dataset.view;
-    if ((v !== "day" && v !== "week") || v === workoutViewMode) return;
-    workoutViewMode = v;
-    syncWorkoutViewToggle();
+  // Each control is one toggle button now: tap to flip its value (no segments).
+  els.workoutViewToggle.addEventListener("click", () => {
+    workoutViewMode = workoutViewMode === "day" ? "week" : "day";
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.workoutShowToggle.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
-    const m = btn?.dataset.show;
-    if ((m !== "exercises" && m !== "groups") || m === workoutShowMode) return;
-    workoutShowMode = m;
-    syncWorkoutShowToggle();
+  els.workoutShowToggle.addEventListener("click", () => {
+    workoutShowMode = workoutShowMode === "exercises" ? "groups" : "exercises";
     renderWorkoutsPage();
   });
-  els.workoutNameToggle.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
-    const m = btn?.dataset.name;
-    if ((m !== "code" && m !== "full") || m === workoutNameMode) return;
-    workoutNameMode = m;
-    syncWorkoutShowToggle();
+  els.workoutNameToggle.addEventListener("click", () => {
+    workoutNameMode = workoutNameMode === "code" ? "full" : "code";
     renderWorkoutsPage();
   });
   els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
-  els.workoutsPageSize.addEventListener("change", () => {
-    workoutsPageSize = Number(els.workoutsPageSize.value) === 50 ? 50 : 20;
+  els.workoutsPageBtn.addEventListener("click", () => {
+    workoutsPageSize = workoutsPageSize === 50 ? 20 : 50;
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.restToggle.addEventListener("change", () => {
+  els.restToggle.addEventListener("click", () => {
+    showRestDays = !showRestDays;
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.addSetsToggle.checked = showAddSets; // reflect the remembered choice
-  els.addSetsToggle.addEventListener("change", () => {
-    showAddSets = els.addSetsToggle.checked;
+  els.addSetsToggle.addEventListener("click", () => {
+    showAddSets = !showAddSets;
     localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
     els.aloneFilter.dataset.state = aloneFilter;
-    els.aloneFilter.textContent = ALONE_FILTER_LABEL[aloneFilter];
     workoutsPage = 0;
     renderWorkoutsPage();
   });
@@ -6232,7 +6197,7 @@ async function init() {
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
     els.formula, els.rank, els.sexFilter, els.viewAsSelect,
-    els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
+    els.workoutGrouping, els.testAthlete, els.testExercise,
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);

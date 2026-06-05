@@ -180,50 +180,23 @@
               <h2 id="workoutsTitle">Workouts</h2>
               <details class="wo-controls-fold">
                 <summary class="wo-controls-sum">⚙ Display options</summary>
-                <div class="wo-controls">
-              <span class="inline-label">View
-                <span id="workoutViewToggle" class="seg-toggle" role="group" aria-label="View by day or week">
-                  <button type="button" class="seg-btn is-active" data-view="day">By day</button>
-                  <button type="button" class="seg-btn" data-view="week">By week</button>
-                </span>
-              </span>
-              <span class="inline-label">Show
-                <span id="workoutShowToggle" class="seg-toggle" role="group" aria-label="Exercise view or group view">
-                  <button type="button" class="seg-btn is-active" data-show="exercises">Exercises</button>
-                  <button type="button" class="seg-btn" data-show="groups">Groups</button>
-                </span>
-              </span>
-              <label class="inline-label" id="workoutGroupDimLabel" hidden>By
-                <select id="workoutGrouping">
-                  <option value="muscles" selected>Muscle group</option>
-                  <option value="functional">Functional group</option>
-                  <option value="combined">Combined lift</option>
-                  <option value="compared">Compared lift</option>
-                </select>
-              </label>
-              <span class="inline-label" id="workoutNameLabel">Names
-                <span id="workoutNameToggle" class="seg-toggle" role="group" aria-label="Exercise code or full name">
-                  <button type="button" class="seg-btn is-active" data-name="code">Code</button>
-                  <button type="button" class="seg-btn" data-name="full">Full</button>
-                </span>
-              </span>
-              <label class="inline-label">Per page
-                <select id="workoutsPageSize">
-                  <option value="20">20</option>
-                  <option value="50" selected>50</option>
-                </select>
-              </label>
-              <label class="check" id="restToggleLabel">
-                <input type="checkbox" id="restToggle" /> Show rest days
-              </label>
-              <label class="check" id="addSetsToggleLabel">
-                <input type="checkbox" id="addSetsToggle" /> + set buttons
-              </label>
-              <button type="button" id="aloneFilter" class="alone-filter" data-state="both"
-                title="Filter by the ‘alone’ tag — tap to cycle: show all sessions / only the ones you tagged trained alone / only the ones you didn’t">
-                Alone: Both
-              </button>
-              </div>
+                <!-- DJ-console style: every control is one small toggle button (no
+                     labels), packed into a tight grid. Tapping a button flips it. -->
+                <div class="wo-controls wo-dj">
+                  <button type="button" id="workoutViewToggle" class="wo-dj-btn" title="By day ↔ by week">Day</button>
+                  <button type="button" id="workoutShowToggle" class="wo-dj-btn" title="Exercises ↔ groups">Exer</button>
+                  <select id="workoutGrouping" class="wo-dj-sel" title="Group by" hidden>
+                    <option value="muscles" selected>Muscle</option>
+                    <option value="functional">Function</option>
+                    <option value="combined">Combined</option>
+                    <option value="compared">Compared</option>
+                  </select>
+                  <button type="button" id="workoutNameToggle" class="wo-dj-btn" title="Code ↔ full name">Code</button>
+                  <button type="button" id="workoutsPageBtn" class="wo-dj-btn" title="Per page (20 ↔ 50)">50</button>
+                  <button type="button" id="restToggle" class="wo-dj-btn" aria-pressed="false" title="Show rest days">Rest</button>
+                  <button type="button" id="addSetsToggle" class="wo-dj-btn" aria-pressed="false" title="Show + set buttons">Sets+</button>
+                  <button type="button" id="aloneFilter" class="wo-dj-btn" data-state="both" title="Alone filter: all ↔ only-alone ↔ not-alone">All</button>
+                </div>
             </details>
             </div>
             <details id="workoutSets" class="workout-sets">
