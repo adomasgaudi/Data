@@ -140,6 +140,10 @@ const els = {
   changelogPage: $("changelogPage"),
   changelogClose: $<HTMLButtonElement>("changelogClose"),
   changelog: $("changelog"),
+  exInfoPage: $("exInfoPage"),
+  exInfoClose: $<HTMLButtonElement>("exInfoClose"),
+  exInfoTitle: $("exInfoTitle"),
+  exInfo: $("exInfo"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
@@ -678,11 +682,62 @@ function setLevelScale(key: string, value: number) {
 }
 
 /** The technique scaling factor for a set: a per-set override beats the per-hole
- * factor, which beats 1 (no scaling). */
+ * factor × the per-note variation factor, which beats 1 (no scaling). */
 function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
   if (o?.scale !== undefined) return o.scale;
-  return r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
+  const level = r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
+  return level * noteVariationScale(r);
+}
+
+// ---- Per-NOTE variation difficulty (the owner tags meaningful notes) ----
+// A logged note can be a real variation ("incline", "knee") that changes how hard
+// the set is, OR just a thought/condition. The owner reviews each distinct note
+// and sets its RELATIVE DIFFICULTY (×1 = no effect). Like the squat-rack holes,
+// this never changes the real weight/1RM or splits the lift into many exercises —
+// it only scales a separate "effort" value so easier/harder variations line up.
+const VARIATION_SCALE_KEY = "colosseum.variationScales.v1";
+const variationScaleOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(VARIATION_SCALE_KEY);
+    const obj = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+})();
+/** Normalised note → key part (trim, lowercase, collapse whitespace). Different
+ * spellings stay distinct on purpose — the owner reviews each. */
+const normNote = (note: string): string => note.trim().toLowerCase().replace(/\s+/g, " ");
+const variationKey = (exerciseName: string, note: string): string => `${exerciseName}|${normNote(note)}`;
+/** Notes that LOOK like a difficulty-changing variation (vs a passing thought),
+ * used only to flag "review needed" until the owner sets a difficulty. */
+const VARIATION_HINT = /\b(incline|incl|decline|decl|knee|knees|diamond|wide|narrow|close|archer|deficit|pike|assist|assisted|band|banded|pause|paused|tempo|slow|explosive|elevated|raised|feet|weighted|weight|ring|rings|clap|pseudo|planche|negative|eccentric|deep|spoto|pin|deload|single|one\s*arm|1\s*arm)\b/i;
+/** This note's relative-difficulty factor: the owner's value, else 1 (no effect). */
+function variationScaleFor(exerciseName: string, note: string): number {
+  const k = variationKey(exerciseName, note);
+  return Object.prototype.hasOwnProperty.call(variationScaleOverrides, k) ? variationScaleOverrides[k]! : 1;
+}
+/** Whether the owner has reviewed this note (set any difficulty, even ×1). */
+function variationReviewed(exerciseName: string, note: string): boolean {
+  return Object.prototype.hasOwnProperty.call(variationScaleOverrides, variationKey(exerciseName, note));
+}
+/** A set's note-variation factor (1 when it has no note). */
+function noteVariationScale(r: SetRecord): number {
+  const note = (r.notes ?? "").trim();
+  return note ? variationScaleFor(r.exerciseName, note) : 1;
+}
+function saveVariationScales(): void {
+  try { localStorage.setItem(VARIATION_SCALE_KEY, JSON.stringify(variationScaleOverrides)); }
+  catch { /* storage may be unavailable — edits still apply this session */ }
+}
+function setVariationScale(exerciseName: string, note: string, value: number): void {
+  variationScaleOverrides[variationKey(exerciseName, note)] = value;
+  saveVariationScales();
+}
+function clearVariationScale(exerciseName: string, note: string): void {
+  delete variationScaleOverrides[variationKey(exerciseName, note)];
+  saveVariationScales();
 }
 
 // ---- Editable athlete stats (height / weight / age / sex / body-fat band) ----
@@ -1161,6 +1216,21 @@ function openHealth() {
 function openChangelog() {
   setSettingsOpen(false);
   els.changelogPage.hidden = false;
+}
+
+// ---- Exercise "More info" overlay (details + note-variation difficulty editor) ----
+let exInfoName: string | null = null;
+/** Open the More-info overlay for one exercise (its details + the editable
+ * difficulty of each note-identified variation). Works for any exercise. */
+function openExerciseInfo(name: string): void {
+  exInfoName = name;
+  els.exInfoTitle.textContent = name;
+  els.exInfo.innerHTML = exerciseInfoHtml(name);
+  els.exInfoPage.hidden = false;
+}
+/** Re-render the open More-info overlay (after a difficulty edit). */
+function refreshExerciseInfo(): void {
+  if (exInfoName && !els.exInfoPage.hidden) els.exInfo.innerHTML = exerciseInfoHtml(exInfoName);
 }
 
 /** Render the version-history list (newest first) into the overlay. Each release
@@ -5147,7 +5217,57 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${groupHtml}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}${groupHtml}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+}
+
+/** The note-variation difficulty editor: every distinct note logged for this lift,
+ * each with an editable relative difficulty (×1 = no effect). Notes that look like
+ * a difficulty-changing variation but haven't been reviewed get a ⚠ flag. */
+function variationsEditorHtml(name: string, recs: SetRecord[]): string {
+  const byNote = new Map<string, { display: string; count: number }>();
+  for (const r of recs) {
+    const note = (r.notes ?? "").trim();
+    if (!note) continue;
+    const k = normNote(note);
+    const e = byNote.get(k) ?? { display: note, count: 0 };
+    e.count++;
+    byNote.set(k, e);
+  }
+  if (byNote.size === 0)
+    return (
+      `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty</div>` +
+      `<p class="muted">No notes logged for this lift yet. Log a note like “incline” or “knee” on a set and it'll appear here, so you can set its relative difficulty.</p></div>`
+    );
+  const entries = [...byNote.values()].sort((a, b) => b.count - a.count);
+  const needReview = entries.filter((e) => VARIATION_HINT.test(e.display) && !variationReviewed(name, e.display)).length;
+  const rowsHtml = entries
+    .map((e) => {
+      const reviewed = variationReviewed(name, e.display);
+      const scale = variationScaleFor(name, e.display);
+      const flag = VARIATION_HINT.test(e.display) && !reviewed;
+      const review = flag
+        ? `<span class="ex-var-review" title="Looks like a variation that may change difficulty — set its relative difficulty (or ×1 to confirm no effect).">⚠ review</span>`
+        : "";
+      const reset = reviewed
+        ? `<button type="button" class="ex-var-reset" data-varreset-ex="${escapeHtml(name)}" data-varreset-note="${escapeHtml(e.display)}" title="Reset to ×1 (mark un-reviewed)">↺</button>`
+        : "";
+      return (
+        `<div class="ex-var-row${flag ? " needs-review" : ""}${scale !== 1 ? " is-scaled" : ""}">` +
+        `<span class="ex-var-note">${escapeHtml(e.display)} ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
+        `<span class="ex-var-edit"><label class="ex-var-lbl">×</label>` +
+        `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(e.display)}" aria-label="Relative difficulty for note ${escapeHtml(e.display)}" />` +
+        reset +
+        `</span></div>`
+      );
+    })
+    .join("");
+  const badge = needReview ? ` <span class="ex-var-needbadge">${needReview} to review</span>` : "";
+  return (
+    `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty${badge}</div>` +
+    `<p class="muted ex-vars-help">Each distinct note logged for this lift. Set a relative difficulty so easier/harder variations line up on one scale (×1 = no effect, &lt;1 easier, &gt;1 harder). It rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise. ⚠ flags notes that look like a variation and haven't been reviewed.</p>` +
+    rowsHtml +
+    `</div>`
+  );
 }
 
 /** Open the Exercises (merges & data) page and scroll to one exercise's row,
@@ -5665,6 +5785,32 @@ async function init() {
   els.changelogBtn.addEventListener("click", openChangelog);
   els.changelogClose.addEventListener("click", () => {
     els.changelogPage.hidden = true;
+  });
+  els.exInfoClose.addEventListener("click", () => {
+    els.exInfoPage.hidden = true;
+    exInfoName = null;
+  });
+  // "More info" buttons (Analysis single mode, drill-in) open the overlay.
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-moreinfoex]");
+    if (btn?.dataset.moreinfoex) openExerciseInfo(btn.dataset.moreinfoex);
+  });
+  // Note-variation difficulty: edit (change) and reset (click). Delegated on
+  // document so it works in the overlay AND the Index page's expandable row.
+  document.addEventListener("change", (e) => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-input");
+    if (!input?.dataset.varEx || input.dataset.varNote === undefined) return;
+    const v = Number(input.value);
+    if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
+    refreshExerciseInfo();
+    renderAll();
+  });
+  document.addEventListener("click", (e) => {
+    const rb = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-reset");
+    if (!rb?.dataset.varresetEx || rb.dataset.varresetNote === undefined) return;
+    clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
+    refreshExerciseInfo();
+    renderAll();
   });
 
   els.formula.addEventListener("change", renderAll);
@@ -7358,7 +7504,17 @@ function renderWorkoutAnalysis(): void {
     // Analysis), so it carries the athlete + scope — no redundant second line.
     if (contentTitle)
       contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${waSelected[0]}` : `${athleteLabel()} — selected lifts`;
-    stats?.setAttribute("hidden", "");
+    // Single mode: a "More info" button for the one selected lift (its details +
+    // the editable difficulty of each note-identified variation).
+    if (stats) {
+      if (mode === "single" && waSelected[0]) {
+        stats.innerHTML = `<button type="button" class="wa-moreinfo" data-moreinfoex="${escapeHtml(waSelected[0])}">ℹ More info &amp; variation difficulty</button>`;
+        stats.removeAttribute("hidden");
+      } else {
+        stats.innerHTML = "";
+        stats.setAttribute("hidden", "");
+      }
+    }
     workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
     renderWorkoutSetsChart();

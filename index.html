@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.4.17</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.4.20</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -1188,6 +1188,17 @@
         </div>
         <p class="muted">Validation issues and out-of-range values found while loading the sheet.</p>
         <div id="health"></div>
+      </div>
+    </div>
+
+    <div id="exInfoPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2 id="exInfoTitle">Exercise info</h2>
+          <button type="button" id="exInfoClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">Details, groupings, and the relative difficulty of each note-identified variation of this lift.</p>
+        <div id="exInfo"></div>
       </div>
     </div>
 
