@@ -127,7 +127,7 @@ describe("live HSPU config (variationConfig.ts) on real notes", () => {
     // "15cm + yoga block" is peeled to "+ yoga block" upstream.
     const yoga = resolveNote("HSPU", "+ yoga block", DEFAULT_VARIATION_CONFIG);
     expect(yoga.vec.support).toBe("wall");
-    expect(yoga.vec.rom).toBe("block_med");
+    expect(yoga.vec.rom).toBe("+15cm"); // range of motion is now in cm
     // "uninterupted no wall" → conflict on support (yoga implies wall? no — just
     // the explicit "no wall" applies), continuity uninterrupted.
     const uninterrupted = resolveNote("HSPU", "uninterupted", DEFAULT_VARIATION_CONFIG);

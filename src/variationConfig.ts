@@ -44,8 +44,11 @@ export const FAMILIES: Record<string, FamilyDef> = {
       support: { free: 1.0, wall: 0.85 },
       // Assistance band ("guma"); higher number = more assistance here (calibrate).
       band: { none: 1.0, light: 0.85, medium: 0.75, heavy: 0.62 },
-      // Range of motion / depth aid (a block shortens it; parallettes/brick deepen it).
-      rom: { full: 1.0, block_large: 0.7, block_med: 0.78, block_small: 0.85, partial: 0.6, deep: 1.12 },
+      // Range of motion measured as the hand height vs the floor, in cm. 0cm = to
+      // the floor (full depth, the ×1 reference); a block/raised hands (+cm) shortens
+      // the range → easier (<1); parallettes/brick go below the floor (−cm) → deeper,
+      // harder (>1). A yoga block reads as +5 / +15 / +23cm depending on its side.
+      rom: { "+23cm": 0.6, "+15cm": 0.72, "+5cm": 0.88, "0cm": 1.0, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35 },
       // Leg shape: an L-sit is harder; hooked/tucked legs take some load off.
       legs: { straight: 1.0, tucked: 0.95, lsit: 1.1, hooked: 0.8 },
       // Torso lean forward (toward a planche line) is harder.
@@ -53,7 +56,7 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
-    defaults: { support: "free", band: "none", rom: "full", legs: "straight", lean: "neutral", continuity: "paused" },
+    defaults: { support: "free", band: "none", rom: "0cm", legs: "straight", lean: "neutral", continuity: "paused" },
   },
   PUSHUP: {
     dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
@@ -75,15 +78,16 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "guma 5": { band: "light" },
     "guma 6": { band: "light" },
     guma: { band: "light" },
-    // range of motion / depth aids (a block implies you're also against the wall)
-    "l yoga": { rom: "block_large", support: "wall" },
-    "m yoga": { rom: "block_med", support: "wall" },
-    "yoga block": { rom: "block_med", support: "wall" },
-    yoga: { rom: "block_med", support: "wall" },
-    paraletes: { rom: "deep" },
-    parallettes: { rom: "deep" },
-    brick: { rom: "deep" },
-    limited: { rom: "partial" },
+    // range of motion in cm (a raised block shortens it; parallettes/brick deepen
+    // it). A block implies you're also against the wall. The yoga side = +5/15/23cm.
+    "l yoga": { rom: "+23cm", support: "wall" },
+    "m yoga": { rom: "+15cm", support: "wall" },
+    "yoga block": { rom: "+15cm", support: "wall" },
+    yoga: { rom: "+15cm", support: "wall" },
+    paraletes: { rom: "-10cm" },
+    parallettes: { rom: "-10cm" },
+    brick: { rom: "-5cm" },
+    limited: { rom: "+5cm" },
     // legs
     "l sit": { legs: "lsit" },
     "l-sit": { legs: "lsit" },
