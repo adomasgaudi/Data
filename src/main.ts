@@ -7573,15 +7573,18 @@ function renderWaGraph(): void {
   // The summary names what's currently plotted so you can see it while collapsed.
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
-  // Graph options sits ABOVE the chart (with the legend + realistic-time toggle),
-  // so all the graph's settings are together at the top and the chart fills the
-  // space below. Collapsed by default; the summary names what's plotted.
+  // Graph options + the chart's Legend sit SIDE BY SIDE in one bar at the top, both
+  // as floating dropdowns (their menus overlay the chart, so opening either never
+  // pushes the layout or needs a scroll). The legend element is rendered by the SVG
+  // engine inside #waGraphChart; we relocate it up into this bar after the chart
+  // draws (its innerHTML keeps updating in place wherever it lives).
   box.innerHTML =
+    `<div class="wa-graph-bar">` +
     `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
-    `<div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
-    cfgUi +
+    `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
     `</details>` +
+    `</div>` +
     `<div id="waGraphChart"></div>` +
     `<div class="muted wa-placeholder" id="waGraphNote"></div>`;
   const chartBox = document.getElementById("waGraphChart");
@@ -7606,6 +7609,11 @@ function renderWaGraph(): void {
         codeOf: exerciseCode,
       })
     : 0;
+  // Relocate the chart's legend up into the top bar so it sits beside Graph options
+  // (the SVG engine keeps updating it in place wherever it lives in the DOM).
+  const graphBar = box.querySelector(".wa-graph-bar");
+  const legendEl = chartBox?.querySelector(".svgc-legend");
+  if (graphBar && legendEl && legendEl.parentElement !== graphBar) graphBar.appendChild(legendEl);
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {
     if (drawn === 0 && graphExercises.length === 0) {
