@@ -3560,6 +3560,13 @@ function exerciseGroupValue(name: string, dim: HeatColorDim): string | null {
   if (dim === "ex") return name;
   return null;
 }
+/** The current athlete's exercises that fall in one group value (a calendar pill).
+ * Used to sync a pill tap with the analysis selection (waSelected). */
+function exercisesInGroup(dim: HeatColorDim, val: string): string[] {
+  return exerciseCountsForUser(activeRecords(), els.athlete.value)
+    .map((e) => e.exerciseName)
+    .filter((n) => exerciseGroupValue(n, dim) === val);
+}
 /** A stable #rrggbb colour for a group value: the category palette for body parts,
  * otherwise a hash-derived hue so every value gets its own distinct colour. */
 function heatGroupColor(dim: HeatColorDim, value: string): string | null {
@@ -3806,7 +3813,10 @@ function heatPillControls(): string {
     `<label class="hm-groupby">Group by <select class="hm-groupby-sel">` +
     HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
     `</select></label>`;
-  const allOn = heatFilters.length === 0;
+  // Pills now mirror the analysis SELECTION (waSelected) — they are one and the
+  // same filter for the whole page. "All" is on when nothing's selected.
+  const selectedSet = new Set(waSelected);
+  const allOn = waSelected.length === 0;
   const allPill = `<button type="button" class="hm-pill hm-pill-all${allOn ? " is-on" : ""}" data-heatall="1">All</button>`;
   if (heatColorBy === "none")
     return `<div class="hm-pills">${groupBy}${allPill}<span class="muted hm-pill-hint">· one colour, lighter = fewer sets</span></div>`;
@@ -3821,7 +3831,11 @@ function heatPillControls(): string {
   const shown = sorted.slice(0, cap);
   const pill = (v: string) => {
     const val = `${heatColorBy}:${v}`;
-    const on = heatFilters.includes(val);
+    // A group pill is "on" when every one of its lifts is in the selection (or, for
+    // the Exercise dimension, when that lift is selected).
+    const on = heatColorBy === "ex"
+      ? selectedSet.has(v)
+      : (() => { const exs = exercisesInGroup(heatColorBy, v); return exs.length > 0 && exs.every((e) => selectedSet.has(e)); })();
     const col = heatGroupColor(heatColorBy, v) ?? "#888";
     return `<button type="button" class="hm-pill${on ? " is-on" : ""}" data-heatpill="${escapeHtml(val)}" style="--pc:${col}"><span class="hm-pill-dot"></span>${escapeHtml(v)}</button>`;
   };
@@ -5825,17 +5839,27 @@ async function init() {
       // Don't close the dropdown — let the user pick multiple
       return renderWorkoutCalendar();
     }
-    // Under-calendar pills: "All" resets, a group pill filters to just that group
-    // (tapping the active one clears back to all).
+    // Under-calendar pills drive the WHOLE analysis selection (waSelected), so the
+    // graph, history and calendar all move together. "All" clears the selection; a
+    // group pill toggles all of that group's lifts; an exercise pill toggles itself.
     if (target.closest("[data-heatall]")) {
-      heatFilters = [];
-      return renderWorkoutCalendar();
+      waSelected = [];
+      return renderWorkoutAnalysis();
     }
     const pill = target.closest<HTMLElement>("[data-heatpill]");
     if (pill?.dataset.heatpill) {
       const val = pill.dataset.heatpill;
-      heatFilters = heatFilters.includes(val) ? [] : [val];
-      return renderWorkoutCalendar();
+      const sep = val.indexOf(":");
+      const dim = val.slice(0, sep) as HeatColorDim;
+      const v = val.slice(sep + 1);
+      if (dim === "ex") {
+        waSelected = waSelected.includes(v) ? waSelected.filter((x) => x !== v) : [...waSelected, v];
+      } else {
+        const exs = exercisesInGroup(dim, v);
+        const allOn = exs.length > 0 && exs.every((e) => waSelected.includes(e));
+        waSelected = allOn ? waSelected.filter((e) => !exs.includes(e)) : [...new Set([...waSelected, ...exs])];
+      }
+      return renderWorkoutAnalysis();
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
@@ -5869,7 +5893,9 @@ async function init() {
   // filter so the pills regenerate for the new grouping.
   els.workoutCalendar.addEventListener("change", (e) => {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".hm-groupby-sel");
-    if (sel) { heatColorBy = sel.value as HeatColorDim; heatFilters = []; renderWorkoutCalendar(); }
+    // Changing the colour/grouping dimension only re-buckets the pills + recolours;
+    // it must NOT clear the shared selection (that would un-sync from the graph).
+    if (sel) { heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
   });
   // Close the heatmap filter menu on any click outside it.
   document.addEventListener("click", (e) => {
