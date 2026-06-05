@@ -1431,6 +1431,23 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
 }
+/* DJ-console display options: a tight grid of tiny toggle buttons (no labels),
+   ~1/5th the size of the old labelled stack. Every control is one button that
+   flips its value on tap; rest / +sets light up when on; alone shows its state. */
+.wo-dj { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.wo-controls-fold[open] .wo-dj { padding: 5px; width: max-content; max-width: 62vw; }
+.wo-dj-btn {
+  font: inherit; font-size: 0.7rem; font-weight: 700; line-height: 1; cursor: pointer;
+  min-width: 2.5rem; padding: 5px 6px; text-align: center;
+  color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
+}
+.wo-dj-btn:hover { border-color: var(--accent); color: var(--accent); }
+.wo-dj-btn.is-active,
+.wo-dj-btn[data-state="alone"], .wo-dj-btn[data-state="notAlone"] {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.wo-dj-btn[hidden] { display: none; }
+.wo-dj-sel { font: inherit; font-size: 0.7rem; padding: 4px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); }
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }

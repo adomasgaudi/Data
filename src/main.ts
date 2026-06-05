@@ -193,16 +193,13 @@ const els = {
   workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
-  workoutViewToggle: $("workoutViewToggle"),
-  workoutShowToggle: $("workoutShowToggle"),
-  workoutNameToggle: $("workoutNameToggle"),
-  workoutNameLabel: $("workoutNameLabel"),
-  workoutGroupDimLabel: $("workoutGroupDimLabel"),
+  workoutViewToggle: $<HTMLButtonElement>("workoutViewToggle"),
+  workoutShowToggle: $<HTMLButtonElement>("workoutShowToggle"),
+  workoutNameToggle: $<HTMLButtonElement>("workoutNameToggle"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
-  workoutsPageSize: $<HTMLSelectElement>("workoutsPageSize"),
-  restToggle: $<HTMLInputElement>("restToggle"),
-  restToggleLabel: $("restToggleLabel"),
-  addSetsToggle: $<HTMLInputElement>("addSetsToggle"),
+  workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
+  restToggle: $<HTMLButtonElement>("restToggle"),
+  addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -1666,22 +1663,28 @@ let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
 let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
 // Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
-// default (cleaner list); toggled + remembered via the "+ set buttons" checkbox.
+// default (cleaner list); toggled + remembered via the "+ set buttons" button.
 let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
-/** Reflect workoutViewMode on the segmented toggle buttons. */
-function syncWorkoutViewToggle(): void {
-  for (const b of els.workoutViewToggle.querySelectorAll<HTMLElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.view === workoutViewMode);
-}
-/** Reflect workoutShowMode on its toggle, and show the group-dimension picker
- * only in group view. */
-function syncWorkoutShowToggle(): void {
-  for (const b of els.workoutShowToggle.querySelectorAll<HTMLElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.show === workoutShowMode);
-  els.workoutGroupDimLabel.hidden = workoutShowMode !== "groups";
-  els.workoutNameLabel.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
-  for (const b of els.workoutNameToggle.querySelectorAll<HTMLElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.name === workoutNameMode);
+let showRestDays = false; // "Rest" toggle: include rest days in the day view
+// Short labels for the compact "Alone filter" DJ button (cycles through these).
+const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
+/** Reflect every workout display toggle on its single button: the label shows the
+ * current value, and on/off toggles light up. The grouping select + name button
+ * only apply to their relevant mode. */
+function syncWorkoutToggles(): void {
+  els.workoutViewToggle.textContent = workoutViewMode === "day" ? "Day" : "Week";
+  els.workoutShowToggle.textContent = workoutShowMode === "exercises" ? "Exer" : "Group";
+  els.workoutGrouping.hidden = workoutShowMode !== "groups";
+  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
+  els.workoutNameToggle.textContent = workoutNameMode === "code" ? "Code" : "Full";
+  els.workoutsPageBtn.textContent = String(workoutsPageSize);
+  els.restToggle.hidden = workoutViewMode === "week"; // rest days only make sense per day
+  els.restToggle.classList.toggle("is-active", showRestDays);
+  els.restToggle.setAttribute("aria-pressed", showRestDays ? "true" : "false");
+  els.addSetsToggle.classList.toggle("is-active", showAddSets);
+  els.addSetsToggle.setAttribute("aria-pressed", showAddSets ? "true" : "false");
+  els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
+  els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -3379,7 +3382,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         .filter(keep),
     );
   }
-  const days = els.restToggle.checked ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
+  const days = showRestDays ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
   return scopeWorkoutGroups(
     days
       .map((d) => ({
@@ -3854,7 +3857,7 @@ function shiftHeatYear(delta: number) {
 
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
 function jumpToWorkoutDate(iso: string) {
-  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutViewToggle(); } // calendar is per-day
+  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutToggles(); } // calendar is per-day
   const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
   workoutsPage = Math.floor(idx / workoutsPageSize);
@@ -3953,7 +3956,7 @@ function setDisplay(s: SetRecord): string {
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const byWeek = workoutViewMode === "week";
-  els.restToggleLabel.hidden = byWeek; // rest days only make sense per day
+  syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — workouts ` +
@@ -5750,51 +5753,39 @@ async function init() {
     syncExProgCompactBtn();
   });
   els.summariseBtn.addEventListener("click", runSummary);
-  els.workoutViewToggle.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
-    const v = btn?.dataset.view;
-    if ((v !== "day" && v !== "week") || v === workoutViewMode) return;
-    workoutViewMode = v;
-    syncWorkoutViewToggle();
+  // Each control is one toggle button now: tap to flip its value (no segments).
+  els.workoutViewToggle.addEventListener("click", () => {
+    workoutViewMode = workoutViewMode === "day" ? "week" : "day";
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.workoutShowToggle.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
-    const m = btn?.dataset.show;
-    if ((m !== "exercises" && m !== "groups") || m === workoutShowMode) return;
-    workoutShowMode = m;
-    syncWorkoutShowToggle();
+  els.workoutShowToggle.addEventListener("click", () => {
+    workoutShowMode = workoutShowMode === "exercises" ? "groups" : "exercises";
     renderWorkoutsPage();
   });
-  els.workoutNameToggle.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".seg-btn");
-    const m = btn?.dataset.name;
-    if ((m !== "code" && m !== "full") || m === workoutNameMode) return;
-    workoutNameMode = m;
-    syncWorkoutShowToggle();
+  els.workoutNameToggle.addEventListener("click", () => {
+    workoutNameMode = workoutNameMode === "code" ? "full" : "code";
     renderWorkoutsPage();
   });
   els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
-  els.workoutsPageSize.addEventListener("change", () => {
-    workoutsPageSize = Number(els.workoutsPageSize.value) === 50 ? 50 : 20;
+  els.workoutsPageBtn.addEventListener("click", () => {
+    workoutsPageSize = workoutsPageSize === 50 ? 20 : 50;
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.restToggle.addEventListener("change", () => {
+  els.restToggle.addEventListener("click", () => {
+    showRestDays = !showRestDays;
     workoutsPage = 0;
     renderWorkoutsPage();
   });
-  els.addSetsToggle.checked = showAddSets; // reflect the remembered choice
-  els.addSetsToggle.addEventListener("change", () => {
-    showAddSets = els.addSetsToggle.checked;
+  els.addSetsToggle.addEventListener("click", () => {
+    showAddSets = !showAddSets;
     localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
     els.aloneFilter.dataset.state = aloneFilter;
-    els.aloneFilter.textContent = ALONE_FILTER_LABEL[aloneFilter];
     workoutsPage = 0;
     renderWorkoutsPage();
   });
@@ -6060,7 +6051,7 @@ async function init() {
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
     els.formula, els.rank, els.sexFilter, els.viewAsSelect,
-    els.workoutGrouping, els.workoutsPageSize, els.testAthlete, els.testExercise,
+    els.workoutGrouping, els.testAthlete, els.testExercise,
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);
