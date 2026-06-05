@@ -7593,16 +7593,11 @@ function renderWaGraph(): void {
       ).length;
       const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
       if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
-      // Make clear the opening view is an automatic pick the user can override.
-      if (autoDefault && graphExercises.length)
-        notes.unshift(`Showing your ${graphExercises.length} most-trained exercises by default — tap lifts above to choose your own.`);
       let html = notes.map(escapeHtml).join("  ·  ");
-      // Over the cap: keep the short headline inline but tuck the (potentially
-      // huge) list of left-out lifts behind a collapsible "see more".
+      // Over the cap: just the "N of M" count as a dropdown revealing the rest.
       if (graphExcluded.length) {
-        const lead = `Graph shows the first ${WA_GRAPH_MAX} of ${baseExercises.length} (more lag the chart)`;
         const block =
-          `<details class="wa-excluded"><summary>${escapeHtml(lead)} — ${graphExcluded.length} not shown, see list</summary>` +
+          `<details class="wa-excluded"><summary>${WA_GRAPH_MAX} of ${baseExercises.length}</summary>` +
           `<div class="wa-excluded-list">${graphExcluded.map(escapeHtml).join(", ")}</div></details>`;
         html = html ? `${html}  ·  ${block}` : block;
       }
@@ -7640,7 +7635,7 @@ function renderWaCompareGraph(): void {
   if (note) {
     if (cmpExcluded.length)
       note.innerHTML =
-        `<details class="wa-excluded"><summary>Showing the first ${WA_GRAPH_MAX} of ${waSelected.length} — ${cmpExcluded.length} not shown, see list</summary>` +
+        `<details class="wa-excluded"><summary>${WA_GRAPH_MAX} of ${waSelected.length}</summary>` +
         `<div class="wa-excluded-list">${cmpExcluded.map(escapeHtml).join(", ")}</div></details>` +
         (noteTxt ? `  ·  ${escapeHtml(noteTxt)}` : "");
     else note.textContent = noteTxt;
