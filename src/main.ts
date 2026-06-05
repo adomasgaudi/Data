@@ -7482,9 +7482,11 @@ function renderWorkoutAnalysis(): void {
     // compact tools row beside the title (they all open as floating menus, so the
     // layout never shifts). Taxonomy editor (single mode) drops below.
     sel.innerHTML =
-      `<div class="wa-sel-header"><h3 class="wa-section-title">Exercise selector</h3>` +
-      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>` +
-      assignUi;
+      `<div class="wa-sel-header">` +
+      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>`;
+    // Taxonomy editor renders into its own section BELOW the sticky bar.
+    const assignBox = document.getElementById("waAssign");
+    if (assignBox) assignBox.innerHTML = assignUi;
     renderWaChips();
   }
   renderWaGraph();

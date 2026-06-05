@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.4.15</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.4.16</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -1083,17 +1083,14 @@
              just under the athlete picker and above the Analysis card. -->
         <div id="waStatsHost" class="wa-stats-top"></div>
         <section class="panel">
-          <h2>Analysis</h2>
-          <!-- Every major section is a collapsible disclosure so the layout is
-               easy to see and explore (fold the graph/filters to watch what the
-               layout buttons change). The renderers fill the inner #waXxx divs in
-               full on every paint (so they start empty — no flash of stale copy);
-               the <details> wrappers persist their open/closed state across
-               re-renders since they're never recreated. -->
-          <details class="wa-fold" open>
-            <summary class="wa-fold-sum">Exercise selector</summary>
-            <div id="waExerciseSelector" class="wa-section"></div>
-          </details>
+          <!-- The exercise selector tools row (Filter / Exercises / ⚙ / +) is a
+               sticky bar: it sits at the top of the card normally and sticks to
+               the top of the screen as you scroll the content below it. The other
+               sections stay collapsible disclosures. -->
+          <div id="waExerciseSelector" class="wa-section wa-selector-sticky"></div>
+          <!-- Taxonomy editor (single mode) renders here, BELOW the sticky bar, so
+               the sticky tools row stays compact. -->
+          <div id="waAssign" class="wa-section"></div>
           <details class="wa-fold" open>
             <summary class="wa-fold-sum">Graph</summary>
             <div id="waGraph" class="wa-section"></div>

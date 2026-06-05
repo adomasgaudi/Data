@@ -2096,7 +2096,18 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* All selector controls (Filter, Exercises, ⚙ Settings, + Create) sit on ONE
    compact row beside the title; each opens as a floating menu so the layout
    never shifts. */
-.wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: auto; align-items: center; justify-content: flex-end; }
+.wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; width: 100%; align-items: center; justify-content: flex-start; }
+/* Sticky selector bar: sits at the top of the Analysis card in normal flow, then
+   pins to the top of the screen as you scroll the content below it. The card must
+   not be an overflow scroll container or sticky can't pin to the viewport. */
+#tab-analysis > .panel { overflow: visible; }
+.wa-selector-sticky {
+  position: sticky; top: 0; z-index: 50;
+  margin: 0 0 0.4rem; padding: 0.45rem 0;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.wa-selector-sticky .wa-sel-header { margin: 0; }
+#waAssign:empty { display: none; }
 .wa-sel-tools > .wa-filters, .wa-sel-tools > .wa-chips-fold {
   margin: 0; padding: 0; border: none; background: none; position: static; overflow: visible;
 }
