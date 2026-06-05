@@ -4568,6 +4568,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
+  // The variation difficulty multiplier applied to this set (note model × level ×
+  // per-set), shown when it isn't a plain ×1 so you can see it here too.
+  const scaleVal = scaleForRecord(s);
+  const scaleTag = Math.abs(scaleVal - 1) > 1e-6
+    ? `<span class="set-scale" title="Variation difficulty multiplier — rescales this set's effort 1RM. Set it in More info → Note variations.">×${Math.round(scaleVal * 100) / 100}</span>`
+    : "";
   // Effort tag from RIR (logged, else predicted): hard / mid / warm-up. Big leg
   // lifts get a wider "mid" band (see effortClass).
   const eff = setEffortClass(s, predRir);
@@ -4581,7 +4587,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const main =
     `<tr class="set-main${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
     `title="Tap to edit this set (weight, reps, bodyweight, scale)">` +
-    `<td class="num wcell">${effTag}${preview}${lvlTag}${wr(s.weight, s.reps)}</td>` +
+    `<td class="num wcell">${effTag}${preview}${lvlTag}${scaleTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
