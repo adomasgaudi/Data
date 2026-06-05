@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
+import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, naturalPotential, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -197,6 +197,30 @@ describe("bodyMassRanges (lean / fat kg bands)", () => {
     }
     // most fat (high95) ⇒ least lean (lo95)
     expect(m.lean.lo95).toBeCloseTo(100 * (1 - defaultBodyFatDist(0.2).high95), 6);
+  });
+});
+
+describe("naturalPotential (lifetime natural ceiling + ideal sport weights)", () => {
+  it("puts the lean cap at the nFFMI ceiling for the height (1.8 m ⇒ nFFMI·3.24)", () => {
+    const p = naturalPotential(180, "m")!;
+    expect(p.leanLimit.avg).toBeCloseTo(25 * 1.8 * 1.8, 4); // 81 kg
+    expect(p.ceilingNffmi).toBe(25);
+  });
+  it("ideal weights = lean cap at sport body fat; power (more fat) is heavier than calisthenics", () => {
+    const p = naturalPotential(180, "m")!;
+    expect(p.idealCalisthenics.avg).toBeCloseTo(p.leanLimit.avg / (1 - 0.08), 4);
+    expect(p.idealPower.avg).toBeCloseTo(p.leanLimit.avg / (1 - 0.14), 4);
+    expect(p.idealPower.avg).toBeGreaterThan(p.idealCalisthenics.avg);
+    expect(p.idealCalisthenics.avg).toBeGreaterThan(p.leanLimit.avg);
+  });
+  it("women get a lower ceiling than men at the same height", () => {
+    expect(naturalPotential(180, "f")!.leanLimit.avg).toBeLessThan(naturalPotential(180, "m")!.leanLimit.avg);
+  });
+  it("returns ascending bands and null on bad height", () => {
+    const p = naturalPotential(175, "m")!;
+    expect(p.leanLimit.lo95).toBeLessThan(p.leanLimit.avg);
+    expect(p.leanLimit.avg).toBeLessThan(p.leanLimit.hi95);
+    expect(naturalPotential(0, "m")).toBeNull();
   });
 });
 

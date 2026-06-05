@@ -72,6 +72,7 @@ import {
   normalizeBodyFatDist,
   nffmiRange,
   bodyMassRanges,
+  naturalPotential,
   defaultBwCoeff,
   realPullupWeight,
   exerciseCategory,
@@ -2042,7 +2043,18 @@ function renderAthleteProfile() {
     bcRow("Lean", mass.lean, " kg") +
     bcRow("Fat", mass.fat, " kg") +
     `</div>`;
-  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn + bodyComp;
+  // Likely lifetime NATURAL potential: the drug-free lean ceiling at this height,
+  // and the ideal bodyweight to carry it at each sport's typical body fat.
+  const pot = p.sex ? naturalPotential(p.height, p.sex) : null;
+  const potBlock = pot
+    ? `<div class="bodycomp bodycomp-pot">` +
+      `<div class="bc-head muted" title="Likely lifetime natural ceiling at nFFMI ≈ ${pot.ceilingNffmi} for ${p.sex === "f" ? "women" : "men"} (Kouri et al.), at this height. Ideal weights put that lean ceiling at a sport-typical body fat: calisthenics ${Math.round(pot.caliBf * 100)}%, power/weightlifting ${Math.round(pot.powerBf * 100)}%. Estimates — genetics & frame vary.">Natural potential (est.)</div>` +
+      bcRow("Lean cap", pot.leanLimit, " kg") +
+      bcRow("Cali wt", pot.idealCalisthenics, " kg") +
+      bcRow("Power wt", pot.idealPower, " kg") +
+      `</div>`
+    : "";
+  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn + bodyComp + potBlock;
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).

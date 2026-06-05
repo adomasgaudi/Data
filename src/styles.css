@@ -564,6 +564,8 @@ main { padding-bottom: 8.5rem; }
 .bc-bar-50 { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: 0.45; }
 .bc-bar-avg { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--accent); transform: translateX(-1px); }
 .bc-val { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.bodycomp-pot { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
+.bc-head { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; cursor: help; }
 .profile-edit {
   font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted);
   background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 0.4rem;
