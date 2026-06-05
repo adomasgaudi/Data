@@ -7354,8 +7354,10 @@ function renderWorkoutAnalysis(): void {
     combinedWith = [];
     waListExerciseFilter = expandToRawExercises(waSelected);
     setAnalysisMainPanel("workouts");
+    // The fold summary IS the title now (the inner panel title is hidden in
+    // Analysis), so it carries the athlete + scope — no redundant second line.
     if (contentTitle)
-      contentTitle.textContent = mode === "single" ? `Workout history — ${waSelected[0]}` : "Workout history — selected lifts";
+      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${waSelected[0]}` : `${athleteLabel()} — selected lifts`;
     stats?.setAttribute("hidden", "");
     workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
@@ -7364,7 +7366,7 @@ function renderWorkoutAnalysis(): void {
     // All (nothing selected): the live Workouts panel — its history list.
     waListExerciseFilter = [];
     setAnalysisMainPanel("workouts");
-    if (contentTitle) contentTitle.textContent = "Workout history";
+    if (contentTitle) contentTitle.textContent = `${athleteLabel()} — workouts`;
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     renderWorkoutSetsChart();

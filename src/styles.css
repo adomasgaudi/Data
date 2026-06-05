@@ -2069,6 +2069,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* The "sets behind the graph" table is redundant in analysis — the workout
    history section already shows the same data in a richer format. */
 #waWorkoutsHost #compareSets { display: none; }
+/* The workouts panel's own "<athlete> — workouts (N sessions…)" heading is
+   redundant in Analysis — the section's dropdown title already says it. */
+#waWorkoutsHost #workoutsTitle { display: none; }
 /* GRAPH-2: the universal #waGraph is the ONLY trend chart in Analysis. The three
    legacy charts that ride in on the relocated panels are hidden WHILE inside the
    host (descendant selector → they reappear automatically once a panel is
