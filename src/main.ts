@@ -2629,7 +2629,7 @@ function renderCompareSets(picks: string[], username: string, recs: SetRecord[],
         `<tr><td class="muted">${shortDate(r.date)}</td>` +
         `<td><span class="cmp-setdot" style="background:${r.color}"></span>${escapeHtml(r.name)}</td>` +
         `<td class="num">${fmt(r.added)}×${r.reps}</td>` +
-        `<td class="num">${r.e1rm === null ? "—" : fmt(r.e1rm)}</td></tr>`,
+        `<td class="num">${r.e1rm === null ? "—" : `${fmt(r.e1rm)}<sup class="onerm-sup">1</sup>`}</td></tr>`,
     )
     .join("");
   els.compareSets.innerHTML =
@@ -3086,7 +3086,7 @@ function renderExerciseTopSets(exName: string) {
       const added = x.s.origWeight !== undefined ? x.s.origWeight : x.s.weight;
       return (
         `<tr><td>${wr(added, x.s.reps)}</td>` +
-        `<td class="num">${fmt(x.e1rm)}</td>` +
+        `<td class="num">${fmt(x.e1rm)}<sup class="onerm-sup">1</sup></td>` +
         `<td class="num muted">${x.s.date ? shortDate(x.s.date) : "—"}</td></tr>`
       );
     })
@@ -4395,10 +4395,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       `<button type="button" class="set-note" title="${escapeHtml(note)}">` +
       `${escapeHtml(short)}<span class="set-note-cue">›</span></button>`;
   }
+  // The 1RM is, by definition, a weight done for ONE rep — so show it as
+  // value¹ (matching the weight column's weight^reps), making that explicit.
   const e1rmCell =
     e1rm === null
       ? "—"
-      : `<button type="button" class="e1rm-btn" title="Show the 1RM formula">${fmt(e1rm)}</button>`;
+      : `<button type="button" class="e1rm-btn" title="Estimated 1RM — the weight you could do for 1 rep. Tap for the formula.">${fmt(e1rm)}<sup class="onerm-sup">1</sup></button>`;
   const sid = setId(s);
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.

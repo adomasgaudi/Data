@@ -1636,6 +1636,9 @@ sup.wr-bw { font-size: 0.85em; }
   color: inherit; border-bottom: 1px dotted var(--muted);
 }
 .e1rm-btn:hover, .e1rm-btn.is-open { color: var(--accent); border-bottom-color: var(--accent); }
+/* 1RM = a weight done for 1 rep, shown as value¹ (like the weight column's
+   weight^reps). The "1" is a muted superscript so the number still reads first. */
+.onerm-sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
 .e1rm-formula-row td { font-size: 0.82em; line-height: 1.4; padding: 4px 9px; }
 .set-note-cue {
   flex: none; font-size: 0.95em; transition: transform 0.15s ease;
