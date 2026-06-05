@@ -3511,6 +3511,7 @@ function renderExerciseProgressChart(exName: string) {
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
@@ -4250,6 +4251,7 @@ function renderWorkoutsPage() {
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
@@ -4571,9 +4573,14 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // The variation difficulty multiplier applied to this set (note model × level ×
   // per-set), shown when it isn't a plain ×1 so you can see it here too.
   const scaleVal = scaleForRecord(s);
-  const scaleTag = Math.abs(scaleVal - 1) > 1e-6
-    ? `<span class="set-scale" title="Variation difficulty multiplier — rescales this set's effort 1RM. Set it in More info → Note variations.">×${Math.round(scaleVal * 100) / 100}</span>`
-    : "";
+  const scaleNum = Math.round(scaleVal * 100) / 100;
+  const scaleNote = (s.notes ?? "").trim();
+  const scaleTag = scaleNote
+    ? // A noted set → an editable chip that opens the floating modifier editor.
+      `<button type="button" class="set-scale is-editable" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(scaleNote)}" title="Tap to edit this note's difficulty modifiers">×${scaleNum} ▾</button>`
+    : Math.abs(scaleVal - 1) > 1e-6
+      ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
+      : "";
   // Effort tag from RIR (logged, else predicted): hard / mid / warm-up. Big leg
   // lifts get a wider "mid" band (see effortClass).
   const eff = setEffortClass(s, predRir);
@@ -4691,6 +4698,57 @@ function toggleSetNote(target: HTMLElement): boolean {
     const hidden = noteRow.toggleAttribute("hidden");
     row.classList.toggle("is-open", !hidden);
   }
+  return true;
+}
+
+// ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
+let scaleEditState: { ex: string; note: string } | null = null;
+function renderScaleEditor(): void {
+  const pop = document.getElementById("scaleEditPop");
+  if (!pop || !scaleEditState) return;
+  pop.innerHTML =
+    `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(scaleEditState.note)}</span>` +
+    `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
+    notePickerHtml(scaleEditState.ex, scaleEditState.note);
+}
+function positionScaleEditor(anchor: HTMLElement): void {
+  const pop = document.getElementById("scaleEditPop");
+  if (!pop) return;
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth - 16, 360);
+  pop.style.width = `${w}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
+  // Below the chip, but flip above if it would run off the bottom.
+  const top = r.bottom + 6;
+  pop.style.top = `${Math.min(top, window.innerHeight - 40)}px`;
+}
+function openScaleEditor(ex: string, note: string, anchor: HTMLElement): void {
+  scaleEditState = { ex, note };
+  let pop = document.getElementById("scaleEditPop");
+  if (!pop) {
+    pop = document.createElement("div");
+    pop.id = "scaleEditPop";
+    pop.className = "scale-edit-pop";
+    document.body.appendChild(pop);
+  }
+  renderScaleEditor();
+  pop.hidden = false;
+  positionScaleEditor(anchor);
+}
+function closeScaleEditor(): void {
+  scaleEditState = null;
+  const pop = document.getElementById("scaleEditPop");
+  if (pop) pop.hidden = true;
+}
+/** Click on a set row's editable ×chip: open/close the floating modifier editor
+ * for that note. Returns true if it handled the click (so the row doesn't edit). */
+function toggleScaleEditor(target: HTMLElement): boolean {
+  if (target.closest(".scale-edit-close")) { closeScaleEditor(); return true; }
+  const btn = target.closest<HTMLElement>(".set-scale.is-editable");
+  if (!btn?.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return false;
+  if (scaleEditState && scaleEditState.ex === btn.dataset.scaleeditEx && scaleEditState.note === btn.dataset.scaleeditNote)
+    closeScaleEditor();
+  else openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn);
   return true;
 }
 
@@ -5378,6 +5436,39 @@ function exerciseEditHtml(name: string): string {
   );
 }
 
+/** The modifier picker for one note: a row of clickable level chips per dimension
+ * (model lifts) that multiply to a final ×, or a single × number input (no model).
+ * Reused by the More-info editor AND the floating set-row editor, so the same
+ * `.ex-var-lvl` / `.ex-var-input` handlers drive both. */
+function notePickerHtml(name: string, note: string): string {
+  const fam = familyOf(name);
+  if (!fam) {
+    const scale = variationScaleFor(name, note);
+    return (
+      `<div class="ex-var-picker"><label class="ex-var-lbl">× ` +
+      `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(note)}" aria-label="Difficulty for ${escapeHtml(note)}" /></label></div>`
+    );
+  }
+  const override = noteVecOverride(name, note);
+  const effVec = { ...resolveNote(fam, note).vec, ...override };
+  const scale = scalarFromVec(fam, effVec);
+  const dims = Object.keys(FAMILIES[fam]!.dims)
+    .map((dim) => {
+      const levels = FAMILIES[fam]!.dims[dim]!;
+      const cur = effVec[dim];
+      const picked = override[dim] !== undefined;
+      const chips = Object.keys(levels)
+        .map(
+          (l) =>
+            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`,
+        )
+        .join("");
+      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
+    })
+    .join("");
+  return `<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div></div>`;
+}
+
 /** The note-variation difficulty editor: every distinct note logged for this lift,
  * each with an editable relative difficulty (×1 = no effect). Notes that look like
  * a difficulty-changing variation but haven't been reviewed get a ⚠ flag. */
@@ -5411,8 +5502,6 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       const handled = reviewed || notCmp;
       const scale = variationScaleFor(name, e.display);
       const resolved = fam ? resolveNote(fam, e.display) : null;
-      const override = fam ? noteVecOverride(name, e.display) : {};
-      const effVec = resolved ? { ...resolved.vec, ...override } : {};
       // Flags: real resolver flags (unreviewed fragments / conflicting tokens) for
       // model lifts; the keyword heuristic only for lifts without a model.
       const realFlags = (resolved?.flags ?? []).filter((f) => f.type === "unreviewed" || f.type === "conflict");
@@ -5433,30 +5522,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark these sets not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘ ${notCmp ? "not comparable" : "not comparable?"}</button>`;
       // Model lift → a row of dimension dropdowns (pick the setup); the × is the
       // resulting product, read-only. No model → the plain × number input.
-      const picker =
-        fam && !notCmp
-          ? `<div class="ex-var-picker">` +
-            Object.keys(FAMILIES[fam]!.dims)
-              .map((dim) => {
-                const levels = FAMILIES[fam]!.dims[dim]!;
-                const cur = effVec[dim];
-                const picked = override[dim] !== undefined;
-                // Each level is a CLICKABLE chip; the chosen one is highlighted.
-                const chips = Object.keys(levels)
-                  .map(
-                    (l) =>
-                      `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(e.display)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`,
-                  )
-                  .join("");
-                return (
-                  `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span>` +
-                  `<div class="ex-var-dim-chips">${chips}</div></div>`
-                );
-              })
-              .join("") +
-            `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
-            `</div>`
-          : "";
+      const picker = fam && !notCmp ? notePickerHtml(name, e.display) : "";
       const editArea = notCmp
         ? `<span class="ex-var-edit">${ncBtn}</span>`
         : fam
@@ -6032,6 +6098,11 @@ async function init() {
     if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
     refreshExerciseInfo();
     renderAll();
+    requestAnimationFrame(renderScaleEditor); // keep the floating editor in sync + open
+  });
+  // Close button on the floating modifier editor.
+  document.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".scale-edit-close")) closeScaleEditor();
   });
   // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
   document.addEventListener("click", (e) => {
@@ -6040,6 +6111,7 @@ async function init() {
     setNoteVecDim(lvl.dataset.vecdimEx, lvl.dataset.vecdimNote, lvl.dataset.vecdimDim, lvl.dataset.vecdimLevel);
     refreshExerciseInfo();
     renderAll();
+    requestAnimationFrame(renderScaleEditor); // re-render the floating editor (deferred so it stays open)
   });
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
@@ -6201,6 +6273,10 @@ async function init() {
       }
     // Same for any open per-set RIR dropdown.
     if (!(e.target as HTMLElement).closest(".xdd-rpe.open")) closeAllRpeMenus();
+    // Close the floating modifier editor when clicking outside it (but not when
+    // clicking the chip that toggles it, which is handled in the set-row handler).
+    const t = e.target as HTMLElement;
+    if (scaleEditState && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
   });
   // "Center on data" snaps the drill-in chart's pan/zoom back to the data fit.
   els.exerciseProgressCenter.addEventListener("click", () => {
