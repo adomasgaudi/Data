@@ -1229,6 +1229,18 @@ function openExerciseInfo(name: string): void {
 function refreshExerciseInfo(): void {
   if (exInfoName && !els.exInfoPage.hidden) els.exInfo.innerHTML = exerciseInfoHtml(exInfoName);
 }
+/** From a note's "who & when" entry: switch to that athlete, open the Analysis
+ * view for this lift (single mode), and scroll to that date in the history. */
+function gotoNoteSet(username: string, exName: string, date: string): void {
+  els.exInfoPage.hidden = true; // close the overlay if it's open
+  exInfoName = null;
+  if (els.athlete.value !== username) {
+    els.athlete.value = username;
+    renderAthlete(); // rebuilds athleteWorkouts for the new athlete
+  }
+  openWorkoutAnalysis({ exercises: [exName] }); // single mode → workout history for this lift
+  requestAnimationFrame(() => jumpToWorkoutDate(date)); // opens the fold + scrolls to the day
+}
 
 /** Render the version-history list (newest first) into the overlay. Each release
  * is an expandable row: version + SP + one-line note collapsed; bullet details
@@ -4820,7 +4832,8 @@ function renderBwParts() {
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
   const rowHtml = (r: IndexRow, hidden: boolean) =>
     `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
-    `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}</td>` +
+    `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}` +
+    ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button></td>` +
     `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
     `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
     `<td class="num">${r.count.toLocaleString()}</td></tr>`;
@@ -5200,14 +5213,19 @@ function exerciseInfoHtml(name: string): string {
  * each with an editable relative difficulty (×1 = no effect). Notes that look like
  * a difficulty-changing variation but haven't been reviewed get a ⚠ flag. */
 function variationsEditorHtml(name: string, recs: SetRecord[]): string {
-  const byNote = new Map<string, { display: string; count: number }>();
+  type Sess = { username: string; user: string; date: string };
+  const byNote = new Map<string, { display: string; count: number; sessions: Map<string, Sess> }>();
   for (const r of recs) {
     const note = (r.notes ?? "").trim();
     if (!note) continue;
     const k = normNote(note);
-    const e = byNote.get(k) ?? { display: note, count: 0 };
+    let e = byNote.get(k);
+    if (!e) { e = { display: note, count: 0, sessions: new Map() }; byNote.set(k, e); }
     e.count++;
-    byNote.set(k, e);
+    if (r.date) {
+      const sk = `${r.username}|${r.date}`;
+      if (!e.sessions.has(sk)) e.sessions.set(sk, { username: r.username, user: r.user || r.username, date: r.date });
+    }
   }
   if (byNote.size === 0)
     return (
@@ -5227,13 +5245,26 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       const reset = reviewed
         ? `<button type="button" class="ex-var-reset" data-varreset-ex="${escapeHtml(name)}" data-varreset-note="${escapeHtml(e.display)}" title="Reset to ×1 (mark un-reviewed)">↺</button>`
         : "";
+      // Who & when: every (athlete, day) that logged this note — tap one to jump
+      // to that athlete's Analysis for this lift, scrolled to that date.
+      const sessions = [...e.sessions.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      const sessBtns = sessions
+        .map(
+          (s) =>
+            `<button type="button" class="ex-var-jump" data-jumpuser="${escapeHtml(s.username)}" data-jumpex="${escapeHtml(name)}" data-jumpdate="${escapeHtml(s.date)}" title="Go to ${escapeHtml(s.user)}'s ${escapeHtml(name)} on ${escapeHtml(shortDate(s.date))}">${escapeHtml(s.user)} · ${escapeHtml(shortDate(s.date))}</button>`,
+        )
+        .join("");
+      const sessFold = `<details class="ex-var-sessions"${flag ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
       return (
-        `<div class="ex-var-row${flag ? " needs-review" : ""}${scale !== 1 ? " is-scaled" : ""}">` +
+        `<div class="ex-var-block${flag ? " needs-review" : ""}${scale !== 1 ? " is-scaled" : ""}">` +
+        `<div class="ex-var-row">` +
         `<span class="ex-var-note">${escapeHtml(e.display)} ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
         `<span class="ex-var-edit"><label class="ex-var-lbl">×</label>` +
         `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(e.display)}" aria-label="Relative difficulty for note ${escapeHtml(e.display)}" />` +
         reset +
-        `</span></div>`
+        `</span></div>` +
+        sessFold +
+        `</div>`
       );
     })
     .join("");
@@ -5787,6 +5818,13 @@ async function init() {
     clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
     refreshExerciseInfo();
     renderAll();
+  });
+  // A "who & when" entry under a note: jump to that athlete's Analysis for this
+  // lift, scrolled to the date where the note was logged.
+  document.addEventListener("click", (e) => {
+    const j = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-jump");
+    if (j?.dataset.jumpuser && j.dataset.jumpex && j.dataset.jumpdate)
+      gotoNoteSet(j.dataset.jumpuser, j.dataset.jumpex, j.dataset.jumpdate);
   });
 
   els.formula.addEventListener("change", renderAll);
