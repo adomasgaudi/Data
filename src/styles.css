@@ -1193,6 +1193,21 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-cell.hm-alone.is-today { box-shadow: 0 0 0 2px var(--gold), inset 0 0 0 2px #e23b3b; }
 .hm-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 3px; font-size: 0.72rem; margin-top: 0.2rem; }
 .hm-legend .hm-cell { width: 12px; height: 12px; cursor: default; }
+/* Interactive under-calendar slicer: Group-by picker + "All" + a clickable
+   colour pill per group. Tap a pill to show only that group. */
+.hm-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.4rem; }
+.hm-groupby { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); margin-right: 0.2rem; }
+.hm-groupby-sel { font: inherit; font-size: 0.78rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
+.hm-pill {
+  display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer;
+  font: inherit; font-size: 0.76rem; font-weight: 600; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
+}
+.hm-pill-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pc, #888); flex: none; }
+.hm-pill.is-on { border-color: var(--pc, var(--accent)); background: var(--pc, var(--accent-soft)); color: #fff; }
+.hm-pill.is-on .hm-pill-dot { background: rgba(255, 255, 255, 0.85); }
+.hm-pill-all.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.hm-pill-hint { font-size: 0.72rem; }
 .cal-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
 .cal-head strong { font-size: 0.95rem; min-width: 9.5rem; text-align: center; }
 .cal-nav {
