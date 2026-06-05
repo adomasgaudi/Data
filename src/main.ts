@@ -5434,15 +5434,20 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
                 const levels = FAMILIES[fam]!.dims[dim]!;
                 const cur = effVec[dim];
                 const picked = override[dim] !== undefined;
-                const opts = Object.keys(levels)
-                  .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(l)} ×${levels[l]}</option>`)
+                // Each level is a CLICKABLE chip; the chosen one is highlighted.
+                const chips = Object.keys(levels)
+                  .map(
+                    (l) =>
+                      `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(e.display)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`,
+                  )
                   .join("");
                 return (
-                  `<label class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span>` +
-                  `<select class="ex-var-dim-sel" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(e.display)}" data-vecdim-dim="${escapeHtml(dim)}">${opts}</select></label>`
+                  `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span>` +
+                  `<div class="ex-var-dim-chips">${chips}</div></div>`
                 );
               })
               .join("") +
+            `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
             `</div>`
           : "";
       const editArea = notCmp
@@ -6021,11 +6026,11 @@ async function init() {
     refreshExerciseInfo();
     renderAll();
   });
-  // Per-note ATTRIBUTE picker (model lifts): pick a dimension's level (DM3).
-  document.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-var-dim-sel");
-    if (!sel?.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.vecdimDim) return;
-    setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.vecdimDim, sel.value);
+  // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
+  document.addEventListener("click", (e) => {
+    const lvl = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-lvl");
+    if (!lvl?.dataset.vecdimEx || lvl.dataset.vecdimNote === undefined || !lvl.dataset.vecdimDim || lvl.dataset.vecdimLevel === undefined) return;
+    setNoteVecDim(lvl.dataset.vecdimEx, lvl.dataset.vecdimNote, lvl.dataset.vecdimDim, lvl.dataset.vecdimLevel);
     refreshExerciseInfo();
     renderAll();
   });
