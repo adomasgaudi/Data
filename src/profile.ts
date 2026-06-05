@@ -127,6 +127,23 @@ export function nffmiRange(weight: number, height: number, dist: BodyFatDist): N
   return { avg: a.nffmi, lo50: lo50.nffmi, hi50: hi50.nffmi, lo95: lo95.nffmi, hi95: hi95.nffmi, leanAvg: a.leanMass };
 }
 
+export interface MassRange { avg: number; lo50: number; hi50: number; lo95: number; hi95: number; }
+export interface BodyMass { lean: MassRange; fat: MassRange; }
+/**
+ * Lean mass and fat mass (kg) as RANGES, propagating the body-fat band's
+ * uncertainty. fat = weight × bf, lean = weight × (1 − bf). Fat rises with body
+ * fat; lean falls — so lean's band is flipped (the high-fat end gives the least
+ * lean mass) and both are returned already ascending (lo ≤ avg ≤ hi).
+ */
+export function bodyMassRanges(weight: number, dist: BodyFatDist): BodyMass {
+  const fat = (bf: number) => weight * bf;
+  const lean = (bf: number) => weight * (1 - bf);
+  return {
+    fat: { avg: fat(dist.avg), lo50: fat(dist.low50), hi50: fat(dist.high50), lo95: fat(dist.low95), hi95: fat(dist.high95) },
+    lean: { avg: lean(dist.avg), lo50: lean(dist.high50), hi50: lean(dist.low50), lo95: lean(dist.high95), hi95: lean(dist.low95) },
+  };
+}
+
 
 /** Fraction of bodyweight a movement lifts. Exact match on the data's exercise name. */
 export const EXERCISE_BW_COEFF: Record<string, number> = {

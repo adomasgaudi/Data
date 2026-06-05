@@ -71,6 +71,7 @@ import {
   defaultBodyFatDist,
   normalizeBodyFatDist,
   nffmiRange,
+  bodyMassRanges,
   defaultBwCoeff,
   realPullupWeight,
   exerciseCategory,
@@ -1946,6 +1947,29 @@ function renderAthlete() {
 }
 
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
+/** A tiny inline range bar: a light 95% track, a darker 50% band, and a marker at
+ * the estimate — a one-glance "predicted ± 50 / 95" picture (like the nFFMI ±). */
+function miniRangeBar(r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, title: string): string {
+  const span = (r.hi95 - r.lo95) || 1;
+  const pos = (v: number) => Math.max(0, Math.min(100, ((v - r.lo95) / span) * 100));
+  return (
+    `<span class="bc-bar" title="${escapeHtml(title)}">` +
+    `<span class="bc-bar-50" style="left:${pos(r.lo50).toFixed(1)}%;right:${(100 - pos(r.hi50)).toFixed(1)}%"></span>` +
+    `<span class="bc-bar-avg" style="left:${pos(r.avg).toFixed(1)}%"></span>` +
+    `</span>`
+  );
+}
+/** One body-composition row: label · range bar · value ± (95% half-width). */
+function bcRow(label: string, r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, unit: string): string {
+  const ci = (r.hi95 - r.lo95) / 2;
+  const f = (n: number) => (Math.round(n * 10) / 10).toString();
+  const title = `est ${f(r.avg)}${unit} · 50% ${f(r.lo50)}–${f(r.hi50)} · 95% ${f(r.lo95)}–${f(r.hi95)}`;
+  return (
+    `<div class="bc-row"><span class="bc-lbl">${escapeHtml(label)}</span>` +
+    miniRangeBar(r, title) +
+    `<span class="bc-val">${f(r.avg)}${unit}${ci >= 0.05 ? ` <span class="muted">±${f(ci)}</span>` : ""}</span></div>`
+  );
+}
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
  * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
@@ -1978,7 +2002,17 @@ function renderAthleteProfile() {
     `<span class="nffmi-lbl">nFFMI</span>` +
     (ci >= 0.05 ? `<span class="nffmi-ci">±${ci.toFixed(1)}</span>` : "") +
     `</span>`;
-  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn;
+  // Body-composition ranges derived from the body-fat band: lean mass and fat
+  // mass (kg), each as a predicted value ± with a little 50/95 range bar — the
+  // same uncertainty the nFFMI carries, made visual.
+  const mass = bodyMassRanges(p.weight, dist);
+  const bodyComp =
+    `<div class="bodycomp">` +
+    bcRow("nFFMI", range, "") +
+    bcRow("Lean", mass.lean, " kg") +
+    bcRow("Fat", mass.fat, " kg") +
+    `</div>`;
+  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn + bodyComp;
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).

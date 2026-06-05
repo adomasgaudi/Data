@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
+import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -174,6 +174,29 @@ describe("body-fat distribution + nFFMI range", () => {
   });
   it("returns null on impossible inputs", () => {
     expect(nffmiRange(0, 180, defaultBodyFatDist(0.2))).toBeNull();
+  });
+});
+
+describe("bodyMassRanges (lean / fat kg bands)", () => {
+  it("splits weight into lean + fat that sum to bodyweight at every band point", () => {
+    const m = bodyMassRanges(100, defaultBodyFatDist(0.2));
+    expect(m.fat.avg).toBeCloseTo(20, 6); // 100 × 20%
+    expect(m.lean.avg).toBeCloseTo(80, 6); // 100 × 80%
+    // lean + fat = bodyweight at each matching end
+    expect(m.lean.avg + m.fat.avg).toBeCloseTo(100, 6);
+    expect(m.lean.lo95 + m.fat.hi95).toBeCloseTo(100, 6);
+    expect(m.lean.hi95 + m.fat.lo95).toBeCloseTo(100, 6);
+  });
+  it("returns both bands ASCENDING (lean falls as fat rises)", () => {
+    const m = bodyMassRanges(100, defaultBodyFatDist(0.2));
+    for (const r of [m.lean, m.fat]) {
+      expect(r.lo95).toBeLessThan(r.lo50);
+      expect(r.lo50).toBeLessThan(r.avg);
+      expect(r.avg).toBeLessThan(r.hi50);
+      expect(r.hi50).toBeLessThan(r.hi95);
+    }
+    // most fat (high95) ⇒ least lean (lo95)
+    expect(m.lean.lo95).toBeCloseTo(100 * (1 - defaultBodyFatDist(0.2).high95), 6);
   });
 });
 
