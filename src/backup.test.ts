@@ -148,6 +148,13 @@ describe("mergeStoredValue (deep)", () => {
     expect(mergeStoredValue('"light"', '"dark"')).toBe('"dark"');
     expect(mergeStoredValue("not json", '{"a":1}')).toBe('{"a":1}');
   });
+  it("nested maps merge leaf-by-leaf (famFactors-style)", () => {
+    const device = JSON.stringify({ HSPU: { rom: { "+5cm": 0.9 }, lean: { "3cm": 1.1 } } });
+    const backup = JSON.stringify({ HSPU: { rom: { "+5cm": 0.8, "+10cm": 0.7 } } });
+    expect(JSON.parse(mergeStoredValue(device, backup))).toEqual({
+      HSPU: { rom: { "+5cm": 0.8, "+10cm": 0.7 }, lean: { "3cm": 1.1 } }, // backup's rom wins, device's lean kept
+    });
+  });
 });
 
 describe("applyBackup deep", () => {

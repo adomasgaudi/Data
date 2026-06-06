@@ -130,18 +130,25 @@ export interface RestoreResult {
  *  - string/number arrays → union (keep both sides' items)
  *  - anything else (scalars, object arrays, parse failures) → incoming wins
  */
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const isPrimArray = (a: unknown[]) => a.every((x) => typeof x === "string" || typeof x === "number");
+/** Recursively merge two parsed values: nested object maps merge LEAF-by-leaf
+ * (incoming wins a conflict, existing-only branches kept), primitive arrays union,
+ * everything else takes the incoming value. */
+function deepMergeValue(e: unknown, i: unknown): unknown {
+  if (Array.isArray(e) && Array.isArray(i)) return isPrimArray(e) && isPrimArray(i) ? [...new Set([...e, ...i])] : i;
+  if (isObj(e) && isObj(i)) {
+    const out: Record<string, unknown> = { ...e };
+    for (const k of Object.keys(i)) out[k] = k in e ? deepMergeValue(e[k], i[k]) : i[k];
+    return out;
+  }
+  return i;
+}
 export function mergeStoredValue(existingRaw: string, incomingRaw: string): string {
   let e: unknown, i: unknown;
   try { e = JSON.parse(existingRaw); } catch { return incomingRaw; }
   try { i = JSON.parse(incomingRaw); } catch { return incomingRaw; }
-  if (Array.isArray(e) && Array.isArray(i)) {
-    const prim = (a: unknown[]) => a.every((x) => typeof x === "string" || typeof x === "number");
-    if (prim(e) && prim(i)) return JSON.stringify([...new Set([...e, ...i])]);
-    return incomingRaw; // arrays of objects → take the backup's
-  }
-  const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
-  if (obj(e) && obj(i)) return JSON.stringify({ ...e, ...i }); // incoming wins per entry; existing-only kept
-  return incomingRaw;
+  return JSON.stringify(deepMergeValue(e, i));
 }
 
 /**
