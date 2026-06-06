@@ -4379,7 +4379,13 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
  * bodyweight/placeholder load (0 or 1 — StrengthLevel sometimes forbids 0) that
  * carries a note shows the NOTE as the base (it's really the difficulty/variation)
  * with the reps as a superscript. */
-function setDisplay(s: SetRecord): string {
+function setDisplay(raw: SetRecord): string {
+  // Apply the on-device per-set edits (note text, weight, reps…) FIRST, so the
+  // compact line resolves the SAME effective note — and therefore the same
+  // ×multiplier — as the expanded set rows (setRowsHtml, which also does this).
+  // Without it, editing a set's note (or that note's difficulty) updated the
+  // expanded chip but left the collapsed compact line on the old, raw-note value.
+  const s = applySetOverride(raw);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
   // A "not comparable" note (e.g. a static hold) has no meaningful multiplier —
