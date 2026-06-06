@@ -2765,15 +2765,22 @@ function miniRangeBar(r: { lo95: number; lo50: number; avg: number; hi50: number
     `</span>`
   );
 }
-/** One body-composition row: label · range bar · value ± (95% half-width). */
+/** One body-composition row: label · range bar · value with BOTH margins (the
+ * 50% and the 95% half-widths), so each derived value reads with its tighter and
+ * wider uncertainty at once — matching the dark (50%) / light (95%) range bar. */
 function bcRow(label: string, r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, unit: string): string {
-  const ci = (r.hi95 - r.lo95) / 2;
+  const ci95 = (r.hi95 - r.lo95) / 2;
+  const ci50 = (r.hi50 - r.lo50) / 2;
   const f = (n: number) => (Math.round(n * 10) / 10).toString();
   const title = `est ${f(r.avg)}${unit} · 50% ${f(r.lo50)}–${f(r.hi50)} · 95% ${f(r.lo95)}–${f(r.hi95)}`;
+  const ciTxt =
+    ci95 >= 0.05
+      ? ` <span class="muted bc-ci">±${f(ci50)}<sup>50</sup> ±${f(ci95)}<sup>95</sup></span>`
+      : "";
   return (
     `<div class="bc-row"><span class="bc-lbl">${escapeHtml(label)}</span>` +
     miniRangeBar(r, title) +
-    `<span class="bc-val">${f(r.avg)}${unit}${ci >= 0.05 ? ` <span class="muted">±${f(ci)}</span>` : ""}</span></div>`
+    `<span class="bc-val">${f(r.avg)}${unit}${ciTxt}</span></div>`
   );
 }
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
@@ -2786,11 +2793,11 @@ function renderAthleteProfile() {
     els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
-  // Body fat is a band, not a point — show its average with the 95% spread, so
-  // any value derived from it reads with its uncertainty.
+  // Body fat is a band, not a point. It no longer sits on the spec line — it's
+  // shown as its own row in the derived-values list below (with the same 50/95 ±
+  // margins as nFFMI / lean / fat), so all the uncertain values read together.
   const dist = bfDistFor(username);
-  const bfLine = `${pct(dist.avg)} body fat <span class="muted">(95% ${pct(dist.low95)}–${pct(dist.high95)})</span>`;
-  const specs = [`${p.weight} kg`, `${p.height} cm`, bfLine];
+  const specs = [`${p.weight} kg`, `${p.height} cm`];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
 
@@ -2799,24 +2806,33 @@ function renderAthleteProfile() {
     els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  // nFFMI = lean-mass index normalised to 1.8 m, shown with the ± error margin
-  // the body-fat band implies (half the 95% width).
-  const ci = (range.hi95 - range.lo95) / 2;
+  // nFFMI = lean-mass index normalised to 1.8 m, shown with BOTH error margins
+  // the body-fat band implies (half the 50% and half the 95% width).
+  const ci95 = (range.hi95 - range.lo95) / 2;
+  const ci50 = (range.hi50 - range.lo50) / 2;
+  const f1 = (n: number) => n.toFixed(1);
   const badge =
-    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling. 95% band ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} from the body-fat uncertainty.">` +
+    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling. 50% band ${f1(range.lo50)}–${f1(range.hi50)}, 95% band ${f1(range.lo95)}–${f1(range.hi95)} from the body-fat uncertainty.">` +
     `<span class="nffmi-val">${range.avg.toFixed(1)}</span>` +
     `<span class="nffmi-lbl">nFFMI</span>` +
-    (ci >= 0.05 ? `<span class="nffmi-ci">±${ci.toFixed(1)}</span>` : "") +
+    (ci95 >= 0.05 ? `<span class="nffmi-ci">±${f1(ci50)}<sup>50</sup> ±${f1(ci95)}<sup>95</sup></span>` : "") +
     `</span>`;
   // Body-composition ranges derived from the body-fat band: lean mass and fat
   // mass (kg), each as a predicted value ± with a little 50/95 range bar — the
   // same uncertainty the nFFMI carries, made visual.
   const mass = bodyMassRanges(p.weight, dist);
+  // Body fat as a 0–100 % range (the dist is stored as fractions), so it slots
+  // into the same value ± row as the rest.
+  const bfPctRange = {
+    lo95: dist.low95 * 100, lo50: dist.low50 * 100, avg: dist.avg * 100,
+    hi50: dist.high50 * 100, hi95: dist.high95 * 100,
+  };
   const bodyComp =
     `<div class="bodycomp">` +
     bcRow("nFFMI", range, "") +
     bcRow("Lean", mass.lean, " kg") +
     bcRow("Fat", mass.fat, " kg") +
+    bcRow("Body fat", bfPctRange, "%") +
     `</div>`;
   // Likely lifetime NATURAL potential: the drug-free lean ceiling at this height,
   // and the ideal bodyweight to carry it at each sport's typical body fat.
