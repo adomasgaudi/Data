@@ -799,6 +799,12 @@ main { padding-bottom: 8.5rem; }
   background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
 }
 .set-edit-delete:hover { border-color: var(--bad, #c0392b); background: rgba(192, 57, 43, 0.08); }
+.set-edit-nc {
+  align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+}
+.set-edit-nc:hover { border-color: var(--muted); }
+.set-edit-nc.is-on { color: #fff; background: var(--muted); border-color: var(--muted); }
 .health-restore, .health-restore-all { font: inherit; font-size: 0.74rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
 .health-restore:hover, .health-restore-all:hover { border-color: var(--accent); }
 /* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight).

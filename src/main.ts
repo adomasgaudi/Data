@@ -942,16 +942,24 @@ const famFactorOverrides: Record<string, Record<string, Record<string, number>>>
 /** A family dimension's levels with any owner factor overrides layered on (base
  * key order preserved, so the pad axis stays consistent). */
 function famLevels(family: string, dim: string): Record<string, number> {
-  const base = FAMILIES[family]?.dims[dim] ?? {};
+  // Per-support lean tables ("lean:back_to_wall", …) default to the shared base
+  // lean, so they start from the same numbers until the owner tunes one.
+  let base = FAMILIES[family]?.dims[dim] ?? {};
+  if (Object.keys(base).length === 0 && dim.startsWith("lean:")) base = FAMILIES[family]?.dims["lean"] ?? {};
   const ov = famFactorOverrides[family]?.[dim];
   return ov ? { ...base, ...ov } : base;
+}
+/** Lean's effect depends on support (back- vs front-to-wall differ), so a
+ * "lean:<support>" override wins over the shared base lean. */
+function leanFactorFor(family: string, support: string, level: string): number {
+  return famLevels(family, `lean:${support}`)[level] ?? famLevels(family, "lean")[level] ?? 1;
 }
 function saveFamFactors(): void {
   try { localStorage.setItem(FAM_FACTORS_KEY, JSON.stringify(famFactorOverrides)); } catch { /* ignore */ }
 }
 /** Set or clear (value === default → clear) one model factor. */
 function setFamFactor(family: string, dim: string, level: string, value: number): void {
-  const def = FAMILIES[family]?.dims[dim]?.[level];
+  const def = FAMILIES[family]?.dims[dim]?.[level] ?? (dim.startsWith("lean:") ? FAMILIES[family]?.dims["lean"]?.[level] : undefined);
   const fam = (famFactorOverrides[family] ??= {});
   const d = (fam[dim] ??= {});
   if (def !== undefined && Math.abs(value - def) < 1e-9) {
@@ -973,9 +981,13 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     // The ladder grip / height only apply when the support is actually "ladder";
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
-    // Lean is a wall-relative thing — a FREE (freestanding) handstand has no wall
-    // to lean toward, so lean doesn't apply (treated as ×1).
-    if (dim === "lean" && (vec.support ?? "free") === "free") continue;
+    if (dim === "lean") {
+      // FREE has no wall to lean toward → no lean. Otherwise the factor is
+      // support-specific (back- vs front-to-wall can differ).
+      if ((vec.support ?? "free") === "free") continue;
+      s *= leanFactorFor(family, vec.support ?? "", vec.lean ?? "");
+      continue;
+    }
     const f = famLevels(family, dim)[vec[dim] ?? ""];
     if (typeof f === "number") s *= f;
   }
@@ -1233,6 +1245,20 @@ function setDeleted(id: string, on: boolean): void {
   if (on) deletedSets.add(id); else deletedSets.delete(id);
   saveDeletedSets();
 }
+
+// ---- Per-set "not comparable" ----. The variations editor marks a whole NOTE
+// not comparable; this marks ONE specific set (by id) — reachable right from the
+// in-workout set editor. Either path drops the set's 1RM & volume (reps/sets still
+// count). Saved on device + in the backup.
+const NC_SETS_KEY = "colosseum.notComparableSets.v1";
+const notComparableSets: Set<string> = (() => {
+  try { const a = JSON.parse(localStorage.getItem(NC_SETS_KEY) ?? "[]"); return new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []); }
+  catch { return new Set(); }
+})();
+function setSetNotComparable(id: string, on: boolean): void {
+  if (on) notComparableSets.add(id); else notComparableSets.delete(id);
+  try { localStorage.setItem(NC_SETS_KEY, JSON.stringify([...notComparableSets])); } catch { /* ignore */ }
+}
 function setRpe(id: string, v: string | null) {
   if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
   else rpeGrades[id] = v;
@@ -1377,7 +1403,9 @@ function computeRecord(r: SetRecord): SetRecord {
   // load by it — an easier variation reports a lower / negative 1RM. ×1 → unstamped.
   const mult = noteVariationScale(base);
   const out = mult !== 1 ? { ...base, difficultyMult: mult } : base;
-  return out.notes && isNoteNotComparable(out.exerciseName, out.notes) ? { ...out, notComparable: true } : out;
+  // Not comparable if THIS set is marked (per-set), or its NOTE is (per-note).
+  const nc = notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
+  return nc ? { ...out, notComparable: true } : out;
 }
 function computeRecordBase(r: SetRecord): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
@@ -3920,6 +3948,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
+  if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -4695,6 +4724,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
+  if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -5093,6 +5123,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
+    `<button type="button" class="set-edit-nc${notComparableSets.has(sid) ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${notComparableSets.has(sid)}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${notComparableSets.has(sid) ? "not comparable" : "not comparable?"}</button>` +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
     `<button type="button" class="set-edit-delete" data-setid="${escapeHtml(sid)}" title="Hide this set everywhere on the site (the source data is never changed; restore in Settings → Data health)">🗑 Delete set</button>` +
     `</div></td></tr>`;
@@ -5316,6 +5347,21 @@ function deleteSetEdit(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   renderHealth();
+  window.scrollTo(0, y);
+  return true;
+}
+
+/** Click "⊘ not comparable" in the set editor: toggle THIS set's not-comparable
+ * flag (drops its 1RM & volume; reps/sets still count), then re-render. */
+function toggleSetNotComparable(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-nc");
+  if (!btn?.dataset.setid) return false;
+  setSetNotComparable(btn.dataset.setid, !notComparableSets.has(btn.dataset.setid));
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
   window.scrollTo(0, y);
   return true;
 }
@@ -5837,20 +5883,27 @@ function setupStatsEdit(): void {
  * with a number input. Shared by the per-exercise panel and the global editor. */
 function familyFactorTableHtml(fam: string): string {
   if (!FAMILIES[fam]) return "";
+  // One editable table for a dim (or a per-support lean table keyed "lean:<support>").
+  const table = (dimKey: string, label: string): string => {
+    const levels = famLevels(fam, dimKey);
+    const cells = Object.keys(levels)
+      .map((lvl) => {
+        const ov = famFactorOverrides[fam]?.[dimKey]?.[lvl] !== undefined;
+        return (
+          `<label class="fac-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${escapeHtml(lvl)}</span>` +
+          `<input class="fac-input" type="number" step="0.01" min="0.05" value="${levels[lvl]}" data-fac-fam="${escapeHtml(fam)}" data-fac-dim="${escapeHtml(dimKey)}" data-fac-lvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(label)} ${escapeHtml(lvl)} multiplier" /></label>`
+        );
+      })
+      .join("");
+    return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(label)}</div><div class="fac-cells">${cells}</div></div>`;
+  };
+  // Lean is rendered once per wall support, since its effect differs (back- vs
+  // front-to-wall); each starts from the shared base lean until tuned.
+  const LEAN_SUPPORTS: [string, string][] = [["back_to_wall", "lean — back to wall"], ["front_to_wall", "lean — front to wall"]];
   return Object.keys(FAMILIES[fam]!.dims)
-    .map((dim) => {
-      const levels = famLevels(fam, dim);
-      const cells = Object.keys(levels)
-        .map((lvl) => {
-          const ov = famFactorOverrides[fam]?.[dim]?.[lvl] !== undefined;
-          return (
-            `<label class="fac-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${escapeHtml(lvl)}</span>` +
-            `<input class="fac-input" type="number" step="0.01" min="0.05" value="${levels[lvl]}" data-fac-fam="${escapeHtml(fam)}" data-fac-dim="${escapeHtml(dim)}" data-fac-lvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(dim)} ${escapeHtml(lvl)} multiplier" /></label>`
-          );
-        })
-        .join("");
-      return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(dim)}</div><div class="fac-cells">${cells}</div></div>`;
-    })
+    .flatMap((dim) =>
+      dim === "lean" ? LEAN_SUPPORTS.map(([sup, lbl]) => table(`lean:${sup}`, lbl)) : [table(dim, dim)],
+    )
     .join("");
 }
 
@@ -6122,7 +6175,7 @@ function notePickerHtml(name: string, note: string): string {
     const leanIdx = noLean ? 0 : Math.max(0, leanKeys.indexOf(String(effVec.lean)));
     const picked = override.rom !== undefined || (!noLean && override.lean !== undefined);
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
-    const romF = romDims![rk]!, leanF = noLean ? 1 : leanDims![lk]!;
+    const romF = romDims![rk]!, leanF = noLean ? 1 : leanFactorFor(fam, support, lk);
     const mult = Math.round(romF * leanF * 100) / 100;
     const leanFrac = !noLean && leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
     const depthTop = romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 0; // 0 top(easy)..1 bottom(hard)
@@ -6137,7 +6190,7 @@ function notePickerHtml(name: string, note: string): string {
     // Free locks lean to the no-lean level so x-drags can't change it.
     const dataLeanKeys = noLean ? [leanKeys[0] ?? ""] : leanKeys;
     const pd =
-      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0"${noLean ? ` data-nolean="1"` : ""} ` +
+      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0" data-support="${escapeHtml(support)}"${noLean ? ` data-nolean="1"` : ""} ` +
       `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(dataLeanKeys.join("|"))}"`;
     const readout = noLean
       ? `depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`
@@ -7131,7 +7184,7 @@ async function init() {
     const rk = romKeys[di]!, lk = leanKeys[li]!;
     setNoteVecDim(ex, note, "rom", rk);
     if (!noLean) setNoteVecDim(ex, note, "lean", lk);
-    const romF = famLevels(fam, "rom")[rk] ?? 1, leanF = noLean ? 1 : (famLevels(fam, "lean")[lk] ?? 1);
+    const romF = famLevels(fam, "rom")[rk] ?? 1, leanF = noLean ? 1 : leanFactorFor(fam, pad.dataset.support ?? "", lk);
     const mult = Math.round(romF * leanF * 100) / 100;
     const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
