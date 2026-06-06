@@ -1922,6 +1922,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-block .ex-var-row { border: none; background: none; margin: 0; }
 /* "Who & when" list under a note — clickable athlete · date chips. */
 .ex-var-sessions { padding: 0 0.55rem 0.4rem; }
+/* Collapsible difficulty editor inside each note row — collapsed by default. */
+.ex-var-edit-fold { border-top: 1px solid var(--line); }
+.ex-var-edit-sum { cursor: pointer; list-style: none; font-size: 0.76rem; font-weight: 700; color: var(--accent); padding: 0.3rem 0.55rem; }
+.ex-var-edit-sum::-webkit-details-marker { display: none; }
+.ex-var-edit-sum::before { content: "▸ "; }
+.ex-var-edit-fold[open] > .ex-var-edit-sum::before { content: "▾ "; }
 .ex-var-sessions-sum { cursor: pointer; list-style: none; font-size: 0.74rem; font-weight: 600; color: var(--muted); padding: 0.15rem 0; }
 .ex-var-sessions-sum::-webkit-details-marker { display: none; }
 .ex-var-sessions-sum::before { content: "▸ "; }
@@ -2298,6 +2304,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    tappable to fold it back up) and the title text is hidden. */
 .wa-fold[open] > .wa-fold-sum { padding: 0.2rem 0; font-size: 0; color: transparent; }
 .wa-fold[open] > .wa-fold-sum::before { font-size: 0.85rem; }
+/* EXCEPTION: the Workout-history summary carries the selected exercise's name, so
+   keep it visible even when open — it's the page's "what am I looking at" title. */
+.wa-fold[open] > #waTableSummary { font-size: 0.95rem; color: var(--text); padding: 0.45rem 0; }
+.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; }
 
 /* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
 .wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }

@@ -2029,6 +2029,11 @@ function renderLeaderboardChart(
     `</svg>`;
 }
 
+// Which note-variation editors are expanded in the More-info page. Empty by
+// default (all collapsed); keyed by variationKey so an edit (which re-renders the
+// page) keeps the one you're working in open instead of snapping it shut.
+const openVarNotes = new Set<string>();
+
 function renderPersonalRecords() {
   const formula = currentFormula();
   const exercise = els.exercise.value;
@@ -6230,9 +6235,15 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
         )
         .join("");
       const sessFold = `<details class="ex-var-sessions"${needsReview ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
+      // The full difficulty editor (chips / pad / support / band, etc.) starts
+      // COLLAPSED — tap "⚙ Edit difficulty" to open it. Open state is remembered
+      // (openVarNotes) so editing, which re-renders, keeps it open.
+      const editOpen = openVarNotes.has(variationKey(name, e.display));
       const ncNote = notCmp
         ? `<div class="ex-var-nc-note muted">Not comparable — reps &amp; sets still count, but no 1RM or volume for these sets.</div>`
-        : picker;
+        : picker
+          ? `<details class="ex-var-edit-fold"${editOpen ? " open" : ""} data-editfold-ex="${escapeHtml(name)}" data-editfold-note="${escapeHtml(e.display)}"><summary class="ex-var-edit-sum">⚙ Edit difficulty</summary>${picker}</details>`
+          : "";
       return (
         `<div class="ex-var-block${needsReview ? " needs-review" : ""}${notCmp ? " is-nc" : scale !== 1 ? " is-scaled" : ""}">` +
         `<div class="ex-var-row">` +
@@ -7077,6 +7088,17 @@ async function init() {
     if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
     refreshAfterDifficultyEdit();
   });
+  // Remember which note-variation editors are expanded (the `toggle` event doesn't
+  // bubble, so listen in the capture phase) — so an edit-driven re-render keeps the
+  // one you're working in open.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!d.classList || !d.classList.contains("ex-var-edit-fold")) return;
+    const ex = d.dataset.editfoldEx, note = d.dataset.editfoldNote;
+    if (!ex || note === undefined) return;
+    const k = variationKey(ex, note);
+    if ((d as HTMLDetailsElement).open) openVarNotes.add(k); else openVarNotes.delete(k);
+  }, true);
   // Merged-lift controls on the exercise info page: separate one member back out,
   // or dissolve the whole merge.
   document.addEventListener("click", (e) => {
@@ -9035,7 +9057,7 @@ function renderWorkoutAnalysis(): void {
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
     if (contentTitle)
-      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${waSelected[0]}${originBadge(waSelected[0]!, true)}` : `${athleteLabel()} — selected lifts`;
+      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${displayName(waSelected[0]!)}${originBadge(waSelected[0]!, true)}` : `${athleteLabel()} — selected lifts`;
     // Single mode: a "More info" button for the one selected lift (its details +
     // the editable difficulty of each note-identified variation).
     if (stats) {
