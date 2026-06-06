@@ -2144,15 +2144,19 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .active-set-bar .as-clear { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.82rem; text-decoration: underline; padding: 0; }
 .active-set-bar .as-hint { margin: 0.4rem 0 0; font-size: 0.78rem; }
 .bw-groups { display: flex; flex-direction: column; gap: 6px; }
-/* overflow stays visible (not hidden) so an expanded row can position:sticky. */
+/* overflow stays visible (not hidden) so the group title + an expanded row can
+   position:sticky. */
 .bw-cat { border: 1px solid var(--line); border-radius: 10px; }
-/* When a row is expanded, its collapsed header sticks to the top while you scroll
-   the (often long) info panel below it, so you never lose which lift you're in. */
-#bwGroups tr.open > td { position: sticky; top: 0; z-index: 3; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
+/* The group title (discipline / muscle header) sticks to the top while you scroll
+   its list of exercises, then leaves as the next group's title takes over. */
 .bw-cat-summary {
+  position: sticky; top: 0; z-index: 4; background: var(--bg);
   cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.6rem;
   padding: 10px 12px; font-size: 0.92rem; font-weight: 600; user-select: none;
 }
+/* When a row is expanded, its collapsed header sticks just BELOW the group title
+   while you scroll the (often long) info panel below it. */
+#bwGroups tr.open > td { position: sticky; top: 2.6rem; z-index: 3; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
 .bw-cat-summary::-webkit-details-marker { display: none; }
 .bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
 .bw-cat[open] > .bw-cat-summary::after { content: "▾"; }
