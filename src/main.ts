@@ -832,6 +832,38 @@ function clearNoteVec(exerciseName: string, note: string): void {
   delete variationVecOverrides[variationKey(exerciseName, note)];
   saveVariationVecs();
 }
+// Per-note DISPLAY RENAME: relabel a cryptic logged note (e.g. "guma 4") to a
+// readable name. Keyed exercise|normNote(original) and applied wherever the note
+// is SHOWN — it does NOT change the note's identity, so its difficulty /
+// not-comparable / attribute settings (all keyed by the original note) stay
+// attached. Blank, or a value equal to the original, clears the rename.
+const NOTE_RENAME_KEY = "colosseum.noteRenames.v1";
+const noteRenames: Record<string, string> = (() => {
+  try {
+    const raw = localStorage.getItem(NOTE_RENAME_KEY);
+    const o = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    return o && typeof o === "object" ? o : {};
+  } catch {
+    return {};
+  }
+})();
+function saveNoteRenames(): void {
+  try { localStorage.setItem(NOTE_RENAME_KEY, JSON.stringify(noteRenames)); }
+  catch { /* storage may be unavailable — edits still apply this session */ }
+}
+/** The owner's readable label for a note, or the note itself when unrenamed. */
+function displayNote(exerciseName: string, note: string): string {
+  if (!note) return note;
+  return noteRenames[variationKey(exerciseName, note)] ?? note;
+}
+/** Rename a note for display. Blank, or text equal to the original, clears it. */
+function setNoteRename(exerciseName: string, originalNote: string, text: string): void {
+  const k = variationKey(exerciseName, originalNote);
+  const trimmed = text.trim();
+  if (!trimmed || trimmed === originalNote.trim()) delete noteRenames[k];
+  else noteRenames[k] = trimmed;
+  saveNoteRenames();
+}
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
   const fam = FAMILIES[family];
@@ -4719,7 +4751,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     predRir === null
       ? "—"
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
-  const note = [s.dropset ? "dropset" : "", s.notes].filter(Boolean).join(" · ");
+  const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, s.notes ?? "")].filter(Boolean).join(" · ");
   let preview = "";
   if (note) {
     const short = note.length > NOTE_PREVIEW_LEN ? `${note.slice(0, NOTE_PREVIEW_LEN)}…` : note;
@@ -6037,7 +6069,9 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       return (
         `<div class="ex-var-block${needsReview ? " needs-review" : ""}${notCmp ? " is-nc" : scale !== 1 ? " is-scaled" : ""}">` +
         `<div class="ex-var-row">` +
-        `<span class="ex-var-note">${escapeHtml(e.display)} ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
+        `<span class="ex-var-note">` +
+        `<input class="ex-var-rename" type="text" value="${escapeHtml(displayNote(name, e.display))}" data-rename-ex="${escapeHtml(name)}" data-rename-note="${escapeHtml(e.display)}" aria-label="Edit this note's text" title="Edit this note's text — applies everywhere it shows. Blank to restore the original." />` +
+        ` ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
         editArea +
         `</div>` +
         ncNote +
@@ -6049,7 +6083,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   const badge = needReview ? ` <span class="ex-var-needbadge">${needReview} to review</span>` : "";
   return (
     `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty${badge}</div>` +
-    `<p class="muted ex-vars-help">Each distinct note logged for this lift. The ×number is its relative difficulty (×1 = no effect, &lt;1 easier, &gt;1 harder); it rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise.${fam ? " This lift has a difficulty model, so the value is <strong>suggested</strong> from the note's setup (support, range, lean…); type your own to pin it (↺ unpins)." : ""} Or mark a note <strong>⊘ not comparable</strong> — its sets keep counting reps &amp; sets but get no 1RM or volume (e.g. a static hold). ⚠ flags variation-like notes you haven't handled yet.</p>` +
+    `<p class="muted ex-vars-help">Each distinct note logged for this lift. <strong>Tap a note's text to rename it</strong> (e.g. a cryptic “guma 4” → “deficit HSPU”) — the new name shows everywhere that note appears; blank it to restore the original. The ×number is its relative difficulty (×1 = no effect, &lt;1 easier, &gt;1 harder); it rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise.${fam ? " This lift has a difficulty model, so the value is <strong>suggested</strong> from the note's setup (support, range, lean…); type your own to pin it (↺ unpins)." : ""} Or mark a note <strong>⊘ not comparable</strong> — its sets keep counting reps &amp; sets but get no 1RM or volume (e.g. a static hold). ⚠ flags variation-like notes you haven't handled yet.</p>` +
     rowsHtml +
     `</div>`
   );
@@ -6586,6 +6620,14 @@ async function init() {
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works in the overlay AND the Index page's expandable row.
   document.addEventListener("change", (e) => {
+    // Rename a note (its readable label) — applies wherever the note is shown.
+    const ren = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-rename");
+    if (ren?.dataset.renameEx && ren.dataset.renameNote !== undefined) {
+      setNoteRename(ren.dataset.renameEx, ren.dataset.renameNote, ren.value);
+      refreshExerciseInfo();
+      renderAll();
+      return;
+    }
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-input");
     if (!input?.dataset.varEx || input.dataset.varNote === undefined) return;
     const v = Number(input.value);

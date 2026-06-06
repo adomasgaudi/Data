@@ -2009,6 +2009,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-moreinfo { font: inherit; font-size: 0.82rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 0 7px; line-height: 1.5; margin-left: 0.3rem; }
 .bw-moreinfo:hover { border-color: var(--accent); background: var(--accent-soft); }
 .ex-var-note { flex: 1 1 11rem; min-width: 0; font-size: 0.84rem; font-weight: 600; overflow-wrap: anywhere; }
+/* The note label is an inline text input you can edit; styled to read like the
+   label until hovered/focused, when it shows a clear editable box. */
+.ex-var-rename { font: inherit; font-weight: 600; color: inherit; width: 8.5rem; max-width: 100%; padding: 1px 4px; border: 1px solid transparent; border-radius: 5px; background: transparent; }
+.ex-var-rename:hover { border-color: var(--border, #d0d4dc); }
+.ex-var-rename:focus { outline: none; border-color: var(--accent, #284e86); background: var(--bg, #fff); }
 .ex-var-count { font-weight: 400; }
 .ex-var-review { font-size: 0.7rem; font-weight: 700; color: var(--warn, #c0603a); white-space: nowrap; }
 .ex-var-edit { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: auto; }
