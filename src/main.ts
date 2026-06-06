@@ -4658,9 +4658,9 @@ function renderWorkoutsPage() {
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
               : "";
-            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${rmTxt}${addBtn}`;
+            return `<div class="wo-ex-line"><span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${addBtn}${rmTxt}</div>`;
           })
-          .join("<br>");
+          .join("");
       } else {
         // Group view: sum each exercise's sets into the chosen grouping dimension.
         did = groupSessionCounts(g.exercises, els.workoutGrouping.value)

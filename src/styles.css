@@ -1188,12 +1188,18 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-setlist { font-size: 0.85rem; }
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
-.wo-scale { font-weight: 700; color: var(--accent); }
+/* Each exercise on its own flex line so the day's record 1RM right-aligns. */
+.wo-ex-line { display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
+/* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
+   and the day 1RM are computed, so they read gold. */
+.wo-scale { font-weight: 700; color: var(--gold); }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
 /* The day's record (best) estimated 1RM for a lift, shown after its sets. */
-.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; margin-left: auto; }
+/* COLOUR RULE (other half): editable values you type are blue. */
+.set-edit-input, .set-edit-note, .ex-var-input, .ex-var-rename, .fac-input { color: var(--accent); font-weight: 600; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
 sup.wr-bw { font-size: 0.85em; }
 .heat-filter {
@@ -1705,9 +1711,9 @@ sup.wr-bw { font-size: 0.85em; }
    it's clickable with a dotted underline. */
 .e1rm-btn {
   border: none; background: none; padding: 0; cursor: pointer; font: inherit;
-  color: inherit; border-bottom: 1px dotted var(--muted);
+  color: var(--gold); font-weight: 700; border-bottom: 1px dotted var(--gold); /* calculated → gold */
 }
-.e1rm-btn:hover, .e1rm-btn.is-open { color: var(--accent); border-bottom-color: var(--accent); }
+.e1rm-btn:hover, .e1rm-btn.is-open { filter: brightness(0.9); border-bottom-style: solid; }
 /* 1RM = a weight done for 1 rep, shown as value¹ (like the weight column's
    weight^reps). The "1" is a muted superscript so the number still reads first. */
 .onerm-sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
