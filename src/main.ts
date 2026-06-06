@@ -2541,6 +2541,8 @@ const DISCIPLINE_COLORS: Record<Discipline, string> = {
   Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
 };
 const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";
+// The two "main" disciplines shown at the Index top level; the rest nest under "Other".
+const MAJOR_DISCIPLINES: Discipline[] = ["Bodybuilding/strength", "Calisthenics"];
 
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
@@ -5859,36 +5861,57 @@ function renderBwParts() {
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
-  els.bwGroups.innerHTML = buckets
-    .map((b) => {
-      // Split the group by the app-wide active-set filter: active lifts stay in
-      // the main list; the rest are greyed under a "Show hidden" sub-dropdown.
-      const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
-      const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
-      const partCount = b.rows.filter((r) => r.coeff > 0).length;
-      const partNote = partCount > 0 ? ` · ${partCount} with a BW part` : "";
-      const meta = activeSet
-        ? `${shown.length} shown${hidden.length ? ` · ${hidden.length} hidden` : ""}${partNote}`
-        : `${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}${partNote}`;
-      const shownBlock = shown.length
-        ? table(shown, false)
-        : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
-      const hiddenBlock = hidden.length
-        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
-        : "";
-      return (
-        `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+  // One group's collapsible <details> (a coloured title + its exercise table). The
+  // active-set filter splits it: active lifts stay; the rest go under "Show hidden".
+  const bucketHtml = (b: IndexBucket, sub = false): string => {
+    const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
+    const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
+    const partCount = b.rows.filter((r) => r.coeff > 0).length;
+    const partNote = partCount > 0 ? ` · ${partCount} with a BW part` : "";
+    const meta = activeSet
+      ? `${shown.length} shown${hidden.length ? ` · ${hidden.length} hidden` : ""}${partNote}`
+      : `${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}${partNote}`;
+    const shownBlock = shown.length
+      ? table(shown, false)
+      : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
+    const hiddenBlock = hidden.length
+      ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
+      : "";
+    return (
+      `<details class="bw-cat${sub ? " bw-cat-sub" : ""}" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+      `<summary class="bw-cat-summary">` +
+      `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
+      `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
+      `<span class="bw-cat-meta muted">${meta}</span>` +
+      `</summary>` +
+      shownBlock +
+      hiddenBlock +
+      `</details>`
+    );
+  };
+
+  // In Discipline mode the two MAIN disciplines (Bodybuilding/strength, Calisthenics)
+  // sit at the top level; everything else is nested as sub-groups under one "Other"
+  // header, since it's less central to the training.
+  if (bwGroupMode === "discipline") {
+    const major = buckets.filter((b) => MAJOR_DISCIPLINES.includes(b.key as Discipline));
+    const minor = buckets.filter((b) => !MAJOR_DISCIPLINES.includes(b.key as Discipline));
+    const otherNames = new Set(minor.flatMap((b) => b.rows.map((r) => r.name)));
+    const otherBlock = minor.length
+      ? `<details class="bw-cat bw-cat-other" data-cat="__other"${open("__other") ? " open" : ""}>` +
         `<summary class="bw-cat-summary">` +
-        `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
-        `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
-        `<span class="bw-cat-meta muted">${meta}</span>` +
+        `<span class="bw-cat-dot" style="background:#9aa1ac"></span>` +
+        `<span class="bw-cat-name">Other</span>` +
+        `<span class="bw-cat-meta muted">${otherNames.size} exercise${otherNames.size === 1 ? "" : "s"} · ${minor.length} groups</span>` +
         `</summary>` +
-        shownBlock +
-        hiddenBlock +
+        minor.map((b) => bucketHtml(b, true)).join("") +
         `</details>`
-      );
-    })
-    .join("");
+      : "";
+    els.bwGroups.innerHTML = major.map((b) => bucketHtml(b)).join("") + otherBlock;
+    return;
+  }
+
+  els.bwGroups.innerHTML = buckets.map((b) => bucketHtml(b)).join("");
 }
 
 /** The "Group by" picker above the Index exercise groups. */

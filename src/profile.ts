@@ -643,7 +643,8 @@ export function exerciseDiscipline(exerciseName: string): Discipline {
   if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "l-sit", "l sit", "lsit", "lever", "flag")) return "Skill";
   if (has("balance", "slackline", "beam", "one-leg", "single-leg balance")) return "Balance";
   if (has("jump", "plyo", "hop", "explosive", "clap", "throw", "slam", "ballistic", "bound")) return "Dynamic";
-  if (has("pull up", "pullup", "pull-up", "chin up", "chinup", "push up", "pushup", "push-up", "pushups", "dip", "ring", "bodyweight", "pistol", "bar muscle", "inverted row", "australian"))
+  // Calisthenics = BODYWEIGHT moves; a "machine" anything is strength, not calisthenics.
+  if (!n.includes("machine") && has("pull up", "pullup", "pull-up", "chin up", "chinup", "push up", "pushup", "push-up", "pushups", "dip", "ring", "bodyweight", "pistol", "bar muscle", "inverted row", "australian"))
     return "Calisthenics";
   return "Bodybuilding/strength";
 }

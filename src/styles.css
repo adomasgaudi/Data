@@ -2160,6 +2160,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* When a row is expanded, its collapsed header sticks just BELOW the group title
    while you scroll the (often long) info panel below it. */
 #bwGroups tr.open > td { position: sticky; top: 2.6rem; z-index: 3; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
+/* "Other" parent holds the minor disciplines as indented sub-groups. */
+.bw-cat-other > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
+.bw-cat-other > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 .bw-cat-summary::-webkit-details-marker { display: none; }
 .bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
 .bw-cat[open] > .bw-cat-summary::after { content: "▾"; }
