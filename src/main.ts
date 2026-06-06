@@ -933,6 +933,9 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     // The ladder grip / height only apply when the support is actually "ladder";
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
+    // Lean is a wall-relative thing — a FREE (freestanding) handstand has no wall
+    // to lean toward, so lean doesn't apply (treated as ×1).
+    if (dim === "lean" && (vec.support ?? "free") === "free") continue;
     const f = fam.dims[dim]![vec[dim] ?? ""];
     if (typeof f === "number") s *= f;
   }
@@ -6016,32 +6019,39 @@ function notePickerHtml(name: string, note: string): string {
     // not by flipping the scene — so the pad never mirrors.
     const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
     const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
-    const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
-    const picked = override.rom !== undefined || override.lean !== undefined;
     const support = String(effVec.support ?? "free");
+    // FREE handstands have no wall to lean toward → no lean, only vertical depth.
+    const noLean = support === "free";
+    const leanIdx = noLean ? 0 : Math.max(0, leanKeys.indexOf(String(effVec.lean)));
+    const picked = override.rom !== undefined || (!noLean && override.lean !== undefined);
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
-    const romF = romDims![rk]!, leanF = leanDims![lk]!;
+    const romF = romDims![rk]!, leanF = noLean ? 1 : leanDims![lk]!;
     const mult = Math.round(romF * leanF * 100) / 100;
-    const leanFrac = leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
+    const leanFrac = !noLean && leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
     const depthTop = romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 0; // 0 top(easy)..1 bottom(hard)
-    const dotLeft = (1 - leanFrac) * 100; // rightmost = no lean (wall is on the left)
+    const dotLeft = noLean ? 50 : (1 - leanFrac) * 100; // rightmost = no lean (wall is on the left)
     const dotTop = depthTop * 100;
     const fillH = 100 - dotTop; // bottom-anchored, up to the handle
-    const fillW = dotLeft;
+    const fillW = noLean ? 100 : dotLeft; // free: full width (depth only)
     const fillSide = `left:0`;
+    // Free locks lean to the no-lean level so x-drags can't change it.
+    const dataLeanKeys = noLean ? [leanKeys[0] ?? ""] : leanKeys;
     const pd =
-      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0" ` +
-      `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(leanKeys.join("|"))}"`;
+      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0"${noLean ? ` data-nolean="1"` : ""} ` +
+      `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(dataLeanKeys.join("|"))}"`;
+    const readout = noLean
+      ? `depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`
+      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
     return (
-      `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
-      `<div class="ex-pad-readout">lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span></div>` +
+      `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}${noLean ? " ex-pad-nolean" : ""}"><span class="ex-var-dim-lbl">${noLean ? "depth (free — no lean)" : "depth × lean"}</span>` +
+      `<div class="ex-pad-readout">${readout}</div>` +
       `<div class="ex-pad" ${pd}>` +
       padSceneSvg(support) +
       `<div class="ex-pad-fill" style="${fillSide};bottom:0;width:${fillW.toFixed(1)}%;height:${fillH.toFixed(1)}%"></div>` +
       `<div class="ex-pad-dot" style="left:${dotLeft.toFixed(1)}%;top:${dotTop.toFixed(1)}%"></div>` +
       `<span class="ex-pad-ylbl ex-pad-yt muted">↑ easier</span>` +
       `<span class="ex-pad-ylbl ex-pad-yb muted">↓ harder</span>` +
-      `<span class="ex-pad-xlbl muted">lean ←</span>` +
+      (noLean ? "" : `<span class="ex-pad-xlbl muted">lean ←</span>`) +
       `</div></div>`
     );
   };
@@ -6969,19 +6979,20 @@ async function init() {
     const fam = familyOf(ex);
     if (!fam) return;
     const mirror = pad.dataset.mirror === "1";
+    const noLean = pad.dataset.nolean === "1"; // free handstand → depth only, lean locked
     const r = pad.getBoundingClientRect();
     const xf = Math.max(0, Math.min(1, r.width ? (clientX - r.left) / r.width : 0));
     const yf = Math.max(0, Math.min(1, r.height ? (clientY - r.top) / r.height : 0));
     const leanFrac = mirror ? xf : 1 - xf; // not-mirror: rightmost = no lean
-    const li = Math.round(leanFrac * (leanKeys.length - 1));
+    const li = noLean ? 0 : Math.round(leanFrac * (leanKeys.length - 1));
     const di = Math.round(yf * (romKeys.length - 1)); // 0 = top = easiest
     const rk = romKeys[di]!, lk = leanKeys[li]!;
     setNoteVecDim(ex, note, "rom", rk);
-    setNoteVecDim(ex, note, "lean", lk);
+    if (!noLean) setNoteVecDim(ex, note, "lean", lk);
     const dims = FAMILIES[fam]!.dims;
-    const romF = dims.rom?.[rk] ?? 1, leanF = dims.lean?.[lk] ?? 1;
+    const romF = dims.rom?.[rk] ?? 1, leanF = noLean ? 1 : (dims.lean?.[lk] ?? 1);
     const mult = Math.round(romF * leanF * 100) / 100;
-    const dotLeft = xf * 100, dotTop = yf * 100;
+    const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
     const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
     set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
@@ -6989,7 +7000,7 @@ async function init() {
     const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
     if (fill) {
       fill.style.left = mirror ? "auto" : "0"; fill.style.right = mirror ? "0" : "auto"; fill.style.bottom = "0";
-      fill.style.width = `${(mirror ? 100 - dotLeft : dotLeft).toFixed(1)}%`;
+      fill.style.width = `${(noLean ? 100 : mirror ? 100 - dotLeft : dotLeft).toFixed(1)}%`;
       fill.style.height = `${(100 - dotTop).toFixed(1)}%`;
     }
     const dot = pad.querySelector<HTMLElement>(".ex-pad-dot");
