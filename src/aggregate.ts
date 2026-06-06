@@ -498,15 +498,11 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   // rather than a clamped one. The Nuzzo curve is data-derived across the study's
   // full range (down to 15% of 1RM ≈ 127 reps), so it is EXEMPT from the cap.
   if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
-  // Variation difficulty scales the EFFECTIVE load before the 1RM curve: an easier
-  // bodyweight variation moved less of your bodyweight, so its 1RM is lower — and
-  // once the FULL bodyweight share is peeled off below it can go negative (you'd
-  // need assistance to do the baseline movement). ×1 / absent leaves it unchanged.
+  // Variation difficulty scales the EFFECTIVE load before the 1RM curve; a band
+  // then SUBTRACTS a constant assistance in kg. ×1 / absent leaves it unchanged.
+  // The result can be ≤ 0 — handled linearly so the 1RM stays continuous.
   const mult = record.difficultyMult ?? 1;
   const effectiveLoad = record.weight ?? 0;
-  // Multiplier scales the load (position difficulty); a band then SUBTRACTS a
-  // constant assistance in kg. The result can be ≤ 0 (you'd need that much help to
-  // do the unassisted movement) — handle it linearly so the 1RM stays continuous.
   const scaledLoad = effectiveLoad * mult - (record.assistKg ?? 0);
   const effective1RM = scaledLoad > 0 ? estimate1RM(scaledLoad, record.reps, formula) : scaledLoad;
   if (effective1RM === null) return null;
@@ -515,7 +511,10 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   // on a bodyweight lift, so the added weight is 0 and the body is the whole load.
   const addedWeight = record.origWeight === undefined ? effectiveLoad : (record.origWeight ?? 0);
   const bodyweightLoad = effectiveLoad - addedWeight;
-  return effective1RM - bodyweightLoad;
+  // Peel the ADJUSTED bodyweight (scaled by the same difficulty) — since the load
+  // fed to the curve was scaled, the bodyweight reference must be scaled too, not
+  // the full bodyweight. (mult = 1 → unchanged for ordinary lifts.)
+  return effective1RM - bodyweightLoad * mult;
 }
 
 /**

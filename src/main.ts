@@ -5061,9 +5061,14 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   } else {
     lines.push(step("Epley", `1RM = ${f2(curveLoad)} × (1 + ${frac(`${r}`, "30")}) = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b>`));
   }
-  // 5) Peel the full bodyweight share back off → added-weight 1RM (the headline).
-  if (hasBody && eff1rm !== null)
-    lines.push(step("added-weight 1RM", `${kg(eff1rm)} − ${kg(bodyLoad)} = <b class="rm-result">${added1rm === null ? "—" : kg(added1rm)}</b>`));
+  // 5) Peel the ADJUSTED bodyweight (scaled by the same difficulty) → added-weight 1RM.
+  if (hasBody && eff1rm !== null) {
+    const adjBody = bodyLoad * mult;
+    const peel = mult !== 1
+      ? `${kg(eff1rm)} − (${kg(bodyLoad)} × ${f2(mult)}) = ${kg(eff1rm)} − ${kg(adjBody)}`
+      : `${kg(eff1rm)} − ${kg(bodyLoad)}`;
+    lines.push(step("added-weight 1RM", `${peel} = <b class="rm-result">${added1rm === null ? "—" : kg(added1rm)}</b>`));
+  }
   return wrap(lines.join(""));
 }
 
