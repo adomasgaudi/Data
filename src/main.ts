@@ -6075,10 +6075,18 @@ function worldRecordEditorHtml(name: string): string {
       `<input class="wr-input" type="number" step="1" min="0" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${sex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
     return `<div class="fac-dim"><div class="fac-dim-h">${lbl}</div><div class="fac-cells">${inp("kg", ref?.kg, "record kg")}${inp("bw", ref?.bw, "at kg bw")}</div></div>`;
   };
+  // The record scaled to the currently-selected athlete (their sex + bodyweight).
+  const prof = athProfile(els.athlete.value);
+  const sex: "m" | "f" = prof?.sex === "f" ? "f" : "m";
+  const bw = prof?.weight ?? null;
+  const scaled = worldRecordKg(name, sex, bw);
+  const forLine = scaled
+    ? `<div class="ex-group-why"><strong>For ${escapeHtml(athleteLabel())}</strong> (${sex === "f" ? "♀" : "♂"}${bw ? `, ${fmt(bw)} kg` : ""}): world record ≈ <b>${fmt(scaled)} kg</b> at this bodyweight.</div>`
+    : "";
   return (
     `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
-    `<div class="ex-group-why muted">The best 1RM-equivalent (kg) at a reference bodyweight, per sex — scaled to each athlete's bodyweight (strength ≈ bw^⅔). A few powerlifting lifts are seeded; set the rest (incl. calisthenics) yourself. Drives the “% of world record” graph metric.</div>` +
-    row("m", "men") + row("f", "women") +
+    `<div class="ex-group-why muted">Your NATTY world record (1RM-equivalent kg) at a reference bodyweight, per sex — scaled to each athlete's bodyweight (strength ≈ bw^⅔). Enter your own; drives the “% of world record” graph metric.</div>` +
+    forLine + row("m", "men") + row("f", "women") +
     `</details>`
   );
 }

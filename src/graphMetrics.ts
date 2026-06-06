@@ -244,8 +244,9 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`),
   },
   // "% of world record" — computed specially in analyticsGraph (needs the athlete's
-  // sex + bodyweight + the per-exercise record), so it carries no compute here.
-  { id: "pctWR", label: "% of world record", type: "scatter", axis: "right" },
+  // sex + bodyweight + the per-exercise record); carries no compute. Shown as a
+  // FRACTION of the record (1.0 = world record), so it shares the left value axis.
+  { id: "pctWR", label: "% of world record", type: "scatter" },
   { id: "strength", label: "Strength Score", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
   { id: "strengthDecay", label: "Strength Score With Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },

@@ -30,12 +30,10 @@ export function scaleWr(ref: WrRef, atBodyweight: number): number {
 }
 
 /**
- * Seed of editable world records, keyed by exercise name → per sex. Approximate
- * raw, open, all-time figures (kg) at ~the holder's bodyweight — meant as a
- * starting point the owner refines. Empty for everything else until set.
+ * Seed of editable world records, keyed by exercise name → per sex. Left EMPTY on
+ * purpose: the previous powerlifting seed used enhanced super-heavyweight figures
+ * (e.g. ~180 kg bodyweight), which are meaningless for a natural / calisthenics
+ * focus. Enter your own NATTY records per exercise in the exercise info page; the
+ * allometric scaling then adjusts them to each athlete's bodyweight.
  */
-export const WORLD_RECORDS_SEED: Record<string, { m?: WrRef; f?: WrRef }> = {
-  Squat: { m: { kg: 490, bw: 180 }, f: { kg: 300, bw: 120 } },
-  "Bench Press": { m: { kg: 350, bw: 180 }, f: { kg: 207, bw: 110 } },
-  Deadlift: { m: { kg: 488, bw: 180 }, f: { kg: 290, bw: 150 } },
-};
+export const WORLD_RECORDS_SEED: Record<string, { m?: WrRef; f?: WrRef }> = {};

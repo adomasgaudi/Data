@@ -87,10 +87,12 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         const wr = input.worldRecordKg?.(g.records[0]?.exerciseName ?? "");
         const e1rm = graphMetric("e1rm");
         if (!wr || wr <= 0 || !e1rm?.compute) continue;
+        // Fraction of the world record (1.0 = the record), so the axis reads in
+        // sub-1 values for sub-record performance.
         const pts = e1rm.compute(g.records, input.config)
           .filter((p) => p.y != null)
-          .map((p) => ({ x: p.x, y: Math.round((p.y! / wr) * 1000) / 10 }));
-        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · % WR` : "% of world record", color: SERIES_COLORS[ci++ % SERIES_COLORS.length]!, type: "scatter", points: pts as SvgPoint[], axis: "right" });
+          .map((p) => ({ x: p.x, y: Math.round((p.y! / wr) * 1000) / 1000 }));
+        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: SERIES_COLORS[ci++ % SERIES_COLORS.length]!, type: "scatter", points: pts as SvgPoint[] });
         continue;
       }
       if (!m.compute) continue; // registered-but-not-computed metric
