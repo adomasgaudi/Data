@@ -832,6 +832,18 @@ main { padding-bottom: 8.5rem; }
 }
 .ex-combine-chip.is-primary { cursor: default; background: var(--accent); color: #fff; border-color: var(--accent); }
 .ex-combine-chip[data-remove]:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
+/* "Save as one lift" — persist the current combine as a permanent merged lift. */
+.ex-combine-save {
+  border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: #fff;
+  font: inherit; font-size: 0.76rem; font-weight: 700; padding: 0.2rem 0.7rem; cursor: pointer;
+}
+.ex-combine-save:hover { filter: brightness(1.07); }
+/* Merged-lift separate/dissolve panel on the exercise info page. */
+.ex-merge-members { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
+.ex-merge-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft); font-size: 0.78rem; padding: 0.15rem 0.55rem; }
+.ex-merge-sep { border: none; background: none; color: var(--bad, #c0392b); font: inherit; font-weight: 700; cursor: pointer; padding: 0 0.1rem; }
+.ex-merge-dissolve { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0.25rem 0.6rem; cursor: pointer; }
+.ex-merge-dissolve:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
 /* The "+ combine with…" custom dropdown, sized to sit inline with the chips. */
 .ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: 999px; }
 .ex-combine-dd .xdd-menu { min-width: max(100%, 12rem); }

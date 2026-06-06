@@ -1310,6 +1310,22 @@ const SYNTHETIC_GROUP_DEFS: SyntheticGroupDef[] = [...COMBINABLE_GROUPS, ...COMP
   }),
 );
 
+/** User "combined" defs as synthetic-group defs (quotient 1 = a pure merge, no
+ * scaling). Feeding these to withSyntheticGroups makes a user-merged lift behave
+ * as ONE lift across EVERY view — picker, leaderboard, Estimated-1RM graph,
+ * calendar, PRs — exactly like the built-in combinable groups. (Before, a
+ * "combined" def only TAGGED its members, so the merge showed in the workouts
+ * list but the graph/calendar still saw separate lifts.) */
+function userCombinedGroupDefs(): SyntheticGroupDef[] {
+  return userExerciseDefs
+    .filter((d) => d.identity === "combined" && d.members && d.members.length > 0)
+    .map((d) => ({
+      id: `combine.user:${d.name}`,
+      derivedName: d.name,
+      members: Object.fromEntries(d.members!.map((m) => [m, 1])),
+    }));
+}
+
 /* ---- Global "active exercise set" filter (app-wide) ----------------------
  * Restrict the WHOLE app to a chosen subset of exercises: a frequency-tier
  * cutoff (S/A/B/C/D by instance count) plus manual include/exclude overrides,
@@ -1396,7 +1412,7 @@ function computedRecords(): SetRecord[] {
   // records derived from those computed loads. Pure source lifts are never mutated.
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
   const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
-  return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
+  return [...pure, ...withSyntheticGroups(pure, [...SYNTHETIC_GROUP_DEFS, ...userCombinedGroupDefs()])];
 }
 
 /**
@@ -1461,7 +1477,10 @@ function mergeVariantsFor(name: string): string[] {
 
 /** The other spellings folded into a merged name, or [] for a plain lift. */
 function exerciseOrigin(name: string): string[] {
-  return mergeVariantsFor(name);
+  // Spelling variants auto-folded into this name, PLUS the member lifts of a
+  // user-defined merge (so a merged lift's title/badge lists what it contains).
+  const def = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
+  return def?.members?.length ? [...mergeVariantsFor(name), ...def.members] : mergeVariantsFor(name);
 }
 
 /** Inline "(also: A, B)" badge for a name, or "" when there's nothing to note.
@@ -3314,12 +3333,67 @@ function renderCombineBar(exName: string, username: string) {
     `<button type="button" class="xdd-btn ex-combine-btn">＋ combine with…<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
     `</div>`;
+  // Persist the current "viewing together" set as ONE permanent merged lift
+  // (a user "combined" def). Once saved it merges everywhere — graph, calendar,
+  // leaderboard, PRs — not just this drill-in.
+  const alreadyMerged = userExerciseDefs.some((d) => d.identity === "combined" && d.name === exName);
+  const saveBtn =
+    combinedWith.length && !alreadyMerged
+      ? `<button type="button" class="ex-combine-save" title="Save these as one permanent merged lift (applies everywhere)">✓ Save as one lift</button>`
+      : "";
   els.exCombineBar.hidden = false;
   els.exCombineBar.innerHTML =
     `<span class="ex-combine-lbl muted">Viewing together:</span>` +
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
-    picker;
+    picker +
+    saveBtn;
+}
+
+/** Persist the current drill-in "viewing together" set as a permanent merged
+ * lift. Asks for a name (defaults to "<primary> (merged)"), saves a user
+ * "combined" def, and selects it so every view shows the one merged lift. */
+function saveCurrentCombine(): void {
+  if (selectedExercise === null || combinedWith.length === 0) return;
+  const members = [selectedExercise, ...combinedWith];
+  const fallback = `${selectedExercise} (merged)`;
+  const name = (window.prompt("Name for the merged lift:", fallback) ?? "").trim() || fallback;
+  // Guard against clashing with an existing lift/def name.
+  if (selectableExercises(data.records).includes(name) || userExerciseDefs.some((d) => d.name === name)) {
+    els.exerciseProgressNote.textContent = `“${name}” already exists — pick another name.`;
+    return;
+  }
+  userExerciseDefs.push({ name, identity: "combined", members });
+  saveUserExerciseDefs();
+  combinedWith = [];
+  selectedExercise = name; // jump straight to the new merged lift
+  populateExercisePicker();
+  renderAll();
+  renderExerciseDetail(name);
+}
+
+/** Pull one member back out of a merged lift. If fewer than two remain it's no
+ * longer a merge, so the whole def is dropped. */
+function separateMergeMember(mergeName: string, member: string): void {
+  const def = userExerciseDefs.find((d) => d.name === mergeName && d.identity === "combined");
+  if (!def?.members) return;
+  def.members = def.members.filter((m) => m !== member);
+  if (def.members.length < 2) {
+    userExerciseDefs = userExerciseDefs.filter((d) => d !== def);
+    if (selectedExercise === mergeName) selectedExercise = null;
+  }
+  saveUserExerciseDefs();
+  populateExercisePicker();
+  refreshAfterDifficultyEdit();
+}
+
+/** Un-merge a lift entirely: drop its user "combined" def. Originals are untouched. */
+function dissolveMerge(mergeName: string): void {
+  userExerciseDefs = userExerciseDefs.filter((d) => !(d.name === mergeName && d.identity === "combined"));
+  if (selectedExercise === mergeName) selectedExercise = null;
+  saveUserExerciseDefs();
+  populateExercisePicker();
+  refreshAfterDifficultyEdit();
 }
 
 /**
@@ -5598,7 +5672,9 @@ function exerciseInfoHtml(name: string): string {
   const mg = mgFor(name);
   const tierLabel = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" }[tierFor(name)];
   const coeff = coeffFor(name);
-  const variants = exerciseOrigin(name).filter((v) => v !== name);
+  // A user-created merge (this lift combines several exercises) vs auto spelling-merges.
+  const userMergeDef = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
+  const spellingVariants = mergeVariantsFor(name);
 
   const athletes = new Map<string, string>();
   let first = "", last = "", setCount = 0;
@@ -5634,12 +5710,15 @@ function exerciseInfoHtml(name: string): string {
       : item("Best 1RM (anyone)", "—"),
     first && last ? item("Logged", `${shortDate(first)} → ${shortDate(last)}`) : "",
     // Always state merge status explicitly, so a standalone lift is confirmed as
-    // such (not just silently lacking an "also logged as" line).
+    // such (not just silently lacking an "also logged as" line). A user-created
+    // merge, an auto spelling-merge, and a plain standalone all read clearly.
     item(
       "Sources",
-      variants.length
-        ? `<strong>Merged</strong> from ${variants.length + 1} spellings: ${escapeHtml([name, ...variants].join(", "))}`
-        : `Standalone — logged under one name only`,
+      userMergeDef?.members?.length
+        ? `<strong>Merged lift</strong> — combines ${userMergeDef.members.length} exercises into one (see below to separate/dissolve)`
+        : spellingVariants.length
+          ? `<strong>Merged</strong> from ${spellingVariants.length + 1} spellings: ${escapeHtml([name, ...spellingVariants].join(", "))}`
+          : `Standalone — logged under one name only`,
     ),
   ].join("");
 
@@ -5663,6 +5742,23 @@ function exerciseInfoHtml(name: string): string {
     })
     .join("");
 
+  // User-merge controls: list the merged-in exercises, each with a "Separate"
+  // (pull it back out) button, plus "Dissolve" to un-merge them all at once.
+  const mergePanel = userMergeDef?.members?.length
+    ? `<div class="ex-group ex-merge"><div class="ex-group-hd">Merged lift — separate or dissolve</div>` +
+      `<div class="ex-group-why muted">This lift combines the exercises below into one across every view (leaderboard, graph, calendar, PRs). Separate one to pull it back out, or dissolve to un-merge them all. The original lifts are never changed.</div>` +
+      `<div class="ex-merge-members">` +
+      userMergeDef.members
+        .map(
+          (m) =>
+            `<span class="ex-merge-chip">${escapeHtml(m)} <button type="button" class="ex-merge-sep" data-sepmerge="${escapeHtml(name)}" data-sepmember="${escapeHtml(m)}" title="Separate ${escapeHtml(m)} back out">✕</button></span>`,
+        )
+        .join("") +
+      `</div>` +
+      `<button type="button" class="ex-merge-dissolve" data-dissolvemerge="${escapeHtml(name)}">↺ Dissolve — un-merge all</button>` +
+      `</div>`
+    : "";
+
   // Active-set status + per-exercise force-in / force-out overrides.
   const incl = activeInclude.has(name);
   const excl = activeExclude.has(name);
@@ -5679,7 +5775,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${groupHtml}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${mergePanel}${groupHtml}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
 }
 
 /** Inline editors for an exercise's identity & physical model — moved here from
@@ -6944,6 +7040,14 @@ async function init() {
     if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
     refreshAfterDifficultyEdit();
   });
+  // Merged-lift controls on the exercise info page: separate one member back out,
+  // or dissolve the whole merge.
+  document.addEventListener("click", (e) => {
+    const sep = (e.target as HTMLElement).closest<HTMLElement>(".ex-merge-sep");
+    if (sep?.dataset.sepmerge && sep.dataset.sepmember) { separateMergeMember(sep.dataset.sepmerge, sep.dataset.sepmember); return; }
+    const dis = (e.target as HTMLElement).closest<HTMLElement>(".ex-merge-dissolve");
+    if (dis?.dataset.dissolvemerge) { dissolveMerge(dis.dataset.dissolvemerge); return; }
+  });
   // A "who & when" entry under a note: jump to that athlete's Analysis for this
   // lift, scrolled to the date where the note was logged.
   document.addEventListener("click", (e) => {
@@ -7204,6 +7308,8 @@ async function init() {
   // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
   els.exCombineBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // Save the current "viewing together" set as a permanent merged lift.
+    if (t.closest(".ex-combine-save")) { saveCurrentCombine(); return; }
     // Toggle the custom "+ combine with…" dropdown.
     const btn = t.closest(".ex-combine-btn");
     if (btn) {
