@@ -9,3 +9,11 @@
 # declares its own route (/api/data) via `export const config = { path }`.
 [functions]
   node_bundler = "esbuild"
+
+# Always revalidate the HTML so a new deploy shows up on the next refresh instead
+# of serving a stale cached page (the whole app is inlined into index.html, so
+# this is the only document that matters).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
