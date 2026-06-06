@@ -124,7 +124,17 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     }
   }
 
-  const config = { series, xKind: "time" as const, compactable: true, noCompactToggle: true, yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true };
+  // "% of world record" view: shade the background grayer as you climb toward the
+  // record — a touch above 0.4, more above 0.6 (very light).
+  const showsWr = metrics.some((m) => m.id === "pctWR");
+  const config = {
+    series, xKind: "time" as const, compactable: true, noCompactToggle: true,
+    yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
+    ...(showsWr ? { yBands: [
+      { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
+      { from: 0.6, fill: "rgba(120,120,120,0.12)" },
+    ] } : {}),
+  };
   const existing = charts.get(container);
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));

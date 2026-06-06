@@ -93,6 +93,9 @@ export interface SvgChartConfig {
   panMode?: "x" | "xy";
   /** Note shown under the legend. */
   note?: string;
+  /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
+   * region as you approach a target. Drawn behind everything. */
+  yBands?: { from: number; to?: number; fill: string }[];
 }
 export interface SvgChart {
   update(cfg: Partial<SvgChartConfig>): void;
@@ -304,9 +307,18 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       }
     }
 
+    // Horizontal value-zone bands on the left axis (e.g. "approaching the record"),
+    // drawn first so everything else sits on top.
+    let bands = "";
+    for (const b of cfg.yBands ?? []) {
+      const yTop = yL(Math.min(b.to ?? view.yMax, view.yMax));
+      const yBot = yL(Math.max(b.from, view.yMin));
+      const top = Math.max(M.t, Math.min(yTop, yBot));
+      const bot = Math.min(h - M.b, Math.max(yTop, yBot));
+      if (bot - top > 0.5) bands += `<rect x="${M.l}" y="${top.toFixed(1)}" width="${plotW.toFixed(1)}" height="${(bot - top).toFixed(1)}" fill="${b.fill}"/>`;
+    }
     // x bands + gridlines + thinned labels.
     let xLabels = "";
-    let bands = "";
     const clampX = (px: number) => Math.max(M.l, Math.min(W - M.r, px));
     if (xKind() === "time" && !useCompact()) {
       // Calendar bands (day/week/month/year): alternating background stripes give
