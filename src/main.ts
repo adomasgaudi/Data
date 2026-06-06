@@ -1084,7 +1084,7 @@ function setRpe(id: string, v: string | null) {
 // Level data: an override keyed by setId is layered on at load. Bodyweight here
 // is JUST for that set (overrides the profile default); scale is the per-set
 // technique factor (beats the per-hole one). RIR keeps its own store above.
-interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; }
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; }
 const SET_OVR_KEY = "colosseum.setOverrides.v1";
 let setOverrides: Record<string, SetOverride> = (() => {
   try {
@@ -1104,10 +1104,23 @@ function applySetOverride(r: SetRecord): SetRecord {
     weight: o.weight !== undefined ? o.weight : r.weight,
     reps: o.reps !== undefined ? o.reps : r.reps,
     bodyweight: o.bodyweight !== undefined ? o.bodyweight : r.bodyweight,
+    notes: o.notes !== undefined ? o.notes : r.notes,
   };
 }
-/** Set or clear one override field for a set (empty/NaN clears just that field). */
-function setSetOverrideField(id: string, field: keyof SetOverride, value: number | null) {
+/** Set or clear the note-text override for a set (empty string clears it back to
+ * the original CSV note). Kept separate from the numeric fields above. */
+function setSetOverrideNote(id: string, value: string, originalNote: string): void {
+  const o = setOverrides[id] ?? {};
+  const trimmed = value.trim();
+  // Storing the original verbatim is pointless — only keep a genuine change.
+  if (trimmed === originalNote.trim()) delete o.notes;
+  else o.notes = trimmed;
+  if (Object.keys(o).length === 0) delete setOverrides[id];
+  else setOverrides[id] = o;
+  saveSetOverrides();
+}
+/** Set or clear one numeric override field for a set (empty/NaN clears just it). */
+function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight" | "scale", value: number | null) {
   const o = setOverrides[id] ?? {};
   if (value === null || !Number.isFinite(value)) delete o[field];
   else o[field] = value;
@@ -4699,12 +4712,18 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
     `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
+  // Editable NOTE: the original CSV note (or your edit of it). Drives the displayed
+  // text and the variation difficulty; blank it to fall back to the original.
+  const noteFld =
+    `<label class="set-edit-f set-edit-f-note">Note` +
+    `<input class="set-edit-note" type="text" data-setid="${escapeHtml(sid)}" data-orig="${escapeHtml(raw.notes ?? "")}" value="${escapeHtml(s.notes ?? "")}" placeholder="${escapeHtml(raw.notes ?? "(no note)")}" /></label>`;
   const editRow =
     `<tr class="set-edit-row" hidden><td colspan="5"><div class="set-edit-grid">` +
     efld("weight", "Weight (kg)", s.weight, 0.5) +
     efld("reps", "Reps", s.reps, 1) +
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
+    noteFld +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
     `</div></td></tr>`;
   return main + noteRow + formulaRow + prirRow + editRow;
@@ -4919,9 +4938,16 @@ function resetSetEdit(target: HTMLElement): boolean {
 /** A set-edit input changed: save the override (weight/reps/bodyweight/scale) and
  * re-render so the new value flows everywhere (1RM, volume, leaderboard, graphs). */
 function onSetEditInput(e: Event): void {
+  // Note text field (string) — edits the original CSV note for this set.
+  const noteInp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-note");
+  if (noteInp?.dataset.setid !== undefined) {
+    setSetOverrideNote(noteInp.dataset.setid, noteInp.value, noteInp.dataset.orig ?? "");
+    renderAll();
+    return;
+  }
   const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-input");
   if (!inp?.dataset.setid || !inp.dataset.field) return;
-  const field = inp.dataset.field as keyof SetOverride;
+  const field = inp.dataset.field as "weight" | "reps" | "bodyweight" | "scale";
   const txt = inp.value.trim();
   let v: number | null = txt === "" ? null : parseFloat(txt);
   if (v !== null && !Number.isFinite(v)) v = null;
@@ -7066,7 +7092,7 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
-    if ((e.target as HTMLElement).closest(".set-edit-input")) { onSetEditInput(e); return; }
+    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note")) { onSetEditInput(e); return; }
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));
