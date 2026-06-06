@@ -30,6 +30,10 @@ export interface AnalyticsGraphInput {
   dateTo?: string;
   /** Short code for an exercise name (for series labels). */
   codeOf?: (name: string) => string;
+  /** Show kg metrics as multiples of bodyweight (divide by `bodyweight`). */
+  perBodyweight?: boolean;
+  /** The athlete's bodyweight in kg, for the per-bodyweight view. */
+  bodyweight?: number | null;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -81,6 +85,19 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
       }
       if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
+      // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
+      // read as multiples of BW; the count metrics (right axis) are left alone.
+      if (input.perBodyweight && input.bodyweight && input.bodyweight > 0 && m.axis !== "right") {
+        const bw = input.bodyweight;
+        const d = (v: number) => Math.round((v / bw) * 1000) / 1000;
+        pts = pts.map((p) => ({
+          ...p,
+          ...(p.y != null ? { y: d(p.y) } : {}),
+          ...(p.lo != null ? { lo: d(p.lo) } : {}),
+          ...(p.hi != null ? { hi: d(p.hi) } : {}),
+          ...(p.bands ? { bands: p.bands.map(d) } : {}),
+        }));
+      }
       const color = SERIES_COLORS[ci % SERIES_COLORS.length]!;
       ci++;
       // One group → label by metric only; several → prefix the exercise.

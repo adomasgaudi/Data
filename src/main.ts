@@ -9344,6 +9344,7 @@ const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint"
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+let waPerBodyweight = false; // graph y-values shown as multiples of bodyweight
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
 let userTaxonomy: UserAssignments = (() => {
@@ -9735,6 +9736,7 @@ function renderWaGraph(): void {
     `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
+    `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
     `<label class="wa-inc" title="Drop easy / warm-up sets (high reps-in-reserve) — keep only hard working sets. Also applies to the training calendar."><input type="checkbox" id="waHardOnly"${waHardOnly ? " checked" : ""} /> Hard sets only</label>` +
     `<button type="button" class="wa-name-opt${compact ? " is-on" : ""}" data-watime="1" title="${compact ? "Showing compacted time (gaps squeezed). Tap for real spacing." : "Showing real time spacing. Tap to squeeze gaps so all sets fit."}">${compact ? "⇄ Compacted time" : "⇄ Realistic time"}</button>` +
     `</div>`;
@@ -9780,6 +9782,8 @@ function renderWaGraph(): void {
         metrics: [...waMetrics],
         config: waGraphConfig,
         codeOf: codeFor,
+        perBodyweight: waPerBodyweight,
+        bodyweight: athProfile(els.athlete.value)?.weight ?? null,
       })
     : 0;
   // Relocate the chart's legend up into the top bar so it sits beside Graph options
@@ -10107,6 +10111,8 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutCalendar();
       return;
     }
+    const perBw = target.closest<HTMLInputElement>("#waPerBw");
+    if (perBw) { waPerBodyweight = perBw.checked; renderWaGraph(); return; }
     // Graph config controls (TASK 29) — update config, re-render just the graph.
     const cfg = target.closest<HTMLElement>(".wa-cfg");
     if (cfg?.dataset.wacfg) {
