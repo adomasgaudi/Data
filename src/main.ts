@@ -612,37 +612,68 @@ function setCoeff(exerciseName: string, value: number) {
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
 // are the read points used across the app so an edit shows everywhere.
 const META_OVERRIDE_KEY = "colosseum.metaOverrides.v1";
-type MetaOverrides = { cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string> };
+type MetaKind = "cat" | "mg" | "tier";
+// An exercise can fit SEVERAL categories / muscle groups / tiers, so each override
+// is a LIST. The legacy single maps (cat/mg/tier) are kept in sync with each list's
+// first (primary) value, so older backups and every single-value reader keep working.
+type MetaOverrides = {
+  cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string>;
+  catSet?: Record<string, string[]>; mgSet?: Record<string, string[]>; tierSet?: Record<string, string[]>;
+};
 const metaOverrides: MetaOverrides = (() => {
+  const empty = (): MetaOverrides => ({ cat: {}, mg: {}, tier: {}, catSet: {}, mgSet: {}, tierSet: {} });
   try {
     const raw = localStorage.getItem(META_OVERRIDE_KEY);
     const o = raw ? (JSON.parse(raw) as MetaOverrides) : {};
-    return { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {} };
+    const m: MetaOverrides = { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {}, catSet: o.catSet ?? {}, mgSet: o.mgSet ?? {}, tierSet: o.tierSet ?? {} };
+    // Migrate any legacy single override into its list form (once).
+    for (const k of ["cat", "mg", "tier"] as MetaKind[]) {
+      const single = m[k]!, set = m[`${k}Set` as const]!;
+      for (const [name, v] of Object.entries(single)) if (v && !set[name]?.length) set[name] = [v];
+    }
+    return m;
   } catch {
-    return { cat: {}, mg: {}, tier: {} };
+    return empty();
   }
 })();
 function saveMetaOverrides() {
   try { localStorage.setItem(META_OVERRIDE_KEY, JSON.stringify(metaOverrides)); } catch { /* storage may be unavailable */ }
 }
-/** Primary training category — the owner's override if set, else the keyword default. */
-function catFor(name: string): TrainingCategory {
-  return (metaOverrides.cat![name] as TrainingCategory) ?? exerciseCategory(name);
+/** The owner's full override LIST for one dimension, or null if none is set. */
+function metaSet(kind: MetaKind, name: string): string[] | null {
+  const arr = metaOverrides[`${kind}Set` as const]![name];
+  return arr && arr.length ? arr : null;
 }
-/** Muscle group — override if set, else the default. */
-function mgFor(name: string): MuscleGroup {
-  return (metaOverrides.mg![name] as MuscleGroup) ?? muscleGroup(name);
+/** All training categories a lift belongs to — the owner's list, else the single default. */
+function catsFor(name: string): TrainingCategory[] {
+  return (metaSet("cat", name) as TrainingCategory[]) ?? [exerciseCategory(name)];
 }
-/** Tier — override if set, else the default. */
-function tierFor(name: string): ExerciseTier {
-  return (metaOverrides.tier![name] as ExerciseTier) ?? exerciseTier(name);
+/** All muscle groups a lift belongs to — the owner's list, else the single default. */
+function mgsFor(name: string): MuscleGroup[] {
+  return (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
 }
-/** Set or clear (empty/"auto" → back to default) one metadata override. */
-function setMetaOverride(kind: "cat" | "mg" | "tier", name: string, value: string) {
-  const map = metaOverrides[kind]!;
-  if (!value || value === "auto") delete map[name];
-  else map[name] = value;
+/** All tiers a lift belongs to — the owner's list, else the single default. */
+function tiersFor(name: string): ExerciseTier[] {
+  return (metaSet("tier", name) as ExerciseTier[]) ?? [exerciseTier(name)];
+}
+/** Primary (first) of each dimension — what every single-value reader uses. */
+function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
+function mgFor(name: string): MuscleGroup { return mgsFor(name)[0]!; }
+function tierFor(name: string): ExerciseTier { return tiersFor(name)[0]!; }
+/** Replace the whole override list for one dimension (empty → back to auto default). */
+function setMetaSet(kind: MetaKind, name: string, values: string[]) {
+  const set = metaOverrides[`${kind}Set` as const]!, single = metaOverrides[kind]!;
+  if (!values.length) { delete set[name]; delete single[name]; }
+  else { set[name] = values; single[name] = values[0]!; }
   saveMetaOverrides();
+}
+/** Toggle one value in a dimension's list (starting from whatever is shown now). */
+function toggleMetaOverride(kind: MetaKind, name: string, value: string) {
+  if (!value || value === "auto") { setMetaSet(kind, name, []); return; } // ↺ reset to default
+  const effective = metaSet(kind, name) ?? [kind === "cat" ? exerciseCategory(name) : kind === "mg" ? muscleGroup(name) : exerciseTier(name)];
+  const next = new Set(effective);
+  if (next.has(value)) next.delete(value); else next.add(value);
+  setMetaSet(kind, name, [...next]);
 }
 /** All muscle-group choices for the editor dropdown. */
 const MUSCLE_GROUPS: MuscleGroup[] = [
@@ -2400,18 +2431,14 @@ interface IndexBucket { key: string; label: string; color: string; rows: IndexRo
  * pattern buckets); "combinable"/"comparable" show each synthetic group's members
  * plus a trailing bucket for everything not in such a group. */
 function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
-  const groupBy = <K extends string>(key: (r: IndexRow) => K): Map<K, IndexRow[]> => {
+  // A lift can sit in SEVERAL muscle groups / categories, so it appears under each.
+  const groupByMulti = <K extends string>(keys: (r: IndexRow) => readonly K[]): Map<K, IndexRow[]> => {
     const by = new Map<K, IndexRow[]>();
-    for (const r of rows) {
-      const k = key(r);
-      const list = by.get(k);
-      if (list) list.push(r); else by.set(k, [r]);
-    }
+    for (const r of rows) for (const k of keys(r)) { const list = by.get(k); if (list) list.push(r); else by.set(k, [r]); }
     return by;
   };
-
   if (mode === "muscle") {
-    const by = groupBy((r) => mgFor(r.name));
+    const by = groupByMulti((r) => mgsFor(r.name));
     return INDEX_MUSCLES.filter((m) => by.has(m)).map((m) => ({ key: m, label: m, color: muscleColor(m), rows: by.get(m)! }));
   }
   if (mode === "function") {
@@ -2430,8 +2457,8 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
       buckets.push({ key: "__ungrouped", label: mode === "combinable" ? "Not in a combinable group" : "Not in a comparable group", color: CATEGORY_COLORS.Other, rows: rest });
     return buckets;
   }
-  // category (default): the one primary training bucket per lift.
-  const by = groupBy((r) => catFor(r.name));
+  // category (default): a lift shows under every category it's tagged with.
+  const by = groupByMulti((r) => catsFor(r.name));
   return TRAINING_CATEGORIES.filter((c) => by.has(c)).map((c) => ({ key: c, label: c, color: CATEGORY_COLORS[c], rows: by.get(c)! }));
 }
 
@@ -6098,8 +6125,6 @@ function openModelEditor(): void {
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   const recs = computedRecords().filter((r) => r.exerciseName === name);
-  const cat = catFor(name);
-  const mg = mgFor(name);
   const coeff = coeffFor(name);
   // A user-created merge (this lift combines several exercises) vs auto spelling-merges.
   const userMergeDef = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
@@ -6130,24 +6155,27 @@ function exerciseInfoHtml(name: string): string {
   // "Edit this exercise" section, every value here that CAN be changed is its own
   // input/select (same classes + data-editex the change handlers already key off).
   const code = codeFor(name), short = shortFor(name);
-  const opt = (v: string, label: string, cur: string) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(label)}</option>`;
   const codeInput = `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />`;
   const shortInput = `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />`;
-  const catSel = `<select class="ex-edit-cat" data-editex="${escapeHtml(name)}" aria-label="Category for ${escapeHtml(name)}">` +
-    TRAINING_CATEGORIES.map((c) => opt(c, c, cat)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
-  const mgSel = `<select class="ex-edit-mg" data-editex="${escapeHtml(name)}" aria-label="Muscle group for ${escapeHtml(name)}">` +
-    MUSCLE_GROUPS.map((m) => opt(m, m, mg)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
-  const tierSel = `<select class="ex-edit-tier" data-editex="${escapeHtml(name)}" aria-label="Tier for ${escapeHtml(name)}">` +
-    (["main", "second", "third"] as ExerciseTier[]).map((tv) => opt(tv, TIER_LABELS[tv], tierFor(name))).join("") +
-    opt("auto", "↺ Auto", "__never") + `</select>`;
+  // Category / Muscle group / Tier are MULTI-select: a lift can fit several at once,
+  // so each is a row of toggle chips (tap to add/remove), highlighted = selected.
+  // The ↺ chip clears the override back to the automatic guess.
+  const metaChips = (kind: MetaKind, all: readonly string[], labelOf: (v: string) => string, sel: readonly string[]) =>
+    `<span class="ex-meta-chips">` +
+    all.map((v) => `<button type="button" class="ex-meta-chip${sel.includes(v) ? " is-on" : ""}" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="${escapeHtml(v)}">${escapeHtml(labelOf(v))}</button>`).join("") +
+    (metaSet(kind, name) ? `<button type="button" class="ex-meta-reset" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
+    `</span>`;
+  const catChips = metaChips("cat", TRAINING_CATEGORIES, (v) => v, catsFor(name));
+  const mgChips = metaChips("mg", MUSCLE_GROUPS, (v) => v, mgsFor(name));
+  const tierChips = metaChips("tier", ["main", "second", "third"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
   const coeffInput = `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" />`;
 
   const rows = [
     item("Code", codeInput),
     item("Short name", shortInput),
-    item("Category", catSel),
-    item("Muscle group", mgSel),
-    item("Tier", tierSel),
+    item("Category", catChips),
+    item("Muscle group", mgChips),
+    item("Tier", tierChips),
     item("Tags", `<span class="ex-tags">${tagChips}</span>`),
     // Difficulty model: assign one so ANY lift (even a hand-created handstand) gets
     // the editable variation multipliers; "None" falls back to the flat per-note ×.
@@ -7514,17 +7542,21 @@ async function init() {
       renderAll();
       return;
     }
-    // Metadata selects: Category / Muscle group / Tier overrides.
-    const cat = t.closest<HTMLSelectElement>(".ex-edit-cat");
-    if (cat?.dataset.editex) { setMetaOverride("cat", cat.dataset.editex, cat.value); refreshExerciseInfo(); renderAll(); return; }
-    const mg = t.closest<HTMLSelectElement>(".ex-edit-mg");
-    if (mg?.dataset.editex) { setMetaOverride("mg", mg.dataset.editex, mg.value); refreshExerciseInfo(); renderAll(); return; }
-    const tier = t.closest<HTMLSelectElement>(".ex-edit-tier");
-    if (tier?.dataset.editex) { setMetaOverride("tier", tier.dataset.editex, tier.value); refreshExerciseInfo(); renderAll(); return; }
     // Difficulty-model assignment: attach (or clear) a model so the lift gets the
     // editable variation multipliers.
     const model = t.closest<HTMLSelectElement>(".ex-edit-model");
     if (model?.dataset.editex) { setExerciseFamily(model.dataset.editex, model.value); refreshAfterDifficultyEdit(); return; }
+  });
+  // Category / Muscle group / Tier are multi-select chips — tap to toggle membership
+  // (a lift can belong to several at once); the ↺ chip resets to the auto default.
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip, .ex-meta-reset");
+    const ex = chip?.dataset.metaEx, kind = chip?.dataset.metaKind, val = chip?.dataset.metaVal;
+    if (!ex || !kind || val === undefined) return;
+    toggleMetaOverride(kind as MetaKind, ex, val);
+    renderAll(); // grouping/colours depend on it; rebuilds the Index list
+    reopenIndexDetail(ex); // keep the inline panel open (it may have moved groups)
+    refreshPoseViz();
   });
   // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {

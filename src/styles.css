@@ -1895,16 +1895,20 @@ sup.wr-bw { font-size: 0.85em; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.3rem 0.2rem; }
-.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; align-items: center; }
-.ex-info-lbl { flex: 0 0 8.5rem; color: var(--muted); font-weight: 600; }
+.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; align-items: flex-start; }
+.ex-info-lbl { flex: 0 0 8.5rem; color: var(--muted); font-weight: 600; padding-top: 3px; }
 .ex-info-val { flex: 1 1 auto; min-width: 0; }
 /* Editable controls folded straight into the info rows — blue = editable. */
 .ex-info-val > input, .ex-info-val > select { font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--accent); font-weight: 600; max-width: 100%; min-width: 0; }
 .ex-info-val > input[type="text"] { width: 100%; }
 .ex-info-val > input:focus, .ex-info-val > select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-/* "↩ All exercises index" link at the top of the More-info overlay. */
-.ex-index-link { font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--accent); background: none; border: none; padding: 0; text-decoration: underline; }
-.ex-index-link:hover { color: var(--text); }
+/* Multi-select chips for Category / Muscle group / Tier (tap to toggle membership). */
+.ex-meta-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.ex-meta-chip:hover { border-color: var(--accent); color: var(--accent); }
+.ex-meta-chip.is-on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.ex-meta-reset { font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; }
+.ex-meta-reset:hover { border-color: var(--accent); color: var(--accent); }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
   cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
