@@ -1,0 +1,17 @@
+{
+  "colosseum.setOverrides.v1": "{\"adomasgaudi|Handstand Push Ups|2026-05-11|6\":{\"reps\":3}}",
+  "colosseum.showAddSets": "1",
+  "colosseum.manualSets.v1": "[{\"id\":\"1780767591805-0-sh2t2\",\"user\":\"Adomas\",\"username\":\"adomasgaudi\",\"date\":\"2026-06-06\",\"exerciseName\":\"Handstand Push Ups\",\"weight\":0,\"reps\":5},{\"id\":\"1780768207974-0-j4v4w\",\"user\":\"Adomas\",\"username\":\"adomasgaudi\",\"date\":\"2026-06-06\",\"exerciseName\":\"Handstand Push Ups\",\"weight\":0,\"reps\":45}]",
+  "colosseum.viewMode": "admin",
+  "colosseum.lastAthlete.v1": "adomasgaudi",
+  "colosseum.exerciseShortNames.v1": "{\"Bench Press\":\"BPress\"}",
+  "colosseum.deletedSets.v1": "[\"adomasgaudi|Handstand Push Ups|2023-09-13|1\",\"adomasgaudi|Handstand Push Ups|2026-03-17|1\",\"adomasgaudi|Handstand Push Ups|2026-06-06|100001\",\"adomasgaudi|Handstand Push Ups|2026-06-06|100000\"]",
+  "colosseum.hardSetsOnly": "1",
+  "colosseum.signedIn": "1",
+  "colosseum.worldRecords.v1": "{\"Bench Press\":{\"m\":{\"kg\":200,\"bw\":80},\"f\":{\"kg\":140,\"bw\":60}},\"Pull Ups\":{\"m\":{\"kg\":100,\"bw\":80},\"f\":{\"kg\":60,\"bw\":60}},\"Squat\":{\"m\":{\"kg\":360,\"bw\":80},\"f\":{\"kg\":260,\"bw\":60}}}",
+  "colosseum.famFactors.v1": "{\"HSPU\":{\"rom\":{\"+2cm\":0.98,\"+5cm\":0.96,\"+10cm\":0.9,\"+15cm\":0.85,\"+20cm\":0.8,\"+23cm\":0.75,\"+25cm\":0.7},\"ladderH\":{\"lad3\":1,\"lad5\":1,\"lad6\":1,\"lad9\":1},\"continuity\":{\"paused\":0.7,\"uninterrupted\":1},\"bandKnob\":{\"a\":10}}}",
+  "colosseum.timeCompact.v1": "1",
+  "colosseum.variationVecs.v1": "{\"Handstand Push Ups|b2 wall, l yoga, + lyiga height, close to wall head\":{\"rom\":\"+23cm\",\"lean\":\"10cm\",\"band\":\"2\",\"continuity\":\"uninterrupted\"},\"Handstand Push Ups|b2 wall, l yoga, + lyiga height, close to wall head + 10 shrugs\":{\"rom\":\"+23cm\",\"lean\":\"10cm\",\"continuity\":\"uninterrupted\"},\"Handstand Push Ups|uninterupted\":{\"rom\":\"+23cm\",\"lean\":\"0cm\"},\"Handstand Push Ups|wall\":{\"rom\":\"+23cm\",\"lean\":\"0cm\"},\"Handstand Push Ups|guma 4, 15kg elev\":{\"rom\":\"+5cm\"},\"Handstand Push Ups|5 level, l sit\":{\"rom\":\"0cm\",\"lean\":\"5cm\"},\"Handstand Push Ups|3 tries\":{\"rom\":\"+23cm\",\"lean\":\"0cm\"},\"Handstand Push Ups|uninterupted close to limit\":{\"rom\":\"+23cm\",\"lean\":\"0cm\"},\"Handstand Push Ups|uninterupted 3 + 5 wall\":{\"rom\":\"+25cm\",\"lean\":\"0cm\",\"support\":\"free\"},\"Handstand Push Ups|forward lean guma 5\":{\"rom\":\"0cm\",\"lean\":\"23cm\"},\"Handstand Push Ups|yoga block\":{\"rom\":\"+23cm\",\"lean\":\"0cm\",\"support\":\"free\"},\"Handstand Push Ups|yoga block, uninterupted no wall\":{\"rom\":\"+25cm\",\"lean\":\"0cm\"}}",
+  "colosseum.metaOverrides.v1": "{\"cat\":{\"Squat\":\"Legs\"},\"mg\":{\"Squat\":\"Quads\"},\"tier\":{},\"catSet\":{\"Squat\":[\"Legs\"]},\"mgSet\":{\"Squat\":[\"Quads\",\"Glutes\",\"Lower back\"]},\"tierSet\":{}}",
+  "colosseum.notComparableNotes.v1": "[\"Handstand Push Ups|static from bottom\"]"
+}

@@ -113,6 +113,20 @@ import {
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename } from "./backup";
+import defaultCache from "./data/defaultCache.json";
+
+// Bundled "global cache" — the owner's baseline setup (overrides, world records,
+// difficulty factors, manual/edited sets…). On any FRESH browser (or one missing a
+// key) we seed it in; existing keys are left untouched, so a device's own later
+// edits always win. Runs before any colosseum.* loader below reads storage.
+(function seedDefaultCache() {
+  try {
+    for (const [k, v] of Object.entries(defaultCache as Record<string, string>))
+      if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
+  } catch {
+    /* storage may be unavailable (e.g. private mode) */
+  }
+})();
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
