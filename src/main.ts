@@ -5618,7 +5618,7 @@ function notePoseHtml(name: string, note: string): string {
   return (
     `<div class="ex-var-pose">` +
     `<div class="pose3d" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"></div>` +
-    `<div class="pose-hint muted">Drag to rotate the figure. Pick options below to pose it.</div>` +
+    `<div class="pose-hint muted">Drag to rotate. The worked muscles (shoulders &amp; triceps) glow blue. Pick options below to pose it.</div>` +
     ctlRow("support") +
     ctlRow("rom") +
     ctlRow("lean") +

@@ -29,6 +29,51 @@ export interface PoseScene {
   dispose(): void;
 }
 
+// "Anatomy chart" look: a silver-grey body with the worked muscles glowing blue.
+const ANATOMY_GREY = new THREE.Color(0x9aa0a8);
+const ANATOMY_BLUE = new THREE.Color(0x2f6bff);
+// Handstand-push-up prime movers (Mixamo bone names, ":" dropped by three.js):
+// deltoids + triceps (upper-arm bones) and the upper chest (Spine2).
+const HSPU_TARGET_BONES = new Set(
+  ["LeftArm", "RightArm", "LeftShoulder", "RightShoulder", "Spine2"].map((s) => "mixamorig" + s),
+);
+
+/** Recolour the rigged body into the grey anatomy look and bake a blue highlight
+ * over the worked muscles, using each vertex's skin weights to find which bones
+ * (muscles) it belongs to. Mutates the (shared) geometry's vertex colours once
+ * and gives each mount its own grey vertex-colour material (disposed per mount). */
+function styleAnatomy(model: THREE.Object3D, ownMat: THREE.Material[]): void {
+  model.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    if (!sm.isSkinnedMesh) return;
+    const g = sm.geometry;
+    if (!g.getAttribute("color")) {
+      const bones = sm.skeleton.bones;
+      const si = g.getAttribute("skinIndex");
+      const sw = g.getAttribute("skinWeight");
+      const n = g.getAttribute("position").count;
+      const col = new Float32Array(n * 3);
+      const c = new THREE.Color();
+      for (let i = 0; i < n; i++) {
+        let tw = 0;
+        for (let j = 0; j < 4; j++) {
+          const b = bones[si.getComponent(i, j)];
+          if (b && HSPU_TARGET_BONES.has(b.name)) tw += sw.getComponent(i, j);
+        }
+        const t = Math.min(1, Math.max(0, (tw - 0.2) / 0.5)); // smooth grey→blue ramp
+        c.copy(ANATOMY_GREY).lerp(ANATOMY_BLUE, t);
+        col[i * 3] = c.r;
+        col[i * 3 + 1] = c.g;
+        col[i * 3 + 2] = c.b;
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    }
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 });
+    sm.material = mat;
+    ownMat.push(mat);
+  });
+}
+
 /** cm string ("+15cm", "-10cm", "0cm") → metres (0.15, −0.10, 0). */
 function cm(v: string | undefined): number {
   const m = /(-?\d+(?:\.\d+)?)\s*cm/.exec(v ?? "");
@@ -219,6 +264,7 @@ export function mountPoseScene(container: HTMLElement, initial: PoseVec): PoseSc
     .then((tpl) => {
       if (disposed) return;
       const model = cloneRig(tpl);
+      styleAnatomy(model, ownMat); // grey anatomy body + blue worked-muscle highlight
       flip.add(model);
       flip.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
