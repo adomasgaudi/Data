@@ -65,11 +65,11 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // the range → easier (<1); parallettes/brick go below the floor (−cm) → deeper,
       // harder (>1). A yoga block reads as +5 / +15 / +23cm depending on its side.
       rom: { "+25cm": 0.56, "+23cm": 0.6, "+20cm": 0.66, "+15cm": 0.72, "+10cm": 0.8, "+5cm": 0.88, "+2cm": 0.94, "0cm": 1.0, "-3cm": 1.06, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35, "-20cm": 1.5 },
-      // Forward lean, measured in cm. 0cm = straight (×1). Leaning further demands
-      // more balance/strength → harder, but only GENTLY: roughly ×1 out to ~15cm,
-      // then ramping to ~×1.2 by 23cm. (Lean's effect differs by support — back- vs
-      // front-to-wall — which the per-support overrides in the customiser handle.)
-      lean: { "0cm": 1.0, "3cm": 1.0, "5cm": 1.0, "8cm": 1.0, "10cm": 1.0, "13cm": 1.0, "15cm": 1.0, "18cm": 1.07, "20cm": 1.13, "23cm": 1.2 },
+      // Forward lean, in cm. This BASE table is the IMMEDIATE one (free / front-to-
+      // wall / banded): lean gets harder from the first cm, ~×1.0 → ×1.2 over 0–23cm.
+      // Back-to-wall gets a 15cm "grace" applied in code (the scale shifted down
+      // 15cm), so against the wall the first 15cm of lean does nothing.
+      lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
@@ -142,7 +142,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 7;
+export const CONFIG_VERSION = 8;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many

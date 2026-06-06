@@ -985,11 +985,34 @@ function setExerciseFamily(exerciseName: string, key: string): void {
   try { localStorage.setItem(EX_FAMILY_KEY, JSON.stringify(exerciseFamilyOverrides)); } catch { /* ignore */ }
 }
 
+const leanCm = (key: string): number => { const n = parseInt(key, 10); return Number.isFinite(n) ? n : 0; };
+/** Default lean table for a support. Back-to-wall gets a 15cm "grace": forward
+ * lean does nothing for the first 15cm (you're against the wall), so the scale is
+ * shifted DOWN 15cm — b2w factor(X) = base factor(X−15). Free / front-to-wall /
+ * ladder use the base table (immediate, harder from the first cm). */
+function defaultLeanTable(family: string, support: string): Record<string, number> {
+  const base = FAMILIES[family]?.dims.lean ?? {};
+  if (support !== "back_to_wall") return base;
+  const keys = Object.keys(base);
+  const factorAtCm = (cm: number): number => {
+    let bestKey = keys[0] ?? "";
+    for (const k of keys) if (leanCm(k) <= cm && leanCm(k) >= leanCm(bestKey)) bestKey = k; // largest key ≤ cm
+    return base[bestKey] ?? 1;
+  };
+  const out: Record<string, number> = {};
+  for (const k of keys) out[k] = factorAtCm(Math.max(0, leanCm(k) - 15));
+  return out;
+}
+
 function famLevels(family: string, dim: string): Record<string, number> {
-  // Per-support lean tables ("lean:back_to_wall", …) default to the shared base
-  // lean, so they start from the same numbers until the owner tunes one.
-  let base = FAMILIES[family]?.dims[dim] ?? {};
-  if (Object.keys(base).length === 0 && dim.startsWith("lean:")) base = FAMILIES[family]?.dims["lean"] ?? {};
+  // Per-support lean tables ("lean:back_to_wall", …): start from that support's
+  // default (b2w = 15cm-graced, others = base) then layer any owner overrides.
+  if (dim.startsWith("lean:")) {
+    const base = defaultLeanTable(family, dim.slice(5));
+    const ov = famFactorOverrides[family]?.[dim];
+    return ov ? { ...base, ...ov } : base;
+  }
+  const base = FAMILIES[family]?.dims[dim] ?? {};
   const ov = famFactorOverrides[family]?.[dim];
   return ov ? { ...base, ...ov } : base;
 }
@@ -1004,7 +1027,7 @@ function saveFamFactors(): void {
 /** Set or clear (value === default → clear) one model factor. */
 function setFamFactor(family: string, dim: string, level: string, value: number): void {
   const def = FAMILIES[family]?.dims[dim]?.[level]
-    ?? (dim.startsWith("lean:") ? FAMILIES[family]?.dims["lean"]?.[level] : undefined)
+    ?? (dim.startsWith("lean:") ? defaultLeanTable(family, dim.slice(5))[level] : undefined)
     ?? (dim === "bandKnob" && level === "a" ? defaultBandKnob(family) : undefined);
   const fam = (famFactorOverrides[family] ??= {});
   const d = (fam[dim] ??= {});
