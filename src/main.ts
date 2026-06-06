@@ -58,6 +58,7 @@ import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./varian
 import { resolveNote } from "./variationModel";
 import { familyOf, FAMILIES } from "./variationConfig";
 import { mountPoseScene, type PoseScene } from "./poseScene";
+import { mountPoseDraw, type PoseDraw } from "./poseDraw";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
@@ -1364,13 +1365,13 @@ function openExerciseInfo(name: string): void {
   els.exInfoTitle.textContent = name;
   els.exInfo.innerHTML = exerciseInfoHtml(name);
   els.exInfoPage.hidden = false;
-  refreshPose3d();
+  refreshPoseViz();
 }
 /** Re-render the open More-info overlay (after a difficulty edit). */
 function refreshExerciseInfo(): void {
   if (exInfoName && !els.exInfoPage.hidden) {
     els.exInfo.innerHTML = exerciseInfoHtml(exInfoName);
-    refreshPose3d();
+    refreshPoseViz();
   }
 }
 /** From a note's "who & when" entry: switch to that athlete, open the Analysis
@@ -4835,7 +4836,7 @@ function renderScaleEditor(): void {
     `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(scaleEditState.note)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     notePickerHtml(scaleEditState.ex, scaleEditState.note);
-  refreshPose3d();
+  refreshPoseViz();
 }
 function positionScaleEditor(anchor: HTMLElement): void {
   const pop = document.getElementById("scaleEditPop");
@@ -4867,7 +4868,7 @@ function closeScaleEditor(): void {
   scaleEditDirty = false;
   const pop = document.getElementById("scaleEditPop");
   if (pop) pop.hidden = true;
-  refreshPose3d(); // tear down the 3-D scene now the popover is closed
+  refreshPoseViz(); // tear down the visual editors now the popover is closed
   // Sync the table/graphs ONCE, on close (not on every chip tap), preserving the
   // scroll position so the page doesn't jump.
   if (wasDirty) {
@@ -5737,45 +5738,9 @@ function notePoseHtml(name: string, note: string): string {
     `</div>`
   );
 }
-/** Inner SVG for the simple 2-D "stickman" view: a side-view handstand figure
- * whose hand height tracks range-of-motion and whose feet offset tracks lean,
- * with the wall lit when the setup uses it. Redrawn in place on each pick. */
-function stickmanInner(name: string, note: string): string {
-  const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
-  const dims = FAMILIES[fam]!.dims;
-  const romKeys = Object.keys(dims.rom ?? {});
-  const leanKeys = Object.keys(dims.lean ?? {});
-  const romN = romKeys.length, leanN = leanKeys.length;
-  const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
-  const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
-  const sup = String(effVec.support ?? "free");
-  const onWall = sup !== "free";
-  const W = 200, floorY = 180, wallX = 24, handX = 112, handTop = 120, handBot = 166;
-  const handY = romN > 1 ? handTop + (romIdx * (handBot - handTop)) / (romN - 1) : 148;
-  const bodyLen = 82, leanMax = 46;
-  const feetX = handX - (leanN > 1 ? (leanIdx * leanMax) / (leanN - 1) : 0);
-  const feetY = handY - bodyLen;
-  const hipX = (handX + feetX) / 2, hipY = handY - bodyLen * 0.5, headY = handY - 15;
-  const f = (n: number) => n.toFixed(1);
-  const block = handY < floorY - 3 ? `<rect x="${handX - 20}" y="${f(handY + 5)}" width="40" height="${f(floorY - handY - 5)}" rx="2" class="pose-block"/>` : "";
-  const wall = `<rect x="0" y="20" width="${wallX}" height="${floorY - 20}" class="pose-wall${onWall ? " is-on" : ""}"/>`;
-  const floor = `<line x1="0" y1="${floorY}" x2="${W}" y2="${floorY}" class="pose-floor"/>`;
-  const fig =
-    `<line x1="${handX}" y1="${f(handY)}" x2="${handX}" y2="${f(headY + 8)}" class="pose-limb"/>` +
-    `<circle cx="${handX}" cy="${f(headY)}" r="9" class="pose-head"/>` +
-    `<line x1="${handX}" y1="${f(headY - 4)}" x2="${f(hipX)}" y2="${f(hipY)}" class="pose-limb"/>` +
-    `<line x1="${f(hipX)}" y1="${f(hipY)}" x2="${f(feetX)}" y2="${f(feetY)}" class="pose-limb"/>` +
-    `<circle cx="${handX - 6}" cy="${f(handY)}" r="3" class="pose-hand"/>` +
-    `<circle cx="${handX + 6}" cy="${f(handY)}" r="3" class="pose-hand"/>`;
-  const lbls =
-    `<text x="${f(feetX)}" y="${f(feetY - 10)}" class="pose-lbl" text-anchor="middle">${escapeHtml(String(effVec.lean))}</text>` +
-    `<text x="${handX + 24}" y="${f(handY + 4)}" class="pose-lbl" text-anchor="start">${escapeHtml(String(effVec.rom))}</text>` +
-    `<text x="${wallX / 2}" y="16" class="pose-lbl" text-anchor="middle">${escapeHtml(onWall ? (SUPPORT_LBL[sup] ?? sup) : "free")}</text>`;
-  return wall + floor + block + fig + lbls;
-}
-/** The 2-D stickman view: the figure + the same tap-to-pick control rows as the
- * 3-D view (reusing .pose-ctl), so picks update both views identically. */
+/** The 2-D "stickman" view: now an ANIMATED, drawn side-view athlete (mounted
+ * after render by refreshDrawn) that loops the rep — elbows bend/extend, the body
+ * leans, the hands sit on the block — plus the same tap-to-pick control rows. */
 function noteStickmanHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
   const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
@@ -5794,8 +5759,8 @@ function noteStickmanHtml(name: string, note: string): string {
   };
   return (
     `<div class="ex-var-pose">` +
-    `<svg class="pose-stickman" viewBox="0 0 200 210" width="100%" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}">${stickmanInner(name, note)}</svg>` +
-    `<div class="pose-hint muted">A simple side-view stickman of this setup. Pick options below.</div>` +
+    `<div class="pose-draw" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"></div>` +
+    `<div class="pose-hint muted">A drawn figure doing the rep — elbows bend, the body leans, hands on the block. Worked muscles (shoulders &amp; triceps) in blue. Pick options below.</div>` +
     ctl("support") + ctl("rom") + ctl("lean") +
     `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
     `</div>`
@@ -5815,6 +5780,25 @@ function refreshPose3d(): void {
   const fam = familyOf(ex);
   const vec = fam ? { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
   activePose3d = { scene: mountPoseScene(el, vec), el };
+}
+/** The currently-mounted drawn (2-D) figure (one at a time). */
+let activeDrawn: { fig: PoseDraw; el: HTMLElement } | null = null;
+/** Mount/dispose the drawn figure to match the visible `.pose-draw` container. */
+function refreshDrawn(): void {
+  const el = Array.from(document.querySelectorAll<HTMLElement>(".pose-draw")).find((c) => c.isConnected && !c.closest("[hidden]")) ?? null;
+  if (activeDrawn && activeDrawn.el === el) return;
+  if (activeDrawn) { activeDrawn.fig.dispose(); activeDrawn = null; }
+  if (!el) return;
+  const ex = el.dataset.poseex ?? "";
+  const note = el.dataset.posenote ?? "";
+  const fam = familyOf(ex);
+  const vec = fam ? { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
+  activeDrawn = { fig: mountPoseDraw(el, vec), el };
+}
+/** Sync both visual editors (3-D + drawn figure) after any editor render. */
+function refreshPoseViz(): void {
+  refreshPose3d();
+  refreshDrawn();
 }
 /** The note-variation difficulty editor: every distinct note logged for this lift,
  * each with an editable relative difficulty (×1 = no effect). Notes that look like
@@ -6430,7 +6414,7 @@ async function init() {
   els.exInfoClose.addEventListener("click", () => {
     els.exInfoPage.hidden = true;
     exInfoName = null;
-    refreshPose3d(); // tear down the 3-D scene when the overlay closes
+    refreshPoseViz(); // tear down the visual editors when the overlay closes
   });
   // "More info" buttons (Analysis single mode, drill-in) open the overlay.
   document.addEventListener("click", (e) => {
@@ -6496,7 +6480,7 @@ async function init() {
     noteEditMode = mode === "pose" ? "pose" : mode === "stickman" ? "stickman" : "chips";
     renderScaleEditor();
     refreshExerciseInfo();
-    refreshPose3d();
+    refreshPoseViz();
   });
   // Visual pose editor: tap a control chip below the 3-D figure to set that
   // dimension (support / rom / lean). Updates the live scene + the multiplier in
@@ -6513,11 +6497,9 @@ async function init() {
     if (!fam) return;
     setNoteVecDim(ex, note, dim, level);
     const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
-    // Update the live 3-D figure (don't remount — keep the orbit view).
+    // Update the live figure(s) without remounting (keep orbit / rep loop going).
     if (activePose3d) activePose3d.scene.update(vec);
-    // Or redraw the 2-D stickman in place, if that view is showing.
-    const stick = b.closest(".ex-var-pose")?.querySelector(".pose-stickman");
-    if (stick) stick.innerHTML = stickmanInner(ex, note);
+    if (activeDrawn) activeDrawn.fig.update(vec);
     // Mark just this dimension's chips as selected.
     const row = b.closest(".ex-var-dim");
     row?.querySelectorAll<HTMLElement>(".pose-ctl").forEach((c) => c.classList.toggle("is-on", c === b));

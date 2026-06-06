@@ -1947,6 +1947,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   touch-action: none; cursor: grab; }
 .pose3d:active { cursor: grabbing; }
 .pose3d canvas { display: block; }
+/* Drawn (2-D) animated figure (the "Stickman" mode). */
+.pose-draw { width: 100%; max-width: 320px; margin: 0 auto; display: block;
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--accent-soft) 100%); }
+.pose-draw-svg { display: block; width: 100%; height: auto; }
 .pose-hint { font-size: 0.74rem; text-align: center; }
 /* Tap-to-pose control chips below the figure (one row per dimension). */
 .pose-ctl { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 3px 9px;
