@@ -2412,12 +2412,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-sq-row { display: flex; gap: 0.4rem; margin-left: auto; }
 .wa-sq-fold { position: relative; }
 .wa-sq-sum {
-  list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-  width: 2rem; height: 2rem; font-size: 1.05rem; font-weight: 700; color: var(--accent);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; user-select: none;
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.2rem;
+  min-width: 2rem; height: 2rem; padding: 0 0.5rem; font-size: 1.05rem; font-weight: 700; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; user-select: none;
 }
 .wa-sq-sum::-webkit-details-marker { display: none; }
-.wa-sq-fold[open] .wa-sq-sum { border-color: var(--accent); background: var(--accent-soft); }
+.wa-sq-caret { font-size: 0.62rem; color: var(--accent); line-height: 1; }
+.wa-sq-sum:hover { background: var(--accent); color: #fff; }
+.wa-sq-sum:hover .wa-sq-caret { color: #fff; }
+.wa-sq-fold[open] .wa-sq-sum { border-color: var(--accent); background: var(--accent); color: #fff; }
+.wa-sq-fold[open] .wa-sq-sum .wa-sq-caret { color: #fff; }
 .wa-sq-menu {
   position: absolute; z-index: 40; top: calc(100% + 4px); right: 0;
   display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem;

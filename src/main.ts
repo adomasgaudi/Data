@@ -8518,7 +8518,7 @@ function renderWorkoutAnalysis(): void {
     // menu (absolute, so it never shifts the layout).
     const createForm =
       `<details class="wa-sq-fold wa-create"${waCreateOpen ? " open" : ""}>` +
-      `<summary class="wa-sq-sum" title="Create variant / group">+</summary>` +
+      `<summary class="wa-sq-sum" title="Create variant / group">+<span class="wa-sq-caret">▾</span></summary>` +
       `<div class="wa-sq-menu wa-create-body">` +
       `<div class="wa-sq-title">Create variant / group</div>` +
       `<label class="wa-create-f">Type<select id="waNewType">` +
@@ -8544,7 +8544,7 @@ function renderWorkoutAnalysis(): void {
     // with a floating menu — so it doesn't push the layout either.
     const settingsFold =
       `<details class="wa-sq-fold wa-settings-fold"${waCogOpen ? " open" : ""}>` +
-      `<summary class="wa-sq-sum" title="Settings">⚙</summary>` +
+      `<summary class="wa-sq-sum" title="Settings">⚙<span class="wa-sq-caret">▾</span></summary>` +
       `<div class="wa-sq-menu"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>` +
       `</details>`;
     // Filter + Exercises sit side by side; their summaries stay in the row while
