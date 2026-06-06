@@ -4927,11 +4927,14 @@ function closeAllRpeMenus(): void {
   }
 }
 
-/** Click on a set row that has a note: expand/collapse the hidden note row that
- * follows it. Returns true if the click was on such a row (so the caller stops).
- * Shared by the Workouts and Exercises sets tables. */
+/** Click on a set's note preview chip (the “…›”): expand/collapse the hidden note
+ * row that follows it. Returns true only when the chip itself was clicked — tapping
+ * anywhere else on the row falls through to open the edit panel (which has its own
+ * Note field), so a set WITH a note stays editable. Shared by both sets tables. */
 function toggleSetNote(target: HTMLElement): boolean {
-  const row = target.closest<HTMLElement>("tr.set-row.has-note");
+  const chip = target.closest<HTMLElement>(".set-note");
+  if (!chip) return false;
+  const row = chip.closest<HTMLElement>("tr.set-row.has-note");
   if (!row) return false;
   const noteRow = row.nextElementSibling;
   if (noteRow?.classList.contains("set-note-row")) {
