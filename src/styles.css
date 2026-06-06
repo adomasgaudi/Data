@@ -1970,7 +1970,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   background: linear-gradient(180deg, var(--bg) 0%, var(--accent-soft) 100%); }
 .pose-draw-svg { display: block; width: 100%; height: auto; }
+/* "Photo" mode: real video frames scrubbed by the slider. */
+.pose-photo { display: block; width: 100%; max-width: 300px; margin: 0 auto; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); }
 .pose-scrub-row { display: flex; align-items: center; gap: 0.4rem; max-width: 320px; margin: 0 auto; }
+.pose-photo-scrub { flex: 1; accent-color: var(--accent); cursor: ew-resize; }
 .pose-scrub { flex: 1; accent-color: var(--accent); cursor: ew-resize; }
 .pose-scrub-cap { font-size: 0.68rem; }
 .pose-scrub-val { font-size: 0.72rem; font-weight: 700; min-width: 3.4em; text-align: right; }

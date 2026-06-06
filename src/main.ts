@@ -60,6 +60,7 @@ import { familyOf, FAMILIES } from "./variationConfig";
 import { anteriorData, posteriorData } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
+import { POSE_FRAMES } from "./poseFrames";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
@@ -5556,7 +5557,7 @@ function exerciseEditHtml(name: string): string {
  * Reused by the More-info editor AND the floating set-row editor, so the same
  * `.ex-var-lvl` / `.ex-var-input` handlers drive both. */
 /** Chips vs Pose for the modifier editor (model lifts with a posable figure). */
-let noteEditMode: "chips" | "stickman" | "pose" = "chips";
+let noteEditMode: "chips" | "stickman" | "photo" | "pose" = "chips";
 /** A family is "posable" when it has the dimensions the stick-figure maps to. */
 function familyPosable(fam: string | null): boolean {
   return !!fam && ["rom", "lean", "support"].every((d) => FAMILIES[fam]!.dims[d]);
@@ -5577,9 +5578,11 @@ function notePickerHtml(name: string, note: string): string {
   const toggle = familyPosable(fam)
     ? `<div class="ex-var-mode"><button type="button" class="ex-var-mode-btn${noteEditMode === "chips" ? " is-on" : ""}" data-notemode="chips">Chips</button>` +
       `<button type="button" class="ex-var-mode-btn${noteEditMode === "stickman" ? " is-on" : ""}" data-notemode="stickman">🧍 Stickman</button>` +
+      `<button type="button" class="ex-var-mode-btn${noteEditMode === "photo" ? " is-on" : ""}" data-notemode="photo">📷 Photo</button>` +
       `<button type="button" class="ex-var-mode-btn${noteEditMode === "pose" ? " is-on" : ""}" data-notemode="pose">🧊 3D model</button></div>`
     : "";
   if (familyPosable(fam) && noteEditMode === "stickman") return toggle + noteStickmanHtml(name, note);
+  if (familyPosable(fam) && noteEditMode === "photo") return toggle + notePhotoHtml(name, note);
   if (familyPosable(fam) && noteEditMode === "pose") return toggle + notePoseHtml(name, note);
   const override = noteVecOverride(name, note);
   const effVec = { ...resolveNote(fam, note).vec, ...override };
@@ -5746,6 +5749,45 @@ function noteStickmanHtml(name: string, note: string): string {
     `<div class="pose-draw" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"></div>` +
     `<div class="pose-hint muted">A drawn figure doing the rep — drag the slider to scrub it down to the depth you did. Worked muscles (shoulders &amp; triceps) in blue.</div>` +
     scrub +
+    ctl("support") + ctl("rom") + ctl("lean") +
+    `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
+    `</div>`
+  );
+}
+/** The "Photo" view: scrub real frames from the owner's own handstand-push-up clip
+ * (top → bottom). The slider moves through the frames (like scrubbing a video) and
+ * maps its position onto the range-of-motion (depth). No mount needed — it's a
+ * plain <img> whose src the slider swaps. */
+function notePhotoHtml(name: string, note: string): string {
+  const fam = familyOf(name)!;
+  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const scale = scalarFromVec(fam, effVec);
+  const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
+  const N = POSE_FRAMES.length;
+  const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
+  // Map the current depth (rom) onto the nearest frame (top→bottom).
+  const frameIdx = romKeys.length > 1 ? Math.round((romIdx / (romKeys.length - 1)) * (N - 1)) : 0;
+  const ctl = (dim: string): string => {
+    const levels = FAMILIES[fam]!.dims[dim];
+    if (!levels) return "";
+    const cur = effVec[dim];
+    const chips = Object.keys(levels)
+      .map((l) => {
+        const lbl = dim === "support" ? SUPPORT_LBL[l] ?? l : l;
+        return `<button type="button" class="pose-ctl${l === cur ? " is-on" : ""}" data-posectl-ex="${escapeHtml(name)}" data-posectl-note="${escapeHtml(note)}" data-posectl-dim="${escapeHtml(dim)}" data-posectl-level="${escapeHtml(l)}">${escapeHtml(lbl)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`;
+      })
+      .join("");
+    return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
+  };
+  const slider =
+    `<div class="pose-scrub-row"><span class="pose-scrub-cap muted">top</span>` +
+    `<input type="range" class="pose-photo-scrub" min="0" max="${N - 1}" step="1" value="${frameIdx}" data-scrubex="${escapeHtml(name)}" data-scrubnote="${escapeHtml(note)}" aria-label="Scrub depth" />` +
+    `<span class="pose-scrub-cap muted">deep</span></div>`;
+  return (
+    `<div class="ex-var-pose">` +
+    `<img class="pose-photo" alt="Handstand push-up depth" src="${POSE_FRAMES[frameIdx]}" />` +
+    `<div class="pose-hint muted">Real frames from the clip — drag the slider to scrub down to the depth you did. It sets the range of motion.</div>` +
+    slider +
     ctl("support") + ctl("rom") + ctl("lean") +
     `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
     `</div>`
@@ -6514,7 +6556,7 @@ async function init() {
     const m = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-mode-btn");
     if (!m?.dataset.notemode) return;
     const mode = m.dataset.notemode;
-    noteEditMode = mode === "pose" ? "pose" : mode === "stickman" ? "stickman" : "chips";
+    noteEditMode = mode === "pose" ? "pose" : mode === "stickman" ? "stickman" : mode === "photo" ? "photo" : "chips";
     renderScaleEditor();
     refreshExerciseInfo();
     refreshPoseViz();
@@ -6585,6 +6627,37 @@ async function init() {
     if (!(e.target as HTMLElement).closest?.(".pose-scrub")) return;
     if (activeDrawn) activeDrawn.fig.scrub(null);
     if (scaleEditState) return; // popover syncs on close (scaleEditDirty already set)
+    scaleEditDirty = false;
+    refreshExerciseInfo();
+    renderAll();
+  });
+  // Photo scrubber: drag through the real video frames (top→bottom); swaps the
+  // shown frame live and maps the position onto the range-of-motion (depth).
+  document.addEventListener("input", (e) => {
+    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".pose-photo-scrub");
+    if (!sl?.dataset.scrubex || sl.dataset.scrubnote === undefined) return;
+    const ex = sl.dataset.scrubex, note = sl.dataset.scrubnote;
+    const fam = familyOf(ex);
+    if (!fam) return;
+    const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
+    const N = POSE_FRAMES.length;
+    const fIdx = Math.max(0, Math.min(N - 1, parseInt(sl.value, 10) || 0));
+    const pose = sl.closest(".ex-var-pose");
+    const img = pose?.querySelector<HTMLImageElement>(".pose-photo");
+    if (img) img.src = POSE_FRAMES[fIdx]!; // scrub the real frame
+    if (romKeys.length > 1) {
+      const romIdx = Math.round((fIdx / (N - 1)) * (romKeys.length - 1));
+      setNoteVecDim(ex, note, "rom", romKeys[romIdx]!);
+      const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+      const prod = pose?.querySelector(".ex-var-product strong");
+      if (prod) prod.textContent = `×${scalarFromVec(fam, vec)}`;
+      pose?.querySelectorAll<HTMLElement>('.pose-ctl[data-posectl-dim="rom"]').forEach((c) => c.classList.toggle("is-on", c.dataset.posectlLevel === romKeys[romIdx]));
+      scaleEditDirty = true;
+    }
+  });
+  document.addEventListener("change", (e) => {
+    if (!(e.target as HTMLElement).closest?.(".pose-photo-scrub")) return;
+    if (scaleEditState) return;
     scaleEditDirty = false;
     refreshExerciseInfo();
     renderAll();
