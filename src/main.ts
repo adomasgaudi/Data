@@ -6510,8 +6510,11 @@ async function init() {
     if (!(e.target as HTMLElement).closest(".xdd-rpe.open")) closeAllRpeMenus();
     // Close the floating modifier editor when clicking outside it (but not when
     // clicking the chip that toggles it, which is handled in the set-row handler).
+    // `t.isConnected` guards against an in-popover control (Chips/Pose toggle, pose
+    // wall) that just re-rendered the popover and orphaned the click target — that
+    // isn't a genuine outside click, so the editor should stay open.
     const t = e.target as HTMLElement;
-    if (scaleEditState && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
+    if (scaleEditState && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
   });
   // "Center on data" snaps the drill-in chart's pan/zoom back to the data fit.
   els.exerciseProgressCenter.addEventListener("click", () => {
