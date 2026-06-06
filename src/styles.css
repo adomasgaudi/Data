@@ -576,6 +576,13 @@ main { padding-bottom: 8.5rem; }
 /* The 50% / 95% margins after a value: the tiny 50/95 marks which CI each ± is. */
 .bc-ci { font-weight: 600; }
 .bc-ci sup, .nffmi-ci sup { font-size: 0.62em; font-weight: 700; opacity: 0.8; margin-left: 0.5px; }
+/* ℹ info button + its expandable math derivation; ±/range mode toggle. */
+.bc-info { font-size: 0.72rem; cursor: pointer; color: var(--muted); background: none; border: none; padding: 0 1px; margin-left: 1px; }
+.bc-info:hover, .bc-info.is-open { color: var(--accent); }
+.bc-derive { margin: 0.1rem 0 0.25rem; padding: 0.35rem 0.55rem; background: var(--accent-soft); border-radius: 8px; }
+.bc-toolbar { display: flex; justify-content: flex-end; margin-bottom: 0.15rem; }
+.bc-mode { font: inherit; font-size: 0.66rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.bc-mode:hover { color: var(--accent); border-color: var(--accent); }
 .bodycomp-pot { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
 .bc-head { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; cursor: help; }
 .profile-edit {
@@ -2178,6 +2185,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-cat-filter { display: inline-flex; gap: 3px; margin-left: 0.5rem; }
 .bw-filt { font: inherit; font-size: 0.7rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
 .bw-filt:hover { border-color: var(--accent); color: var(--accent); }
+/* The single cycling group toggle: lights up when it's restricting the app. */
+.bw-filt-toggle { min-width: 4.6rem; font-weight: 600; }
+.bw-filt-toggle.is-only { border-color: var(--accent); color: #fff; background: var(--accent); }
+.bw-filt-toggle.is-hide { border-color: var(--muted); color: var(--text); background: var(--accent-soft); }
 /* Strength sub-grouping: the muscle/function picker + the nested sub-groups. */
 .bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; }
 .bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }

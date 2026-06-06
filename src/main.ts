@@ -81,6 +81,7 @@ import {
   normalizeBodyFatDist,
   nffmiRange,
   bodyMassRanges,
+  bodyComposition,
   naturalPotential,
   defaultBwCoeff,
   realPullupWeight,
@@ -1836,6 +1837,17 @@ function applyGroupFilter(mode: string, names: string[]): void {
   renderAll();
 }
 
+/** A group's current app-wide filter state, for the single cycling toggle:
+ * "only" (restricted to these), "hide" (these hidden), or "off" (neither). */
+function groupFilterState(names: string[]): "only" | "hide" | "off" {
+  if (names.length === 0) return "off";
+  if (names.every((n) => activeExclude.has(n))) return "hide";
+  if (activeSolo && names.every((n) => activeSolo!.has(n))) return "only";
+  return "off";
+}
+/** The next state in the cycle off → only → hide → off, as a grpfilter mode. */
+const GROUP_FILTER_NEXT: Record<"only" | "hide" | "off", string> = { off: "only", only: "hide", hide: "show" };
+
 /** Raw logged records, filtered to the active exercise set (or all, if off). The
  * single choke point every view/graph/list reads instead of data.records. */
 function activeRecords(): SetRecord[] {
@@ -2765,22 +2777,35 @@ function miniRangeBar(r: { lo95: number; lo50: number; avg: number; hi50: number
     `</span>`
   );
 }
-/** One body-composition row: label · range bar · value with BOTH margins (the
- * 50% and the 95% half-widths), so each derived value reads with its tighter and
- * wider uncertainty at once — matching the dark (50%) / light (95%) range bar. */
-function bcRow(label: string, r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, unit: string): string {
+/** Body stats card: show each value either as ±margin or as a lo–hi range
+ * (toggled by the little ±/range button). Saved on this device. */
+let bcShowRange = (() => { try { return localStorage.getItem("colosseum.bcShowRange") === "1"; } catch { return false; } })();
+
+/** One body-composition row: label · range bar · value with BOTH the 50% and 95%
+ * spreads (as ± margins or lo–hi ranges, per the toggle), plus an optional ℹ info
+ * button that expands a math derivation of how the value was calculated. */
+function bcRow(
+  label: string,
+  r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number },
+  unit: string,
+  deriveHtml?: string,
+): string {
   const ci95 = (r.hi95 - r.lo95) / 2;
   const ci50 = (r.hi50 - r.lo50) / 2;
   const f = (n: number) => (Math.round(n * 10) / 10).toString();
   const title = `est ${f(r.avg)}${unit} · 50% ${f(r.lo50)}–${f(r.hi50)} · 95% ${f(r.lo95)}–${f(r.hi95)}`;
-  const ciTxt =
-    ci95 >= 0.05
-      ? ` <span class="muted bc-ci">±${f(ci50)}<sup>50</sup> ±${f(ci95)}<sup>95</sup></span>`
-      : "";
+  const spread =
+    ci95 < 0.05
+      ? ""
+      : bcShowRange
+        ? ` <span class="muted bc-ci">${f(r.lo50)}–${f(r.hi50)}<sup>50</sup> ${f(r.lo95)}–${f(r.hi95)}<sup>95</sup></span>`
+        : ` <span class="muted bc-ci">±${f(ci50)}<sup>50</sup> ±${f(ci95)}<sup>95</sup></span>`;
+  const info = deriveHtml ? ` <button type="button" class="bc-info" aria-label="How ${escapeHtml(label)} is calculated" title="How this is calculated">ℹ</button>` : "";
   return (
     `<div class="bc-row"><span class="bc-lbl">${escapeHtml(label)}</span>` +
     miniRangeBar(r, title) +
-    `<span class="bc-val">${f(r.avg)}${unit}${ciTxt}</span></div>`
+    `<span class="bc-val">${f(r.avg)}${unit}${spread}${info}</span></div>` +
+    (deriveHtml ? `<div class="bc-derive" hidden>${deriveHtml}</div>` : "")
   );
 }
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
@@ -2827,23 +2852,57 @@ function renderAthleteProfile() {
     lo95: dist.low95 * 100, lo50: dist.low50 * 100, avg: dist.avg * 100,
     hi50: dist.high50 * 100, hi95: dist.high95 * 100,
   };
+  // ---- ℹ derivations: how each value is calculated, in the same math style as
+  // the workouts list's 1RM (rm-derive / rm-step). ----
+  const hM = p.height / 100;
+  const comp = bodyComposition({ weight: p.weight, height: p.height, bodyFat: dist.avg });
+  const bfPct = (n: number) => `${f1(n * 100)}%`;
+  const dstep = (lbl: string, eq: string) => `<div class="rm-step"><span class="rm-lbl">${lbl}</span><span class="rm-eq">${eq}</span></div>`;
+  const derive = (steps: string[]) => `<div class="rm-derive">${steps.filter(Boolean).join("")}</div>`;
+  const nffmiDerive = derive([
+    dstep("lean", `${p.weight} kg × (1 − ${bfPct(dist.avg)}) = <b>${f1(range.leanAvg)} kg</b>`),
+    comp ? dstep("FFMI", `${f1(range.leanAvg)} ÷ ${f1(hM)}² = <b>${f1(comp.ffmi)}</b>`) : "",
+    dstep("nFFMI", `FFMI + 6.1 × (1.8 − ${f1(hM)}) = <b class="rm-result">${f1(range.avg)}</b>`),
+    dstep("spread", `50% / 95% come from your body-fat band`),
+  ]);
+  const leanDerive = derive([dstep("lean", `${p.weight} kg × (1 − ${bfPct(dist.avg)}) = <b class="rm-result">${f1(mass.lean.avg)} kg</b>`)]);
+  const fatDerive = derive([dstep("fat", `${p.weight} kg × ${bfPct(dist.avg)} = <b class="rm-result">${f1(mass.fat.avg)} kg</b>`)]);
+  const bfDerive = derive([
+    dstep("body fat", `your estimate — edit on the Athletes page`),
+    dstep("50% band", `${bfPct(dist.low50)} – ${bfPct(dist.high50)}`),
+    dstep("95% band", `${bfPct(dist.low95)} – ${bfPct(dist.high95)}`),
+  ]);
   const bodyComp =
     `<div class="bodycomp">` +
-    bcRow("nFFMI", range, "") +
-    bcRow("Lean", mass.lean, " kg") +
-    bcRow("Fat", mass.fat, " kg") +
-    bcRow("Body fat", bfPctRange, "%") +
+    `<div class="bc-toolbar"><button type="button" class="bc-mode" title="Switch how the spread is shown">${bcShowRange ? "range" : "± margin"}</button></div>` +
+    bcRow("nFFMI", range, "", nffmiDerive) +
+    bcRow("Lean", mass.lean, " kg", leanDerive) +
+    bcRow("Fat", mass.fat, " kg", fatDerive) +
+    bcRow("Body fat", bfPctRange, "%", bfDerive) +
     `</div>`;
   // Likely lifetime NATURAL potential: the drug-free lean ceiling at this height,
   // and the ideal bodyweight to carry it at each sport's typical body fat.
   const pot = p.sex ? naturalPotential(p.height, p.sex) : null;
   const potBlock = pot
-    ? `<div class="bodycomp bodycomp-pot">` +
-      `<div class="bc-head muted" title="Likely lifetime natural ceiling at nFFMI ≈ ${pot.ceilingNffmi} for ${p.sex === "f" ? "women" : "men"} (Kouri et al.), at this height. Ideal weights put that lean ceiling at a sport-typical body fat: calisthenics ${Math.round(pot.caliBf * 100)}%, power/weightlifting ${Math.round(pot.powerBf * 100)}%. Estimates — genetics & frame vary.">Natural potential (est.)</div>` +
-      bcRow("Lean cap", pot.leanLimit, " kg") +
-      bcRow("Cali wt", pot.idealCalisthenics, " kg") +
-      bcRow("Power wt", pot.idealPower, " kg") +
-      `</div>`
+    ? (() => {
+        const sexLbl = p.sex === "f" ? "women" : "men";
+        const capDerive = derive([
+          dstep("ceiling", `natural nFFMI ≈ ${pot.ceilingNffmi} (${sexLbl}, Kouri et al.)`),
+          dstep("lean cap", `(${pot.ceilingNffmi} − 6.1 × (1.8 − ${f1(hM)})) × ${f1(hM)}² = <b class="rm-result">${f1(pot.leanLimit.avg)} kg</b>`),
+        ]);
+        const wtDerive = (bf: number, ideal: number, sport: string) => derive([
+          dstep("carry at", `${Math.round(bf * 100)}% body fat (${sport})`),
+          dstep("ideal wt", `${f1(pot.leanLimit.avg)} ÷ (1 − ${Math.round(bf * 100)}%) = <b class="rm-result">${f1(ideal)} kg</b>`),
+        ]);
+        return (
+          `<div class="bodycomp bodycomp-pot">` +
+          `<div class="bc-head muted" title="Likely lifetime natural ceiling at nFFMI ≈ ${pot.ceilingNffmi} for ${sexLbl} (Kouri et al.), at this height. Ideal weights put that lean ceiling at a sport-typical body fat: calisthenics ${Math.round(pot.caliBf * 100)}%, power/weightlifting ${Math.round(pot.powerBf * 100)}%. Estimates — genetics & frame vary.">Natural potential (est.)</div>` +
+          bcRow("Lean cap", pot.leanLimit, " kg", capDerive) +
+          bcRow("Cali wt", pot.idealCalisthenics, " kg", wtDerive(pot.caliBf, pot.idealCalisthenics.avg, "calisthenics")) +
+          bcRow("Power wt", pot.idealPower, " kg", wtDerive(pot.powerBf, pot.idealPower.avg, "power")) +
+          `</div>`
+        );
+      })()
     : "";
   els.athleteProfile.innerHTML = badge + specLine + " " + editBtn + bodyComp + potBlock;
 }
@@ -5932,14 +5991,19 @@ function renderBwParts() {
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
-  // Per-group app-wide filter actions (Only these / Hide these / Show these). The
+  // Per-group app-wide filter: ONE cycling toggle (show all → only these →
+  // hidden → …) instead of three buttons. Its label shows the current state; the
   // members are read from the group's rows in the DOM when clicked.
-  const groupFilterBtns =
-    `<span class="bw-cat-filter">` +
-    `<button type="button" class="bw-filt" data-grpfilter="only" title="Show ONLY these exercises app-wide">only</button>` +
-    `<button type="button" class="bw-filt" data-grpfilter="hide" title="Hide these exercises app-wide">hide</button>` +
-    `<button type="button" class="bw-filt" data-grpfilter="show" title="Show these (clear any hiding)">show</button>` +
-    `</span>`;
+  const groupFilterToggle = (names: string[]): string => {
+    const st = groupFilterState(names);
+    const label = st === "only" ? "only these" : st === "hide" ? "hidden" : "show all";
+    return (
+      `<span class="bw-cat-filter">` +
+      `<button type="button" class="bw-filt bw-filt-toggle is-${st}" data-grpcycle="1" ` +
+      `title="App-wide filter — tap to cycle: show all → only these → hidden">${label}</button>` +
+      `</span>`
+    );
+  };
 
   // One group's collapsible <details> (a coloured title + its exercise table). The
   // active-set filter splits it: active lifts stay; the rest go under "Show hidden".
@@ -5961,7 +6025,7 @@ function renderBwParts() {
       `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
       `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
       `<span class="bw-cat-meta muted">${meta}</span>` +
-      groupFilterBtns +
+      groupFilterToggle(b.rows.map((r) => r.name)) +
       `</summary>` +
       shownBlock +
       hiddenBlock +
@@ -5982,7 +6046,7 @@ function renderBwParts() {
       `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
       `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
       `<span class="bw-cat-meta muted">${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}</span>` +
-      groupFilterBtns +
+      groupFilterToggle(b.rows.map((r) => r.name)) +
       `</summary>` +
       sel +
       subs.map((s) => bucketHtml(s, true)).join("") +
@@ -6003,7 +6067,7 @@ function renderBwParts() {
         `<span class="bw-cat-dot" style="background:#9aa1ac"></span>` +
         `<span class="bw-cat-name">Other</span>` +
         `<span class="bw-cat-meta muted">${otherNames.size} exercise${otherNames.size === 1 ? "" : "s"} · ${minor.length} groups</span>` +
-        groupFilterBtns +
+        groupFilterToggle([...otherNames]) +
         `</summary>` +
         minor.map((b) => bucketHtml(b, true)).join("") +
         `</details>`
@@ -7318,7 +7382,22 @@ async function init() {
   void setupBackup();
   setupStatsEdit();
   els.athleteProfile.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-editstats]");
+    const target = e.target as HTMLElement;
+    // ℹ on a value row → toggle its math derivation (the next .bc-derive sibling).
+    const info = target.closest<HTMLElement>(".bc-info");
+    if (info) {
+      const d = info.closest(".bc-row")?.nextElementSibling;
+      if (d?.classList.contains("bc-derive")) { d.toggleAttribute("hidden"); info.classList.toggle("is-open"); }
+      return;
+    }
+    // ±/range toggle → flip how every value's spread is shown, save, re-render.
+    if (target.closest(".bc-mode")) {
+      bcShowRange = !bcShowRange;
+      try { localStorage.setItem("colosseum.bcShowRange", bcShowRange ? "1" : "0"); } catch { /* ignore */ }
+      renderAthleteProfile();
+      return;
+    }
+    const btn = target.closest<HTMLElement>("[data-editstats]");
     if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
   });
   setupWorkoutAnalysis();
@@ -8206,13 +8285,13 @@ async function init() {
     // Group header "only / hide / show" — read the group's lifts from its rows and
     // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
     const filt = (e.target as HTMLElement).closest<HTMLElement>(".bw-filt");
-    if (filt?.dataset.grpfilter) {
+    if (filt?.dataset.grpcycle) {
       e.preventDefault();
       const cat = filt.closest<HTMLElement>(".bw-cat");
-      const names = cat
+      const names = [...new Set(cat
         ? [...cat.querySelectorAll<HTMLTableRowElement>("tr[data-exrow]")].map((tr) => tr.dataset.exrow).filter((n): n is string => !!n)
-        : [];
-      applyGroupFilter(filt.dataset.grpfilter, [...new Set(names)]);
+        : [])];
+      applyGroupFilter(GROUP_FILTER_NEXT[groupFilterState(names)], names);
       return;
     }
     // Per-exercise active-set overrides in the inspector (force in / out).
