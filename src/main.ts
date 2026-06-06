@@ -5946,11 +5946,9 @@ function renderBwParts() {
   const bucketHtml = (b: IndexBucket, sub = false): string => {
     const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
     const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
-    const partCount = b.rows.filter((r) => r.coeff > 0).length;
-    const partNote = partCount > 0 ? ` · ${partCount} with a BW part` : "";
     const meta = activeSet
-      ? `${shown.length} shown${hidden.length ? ` · ${hidden.length} hidden` : ""}${partNote}`
-      : `${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}${partNote}`;
+      ? `${shown.length}${hidden.length ? ` <span class="bw-cat-hidden">${hidden.length} hidden</span>` : ""}`
+      : `${b.rows.length}`;
     const shownBlock = shown.length
       ? table(shown, false)
       : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
