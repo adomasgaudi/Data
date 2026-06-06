@@ -57,7 +57,7 @@ import {
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf, FAMILIES } from "./variationConfig";
-import { anteriorData, posteriorData } from "./muscleMapData";
+import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
 import { POSE_FRAMES } from "./poseFrames";
@@ -2341,50 +2341,46 @@ function renderMuscleMap() {
     els.muscleMapBody.innerHTML = `<p class="muted">No 1RM on the key lifts yet (squat, deadlift, pull-ups, push-ups, dips, shoulder press, decline sit-ups).</p>`;
     return;
   }
-  // Map each ANATOMICAL muscle (from the vendored body-map asset) to one of the
-  // strength-feat regions above, so the real muscle polygons tint by your data.
-  // Muscles with no tracked feat (forearms, calves, neck …) draw in neutral grey.
-  const SLUG_FEAT: Record<string, string> = {
-    chest: "Chest",
-    "front-deltoids": "Shoulders",
-    "back-deltoids": "Shoulders",
-    biceps: "Biceps",
-    triceps: "Triceps",
-    abs: "Core (abs)",
-    obliques: "Core (abs)",
-    quadriceps: "Quads",
-    hamstring: "Hamstrings / lower back",
-    "lower-back": "Hamstrings / lower back",
-    gluteal: "Glutes",
-    trapezius: "Back (lats)",
-    "upper-back": "Back (lats)",
+  // Map each detailed anatomical muscle (by its id) to one of the strength-feat
+  // regions above, by keyword, so the real muscle shapes tint by your data.
+  // Muscles with no tracked feat (forearms, calves, neck, hands…) → neutral grey.
+  const featForMuscle = (id: string): string | null => {
+    if (id.includes("chest")) return "Chest";
+    if (id.includes("shoulder") || id.includes("deltoid") || id.includes("traps")) return "Shoulders";
+    if (id.includes("biceps")) return "Biceps";
+    if (id.includes("triceps")) return "Triceps";
+    if (id.includes("abs") || id.includes("obliques") || id.includes("serratus")) return "Core (abs)";
+    if (id.includes("lats")) return "Back (lats)";
+    if (id.includes("lower-back") || id.includes("erectors") || id.includes("-ql") || id === "spine") return "Hamstrings / lower back";
+    if (id.includes("hamstrings")) return "Hamstrings / lower back";
+    if (id.includes("quads")) return "Quads";
+    if (id.includes("glute")) return "Glutes";
+    return null; // forearms, calves, tibialis, knees, hip-flexor, head, neck, hands, feet
   };
   const featCat = new Map(MUSCLE_FEATS.map((f) => [f.label, f.cat] as const));
-  const fillFor = (label: string, cat: TrainingCategory): string => {
-    const v = byLabel.get(label);
+  const fillFor = (feat: string): string => {
+    const v = byLabel.get(feat);
     if (v == null) return `fill:#d9d7d0`; // tracked region, nothing logged → light grey
     const op = 0.2 + 0.8 * Math.max(0, Math.min(1, v / maxFeat));
-    return `fill:${CATEGORY_COLORS[cat]};fill-opacity:${op.toFixed(2)}`;
+    return `fill:${CATEGORY_COLORS[featCat.get(feat)!]};fill-opacity:${op.toFixed(2)}`;
   };
-  // One <g> per muscle: tinted by its feat's best 1RM, or neutral grey if untracked.
-  const muscleSvg = (data: { muscle: string; svgPoints: string[] }[], label: string): string => {
+  // One <path> per muscle: tinted by its feat's best 1RM, or neutral grey if untracked.
+  const muscleSvg = (data: MusclePath[], label: string): string => {
     const body = data
-      .map((md) => {
-        const polys = md.svgPoints.map((p) => `<polygon points="${p}"/>`).join("");
-        const feat = SLUG_FEAT[md.muscle];
+      .map((m) => {
+        const feat = featForMuscle(m.id);
         if (feat) {
-          const cat = featCat.get(feat)!;
           const v = byLabel.get(feat);
-          const t = v == null ? `${feat}: no key lift logged` : `${feat} — best 1RM ${fmt(v)} kg`;
-          return `<g style="${fillFor(feat, cat)}"><title>${escapeHtml(t)}</title>${polys}</g>`;
+          const t = v == null ? `${m.name} (${feat}): no key lift logged` : `${m.name} — ${feat} best 1RM ${fmt(v)} kg`;
+          return `<path d="${m.path}" style="${fillFor(feat)}"><title>${escapeHtml(t)}</title></path>`;
         }
-        return `<g style="fill:#d9d7d0"><title>${escapeHtml(md.muscle.replace(/-/g, " "))}</title>${polys}</g>`;
+        return `<path d="${m.path}" style="fill:#d9d7d0"><title>${escapeHtml(m.name)}</title></path>`;
       })
       .join("");
-    return `<svg viewBox="0 0 100 200" class="body-svg" role="img" aria-label="${label}">${body}</svg>`;
+    return `<svg viewBox="0 0 35 93" class="body-svg" role="img" aria-label="${label}">${body}</svg>`;
   };
-  const front = muscleSvg(anteriorData, "Front muscle map");
-  const back = muscleSvg(posteriorData, "Back muscle map");
+  const front = muscleSvg(frontMuscles, "Front muscle map");
+  const back = muscleSvg(backMuscles, "Back muscle map");
 
   // Legend: each region's feat + best 1RM, strongest first.
   const legend = MUSCLE_FEATS
