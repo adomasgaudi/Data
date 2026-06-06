@@ -3,9 +3,9 @@
  *
  * SOURCE OF TRUTH: the flat, newest-first {@link RELEASES} list below — one entry
  * per shipped version. The nested history tree is BUILT from it automatically by
- * {@link buildChangelogTree}: leaves bucket into ~30-SP sub-groups, those into
- * ~100-SP groups (three levels: group → sub-group → release). Every SP total is
- * summed up the tree, and each group/sub-group is titled by its biggest release
+ * {@link buildChangelogTree}: one named chapter per version era (newest first),
+ * each auto-split into ~30-SP sub-groups (chapter → sub-group → release). Every SP
+ * total is summed up the tree, and each sub-group is titled by its biggest release
  * and labelled with its version span — so adding ONE release to RELEASES re-shapes
  * the whole history and the SP-over-time graph on its own. No hand-nesting.
  *
@@ -67,6 +67,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.5.0", title: "Version 2.5 milestone", sp: 1, note: "Reorganised the version history back into named chapters by version era (b.2.5, b.2.4, b.2.3 ...), each auto-split into ~30-SP sub-groups and built from the flat release list. Bumped to b.2.5." },
   { version: "b.2.4.50", title: "Chips/Pose toggle keeps the editor open", sp: 1, note: "Fixed the modifier editor closing when you tapped “Chips” or “🧍 Pose” to switch views (or tapped the wall in Pose) — switching a view re-drew the popover, which the “click outside to close” logic mistook for an outside click. It now stays open; only a genuine tap outside (or the ✕, or picking a difficulty) closes it." },
   { version: "b.2.4.49", title: "Fleshed-out pose figure", sp: 2, note: "Upgraded the pose figure from a stick figure to a proportioned vector “mannequin”: rounded, fleshed-out arms and legs (a body-tone fill over a darker outline), a tapered hourglass torso, and a head with a face dot showing which way it looks. It still drags the same way (hands = range, feet = lean, tap wall to cycle orientation). It's a clean 2-D mannequin — a true photo-real 3-D model would need a heavy 3-D engine and a rigged body asset, which isn't worth bloating the app for a tuning widget; happy to do that as a separate project if you want it." },
   { version: "b.2.4.48", title: "Nicer stickman + 3 wall variations", sp: 3, note: "Redrew the pose figure to look like a real handstand — two bent arms, a torso, two legs with knees, and a head that faces the right way. And the wall orientation is now the 3 real variations you do: BACK to wall (easiest with a wall), FRONT to wall (harder, stays vertical), and LADDER (legs on the rungs — big assist), plus freestanding. Tap the wall in the Pose view to cycle through them (the figure flips to face the wall for front-to-wall, and shows rungs for ladder); your “navel/close to wall” notes read as front-to-wall, plain “wall” as back-to-wall." },
@@ -388,11 +389,9 @@ export const RELEASES: Release[] = [
   { version: "0.0.1", title: "First dashboard", sp: 8, note: "First dashboard: load the CSV and render leaderboards/PRs/1RMs." },
 ];
 
-/** Target SP for an auto-built sub-group and top-group. The flat RELEASES list
- *  (newest-first) is bucketed bottom-up: leaves into ~30-SP sub-groups, those
- *  into ~100-SP groups. */
+/** Target SP for an auto-built sub-group. Within a chapter, the (newest-first)
+ *  releases are bucketed into ~30-SP sub-groups. */
 const SUBGROUP_TARGET_SP = 30;
-const GROUP_TARGET_SP = 100;
 
 /** Summed story points of a node's leaves (a leaf returns its own sp). */
 function leafSp(r: Release): number {
@@ -401,8 +400,7 @@ function leafSp(r: Release): number {
 
 /** Greedily bucket an ordered list so each bucket's summed SP reaches ~target.
  *  A look-ahead closes a bucket early when the next item would overshoot badly,
- *  and a small trailing remainder is merged back into the previous bucket — so
- *  every bucket lands near the target instead of way over. */
+ *  and a small trailing remainder is merged back into the previous bucket. */
 function bucketBySp(items: Release[], target: number): Release[][] {
   const buckets: Release[][] = [];
   let cur: Release[] = [];
@@ -423,7 +421,7 @@ function bucketBySp(items: Release[], target: number): Release[][] {
   return buckets;
 }
 
-/** Newest / oldest leaf version under a node (newest = first child, all the way down). */
+/** Newest / oldest leaf version under a node. */
 function newestLeafVersion(r: Release): string {
   let n = r;
   while (n.children?.length) n = n.children[0]!;
@@ -435,7 +433,7 @@ function oldestLeafVersion(r: Release): string {
   return n.version;
 }
 
-/** Version span label "oldest–newest" for a newest-first list of nodes. */
+/** Version span label "oldest-newest" for a newest-first list of nodes. */
 function spanLabel(nodes: Release[]): string {
   const newest = newestLeafVersion(nodes[0]!);
   const oldest = oldestLeafVersion(nodes[nodes.length - 1]!);
@@ -453,29 +451,52 @@ function headlineTitle(nodes: Release[]): string {
   return best ? (best as Release).title : "Releases";
 }
 
-/** Count the leaves under a list of nodes. */
-function leafCount(nodes: Release[]): number {
-  let n = 0;
-  const walk = (r: Release) => { if (r.children?.length) r.children.forEach(walk); else n++; };
-  nodes.forEach(walk);
-  return n;
+/** Which named chapter a version belongs to (the b.2.x minor, or a b.1 / 0.x era). */
+function chapterKey(version: string): string {
+  const m2 = version.match(/^b\.2\.(\d+)/);
+  if (m2) return `b.2.${m2[1]}`;
+  const m1 = version.match(/^b\.1\.(\d+)/);
+  if (m1) return Number(m1[1]) >= 10 ? "b.1.hi" : "b.1.lo";
+  return "0.x";
 }
 
-/** Build the nested ~100 / ~30 SP history tree from the flat, newest-first list. */
+/** Descriptive chapter titles (the version "eras"). Unmapped chapters fall back
+ *  to their biggest release's title, so new minors still read well. */
+const CHAPTER_TITLES: Record<string, string> = {
+  "b.2.5": "Version 2.5 milestone",
+  "b.2.4": "Handstand modelling & analysis polish",
+  "b.2.3": "Unified Analysis & timeline heatmap",
+  "b.2.2": "Universal graph & exercise taxonomy",
+  "b.2.1": "Fades, roles & per-set editing",
+  "b.2.0": "Current strength & combined lifts",
+  "b.1.hi": "Charts engine & live data",
+  "b.1.lo": "Bottom nav, Add & compare",
+  "0.x": "Before the reset",
+};
+
+/** Build the history tree from the flat, newest-first RELEASES list: one named
+ *  chapter per version era (newest first), each auto-split into ~30-SP sub-groups
+ *  (a small chapter keeps its releases directly). All SP totals roll up the tree. */
 export function buildChangelogTree(releases: Release[]): Release[] {
-  // Bucket oldest-first so version spans read naturally, then flip to newest-first.
-  const chrono = [...releases].reverse();
-  const subgroups: Release[] = bucketBySp(chrono, SUBGROUP_TARGET_SP).map((leaves) => {
-    const kids = [...leaves].reverse();
-    return { version: spanLabel(kids), title: headlineTitle(kids), sp: 0,
-      note: `${kids.length} releases.`, children: kids };
+  const order: string[] = [];
+  const byChapter = new Map<string, Release[]>();
+  for (const r of releases) {
+    const k = chapterKey(r.version);
+    if (!byChapter.has(k)) { byChapter.set(k, []); order.push(k); }
+    byChapter.get(k)!.push(r);
+  }
+  return order.map((k) => {
+    const rels = byChapter.get(k)!;
+    const chrono = [...rels].reverse();
+    const subgroups: Release[] = bucketBySp(chrono, SUBGROUP_TARGET_SP).map((leaves) => {
+      const kids = [...leaves].reverse();
+      return { version: spanLabel(kids), title: headlineTitle(kids), sp: 0,
+        note: `${kids.length} releases.`, children: kids };
+    });
+    const children = subgroups.length > 1 ? subgroups : rels;
+    return { version: k, title: CHAPTER_TITLES[k] ?? headlineTitle(rels), sp: 0,
+      note: `${rels.length} releases.`, children };
   });
-  const groups: Release[] = bucketBySp(subgroups, GROUP_TARGET_SP).map((subs) => {
-    const kids = [...subs].reverse();
-    return { version: spanLabel(kids), title: headlineTitle(kids), sp: 0,
-      note: `${kids.length} sub-groups · ${leafCount(kids)} releases.`, children: kids };
-  });
-  return groups.reverse();
 }
 
 export const CHANGELOG: Release[] = [SOON, ...buildChangelogTree(RELEASES)];
