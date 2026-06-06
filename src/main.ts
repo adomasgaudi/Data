@@ -234,6 +234,7 @@ const els = {
   addVariant: $<HTMLInputElement>("addVariant"),
   addVariantField: $("addVariantField"),
   addVariantLabel: $("addVariantLabel"),
+  addNote: $<HTMLInputElement>("addNote"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
   addSets: $<HTMLInputElement>("addSets"),
@@ -8249,6 +8250,9 @@ interface ManualEntry {
   exerciseName: string;
   weight: number | null;
   reps: number | null;
+  /** Free-text note (the variation circumstances, e.g. a handstand's setup) so a
+   * hand-logged set joins the same note-based variation system as CSV sets. */
+  notes?: string;
   /** Squat-rack hole chosen on the Add form, stored per set — the difficulty
    * selection that replaces added weight for incline push-ups. */
   levelValue?: number;
@@ -8275,17 +8279,19 @@ function saveManual() {
 
 /** Turn a stored entry into a SetRecord matching the CSV shape, so every view
  * treats it identically. Bodyweight comes from the athlete profile table. */
-function manualToRecord(m: ManualEntry): SetRecord {
+function manualToRecord(m: ManualEntry, setNumber: number): SetRecord {
   return {
     user: m.user,
     username: m.username,
     date: m.date,
     bodyweight: athProfile(m.username)?.weight ?? null,
     exerciseName: m.exerciseName,
-    setNumber: 1,
+    setNumber,
     weight: m.weight,
     reps: m.reps,
-    notes: "",
+    // The note carries the variation (e.g. a handstand's "b2w, +15cm") so a
+    // hand-logged set resolves + edits its difficulty exactly like a CSV set.
+    notes: m.notes ?? "",
     dropset: false,
     percentile: null,
     ...(m.levelValue !== undefined
@@ -8300,7 +8306,9 @@ let csvRecordCount = 0; // how many of data.records came from the CSV (the prefi
 function mergeManualSets() {
   // Keep the first csvRecordCount records (the CSV) and re-append manual ones.
   data.records.length = csvRecordCount;
-  for (const m of manualEntries) data.records.push(manualToRecord(m));
+  // A high, unique set number per entry → a stable, collision-free setId (so each
+  // hand-logged set edits/tags independently and never clashes with a CSV set).
+  manualEntries.forEach((m, i) => data.records.push(manualToRecord(m, 100000 + i)));
 }
 
 /** Populate the Add form's athlete dropdown + exercise suggestions and the table. */
@@ -8579,6 +8587,7 @@ function onAddSubmit() {
     !els.addVariantField.hidden && Number.isFinite(holeRaw) ? Math.round(holeRaw) : undefined;
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
+  const note = els.addNote.value.trim(); // variation circumstances (resolves + editable like CSV)
   const date = els.addDate.value || todayIso();
   // How many identical sets to log at once (blank/1 = a single set).
   const setsRaw = Math.round(parseFloat(els.addSets.value));
@@ -8600,6 +8609,7 @@ function onAddSubmit() {
       exerciseName,
       weight: Number.isFinite(weight) ? weight : null,
       reps,
+      ...(note ? { notes: note } : {}),
       ...(levelValue !== undefined ? { levelValue } : {}),
     });
   }
