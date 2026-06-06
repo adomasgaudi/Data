@@ -828,6 +828,9 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
   if (!fam) return 1;
   let s = 1;
   for (const dim of Object.keys(fam.dims)) {
+    // The ladder grip / height only apply when the support is actually "ladder";
+    // ignore any stale value otherwise so they don't skew a non-ladder setup.
+    if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
     const f = fam.dims[dim]![vec[dim] ?? ""];
     if (typeof f === "number") s *= f;
   }
@@ -5569,8 +5572,32 @@ function notePickerHtml(name: string, note: string): string {
   const override = noteVecOverride(name, note);
   const effVec = { ...resolveNote(fam, note).vec, ...override };
   const scale = scalarFromVec(fam, effVec);
+  // SUPPORT is a nested dropdown: a primary picker (free / f2w / b2w / ladder), and
+  // when "ladder" is chosen, two sub-dropdowns appear — a leg grip and a rung
+  // height — each its own multiplier. The grip/height dims are rendered here (not
+  // as their own chip rows). Other dimensions stay as chip rows.
+  const SUPPORT_LBL: Record<string, string> = { free: "free", front_to_wall: "f2w", back_to_wall: "b2w", ladder: "ladder" };
+  const GRIP_LBL: Record<string, string> = { none: "no grip", lsit: "l-sit", hooked: "hooked" };
+  const HT_LBL: Record<string, string> = { none: "any height", lad3: "lad3", lad5: "lad5", lad6: "lad6", lad9: "lad9" };
+  const vecSelect = (dim: string, labelMap: Record<string, string>): string => {
+    const levels = FAMILIES[fam]!.dims[dim]!;
+    const cur = effVec[dim] ?? "";
+    const opts = Object.keys(levels)
+      .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(labelMap[l] ?? l)} ×${levels[l]}</option>`)
+      .join("");
+    return `<select class="ex-var-sel" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" aria-label="${escapeHtml(dim)}">${opts}</select>`;
+  };
+  const isLadder = (effVec.support ?? "free") === "ladder";
+  const supPicked = override.support !== undefined || override.ladderGrip !== undefined || override.ladderH !== undefined;
+  const supportBlock =
+    `<div class="ex-var-dim${supPicked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">support</span>` +
+    `<div class="ex-var-selrow">${vecSelect("support", SUPPORT_LBL)}` +
+    (isLadder ? vecSelect("ladderGrip", GRIP_LBL) + vecSelect("ladderH", HT_LBL) : "") +
+    `</div></div>`;
   const dims = Object.keys(FAMILIES[fam]!.dims)
+    .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH") // shown inside supportBlock
     .map((dim) => {
+      if (dim === "support") return supportBlock;
       const levels = FAMILIES[fam]!.dims[dim]!;
       const cur = effVec[dim];
       const picked = override[dim] !== undefined;
@@ -6361,6 +6388,15 @@ async function init() {
       refreshExerciseInfo();
       renderAll();
     }
+  });
+  // Nested SUPPORT dropdowns (support / ladder grip / ladder height): pick a value
+  // → set the dim and re-render the editor in place (so ladder reveals its subs).
+  document.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-var-sel");
+    if (!sel?.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.vecdimDim) return;
+    setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.vecdimDim, sel.value);
+    if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+    else { refreshExerciseInfo(); renderAll(); }
   });
   // Chips / Stickman / 3D model toggle for the modifier editor.
   document.addEventListener("click", (e) => {

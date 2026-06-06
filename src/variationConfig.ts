@@ -40,25 +40,23 @@ export interface VariationConfig {
 export const FAMILIES: Record<string, FamilyDef> = {
   HSPU: {
     dims: {
-      // SUPPORT — the wall orientation / overall setup. The 3 main variations are
-      // BACK to wall (heels on the wall, can rest → easiest with a wall),
-      // FRONT to wall (chest/face to the wall, must stay vertical → harder), and
-      // LADDER (technically front-to-wall, legs on the rungs in an L → big assist).
-      // free = freestanding (×1 reference). Finer leg shapes / ladder-rung levels
-      // are kept below for resolving older notes. Calibrate the numbers.
+      // SUPPORT — the wall orientation / overall setup, picked from a dropdown:
+      // free (freestanding, ×1 reference), front-to-wall, back-to-wall, or LADDER.
+      // The ladder setup then adds two sub-choices below (its own dimensions):
+      // a leg GRIP (l-sit / hooked) and a rung HEIGHT — each a separate multiplier
+      // that combines with the ladder base. Calibrate the numbers.
       support: {
         free: 1.0,
         front_to_wall: 0.92,
         back_to_wall: 0.82,
         ladder: 0.55,
-        lsit: 1.1,
-        tucked: 0.95,
-        hooked: 0.8,
-        lad3: 0.72,
-        lad5: 0.6,
-        lad6: 0.55,
-        lad9: 0.42,
       },
+      // Ladder leg grip (only applies on the ladder). l-sit = legs out front (harder),
+      // hooked = legs hooked on a rung (assisted, easier). none = neither.
+      ladderGrip: { none: 1.0, lsit: 1.1, hooked: 0.8 },
+      // Ladder rung height — how high your feet are (higher rung = more assist =
+      // easier). none = unspecified. lad3 lowest … lad9 highest.
+      ladderH: { none: 1.0, lad3: 0.72, lad5: 0.6, lad6: 0.55, lad9: 0.42 },
       // Assistance band ("guma") by its NUMBER (1–6). HIGHER number = heavier band =
       // MORE help = lower factor; lower number = lighter = less help. Calibrate.
       band: { none: 1.0, "1": 0.92, "2": 0.85, "3": 0.75, "4": 0.62, "5": 0.56, "6": 0.5 },
@@ -74,7 +72,7 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
-    defaults: { support: "free", band: "none", rom: "0cm", lean: "0cm", continuity: "paused" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused" },
   },
   PUSHUP: {
     dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
@@ -114,23 +112,24 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     parallettes: { rom: "-10cm" },
     brick: { rom: "-5cm" },
     limited: { rom: "+5cm" },
-    // legs → now part of SUPPORT
-    "l sit": { support: "lsit" },
-    "l-sit": { support: "lsit" },
-    lsit: { support: "lsit" },
-    "užkabintos kojos": { support: "hooked" }, // hooked legs (assisted)
+    // legs → a ladder GRIP (and they imply the ladder setup)
+    "l sit": { support: "ladder", ladderGrip: "lsit" },
+    "l-sit": { support: "ladder", ladderGrip: "lsit" },
+    lsit: { support: "ladder", ladderGrip: "lsit" },
+    hooked: { support: "ladder", ladderGrip: "hooked" },
+    "užkabintos kojos": { support: "ladder", ladderGrip: "hooked" }, // hooked legs (assisted)
     // lean / continuity
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
     uninterrupted: { continuity: "uninterrupted" },
-    // ladder / wall-bar assist level → now part of SUPPORT ("lad5", "9lygis", …)
-    "lad3": { support: "lad3" },
-    "lad5": { support: "lad5" },
-    "lad6": { support: "lad6" },
-    "6lad": { support: "lad6" },
-    "9lygis": { support: "lad9" },
-    "5 level": { support: "lad5" },
-    "5 lygis": { support: "lad5" },
+    // ladder / wall-bar rung height → ladder SUPPORT + a HEIGHT ("lad5", "9lygis", …)
+    "lad3": { support: "ladder", ladderH: "lad3" },
+    "lad5": { support: "ladder", ladderH: "lad5" },
+    "lad6": { support: "ladder", ladderH: "lad6" },
+    "6lad": { support: "ladder", ladderH: "lad6" },
+    "9lygis": { support: "ladder", ladderH: "lad9" },
+    "5 level": { support: "ladder", ladderH: "lad5" },
+    "5 lygis": { support: "ladder", ladderH: "lad5" },
   },
   PUSHUP: {
     /* token → { incline: "lN" } — the owner fills this in. */
@@ -142,7 +141,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 4;
+export const CONFIG_VERSION = 5;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many

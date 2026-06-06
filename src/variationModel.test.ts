@@ -134,8 +134,13 @@ describe("live HSPU config (variationConfig.ts) on real notes", () => {
     expect(uninterrupted.vec.continuity).toBe("uninterrupted");
     // a band token — bands are now numbered 1–6 ("guma 5" ⇒ band "5")
     expect(resolveNote("HSPU", "guma 5", DEFAULT_VARIATION_CONFIG).vec.band).toBe("5");
-    // legs and ladder are now part of the merged "support" dimension
-    expect(resolveNote("HSPU", "l sit", DEFAULT_VARIATION_CONFIG).vec.support).toBe("lsit");
-    expect(resolveNote("HSPU", "lad5", DEFAULT_VARIATION_CONFIG).vec.support).toBe("lad5");
+    // Legs and ladder rungs now resolve to the LADDER support plus a sub-dimension:
+    // a leg grip (l-sit / hooked) and a rung height (lad3…lad9).
+    const lsit = resolveNote("HSPU", "l sit", DEFAULT_VARIATION_CONFIG);
+    expect(lsit.vec.support).toBe("ladder");
+    expect(lsit.vec.ladderGrip).toBe("lsit");
+    const lad5 = resolveNote("HSPU", "lad5", DEFAULT_VARIATION_CONFIG);
+    expect(lad5.vec.support).toBe("ladder");
+    expect(lad5.vec.ladderH).toBe("lad5");
   });
 });
