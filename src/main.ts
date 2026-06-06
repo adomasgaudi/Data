@@ -91,13 +91,8 @@ import {
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
-  MUSCLE_GROUP_TAGS,
-  FUNCTIONAL_PATTERN_TAGS,
   tagsForExercise,
-  combinableGroupsFor,
-  comparableGroupsFor,
   membersOfGroup,
-  exercisesForTag,
   type RegistryTag,
   LIST_CATEGORIES,
   exerciseCode,
@@ -273,7 +268,6 @@ const els = {
   codesTable: $("codesTable"),
   statsEditBody: $("statsEditBody"),
   codesSearch: $<HTMLInputElement>("codesSearch"),
-  groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
   calcReps: $<HTMLInputElement>("calcReps"),
@@ -1678,15 +1672,72 @@ function computeRecordBase(r: SetRecord): SetRecord {
   return applyMachineMode({ ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight });
 }
 
-/** The combinable + comparable registry groups, in the shape withSyntheticGroups
- * wants (id, derivedName, member→quotient map). Combinable members use ratio 1. */
-const SYNTHETIC_GROUP_DEFS: SyntheticGroupDef[] = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].map(
-  (t: RegistryTag): SyntheticGroupDef => ({
-    id: t.id,
-    derivedName: t.derivedName ?? t.label,
-    members: Object.fromEntries((t.members ?? []).map((m) => [m.exerciseName, m.ratio])),
-  }),
-);
+// ---- Owner-editable combinable/comparable membership ------------------------
+// The built-in groups (COMBINABLE_GROUPS / COMPARABLE_GROUPS) define a base member
+// list; the owner can ADD lifts (with a ratio for comparable) or REMOVE base ones,
+// per group, saved here. Every read goes through the "effective" helpers below so
+// the edits flow into grouping, the info panel AND the synthetic combine/compare
+// computation.
+const GROUP_MEMBER_KEY = "colosseum.groupMembers.v1";
+type GroupMemberOverride = { add?: Record<string, number>; remove?: string[] };
+const groupMemberOverrides: Record<string, GroupMemberOverride> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(GROUP_MEMBER_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+function saveGroupMembers() { try { localStorage.setItem(GROUP_MEMBER_KEY, JSON.stringify(groupMemberOverrides)); } catch { /* ignore */ } }
+/** A registry group with the owner's member add/remove overrides applied. */
+function withMemberOverrides(g: RegistryTag): RegistryTag {
+  const ov = groupMemberOverrides[g.id];
+  if (!ov || (!ov.add && !ov.remove)) return g;
+  const removed = new Set(ov.remove ?? []);
+  const base = (g.members ?? []).filter((m) => !removed.has(m.exerciseName));
+  const baseNames = new Set(base.map((m) => m.exerciseName));
+  const added = Object.entries(ov.add ?? {})
+    .filter(([ex]) => !removed.has(ex) && !baseNames.has(ex))
+    .map(([exerciseName, ratio]) => ({ exerciseName, ratio }));
+  return { ...g, members: [...base, ...added] };
+}
+const effectiveCombinableGroups = (): RegistryTag[] => COMBINABLE_GROUPS.map(withMemberOverrides);
+const effectiveComparableGroups = (): RegistryTag[] => COMPARABLE_GROUPS.map(withMemberOverrides);
+const combinableGroupsForEx = (name: string): RegistryTag[] => effectiveCombinableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
+const comparableGroupsForEx = (name: string): RegistryTag[] => effectiveComparableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
+/** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
+function toggleGroupMembership(groupId: string, exName: string): void {
+  const g = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].find((x) => x.id === groupId);
+  if (!g) return;
+  const inBase = (g.members ?? []).some((m) => m.exerciseName === exName);
+  const isMember = (withMemberOverrides(g).members ?? []).some((m) => m.exerciseName === exName);
+  const ov = (groupMemberOverrides[groupId] ??= {});
+  if (isMember) {
+    if (ov.add) delete ov.add[exName];
+    if (inBase) ov.remove = [...new Set([...(ov.remove ?? []), exName])];
+  } else {
+    ov.remove = (ov.remove ?? []).filter((x) => x !== exName);
+    (ov.add ??= {})[exName] = 1;
+  }
+  if (ov.add && !Object.keys(ov.add).length) delete ov.add;
+  if (ov.remove && !ov.remove.length) delete ov.remove;
+  if (!ov.add && !ov.remove) delete groupMemberOverrides[groupId];
+  saveGroupMembers();
+}
+/** Set the comparable ratio for an owner-added member. */
+function setGroupRatio(groupId: string, exName: string, ratio: number): void {
+  const ov = (groupMemberOverrides[groupId] ??= {});
+  (ov.add ??= {})[exName] = Math.min(2, Math.max(0.05, ratio));
+  saveGroupMembers();
+}
+
+/** The combinable + comparable registry groups (with owner member edits applied),
+ * in the shape withSyntheticGroups wants (id, derivedName, member→quotient map). */
+function syntheticGroupDefs(): SyntheticGroupDef[] {
+  return [...effectiveCombinableGroups(), ...effectiveComparableGroups()].map(
+    (t: RegistryTag): SyntheticGroupDef => ({
+      id: t.id,
+      derivedName: t.derivedName ?? t.label,
+      members: Object.fromEntries((t.members ?? []).map((m) => [m.exerciseName, m.ratio])),
+    }),
+  );
+}
 
 /** User "combined" defs as synthetic-group defs (quotient 1 = a pure merge, no
  * scaling). Feeding these to withSyntheticGroups makes a user-merged lift behave
@@ -1793,7 +1844,7 @@ function computedRecords(): SetRecord[] {
   // records derived from those computed loads. Pure source lifts are never mutated.
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
   const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
-  return [...pure, ...withSyntheticGroups(pure, [...SYNTHETIC_GROUP_DEFS, ...userCombinedGroupDefs()])];
+  return [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
 }
 
 /**
@@ -2574,7 +2625,7 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
       .filter((b) => b.rows.length);
   }
   if (mode === "combinable" || mode === "comparable") {
-    const groups = mode === "combinable" ? COMBINABLE_GROUPS : COMPARABLE_GROUPS;
+    const groups = mode === "combinable" ? effectiveCombinableGroups() : effectiveComparableGroups();
     const buckets: IndexBucket[] = groups
       .map((g) => ({ key: g.id, label: g.label, color: "#1f6f8b", rows: rows.filter((r) => g.members?.some((m) => m.exerciseName === r.name)) }))
       .filter((b) => b.rows.length);
@@ -4853,8 +4904,8 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
     let labels: string[];
     if (dim === "muscles") labels = [mgFor(e.exerciseName)];
     else if (dim === "functional") labels = tagsForExercise(e.exerciseName).filter((t) => t.kind === "functional-pattern").map((t) => t.label);
-    else if (dim === "combined") labels = combinableGroupsFor(e.exerciseName).map((t) => t.label);
-    else if (dim === "compared") labels = comparableGroupsFor(e.exerciseName).map((t) => t.label);
+    else if (dim === "combined") labels = combinableGroupsForEx(e.exerciseName).map((t) => t.label);
+    else if (dim === "compared") labels = comparableGroupsForEx(e.exerciseName).map((t) => t.label);
     else labels = [];
     for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + e.count);
   }
@@ -5781,51 +5832,8 @@ function openAncestorDetails(el: HTMLElement): void {
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
-/** "Browse groups" on the Index page: two levels of native <details> — open a
- * dimension (Muscle groups / Functional groups / Combined lifts), then a group,
- * to read its plain-language explanation and the exercises that fall under it. */
-function renderGroupBrowser() {
-  const names = distinctExercises(data.records);
-  const groupBlock = (t: RegistryTag): string => {
-    const ex = exercisesForTag(t, names);
-    const list = ex.length
-      ? ex.map((e) => `<span class="gb-ex">${escapeHtml(e)}</span>`).join("")
-      : `<span class="muted">none logged</span>`;
-    return (
-      `<details class="gb-group" data-gb="${escapeHtml(t.label)}">` +
-      `<summary class="gb-sum"><span class="caret">▸</span>${escapeHtml(t.label)} ` +
-      `<span class="gb-count muted">${ex.length}</span></summary>` +
-      `<div class="gb-why">${escapeHtml(t.why)}</div>` +
-      `<div class="gb-exlist">${list}</div></details>`
-    );
-  };
-  const dim = (title: string, tags: readonly RegistryTag[]): string =>
-    `<details class="gb-dim"><summary class="gb-dim-sum"><span class="caret">▸</span>${escapeHtml(title)} ` +
-    `<span class="gb-count muted">${tags.length}</span></summary>` +
-    `<div class="gb-dim-body">${tags.map(groupBlock).join("")}</div></details>`;
-  els.groupBrowser.innerHTML =
-    dim("Muscle groups", MUSCLE_GROUP_TAGS) +
-    dim("Functional groups", FUNCTIONAL_PATTERN_TAGS) +
-    dim("Combined lifts", [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS]);
-}
-
-/** Open the Browse-groups panel to a specific group (from an inspector tag chip):
- * expand its dimension + the group, scroll to it and flash. */
-function jumpToGroup(label: string): void {
-  const group = els.groupBrowser.querySelector<HTMLDetailsElement>(`details.gb-group[data-gb="${CSS.escape(label)}"]`);
-  if (!group) return;
-  group.closest<HTMLDetailsElement>("details.gb-dim")?.setAttribute("open", "");
-  group.open = true;
-  requestAnimationFrame(() => {
-    group.scrollIntoView({ behavior: "smooth", block: "center" });
-    group.classList.add("wo-flash");
-    window.setTimeout(() => group.classList.remove("wo-flash"), 1600);
-  });
-}
-
 function renderBwParts() {
   renderMergeList();
-  renderGroupBrowser();
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
@@ -5834,9 +5842,7 @@ function renderBwParts() {
     // Most-trained first (by set count), then alphabetical - kept inside each group.
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  const withPart = rows.filter((r) => r.coeff > 0).length;
-  els.bwTitle.innerHTML =
-    `Exercises <span class="muted">(${rows.length} · ${withPart} with a bodyweight part · edit to update all stats)</span>`;
+  els.bwTitle.textContent = "Exercises";
   renderActiveSetBar(rows.length);
   renderBwGroupBar();
 
@@ -6321,7 +6327,7 @@ function exerciseInfoHtml(name: string): string {
   // each chip explains its WHY on hover.
   const tags = tagsForExercise(name);
   const tagChips = tags.length
-    ? tags.map((t) => `<button type="button" class="ex-tag" data-tagjump="${escapeHtml(t.label)}" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</button>`).join("")
+    ? tags.map((t) => `<span class="ex-tag" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</span>`).join("")
     : `<span class="muted">none</span>`;
 
   // Editable controls, folded straight into the info rows — there is no separate
@@ -6341,6 +6347,26 @@ function exerciseInfoHtml(name: string): string {
   const discChips = metaChips("disc", DISCIPLINES, (v) => v, discsFor(name));
   const mgChips = metaChips("mg", MUSCLE_GROUPS, (v) => v, mgsFor(name));
   const tierChips = metaChips("tier", ["main", "second", "third"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
+  // Combinable / Comparable membership chips — tap to add/remove this lift from a
+  // group (comparable also gets a ratio input when it's an owner-added member).
+  const groupChips = (all: RegistryTag[], kind: "combine" | "compare") => {
+    const memberIds = new Set((kind === "combine" ? combinableGroupsForEx(name) : comparableGroupsForEx(name)).map((g) => g.id));
+    return (
+      `<span class="ex-meta-chips">` +
+      all.map((g) => {
+        const on = memberIds.has(g.id);
+        const added = groupMemberOverrides[g.id]?.add?.[name];
+        const ratio = on && kind === "compare" && added !== undefined
+          ? `<input class="ex-grp-ratio" type="number" step="0.05" min="0.05" max="2" value="${added}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-ex="${escapeHtml(name)}" title="Ratio vs the reference lift" />`
+          : "";
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratio}`;
+      }).join("") +
+      (all.length ? "" : `<span class="muted">none</span>`) +
+      `</span>`
+    );
+  };
+  const combineChips = groupChips(COMBINABLE_GROUPS, "combine");
+  const compareChips = groupChips(COMPARABLE_GROUPS, "compare");
   // Bodyweight part is a RANGE (min–max); the 1RM uses the average (shown in gold).
   const cr = coeffRangeFor(name);
   const coeffInput =
@@ -6357,6 +6383,8 @@ function exerciseInfoHtml(name: string): string {
     item("Discipline", discChips),
     item("Muscle group", mgChips),
     item("Tier", tierChips),
+    item("Combinable", combineChips),
+    item("Comparable", compareChips),
     item("Tags", `<span class="ex-tags">${tagChips}</span>`),
     // Difficulty model: assign one so ANY lift (even a hand-created handstand) gets
     // the editable variation multipliers; "None" falls back to the flat per-note ×.
@@ -6391,7 +6419,7 @@ function exerciseInfoHtml(name: string): string {
   // Combinable / comparable group membership, with members present in the data
   // and the plain-language WHY behind the grouping.
   const presentNames = distinctExercises(data.records);
-  const groups = [...combinableGroupsFor(name), ...comparableGroupsFor(name)];
+  const groups = [...combinableGroupsForEx(name), ...comparableGroupsForEx(name)];
   const groupHtml = groups
     .map((g) => {
       const members = membersOfGroup(g, presentNames);
@@ -7748,6 +7776,26 @@ async function init() {
     reopenIndexDetail(ex); // keep the inline panel open (it may have moved groups)
     refreshPoseViz();
   });
+  // Combinable / Comparable membership chips — toggle this lift in/out of a group.
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip[data-grp-id]");
+    const ex = chip?.dataset.grpEx, gid = chip?.dataset.grpId;
+    if (!ex || !gid) return;
+    toggleGroupMembership(gid, ex);
+    renderAll();
+    reopenIndexDetail(ex);
+    refreshPoseViz();
+  });
+  // The comparable-ratio input next to a selected comparable group chip.
+  document.addEventListener("change", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-grp-ratio");
+    const ex = inp?.dataset.grpratioEx, gid = inp?.dataset.grpratioId;
+    if (!ex || !gid) return;
+    const v = parseFloat(inp.value);
+    if (Number.isFinite(v)) setGroupRatio(gid, ex, v);
+    renderAll();
+    reopenIndexDetail(ex);
+  });
   // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-nc-btn");
@@ -8222,9 +8270,6 @@ async function init() {
   });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
-    // A tag chip in the inspector jumps to that group in the Browse-groups panel.
-    const tagJump = (e.target as HTMLElement).closest<HTMLElement>("[data-tagjump]");
-    if (tagJump?.dataset.tagjump) { jumpToGroup(tagJump.dataset.tagjump); return; }
     // Per-exercise active-set overrides in the inspector (force in / out).
     const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
     if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
