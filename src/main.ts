@@ -5541,7 +5541,7 @@ function exerciseEditHtml(name: string): string {
  * Reused by the More-info editor AND the floating set-row editor, so the same
  * `.ex-var-lvl` / `.ex-var-input` handlers drive both. */
 /** Chips vs Pose for the modifier editor (model lifts with a posable figure). */
-let noteEditMode: "chips" | "pose" = "chips";
+let noteEditMode: "chips" | "stickman" | "pose" = "chips";
 /** A family is "posable" when it has the dimensions the stick-figure maps to. */
 function familyPosable(fam: string | null): boolean {
   return !!fam && ["rom", "lean", "support"].every((d) => FAMILIES[fam]!.dims[d]);
@@ -5556,12 +5556,15 @@ function notePickerHtml(name: string, note: string): string {
       `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(note)}" aria-label="Difficulty for ${escapeHtml(note)}" /></label></div>`
     );
   }
-  // Chips ⇄ Pose toggle for posable lifts; the figure is an alternative way to set
-  // the same attributes (drag instead of tap).
+  // Chips / Stickman / 3D model toggle for posable lifts: three ways to set the
+  // same attributes. Chips = tap; Stickman = drag the 2-D figure; 3D model is a
+  // placeholder while a separate build creates the rotatable 3-D handstand.
   const toggle = familyPosable(fam)
     ? `<div class="ex-var-mode"><button type="button" class="ex-var-mode-btn${noteEditMode === "chips" ? " is-on" : ""}" data-notemode="chips">Chips</button>` +
-      `<button type="button" class="ex-var-mode-btn${noteEditMode === "pose" ? " is-on" : ""}" data-notemode="pose">🧍 Pose</button></div>`
+      `<button type="button" class="ex-var-mode-btn${noteEditMode === "stickman" ? " is-on" : ""}" data-notemode="stickman">🧍 Stickman</button>` +
+      `<button type="button" class="ex-var-mode-btn${noteEditMode === "pose" ? " is-on" : ""}" data-notemode="pose">🧊 3D model</button></div>`
     : "";
+  if (familyPosable(fam) && noteEditMode === "stickman") return toggle + noteStickmanHtml(name, note);
   if (familyPosable(fam) && noteEditMode === "pose") return toggle + notePoseHtml(name, note);
   const override = noteVecOverride(name, note);
   const effVec = { ...resolveNote(fam, note).vec, ...override };
@@ -5622,6 +5625,70 @@ function notePoseHtml(name: string, note: string): string {
     ctlRow("support") +
     ctlRow("rom") +
     ctlRow("lean") +
+    `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
+    `</div>`
+  );
+}
+/** Inner SVG for the simple 2-D "stickman" view: a side-view handstand figure
+ * whose hand height tracks range-of-motion and whose feet offset tracks lean,
+ * with the wall lit when the setup uses it. Redrawn in place on each pick. */
+function stickmanInner(name: string, note: string): string {
+  const fam = familyOf(name)!;
+  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const dims = FAMILIES[fam]!.dims;
+  const romKeys = Object.keys(dims.rom ?? {});
+  const leanKeys = Object.keys(dims.lean ?? {});
+  const romN = romKeys.length, leanN = leanKeys.length;
+  const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
+  const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
+  const sup = String(effVec.support ?? "free");
+  const onWall = sup !== "free";
+  const W = 200, floorY = 180, wallX = 24, handX = 112, handTop = 120, handBot = 166;
+  const handY = romN > 1 ? handTop + (romIdx * (handBot - handTop)) / (romN - 1) : 148;
+  const bodyLen = 82, leanMax = 46;
+  const feetX = handX - (leanN > 1 ? (leanIdx * leanMax) / (leanN - 1) : 0);
+  const feetY = handY - bodyLen;
+  const hipX = (handX + feetX) / 2, hipY = handY - bodyLen * 0.5, headY = handY - 15;
+  const f = (n: number) => n.toFixed(1);
+  const block = handY < floorY - 3 ? `<rect x="${handX - 20}" y="${f(handY + 5)}" width="40" height="${f(floorY - handY - 5)}" rx="2" class="pose-block"/>` : "";
+  const wall = `<rect x="0" y="20" width="${wallX}" height="${floorY - 20}" class="pose-wall${onWall ? " is-on" : ""}"/>`;
+  const floor = `<line x1="0" y1="${floorY}" x2="${W}" y2="${floorY}" class="pose-floor"/>`;
+  const fig =
+    `<line x1="${handX}" y1="${f(handY)}" x2="${handX}" y2="${f(headY + 8)}" class="pose-limb"/>` +
+    `<circle cx="${handX}" cy="${f(headY)}" r="9" class="pose-head"/>` +
+    `<line x1="${handX}" y1="${f(headY - 4)}" x2="${f(hipX)}" y2="${f(hipY)}" class="pose-limb"/>` +
+    `<line x1="${f(hipX)}" y1="${f(hipY)}" x2="${f(feetX)}" y2="${f(feetY)}" class="pose-limb"/>` +
+    `<circle cx="${handX - 6}" cy="${f(handY)}" r="3" class="pose-hand"/>` +
+    `<circle cx="${handX + 6}" cy="${f(handY)}" r="3" class="pose-hand"/>`;
+  const lbls =
+    `<text x="${f(feetX)}" y="${f(feetY - 10)}" class="pose-lbl" text-anchor="middle">${escapeHtml(String(effVec.lean))}</text>` +
+    `<text x="${handX + 24}" y="${f(handY + 4)}" class="pose-lbl" text-anchor="start">${escapeHtml(String(effVec.rom))}</text>` +
+    `<text x="${wallX / 2}" y="16" class="pose-lbl" text-anchor="middle">${escapeHtml(onWall ? (SUPPORT_LBL[sup] ?? sup) : "free")}</text>`;
+  return wall + floor + block + fig + lbls;
+}
+/** The 2-D stickman view: the figure + the same tap-to-pick control rows as the
+ * 3-D view (reusing .pose-ctl), so picks update both views identically. */
+function noteStickmanHtml(name: string, note: string): string {
+  const fam = familyOf(name)!;
+  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const scale = scalarFromVec(fam, effVec);
+  const ctl = (dim: string): string => {
+    const levels = FAMILIES[fam]!.dims[dim];
+    if (!levels) return "";
+    const cur = effVec[dim];
+    const chips = Object.keys(levels)
+      .map((l) => {
+        const lbl = dim === "support" ? SUPPORT_LBL[l] ?? l : l;
+        return `<button type="button" class="pose-ctl${l === cur ? " is-on" : ""}" data-posectl-ex="${escapeHtml(name)}" data-posectl-note="${escapeHtml(note)}" data-posectl-dim="${escapeHtml(dim)}" data-posectl-level="${escapeHtml(l)}">${escapeHtml(lbl)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`;
+      })
+      .join("");
+    return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
+  };
+  return (
+    `<div class="ex-var-pose">` +
+    `<svg class="pose-stickman" viewBox="0 0 200 210" width="100%" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}">${stickmanInner(name, note)}</svg>` +
+    `<div class="pose-hint muted">A simple side-view stickman of this setup. Pick options below.</div>` +
+    ctl("support") + ctl("rom") + ctl("lean") +
     `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
     `</div>`
   );
@@ -6295,11 +6362,12 @@ async function init() {
       renderAll();
     }
   });
-  // Chips ⇄ Pose toggle for the modifier editor.
+  // Chips / Stickman / 3D model toggle for the modifier editor.
   document.addEventListener("click", (e) => {
     const m = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-mode-btn");
     if (!m?.dataset.notemode) return;
-    noteEditMode = m.dataset.notemode === "pose" ? "pose" : "chips";
+    const mode = m.dataset.notemode;
+    noteEditMode = mode === "pose" ? "pose" : mode === "stickman" ? "stickman" : "chips";
     renderScaleEditor();
     refreshExerciseInfo();
     refreshPose3d();
@@ -6321,6 +6389,9 @@ async function init() {
     const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
     // Update the live 3-D figure (don't remount — keep the orbit view).
     if (activePose3d) activePose3d.scene.update(vec);
+    // Or redraw the 2-D stickman in place, if that view is showing.
+    const stick = b.closest(".ex-var-pose")?.querySelector(".pose-stickman");
+    if (stick) stick.innerHTML = stickmanInner(ex, note);
     // Mark just this dimension's chips as selected.
     const row = b.closest(".ex-var-dim");
     row?.querySelectorAll<HTMLElement>(".pose-ctl").forEach((c) => c.classList.toggle("is-on", c === b));
