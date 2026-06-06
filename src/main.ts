@@ -4987,14 +4987,9 @@ function closeScaleEditor(): void {
   const pop = document.getElementById("scaleEditPop");
   if (pop) pop.hidden = true;
   refreshPoseViz(); // tear down the visual editors now the popover is closed
-  // Sync the table/graphs ONCE, on close (not on every chip tap), preserving the
-  // scroll position so the page doesn't jump.
-  if (wasDirty) {
-    const y = window.scrollY;
-    refreshExerciseInfo();
-    renderAll();
-    window.scrollTo(0, y);
-  }
+  // Sync the table/graphs ONCE, on close (not on every chip tap) — including the
+  // workouts list + charts so the compact ×multipliers update, scroll preserved.
+  if (wasDirty) refreshAfterDifficultyEdit();
 }
 /** Click on a set row's editable ×chip: open/close the floating modifier editor
  * for that note. Returns true if it handled the click (so the row doesn't edit). */
@@ -6413,6 +6408,26 @@ function renderAll() {
   renderTest();
 }
 
+/**
+ * Re-render everything a difficulty / scale / note edit affects. renderAll covers
+ * the leaderboard, PRs, athlete and Index views, but NOT the Analysis workouts
+ * list or its charts — yet the compact "×mult" on each set there reads the same
+ * scaleForRecord. Without refreshing them, an edited multiplier updates in the
+ * editor but the (collapsed) workout list keeps showing the old number. Scroll is
+ * preserved (and re-applied after the charts mount async) so the page won't jump.
+ */
+function refreshAfterDifficultyEdit(): void {
+  const y = window.scrollY;
+  refreshExerciseInfo();
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  renderWorkoutSetsChart();
+  renderWaCompareGraph();
+  if (selectedExercise) renderExerciseProgressChart(selectedExercise);
+  window.scrollTo(0, y);
+  requestAnimationFrame(() => window.scrollTo(0, y));
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
@@ -6652,8 +6667,7 @@ async function init() {
     const ren = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-rename");
     if (ren?.dataset.renameEx && ren.dataset.renameNote !== undefined) {
       setNoteRename(ren.dataset.renameEx, ren.dataset.renameNote, ren.value);
-      refreshExerciseInfo();
-      renderAll();
+      refreshAfterDifficultyEdit();
       return;
     }
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-input");
@@ -6664,8 +6678,7 @@ async function init() {
       scaleEditDirty = true;
       closeScaleEditor(); // a selection in the floating popover closes it
     } else {
-      refreshExerciseInfo();
-      renderAll();
+      refreshAfterDifficultyEdit();
     }
   });
   // Close button on the floating modifier editor.
@@ -6682,8 +6695,7 @@ async function init() {
       scaleEditDirty = true;
       closeScaleEditor();
     } else {
-      refreshExerciseInfo();
-      renderAll();
+      refreshAfterDifficultyEdit();
     }
   });
   // Nested SUPPORT dropdowns (support / ladder grip / ladder height) — custom
@@ -6705,7 +6717,7 @@ async function init() {
     if (!opt?.dataset.vecdimEx || opt.dataset.vecdimNote === undefined || !opt.dataset.vecdimDim || opt.dataset.vecdimLevel === undefined) return;
     setNoteVecDim(opt.dataset.vecdimEx, opt.dataset.vecdimNote, opt.dataset.vecdimDim, opt.dataset.vecdimLevel);
     if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
-    else { refreshExerciseInfo(); renderAll(); }
+    else { refreshAfterDifficultyEdit(); }
   });
   // Depth × lean SQUARE pad: drag the handle anywhere to set BOTH at once. y: TOP =
   // higher/easier, BOTTOM = deeper/harder. x: rightmost = no lean (reversed). The
@@ -6764,7 +6776,7 @@ async function init() {
   document.addEventListener("pointerup", () => {
     if (!padDrag) return;
     padDrag = null;
-    if (!scaleEditState) { refreshExerciseInfo(); renderAll(); } // sync on release (More-info page)
+    if (!scaleEditState) refreshAfterDifficultyEdit(); // sync on release (More-info page)
   });
   // Chips / Stickman / 3D model toggle for the modifier editor.
   document.addEventListener("click", (e) => {
@@ -6908,8 +6920,7 @@ async function init() {
     if (!b?.dataset.ncEx || b.dataset.ncNote === undefined) return;
     setNoteNotComparable(b.dataset.ncEx, b.dataset.ncNote, !isNoteNotComparable(b.dataset.ncEx, b.dataset.ncNote));
     if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
-    refreshExerciseInfo();
-    renderAll();
+    refreshAfterDifficultyEdit();
   });
   document.addEventListener("click", (e) => {
     const rb = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-reset");
@@ -6918,8 +6929,7 @@ async function init() {
     if (familyOf(rb.dataset.varresetEx)) clearNoteVec(rb.dataset.varresetEx, rb.dataset.varresetNote);
     else clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
     if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
-    refreshExerciseInfo();
-    renderAll();
+    refreshAfterDifficultyEdit();
   });
   // A "who & when" entry under a note: jump to that athlete's Analysis for this
   // lift, scrolled to the date where the note was logged.
@@ -8893,7 +8903,12 @@ function renderWorkoutAnalysis(): void {
   if (document.getElementById("tab-analysis")?.hidden === false) {
     if ((mode === "single" || mode === "compare") && waSelected.length) {
       if (heatFiltersSaved === null) heatFiltersSaved = heatFilters;
-      heatFilters = waSelected.map((n) => `ex:${n}`);
+      // Expand combined/comparison lifts to their raw member names — the same
+      // expansion the history list uses (waListExerciseFilter) — so the calendar
+      // counts EVERY set of the selection, not just those logged under the parent
+      // name. Without this a merged lift shows all sets in the list but only a few
+      // on the calendar.
+      heatFilters = expandToRawExercises(waSelected).map((n) => `ex:${n}`);
     } else if (heatFiltersSaved !== null) {
       heatFilters = heatFiltersSaved;
       heatFiltersSaved = null;
