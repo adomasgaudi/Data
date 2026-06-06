@@ -276,22 +276,31 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
     let grid = "";
     let yLabels = "";
-    for (const v of niceTicks(view.yMin, view.yMax, 6)) {
+    // Format ticks with decimals when the step is sub-1 (e.g. a 0–1 fraction axis),
+    // else as integers — otherwise Math.round() collapses 0.1/0.2… to 0.
+    const fmtTick = (v: number, ticks: number[]): string => {
+      const stepT = ticks.length > 1 ? Math.abs(ticks[1]! - ticks[0]!) : Math.abs(v) || 1;
+      if (stepT >= 1 || stepT === 0) return String(Math.round(v));
+      return v.toFixed(Math.min(3, Math.ceil(-Math.log10(stepT))));
+    };
+    const yT = niceTicks(view.yMin, view.yMax, 6);
+    for (const v of yT) {
       const py = yL(v);
       if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
       grid += `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${W - M.r}" y2="${py.toFixed(1)}" class="svgc-grid" stroke-width="1"/>`;
       yLabels += inside()
-        ? halo((M.l + 4).toString(), (py - 3).toFixed(1), "start", String(Math.round(v)))
-        : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" class="svgc-axislabel" font-size="11">${Math.round(v)}</text>`;
+        ? halo((M.l + 4).toString(), (py - 3).toFixed(1), "start", fmtTick(v, yT))
+        : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" class="svgc-axislabel" font-size="11">${fmtTick(v, yT)}</text>`;
     }
     // right-axis labels (no gridlines, to avoid a double grid)
     if (hasRight()) {
-      for (const v of niceTicks(ry.yMin, ry.yMax, 6)) {
+      const ryT = niceTicks(ry.yMin, ry.yMax, 6);
+      for (const v of ryT) {
         const py = yR(v);
         if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
         yLabels += inside()
-          ? halo((W - M.r - 4).toString(), (py - 3).toFixed(1), "end", String(Math.round(v)))
-          : `<text x="${W - M.r + 6}" y="${(py + 4).toFixed(1)}" text-anchor="start" class="svgc-axislabel" font-size="11">${Math.round(v)}</text>`;
+          ? halo((W - M.r - 4).toString(), (py - 3).toFixed(1), "end", fmtTick(v, ryT))
+          : `<text x="${W - M.r + 6}" y="${(py + 4).toFixed(1)}" text-anchor="start" class="svgc-axislabel" font-size="11">${fmtTick(v, ryT)}</text>`;
       }
     }
 
