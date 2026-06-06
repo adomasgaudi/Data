@@ -1172,6 +1172,24 @@ let rpeGrades: Record<string, string> = (() => {
 /** Stable id for one set. */
 const setId = (r: SetRecord): string => `${r.username}|${r.exerciseName}|${r.date}|${r.setNumber}`;
 const rpeFor = (r: SetRecord): string | undefined => rpeGrades[setId(r)];
+
+// ---- On-device "deleted" (hidden) sets ----. A bad logged set can be hidden
+// across the WHOLE app without touching the source CSV: its setId is stored here
+// and activeRecords() filters it out everywhere. Reversible (restore in Data
+// health) and carried in the backup. CSV re-imports bring the set back unless it's
+// still listed here.
+const DELETED_SETS_KEY = "colosseum.deletedSets.v1";
+const deletedSets: Set<string> = (() => {
+  try { const a = JSON.parse(localStorage.getItem(DELETED_SETS_KEY) ?? "[]"); return new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []); }
+  catch { return new Set(); }
+})();
+function saveDeletedSets(): void {
+  try { localStorage.setItem(DELETED_SETS_KEY, JSON.stringify([...deletedSets])); } catch { /* ignore */ }
+}
+function setDeleted(id: string, on: boolean): void {
+  if (on) deletedSets.add(id); else deletedSets.delete(id);
+  saveDeletedSets();
+}
 function setRpe(id: string, v: string | null) {
   if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
   else rpeGrades[id] = v;
@@ -1410,9 +1428,12 @@ function saveActiveSet(): void {
 /** Raw logged records, filtered to the active exercise set (or all, if off). The
  * single choke point every view/graph/list reads instead of data.records. */
 function activeRecords(): SetRecord[] {
-  if (!activeSet) return data.records;
+  // Hidden (on-device "deleted") sets drop out everywhere; then the active-set
+  // exercise filter, if on.
+  const live = deletedSets.size ? data.records.filter((r) => !deletedSets.has(setId(r))) : data.records;
+  if (!activeSet) return live;
   const allow = activeSet;
-  return data.records.filter((r) => allow.has(r.exerciseName));
+  return live.filter((r) => allow.has(r.exerciseName));
 }
 
 /** User-created exercise definitions (TASKS 13–15), saved on this device: a
@@ -1788,6 +1809,19 @@ function renderHealth() {
   els.healthBadge.textContent = total === 0 ? "✓ clear" : `⚠ ${total}`;
 
   const lines: string[] = [];
+  // Hidden (on-device "deleted") sets — listed with a per-set restore and a
+  // restore-all, so a delete is never permanent.
+  if (deletedSets.size) {
+    lines.push(`<h3 class="health-section">Hidden sets (${deletedSets.size}) <button type="button" class="health-restore-all">Restore all</button></h3>`);
+    lines.push(`<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">These sets are hidden from the whole site (your source data is unchanged). Restore any to bring it back.</p>`);
+    for (const id of [...deletedSets].slice(0, 80)) {
+      const [user, ex, date, setNo] = id.split("|");
+      lines.push(
+        `<div class="health-item dup"><span>${escapeHtml(user ?? "")} — ${escapeHtml(displayName(ex ?? ""))} <span class="muted">${escapeHtml(date ?? "")} · set ${escapeHtml(setNo ?? "")}</span></span> ` +
+        `<button type="button" class="health-restore" data-restoreset="${escapeHtml(id)}">↺ Restore</button></div>`,
+      );
+    }
+  }
   for (const issue of data.issues.slice(0, 50))
     lines.push(`<div class="health-item warn">Row ${issue.index}: ${escapeHtml(issue.message)}</div>`);
   for (const w of data.warnings.slice(0, 50))
@@ -3842,6 +3876,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
+  if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -4605,6 +4640,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
+  if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -5004,6 +5040,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
+    `<button type="button" class="set-edit-delete" data-setid="${escapeHtml(sid)}" title="Hide this set everywhere on the site (the source data is never changed; restore in Settings → Data health)">🗑 Delete set</button>` +
     `</div></td></tr>`;
   return main + noteRow + formulaRow + prirRow + editRow;
 }
@@ -5209,6 +5246,23 @@ function resetSetEdit(target: HTMLElement): boolean {
   delete setOverrides[btn.dataset.setid];
   saveSetOverrides();
   renderAll();
+  return true;
+}
+
+/** Click "Delete set": hide this set everywhere (on-device only — the source CSV
+ * is untouched). Confirm first; restorable in Data health. */
+function deleteSetEdit(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-delete");
+  if (!btn?.dataset.setid) return false;
+  if (!window.confirm("Hide this set from the whole site? Your source data isn't changed, and you can restore it later in Settings → Data health.")) return true;
+  setDeleted(btn.dataset.setid, true);
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  renderHealth();
+  window.scrollTo(0, y);
   return true;
 }
 
@@ -6817,6 +6871,14 @@ async function init() {
   els.healthBtn.addEventListener("click", openHealth);
   els.status.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".badge-link")) openHealth();
+  });
+  // Restore hidden ("deleted") sets from the Data-health list.
+  els.health.addEventListener("click", (e) => {
+    const one = (e.target as HTMLElement).closest<HTMLElement>(".health-restore");
+    if (one?.dataset.restoreset) { setDeleted(one.dataset.restoreset, false); renderHealth(); renderAll(); renderWorkoutsPage(); return; }
+    if ((e.target as HTMLElement).closest(".health-restore-all")) {
+      deletedSets.clear(); saveDeletedSets(); renderHealth(); renderAll(); renderWorkoutsPage();
+    }
   });
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
