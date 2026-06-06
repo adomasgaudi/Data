@@ -1917,8 +1917,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-dim-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; flex: 1 1 auto; min-width: 0; }
 /* Nested SUPPORT dropdowns (support → ladder grip + height). */
 .ex-var-selrow { display: flex; flex-wrap: wrap; gap: 0.3rem; flex: 1 1 auto; min-width: 0; }
-.ex-var-sel { font: inherit; font-size: 0.78rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }
-.ex-var-sel:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Custom floating dropdowns (no native <select>) for the support pickers. */
+.ex-var-xdd .xdd-btn { font-size: 0.78rem; padding: 4px 8px; }
+.ex-var-xdd .xdd-menu { min-width: max(100%, 9rem); }
 /* Depth × lean 2-D grid (rows = depth ↓, columns = forward lean →). */
 .ex-grid-dim { align-items: stretch; }
 .ex-grid { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
@@ -1927,6 +1928,18 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-grid-cell { font: inherit; font-size: 0.6rem; padding: 4px 1px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--muted); cursor: pointer; min-width: 0; }
 .ex-grid-cell:hover { border-color: var(--accent); color: var(--accent); }
 .ex-grid-cell.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Depth (vertical) × lean (horizontal) sliders. */
+.ex-sl-dim { align-items: stretch; }
+.ex-slwrap { display: flex; gap: 0.7rem; flex: 1 1 auto; min-width: 0; align-items: stretch; }
+.ex-sl-vcol { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+.ex-sl-v { writing-mode: vertical-lr; direction: rtl; width: 1.5rem; min-height: 6.5rem; }
+.ex-sl-vlbl { font-size: 0.62rem; }
+.ex-sl-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; }
+.ex-sl-h { width: 100%; }
+.ex-sl { accent-color: var(--accent); cursor: pointer; }
+.ex-sl-read { font-size: 0.82rem; }
+.ex-sl-read b { color: var(--accent); }
+.ex-sl-haxis { display: flex; justify-content: space-between; font-size: 0.62rem; }
 .ex-var-lvl { font: inherit; font-size: 0.72rem; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); white-space: nowrap; }
 .ex-var-lvl:hover { border-color: var(--accent); }
 .ex-var-lvl.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }

@@ -5631,13 +5631,23 @@ function notePickerHtml(name: string, note: string): string {
   const SUPPORT_LBL: Record<string, string> = { free: "free", front_to_wall: "f2w", back_to_wall: "b2w", ladder: "ladder" };
   const GRIP_LBL: Record<string, string> = { none: "no grip", lsit: "l-sit", hooked: "hooked" };
   const HT_LBL: Record<string, string> = { none: "any height", lad3: "lad3", lad5: "lad5", lad6: "lad6", lad9: "lad9" };
+  // A custom floating CSS/HTML dropdown (the app's .xdd pattern) — NEVER a native
+  // <select>. The button shows the current level; the floating menu lists options.
   const vecSelect = (dim: string, labelMap: Record<string, string>): string => {
     const levels = FAMILIES[fam]!.dims[dim]!;
-    const cur = effVec[dim] ?? "";
+    const cur = String(effVec[dim] ?? "");
+    const curLbl = `${labelMap[cur] ?? cur} ×${levels[cur] ?? 1}`;
     const opts = Object.keys(levels)
-      .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(labelMap[l] ?? l)} ×${levels[l]}</option>`)
+      .map((l) => {
+        const on = l === cur;
+        return `<button type="button" class="xdd-opt ex-vecopt${on ? " is-active" : ""}" role="option" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}">${escapeHtml(labelMap[l] ?? l)} ×${levels[l]}${on ? ' <span class="xdd-check">✓</span>' : ""}</button>`;
+      })
       .join("");
-    return `<select class="ex-var-sel" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" aria-label="${escapeHtml(dim)}">${opts}</select>`;
+    return (
+      `<div class="xdd ex-var-xdd" data-vecdd-dim="${escapeHtml(dim)}">` +
+      `<button type="button" class="xdd-btn ex-vecbtn" aria-label="${escapeHtml(dim)}">${escapeHtml(curLbl)}<span class="xdd-caret">▾</span></button>` +
+      `<div class="xdd-menu" hidden role="listbox">${opts}</div></div>`
+    );
   };
   const isLadder = (effVec.support ?? "free") === "ladder";
   const supPicked = override.support !== undefined || override.ladderGrip !== undefined || override.ladderH !== undefined;
@@ -5646,32 +5656,29 @@ function notePickerHtml(name: string, note: string): string {
     `<div class="ex-var-selrow">${vecSelect("support", SUPPORT_LBL)}` +
     (isLadder ? vecSelect("ladderGrip", GRIP_LBL) + vecSelect("ladderH", HT_LBL) : "") +
     `</div></div>`;
-  // ROM (depth, ↓) × LEAN (forward, →) describe two directions of the same body
-  // position, so they collapse into ONE 2-D grid: rows = depth, columns = lean,
-  // each cell setting both at once and showing the combined multiplier.
+  // ROM (depth, ↓) × LEAN (forward, →) are two directions of one body position, set
+  // with a VERTICAL depth slider + a HORIZONTAL lean slider (each step = a defined
+  // level, so it scales to many levels without a giant grid). The multiplier is the
+  // formula depthFactor × leanFactor, recomputed live from the two slider positions.
   const romDims = FAMILIES[fam]!.dims.rom, leanDims = FAMILIES[fam]!.dims.lean;
   const hasGrid = !!(romDims && leanDims);
   const romLeanGrid = (): string => {
     const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
-    const curRom = effVec.rom, curLean = effVec.lean;
+    const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
+    const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
     const picked = override.rom !== undefined || override.lean !== undefined;
-    const head = leanKeys.map((lk) => `<div class="ex-grid-h">${escapeHtml(lk)}</div>`).join("");
-    const body = romKeys
-      .map((rk) => {
-        const cells = leanKeys
-          .map((lk) => {
-            const on = rk === curRom && lk === curLean;
-            const f = Math.round(romDims![rk]! * leanDims![lk]! * 100) / 100;
-            return `<button type="button" class="ex-grid-cell${on ? " is-on" : ""}" data-gridex="${escapeHtml(name)}" data-gridnote="${escapeHtml(note)}" data-gridrom="${escapeHtml(rk)}" data-gridlean="${escapeHtml(lk)}" aria-pressed="${on}" title="depth ${escapeHtml(rk)} · lean ${escapeHtml(lk)} → ×${f}">×${f}</button>`;
-          })
-          .join("");
-        return `<div class="ex-grid-rlabel">${escapeHtml(rk)}</div>${cells}`;
-      })
-      .join("");
+    const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
+    const mult = Math.round(romDims![rk]! * leanDims![lk]! * 100) / 100;
+    const da = `data-slex="${escapeHtml(name)}" data-slnote="${escapeHtml(note)}"`;
     return (
-      `<div class="ex-var-dim ex-grid-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
-      `<div class="ex-grid" style="grid-template-columns:auto repeat(${leanKeys.length},1fr)">` +
-      `<div class="ex-grid-corner">↓ deeper · → lean</div>${head}${body}</div></div>`
+      `<div class="ex-var-dim ex-sl-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
+      `<div class="ex-slwrap">` +
+      `<div class="ex-sl-vcol"><input type="range" class="ex-sl ex-sl-v" ${da} data-sldim="rom" data-slkeys="${escapeHtml(romKeys.join("|"))}" min="0" max="${romKeys.length - 1}" step="1" value="${romIdx}" aria-label="depth" /><span class="ex-sl-vlbl muted">depth</span></div>` +
+      `<div class="ex-sl-col">` +
+      `<div class="ex-sl-read">depth <b class="ex-sl-rk">${escapeHtml(rk)}</b> · lean <b class="ex-sl-lk">${escapeHtml(lk)}</b> = <b class="ex-sl-mult">×${mult}</b></div>` +
+      `<input type="range" class="ex-sl ex-sl-h" ${da} data-sldim="lean" data-slkeys="${escapeHtml(leanKeys.join("|"))}" min="0" max="${leanKeys.length - 1}" step="1" value="${leanIdx}" aria-label="lean" />` +
+      `<div class="ex-sl-haxis muted"><span>${escapeHtml(leanKeys[0]!)}</span><span>lean →</span><span>${escapeHtml(leanKeys[leanKeys.length - 1]!)}</span></div>` +
+      `</div></div></div>`
     );
   };
   const dims = Object.keys(FAMILIES[fam]!.dims)
@@ -6454,23 +6461,64 @@ async function init() {
       renderAll();
     }
   });
-  // Nested SUPPORT dropdowns (support / ladder grip / ladder height): pick a value
-  // → set the dim and re-render the editor in place (so ladder reveals its subs).
-  document.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-var-sel");
-    if (!sel?.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.vecdimDim) return;
-    setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.vecdimDim, sel.value);
+  // Nested SUPPORT dropdowns (support / ladder grip / ladder height) — custom
+  // floating .xdd menus, never native <select>. Tapping the button toggles its
+  // menu; picking an option sets the dim and re-renders in place (so "ladder"
+  // reveals its sub-dropdowns).
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".ex-vecbtn");
+    if (btn) {
+      const dd = btn.closest(".ex-var-xdd");
+      const menu = dd?.querySelector<HTMLElement>(".xdd-menu");
+      const opening = !!menu?.hasAttribute("hidden");
+      document.querySelectorAll<HTMLElement>(".ex-var-xdd .xdd-menu").forEach((m) => m.setAttribute("hidden", ""));
+      document.querySelectorAll<HTMLElement>(".ex-var-xdd").forEach((d) => d.classList.remove("open"));
+      if (menu && opening) { menu.removeAttribute("hidden"); dd?.classList.add("open"); }
+      return;
+    }
+    const opt = (e.target as HTMLElement).closest<HTMLElement>(".ex-vecopt");
+    if (!opt?.dataset.vecdimEx || opt.dataset.vecdimNote === undefined || !opt.dataset.vecdimDim || opt.dataset.vecdimLevel === undefined) return;
+    setNoteVecDim(opt.dataset.vecdimEx, opt.dataset.vecdimNote, opt.dataset.vecdimDim, opt.dataset.vecdimLevel);
     if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
     else { refreshExerciseInfo(); renderAll(); }
   });
-  // Depth×lean grid cell: one tap sets BOTH the rom (depth) and lean dimensions.
-  document.addEventListener("click", (e) => {
-    const cell = (e.target as HTMLElement).closest<HTMLElement>(".ex-grid-cell");
-    if (!cell?.dataset.gridex || cell.dataset.gridnote === undefined) return;
-    setNoteVecDim(cell.dataset.gridex, cell.dataset.gridnote, "rom", cell.dataset.gridrom!);
-    setNoteVecDim(cell.dataset.gridex, cell.dataset.gridnote, "lean", cell.dataset.gridlean!);
-    if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
-    else { refreshExerciseInfo(); renderAll(); }
+  // Depth (vertical) / lean (horizontal) sliders: each step snaps to a defined
+  // level. On drag, set the dim and update the multiplier readout LIVE (no full
+  // re-render, so the slider stays smooth); the multiplier = depthFactor ×
+  // leanFactor. The heavy table/graph sync is deferred to release / popover-close.
+  const onSliderInput = (sl: HTMLInputElement) => {
+    const ex = sl.dataset.slex, note = sl.dataset.slnote, dim = sl.dataset.sldim, keysStr = sl.dataset.slkeys;
+    if (!ex || note === undefined || !dim || !keysStr) return;
+    const fam = familyOf(ex);
+    if (!fam) return;
+    const key = keysStr.split("|")[Number(sl.value)] ?? keysStr.split("|")[0]!;
+    setNoteVecDim(ex, note, dim, key);
+    const wrap = sl.closest(".ex-sl-dim");
+    const vSl = wrap?.querySelector<HTMLInputElement>(".ex-sl-v");
+    const hSl = wrap?.querySelector<HTMLInputElement>(".ex-sl-h");
+    const rk = (vSl?.dataset.slkeys?.split("|") ?? [])[Number(vSl?.value)] ?? "";
+    const lk = (hSl?.dataset.slkeys?.split("|") ?? [])[Number(hSl?.value)] ?? "";
+    const dims = FAMILIES[fam]!.dims;
+    const mult = Math.round((dims.rom?.[rk] ?? 1) * (dims.lean?.[lk] ?? 1) * 100) / 100;
+    if (wrap) {
+      const set = (sel: string, txt: string) => { const el = wrap.querySelector(sel); if (el) el.textContent = txt; };
+      set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
+      wrap.classList.add("is-picked");
+    }
+    const prod = sl.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");
+    if (prod) {
+      const eff = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+      prod.textContent = `×${scalarFromVec(fam, eff)}`;
+    }
+    if (scaleEditState) scaleEditDirty = true;
+  };
+  document.addEventListener("input", (e) => {
+    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-sl");
+    if (sl) onSliderInput(sl);
+  });
+  document.addEventListener("change", (e) => {
+    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-sl");
+    if (sl && !scaleEditState) { refreshExerciseInfo(); renderAll(); } // sync on release (More-info page)
   });
   // Chips / Stickman / 3D model toggle for the modifier editor.
   document.addEventListener("click", (e) => {
