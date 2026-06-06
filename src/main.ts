@@ -162,10 +162,6 @@ const els = {
   modelClose: $<HTMLButtonElement>("modelClose"),
   modelEditor: $("modelEditor"),
   modelResetAll: $<HTMLButtonElement>("modelResetAll"),
-  exInfoPage: $("exInfoPage"),
-  exInfoClose: $<HTMLButtonElement>("exInfoClose"),
-  exInfoTitle: $("exInfoTitle"),
-  exInfo: $("exInfo"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
@@ -1761,29 +1757,26 @@ function openChangelog() {
   els.changelogPage.hidden = false;
 }
 
-// ---- Exercise "More info" overlay (details + note-variation difficulty editor) ----
-let exInfoName: string | null = null;
-/** Open the More-info overlay for one exercise (its details + the editable
- * difficulty of each note-identified variation). Works for any exercise. */
-function openExerciseInfo(name: string): void {
-  exInfoName = name;
-  els.exInfoTitle.textContent = name;
-  els.exInfo.innerHTML = exerciseInfoHtml(name);
-  els.exInfoPage.hidden = false;
-  refreshPoseViz();
-}
-/** Re-render the open More-info overlay (after a difficulty edit). */
+// ---- Exercise "More info" — now an inline, expandable dropdown on the Index
+// page (no separate overlay). Each Index row expands to the same details +
+// note-variation difficulty editor; the helpers below keep open panels fresh. ----
+/** Re-render every open inline info panel in the Index (after an edit anywhere
+ * in it), so the dropdown stays in sync without collapsing. */
 function refreshExerciseInfo(): void {
-  if (exInfoName && !els.exInfoPage.hidden) {
-    els.exInfo.innerHTML = exerciseInfoHtml(exInfoName);
-    refreshPoseViz();
+  let any = false;
+  for (const detail of Array.from(els.bwGroups.querySelectorAll<HTMLTableRowElement>("tr.detail-row"))) {
+    const row = detail.previousElementSibling as HTMLTableRowElement | null;
+    const name = row?.dataset.exrow;
+    if (!name) continue;
+    const cell = detail.querySelector("td");
+    if (cell) cell.innerHTML = exerciseInfoHtml(name);
+    any = true;
   }
+  if (any) refreshPoseViz();
 }
 /** From a note's "who & when" entry: switch to that athlete, open the Analysis
  * view for this lift (single mode), and scroll to that date in the history. */
 function gotoNoteSet(username: string, exName: string, date: string): void {
-  els.exInfoPage.hidden = true; // close the overlay if it's open
-  exInfoName = null;
   if (els.athlete.value !== username) {
     els.athlete.value = username;
     renderAthlete(); // rebuilds athleteWorkouts for the new athlete
@@ -6660,15 +6653,21 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   );
 }
 
-/** Open the Exercises (merges & data) page and scroll to one exercise's row,
- * opening its category dropdown and flashing the row. Called from the per-athlete
- * drill-in's "Exercise info" button — the same exercise, but with no person. */
+/** Open the Index page, EXPAND one exercise's inline info dropdown, scroll to it
+ * and flash it. The single entry point for "more info" from anywhere (the Index
+ * ℹ button, the per-athlete drill-in, the Analysis panel) now the standalone
+ * overlay is gone. */
 function jumpToExerciseInfo(exName: string) {
   switchTopTab("bwparts");
   const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(exName)}"]`);
   if (!row) return;
   openAncestorDetails(row); // group + "Show hidden" sub-dropdown if the lift is filtered out
-  // Let the just-opened <details> lay out before scrolling to the row.
+  // Expand the inline info panel if it isn't already open.
+  if (!row.nextElementSibling?.classList.contains("detail-row")) {
+    insertDetail(row, 3, exerciseInfoHtml(exName));
+    refreshPoseViz();
+  }
+  // Let the just-opened rows lay out before scrolling to the row.
   requestAnimationFrame(() => {
     row.scrollIntoView({ behavior: "smooth", block: "center" });
     row.classList.add("wo-flash");
@@ -7235,26 +7234,14 @@ async function init() {
     renderModelEditor();
     refreshAfterDifficultyEdit();
   });
-  els.exInfoClose.addEventListener("click", () => {
-    els.exInfoPage.hidden = true;
-    exInfoName = null;
-    refreshPoseViz(); // tear down the visual editors when the overlay closes
-  });
-  // "↩ All exercises index" — close the overlay and jump to the full, filterable,
-  // category-grouped index (the Index tab), one row per exercise.
-  document.getElementById("exInfoIndexLink")?.addEventListener("click", () => {
-    els.exInfoPage.hidden = true;
-    exInfoName = null;
-    refreshPoseViz();
-    switchTopTab("bwparts");
-  });
-  // "More info" buttons (Analysis single mode, drill-in) open the overlay.
+  // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all jump to the
+  // Index page and expand that exercise's inline info dropdown.
   document.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-moreinfoex]");
-    if (btn?.dataset.moreinfoex) openExerciseInfo(btn.dataset.moreinfoex);
+    if (btn?.dataset.moreinfoex) jumpToExerciseInfo(btn.dataset.moreinfoex);
   });
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
-  // document so it works in the overlay AND the Index page's expandable row.
+  // document so it works inside the Index page's expandable info dropdown.
   document.addEventListener("change", (e) => {
     // Edit a difficulty-model factor. Keep it light so you can edit many in a row:
     // save + recolour just this cell (no rebuild of the editor you're in → focus &
