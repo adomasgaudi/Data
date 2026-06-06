@@ -49,15 +49,25 @@ describe("graph metric registry (TASK 26)", () => {
     expect(graphMetric("weightRange")!.type).toBe("range");
   });
 
-  it("weight range plots bodyweight lifts (origWeight null → added 0)", () => {
-    // A pure bodyweight set (no plate) has origWeight null; it must still produce
-    // a range bar (lo at 0), not be dropped as "not enough data".
-    const pts = graphMetric("weightRange")!.compute!(
+  it("weight range plots bodyweight lifts via effective load (not added 0)", () => {
+    // A pure bodyweight set (no plate) has origWeight null. Instead of an empty /
+    // below-axis added-weight bar, it plots the effective (bodyweight-inclusive)
+    // load moved up to its 1RM — a real positive range, scaled by difficulty.
+    const full = graphMetric("weightRange")!.compute!(
       [rec({ exerciseName: "Pull Up", weight: 80, origWeight: null, reps: 5 })],
       DEFAULT_GRAPH_CONFIG,
     );
-    expect(pts.length).toBe(1);
-    expect(pts[0]!.lo).toBe(0);
+    expect(full.length).toBe(1);
+    expect(full[0]!.lo).toBe(80); // the effective load handled
+    expect(full[0]!.hi!).toBeGreaterThan(80); // up to its estimated 1RM
+
+    // An easy variation (×0.5) scales the effective load down — still positive.
+    const easy = graphMetric("weightRange")!.compute!(
+      [rec({ exerciseName: "Handstand Push Up", weight: 80, origWeight: null, difficultyMult: 0.5, reps: 5 })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    expect(easy[0]!.lo).toBe(40);
+    expect(easy[0]!.hi!).toBeGreaterThan(40);
   });
 
   it("strength score never drops (running max), decay can dip (TASKS 34–35)", () => {

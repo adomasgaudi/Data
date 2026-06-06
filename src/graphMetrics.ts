@@ -7,7 +7,8 @@
  */
 import type { SetRecord } from "./domain";
 import { addedWeight1RM, decayedStrengthSeries } from "./aggregate";
-import { setVolume, linearFit, type OneRepMaxFormula } from "./metrics";
+import { setVolume, linearFit, estimate1RM, type OneRepMaxFormula } from "./metrics";
+import { isIsometric } from "./profile";
 import type { GraphConfig } from "./graphConfig";
 
 const DAY = 86_400_000;
@@ -198,24 +199,40 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
       const times = setTimes(rs);
       const out: GraphPoint[] = [];
       for (const r of rs) {
-        // A pure bodyweight set carries no bar weight (origWeight null) — its
-        // "added" load is 0, matching addedWeight1RM's own treatment. Without this
-        // every bodyweight lift (e.g. handstand push-ups) was dropped from the
-        // range entirely, so the graph read "not enough data".
-        const lo = added(r) ?? 0;
-        const hi = addedWeight1RM(r, cfg.formula);
-        if (hi == null) continue;
-        // Section the bar by rep: the value at each rep k is what THIS weight done
-        // for k reps estimates as a 1RM, from k=1 (the weight itself) up to the
-        // logged rep count (the full estimated 1RM at the top). Splits the bar into
-        // one section per rep so each set reads as its rep-by-rep 1RM ladder.
         const reps = r.reps ?? 0;
+        const add = added(r) ?? 0;
+        // A weighted set has a meaningful ADDED-weight range: from the plate you
+        // lifted up to its added-weight 1RM. A PURE bodyweight set (no plate) does
+        // not — its added 1RM is near zero or negative for easy variations (an
+        // easy handstand push-up reads a negative "addable" 1RM by design), so the
+        // bar sat below the axis and the graph read "not enough data". For those we
+        // instead plot the EFFECTIVE (bodyweight-inclusive) load you actually moved
+        // — scaled by the set's variation difficulty — up to its 1RM: a real,
+        // positive strength range for calisthenics.
+        let lo: number;
+        let hi: number | null;
+        let oneRm: (k: number) => number | null;
+        if (add > 0) {
+          lo = add;
+          hi = addedWeight1RM(r, cfg.formula);
+          oneRm = (k) => addedWeight1RM({ ...r, reps: k }, cfg.formula);
+        } else {
+          if (r.notComparable || isIsometric(r.exerciseName)) continue; // no 1RM for these
+          const eff = (r.weight ?? 0) * (r.difficultyMult ?? 1);
+          lo = eff;
+          hi = estimate1RM(eff, reps, cfg.formula);
+          oneRm = (k) => estimate1RM(eff, k, cfg.formula);
+        }
+        if (hi == null) continue;
+        // Section the bar by rep: the value at each rep k is what THIS load done for
+        // k reps estimates as a 1RM, from k=1 (the load itself) up to the logged rep
+        // count (the full estimated 1RM at the top) — a rep-by-rep 1RM ladder.
         const bands: number[] = [];
         for (let k = 1; k <= reps; k++) {
-          const v = addedWeight1RM({ ...r, reps: k }, cfg.formula);
+          const v = oneRm(k);
           if (v != null) bands.push(r1(v));
         }
-        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${lo}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
       }
       return out.sort((a, b) => a.x - b.x);
     },
