@@ -4667,6 +4667,23 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
  * bodyweight/placeholder load (0 or 1 — StrengthLevel sometimes forbids 0) that
  * carries a note shows the NOTE as the base (it's really the difficulty/variation)
  * with the reps as a superscript. */
+/** Compact chips summarising a set's resolved variation (support, band, lean) for
+ * model lifts — so the workout history shows b2w / f2w / ladder / free / band at a
+ * glance, not just the ×multiplier. Empty for non-model lifts or noteless sets. */
+function variationChipsHtml(r: SetRecord): string {
+  const fam = familyOf(r.exerciseName);
+  const note = (r.notes ?? "").trim();
+  if (!fam || !note) return "";
+  const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  const SUP: Record<string, string> = { free: "free", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ladder" };
+  const chips: string[] = [];
+  const sup = String(vec.support ?? "free");
+  chips.push(`<span class="wo-var-chip wo-var-sup">${escapeHtml(SUP[sup] ?? sup)}</span>`);
+  if (vec.band && vec.band !== "none") chips.push(`<span class="wo-var-chip wo-var-band">band ${escapeHtml(String(vec.band))}</span>`);
+  if (vec.lean && vec.lean !== "0cm") chips.push(`<span class="wo-var-chip">lean ${escapeHtml(String(vec.lean))}</span>`);
+  return `<span class="wo-var-chips">${chips.join("")}</span>`;
+}
+
 function setDisplay(raw: SetRecord): string {
   // Apply the on-device per-set edits (note text, weight, reps…) FIRST, so the
   // compact line resolves the SAME effective note — and therefore the same
@@ -4676,10 +4693,11 @@ function setDisplay(raw: SetRecord): string {
   const s = applySetOverride(raw);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
+  const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
   // A "not comparable" note (e.g. a static hold) has no meaningful multiplier —
   // show "UN" with the reps instead of a ×number.
   if (note && isNoteNotComparable(s.exerciseName, note))
-    return `<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}`;
+    return `${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}`;
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -4689,12 +4707,12 @@ function setDisplay(raw: SetRecord): string {
   if (scaled) {
     const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
     return bw
-      ? `<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
-      : `${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
+      ? `${chips}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
+      : `${chips}${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
   }
   if (bw && note)
-    return `<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
-  return wr(s.weight, s.reps);
+    return `${chips}<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+  return `${chips}${wr(s.weight, s.reps)}`;
 }
 
 function renderWorkoutsPage() {

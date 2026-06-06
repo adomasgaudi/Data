@@ -1199,6 +1199,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
 .wo-scale { font-weight: 700; color: var(--accent); } /* multiplier in blue (workout history) */
+/* Variation chips (b2w / f2w / ladder / free / band …) shown per set. */
+.wo-var-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 4px; vertical-align: middle; }
+.wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: 4px; padding: 0 4px; line-height: 1.5; }
+.wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
+.wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
