@@ -108,6 +108,7 @@ import {
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
+import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename } from "./backup";
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -141,6 +142,11 @@ const els = {
   prTable: $<HTMLTableElement>("prTable"),
   prCount: $("prCount"),
   health: $("health"),
+  backupNowBtn: $<HTMLButtonElement>("backupNowBtn"),
+  restoreBtn: $<HTMLButtonElement>("restoreBtn"),
+  restoreFile: $<HTMLInputElement>("restoreFile"),
+  autoBackupToggle: $<HTMLInputElement>("autoBackupToggle"),
+  autoBackupHint: $("autoBackupHint"),
   healthBtn: $<HTMLButtonElement>("healthBtn"),
   healthBadge: $("healthBadge"),
   healthPage: $("healthPage"),
@@ -6490,6 +6496,7 @@ async function init() {
   setupDataTab();
   renderDataTab();
   setupAddTab();
+  void setupBackup();
   setupCodesTab();
   setupStatsEdit();
   els.athleteProfile.addEventListener("click", (e) => {
@@ -8023,6 +8030,216 @@ async function importManual(file: File) {
     els.addHint.textContent = `Imported — ${added} new set${added === 1 ? "" : "s"} added (${manualEntries.length} total).`;
   } catch (err) {
     els.addHint.textContent = `Couldn't read that file: ${String(err)}`;
+  }
+}
+
+// ===========================================================================
+// FULL-SITE BACKUP  (see src/backup.ts for the pure, tested core)
+//
+// Everything the owner edits lives in localStorage. These helpers let them save
+// ALL of it to one file and restore it, and — when the browser supports it —
+// keep a live backup file that re-saves itself on every change. Pure logic is
+// in backup.ts; this is the browser glue (downloads, file pickers, the handle).
+// ===========================================================================
+
+const AUTOBACKUP_ON_KEY = "colosseum.__autobackupOn.v1";
+const AUTOBACKUP_AT_KEY = "colosseum.__autobackupAt.v1";
+
+/** Build a fresh full backup of every saved setting on this device. */
+function makeBackupText(): string {
+  return backupToText(collectBackup(localStorage, CURRENT_VERSION));
+}
+
+/** Download a complete backup file (manual "Back up everything" button). */
+function downloadBackup() {
+  const blob = new Blob([makeBackupText()], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = backupFilename();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  setAutoBackupStatus("Backed up just now.");
+}
+
+/** Restore from a chosen backup file, then reload so every view re-reads it. */
+async function restoreFromFile(file: File) {
+  try {
+    const backup = parseBackup(await file.text());
+    const count = Object.keys(backup.data).length;
+    const when = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : "an unknown time";
+    const ok = window.confirm(
+      `Restore ${count} saved setting${count === 1 ? "" : "s"} from this backup (taken ${when})?\n\n` +
+        `Anything in the backup overwrites what's here now. The page will reload.`,
+    );
+    if (!ok) return;
+    applyBackup(localStorage, backup, "merge");
+    window.location.reload();
+  } catch (err) {
+    setAutoBackupStatus(`Couldn't restore: ${String(err instanceof Error ? err.message : err)}`, true);
+  }
+}
+
+// ---- Live auto-backup via the File System Access API (where supported) ------
+// The chosen file's handle can't be JSON-stringified into localStorage, so it
+// lives in a tiny IndexedDB store that persists across reloads.
+
+type FsHandle = FileSystemFileHandle;
+const fsApiSupported = (): boolean => typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function";
+
+function idb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("colosseum-backup", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("handles");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbPut(key: string, val: unknown): Promise<void> {
+  const db = await idb();
+  await new Promise<void>((res, rej) => {
+    const tx = db.transaction("handles", "readwrite");
+    tx.objectStore("handles").put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+  db.close();
+}
+async function idbGet<T>(key: string): Promise<T | undefined> {
+  const db = await idb();
+  const out = await new Promise<T | undefined>((res, rej) => {
+    const tx = db.transaction("handles", "readonly");
+    const r = tx.objectStore("handles").get(key);
+    r.onsuccess = () => res(r.result as T | undefined);
+    r.onerror = () => rej(r.error);
+  });
+  db.close();
+  return out;
+}
+
+let autoHandle: FsHandle | null = null;
+
+/** Verify (or request) write permission on the saved handle. */
+async function ensureWritable(h: FsHandle): Promise<boolean> {
+  const anyH = h as unknown as {
+    queryPermission(o: { mode: "readwrite" }): Promise<PermissionState>;
+    requestPermission(o: { mode: "readwrite" }): Promise<PermissionState>;
+  };
+  if ((await anyH.queryPermission({ mode: "readwrite" })) === "granted") return true;
+  return (await anyH.requestPermission({ mode: "readwrite" })) === "granted";
+}
+
+/** Write the current full backup to the live file. Silent on success. */
+async function writeAutoBackup(): Promise<void> {
+  if (!autoHandle) return;
+  try {
+    if (!(await ensureWritable(autoHandle))) {
+      setAutoBackupStatus("Auto-backup paused — the file needs permission again.", true);
+      return;
+    }
+    const w = await autoHandle.createWritable();
+    await w.write(makeBackupText());
+    await w.close();
+    try { localStorage.setItem(AUTOBACKUP_AT_KEY, new Date().toISOString()); } catch { /* ignore */ }
+    setAutoBackupStatus(`Live backup saved at ${new Date().toLocaleTimeString()}.`);
+  } catch {
+    setAutoBackupStatus("Couldn't write the live backup file just now.", true);
+  }
+}
+
+// Debounce: many settings save in a burst; write the file once the dust settles.
+let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleAutoBackup() {
+  if (localStorage.getItem(AUTOBACKUP_ON_KEY) !== "1" || !autoHandle) return;
+  if (autoBackupTimer) clearTimeout(autoBackupTimer);
+  autoBackupTimer = setTimeout(() => void writeAutoBackup(), 1500);
+}
+
+/** Turn the live auto-backup on: let the owner pick/create the file once. */
+async function armAutoBackup(): Promise<void> {
+  if (!fsApiSupported()) return;
+  try {
+    const picker = (window as unknown as {
+      showSaveFilePicker(o: unknown): Promise<FsHandle>;
+    }).showSaveFilePicker;
+    autoHandle = await picker({
+      suggestedName: backupFilename(),
+      types: [{ description: "Colosseum backup", accept: { "application/json": [".json"] } }],
+    });
+    await idbPut("autoBackupHandle", autoHandle);
+    localStorage.setItem(AUTOBACKUP_ON_KEY, "1");
+    els.autoBackupToggle.checked = true;
+    await writeAutoBackup(); // save immediately so the file is current from the off
+  } catch {
+    // user cancelled the picker — leave it off
+    autoHandle = null;
+    els.autoBackupToggle.checked = false;
+  }
+}
+
+function disarmAutoBackup() {
+  autoHandle = null;
+  try { localStorage.setItem(AUTOBACKUP_ON_KEY, "0"); } catch { /* ignore */ }
+  els.autoBackupToggle.checked = false;
+  setAutoBackupStatus("Live auto-backup is off. Use “Back up everything” to save a file manually.");
+}
+
+function setAutoBackupStatus(msg: string, warn = false) {
+  els.autoBackupHint.textContent = msg;
+  els.autoBackupHint.classList.toggle("settings-hint--warn", warn);
+}
+
+/**
+ * Central change hook: wrap localStorage.setItem once so EVERY edit (no matter
+ * which of the ~30 save functions made it) nudges the live backup. This is why
+ * we don't have to touch each saveX() call site.
+ */
+function installBackupHook() {
+  const native = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = (k: string, v: string) => {
+    native(k, v);
+    if (k.startsWith("colosseum.") && k !== AUTOBACKUP_AT_KEY && k !== AUTOBACKUP_ON_KEY) scheduleAutoBackup();
+  };
+}
+
+/** Wire the Settings backup controls and restore live-backup state on load. */
+async function setupBackup() {
+  installBackupHook();
+  els.backupNowBtn.addEventListener("click", downloadBackup);
+  els.restoreBtn.addEventListener("click", () => els.restoreFile.click());
+  els.restoreFile.addEventListener("change", () => {
+    const f = els.restoreFile.files?.[0];
+    if (f) void restoreFromFile(f);
+    els.restoreFile.value = "";
+  });
+
+  if (!fsApiSupported()) {
+    // No live-file support (e.g. iPhone Safari) — hide the toggle, lean on manual.
+    els.autoBackupToggle.closest("label")?.setAttribute("hidden", "");
+    setAutoBackupStatus("Tip: tap “Back up everything” after editing to save a file you can keep or move to another device.");
+    return;
+  }
+
+  els.autoBackupToggle.addEventListener("change", () => {
+    if (els.autoBackupToggle.checked) void armAutoBackup();
+    else disarmAutoBackup();
+  });
+
+  // Re-arm from a previous session: if the owner had it on, reuse the saved handle.
+  if (localStorage.getItem(AUTOBACKUP_ON_KEY) === "1") {
+    const saved = await idbGet<FsHandle>("autoBackupHandle");
+    if (saved && (await ensureWritable(saved))) {
+      autoHandle = saved;
+      els.autoBackupToggle.checked = true;
+      const at = localStorage.getItem(AUTOBACKUP_AT_KEY);
+      setAutoBackupStatus(at ? `Live backup on — last saved ${new Date(at).toLocaleString()}.` : "Live backup on.");
+    } else {
+      // handle lost or permission gone — fall back to off but tell them why
+      disarmAutoBackup();
+      setAutoBackupStatus("Live backup was interrupted (file or permission lost). Turn it back on to re-pick the file.", true);
+    }
   }
 }
 
