@@ -728,10 +728,10 @@ function loadShortOverrides(): Record<string, string> {
   }
 }
 
-/** The default short name for an exercise: for now, the same as its (effective)
- * code — so it follows any code override until the owner sets a distinct short. */
+/** The default short name for an exercise: its FULL name, so "short" mode reads
+ * as the readable name (not the tiny code) until the owner shortens a lift. */
 function defaultShort(exerciseName: string): string {
-  return codeFor(exerciseName);
+  return exerciseName;
 }
 
 /** The short name shown for an exercise: the owner's override if set, else the
@@ -753,6 +753,43 @@ function setShortOverride(exerciseName: string, short: string) {
   if (!trimmed || trimmed === defaultShort(exerciseName)) delete shortOverrides[exerciseName];
   else shortOverrides[exerciseName] = trimmed;
   saveShortOverrides();
+}
+
+// ---- GLOBAL exercise-name display mode (ONE switch for the WHOLE site) ----
+// Every place that prints an exercise name reads displayName(), which follows
+// this single setting: "code" = the tiny code (HS-PU), "short" = the owner's
+// short name, "full" = the full logged name. Default is "short". Changing it
+// re-labels every view in lockstep — no per-view name toggles.
+type NameMode = "code" | "short" | "full";
+const NAME_MODE_KEY = "colosseum.nameMode.v1";
+let nameMode: NameMode = (() => {
+  try { const v = localStorage.getItem(NAME_MODE_KEY); return v === "code" || v === "full" ? v : "short"; } catch { return "short"; }
+})();
+function setNameMode(m: NameMode): void {
+  nameMode = m;
+  try { localStorage.setItem(NAME_MODE_KEY, m); } catch { /* ignore */ }
+}
+/** The exercise name to SHOW anywhere on the site, per the global name mode. */
+function displayName(exerciseName: string): string {
+  return nameMode === "code" ? codeFor(exerciseName) : nameMode === "full" ? exerciseName : shortFor(exerciseName);
+}
+/** Re-render every view after the global name mode changes — names appear across
+ * all of them. Scroll preserved so the page doesn't jump. */
+function applyNameModeChange(): void {
+  const y = window.scrollY;
+  syncWorkoutToggles();
+  syncNameModeButtons();
+  populateExercisePicker();
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  window.scrollTo(0, y);
+}
+/** Light up the active name-mode button in the Settings picker. */
+function syncNameModeButtons(): void {
+  for (const b of document.querySelectorAll<HTMLElement>("#nameModeRow .name-mode-opt"))
+    b.classList.toggle("is-on", b.dataset.namemode === nameMode);
 }
 
 // ---- Per-LEVEL technique scaling factors (the squat-rack holes), editable ----
@@ -1426,7 +1463,7 @@ function populateExercisePicker(): void {
   // The synthetic combinable/comparable lifts (SQ mix, DL pattern) whose members
   // are present — surfaced in a labelled group at the TOP so they're easy to find.
   const synth = availableSyntheticNames(pure);
-  const opt = (e: string) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`;
+  const opt = (e: string) => `<option value="${escapeHtml(e)}">${escapeHtml(displayName(e))}</option>`;
   const synthGroup = synth.length
     ? `<optgroup label="✦ Combined lifts">${synth.map(opt).join("")}</optgroup>`
     : "";
@@ -1882,7 +1919,7 @@ function renderLeaderboard() {
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
   // Groups are scaled cross-exercise estimates — label them clearly so a grouped
   // number is never mistaken for a real single-exercise lift.
-  els.lbTitle.textContent = `${exercise}${originBadge(exercise, true)} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
+  els.lbTitle.textContent = `${displayName(exercise)}${originBadge(exercise, true)} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, bandData, rel);
 }
@@ -2052,7 +2089,6 @@ let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
 let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default: day)
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
-let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
 // Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
 // default (cleaner list); toggled + remembered via the "+ set buttons" button.
 let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
@@ -2066,8 +2102,9 @@ function syncWorkoutToggles(): void {
   els.workoutViewToggle.textContent = workoutViewMode === "day" ? "Day" : "Week";
   els.workoutShowToggle.textContent = workoutShowMode === "exercises" ? "Exer" : "Group";
   els.workoutGrouping.hidden = workoutShowMode !== "groups";
-  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
-  els.workoutNameToggle.textContent = workoutNameMode === "code" ? "Code" : "Full";
+  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // names only apply to the exercise view
+  // This button is now a shortcut to the GLOBAL name mode (cycles code → short → full).
+  els.workoutNameToggle.textContent = nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full";
   els.workoutsPageBtn.textContent = String(workoutsPageSize);
   els.restToggle.hidden = workoutViewMode === "week"; // rest days only make sense per day
   els.restToggle.classList.toggle("is-active", showRestDays);
@@ -4419,7 +4456,7 @@ function renderWorkoutSetsChart() {
     const color = named.get(s.exerciseName) ?? OTHER;
     const g = groups.get(label) ?? groups.set(label, { color, points: [] }).get(label)!;
     const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${codeFor(s.exerciseName)} ×${s.reps ?? 0}` });
+    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${displayName(s.exerciseName)} ×${s.reps ?? 0}` });
   }
   const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
   const series: SvgSeries[] = order.map((label) => ({ name: label, color: groups.get(label)!.color, type: "range", points: groups.get(label)!.points }));
@@ -4514,7 +4551,7 @@ function renderWorkoutsPage() {
               .filter((s) => s.exerciseName === e.exerciseName)
               .map((s) => setDisplay(s))
               .join(" ");
-            const name = workoutNameMode === "code" ? codeFor(e.exerciseName) : e.exerciseName;
+            const name = displayName(e.exerciseName);
             const addBtn = showAddSets
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
@@ -4633,7 +4670,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
         : "";
       const header =
         `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
+        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
         `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
@@ -6262,7 +6299,7 @@ function populateTestExercises(username: string) {
   }
   const exercises = exerciseCountsForUser(activeRecords(), username);
   els.testExercise.innerHTML = exercises
-    .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</option>`)
+    .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</option>`)
     .join("");
   // Default to Squat when this athlete has it, else their most-trained lift.
   const squat = exercises.find((e) => e.exerciseName.toLowerCase() === "squat");
@@ -7219,9 +7256,17 @@ async function init() {
     renderWorkoutsPage();
   });
   els.workoutNameToggle.addEventListener("click", () => {
-    workoutNameMode = workoutNameMode === "code" ? "full" : "code";
-    renderWorkoutsPage();
+    setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code");
+    applyNameModeChange();
   });
+  // Settings → "Exercise names shown as" — the global name-mode picker.
+  document.getElementById("nameModeRow")?.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(".name-mode-opt");
+    if (!b?.dataset.namemode) return;
+    setNameMode(b.dataset.namemode as NameMode);
+    applyNameModeChange();
+  });
+  syncNameModeButtons();
   els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
   els.workoutsPageBtn.addEventListener("click", () => {
     workoutsPageSize = workoutsPageSize === 50 ? 20 : 50;
@@ -8840,8 +8885,6 @@ let waGroupBy: "none" | ExerciseFilterDim = "none";
 let waChipsFoldOpen = false;
 let waCogOpen = false;
 let waCreateOpen = false;
-// Selector chip labels: "code" (short tag, e.g. BPR) or "full" exercise name.
-let waChipNameMode: "code" | "full" = "code";
 let waGraphFoldOpen = false;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
@@ -9054,11 +9097,13 @@ function renderWorkoutAnalysis(): void {
           `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
       )
       .join("");
-    // Chip label mode: show the short code (e.g. BPR) or the full exercise name.
+    // Chip label mode — drives the GLOBAL name mode (code / short / full), so it
+    // matches the rest of the site rather than being an analysis-only toggle.
+    const nameOpt = (m: NameMode, lbl: string) =>
+      `<button type="button" class="wa-name-opt name-mode-opt${nameMode === m ? " is-on" : ""}" data-waname="${m}">${lbl}</button>`;
     const nameToggle =
       `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
-      `<button type="button" class="wa-name-opt${waChipNameMode === "code" ? " is-on" : ""}" data-waname="code">Code</button>` +
-      `<button type="button" class="wa-name-opt${waChipNameMode === "full" ? " is-on" : ""}" data-waname="full">Full name</button></div>`;
+      nameOpt("code", "Code") + nameOpt("short", "Short") + nameOpt("full", "Full name") + `</div>`;
     // Metadata-filter controls (TASK 44): one multi-select per dimension that has
     // values among the identity-included exercises.
     const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
@@ -9145,8 +9190,8 @@ function renderWorkoutAnalysis(): void {
 /** One chip for an exercise (selected state + identity). */
 function waChipHtml(name: string, identity: ExerciseIdentity): string {
   const on = waSelected.includes(name);
-  const label = waChipNameMode === "full" ? name : codeFor(name);
-  return `<button type="button" class="wa-ex-chip${waChipNameMode === "full" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
+  const label = displayName(name);
+  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
@@ -9450,7 +9495,7 @@ function commandList(): CmdSpec[] {
   return [
     { cmd: ".all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
     { cmd: ".clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
-    { cmd: ".names", desc: "Toggle exercise labels: short code ↔ full name", run: () => { waChipNameMode = waChipNameMode === "code" ? "full" : "code"; goToAnalysis(); } },
+    { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
     { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
@@ -9636,11 +9681,11 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutAnalysis();
       return;
     }
-    // Chip label mode: show short codes or full exercise names in the selector.
+    // Chip label mode → set the GLOBAL name mode (code / short / full), site-wide.
     const nameOpt = t.closest<HTMLElement>(".wa-name-opt");
     if (nameOpt?.dataset.waname) {
-      waChipNameMode = nameOpt.dataset.waname as "code" | "full";
-      renderWorkoutAnalysis();
+      setNameMode(nameOpt.dataset.waname as NameMode);
+      applyNameModeChange();
       return;
     }
     // Metadata-filter chip: toggle one value of one dimension on/off.
