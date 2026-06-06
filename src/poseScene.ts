@@ -30,48 +30,66 @@ export interface PoseScene {
 }
 
 // "Anatomy chart" look: a silver-grey body with the worked muscles glowing blue.
-const ANATOMY_GREY = new THREE.Color(0x9aa0a8);
-const ANATOMY_BLUE = new THREE.Color(0x2f6bff);
-// Handstand-push-up prime movers (Mixamo bone names, ":" dropped by three.js):
-// deltoids + triceps (upper-arm bones) and the upper chest (Spine2).
-const HSPU_TARGET_BONES = new Set(
-  ["LeftArm", "RightArm", "LeftShoulder", "RightShoulder", "Spine2"].map((s) => "mixamorig" + s),
-);
+const BODY_GREY = 0x9aa0a8; // bare sexless mannequin
+const MUSCLE_TONE = 0xb4564a; // muscle "meat" tone for the muscle pads
+const MUSCLE_WORKED = 0x2f6bff; // blue = the muscles worked by a handstand push-up
+const MUSCLE_GEO = new THREE.SphereGeometry(1, 18, 14); // unit sphere, scaled per pad
+const _up = new THREE.Vector3(0, 1, 0);
 
-/** Recolour the rigged body into the grey anatomy look and bake a blue highlight
- * over the worked muscles, using each vertex's skin weights to find which bones
- * (muscles) it belongs to. Mutates the (shared) geometry's vertex colours once
- * and gives each mount its own grey vertex-colour material (disposed per mount). */
-function styleAnatomy(model: THREE.Object3D, ownMat: THREE.Material[]): void {
+/** Strip the mannequin to a plain grey body: hide the mechanical joint dots and
+ * recolour the surface (no hair / clothing on this model to begin with). */
+function prepBody(model: THREE.Object3D): void {
   model.traverse((o) => {
-    const sm = o as THREE.SkinnedMesh;
-    if (!sm.isSkinnedMesh) return;
-    const g = sm.geometry;
-    if (!g.getAttribute("color")) {
-      const bones = sm.skeleton.bones;
-      const si = g.getAttribute("skinIndex");
-      const sw = g.getAttribute("skinWeight");
-      const n = g.getAttribute("position").count;
-      const col = new Float32Array(n * 3);
-      const c = new THREE.Color();
-      for (let i = 0; i < n; i++) {
-        let tw = 0;
-        for (let j = 0; j < 4; j++) {
-          const b = bones[si.getComponent(i, j)];
-          if (b && HSPU_TARGET_BONES.has(b.name)) tw += sw.getComponent(i, j);
-        }
-        const t = Math.min(1, Math.max(0, (tw - 0.2) / 0.5)); // smooth grey→blue ramp
-        c.copy(ANATOMY_GREY).lerp(ANATOMY_BLUE, t);
-        col[i * 3] = c.r;
-        col[i * 3 + 1] = c.g;
-        col[i * 3 + 2] = c.b;
-      }
-      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (/joint/i.test(m.name)) {
+      m.visible = false; // the "Beta_Joints" mechanical balls
+      return;
     }
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 });
-    sm.material = mat;
-    ownMat.push(mat);
+    m.material = new THREE.MeshStandardMaterial({ color: BODY_GREY, roughness: 0.6, metalness: 0.04 });
   });
+}
+
+/** Add discernible 3-D muscle "pads" (ellipsoids parented to the skeleton, so
+ * they move with the pose) for the big groups: deltoids, biceps, triceps, quads,
+ * glutes. The handstand-push-up prime movers (delts + triceps) are tinted blue;
+ * the rest are a muscle tone. Placed in the rest pose, then the bones are posed. */
+function addMuscles(model: THREE.Object3D): void {
+  model.updateMatrixWorld(true);
+  const matTone = new THREE.MeshStandardMaterial({ color: MUSCLE_TONE, roughness: 0.55, metalness: 0.05 });
+  const matWorked = new THREE.MeshStandardMaterial({ color: MUSCLE_WORKED, roughness: 0.5, metalness: 0.05 });
+  const vget = (n: string): THREE.Vector3 => {
+    const b = bone(model, n);
+    const v = new THREE.Vector3();
+    if (b) b.getWorldPosition(v);
+    return v;
+  };
+  const pad = (boneName: string, pos: THREE.Vector3, axis: THREE.Vector3 | null, halfLen: number, rad: number, worked: boolean): void => {
+    const m = new THREE.Mesh(MUSCLE_GEO, worked ? matWorked : matTone);
+    m.position.copy(pos);
+    if (axis) m.quaternion.setFromUnitVectors(_up, axis.clone().normalize());
+    m.scale.set(rad, halfLen, rad);
+    m.updateMatrixWorld(true);
+    const b = bone(model, boneName);
+    if (b) b.attach(m); // reparent to the bone, preserving the world transform
+    else model.add(m);
+  };
+  const front = new THREE.Vector3(0, 0, 1); // anterior (the mannequin faces +Z)
+  for (const s of [1, -1]) {
+    const side = s > 0 ? "Left" : "Right";
+    const arm = vget(side + "Arm"), fore = vget(side + "ForeArm");
+    const upleg = vget(side + "UpLeg"), leg = vget(side + "Leg");
+    const hips = vget("Hips");
+    const armDir = fore.clone().sub(arm);
+    const armMid = arm.clone().lerp(fore, 0.5);
+    const legDir = leg.clone().sub(upleg);
+    const thighMid = upleg.clone().lerp(leg, 0.5);
+    pad(side + "Arm", arm.clone().add(new THREE.Vector3(s * 0.01, 0.03, 0)), null, 0.085, 0.085, true); // deltoid cap
+    pad(side + "Arm", armMid.clone().addScaledVector(front, 0.045), armDir, 0.10, 0.045, false); // biceps (front)
+    pad(side + "Arm", armMid.clone().addScaledVector(front, -0.045), armDir, 0.11, 0.05, true); // triceps (back)
+    pad(side + "UpLeg", thighMid.clone().addScaledVector(front, 0.05), legDir, 0.18, 0.075, false); // quadriceps (front)
+    pad("Hips", new THREE.Vector3(s * 0.08, hips.y - 0.02, -0.08), null, 0.1, 0.095, false); // gluteus (back)
+  }
 }
 
 /** cm string ("+15cm", "-10cm", "0cm") → metres (0.15, −0.10, 0). */
@@ -122,8 +140,8 @@ function poseHandstand(model: THREE.Object3D): void {
   if (RUL && RL && RFO) { aim(RUL, RL, 0, -1, 0); aim(RL, RFO, 0, -1, 0); }
 }
 
-// Load + pose the figure ONCE; each mount clones the posed rig (cheap) so the
-// 3.3 MB model is decoded a single time for the whole session.
+// Load + prep + pose the figure ONCE; each mount clones the posed rig (cheap) so
+// the model is decoded a single time for the whole session.
 let templatePromise: Promise<THREE.Object3D> | null = null;
 function loadTemplate(): Promise<THREE.Object3D> {
   if (!templatePromise) {
@@ -131,7 +149,9 @@ function loadTemplate(): Promise<THREE.Object3D> {
       new GLTFLoader().load(
         modelUrl,
         (gltf) => {
-          poseHandstand(gltf.scene);
+          prepBody(gltf.scene); // grey body, hide joint dots
+          addMuscles(gltf.scene); // discernible muscle pads (rest pose)
+          poseHandstand(gltf.scene); // then bend into the handstand (muscles follow)
           gltf.scene.updateMatrixWorld(true);
           resolve(gltf.scene);
         },
@@ -264,7 +284,6 @@ export function mountPoseScene(container: HTMLElement, initial: PoseVec): PoseSc
     .then((tpl) => {
       if (disposed) return;
       const model = cloneRig(tpl);
-      styleAnatomy(model, ownMat); // grey anatomy body + blue worked-muscle highlight
       flip.add(model);
       flip.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(model);
