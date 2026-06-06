@@ -110,3 +110,15 @@ StrengthLevel data and shows leaderboards, personal records and estimated 1RMs.
   when work is complete. Don't open a PR unless asked.
 - To add a standing rule, the owner says "remember: …" and it gets appended to
   `CLAUDE.md` (or saved to memory). Keep this handoff file in sync if you do.
+
+---
+
+## H. Task inbox — for scrumCO
+
+- **OPS-1 (SP:2) branch-cleanup** — tidy the pile of session branches.
+  - **Keep (never delete):** `claude/strength-training-dashboard-SdAlT` (canonical / live site).
+  - **Delete once confirmed merged into canonical:** the login-by-name branch (work is live as `b.2.5.28`), `claude/charming-feynman-A0u0r` (full-site-backup, already merged), and any other finished `claude/*` session branch.
+  - **Check before deleting:** `claude/jolly-planck-9eFzI` holds early Legacy-CO doc edits (COs roster, two-agents notes) that may NOT be merged — port anything still wanted into canonical first, then delete.
+  - **`claude/devco-2`:** keep only if a 2nd devCO is still using it; else delete.
+  - **Constraint:** deleting a remote branch from the Claude sandbox returns HTTP 403 — do the deletions from the GitHub web UI (repo → Branches → trash icon).
+  - **Done when:** only canonical (+ any actively-used) branches remain, and no unmerged work was lost.

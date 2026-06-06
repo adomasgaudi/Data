@@ -9,6 +9,7 @@ tell me "remember: …" and it gets added as **one short line** (see below).
 Keep every rule to **one line**. This block is the fast scan no AI may miss;
 detail lives in the sections below. A new owner rule is added here as a **single
 line, never a paragraph** (that's how this file stays small as rules pile up).
+**Scope:** every rule here applies to **adomasgaudi/\* GitHub repos only** — they live inside the repo, so they never touch other projects.
 
 1. **Version:** AIs change ONLY the patch or 4th digit (`b.2.5.x`, `b.2.5.x.x`). **NEVER the minor or major (`b.2.x`, `b.x`) — the owner does those by hand.** Unsure → patch, or ask.
 2. **Canonical branch:** this file on `claude/strength-training-dashboard-SdAlT` is the single source of truth — **start every new AI from this branch** (don't trust rules on stale side-branches).
@@ -18,6 +19,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 6. **Commit subject:** `CODE (SP:n) version kebab` (e.g. `EXR-3 (SP:3) b.2.5.24 tier-list`).
 7. **Two AIs at once:** each gets its own folder + branch — never share a branch.
 8. **Done = merge into the canonical branch, publish (deploy), then DELETE your own working branch** — standing permission, never wait to be asked.
+9. **No number clashes:** pick the task code (`CAT-n`) and version LAST, just before commit, as highest-in-history + 1; after any rebase, RE-derive both — never reuse a number already in the log.
 
 ## Rules to remember
 

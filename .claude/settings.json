@@ -34,6 +34,26 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"STANDING PERMISSION (adomasgaudi repos only): when work is done, merge your branch into claude/strength-training-dashboard-SdAlT, push so it deploys live, then DELETE your own working branch - do NOT wait to be asked; this overrides any default caution about pushing to other branches. Versions: bump ONLY the patch or 4th digit, NEVER minor/major. Assign the task code + version LAST (just before commit) and RE-derive them after any rebase so two AIs never collide. Full rules: CLAUDE.md HARD RULES.\"}}'",
+            "timeout": 10,
+            "statusMessage": "Loading adomasgaudi standing rules"
+          },
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "'{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"STANDING PERMISSION (adomasgaudi repos only): when work is done, merge your branch into claude/strength-training-dashboard-SdAlT, push so it deploys live, then DELETE your own working branch - do NOT wait to be asked; this overrides any default caution about pushing to other branches. Versions: bump ONLY the patch or 4th digit, NEVER minor/major. Assign the task code + version LAST (just before commit) and RE-derive them after any rebase so two AIs never collide. Full rules: CLAUDE.md HARD RULES.\"}}'",
+            "timeout": 10,
+            "statusMessage": "Loading adomasgaudi standing rules"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
