@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.5.45</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.5.46</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -83,6 +83,9 @@
               <p class="settings-hint" id="autoBackupHint">When on, the site silently re-saves your backup file every time you change something. Pick the file once; it stays current after that.</p>
             </div>
           </details>
+          <button type="button" id="modelBtn" class="settings-link">
+            ✎ Difficulty multipliers
+          </button>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
           </button>
@@ -1180,6 +1183,18 @@
         </div>
         <p class="muted">Validation issues and out-of-range values found while loading the sheet.</p>
         <div id="health"></div>
+      </div>
+    </div>
+
+    <div id="modelPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Difficulty multipliers</h2>
+          <button type="button" id="modelClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">Edit the ×factor for every level of each difficulty model (band assistance, depth, lean, support…). Changes apply to every set of that family everywhere — leaderboard, graphs and 1RM included. Set a value back to its default to clear it. Saved on this device.</p>
+        <div class="settings-row" style="margin:0 0 0.6rem"><button type="button" id="modelResetAll" class="settings-link">↺ Reset all to defaults</button></div>
+        <div id="modelEditor"></div>
       </div>
     </div>
 

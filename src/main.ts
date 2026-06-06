@@ -156,6 +156,11 @@ const els = {
   changelogPage: $("changelogPage"),
   changelogClose: $<HTMLButtonElement>("changelogClose"),
   changelog: $("changelog"),
+  modelBtn: $<HTMLButtonElement>("modelBtn"),
+  modelPage: $("modelPage"),
+  modelClose: $<HTMLButtonElement>("modelClose"),
+  modelEditor: $("modelEditor"),
+  modelResetAll: $<HTMLButtonElement>("modelResetAll"),
   exInfoPage: $("exInfoPage"),
   exInfoClose: $<HTMLButtonElement>("exInfoClose"),
   exInfoTitle: $("exInfoTitle"),
@@ -5828,13 +5833,11 @@ function setupStatsEdit(): void {
 /** Expanded info panel for one exercise on the Index page: category / muscle /
  * tier, bodyweight part, merged spellings, total sets, who trains it, the best
  * estimated 1RM ever logged (any athlete) and the date span. */
-/** Editable difficulty-model factors for a family lift: every dimension's levels
- * with an editable ×factor input. Edits are shared across the whole family and
- * apply everywhere; clearing back to the default removes the override. */
-function modelFactorsEditorHtml(name: string): string {
-  const fam = familyOf(name);
-  if (!fam || !FAMILIES[fam]) return "";
-  const dimRows = Object.keys(FAMILIES[fam]!.dims)
+/** The editable ×factor table for one difficulty family: every dimension's levels
+ * with a number input. Shared by the per-exercise panel and the global editor. */
+function familyFactorTableHtml(fam: string): string {
+  if (!FAMILIES[fam]) return "";
+  return Object.keys(FAMILIES[fam]!.dims)
     .map((dim) => {
       const levels = famLevels(fam, dim);
       const cells = Object.keys(levels)
@@ -5849,12 +5852,31 @@ function modelFactorsEditorHtml(name: string): string {
       return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(dim)}</div><div class="fac-cells">${cells}</div></div>`;
     })
     .join("");
+}
+
+/** Editable difficulty-model factors for a family lift: every dimension's levels
+ * with an editable ×factor input. Edits are shared across the whole family and
+ * apply everywhere; clearing back to the default removes the override. */
+function modelFactorsEditorHtml(name: string): string {
+  const fam = familyOf(name);
+  if (!fam || !FAMILIES[fam]) return "";
   return (
     `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">⚙ Edit difficulty multipliers</summary>` +
-    `<div class="ex-group-why muted">Re-tune any level's ×factor for the “${escapeHtml(fam)}” difficulty model. Changes apply to every set of this family everywhere on the site; set a value back to its default to clear the edit. Saved on this device.</div>` +
-    dimRows +
+    `<div class="ex-group-why muted">Re-tune any level's ×factor for the “${escapeHtml(fam)}” difficulty model. Changes apply to every set of this family everywhere on the site; set a value back to its default to clear the edit. (Also under Settings → ✎ Difficulty multipliers.)</div>` +
+    familyFactorTableHtml(fam) +
     `</details>`
   );
+}
+
+/** The global "Difficulty multipliers" overlay: every family's editable factors. */
+function renderModelEditor(): void {
+  els.modelEditor.innerHTML = Object.keys(FAMILIES)
+    .map((fam) => `<details class="model-fam ex-model-fold" open><summary class="ex-group-hd">“${escapeHtml(fam)}” model</summary>${familyFactorTableHtml(fam)}</details>`)
+    .join("");
+}
+function openModelEditor(): void {
+  renderModelEditor();
+  els.modelPage.hidden = false;
 }
 
 function exerciseInfoHtml(name: string): string {
@@ -6976,6 +6998,16 @@ async function init() {
   els.changelogClose.addEventListener("click", () => {
     els.changelogPage.hidden = true;
   });
+  // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
+  els.modelBtn.addEventListener("click", openModelEditor);
+  els.modelClose.addEventListener("click", () => { els.modelPage.hidden = true; });
+  els.modelResetAll.addEventListener("click", () => {
+    if (!window.confirm("Reset every difficulty multiplier back to its default?")) return;
+    for (const k of Object.keys(famFactorOverrides)) delete famFactorOverrides[k];
+    saveFamFactors();
+    renderModelEditor();
+    refreshAfterDifficultyEdit();
+  });
   els.exInfoClose.addEventListener("click", () => {
     els.exInfoPage.hidden = true;
     exInfoName = null;
@@ -6996,6 +7028,7 @@ async function init() {
       if (Number.isFinite(v) && v > 0) {
         setFamFactor(fac.dataset.facFam, fac.dataset.facDim, fac.dataset.facLvl, Math.round(v * 1000) / 1000);
         refreshAfterDifficultyEdit();
+        if (!els.modelPage.hidden) renderModelEditor(); // refresh the overlay's overridden-highlight
       }
       return;
     }
