@@ -1914,6 +1914,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-coeff-range > input { width: 4rem; }
 .ex-coeff-dash { color: var(--muted); }
 .ex-coeff-avg { font-size: 0.78rem; font-weight: 700; color: var(--gold, #b8902f); margin-left: 4px; }
+/* World-record guesstimate: faint inputs + an "est." tag until the owner sets it. */
+.wr-input.is-guess { color: var(--muted); font-style: italic; }
+.wr-est { font-size: 0.7rem; font-weight: 600; color: var(--muted); }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
   cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
@@ -2300,6 +2303,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    instead of crushing the columns. */
 .data-table { min-width: 460px; }
 .panel { overflow-x: auto; }
+/* …except the Index exercise list: its tables wrap (min-width:0) so they never need
+   sideways scroll, and a scrolling panel would disable the sticky group titles/rows. */
+.panel:has(#bwGroups) { overflow: visible; }
 
 /* Phones / small screens */
 @media (max-width: 640px) {

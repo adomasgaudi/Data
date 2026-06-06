@@ -20,6 +20,7 @@ import {
   weeksForUser,
   exerciseProgressByWeek,
   addedWeight1RM,
+  effectiveE1RM,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -109,6 +110,7 @@ import {
   DISCIPLINES,
   type Discipline,
   exerciseDiscipline,
+  exerciseDisciplines,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
@@ -718,7 +720,7 @@ function tiersFor(name: string): ExerciseTier[] {
 }
 /** All disciplines a lift belongs to — the owner's list, else the single default. */
 function discsFor(name: string): Discipline[] {
-  return (metaSet("disc", name) as Discipline[]) ?? [exerciseDiscipline(name)];
+  return (metaSet("disc", name) as Discipline[]) ?? exerciseDisciplines(name);
 }
 /** Primary (first) of each dimension — what every single-value reader uses. */
 function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
@@ -746,7 +748,7 @@ function toggleMetaOverride(kind: MetaKind, name: string, value: string) {
 /** All muscle-group choices for the editor dropdown. */
 const MUSCLE_GROUPS: MuscleGroup[] = [
   "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats",
-  "Chest", "Shoulders", "Biceps", "Triceps", "Core",
+  "Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Core",
 ];
 const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary" };
 
@@ -1086,9 +1088,50 @@ const worldRecordOverrides: Record<string, { m?: WrRef; f?: WrRef }> = (() => {
 function worldRecordRef(exerciseName: string, sex: "m" | "f"): WrRef | null {
   return worldRecordOverrides[exerciseName]?.[sex] ?? WORLD_RECORDS_SEED[exerciseName]?.[sex] ?? null;
 }
-/** The world record (kg) scaled to a bodyweight; null if none set for that sex. */
+/** Best bodyweight-inclusive 1RM ever logged for an exercise by a lifter of the
+ * given sex, with that lifter's bodyweight — the basis for a record guesstimate. */
+function bestLoggedE1RM(exerciseName: string, sex: "m" | "f"): { e1rm: number; bw: number } | null {
+  const formula = currentFormula();
+  let best: { e1rm: number; bw: number } | null = null;
+  for (const r of computedRecords()) {
+    if (r.exerciseName !== exerciseName) continue;
+    const prof = athProfile(r.username);
+    if (prof?.sex && (prof.sex === "f" ? "f" : "m") !== sex) continue;
+    const e = effectiveE1RM(r, formula);
+    if (e == null || e <= 0) continue;
+    if (!best || e > best.e1rm) best = { e1rm: e, bw: prof?.weight ?? (sex === "f" ? 60 : 80) };
+  }
+  return best;
+}
+/** How far the best logged effort sits below a real record, LEARNED from the lifts
+ * that already have a record set (median ratio). Falls back to ~1.6× when none. */
+function wrHeadroom(sex: "m" | "f"): number {
+  const ratios: number[] = [];
+  for (const ex of new Set([...Object.keys(worldRecordOverrides), ...Object.keys(WORLD_RECORDS_SEED)])) {
+    const ref = worldRecordRef(ex, sex);
+    const best = ref && bestLoggedE1RM(ex, sex);
+    if (!ref || !best || best.e1rm <= 0) continue;
+    const ratio = (best.bw ? scaleWr(ref, best.bw) : ref.kg) / best.e1rm;
+    if (Number.isFinite(ratio) && ratio > 0) ratios.push(ratio);
+  }
+  if (!ratios.length) return 1.6;
+  ratios.sort((a, b) => a - b);
+  return ratios[Math.floor(ratios.length / 2)]!;
+}
+/** A GUESSTIMATED record for a lift with no explicit value — the best logged effort
+ * scaled up by the learned headroom. null when nothing's been logged for it. */
+function guessWorldRecord(exerciseName: string, sex: "m" | "f"): WrRef | null {
+  const best = bestLoggedE1RM(exerciseName, sex);
+  if (!best) return null;
+  return { kg: Math.round(best.e1rm * wrHeadroom(sex)), bw: Math.round(best.bw) };
+}
+/** Explicit record if the owner set one, else the guesstimate (used by graph + editor). */
+function worldRecordRefEffective(exerciseName: string, sex: "m" | "f"): WrRef | null {
+  return worldRecordRef(exerciseName, sex) ?? guessWorldRecord(exerciseName, sex);
+}
+/** The world record (kg) scaled to a bodyweight; uses the guesstimate when unset. */
 function worldRecordKg(exerciseName: string, sex: "m" | "f", bodyweight: number | null): number | null {
-  const ref = worldRecordRef(exerciseName, sex);
+  const ref = worldRecordRefEffective(exerciseName, sex);
   if (!ref || !bodyweight || bodyweight <= 0) return ref ? ref.kg : null;
   return scaleWr(ref, bodyweight);
 }
@@ -2480,14 +2523,14 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
 const INDEX_MUSCLES: MuscleGroup[] = [
   "Quads", "Hamstrings", "Glutes", "Calves",
   "Lower back", "Upper back", "Lats",
-  "Chest", "Shoulders", "Biceps", "Triceps",
+  "Chest", "Shoulders", "Biceps", "Triceps", "Forearms",
   "Core", "Other",
 ];
 const muscleColor = (m: MuscleGroup): string =>
   (({
     Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf",
     "Lower back": "#3b66a6", "Upper back": "#4f79b8", Lats: "#5f86c2",
-    Biceps: "#9c5bb8", Triceps: "#b07fc9",
+    Biceps: "#9c5bb8", Triceps: "#b07fc9", Forearms: "#c79fd8",
   } as Record<string, string>)[m]) ??
   CATEGORY_COLORS[m as TrainingCategory] ?? CATEGORY_COLORS.Other;
 
@@ -6165,23 +6208,27 @@ function modelFactorsEditorHtml(name: string): string {
  * bodyweight; scaled to each athlete's bodyweight for the "% of world record". */
 function worldRecordEditorHtml(name: string): string {
   const row = (sex: "m" | "f", lbl: string) => {
-    const ref = worldRecordRef(name, sex);
+    const explicit = worldRecordRef(name, sex);
+    const ref = explicit ?? guessWorldRecord(name, sex); // guess fills an unset record
+    const est = !explicit && !!ref;
     const inp = (field: "kg" | "bw", val: number | undefined, ph: string) =>
       `<label class="fac-cell"><span class="fac-lvl">${field === "kg" ? "kg" : "@ bw"}</span>` +
-      `<input class="wr-input" type="number" step="1" min="0" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${sex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
-    return `<div class="fac-dim"><div class="fac-dim-h">${lbl}</div><div class="fac-cells">${inp("kg", ref?.kg, "record kg")}${inp("bw", ref?.bw, "at kg bw")}</div></div>`;
+      `<input class="wr-input${est ? " is-guess" : ""}" type="number" step="1" min="0" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${sex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
+    const tag = est ? ` <span class="wr-est" title="Estimated from your logged bests — edit either box to lock in your own value">≈ est.</span>` : "";
+    return `<div class="fac-dim"><div class="fac-dim-h">${lbl}${tag}</div><div class="fac-cells">${inp("kg", ref?.kg, "record kg")}${inp("bw", ref?.bw, "at kg bw")}</div></div>`;
   };
   // The record scaled to the currently-selected athlete (their sex + bodyweight).
   const prof = athProfile(els.athlete.value);
   const sex: "m" | "f" = prof?.sex === "f" ? "f" : "m";
   const bw = prof?.weight ?? null;
   const scaled = worldRecordKg(name, sex, bw);
+  const isEst = !worldRecordRef(name, sex) && scaled != null;
   const forLine = scaled
-    ? `<div class="ex-group-why"><strong>For ${escapeHtml(athleteLabel())}</strong> (${sex === "f" ? "♀" : "♂"}${bw ? `, ${fmt(bw)} kg` : ""}): world record ≈ <b>${fmt(scaled)} kg</b> at this bodyweight.</div>`
+    ? `<div class="ex-group-why"><strong>For ${escapeHtml(athleteLabel())}</strong> (${sex === "f" ? "♀" : "♂"}${bw ? `, ${fmt(bw)} kg` : ""}): world record ${isEst ? "≈ <i>(est.)</i> " : "≈ "}<b>${fmt(scaled)} kg</b> at this bodyweight.</div>`
     : "";
   return (
     `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
-    `<div class="ex-group-why muted">Natty record — total 1RM (bodyweight + plate), per sex. Scaled to each athlete's bodyweight.</div>` +
+    `<div class="ex-group-why muted">Natty record — total 1RM (bodyweight + plate), per sex. Scaled to each athlete's bodyweight. <b>No value set?</b> We estimate one from your logged bests (shown faint, marked “≈ est.”) so the “% of world record” still works — edit either box to lock in your own.</div>` +
     forLine + row("m", "men") + row("f", "women") +
     `</details>`
   );

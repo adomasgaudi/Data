@@ -325,6 +325,9 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
   { id: "muscle.triceps", kind: "muscle-group", label: "Triceps",
     why: "Elbow-extension: pushdowns, skulls, JM press, close-grip bench. Before chest so close-grip bench reads triceps.",
     keywords: ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"] },
+  { id: "muscle.forearms", kind: "muscle-group", label: "Forearms",
+    why: "Grip & wrist work: wrist curls, dead hangs, farmer's carries, pinch/finger and forearm work. Before biceps so a 'wrist curl' isn't read as a biceps curl.",
+    keywords: ["forearm", "wrist", "grip", "dead hang", "farmer", "suitcase", "pinch", "finger", "reverse curl"] },
   { id: "muscle.biceps", kind: "muscle-group", label: "Biceps",
     why: "Elbow-flexion: curls, preacher, hammer.",
     keywords: ["curl", "preacher", "hammer"] },
@@ -633,13 +636,28 @@ export function exerciseDiscipline(exerciseName: string): Discipline {
   if (has("parkour", "vault", "kong", "precision jump", "cat leap", "wall run", "wall climb")) return "Parkour";
   if (has("stretch", "split", "pancake", "tailor", "mobility", "ankle", "breath", "cold shower", "meditation", "pose")) return "Mobility";
   if (/^pos\b|^post\b|posture/.test(n)) return "Posture";
-  if (/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie")) return "Cardio";
+  // Cardio — but a "sled LEG PRESS" or a "bicycle CRUNCH" are strength/core moves
+  // that merely share a word, so those are excluded and fall through to strength.
+  if ((/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie")) && !/crunch|leg press|leg-press/.test(n))
+    return "Cardio";
   if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "l-sit", "l sit", "lsit", "lever", "flag")) return "Skill";
   if (has("balance", "slackline", "beam", "one-leg", "single-leg balance")) return "Balance";
   if (has("jump", "plyo", "hop", "explosive", "clap", "throw", "slam", "ballistic", "bound")) return "Dynamic";
   if (has("pull up", "pullup", "pull-up", "chin up", "chinup", "push up", "pushup", "push-up", "pushups", "dip", "ring", "bodyweight", "pistol", "bar muscle", "inverted row", "australian"))
     return "Calisthenics";
   return "Bodybuilding/strength";
+}
+/** All disciplines a lift defaults into (one or more): the primary, plus any extra
+ * that clearly also applies — e.g. a wall climb / run-up / vault is also Parkour. */
+export function exerciseDisciplines(exerciseName: string): Discipline[] {
+  const out: Discipline[] = [exerciseDiscipline(exerciseName)];
+  const n = exerciseName.toLowerCase();
+  if (/wall climb|wall run|run ?up|vault|\bkong\b|cat leap|precision jump|parkour|rag wall/.test(n) && !out.includes("Parkour"))
+    out.push("Parkour");
+  // Bodyweight SKILLS (levers, planche, handstands, muscle-ups, L-sit…) are
+  // calisthenics too — they belong in both the Skill and Calisthenics groups.
+  if (out[0] === "Skill" && !out.includes("Calisthenics")) out.push("Calisthenics");
+  return out;
 }
 
 /** Finer muscle groups than {@link exerciseCategory} — the legs split into
@@ -653,7 +671,7 @@ export function exerciseDiscipline(exerciseName: string): Discipline {
 export type MuscleGroup =
   | "Quads" | "Hamstrings" | "Glutes" | "Calves"
   | "Lower back" | "Upper back" | "Lats"
-  | "Chest" | "Shoulders" | "Biceps" | "Triceps"
+  | "Chest" | "Shoulders" | "Biceps" | "Triceps" | "Forearms"
   | "Core" | "Other";
 
 export function muscleGroup(exerciseName: string): MuscleGroup {
