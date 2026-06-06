@@ -924,6 +924,41 @@ function setNoteRename(exerciseName: string, originalNote: string, text: string)
   else noteRenames[k] = trimmed;
   saveNoteRenames();
 }
+
+// ---- Editable difficulty-model factors ----. The handstand model's per-level
+// ×factors (Band 5 = ×0.56, depth +25cm = ×0.56, …) live in FAMILIES, but the
+// owner can re-tune any of them here; overrides are keyed family→dim→level and
+// layered over the defaults by famLevels(), the single read point. Saved on device.
+const FAM_FACTORS_KEY = "colosseum.famFactors.v1";
+const famFactorOverrides: Record<string, Record<string, Record<string, number>>> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(FAM_FACTORS_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+/** A family dimension's levels with any owner factor overrides layered on (base
+ * key order preserved, so the pad axis stays consistent). */
+function famLevels(family: string, dim: string): Record<string, number> {
+  const base = FAMILIES[family]?.dims[dim] ?? {};
+  const ov = famFactorOverrides[family]?.[dim];
+  return ov ? { ...base, ...ov } : base;
+}
+function saveFamFactors(): void {
+  try { localStorage.setItem(FAM_FACTORS_KEY, JSON.stringify(famFactorOverrides)); } catch { /* ignore */ }
+}
+/** Set or clear (value === default → clear) one model factor. */
+function setFamFactor(family: string, dim: string, level: string, value: number): void {
+  const def = FAMILIES[family]?.dims[dim]?.[level];
+  const fam = (famFactorOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  if (def !== undefined && Math.abs(value - def) < 1e-9) {
+    delete d[level];
+    if (Object.keys(d).length === 0) delete fam[dim];
+    if (Object.keys(fam).length === 0) delete famFactorOverrides[family];
+  } else {
+    d[level] = value;
+  }
+  saveFamFactors();
+}
+
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
   const fam = FAMILIES[family];
@@ -936,7 +971,7 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     // Lean is a wall-relative thing — a FREE (freestanding) handstand has no wall
     // to lean toward, so lean doesn't apply (treated as ×1).
     if (dim === "lean" && (vec.support ?? "free") === "free") continue;
-    const f = fam.dims[dim]![vec[dim] ?? ""];
+    const f = famLevels(family, dim)[vec[dim] ?? ""];
     if (typeof f === "number") s *= f;
   }
   return Math.round(s * 1e6) / 1e6;
@@ -5782,6 +5817,35 @@ function setupStatsEdit(): void {
 /** Expanded info panel for one exercise on the Index page: category / muscle /
  * tier, bodyweight part, merged spellings, total sets, who trains it, the best
  * estimated 1RM ever logged (any athlete) and the date span. */
+/** Editable difficulty-model factors for a family lift: every dimension's levels
+ * with an editable ×factor input. Edits are shared across the whole family and
+ * apply everywhere; clearing back to the default removes the override. */
+function modelFactorsEditorHtml(name: string): string {
+  const fam = familyOf(name);
+  if (!fam || !FAMILIES[fam]) return "";
+  const dimRows = Object.keys(FAMILIES[fam]!.dims)
+    .map((dim) => {
+      const levels = famLevels(fam, dim);
+      const cells = Object.keys(levels)
+        .map((lvl) => {
+          const ov = famFactorOverrides[fam]?.[dim]?.[lvl] !== undefined;
+          return (
+            `<label class="fac-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${escapeHtml(lvl)}</span>` +
+            `<input class="fac-input" type="number" step="0.01" min="0.05" value="${levels[lvl]}" data-fac-fam="${escapeHtml(fam)}" data-fac-dim="${escapeHtml(dim)}" data-fac-lvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(dim)} ${escapeHtml(lvl)} multiplier" /></label>`
+          );
+        })
+        .join("");
+      return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(dim)}</div><div class="fac-cells">${cells}</div></div>`;
+    })
+    .join("");
+  return (
+    `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">⚙ Edit difficulty multipliers</summary>` +
+    `<div class="ex-group-why muted">Re-tune any level's ×factor for the “${escapeHtml(fam)}” difficulty model. Changes apply to every set of this family everywhere on the site; set a value back to its default to clear the edit. Saved on this device.</div>` +
+    dimRows +
+    `</details>`
+  );
+}
+
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   const recs = computedRecords().filter((r) => r.exerciseName === name);
@@ -5892,7 +5956,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${mergePanel}${groupHtml}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
 }
 
 /** Inline editors for an exercise's identity & physical model — moved here from
@@ -5982,7 +6046,7 @@ function notePickerHtml(name: string, note: string): string {
   // A custom floating CSS/HTML dropdown (the app's .xdd pattern) — NEVER a native
   // <select>. The button shows the current level; the floating menu lists options.
   const vecSelect = (dim: string, labelMap: Record<string, string>): string => {
-    const levels = FAMILIES[fam]!.dims[dim]!;
+    const levels = famLevels(fam, dim);
     const cur = String(effVec[dim] ?? "");
     const curLbl = `${labelMap[cur] ?? cur} ×${levels[cur] ?? 1}`;
     const opts = Object.keys(levels)
@@ -6008,8 +6072,8 @@ function notePickerHtml(name: string, note: string): string {
   // with a VERTICAL depth slider + a HORIZONTAL lean slider (each step = a defined
   // level, so it scales to many levels without a giant grid). The multiplier is the
   // formula depthFactor × leanFactor, recomputed live from the two slider positions.
-  const romDims = FAMILIES[fam]!.dims.rom, leanDims = FAMILIES[fam]!.dims.lean;
-  const hasGrid = !!(romDims && leanDims);
+  const romDims = famLevels(fam, "rom"), leanDims = famLevels(fam, "lean");
+  const hasGrid = Object.keys(romDims).length > 0 && Object.keys(leanDims).length > 0;
   const romLeanGrid = (): string => {
     // The pad is a side-view scene. y: TOP = higher/easier (raised block, head only
     // dips to the corner), BOTTOM = deeper/harder. The fill grows UP FROM THE FLOOR
@@ -6034,6 +6098,9 @@ function notePickerHtml(name: string, note: string): string {
     const fillH = 100 - dotTop; // bottom-anchored, up to the handle
     const fillW = noLean ? 100 : dotLeft; // free: full width (depth only)
     const fillSide = `left:0`;
+    // Reference line where depth = 0 cm (the ×1 neutral — hands at floor height).
+    const zeroIdx = romKeys.findIndex((k) => Math.abs((romDims![k] ?? 1) - 1) < 1e-9);
+    const zeroTop = zeroIdx >= 0 && romKeys.length > 1 ? (zeroIdx / (romKeys.length - 1)) * 100 : null;
     // Free locks lean to the no-lean level so x-drags can't change it.
     const dataLeanKeys = noLean ? [leanKeys[0] ?? ""] : leanKeys;
     const pd =
@@ -6047,6 +6114,7 @@ function notePickerHtml(name: string, note: string): string {
       `<div class="ex-pad-readout">${readout}</div>` +
       `<div class="ex-pad" ${pd}>` +
       padSceneSvg(support) +
+      (zeroTop !== null ? `<div class="ex-pad-zero" style="top:${zeroTop.toFixed(1)}%"><span class="ex-pad-zero-lbl">0cm</span></div>` : "") +
       `<div class="ex-pad-fill" style="${fillSide};bottom:0;width:${fillW.toFixed(1)}%;height:${fillH.toFixed(1)}%"></div>` +
       `<div class="ex-pad-dot" style="left:${dotLeft.toFixed(1)}%;top:${dotTop.toFixed(1)}%"></div>` +
       `<span class="ex-pad-ylbl ex-pad-yt muted">↑ easier</span>` +
@@ -6061,7 +6129,7 @@ function notePickerHtml(name: string, note: string): string {
     .map((dim) => {
       if (dim === "support") return supportBlock;
       if (dim === "rom" && hasGrid) return romLeanGrid();
-      const levels = FAMILIES[fam]!.dims[dim]!;
+      const levels = famLevels(fam, dim)!;
       const cur = effVec[dim];
       const picked = override[dim] !== undefined;
       const chips = Object.keys(levels)
@@ -6112,7 +6180,7 @@ function notePoseHtml(name: string, note: string): string {
   const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const ctlRow = (dim: string): string => {
-    const levels = FAMILIES[fam]!.dims[dim];
+    const levels = famLevels(fam, dim);
     if (!levels) return "";
     const cur = effVec[dim];
     const chips = Object.keys(levels)
@@ -6142,7 +6210,7 @@ function noteStickmanHtml(name: string, note: string): string {
   const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const ctl = (dim: string): string => {
-    const levels = FAMILIES[fam]!.dims[dim];
+    const levels = famLevels(fam, dim);
     if (!levels) return "";
     const cur = effVec[dim];
     const chips = Object.keys(levels)
@@ -6187,7 +6255,7 @@ function notePhotoHtml(name: string, note: string): string {
   // Map the current depth (rom) onto the nearest frame (top→bottom).
   const frameIdx = romKeys.length > 1 ? Math.round((romIdx / (romKeys.length - 1)) * (N - 1)) : 0;
   const ctl = (dim: string): string => {
-    const levels = FAMILIES[fam]!.dims[dim];
+    const levels = famLevels(fam, dim);
     if (!levels) return "";
     const cur = effVec[dim];
     const chips = Object.keys(levels)
@@ -6910,6 +6978,16 @@ async function init() {
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works in the overlay AND the Index page's expandable row.
   document.addEventListener("change", (e) => {
+    // Edit a difficulty-model factor (Settings-free, on the exercise info page).
+    const fac = (e.target as HTMLElement).closest<HTMLInputElement>(".fac-input");
+    if (fac?.dataset.facFam && fac.dataset.facDim && fac.dataset.facLvl !== undefined) {
+      const v = Number(fac.value);
+      if (Number.isFinite(v) && v > 0) {
+        setFamFactor(fac.dataset.facFam, fac.dataset.facDim, fac.dataset.facLvl, Math.round(v * 1000) / 1000);
+        refreshAfterDifficultyEdit();
+      }
+      return;
+    }
     // Rename a note (its readable label) — applies wherever the note is shown.
     const ren = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-rename");
     if (ren?.dataset.renameEx && ren.dataset.renameNote !== undefined) {
@@ -6989,8 +7067,7 @@ async function init() {
     const rk = romKeys[di]!, lk = leanKeys[li]!;
     setNoteVecDim(ex, note, "rom", rk);
     if (!noLean) setNoteVecDim(ex, note, "lean", lk);
-    const dims = FAMILIES[fam]!.dims;
-    const romF = dims.rom?.[rk] ?? 1, leanF = noLean ? 1 : (dims.lean?.[lk] ?? 1);
+    const romF = famLevels(fam, "rom")[rk] ?? 1, leanF = noLean ? 1 : (famLevels(fam, "lean")[lk] ?? 1);
     const mult = Math.round(romF * leanF * 100) / 100;
     const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");

@@ -1980,6 +1980,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-pad-scene .pad-rung { stroke: var(--accent); stroke-width: 1.4; }
 .ex-pad-scene .pad-floor { stroke: var(--text); stroke-width: 1.6; }
 .ex-pad-fill { position: absolute; left: 0; bottom: 0; background: var(--accent-soft); opacity: 0.7; pointer-events: none; }
+/* The 0 cm depth reference line (hands at floor height, ×1). */
+.ex-pad-zero { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
+.ex-pad-zero-lbl { position: absolute; right: 3px; top: -0.62rem; font-size: 0.55rem; color: var(--muted); background: var(--bg); padding: 0 2px; }
+/* Editable difficulty-model factor table on the exercise info page. */
+.ex-model-fold .fac-dim { margin: 0.35rem 0; }
+.ex-model-fold .fac-dim-h { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; margin: 0.15rem 0; }
+.ex-model-fold .fac-cells { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ex-model-fold .fac-cell { display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; font-size: 0.72rem; }
+.ex-model-fold .fac-cell.is-ov { border-color: var(--accent); }
+.ex-model-fold .fac-lvl { color: var(--muted); }
+.ex-model-fold .fac-input { width: 3.1rem; font: inherit; font-size: 0.72rem; border: none; background: none; color: var(--text); text-align: right; }
 .ex-pad-dot {
   position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
   background: var(--accent); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); pointer-events: none;
