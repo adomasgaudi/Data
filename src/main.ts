@@ -4176,7 +4176,20 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
  * with the reps as a superscript. */
 function setDisplay(s: SetRecord): string {
   const note = s.notes?.trim();
-  if ((s.weight === 0 || s.weight === 1) && note)
+  const bw = s.weight === 0 || s.weight === 1;
+  // The set's final variation multiplier (note model × level × per-set override).
+  const scale = scaleForRecord(s);
+  const scaled = Math.abs(scale - 1) > 1e-6;
+  // When a multiplier applies, show it AS the weight^reps in the compact view —
+  // for a bodyweight lift it fills the empty weight slot (×0.6⁵); for a weighted
+  // lift it tags onto the real weight^reps.
+  if (scaled) {
+    const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
+    return bw
+      ? `<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
+      : `${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
+  }
+  if (bw && note)
     return `<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
   return wr(s.weight, s.reps);
 }

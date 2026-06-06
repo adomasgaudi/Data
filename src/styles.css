@@ -1149,6 +1149,8 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-exname { font-weight: 600; }
 .wo-setlist { font-size: 0.85rem; }
 .wo-note { font-style: italic; }
+/* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
+.wo-scale { font-weight: 700; color: var(--accent); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
 sup.wr-bw { font-size: 0.85em; }
