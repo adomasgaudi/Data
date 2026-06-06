@@ -111,6 +111,8 @@ import {
   type Discipline,
   exerciseDiscipline,
   exerciseDisciplines,
+  JOINT_MOVEMENTS,
+  jointMovements,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
@@ -2514,7 +2516,7 @@ let bwGroupMode: IndexGroupMode = "discipline";
 const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
   { mode: "discipline", label: "Discipline" },
   { mode: "muscle", label: "Muscle group" },
-  { mode: "function", label: "Function (movement)" },
+  { mode: "function", label: "Joint movement" },
   { mode: "combinable", label: "Combinable" },
   { mode: "comparable", label: "Comparable" },
 ];
@@ -2565,8 +2567,10 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
     return INDEX_MUSCLES.filter((m) => by.has(m)).map((m) => ({ key: m, label: m, color: muscleColor(m), rows: by.get(m)! }));
   }
   if (mode === "function") {
-    return LIST_CATEGORIES
-      .map((c) => ({ key: c, label: c, color: listCatColor(c), rows: rows.filter((r) => exerciseCategories(r.name).includes(c)) }))
+    // Joint movements (shoulder abd/add, flexion/extension at each joint…), not
+    // muscle groups — a lift shows under every joint action it trains.
+    return JOINT_MOVEMENTS
+      .map((c) => ({ key: c, label: c, color: hashHueHex(c), rows: rows.filter((r) => jointMovements(r.name).includes(c)) }))
       .filter((b) => b.rows.length);
   }
   if (mode === "combinable" || mode === "comparable") {
@@ -5898,7 +5902,7 @@ function renderBwParts() {
   const strengthBucketHtml = (b: IndexBucket): string => {
     const subs = indexBuckets(b.rows, strengthSubMode);
     const opt = (m: "muscle" | "function", lbl: string) => `<option value="${m}"${strengthSubMode === m ? " selected" : ""}>${lbl}</option>`;
-    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscle", "Muscle group")}${opt("function", "Function")}</select></div>`;
+    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscle", "Muscle group")}${opt("function", "Joint movement")}</select></div>`;
     return (
       `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
       `<summary class="bw-cat-summary">` +
