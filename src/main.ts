@@ -6210,10 +6210,8 @@ async function init() {
     const v = Number(input.value);
     if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
     if (scaleEditState) {
-      // Editing in the floating popover: only update the popover now; the heavy
-      // re-render (which collapses the expanded day) is deferred until it closes.
       scaleEditDirty = true;
-      requestAnimationFrame(renderScaleEditor);
+      closeScaleEditor(); // a selection in the floating popover closes it
     } else {
       refreshExerciseInfo();
       renderAll();
@@ -6229,10 +6227,9 @@ async function init() {
     if (!lvl?.dataset.vecdimEx || lvl.dataset.vecdimNote === undefined || !lvl.dataset.vecdimDim || lvl.dataset.vecdimLevel === undefined) return;
     setNoteVecDim(lvl.dataset.vecdimEx, lvl.dataset.vecdimNote, lvl.dataset.vecdimDim, lvl.dataset.vecdimLevel);
     if (scaleEditState) {
-      // In the floating popover: keep it open, update it only; defer the heavy
-      // re-render (which would collapse the expanded day + scroll up) until close.
+      // In the floating popover, a selection closes it (which syncs the table/graph).
       scaleEditDirty = true;
-      requestAnimationFrame(renderScaleEditor);
+      closeScaleEditor();
     } else {
       refreshExerciseInfo();
       renderAll();
@@ -6336,6 +6333,7 @@ async function init() {
     const b = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-nc-btn");
     if (!b?.dataset.ncEx || b.dataset.ncNote === undefined) return;
     setNoteNotComparable(b.dataset.ncEx, b.dataset.ncNote, !isNoteNotComparable(b.dataset.ncEx, b.dataset.ncNote));
+    if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
     refreshExerciseInfo();
     renderAll();
   });
@@ -6345,6 +6343,7 @@ async function init() {
     // Model lift → clear the attribute picks; otherwise clear the number pin.
     if (familyOf(rb.dataset.varresetEx)) clearNoteVec(rb.dataset.varresetEx, rb.dataset.varresetNote);
     else clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
+    if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
     refreshExerciseInfo();
     renderAll();
   });
