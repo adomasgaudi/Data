@@ -1199,6 +1199,20 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
 .wo-scale { font-weight: 700; color: var(--accent); } /* multiplier in blue (workout history) */
+/* 1RM derivation — a readable, math-paper-style breakdown (one step per line). */
+.rm-derive { font-family: Georgia, "Times New Roman", serif; font-size: 0.82rem; color: var(--text); margin: 0.2rem 0; }
+.rm-step { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.12rem 0; border-bottom: 1px dotted var(--line); }
+.rm-step:last-child { border-bottom: none; }
+.rm-lbl { flex: 0 0 6.5rem; font-family: var(--ui-font, system-ui, sans-serif); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); text-align: right; }
+.rm-eq { flex: 1; }
+.rm-eq i { color: var(--accent); font-style: italic; }
+.rm-eq b { font-weight: 700; }
+.rm-result { color: var(--gold); }
+.rm-note { font-family: var(--ui-font, system-ui, sans-serif); font-size: 0.66rem; color: var(--muted); }
+/* Stacked fraction with a real bar (numerator over denominator). */
+.rm-frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 0 0.15rem; }
+.rm-frac .rm-num { border-bottom: 1px solid currentColor; padding: 0 0.3rem; }
+.rm-frac .rm-den { padding: 0 0.3rem; }
 /* Variation chips (b2w / f2w / ladder / free / band …) shown per set. */
 .wo-var-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 4px; vertical-align: middle; }
 .wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: 4px; padding: 0 4px; line-height: 1.5; }

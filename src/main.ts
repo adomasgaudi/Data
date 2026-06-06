@@ -5012,64 +5012,59 @@ const NOTE_PREVIEW_LEN = 8;
  * chain — bodyweight share, effective load, the formula, then peeling the body
  * share back off — and always matches the bodyweight-aware number displayed.
  */
+/**
+ * A readable, math-paper-style derivation of a set's estimated 1RM — one step per
+ * line, with a real fraction bar for the rep-curve division. Returns HTML (the
+ * caller inserts it unescaped). Takes a COMPUTED record (bodyweight folded into
+ * `weight`, logged bar weight in `origWeight`, difficultyMult / assistKg stamped).
+ */
 function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const effLoad = c.weight; // bodyweight-inclusive load
   const r = c.reps;
-  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return "Needs a weight and reps to estimate a 1RM.";
+  const wrap = (s: string) => `<div class="rm-derive">${s}</div>`;
+  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return wrap(`<div class="rm-step">Needs a weight and reps to estimate a 1RM.</div>`);
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
-  // Bar weight vs the body's share folded in by computeRecord.
+  const kg = (n: number) => `${f2(n)} kg`;
+  const frac = (n: string, d: string) => `<span class="rm-frac"><span class="rm-num">${n}</span><span class="rm-den">${d}</span></span>`;
+  const step = (lbl: string, eq: string) => `<div class="rm-step"><span class="rm-lbl">${lbl}</span><span class="rm-eq">${eq}</span></div>`;
   const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
   const bodyLoad = effLoad - added;
   const hasBody = bodyLoad > 0.01;
-  // Above the cap there is no reliable 1RM — say so, show "—", don't estimate.
-  if (r > MAX_1RM_REPS) {
-    return (
-      (hasBody ? `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg. ` : "") +
-      `${r} reps is above the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable, so no 1RM is shown (—).`
-    );
-  }
-  // Variation difficulty scales the effective load (an easier variation moved less
-  // of your bodyweight), so the curve runs on the SCALED load; the FULL bodyweight
-  // share is still peeled off, which is why an easy variation can go negative.
-  const mult = c.difficultyMult ?? 1;
-  const scaledLoad = effLoad * mult;
-  const eff1rm = estimate1RM(scaledLoad, r, formula);
-  const added1rm = addedWeight1RM(c, formula);
-  const addedTxt = added1rm === null ? "—" : `${f2(added1rm)} kg`;
+  if (r > MAX_1RM_REPS)
+    return wrap(step("reps", `${r} reps is past the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable — no 1RM shown.`));
 
-  const parts: string[] = [];
-  if (hasBody) {
-    parts.push(
-      `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg.`,
-    );
-  }
-  if (mult !== 1) {
-    parts.push(
-      `Variation difficulty ×${f2(mult)} (an easier/harder version), so the load counts as ${f2(effLoad)} × ${f2(mult)} = ${f2(scaledLoad)} kg.`,
-    );
-  }
-  if (r === 1) {
-    parts.push(`${formula}: a single is the 1RM → ${f2(scaledLoad)} kg.`);
+  const mult = c.difficultyMult ?? 1;
+  const assist = c.assistKg ?? 0;
+  const scaledLoad = effLoad * mult;
+  const curveLoad = scaledLoad - assist; // what the rep-curve runs on (matches addedWeight1RM)
+  const eff1rm = curveLoad > 0 ? estimate1RM(curveLoad, r, formula) : curveLoad;
+  const added1rm = addedWeight1RM(c, formula);
+
+  const lines: string[] = [];
+  // 1) Effective load = bar + bodyweight share.
+  lines.push(step("effective load", hasBody ? `<i>L</i> = ${kg(added)} + ${kg(bodyLoad)} = <b>${kg(effLoad)}</b>` : `<i>L</i> = <b>${kg(effLoad)}</b>`));
+  // 2) Variation difficulty (multiplier on the load).
+  let cur = effLoad;
+  if (mult !== 1) { lines.push(step("× difficulty", `${kg(effLoad)} × ${f2(mult)} = <b>${kg(scaledLoad)}</b>`)); cur = scaledLoad; }
+  // 3) Band assistance (kg subtracted).
+  if (assist > 0) { lines.push(step("− band", `${kg(cur)} − ${kg(assist)} = <b>${kg(curveLoad)}</b>`)); cur = curveLoad; }
+  // 4) Rep curve → the 1RM of that load.
+  if (curveLoad <= 0) {
+    lines.push(step(formula, `load ≤ 0 — the band more than covers it, so 1RM = <b>${kg(curveLoad)}</b>`));
+  } else if (r === 1) {
+    lines.push(step(formula, `a single rep IS the 1RM = <b>${kg(curveLoad)}</b>`));
   } else if (formula === "brzycki") {
-    parts.push(
-      r >= 37
-        ? "Brzycki is undefined at 37+ reps."
-        : `Brzycki: load × 36 / (37 − reps) = ${f2(scaledLoad)} × 36 / (37 − ${r}) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
-    );
+    lines.push(step("Brzycki", `1RM = ${frac(`${f2(curveLoad)} × 36`, `37 − ${r}`)} = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b>`));
   } else if (formula === "nuzzo") {
     const pct = benchPctForReps(r);
-    parts.push(
-      `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(scaledLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
-    );
+    lines.push(step("Nuzzo curve", `1RM = ${frac(`${kg(curveLoad)}`, `${f2(pct)}%`)} = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b> <span class="rm-note">(${r} reps ≈ ${f2(pct)}% of 1RM)</span>`));
   } else {
-    parts.push(
-      `Epley: load × (1 + reps/30) = ${f2(scaledLoad)} × (1 + ${r}/30) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
-    );
+    lines.push(step("Epley", `1RM = ${f2(curveLoad)} × (1 + ${frac(`${r}`, "30")}) = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b>`));
   }
-  if (hasBody && eff1rm !== null) {
-    parts.push(`Peel the bodyweight share back off: ${f2(eff1rm)} − ${f2(bodyLoad)} = ${addedTxt} added-weight 1RM.`);
-  }
-  return parts.join(" ");
+  // 5) Peel the full bodyweight share back off → added-weight 1RM (the headline).
+  if (hasBody && eff1rm !== null)
+    lines.push(step("added-weight 1RM", `${kg(eff1rm)} − ${kg(bodyLoad)} = <b class="rm-result">${added1rm === null ? "—" : kg(added1rm)}</b>`));
+  return wrap(lines.join(""));
 }
 
 /**
@@ -5197,7 +5192,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const formulaRow =
     e1rm === null
       ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
+      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${oneRmFormulaText(computed, formula)}</td></tr>`;
   const prirRow =
     predRir === null || !prirText
       ? ""
