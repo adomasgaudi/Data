@@ -1225,11 +1225,17 @@ function notePin(exerciseName: string, note: string): number | undefined {
   const k = variationKey(exerciseName, note);
   return Object.prototype.hasOwnProperty.call(variationScaleOverrides, k) ? variationScaleOverrides[k] : undefined;
 }
+/** resolveNote, but a SYNTHETIC per-set note ("__set:…", which carries no readable
+ * tokens) resolves to the family's neutral defaults rather than being parsed — so a
+ * hand-added set starts from a clean form the owner then tunes. */
+function rNote(family: string, note: string) {
+  return resolveNote(family, note.startsWith("__set:") ? "" : note);
+}
 /** This note's EFFECTIVE relative-difficulty factor. Model lift → product of the
  * resolved-plus-picked attribute vector; otherwise the pin, else 1. */
 function variationScaleFor(exerciseName: string, note: string): number {
   const fam = familyOf(exerciseName);
-  if (fam) return scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+  if (fam) return scalarFromVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
   return notePin(exerciseName, note) ?? 1;
 }
 /** Whether the owner has reviewed this note: pinned a number (non-model) or picked
@@ -1237,17 +1243,28 @@ function variationScaleFor(exerciseName: string, note: string): number {
 function variationReviewed(exerciseName: string, note: string): boolean {
   return notePin(exerciseName, note) !== undefined || noteHasVecOverride(exerciseName, note);
 }
-/** A set's note-variation factor (1 when it has no note). */
-function noteVariationScale(r: SetRecord): number {
+/** The note used for a set's variation lookup: its real note, or — for a family
+ * lift logged WITHOUT a note — a per-set synthetic key, so a hand-added handstand
+ * can still get its own banded/lean/ROM form (active once the owner tunes it). */
+function variationNote(r: SetRecord): string {
   const note = (r.notes ?? "").trim();
+  if (note) return note;
+  const fam = familyOf(r.exerciseName);
+  if (!fam) return "";
+  const key = `__set:${setId(r)}`;
+  return noteHasVecOverride(r.exerciseName, key) ? key : "";
+}
+/** A set's note-variation factor (1 when it has no note/per-set variation). */
+function noteVariationScale(r: SetRecord): number {
+  const note = variationNote(r);
   return note ? variationScaleFor(r.exerciseName, note) : 1;
 }
 /** A set's band assistance in kg (0 when no model/note/band). */
 function noteAssistKg(r: SetRecord): number {
   const fam = familyOf(r.exerciseName);
-  const note = (r.notes ?? "").trim();
+  const note = variationNote(r);
   if (!fam || !note) return 0;
-  const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
   return bandAssistKg(fam, vec.band ?? "none");
 }
 function saveVariationScales(): void {
@@ -4787,13 +4804,9 @@ function renderWorkoutCalendar() {
 
   if (heatScope === "ribbon") {
     const g = ribbonGridHtml(counts);
-    const oldest = years[years.length - 1]!;
-    const newest = years[0]!;
-    const span = oldest === newest ? `${newest}` : `${oldest}–${newest}`;
-    els.workoutCalendar.innerHTML =
-      `<div class="cal-head"><strong>${span}</strong>${count(g)}</div>` +
-      g.html +
-      legend;
+    // No header line here — the calendar sits right at the top (the year span +
+    // day/set count were redundant clutter).
+    els.workoutCalendar.innerHTML = g.html + legend;
     els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
     scrollHeatmapToEnd();
     return;
@@ -4947,7 +4960,7 @@ function variationChipsHtml(r: SetRecord): string {
   const fam = familyOf(r.exerciseName);
   const note = (r.notes ?? "").trim();
   if (!fam || !note) return "";
-  const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
   const SUP: Record<string, string> = { free: "free", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ladder" };
   const chips: string[] = [];
   const sup = String(vec.support ?? "free");
@@ -5405,12 +5418,16 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const scaleVal = scaleForRecord(s);
   const scaleNum = Math.round(scaleVal * 100) / 100;
   const scaleNote = (s.notes ?? "").trim();
+  // The note the editor edits: a real note, or — for a difficulty-model lift with NO
+  // note (e.g. a hand-added handstand) — a per-set synthetic key, so its banded/lean/
+  // ROM form is editable just like a logged-note set.
+  const editNote = scaleNote || (familyOf(s.exerciseName) ? `__set:${sid}` : "");
   // A "not comparable" note has no meaningful multiplier — the chip reads "UN".
   const uncmp = !!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote);
   const chipLabel = uncmp ? "UN" : `×${scaleNum}`;
-  const scaleTag = scaleNote
-    ? // A noted set → an editable chip that opens the floating modifier editor.
-      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(scaleNote)}" title="${uncmp ? "Not comparable — tap to edit" : "Tap to edit this note's difficulty modifiers"}">${chipLabel} ▾</button>`
+  const scaleTag = editNote
+    ? // Editable chip that opens the floating modifier editor (note OR per-set form).
+      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
     : Math.abs(scaleVal - 1) > 1e-6
       ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
       : "";
@@ -5560,8 +5577,9 @@ let scaleEditDirty = false; // an edit was made while the popover was open
 function renderScaleEditor(): void {
   const pop = document.getElementById("scaleEditPop");
   if (!pop || !scaleEditState) return;
+  const title = scaleEditState.note.startsWith("__set:") ? "This set's variation" : scaleEditState.note;
   pop.innerHTML =
-    `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(scaleEditState.note)}</span>` +
+    `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(title)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     notePickerHtml(scaleEditState.ex, scaleEditState.note);
   refreshPoseViz();
@@ -6407,7 +6425,7 @@ function notePickerHtml(name: string, note: string): string {
   if (familyPosable(fam) && noteEditMode === "photo") return toggle + notePhotoHtml(name, note);
   if (familyPosable(fam) && noteEditMode === "pose") return toggle + notePoseHtml(name, note);
   const override = noteVecOverride(name, note);
-  const effVec = { ...resolveNote(fam, note).vec, ...override };
+  const effVec = { ...rNote(fam, note).vec, ...override };
   const scale = scalarFromVec(fam, effVec);
   // SUPPORT is a nested dropdown: a primary picker (free / f2w / b2w / ladder), and
   // when "ladder" is chosen, two sub-dropdowns appear — a leg grip and a rung
@@ -6552,7 +6570,7 @@ const SUPPORT_LBL: Record<string, string> = {
  * tap-to-pose control rows for the visual dimensions, and the live multiplier. */
 function notePoseHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const ctlRow = (dim: string): string => {
     const levels = famLevels(fam, dim);
@@ -6582,7 +6600,7 @@ function notePoseHtml(name: string, note: string): string {
  * leans, the hands sit on the block — plus the same tap-to-pick control rows. */
 function noteStickmanHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const ctl = (dim: string): string => {
     const levels = famLevels(fam, dim);
@@ -6622,7 +6640,7 @@ function noteStickmanHtml(name: string, note: string): string {
  * plain <img> whose src the slider swaps. */
 function notePhotoHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
   const N = POSE_FRAMES.length;
@@ -6667,7 +6685,7 @@ function refreshPose3d(): void {
   const ex = el.dataset.poseex ?? "";
   const note = el.dataset.posenote ?? "";
   const fam = familyOf(ex);
-  const vec = fam ? { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
+  const vec = fam ? { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
   activePose3d = { scene: mountPoseScene(el, vec), el };
 }
 /** The currently-mounted drawn (2-D) figure (one at a time). */
@@ -6681,7 +6699,7 @@ function refreshDrawn(): void {
   const ex = el.dataset.poseex ?? "";
   const note = el.dataset.posenote ?? "";
   const fam = familyOf(ex);
-  const vec = fam ? { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
+  const vec = fam ? { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
   activeDrawn = { fig: mountPoseDraw(el, vec), el };
 }
 /** Sync both visual editors (3-D + drawn figure) after any editor render. */
@@ -6721,7 +6739,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       const reviewed = variationReviewed(name, e.display); // pinned a number OR picked attributes
       const handled = reviewed || notCmp;
       const scale = variationScaleFor(name, e.display);
-      const resolved = fam ? resolveNote(fam, e.display) : null;
+      const resolved = fam ? rNote(fam, e.display) : null;
       // Flags: real resolver flags (unreviewed fragments / conflicting tokens) for
       // model lifts; the keyword heuristic only for lifts without a model.
       const realFlags = (resolved?.flags ?? []).filter((f) => f.type === "unreviewed" || f.type === "conflict");
@@ -7511,7 +7529,7 @@ async function init() {
     if (dot) { dot.style.left = `${dotLeft.toFixed(1)}%`; dot.style.top = `${dotTop.toFixed(1)}%`; }
     wrap?.classList.add("is-picked");
     const prod = pad.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");
-    if (prod) prod.textContent = `×${scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) })}`;
+    if (prod) prod.textContent = `×${scalarFromVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) })}`;
     if (scaleEditState) scaleEditDirty = true;
   };
   document.addEventListener("pointerdown", (e) => {
@@ -7554,7 +7572,7 @@ async function init() {
     const fam = familyOf(ex);
     if (!fam) return;
     setNoteVecDim(ex, note, dim, level);
-    const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+    const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
     // Update the live figure(s) without remounting (keep orbit / rep loop going).
     if (activePose3d) activePose3d.scene.update(vec);
     if (activeDrawn) activeDrawn.fig.update(vec);
@@ -7587,7 +7605,7 @@ async function init() {
     const idx = Math.max(0, Math.min(romKeys.length - 1, parseInt(sl.value, 10) || 0));
     const frac = idx / (romKeys.length - 1);
     setNoteVecDim(ex, note, "rom", romKeys[idx]!);
-    const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+    const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
     if (activeDrawn) { activeDrawn.fig.update(vec); activeDrawn.fig.scrub(frac); } // hold at this depth
     const pose = sl.closest(".ex-var-pose");
     const prod = pose?.querySelector(".ex-var-product strong");
@@ -7627,7 +7645,7 @@ async function init() {
     if (romKeys.length > 1) {
       const romIdx = Math.round((fIdx / (N - 1)) * (romKeys.length - 1));
       setNoteVecDim(ex, note, "rom", romKeys[romIdx]!);
-      const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+      const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
       const prod = pose?.querySelector(".ex-var-product strong");
       if (prod) prod.textContent = `×${scalarFromVec(fam, vec)}`;
       pose?.querySelectorAll<HTMLElement>('.pose-ctl[data-posectl-dim="rom"]').forEach((c) => c.classList.toggle("is-on", c.dataset.posectlLevel === romKeys[romIdx]));
