@@ -5471,6 +5471,13 @@ function exerciseEditHtml(name: string): string {
  * (model lifts) that multiply to a final ×, or a single × number input (no model).
  * Reused by the More-info editor AND the floating set-row editor, so the same
  * `.ex-var-lvl` / `.ex-var-input` handlers drive both. */
+/** Chips vs Pose for the modifier editor (model lifts with a posable figure). */
+let noteEditMode: "chips" | "pose" = "chips";
+/** A family is "posable" when it has the dimensions the stick-figure maps to. */
+function familyPosable(fam: string | null): boolean {
+  return !!fam && ["rom", "lean", "support"].every((d) => FAMILIES[fam]!.dims[d]);
+}
+
 function notePickerHtml(name: string, note: string): string {
   const fam = familyOf(name);
   if (!fam) {
@@ -5480,6 +5487,13 @@ function notePickerHtml(name: string, note: string): string {
       `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(note)}" aria-label="Difficulty for ${escapeHtml(note)}" /></label></div>`
     );
   }
+  // Chips ⇄ Pose toggle for posable lifts; the figure is an alternative way to set
+  // the same attributes (drag instead of tap).
+  const toggle = familyPosable(fam)
+    ? `<div class="ex-var-mode"><button type="button" class="ex-var-mode-btn${noteEditMode === "chips" ? " is-on" : ""}" data-notemode="chips">Chips</button>` +
+      `<button type="button" class="ex-var-mode-btn${noteEditMode === "pose" ? " is-on" : ""}" data-notemode="pose">🧍 Pose</button></div>`
+    : "";
+  if (familyPosable(fam) && noteEditMode === "pose") return toggle + notePoseHtml(name, note);
   const override = noteVecOverride(name, note);
   const effVec = { ...resolveNote(fam, note).vec, ...override };
   const scale = scalarFromVec(fam, effVec);
@@ -5497,7 +5511,75 @@ function notePickerHtml(name: string, note: string): string {
       return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
     })
     .join("");
-  return `<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div></div>`;
+  return `${toggle}<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div></div>`;
+}
+
+// ---- Visual "pose" editor: a draggable side-view handstand stick figure ----
+const POSE_W = 240;
+const POSE_H = 250;
+/** Build the SVG figure innards for a note's current pose, plus the scalar — so a
+ * drag can redraw the figure in place without rebuilding the whole editor. */
+function poseSvgInner(name: string, note: string): { inner: string; scale: number } {
+  const fam = familyOf(name)!;
+  const dims = FAMILIES[fam]!.dims;
+  const override = noteVecOverride(name, note);
+  const effVec = { ...resolveNote(fam, note).vec, ...override };
+  const scale = scalarFromVec(fam, effVec);
+  const romKeys = Object.keys(dims.rom!);
+  const leanKeys = Object.keys(dims.lean!);
+  const romN = romKeys.length;
+  const leanN = leanKeys.length;
+  const romIdx = Math.max(0, romKeys.indexOf(effVec.rom!));
+  const leanIdx = Math.max(0, leanKeys.indexOf(effVec.lean!));
+  const onWall = effVec.support === "wall";
+  const floorY = 200;
+  const wallX = 34;
+  const handX = 132;
+  const handTop = 150;
+  const handBot = 222;
+  const handY = romN > 1 ? handTop + (romIdx * (handBot - handTop)) / (romN - 1) : 185;
+  const bodyLen = 96;
+  const leanMax = 54;
+  const feetX = handX - (leanN > 1 ? (leanIdx * leanMax) / (leanN - 1) : 0);
+  const feetY = handY - bodyLen;
+  const hipX = (handX + feetX) / 2;
+  const hipY = handY - bodyLen * 0.55;
+  const headY = handY - 16;
+  const block = handY < floorY - 2 ? `<rect x="${(handX - 22).toFixed(0)}" y="${(handY + 4).toFixed(1)}" width="44" height="${(floorY - handY - 4).toFixed(1)}" rx="2" class="pose-block"/>` : "";
+  const wall = `<rect x="0" y="34" width="${wallX}" height="${floorY - 34}" class="pose-wall${onWall ? " is-on" : ""}" data-posewall="1"/>`;
+  const floor = `<line x1="0" y1="${floorY}" x2="${POSE_W}" y2="${floorY}" class="pose-floor"/>`;
+  const fig =
+    `<line x1="${handX}" y1="${handY.toFixed(1)}" x2="${handX}" y2="${(headY + 8).toFixed(1)}" class="pose-limb"/>` +
+    `<circle cx="${handX}" cy="${headY.toFixed(1)}" r="10" class="pose-head"/>` +
+    `<line x1="${handX}" y1="${(headY - 6).toFixed(1)}" x2="${hipX.toFixed(1)}" y2="${hipY.toFixed(1)}" class="pose-limb"/>` +
+    `<line x1="${hipX.toFixed(1)}" y1="${hipY.toFixed(1)}" x2="${feetX.toFixed(1)}" y2="${feetY.toFixed(1)}" class="pose-limb"/>` +
+    `<circle cx="${(handX - 6).toFixed(1)}" cy="${handY.toFixed(1)}" r="3.5" class="pose-hand"/>` +
+    `<circle cx="${(handX + 6).toFixed(1)}" cy="${handY.toFixed(1)}" r="3.5" class="pose-hand"/>`;
+  const romHandle = `<circle cx="${handX}" cy="${handY.toFixed(1)}" r="12" class="pose-handle" data-posedim="rom" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
+  const leanHandle = `<circle cx="${feetX.toFixed(1)}" cy="${feetY.toFixed(1)}" r="12" class="pose-handle" data-posedim="lean" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
+  const labels =
+    `<text x="${feetX.toFixed(1)}" y="${(feetY - 16).toFixed(1)}" class="pose-lbl" text-anchor="middle">lean ${escapeHtml(effVec.lean!)}</text>` +
+    `<text x="${(handX + 28).toFixed(0)}" y="${(handY + 4).toFixed(1)}" class="pose-lbl" text-anchor="start">rom ${escapeHtml(effVec.rom!)}</text>` +
+    `<text x="${(wallX / 2).toFixed(0)}" y="28" class="pose-lbl" text-anchor="middle">${onWall ? "wall" : "free"}</text>`;
+  return { inner: wall + floor + block + fig + romHandle + leanHandle + labels, scale };
+}
+function notePoseHtml(name: string, note: string): string {
+  const { inner, scale } = poseSvgInner(name, note);
+  return (
+    `<div class="ex-var-pose">` +
+    `<svg class="pose-svg" viewBox="0 0 ${POSE_W} ${POSE_H}" width="100%" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}">${inner}</svg>` +
+    `<div class="pose-hint muted">Drag the hands ↕ for range of motion, the feet ↔ for lean; tap the wall to lean on it.</div>` +
+    `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
+    `</div>`
+  );
+}
+/** Redraw a pose figure in place during a drag (keeps the <svg> element so its
+ * coordinate frame stays valid), and update the multiplier readout beside it. */
+function redrawPoseSvg(svg: SVGSVGElement, name: string, note: string): void {
+  const { inner, scale } = poseSvgInner(name, note);
+  svg.innerHTML = inner;
+  const prod = svg.parentElement?.querySelector(".ex-var-product strong");
+  if (prod) prod.textContent = `×${scale}`;
 }
 
 /** The note-variation difficulty editor: every distinct note logged for this lift,
@@ -6155,6 +6237,81 @@ async function init() {
       refreshExerciseInfo();
       renderAll();
     }
+  });
+  // Chips ⇄ Pose toggle for the modifier editor.
+  document.addEventListener("click", (e) => {
+    const m = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-mode-btn");
+    if (!m?.dataset.notemode) return;
+    noteEditMode = m.dataset.notemode === "pose" ? "pose" : "chips";
+    renderScaleEditor();
+    refreshExerciseInfo();
+  });
+  // Visual pose editor: tap the wall to lean on it (toggle support).
+  document.addEventListener("click", (e) => {
+    const w = (e.target as Element).closest?.("[data-posewall]");
+    if (!w) return;
+    const svg = w.closest("svg") as SVGSVGElement | null;
+    const ex = svg?.dataset.poseex;
+    const note = svg?.dataset.posenote;
+    if (!ex || note === undefined || !svg) return;
+    const cur = noteVecOverride(ex, note).support ?? resolveNote(familyOf(ex)!, note).vec.support;
+    setNoteVecDim(ex, note, "support", cur === "wall" ? "free" : "wall");
+    redrawPoseSvg(svg, ex, note);
+    if (scaleEditState) {
+      scaleEditDirty = true;
+    } else {
+      refreshExerciseInfo();
+      requestAnimationFrame(renderAll);
+    }
+  });
+  // Visual pose editor: drag the hands (↕ rom) / feet (↔ lean) handles.
+  let poseDrag: { ex: string; note: string; dim: string; svg: SVGSVGElement } | null = null;
+  const poseToVb = (svg: SVGSVGElement, cx: number, cy: number) => {
+    const r = svg.getBoundingClientRect();
+    return { x: r.width ? ((cx - r.left) / r.width) * POSE_W : 0, y: r.height ? ((cy - r.top) / r.height) * POSE_H : 0 };
+  };
+  const onPoseMove = (e: PointerEvent) => {
+    if (!poseDrag) return;
+    const fam = familyOf(poseDrag.ex);
+    if (!fam) return;
+    const p = poseToVb(poseDrag.svg, e.clientX, e.clientY);
+    if (poseDrag.dim === "rom") {
+      const keys = Object.keys(FAMILIES[fam]!.dims.rom!);
+      const idx = Math.max(0, Math.min(keys.length - 1, Math.round(((p.y - 150) * (keys.length - 1)) / 72)));
+      setNoteVecDim(poseDrag.ex, poseDrag.note, "rom", keys[idx]!);
+    } else if (poseDrag.dim === "lean") {
+      const keys = Object.keys(FAMILIES[fam]!.dims.lean!);
+      const idx = Math.max(0, Math.min(keys.length - 1, Math.round(((132 - p.x) * (keys.length - 1)) / 54)));
+      setNoteVecDim(poseDrag.ex, poseDrag.note, "lean", keys[idx]!);
+    }
+    redrawPoseSvg(poseDrag.svg, poseDrag.ex, poseDrag.note);
+  };
+  const onPoseUp = () => {
+    if (!poseDrag) return;
+    poseDrag = null;
+    window.removeEventListener("pointermove", onPoseMove);
+    window.removeEventListener("pointerup", onPoseUp);
+    // The figure was redrawn live during the drag; defer the heavy table/graph
+    // sync (it collapses the expanded day) to popover-close, like the chips.
+    if (scaleEditState) {
+      scaleEditDirty = true;
+    } else {
+      refreshExerciseInfo();
+      requestAnimationFrame(renderAll);
+    }
+  };
+  document.addEventListener("pointerdown", (e) => {
+    const h = (e.target as Element).closest?.(".pose-handle") as SVGElement | null;
+    if (!h) return;
+    const svg = h.closest("svg") as SVGSVGElement | null;
+    const ex = h.dataset.poseex;
+    const note = h.dataset.posenote;
+    const dim = h.dataset.posedim;
+    if (!ex || note === undefined || !dim || !svg) return;
+    poseDrag = { ex, note, dim, svg };
+    e.preventDefault();
+    window.addEventListener("pointermove", onPoseMove);
+    window.addEventListener("pointerup", onPoseUp);
   });
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
