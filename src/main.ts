@@ -8783,10 +8783,11 @@ async function restoreFromFile(file: File) {
     const when = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : "an unknown time";
     const ok = window.confirm(
       `Restore ${count} saved setting${count === 1 ? "" : "s"} from this backup (taken ${when})?\n\n` +
-        `Anything in the backup overwrites what's here now. The page will reload.`,
+        `Smart merge: this backup wins on any conflict, but anything you've edited ` +
+        `on THIS device that the backup doesn't mention is kept. The page will reload.`,
     );
     if (!ok) return;
-    applyBackup(localStorage, backup, "merge");
+    applyBackup(localStorage, backup, "deep");
     window.location.reload();
   } catch (err) {
     setAutoBackupStatus(`Couldn't restore: ${String(err instanceof Error ? err.message : err)}`, true);

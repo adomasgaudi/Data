@@ -122,17 +122,43 @@ export interface RestoreResult {
 }
 
 /**
+ * Deep-merge one stored value (both are localStorage JSON strings). Used by the
+ * "deep" restore so that, WITHIN a key, the incoming (backup) entries win on a
+ * conflict but the existing (this-device) entries the backup doesn't mention are
+ * preserved. Rules:
+ *  - object maps  → { ...existing, ...incoming }  (incoming wins per key)
+ *  - string/number arrays → union (keep both sides' items)
+ *  - anything else (scalars, object arrays, parse failures) → incoming wins
+ */
+export function mergeStoredValue(existingRaw: string, incomingRaw: string): string {
+  let e: unknown, i: unknown;
+  try { e = JSON.parse(existingRaw); } catch { return incomingRaw; }
+  try { i = JSON.parse(incomingRaw); } catch { return incomingRaw; }
+  if (Array.isArray(e) && Array.isArray(i)) {
+    const prim = (a: unknown[]) => a.every((x) => typeof x === "string" || typeof x === "number");
+    if (prim(e) && prim(i)) return JSON.stringify([...new Set([...e, ...i])]);
+    return incomingRaw; // arrays of objects → take the backup's
+  }
+  const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+  if (obj(e) && obj(i)) return JSON.stringify({ ...e, ...i }); // incoming wins per entry; existing-only kept
+  return incomingRaw;
+}
+
+/**
  * Write a backup's keys back into `storage`.
  *
  * - `"merge"` (default): set every key from the backup, overwriting matches and
- *   leaving any keys NOT in the backup untouched. Safest — only ever adds back.
+ *   leaving any keys NOT in the backup untouched.
+ * - `"deep"`: like merge, but for object/array values it merges ENTRY-BY-ENTRY —
+ *   the backup wins on a conflict, while entries only on this device survive. Use
+ *   when reconciling two devices that each edited different things.
  * - `"replace"`: first delete every backup-worthy `colosseum.*` key, then write
  *   the backup. An exact restore to the file's moment in time.
  */
 export function applyBackup(
   storage: StorageLike,
   backup: BackupFile,
-  mode: "merge" | "replace" = "merge",
+  mode: "merge" | "deep" | "replace" = "merge",
 ): RestoreResult {
   if (mode === "replace") {
     const toRemove: string[] = [];
@@ -145,7 +171,8 @@ export function applyBackup(
   let restored = 0;
   for (const [k, v] of Object.entries(backup.data)) {
     if (BACKUP_SKIP.has(k) || !k.startsWith(BACKUP_PREFIX)) continue;
-    storage.setItem(k, v);
+    const existing = mode === "deep" ? storage.getItem(k) : null;
+    storage.setItem(k, existing !== null ? mergeStoredValue(existing, v) : v);
     restored++;
   }
   return { restored };

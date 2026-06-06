@@ -3,6 +3,7 @@ import {
   collectBackup,
   parseBackup,
   applyBackup,
+  mergeStoredValue,
   backupToText,
   backupFilename,
   type StorageLike,
@@ -131,6 +132,38 @@ describe("applyBackup", () => {
     applyBackup(wiped, backup, "replace");
     // Every backed-up key is back, byte-for-byte.
     for (const [k, v] of Object.entries(backup.data)) expect(wiped.getItem(k)).toBe(v);
+  });
+});
+
+describe("mergeStoredValue (deep)", () => {
+  it("object maps: backup wins per entry, device-only entries kept", () => {
+    const device = JSON.stringify({ a: "1", c: "device" });
+    const backup = JSON.stringify({ a: "2", b: "backup" });
+    expect(JSON.parse(mergeStoredValue(device, backup))).toEqual({ a: "2", c: "device", b: "backup" });
+  });
+  it("primitive arrays: union of both", () => {
+    expect(JSON.parse(mergeStoredValue(JSON.stringify(["x", "y"]), JSON.stringify(["y", "z"])))).toEqual(["x", "y", "z"]);
+  });
+  it("scalars / mismatched / unparseable: backup wins", () => {
+    expect(mergeStoredValue('"light"', '"dark"')).toBe('"dark"');
+    expect(mergeStoredValue("not json", '{"a":1}')).toBe('{"a":1}');
+  });
+});
+
+describe("applyBackup deep", () => {
+  it("merges within a key — backup conflicts win, this-device-only edits survive", () => {
+    const target = new FakeStorage();
+    target.setItem("colosseum.setOverrides.v1", JSON.stringify({ setA: { reps: 5 }, setC: { reps: 9 } }));
+    const backup = {
+      app: "colosseum" as const, kind: "full-backup" as const, format: 1, exportedAt: "",
+      data: { "colosseum.setOverrides.v1": JSON.stringify({ setA: { reps: 7 }, setB: { reps: 3 } }) },
+    };
+    applyBackup(target, backup, "deep");
+    expect(JSON.parse(target.getItem("colosseum.setOverrides.v1")!)).toEqual({
+      setA: { reps: 7 }, // backup wins the conflict
+      setB: { reps: 3 }, // backup's new entry
+      setC: { reps: 9 }, // this-device-only entry preserved
+    });
   });
 });
 
