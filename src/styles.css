@@ -1911,6 +1911,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-selrow { display: flex; flex-wrap: wrap; gap: 0.3rem; flex: 1 1 auto; min-width: 0; }
 .ex-var-sel { font: inherit; font-size: 0.78rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }
 .ex-var-sel:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Depth × lean 2-D grid (rows = depth ↓, columns = forward lean →). */
+.ex-grid-dim { align-items: stretch; }
+.ex-grid { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.ex-grid-corner, .ex-grid-h, .ex-grid-rlabel { font-size: 0.58rem; color: var(--muted); display: flex; align-items: center; justify-content: center; text-align: center; }
+.ex-grid-rlabel { justify-content: flex-end; padding-right: 3px; white-space: nowrap; }
+.ex-grid-cell { font: inherit; font-size: 0.6rem; padding: 4px 1px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--muted); cursor: pointer; min-width: 0; }
+.ex-grid-cell:hover { border-color: var(--accent); color: var(--accent); }
+.ex-grid-cell.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ex-var-lvl { font: inherit; font-size: 0.72rem; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); white-space: nowrap; }
 .ex-var-lvl:hover { border-color: var(--accent); }
 .ex-var-lvl.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }

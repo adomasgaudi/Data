@@ -5594,10 +5594,40 @@ function notePickerHtml(name: string, note: string): string {
     `<div class="ex-var-selrow">${vecSelect("support", SUPPORT_LBL)}` +
     (isLadder ? vecSelect("ladderGrip", GRIP_LBL) + vecSelect("ladderH", HT_LBL) : "") +
     `</div></div>`;
+  // ROM (depth, ↓) × LEAN (forward, →) describe two directions of the same body
+  // position, so they collapse into ONE 2-D grid: rows = depth, columns = lean,
+  // each cell setting both at once and showing the combined multiplier.
+  const romDims = FAMILIES[fam]!.dims.rom, leanDims = FAMILIES[fam]!.dims.lean;
+  const hasGrid = !!(romDims && leanDims);
+  const romLeanGrid = (): string => {
+    const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
+    const curRom = effVec.rom, curLean = effVec.lean;
+    const picked = override.rom !== undefined || override.lean !== undefined;
+    const head = leanKeys.map((lk) => `<div class="ex-grid-h">${escapeHtml(lk)}</div>`).join("");
+    const body = romKeys
+      .map((rk) => {
+        const cells = leanKeys
+          .map((lk) => {
+            const on = rk === curRom && lk === curLean;
+            const f = Math.round(romDims![rk]! * leanDims![lk]! * 100) / 100;
+            return `<button type="button" class="ex-grid-cell${on ? " is-on" : ""}" data-gridex="${escapeHtml(name)}" data-gridnote="${escapeHtml(note)}" data-gridrom="${escapeHtml(rk)}" data-gridlean="${escapeHtml(lk)}" aria-pressed="${on}" title="depth ${escapeHtml(rk)} · lean ${escapeHtml(lk)} → ×${f}">×${f}</button>`;
+          })
+          .join("");
+        return `<div class="ex-grid-rlabel">${escapeHtml(rk)}</div>${cells}`;
+      })
+      .join("");
+    return (
+      `<div class="ex-var-dim ex-grid-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
+      `<div class="ex-grid" style="grid-template-columns:auto repeat(${leanKeys.length},1fr)">` +
+      `<div class="ex-grid-corner">↓ deeper · → lean</div>${head}${body}</div></div>`
+    );
+  };
   const dims = Object.keys(FAMILIES[fam]!.dims)
-    .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH") // shown inside supportBlock
+    // ladderGrip/ladderH live in the support block; lean is folded into the rom grid.
+    .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH" && !(hasGrid && dim === "lean"))
     .map((dim) => {
       if (dim === "support") return supportBlock;
+      if (dim === "rom" && hasGrid) return romLeanGrid();
       const levels = FAMILIES[fam]!.dims[dim]!;
       const cur = effVec[dim];
       const picked = override[dim] !== undefined;
@@ -6395,6 +6425,15 @@ async function init() {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-var-sel");
     if (!sel?.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.vecdimDim) return;
     setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.vecdimDim, sel.value);
+    if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+    else { refreshExerciseInfo(); renderAll(); }
+  });
+  // Depth×lean grid cell: one tap sets BOTH the rom (depth) and lean dimensions.
+  document.addEventListener("click", (e) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".ex-grid-cell");
+    if (!cell?.dataset.gridex || cell.dataset.gridnote === undefined) return;
+    setNoteVecDim(cell.dataset.gridex, cell.dataset.gridnote, "rom", cell.dataset.gridrom!);
+    setNoteVecDim(cell.dataset.gridex, cell.dataset.gridnote, "lean", cell.dataset.gridlean!);
     if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
     else { refreshExerciseInfo(); renderAll(); }
   });
