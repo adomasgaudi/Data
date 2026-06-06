@@ -518,6 +518,22 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
 }
 
 /**
+ * The bodyweight-INCLUSIVE estimated 1RM (the rep-curve result on the effective,
+ * difficulty-scaled, band-assisted load) — i.e. addedWeight1RM BEFORE the
+ * bodyweight share is peeled off. Always reflects the whole load moved, so it
+ * stays ≥ 0 for anyone who can do the movement at all (used for "% of world
+ * record", where a negative added-weight 1RM would wrongly read below 0).
+ */
+export function effectiveE1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
+  if (record.notComparable) return null;
+  if (isIsometric(record.exerciseName)) return null;
+  if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
+  const mult = record.difficultyMult ?? 1;
+  const scaledLoad = (record.weight ?? 0) * mult - (record.assistKg ?? 0);
+  return scaledLoad > 0 ? estimate1RM(scaledLoad, record.reps, formula) : scaledLoad;
+}
+
+/**
  * Collapse a group's member sets into one comparable exercise: keep only sets whose
  * exercise is a group member, relabel them to `groupName`, and divide their load by
  * the member's scaling quotient so everyone is compared on the reference lift (an

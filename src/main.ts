@@ -6085,7 +6085,7 @@ function worldRecordEditorHtml(name: string): string {
     : "";
   return (
     `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
-    `<div class="ex-group-why muted">Your NATTY world record (1RM-equivalent kg) at a reference bodyweight, per sex — scaled to each athlete's bodyweight (strength ≈ bw^⅔). Enter your own; drives the “% of world record” graph metric.</div>` +
+    `<div class="ex-group-why muted">Your NATTY world record as the TOTAL 1RM in kg — bodyweight included (e.g. a weighted pull-up record = bodyweight + the plate) — at a reference bodyweight, per sex. Scaled to each athlete's bodyweight (strength ≈ bw^⅔). Drives the “% of world record” graph, which compares your bodyweight-inclusive 1RM to this, so it never goes below 0.</div>` +
     forLine + row("m", "men") + row("f", "women") +
     `</details>`
   );

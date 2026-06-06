@@ -11,7 +11,7 @@
  * through identically (it's name-based).
  */
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint } from "./svgChart";
-import { decayedStrengthSeries } from "./aggregate";
+import { decayedStrengthSeries, effectiveE1RM } from "./aggregate";
 import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import type { GraphConfig } from "./graphConfig";
@@ -85,13 +85,15 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // (bodyweight+sex-scaled) world record × 100. Needs the e1rm compute + the WR.
       if (m.id === "pctWR") {
         const wr = input.worldRecordKg?.(g.records[0]?.exerciseName ?? "");
-        const e1rm = graphMetric("e1rm");
-        if (!wr || wr <= 0 || !e1rm?.compute) continue;
-        // Fraction of the world record (1.0 = the record), so the axis reads in
-        // sub-1 values for sub-record performance.
-        const pts = e1rm.compute(g.records, input.config)
-          .filter((p) => p.y != null)
-          .map((p) => ({ x: p.x, y: Math.round((p.y! / wr) * 1000) / 1000 }));
+        if (!wr || wr <= 0) continue;
+        // Fraction of the world record (1.0 = the record). Uses the BODYWEIGHT-
+        // INCLUSIVE 1RM (effectiveE1RM) vs the bodyweight-inclusive record, so it
+        // stays ≥ 0 — a sub-bodyweight (assisted) effort reads low, not negative.
+        const pts = g.records
+          .filter((r) => r.date && effectiveE1RM(r, input.config.formula) != null)
+          .map((r) => ({ x: Date.parse(r.date), y: Math.round((effectiveE1RM(r, input.config.formula)! / wr) * 1000) / 1000 }))
+          .filter((p) => Number.isFinite(p.x))
+          .sort((a, b) => a.x - b.x);
         if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: SERIES_COLORS[ci++ % SERIES_COLORS.length]!, type: "scatter", points: pts as SvgPoint[] });
         continue;
       }
