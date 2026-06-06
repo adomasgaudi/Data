@@ -57,8 +57,13 @@ export const FAMILIES: Record<string, FamilyDef> = {
       lean: { "0cm": 1.0, "5cm": 1.08, "15cm": 1.18, "23cm": 1.3 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
+      // Ladder/wall-bar assist ("lad5" / "9lygis" / "5 level"): the legs rest on a
+      // rung at some height in an L-shape, so a chunk of bodyweight is held by the
+      // ladder — a LOT of assistance (×<1). Higher rung = more L-shape/closer = more
+      // help = lower. "none" = no ladder. Placeholders to calibrate.
+      ladder: { none: 1.0, l3: 0.72, l5: 0.6, l6: 0.55, l9: 0.42 },
     },
-    defaults: { support: "free", band: "none", rom: "0cm", legs: "straight", lean: "0cm", continuity: "paused" },
+    defaults: { support: "free", band: "none", rom: "0cm", legs: "straight", lean: "0cm", continuity: "paused", ladder: "none" },
   },
   PUSHUP: {
     dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
@@ -99,6 +104,14 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
     uninterrupted: { continuity: "uninterrupted" },
+    // ladder / wall-bar assist level ("lad5", "6lad", "9lygis", "5 level")
+    "lad3": { ladder: "l3" },
+    "lad5": { ladder: "l5" },
+    "lad6": { ladder: "l6" },
+    "6lad": { ladder: "l6" },
+    "9lygis": { ladder: "l9" },
+    "5 level": { ladder: "l5" },
+    "5 lygis": { ladder: "l5" },
   },
   PUSHUP: {
     /* token → { incline: "lN" } — the owner fills this in. */

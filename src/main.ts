@@ -4177,6 +4177,10 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 function setDisplay(s: SetRecord): string {
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
+  // A "not comparable" note (e.g. a static hold) has no meaningful multiplier —
+  // show "UN" with the reps instead of a ×number.
+  if (note && isNoteNotComparable(s.exerciseName, note))
+    return `<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}`;
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -4588,9 +4592,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const scaleVal = scaleForRecord(s);
   const scaleNum = Math.round(scaleVal * 100) / 100;
   const scaleNote = (s.notes ?? "").trim();
+  // A "not comparable" note has no meaningful multiplier — the chip reads "UN".
+  const uncmp = !!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote);
+  const chipLabel = uncmp ? "UN" : `×${scaleNum}`;
   const scaleTag = scaleNote
     ? // A noted set → an editable chip that opens the floating modifier editor.
-      `<button type="button" class="set-scale is-editable" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(scaleNote)}" title="Tap to edit this note's difficulty modifiers">×${scaleNum} ▾</button>`
+      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(scaleNote)}" title="${uncmp ? "Not comparable — tap to edit" : "Tap to edit this note's difficulty modifiers"}">${chipLabel} ▾</button>`
     : Math.abs(scaleVal - 1) > 1e-6
       ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
       : "";
