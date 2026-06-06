@@ -55,9 +55,9 @@ export const FAMILIES: Record<string, FamilyDef> = {
         lad6: 0.55,
         lad9: 0.42,
       },
-      // Assistance band ("guma") by its NUMBER (1–6). Lower number = thicker band =
-      // more help = lower factor; higher number = thinner = less help. Calibrate.
-      band: { none: 1.0, "1": 0.5, "2": 0.56, "3": 0.62, "4": 0.75, "5": 0.85, "6": 0.92 },
+      // Assistance band ("guma") by its NUMBER (1–6). HIGHER number = heavier band =
+      // MORE help = lower factor; lower number = lighter = less help. Calibrate.
+      band: { none: 1.0, "1": 0.92, "2": 0.85, "3": 0.75, "4": 0.62, "5": 0.56, "6": 0.5 },
       // Range of motion measured as the hand height vs the floor, in cm. 0cm = to
       // the floor (full depth, the ×1 reference); a block/raised hands (+cm) shortens
       // the range → easier (<1); parallettes/brick go below the floor (−cm) → deeper,
@@ -86,8 +86,8 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     freestanding: { support: "free" },
     "navel to wall": { support: "wall" },
     "close to wall": { support: "wall" },
-    // assistance band — "guma N" by number; longest-match-first means "guma 5"
-    // beats "guma". Bare "guma" assumes a mid band (5).
+    // assistance band — "guma N" by number (higher N = heavier = more help);
+    // longest-match-first means "guma 5" beats "guma". Bare "guma" assumes a mid band.
     "guma 1": { band: "1" },
     "guma 2": { band: "2" },
     "guma 3": { band: "3" },
@@ -133,7 +133,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 2;
+export const CONFIG_VERSION = 3;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
