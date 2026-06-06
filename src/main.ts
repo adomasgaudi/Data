@@ -2350,27 +2350,78 @@ function renderMuscleMap() {
     const t = v == null ? `${label}: no ${f.feat} logged` : `${label} — ${f.feat}: best 1RM ${fmt(v)} kg`;
     return `<g style="${fillFor(label, cat)}"><title>${escapeHtml(t)}</title>${shapes}</g>`;
   };
+  // Non-scored anatomy (forearms, calves, traps…) drawn in a neutral muscle tone,
+  // and skin/joint parts (head, hands, knees) in light grey — together with the
+  // thin outlines (CSS) they give the figure an "anatomy chart" look.
+  const anat = (s: string) => `<g class="mm-anat">${s}</g>`;
+  const skin = (s: string) => `<g class="mm-skin">${s}</g>`;
 
+  // Front view — recognisable muscle groups: deltoids, pectorals, biceps,
+  // forearms, rectus abdominis (with the six-pack lines), obliques/serratus,
+  // quadriceps (vastus lateralis / rectus femoris / vastus medialis) and shins.
   const front =
-    `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Front muscle map">` +
-    `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
-    reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
-    reg("Chest", "Chest", `<path d="M44 38 H76 Q80 54 60 58 Q40 54 44 38 Z"/>`) +
-    reg("Arms", "Biceps", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
-    reg("Core", "Core (abs)", `<rect x="48" y="60" width="24" height="34" rx="4"/>`) +
-    reg("Legs", "Quads", `<rect x="46" y="98" width="12" height="54" rx="5"/><rect x="62" y="98" width="12" height="54" rx="5"/>`) +
-    `<g fill="#d9d7d0"><rect x="47" y="154" width="10" height="40" rx="4"/><rect x="63" y="154" width="10" height="40" rx="4"/></g>` +
+    `<svg viewBox="0 0 240 470" class="body-svg" role="img" aria-label="Front muscle map">` +
+    skin(`<ellipse cx="120" cy="28" rx="18" ry="22"/><path d="M108 47 Q120 55 132 47 L134 66 Q120 72 106 66 Z"/>`) +
+    anat(`<path d="M111 51 L115 66 Q120 68 120 61 Z"/><path d="M129 51 L125 66 Q120 68 120 61 Z"/>`) + // sternocleidomastoid
+    anat(`<path d="M104 62 Q120 57 136 62 L156 88 Q120 82 84 88 Z"/>`) + // trapezius
+    reg("Shoulders", "Shoulders",
+      `<path d="M84 82 Q60 84 54 110 Q60 126 82 120 Q93 102 92 86 Z"/>` +
+      `<path d="M156 82 Q180 84 186 110 Q180 126 158 120 Q147 102 148 86 Z"/>`) +
+    reg("Chest", "Chest",
+      `<path d="M118 88 Q92 88 86 108 Q90 132 118 134 Z"/>` +
+      `<path d="M122 88 Q148 88 154 108 Q150 132 122 134 Z"/>`) +
+    reg("Arms", "Biceps",
+      `<path d="M52 112 Q44 142 52 172 Q64 174 68 164 Q66 134 70 116 Q62 108 52 112 Z"/>` +
+      `<path d="M188 112 Q196 142 188 172 Q176 174 172 164 Q174 134 170 116 Q178 108 188 112 Z"/>`) +
+    anat(`<path d="M50 174 Q42 206 52 238 Q62 240 66 230 Q64 202 66 178 Z"/>` +
+      `<path d="M190 174 Q198 206 188 238 Q178 240 174 230 Q176 202 174 178 Z"/>`) + // forearms
+    skin(`<ellipse cx="57" cy="248" rx="8" ry="11"/><ellipse cx="183" cy="248" rx="8" ry="11"/>`) + // hands
+    anat(`<path d="M92 134 Q86 152 97 170 L104 162 L102 136 Z"/>` +
+      `<path d="M148 134 Q154 152 143 170 L136 162 L138 136 Z"/>`) + // serratus / obliques
+    reg("Core", "Core (abs)", `<path d="M104 134 Q120 130 136 134 L134 212 Q120 220 106 212 Z"/>`) +
+    `<g class="mm-lines"><path d="M120 136 V214"/><path d="M106 156 H134"/><path d="M105 176 H135"/><path d="M106 196 H134"/></g>` +
+    reg("Legs", "Quads",
+      `<path d="M86 226 Q74 270 82 324 Q92 328 98 314 Q96 266 98 230 Z"/>` + // vastus lateralis (L)
+      `<path d="M100 228 Q96 282 102 328 Q110 330 114 320 Q112 270 112 230 Z"/>` + // rectus femoris (L)
+      `<path d="M114 292 Q120 310 116 328 Q108 332 104 320 Q108 302 114 292 Z"/>` + // vastus medialis (L)
+      `<path d="M154 226 Q166 270 158 324 Q148 328 142 314 Q144 266 142 230 Z"/>` + // (R)
+      `<path d="M140 228 Q144 282 138 328 Q130 330 126 320 Q128 270 128 230 Z"/>` +
+      `<path d="M126 292 Q120 310 124 328 Q132 332 136 320 Q132 302 126 292 Z"/>`) +
+    skin(`<ellipse cx="100" cy="334" rx="12" ry="9"/><ellipse cx="140" cy="334" rx="12" ry="9"/>`) + // knees
+    anat(`<path d="M92 344 Q86 390 92 434 Q100 436 104 426 Q102 386 104 348 Z"/>` +
+      `<path d="M148 344 Q154 390 148 434 Q140 436 136 426 Q138 386 136 348 Z"/>`) + // shins (tibialis/peroneus)
+    skin(`<path d="M88 438 Q86 454 102 454 L106 438 Z"/><path d="M152 438 Q154 454 138 454 L134 438 Z"/>`) + // feet
     `</svg>`;
 
+  // Back view — traps, lats (the V), triceps, forearms, erector spinae, glutes,
+  // hamstrings and the gastrocnemius (calves).
   const back =
-    `<svg viewBox="0 0 120 220" class="body-svg" role="img" aria-label="Back muscle map">` +
-    `<g fill="#d9d7d0"><circle cx="60" cy="18" r="11"/><rect x="54" y="28" width="12" height="8"/></g>` +
-    reg("Shoulders", "Shoulders", `<circle cx="38" cy="44" r="9"/><circle cx="82" cy="44" r="9"/>`) +
-    reg("Back", "Back (lats)", `<path d="M44 38 H76 L74 74 Q60 82 46 74 Z"/>`) +
-    reg("Arms", "Triceps", `<rect x="26" y="48" width="9" height="30" rx="4"/><rect x="85" y="48" width="9" height="30" rx="4"/>`) +
-    reg("Legs", "Glutes", `<path d="M47 92 Q60 86 73 92 Q74 104 60 104 Q46 104 47 92 Z"/>`) +
-    reg("Legs", "Hamstrings / lower back", `<rect x="46" y="106" width="12" height="48" rx="5"/><rect x="62" y="106" width="12" height="48" rx="5"/>`) +
-    `<g fill="#d9d7d0"><rect x="47" y="156" width="10" height="38" rx="4"/><rect x="63" y="156" width="10" height="38" rx="4"/></g>` +
+    `<svg viewBox="0 0 240 470" class="body-svg" role="img" aria-label="Back muscle map">` +
+    skin(`<ellipse cx="120" cy="28" rx="18" ry="22"/><path d="M108 47 Q120 55 132 47 L134 66 Q120 72 106 66 Z"/>`) +
+    anat(`<path d="M104 62 Q120 57 136 62 L150 98 Q120 110 90 98 Z"/>`) + // trapezius (large)
+    reg("Shoulders", "Shoulders",
+      `<path d="M84 82 Q60 84 54 110 Q60 126 82 120 Q93 102 92 86 Z"/>` +
+      `<path d="M156 82 Q180 84 186 110 Q180 126 158 120 Q147 102 148 86 Z"/>`) +
+    reg("Back", "Back (lats)",
+      `<path d="M92 98 Q84 134 110 172 L118 150 L116 102 Z"/>` +
+      `<path d="M148 98 Q156 134 130 172 L122 150 L124 102 Z"/>`) +
+    reg("Arms", "Triceps",
+      `<path d="M52 112 Q44 144 52 174 Q64 176 68 166 Q66 136 70 116 Q62 108 52 112 Z"/>` +
+      `<path d="M188 112 Q196 144 188 174 Q176 176 172 166 Q174 136 170 116 Q178 108 188 112 Z"/>`) +
+    anat(`<path d="M50 176 Q42 208 52 240 Q62 242 66 232 Q64 204 66 180 Z"/>` +
+      `<path d="M190 176 Q198 208 188 240 Q178 242 174 232 Q176 204 174 180 Z"/>`) + // forearms
+    skin(`<ellipse cx="57" cy="250" rx="8" ry="11"/><ellipse cx="183" cy="250" rx="8" ry="11"/>`) + // hands
+    anat(`<path d="M108 172 Q120 168 132 172 L130 208 Q120 214 110 208 Z"/>`) + // erector spinae (lower back)
+    reg("Legs", "Glutes",
+      `<path d="M104 208 Q90 208 88 230 Q98 246 118 240 L118 210 Z"/>` +
+      `<path d="M136 208 Q150 208 152 230 Q142 246 122 240 L122 210 Z"/>`) +
+    reg("Legs", "Hamstrings / lower back",
+      `<path d="M88 244 Q78 288 86 328 Q96 332 102 318 Q100 278 102 248 Z"/>` +
+      `<path d="M152 244 Q162 288 154 328 Q144 332 138 318 Q140 278 138 248 Z"/>`) +
+    skin(`<ellipse cx="98" cy="336" rx="11" ry="9"/><ellipse cx="142" cy="336" rx="11" ry="9"/>`) + // knees
+    anat(`<path d="M90 346 Q82 378 90 414 Q100 418 104 406 Q100 376 104 350 Z"/>` +
+      `<path d="M150 346 Q158 378 150 414 Q140 418 136 406 Q140 376 136 350 Z"/>`) + // gastrocnemius (calves)
+    skin(`<path d="M90 436 Q88 452 104 452 L108 436 Z"/><path d="M150 436 Q152 452 136 452 L132 436 Z"/>`) + // heels/feet
     `</svg>`;
 
   // Legend: each region's feat + best 1RM, strongest first.
