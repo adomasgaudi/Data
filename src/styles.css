@@ -1927,12 +1927,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pose-wall { cursor: pointer; }
 .pose-floor { stroke: var(--muted); stroke-width: 2; }
 .pose-block { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
-.pose-limb { stroke: var(--text); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-.pose-torso { stroke: var(--text); stroke-width: 9; stroke-linecap: round; }
-.pose-nose { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; }
+/* Vector mannequin: rounded body-tone tubes over a darker outline. */
+.pose-tube-out { stroke: #6f6150; stroke-linecap: round; stroke-linejoin: round; }
+.pose-tube { stroke: #d8b48c; stroke-linecap: round; stroke-linejoin: round; }
+.pose-tube.is-back, .pose-tube-out.is-back { opacity: 0.6; }
+.pose-body { fill: #d8b48c; stroke: #6f6150; stroke-width: 2; stroke-linejoin: round; }
+.pose-face { fill: #6f6150; }
 .pose-rung { stroke: var(--accent); stroke-width: 2; opacity: 0.8; }
 .pose-orient { font-weight: 700; fill: var(--accent); }
-.pose-head { fill: var(--panel); stroke: var(--text); stroke-width: 3; }
 .pose-hand { fill: var(--text); }
 .pose-handle { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 2; cursor: grab; }
 .pose-handle:active { cursor: grabbing; fill-opacity: 0.6; }

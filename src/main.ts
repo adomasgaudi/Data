@@ -5563,20 +5563,30 @@ function poseSvgInner(name: string, note: string): { inner: string; scale: numbe
     ? `<rect x="0" y="28" width="${wallX}" height="${floorY - 28}" class="pose-wall is-on" data-posewall="1"/>` +
       (isLadder ? [44, 78, 112, 146, 180].map((y) => `<line x1="0" y1="${y}" x2="${wallX}" y2="${y}" class="pose-rung"/>`).join("") : "")
     : `<rect x="0" y="28" width="${wallX}" height="${floorY - 28}" class="pose-wall" data-posewall="1"/>`;
-  // Anatomical-ish figure: two arms (bent elbows), torso, two legs (bent knees),
-  // head with a nose showing which way it faces.
-  const arms =
-    `<polyline points="${f(handX - 9)},${f(handY)} ${f(handX - 13)},${f(elbowY)} ${f(handX - 8)},${f(shoulderY)}" class="pose-limb" fill="none"/>` +
-    `<polyline points="${f(handX + 9)},${f(handY)} ${f(handX + 13)},${f(elbowY)} ${f(handX + 8)},${f(shoulderY)}" class="pose-limb" fill="none"/>`;
-  const torso = `<line x1="${handX}" y1="${f(shoulderY)}" x2="${f(hipX)}" y2="${f(hipY)}" class="pose-torso"/>`;
-  const legs =
-    `<polyline points="${f(hipX)},${f(hipY)} ${f(kneeX - 4)},${f(kneeY)} ${f(feetX - 5)},${f(feetY)}" class="pose-limb" fill="none" opacity="0.55"/>` +
-    `<polyline points="${f(hipX)},${f(hipY)} ${f(kneeX + 3)},${f(kneeY)} ${f(feetX + 4)},${f(feetY)}" class="pose-limb" fill="none"/>`;
-  const neck = `<line x1="${handX}" y1="${f(shoulderY)}" x2="${handX}" y2="${f(headY - 7)}" class="pose-limb"/>`;
-  const head = `<circle cx="${handX}" cy="${f(headY)}" r="9" class="pose-head"/>`;
-  const nose = `<line x1="${handX}" y1="${f(headY)}" x2="${f(handX + noseDir * 12)}" y2="${f(headY + 2)}" class="pose-nose"/>`;
-  const hands = `<circle cx="${f(handX - 9)}" cy="${f(handY)}" r="3.5" class="pose-hand"/><circle cx="${f(handX + 9)}" cy="${f(handY)}" r="3.5" class="pose-hand"/>`;
-  const fig = neck + torso + legs + arms + head + nose + hands;
+  // Fleshed-out vector mannequin: each limb is a rounded "tube" (a dark outline
+  // under a body-tone fill), the torso a tapered hourglass, plus a head. Reads as a
+  // proportioned human rather than a stick figure — no 3-D engine needed.
+  const waistY = (shoulderY + hipY) / 2;
+  const waistX = (handX + hipX) / 2;
+  const tube = (pts: string, w: number, back = false) =>
+    `<polyline points="${pts}" class="pose-tube-out${back ? " is-back" : ""}" fill="none" stroke-width="${w + 3}"/>` +
+    `<polyline points="${pts}" class="pose-tube${back ? " is-back" : ""}" fill="none" stroke-width="${w}"/>`;
+  // arms: shoulder → elbow → wrist (upper arm thicker than forearm — two segments).
+  const armPts = (s: number) => `${f(handX + s * 15)},${f(shoulderY)} ${f(handX + s * 15)},${f(elbowY)} ${f(handX + s * 9)},${f(handY)}`;
+  const legPts = (s: number) => `${f(hipX + s * 9)},${f(hipY)} ${f(kneeX + s * 8)},${f(kneeY)} ${f(feetX + s * 6)},${f(feetY)}`;
+  const torso =
+    `<path d="M ${f(handX - 16)} ${f(shoulderY)} Q ${f(waistX - 11)} ${f(waistY)} ${f(hipX - 13)} ${f(hipY)} ` +
+    `L ${f(hipX + 13)} ${f(hipY)} Q ${f(waistX + 11)} ${f(waistY)} ${f(handX + 16)} ${f(shoulderY)} Z" class="pose-body"/>`;
+  const fig =
+    tube(legPts(-1), 15, true) + // far leg (behind)
+    tube(armPts(-1), 11, true) + // far arm (behind)
+    torso +
+    tube(legPts(1), 15) + // near leg
+    tube(armPts(1), 11) + // near arm
+    tube(`${handX},${f(shoulderY)} ${handX},${f(headY + 6)}`, 9) + // neck
+    `<ellipse cx="${handX}" cy="${f(headY)}" rx="10" ry="11.5" class="pose-body"/>` +
+    `<circle cx="${f(handX + noseDir * 8)}" cy="${f(headY + 3)}" r="2.4" class="pose-face"/>` + // nose/face direction
+    `<circle cx="${f(handX - 9)}" cy="${f(handY)}" r="4" class="pose-hand"/><circle cx="${f(handX + 9)}" cy="${f(handY)}" r="4" class="pose-hand"/>`;
   const romHandle = `<circle cx="${handX}" cy="${f(handY)}" r="13" class="pose-handle" data-posedim="rom" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
   const leanHandle = `<circle cx="${f(feetX)}" cy="${f(feetY)}" r="13" class="pose-handle" data-posedim="lean" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
   const labels =
