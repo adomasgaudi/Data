@@ -941,7 +941,36 @@ const famFactorOverrides: Record<string, Record<string, Record<string, number>>>
 })();
 /** A family dimension's levels with any owner factor overrides layered on (base
  * key order preserved, so the pad axis stays consistent). */
+// ---- Band assistance: ONE knob, all levels related ----.
+// The bands aren't independent — stacking them compounds the assistance. The
+// owner's rule "2× band-k = band-(k+2)" means assistance DOUBLES every 2 levels,
+// so assistance a(k) = A·√2^(k-1) (because √2² = 2 ⇒ a(k+2) = 2·a(k)), and the
+// band factor is f(k) = 1 − a(k). The single knob A is band-1's assistance.
+const BAND_RATIO = Math.SQRT2;
+function defaultBandKnob(family: string): number {
+  const b1 = FAMILIES[family]?.dims.band?.["1"];
+  return b1 !== undefined ? Math.round((1 - b1) * 1000) / 1000 : 0.08;
+}
+function bandKnob(family: string): number {
+  return famFactorOverrides[family]?.["bandKnob"]?.["a"] ?? defaultBandKnob(family);
+}
+/** Band level→factor derived from the one knob; none = ×1, factors floored at 0.1. */
+function bandFactorsFor(family: string): Record<string, number> {
+  const base = FAMILIES[family]?.dims.band ?? {};
+  const A = bandKnob(family);
+  const out: Record<string, number> = {};
+  for (const key of Object.keys(base)) {
+    const k = Number(key);
+    if (key === "none" || !Number.isFinite(k)) { out[key] = key === "none" ? 1 : base[key]!; continue; }
+    const a = A * Math.pow(BAND_RATIO, k - 1);
+    out[key] = Math.max(0.1, Math.round((1 - a) * 1000) / 1000);
+  }
+  return out;
+}
+
 function famLevels(family: string, dim: string): Record<string, number> {
+  // Band is fully derived from its single knob (see bandFactorsFor).
+  if (dim === "band" && FAMILIES[family]?.dims.band) return bandFactorsFor(family);
   // Per-support lean tables ("lean:back_to_wall", …) default to the shared base
   // lean, so they start from the same numbers until the owner tunes one.
   let base = FAMILIES[family]?.dims[dim] ?? {};
@@ -959,7 +988,9 @@ function saveFamFactors(): void {
 }
 /** Set or clear (value === default → clear) one model factor. */
 function setFamFactor(family: string, dim: string, level: string, value: number): void {
-  const def = FAMILIES[family]?.dims[dim]?.[level] ?? (dim.startsWith("lean:") ? FAMILIES[family]?.dims["lean"]?.[level] : undefined);
+  const def = FAMILIES[family]?.dims[dim]?.[level]
+    ?? (dim.startsWith("lean:") ? FAMILIES[family]?.dims["lean"]?.[level] : undefined)
+    ?? (dim === "bandKnob" && level === "a" ? defaultBandKnob(family) : undefined);
   const fam = (famFactorOverrides[family] ??= {});
   const d = (fam[dim] ??= {});
   if (def !== undefined && Math.abs(value - def) < 1e-9) {
@@ -5897,14 +5928,32 @@ function familyFactorTableHtml(fam: string): string {
       .join("");
     return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(label)}</div><div class="fac-cells">${cells}</div></div>`;
   };
+  // Band is ONE knob (band-1 assistance); all 6 bands derive from it (assistance
+  // doubles every 2 levels). Show the knob + a live preview of the resulting bands.
+  const bandKnobTable = (): string => {
+    const A = bandKnob(fam);
+    const ov = famFactorOverrides[fam]?.["bandKnob"]?.["a"] !== undefined;
+    return (
+      `<div class="fac-dim"><div class="fac-dim-h">band assistance (one knob)</div>` +
+      `<div class="fac-cells"><label class="fac-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">band-1 assist</span>` +
+      `<input class="fac-input" type="number" step="0.01" min="0.01" max="0.9" value="${A}" data-fac-fam="${escapeHtml(fam)}" data-fac-dim="bandKnob" data-fac-lvl="a" aria-label="band-1 assistance knob" /></label></div>` +
+      `<div class="ex-group-why muted">All bands scale from this: assistance doubles every 2 levels (2× a band = +2 levels). → <span class="band-knob-preview" data-fam="${escapeHtml(fam)}">${escapeHtml(bandPreviewText(fam))}</span></div></div>`
+    );
+  };
   // Lean is rendered once per wall support, since its effect differs (back- vs
   // front-to-wall); each starts from the shared base lean until tuned.
   const LEAN_SUPPORTS: [string, string][] = [["back_to_wall", "lean — back to wall"], ["front_to_wall", "lean — front to wall"]];
   return Object.keys(FAMILIES[fam]!.dims)
     .flatMap((dim) =>
-      dim === "lean" ? LEAN_SUPPORTS.map(([sup, lbl]) => table(`lean:${sup}`, lbl)) : [table(dim, dim)],
+      dim === "band" ? [bandKnobTable()] : dim === "lean" ? LEAN_SUPPORTS.map(([sup, lbl]) => table(`lean:${sup}`, lbl)) : [table(dim, dim)],
     )
     .join("");
+}
+
+/** "1=×0.92  2=×0.89  …  6=×0.55" — the bands the current knob produces. */
+function bandPreviewText(fam: string): string {
+  const f = bandFactorsFor(fam);
+  return Object.keys(f).filter((k) => k !== "none").map((k) => `${k}=×${f[k]}`).join("  ");
 }
 
 /** Editable difficulty-model factors for a family lift: every dimension's levels
@@ -7101,6 +7150,11 @@ async function init() {
         setFamFactor(fac.dataset.facFam, fac.dataset.facDim, fac.dataset.facLvl, Math.round(v * 1000) / 1000);
         const isOv = famFactorOverrides[fac.dataset.facFam]?.[fac.dataset.facDim]?.[fac.dataset.facLvl] !== undefined;
         fac.closest(".fac-cell")?.classList.toggle("is-ov", isOv);
+        // The band knob drives all 6 bands — update its live preview in place.
+        if (fac.dataset.facDim === "bandKnob") {
+          const famEsc = fac.dataset.facFam;
+          document.querySelectorAll<HTMLElement>(`.band-knob-preview[data-fam="${CSS.escape(famEsc)}"]`).forEach((el) => { el.textContent = bandPreviewText(famEsc); });
+        }
         scheduleModelFactorsApply();
       }
       return;
