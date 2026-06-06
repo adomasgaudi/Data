@@ -6982,9 +6982,19 @@ async function init() {
     // Under-calendar pills drive the WHOLE analysis selection (waSelected), so the
     // graph, history and calendar all move together. "All" clears the selection; a
     // group pill toggles all of that group's lifts; an exercise pill toggles itself.
+    // Tapping a pill re-renders the whole analysis section (list, chart, calendar);
+    // keep the page exactly where it is so it doesn't jump. Restore on the next
+    // frame too, since the charts mount asynchronously and can reflow after.
+    const keepScroll = (fn: () => void) => {
+      const y = window.scrollY;
+      fn();
+      window.scrollTo(0, y);
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    };
     if (target.closest("[data-heatall]")) {
       waSelected = [];
-      return renderWorkoutAnalysis();
+      keepScroll(renderWorkoutAnalysis);
+      return;
     }
     const pill = target.closest<HTMLElement>("[data-heatpill]");
     if (pill?.dataset.heatpill) {
@@ -6999,7 +7009,8 @@ async function init() {
         const allOn = exs.length > 0 && exs.every((e) => waSelected.includes(e));
         waSelected = allOn ? waSelected.filter((e) => !exs.includes(e)) : [...new Set([...waSelected, ...exs])];
       }
-      return renderWorkoutAnalysis();
+      keepScroll(renderWorkoutAnalysis);
+      return;
     }
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
