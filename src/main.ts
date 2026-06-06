@@ -8903,7 +8903,7 @@ const waIncludeIdentities = new Set<ExerciseIdentity>(["original", "dissolved", 
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
-let waGroupBy: "none" | ExerciseFilterDim = "none";
+let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
 let waChipsFoldOpen = false;
 let waCogOpen = false;
 let waCreateOpen = false;
