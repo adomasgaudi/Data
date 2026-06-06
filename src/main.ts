@@ -5622,32 +5622,40 @@ function notePickerHtml(name: string, note: string): string {
   const romDims = FAMILIES[fam]!.dims.rom, leanDims = FAMILIES[fam]!.dims.lean;
   const hasGrid = !!(romDims && leanDims);
   const romLeanGrid = (): string => {
-    // romKeys run easiest→hardest (raised/+cm → deep/−cm). Higher on the pad =
-    // easier (a higher block = your head only dips to the corner = shorter range),
-    // so index 0 (most raised) sits at the TOP. leanKeys: left = no lean (easier),
-    // right = more lean. Drag the corner handle to set both at once; the square
-    // fills toward the hard (bottom-right) corner.
+    // The pad is a side-view scene. y: TOP = higher/easier (raised block, head only
+    // dips to the corner), BOTTOM = deeper/harder. The fill grows UP FROM THE FLOOR
+    // (bottom) to the handle — a taller fill = a higher block = easier. lean is
+    // REVERSED: rightmost = no lean (less). For front-to-wall / ladder the whole
+    // thing MIRRORS (wall on the right, lean grows the other way).
     const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
     const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
     const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
     const picked = override.rom !== undefined || override.lean !== undefined;
+    const support = String(effVec.support ?? "free");
+    const mirror = support === "front_to_wall" || support === "ladder";
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
     const romF = romDims![rk]!, leanF = leanDims![lk]!;
     const mult = Math.round(romF * leanF * 100) / 100;
-    const lf = (leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 1) * 100; // 0..100 across
-    const df = (romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 1) * 100; // 0 top(easy) .. 100 bottom(hard)
+    const leanFrac = leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
+    const depthTop = romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 0; // 0 top(easy)..1 bottom(hard)
+    const dotLeft = (mirror ? leanFrac : 1 - leanFrac) * 100; // not-mirror: lean 0 at right
+    const dotTop = depthTop * 100;
+    const fillH = 100 - dotTop; // bottom-anchored, up to the handle
+    const fillW = mirror ? 100 - dotLeft : dotLeft;
+    const fillSide = mirror ? `right:0` : `left:0`;
     const pd =
-      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" ` +
+      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="${mirror ? 1 : 0}" ` +
       `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(leanKeys.join("|"))}"`;
     return (
       `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
       `<div class="ex-pad-readout">lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span></div>` +
       `<div class="ex-pad" ${pd}>` +
-      `<div class="ex-pad-fill" style="width:${lf.toFixed(1)}%;height:${df.toFixed(1)}%"></div>` +
-      `<div class="ex-pad-dot" style="left:${lf.toFixed(1)}%;top:${df.toFixed(1)}%"></div>` +
-      `<span class="ex-pad-ylbl ex-pad-yt muted">higher · easier</span>` +
-      `<span class="ex-pad-ylbl ex-pad-yb muted">deeper · harder</span>` +
-      `<span class="ex-pad-xlbl muted">lean →</span>` +
+      padSceneSvg(support) +
+      `<div class="ex-pad-fill" style="${fillSide};bottom:0;width:${fillW.toFixed(1)}%;height:${fillH.toFixed(1)}%"></div>` +
+      `<div class="ex-pad-dot" style="left:${dotLeft.toFixed(1)}%;top:${dotTop.toFixed(1)}%"></div>` +
+      `<span class="ex-pad-ylbl ex-pad-yt muted">↑ easier</span>` +
+      `<span class="ex-pad-ylbl ex-pad-yb muted">↓ harder</span>` +
+      `<span class="ex-pad-xlbl muted">lean ${mirror ? "→" : "←"}</span>` +
       `</div></div>`
     );
   };
@@ -5670,6 +5678,22 @@ function notePickerHtml(name: string, note: string): string {
     })
     .join("");
   return `${toggle}<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div></div>`;
+}
+
+/** A little side-view scene for the depth × lean pad: the floor, the wall on the
+ * correct side (LEFT for back-to-wall / free, RIGHT and mirrored for front-to-wall
+ * / ladder), with rungs drawn for a ladder. Crisp boundaries (rigid look). */
+function padSceneSvg(support: string): string {
+  const mirror = support === "front_to_wall" || support === "ladder";
+  const hasWall = support !== "free";
+  const isLadder = support === "ladder";
+  const wx = mirror ? 90 : 2; // wall rect x (width 8)
+  const floor = `<line x1="0" y1="97" x2="100" y2="97" class="pad-floor" />`;
+  const wall = hasWall ? `<rect x="${wx}" y="2" width="8" height="95" class="pad-wall" />` : "";
+  const rungs = isLadder
+    ? [16, 31, 46, 61, 76].map((y) => `<line x1="${wx}" y1="${y}" x2="${wx + 8}" y2="${y}" class="pad-rung" />`).join("")
+    : "";
+  return `<svg class="ex-pad-scene" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${floor}${wall}${rungs}</svg>`;
 }
 
 // ---- Visual "pose" editor: a 3-D handstand mannequin (three.js) you orbit ----
@@ -6502,10 +6526,10 @@ async function init() {
     if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
     else { refreshExerciseInfo(); renderAll(); }
   });
-  // Depth × lean SQUARE pad: drag the corner handle anywhere in the square to set
-  // BOTH at once. x = lean (left none → right more), y = depth (TOP = higher block
-  // = easier; BOTTOM = deeper = harder). The square fills toward the hard corner
-  // and the readout updates live (lean-factor × depth-factor); heavy sync deferred.
+  // Depth × lean SQUARE pad: drag the handle anywhere to set BOTH at once. y: TOP =
+  // higher/easier, BOTTOM = deeper/harder. x: rightmost = no lean (reversed); for
+  // front-to-wall / ladder (data-mirror) the lean direction + fill side flip. The
+  // fill grows up from the floor to the handle; readout = lean × depth; sync deferred.
   let padDrag: HTMLElement | null = null;
   const padSet = (pad: HTMLElement, clientX: number, clientY: number) => {
     const ex = pad.dataset.padex, note = pad.dataset.padnote;
@@ -6513,10 +6537,12 @@ async function init() {
     if (!ex || note === undefined || romKeys.length === 0 || leanKeys.length === 0) return;
     const fam = familyOf(ex);
     if (!fam) return;
+    const mirror = pad.dataset.mirror === "1";
     const r = pad.getBoundingClientRect();
     const xf = Math.max(0, Math.min(1, r.width ? (clientX - r.left) / r.width : 0));
     const yf = Math.max(0, Math.min(1, r.height ? (clientY - r.top) / r.height : 0));
-    const li = Math.round(xf * (leanKeys.length - 1));
+    const leanFrac = mirror ? xf : 1 - xf; // not-mirror: rightmost = no lean
+    const li = Math.round(leanFrac * (leanKeys.length - 1));
     const di = Math.round(yf * (romKeys.length - 1)); // 0 = top = easiest
     const rk = romKeys[di]!, lk = leanKeys[li]!;
     setNoteVecDim(ex, note, "rom", rk);
@@ -6524,16 +6550,19 @@ async function init() {
     const dims = FAMILIES[fam]!.dims;
     const romF = dims.rom?.[rk] ?? 1, leanF = dims.lean?.[lk] ?? 1;
     const mult = Math.round(romF * leanF * 100) / 100;
-    const lf = (leanKeys.length > 1 ? li / (leanKeys.length - 1) : 1) * 100;
-    const df = (romKeys.length > 1 ? di / (romKeys.length - 1) : 1) * 100;
+    const dotLeft = xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
     const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
     set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
     set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
     const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
-    if (fill) { fill.style.width = `${lf.toFixed(1)}%`; fill.style.height = `${df.toFixed(1)}%`; }
+    if (fill) {
+      fill.style.left = mirror ? "auto" : "0"; fill.style.right = mirror ? "0" : "auto"; fill.style.bottom = "0";
+      fill.style.width = `${(mirror ? 100 - dotLeft : dotLeft).toFixed(1)}%`;
+      fill.style.height = `${(100 - dotTop).toFixed(1)}%`;
+    }
     const dot = pad.querySelector<HTMLElement>(".ex-pad-dot");
-    if (dot) { dot.style.left = `${lf.toFixed(1)}%`; dot.style.top = `${df.toFixed(1)}%`; }
+    if (dot) { dot.style.left = `${dotLeft.toFixed(1)}%`; dot.style.top = `${dotTop.toFixed(1)}%`; }
     wrap?.classList.add("is-picked");
     const prod = pad.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");
     if (prod) prod.textContent = `×${scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) })}`;
