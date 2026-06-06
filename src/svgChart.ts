@@ -666,9 +666,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     draw();
   };
   legendEl.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".svgc-compact")) { setCompactPref(!compactPref); return; }
+    // toggleSeries() redraws and rebuilds this legend's DOM, detaching the node
+    // that was just clicked. If the click then bubbled to the document
+    // outside-click handler, `legendEl.contains(target)` would be false (the node
+    // is now orphaned) and it would wrongly close the legend. Stop propagation on
+    // any in-legend action so the legend stays open until you click truly outside.
+    if ((e.target as HTMLElement).closest(".svgc-compact")) { e.stopPropagation(); setCompactPref(!compactPref); return; }
     const key = (e.target as HTMLElement).closest<HTMLElement>(".svgc-key.is-toggle");
-    if (key?.dataset.series) toggleSeries(key.dataset.series);
+    if (key?.dataset.series) { e.stopPropagation(); toggleSeries(key.dataset.series); }
   });
   legendEl.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
