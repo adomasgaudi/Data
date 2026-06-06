@@ -383,6 +383,18 @@ export const FUNCTIONAL_PATTERN_TAGS: RegistryTag[] = [
     why: "Hip-hinge movements (push the hips back, flat-ish back): deadlifts, RDLs, good mornings, back extensions, thrusts.",
     keywords: ["deadlift", "rdl", "romanian", "good morning", "back extension", "hyperextension", "reverse hyper", "nordic", "hip thrust"],
     exclude: ["Inverted deadlift"] },
+  { id: "pattern.calisthenics", kind: "functional-pattern", label: "Calisthenics",
+    why: "Bodyweight strength movements — handstands & handstand push-ups, pull-ups/chin-ups, dips, push-ups, muscle-ups, L-sits, levers, planche, leg/knee raises, pistol squats and the like.",
+    keywords: [
+      "handstand", "pull up", "pullup", "chin up", "chinup", "dip", "push up", "pushup",
+      "muscle up", "muscleup", "l-sit", "lsit", "planche", "lever", "leg raise",
+      "knee raise", "toes to bar", "pistol", "archer", "inverted row", "australian",
+      "hollow", "pike push", "pseudo", "rings", "bar hang", "hanging", "crow", "frog stand",
+      "human flag", "dragon flag", "front lever", "back lever", "skin the cat", "wall touch", "wall walk",
+    ],
+    // "rings" (not "ring") avoids hamSTRING; "l-sit"/"lsit" (not "l sit") avoids waLL SITs.
+    // A few weighted/machine items that still slip a keyword through:
+    exclude: ["Ring Curl", "Cable Tricep Pushdown", "Seated Dip Machine"] },
 ];
 
 /** Combinable groups: members are the SAME lift, merged 1:1 into one staple. */
@@ -862,6 +874,23 @@ const EXACT_CODE_OVERRIDES: Record<string, string> = {
   hipabduction: "H-ABD",
   hipadduction: "H-ADD",
   declinesitup: "dSU",
+  // Handstand family — give each version a clear, distinct code (the auto-coder
+  // read "Handstand Push Ups" as "PU", clashing with regular Push Ups, and two
+  // handstand lifts both coded "LC"). All start "HS" so they read as a family.
+  handstandpushups: "HSPU",
+  handstandpushuptoblock15cm: "HSPU-B",
+  handstandtouchshoulders: "HS-TS",
+  handstandshouldertouchclosehand: "HS-TSc",
+  handstandwalltouch: "HS-WT",
+  handstandkicks: "HS-K",
+  handstandwalk: "HS-W",
+  handstandstepsnexttowall1hand1: "HS-ST",
+  handstandclose2flegcurls: "HS-LCc",
+  handstandlegcurl: "HS-LC",
+  handstandonhead: "HS-OH",
+  handstanddancepppp: "HS-D",
+  handstandhold: "HS-H",
+  handstand: "HS",
 };
 
 // Movement cores (UPPERCASE), matched on the longest phrase first so "bench
