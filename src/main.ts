@@ -5764,10 +5764,21 @@ function noteStickmanHtml(name: string, note: string): string {
       .join("");
     return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
   };
+  // Scrub slider: drag to "play" the figure down through the rep — where you stop
+  // sets the depth (range of motion). Left = shallow (top), right = deepest.
+  const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
+  const curIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
+  const scrubLbl = romKeys.length ? String(effVec.rom ?? romKeys[curIdx]) : "";
+  const scrub = romKeys.length > 1
+    ? `<div class="pose-scrub-row"><span class="pose-scrub-cap muted">shallow</span>` +
+      `<input type="range" class="pose-scrub" min="0" max="${romKeys.length - 1}" step="1" value="${curIdx}" data-scrubex="${escapeHtml(name)}" data-scrubnote="${escapeHtml(note)}" aria-label="Scrub depth" />` +
+      `<span class="pose-scrub-cap muted">deep</span><span class="pose-scrub-val">${escapeHtml(scrubLbl)}</span></div>`
+    : "";
   return (
     `<div class="ex-var-pose">` +
     `<div class="pose-draw" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"></div>` +
-    `<div class="pose-hint muted">A drawn figure doing the rep — elbows bend, the body leans, hands on the block. Worked muscles (shoulders &amp; triceps) in blue. Pick options below.</div>` +
+    `<div class="pose-hint muted">A drawn figure doing the rep — drag the slider to scrub it down to the depth you did. Worked muscles (shoulders &amp; triceps) in blue.</div>` +
+    scrub +
     ctl("support") + ctl("rom") + ctl("lean") +
     `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
     `</div>`
@@ -6563,6 +6574,42 @@ async function init() {
       refreshExerciseInfo();
       requestAnimationFrame(renderAll);
     }
+  });
+  // Scrub slider under the drawn figure: drag to "play" the rep down to the depth
+  // you did — it scrubs the figure live and sets the range-of-motion (rom) level.
+  const onScrub = (e: Event): void => {
+    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".pose-scrub");
+    if (!sl?.dataset.scrubex || sl.dataset.scrubnote === undefined) return;
+    const ex = sl.dataset.scrubex, note = sl.dataset.scrubnote;
+    const fam = familyOf(ex);
+    if (!fam) return;
+    const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
+    if (romKeys.length < 2) return;
+    const idx = Math.max(0, Math.min(romKeys.length - 1, parseInt(sl.value, 10) || 0));
+    const frac = idx / (romKeys.length - 1);
+    setNoteVecDim(ex, note, "rom", romKeys[idx]!);
+    const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+    if (activeDrawn) { activeDrawn.fig.update(vec); activeDrawn.fig.scrub(frac); } // hold at this depth
+    const pose = sl.closest(".ex-var-pose");
+    const prod = pose?.querySelector(".ex-var-product strong");
+    if (prod) prod.textContent = `×${scalarFromVec(fam, vec)}`;
+    const val = pose?.querySelector(".pose-scrub-val");
+    if (val) val.textContent = romKeys[idx]!;
+    // Reflect on the rom chip row too, without a full re-render.
+    pose?.querySelectorAll<HTMLElement>('.pose-ctl[data-posectl-dim="rom"]').forEach((c) => c.classList.toggle("is-on", c.dataset.posectlLevel === romKeys[idx]));
+    // NB: don't re-render here — that would destroy the slider mid-drag. The heavy
+    // table/graph sync is deferred to release (the 'change' handler below).
+    scaleEditDirty = true;
+  };
+  document.addEventListener("input", onScrub);
+  // On release: resume the rep loop and do the deferred table/graph sync.
+  document.addEventListener("change", (e) => {
+    if (!(e.target as HTMLElement).closest?.(".pose-scrub")) return;
+    if (activeDrawn) activeDrawn.fig.scrub(null);
+    if (scaleEditState) return; // popover syncs on close (scaleEditDirty already set)
+    scaleEditDirty = false;
+    refreshExerciseInfo();
+    renderAll();
   });
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {

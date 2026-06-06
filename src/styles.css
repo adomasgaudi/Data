@@ -1965,6 +1965,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   background: linear-gradient(180deg, var(--bg) 0%, var(--accent-soft) 100%); }
 .pose-draw-svg { display: block; width: 100%; height: auto; }
+.pose-scrub-row { display: flex; align-items: center; gap: 0.4rem; max-width: 320px; margin: 0 auto; }
+.pose-scrub { flex: 1; accent-color: var(--accent); cursor: ew-resize; }
+.pose-scrub-cap { font-size: 0.68rem; }
+.pose-scrub-val { font-size: 0.72rem; font-weight: 700; min-width: 3.4em; text-align: right; }
 .pose-hint { font-size: 0.74rem; text-align: center; }
 /* Tap-to-pose control chips below the figure (one row per dimension). */
 .pose-ctl { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 3px 9px;

@@ -20,6 +20,8 @@ export interface PoseVec {
 }
 export interface PoseDraw {
   update(vec: PoseVec): void;
+  /** Hold the figure at a manual rep phase 0..1 (scrub), or null to auto-loop. */
+  scrub(p: number | null): void;
   dispose(): void;
 }
 
@@ -84,8 +86,10 @@ function build(t: Targets, p: number): string {
   const Px = Sx + BODYLEN * bdx, Py = Sy + BODYLEN * bdy; // hip
   const Kx = Px + LEGLEN * 0.5 * bdx, Ky = Py + LEGLEN * 0.5 * bdy; // knee
   const Fx = Px + LEGLEN * bdx, Fy = Py + LEGLEN * bdy; // feet
-  const Hx = Sx + faceDir * 8;
-  const Hy = Math.min(FLOOR - HEADR - 2, Sy + (handY - Sy) * 0.42); // head hangs toward the floor
+  // Head dives forward (in front of the hands) and down toward the floor as the
+  // rep deepens — matching a real front-to-wall handstand push-up.
+  const Hx = Sx + faceDir * (6 + 16 * p);
+  const Hy = Math.min(FLOOR - HEADR - 2, Sy + (handY - Sy) * (0.42 + 0.32 * p));
 
   const GREY = "url(#lg)", BLUE = "#2f6bff", TONE = "#c2655a";
   // Scenery: wall / ladder, floor + contact shadow, block / parallettes.
@@ -134,6 +138,7 @@ export function mountPoseDraw(container: HTMLElement, initial: PoseVec): PoseDra
   const start = performance.now();
   let raf = 0;
   let disposed = false;
+  let scrubP: number | null = null; // when set, the rep is held at this phase (slider)
 
   const frame = (now: number): void => {
     if (disposed) return;
@@ -141,7 +146,8 @@ export function mountPoseDraw(container: HTMLElement, initial: PoseVec): PoseDra
     anim.phi += (target.phi - anim.phi) * 0.15;
     anim.blockH += (target.blockH - anim.blockH) * 0.15;
     anim.depth += (target.depth - anim.depth) * 0.15;
-    const p = 0.5 - 0.5 * Math.cos((now - start) * ((Math.PI * 2) / 2400)); // ~2.4 s rep loop
+    // Scrubbed → hold the manual phase; otherwise loop the rep (~2.4 s).
+    const p = scrubP != null ? scrubP : 0.5 - 0.5 * Math.cos((now - start) * ((Math.PI * 2) / 2400));
     svg.innerHTML = build({ ...target, phi: anim.phi, blockH: anim.blockH, depth: anim.depth }, p);
     raf = requestAnimationFrame(frame);
   };
@@ -152,6 +158,9 @@ export function mountPoseDraw(container: HTMLElement, initial: PoseVec): PoseDra
       const next = readTargets(vec);
       // keep eased fields tweening; copy discrete fields immediately
       target = next;
+    },
+    scrub(p: number | null) {
+      scrubP = p == null ? null : Math.min(1, Math.max(0, p));
     },
     dispose() {
       disposed = true;
