@@ -86,8 +86,6 @@ import {
   realPullupWeight,
   exerciseCategory,
   exerciseCategories,
-  trainingCategories,
-  isStatic,
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
@@ -265,9 +263,7 @@ const els = {
   activeSetBar: $("activeSetBar"),
   bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
-  codesTable: $("codesTable"),
   statsEditBody: $("statsEditBody"),
-  codesSearch: $<HTMLInputElement>("codesSearch"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
   calcReps: $<HTMLInputElement>("calcReps"),
@@ -5997,141 +5993,6 @@ function renderBwGroupBar(): void {
     `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>`;
 }
 
-// ---- Exercise codes tab: rename the short code shown for each lift ----
-let codesQuery = "";
-// Which category sections are collapsed in the Codes list, remembered on device.
-const CODES_COLLAPSED_KEY = "colosseum.codesCollapsed.v1";
-const codesCollapsed: Set<string> = (() => {
-  try {
-    const a = JSON.parse(localStorage.getItem(CODES_COLLAPSED_KEY) ?? "[]");
-    return new Set<string>(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []);
-  } catch {
-    return new Set<string>();
-  }
-})();
-function saveCodesCollapsed() {
-  try { localStorage.setItem(CODES_COLLAPSED_KEY, JSON.stringify([...codesCollapsed])); } catch { /* storage may be unavailable */ }
-}
-
-/** Render the editable exercise-code list, GROUPED BY CATEGORY (most-trained
- * first within each), searchable — so the codes aren't a confusing mix. */
-function renderCodesTab(): void {
-  const counts = new Map<string, number>();
-  for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
-  for (const name of Object.keys(codeOverrides)) if (!counts.has(name)) counts.set(name, 0); // keep edited-but-absent lifts visible
-  for (const name of Object.keys(shortOverrides)) if (!counts.has(name)) counts.set(name, 0);
-  const q = codesQuery.trim().toLowerCase();
-  const names = [...counts.keys()]
-    .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q) || shortFor(n).toLowerCase().includes(q))
-    .sort((a, b) => (counts.get(b)! - counts.get(a)!) || a.localeCompare(b));
-
-  // Bucket the (already most-trained-first) names by training category. An
-  // exercise can belong to several categories, so it appears under each — a
-  // deadlift shows under Legs, Back and Core; a front lever under Skill, Back
-  // and Core.
-  const byCat = new Map<TrainingCategory, string[]>();
-  for (const name of names) {
-    for (const c of trainingCategories(name)) {
-      const list = byCat.get(c);
-      if (list) list.push(name); else byCat.set(c, [name]);
-    }
-  }
-
-  const rowHtml = (name: string) => {
-    const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
-    const def = exerciseCode(name);
-    const shortOver = !!(shortOverrides[name] && shortOverrides[name]!.trim());
-    const shortDef = defaultShort(name);
-    const staticTag = isStatic(name) ? ` <span class="codes-static" title="Isometric hold">static</span>` : "";
-    // Code + Short share ONE cell, each on its own labelled line — so neither
-    // input gets squeezed into a sliver on a phone (the old 4-column layout did).
-    return (
-      `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}${staticTag}</td>` +
-      `<td class="codes-cell">` +
-      `<div class="codes-field"><span class="codes-flabel">Code</span>` +
-      `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
-      `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +
-      (overridden
-        ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
-        : `<span class="codes-def muted">default</span>`) +
-      `</div>` +
-      `<div class="codes-field"><span class="codes-flabel">Short</span>` +
-      `<input class="codes-input codes-short${shortOver ? " is-custom" : ""}" type="text" maxlength="40" spellcheck="false" autocomplete="off" ` +
-      `value="${escapeHtml(shortFor(name))}" data-exshort="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />` +
-      (shortOver
-        ? `<button type="button" class="codes-reset" data-shortreset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(shortDef)})">↺</button>`
-        : `<span class="codes-def muted">= code</span>`) +
-      `</div>` +
-      `</td>` +
-      `<td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
-    );
-  };
-
-  const head = `<thead><tr><th>Exercise</th><th>Code &amp; short</th><th class="num">Sets</th></tr></thead>`;
-  // While searching, force every section open so matches aren't hidden in a
-  // collapsed group.
-  const searching = q.length > 0;
-  const body = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
-    .map((cat) => {
-      const list = byCat.get(cat)!;
-      const collapsed = !searching && codesCollapsed.has(cat);
-      const header =
-        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="3">` +
-        `<span class="codes-cat-caret">${collapsed ? "▸" : "▾"}</span>` +
-        `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
-        `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
-      const rows = collapsed ? "" : list.map(rowHtml).join("");
-      return header + rows;
-    })
-    .join("");
-  els.codesTable.innerHTML = names.length
-    ? head + `<tbody>${body}</tbody>`
-    : `<tbody><tr><td class="muted">No exercises match.</td></tr></tbody>`;
-}
-
-/** Wire the Codes tab's search box, per-row code edits and reset buttons. */
-function setupCodesTab(): void {
-  els.codesSearch.addEventListener("input", () => { codesQuery = els.codesSearch.value; renderCodesTab(); });
-  // Commit a typed code on blur/Enter (change), then refresh everywhere it shows.
-  els.codesTable.addEventListener("change", (e) => {
-    const input = (e.target as HTMLElement).closest<HTMLInputElement>(".codes-input");
-    if (!input) return;
-    if (input.dataset.exshort) {
-      setShortOverride(input.dataset.exshort, input.value);
-      renderCodesTab();
-      return;
-    }
-    if (!input.dataset.ex) return;
-    setCodeOverride(input.dataset.ex, input.value);
-    renderCodesTab();
-    renderAll();
-  });
-  els.codesTable.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    // Collapse / expand a category section.
-    const catRow = target.closest<HTMLElement>("tr.codes-cat");
-    if (catRow?.dataset.codescat) {
-      const cat = catRow.dataset.codescat;
-      if (codesCollapsed.has(cat)) codesCollapsed.delete(cat);
-      else codesCollapsed.add(cat);
-      saveCodesCollapsed();
-      renderCodesTab();
-      return;
-    }
-    const shortBtn = target.closest<HTMLElement>("[data-shortreset]");
-    if (shortBtn?.dataset.shortreset) {
-      setShortOverride(shortBtn.dataset.shortreset, ""); // blank clears the override
-      renderCodesTab();
-      return;
-    }
-    const btn = target.closest<HTMLElement>("[data-reset]");
-    if (!btn?.dataset.reset) return;
-    setCodeOverride(btn.dataset.reset, ""); // blank clears the override
-    renderCodesTab();
-    renderAll();
-  });
-}
-
 // ---- Edit athlete stats page ----
 let statsEditUser = ""; // which athlete the editor is showing
 
@@ -7423,7 +7284,6 @@ async function init() {
   renderDataTab();
   setupAddTab();
   void setupBackup();
-  setupCodesTab();
   setupStatsEdit();
   els.athleteProfile.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-editstats]");
@@ -10335,7 +10195,6 @@ function commandList(): CmdSpec[] {
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
     { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
-    { cmd: ".codes", desc: "Open the Exercise codes page", run: () => switchTopTab("codes") },
     { cmd: ".add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
     { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
     { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },
@@ -10668,7 +10527,6 @@ function switchTopTab(name: string) {
   if (name === "sitemap") renderSiteMap();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
-  if (name === "codes") renderCodesTab();
   if (name === "statsedit") renderStatsEdit();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
