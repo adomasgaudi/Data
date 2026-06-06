@@ -498,9 +498,14 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   // rather than a clamped one. The Nuzzo curve is data-derived across the study's
   // full range (down to 15% of 1RM ≈ 127 reps), so it is EXEMPT from the cap.
   if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
-  const effective1RM = estimate1RM(record.weight, record.reps, formula);
-  if (effective1RM === null) return null;
+  // Variation difficulty scales the EFFECTIVE load before the 1RM curve: an easier
+  // bodyweight variation moved less of your bodyweight, so its 1RM is lower — and
+  // once the FULL bodyweight share is peeled off below it can go negative (you'd
+  // need assistance to do the baseline movement). ×1 / absent leaves it unchanged.
+  const mult = record.difficultyMult ?? 1;
   const effectiveLoad = record.weight ?? 0;
+  const effective1RM = estimate1RM(effectiveLoad * mult, record.reps, formula);
+  if (effective1RM === null) return null;
   // origWeight is undefined only for bar-only lifts (no bodyweight folded in) → the
   // whole load is "added". When it's explicitly null, it was a bodyweight-only set
   // on a bodyweight lift, so the added weight is 0 and the body is the whole load.

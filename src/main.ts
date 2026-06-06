@@ -1311,7 +1311,11 @@ function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight"
 /** Public computeRecord: the bodyweight-aware compute, then tag the owner's
  * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
 function computeRecord(r: SetRecord): SetRecord {
-  const out = computeRecordBase(r);
+  const base = computeRecordBase(r);
+  // Stamp the per-NOTE variation difficulty so the 1RM (addedWeight1RM) scales the
+  // load by it — an easier variation reports a lower / negative 1RM. ×1 → unstamped.
+  const mult = noteVariationScale(base);
+  const out = mult !== 1 ? { ...base, difficultyMult: mult } : base;
   return out.notes && isNoteNotComparable(out.exerciseName, out.notes) ? { ...out, notComparable: true } : out;
 }
 function computeRecordBase(r: SetRecord): SetRecord {
@@ -3791,7 +3795,11 @@ function renderExerciseProgressChart(exName: string) {
     const x = base + frac * MS_DAY;
     const meta = `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM · ${shortDate(s.date)}` + (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : "");
     strengthRaw.push({ x, y: e1rm, meta });
-    scaledRaw.push({ x, y: e1rm * scaleForRecord(s) });
+    // The note-variation factor is already folded into e1rm now, so the "Scaled
+    // effort" line only needs the REMAINING factors (squat-rack level × per-set
+    // scale) — dividing it out avoids double-counting the variation difficulty.
+    const nv = noteVariationScale(s) || 1;
+    scaledRaw.push({ x, y: e1rm * (scaleForRecord(s) / nv) });
   }
   const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
   const hasLevels = sets.some((s) => s.levelValue !== undefined);
@@ -4802,7 +4810,12 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
       `${r} reps is above the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable, so no 1RM is shown (—).`
     );
   }
-  const eff1rm = estimate1RM(effLoad, r, formula);
+  // Variation difficulty scales the effective load (an easier variation moved less
+  // of your bodyweight), so the curve runs on the SCALED load; the FULL bodyweight
+  // share is still peeled off, which is why an easy variation can go negative.
+  const mult = c.difficultyMult ?? 1;
+  const scaledLoad = effLoad * mult;
+  const eff1rm = estimate1RM(scaledLoad, r, formula);
   const added1rm = addedWeight1RM(c, formula);
   const addedTxt = added1rm === null ? "—" : `${f2(added1rm)} kg`;
 
@@ -4812,22 +4825,27 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
       `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg.`,
     );
   }
+  if (mult !== 1) {
+    parts.push(
+      `Variation difficulty ×${f2(mult)} (an easier/harder version), so the load counts as ${f2(effLoad)} × ${f2(mult)} = ${f2(scaledLoad)} kg.`,
+    );
+  }
   if (r === 1) {
-    parts.push(`${formula}: a single is the 1RM → ${f2(effLoad)} kg.`);
+    parts.push(`${formula}: a single is the 1RM → ${f2(scaledLoad)} kg.`);
   } else if (formula === "brzycki") {
     parts.push(
       r >= 37
         ? "Brzycki is undefined at 37+ reps."
-        : `Brzycki: load × 36 / (37 − reps) = ${f2(effLoad)} × 36 / (37 − ${r}) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+        : `Brzycki: load × 36 / (37 − reps) = ${f2(scaledLoad)} × 36 / (37 − ${r}) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
     );
   } else if (formula === "nuzzo") {
     const pct = benchPctForReps(r);
     parts.push(
-      `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(effLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+      `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(scaledLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
     );
   } else {
     parts.push(
-      `Epley: load × (1 + reps/30) = ${f2(effLoad)} × (1 + ${r}/30) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
+      `Epley: load × (1 + reps/30) = ${f2(scaledLoad)} × (1 + ${r}/30) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
     );
   }
   if (hasBody && eff1rm !== null) {
