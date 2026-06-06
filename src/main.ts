@@ -9247,14 +9247,38 @@ function renderWaChips(): void {
     const key = waMeta(e.name, waGroupBy)[0] ?? "Unassigned";
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
   }
+  const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
   box.innerHTML = [...groups.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(
-      ([g, items]) =>
+    .map(([g, items]) => {
+      // Within a group, cluster related families (e.g. all handstand variants) under
+      // a nested sub-header; everything else stays directly under the group.
+      const direct: typeof list = [];
+      const subs = new Map<string, typeof list>();
+      for (const e of items) {
+        const sg = exerciseSubgroup(e.name);
+        if (sg) (subs.get(sg) ?? subs.set(sg, []).get(sg)!).push(e);
+        else direct.push(e);
+      }
+      const subHtml = [...subs.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(
+          ([sg, sgItems]) =>
+            `<div class="wa-subgroup"><div class="wa-subgroup-h">${escapeHtml(sg)} <span class="muted">(${sgItems.length})</span></div>${chips(sgItems)}</div>`,
+        )
+        .join("");
+      return (
         `<div class="wa-group"><div class="wa-group-h">${escapeHtml(g)} <span class="muted">(${items.length})</span></div>` +
-        `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div></div>`,
-    )
+        (direct.length ? chips(direct) : "") + subHtml + `</div>`
+      );
+    })
     .join("");
+}
+
+/** A finer "family" subgroup within a group — all handstand variants cluster under
+ * "Handstand". null = no subgroup (the chip sits directly under its group). */
+function exerciseSubgroup(name: string): string | null {
+  return /handstand/i.test(name) ? "Handstand" : null;
 }
 
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
