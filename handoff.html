@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colosseum — Rebuild Handoff</title>
+<style>
+  html { background: #fff; color: #000; }
+  body {
+    max-width: 40rem;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    font: 16px/1.6 -apple-system, system-ui, sans-serif;
+  }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 2rem; }
+  ol { padding-left: 1.4rem; }
+  li { margin-bottom: 0.9rem; }
+</style>
+</head>
+<body>
+  <h1>Colosseum — Rebuild Handoff</h1>
+  <ol>
+    <li>Data: StrengthLevel → Apps Script → Google Sheet → CSV.</li>
+    <li>Never rebuild the scraper; reuse the Apps Script.</li>
+    <li>CSV bundled at build; runs fully in-browser.</li>
+    <li>Stack: TypeScript, Vite, Zod, Vitest, Chart.js.</li>
+    <li>All compute logic in pure, unit-tested functions.</li>
+    <li>Validate data at the boundary with Zod.</li>
+    <li>sanityCheck() range-checks records, flags outliers.</li>
+    <li>1RM formulas: Epley, Brzycki, bench-specific Nuzzo.</li>
+    <li>Effective load = coeff × bodyweight + added weight.</li>
+    <li>Property tests (fast-check) pin core invariants.</li>
+  </ol>
+</body>
+</html>
