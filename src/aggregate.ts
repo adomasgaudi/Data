@@ -504,7 +504,11 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   // need assistance to do the baseline movement). ×1 / absent leaves it unchanged.
   const mult = record.difficultyMult ?? 1;
   const effectiveLoad = record.weight ?? 0;
-  const effective1RM = estimate1RM(effectiveLoad * mult, record.reps, formula);
+  // Multiplier scales the load (position difficulty); a band then SUBTRACTS a
+  // constant assistance in kg. The result can be ≤ 0 (you'd need that much help to
+  // do the unassisted movement) — handle it linearly so the 1RM stays continuous.
+  const scaledLoad = effectiveLoad * mult - (record.assistKg ?? 0);
+  const effective1RM = scaledLoad > 0 ? estimate1RM(scaledLoad, record.reps, formula) : scaledLoad;
   if (effective1RM === null) return null;
   // origWeight is undefined only for bar-only lifts (no bodyweight folded in) → the
   // whole load is "added". When it's explicitly null, it was a bodyweight-only set

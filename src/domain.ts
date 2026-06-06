@@ -67,6 +67,10 @@ export interface SetRecord {
    * reports a lower — possibly negative — added-weight 1RM. Stamped by the app's
    * computeRecord; absent on raw records (treated as ×1). */
   difficultyMult?: number;
+  /** Band assistance in KILOGRAMS — a band removes a roughly constant force, so it
+   * is SUBTRACTED from the (multiplier-scaled) load before the 1RM curve, not
+   * multiplied. Stamped by computeRecord; absent / 0 means no band. */
+  assistKg?: number;
   /** Machine-type verdict for a gravity-or-cable lift (e.g. Lat Pulldown) when the
    * exercise is in "gravity" or "mixed" mode. "gravity" means the strength weight
    * was scaled to its cable-equivalent (×0.6, logged value kept in origWeight);
