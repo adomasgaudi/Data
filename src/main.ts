@@ -68,6 +68,7 @@ import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVE
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
 import { renderAnalyticsGraph } from "./analyticsGraph";
+import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
@@ -978,6 +979,33 @@ function familyOf(exerciseName: string): string | null {
   if (o !== undefined) return o || null; // "" → explicitly none
   return baseFamilyOf(exerciseName);
 }
+// ---- World-record reference per exercise (for "% of world record") ----. Seed
+// (WORLD_RECORDS_SEED) layered with owner edits; each is a kg at a reference
+// bodyweight, scaled allometrically to the viewed athlete's bodyweight. Saved.
+const WR_KEY = "colosseum.worldRecords.v1";
+const worldRecordOverrides: Record<string, { m?: WrRef; f?: WrRef }> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(WR_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+/** The record reference for an exercise + sex (owner edit wins over the seed). */
+function worldRecordRef(exerciseName: string, sex: "m" | "f"): WrRef | null {
+  return worldRecordOverrides[exerciseName]?.[sex] ?? WORLD_RECORDS_SEED[exerciseName]?.[sex] ?? null;
+}
+/** The world record (kg) scaled to a bodyweight; null if none set for that sex. */
+function worldRecordKg(exerciseName: string, sex: "m" | "f", bodyweight: number | null): number | null {
+  const ref = worldRecordRef(exerciseName, sex);
+  if (!ref || !bodyweight || bodyweight <= 0) return ref ? ref.kg : null;
+  return scaleWr(ref, bodyweight);
+}
+/** Set or clear (blank → remove) a world-record field for an exercise/sex. */
+function setWorldRecord(exerciseName: string, sex: "m" | "f", kg: number | null, bw: number | null): void {
+  const cur = (worldRecordOverrides[exerciseName] ??= {});
+  if (kg === null || !Number.isFinite(kg) || kg <= 0 || bw === null || !Number.isFinite(bw) || bw <= 0) delete cur[sex];
+  else cur[sex] = { kg: Math.round(kg * 10) / 10, bw: Math.round(bw * 10) / 10 };
+  if (!cur.m && !cur.f) delete worldRecordOverrides[exerciseName];
+  try { localStorage.setItem(WR_KEY, JSON.stringify(worldRecordOverrides)); } catch { /* ignore */ }
+}
+
 function setExerciseFamily(exerciseName: string, key: string): void {
   // Clear the override when it matches the built-in default; else store the choice.
   if (key === (baseFamilyOf(exerciseName) ?? "")) delete exerciseFamilyOverrides[exerciseName];
@@ -6037,6 +6065,24 @@ function modelFactorsEditorHtml(name: string): string {
   );
 }
 
+/** Editable world record (per sex) for an exercise — a kg at a reference
+ * bodyweight; scaled to each athlete's bodyweight for the "% of world record". */
+function worldRecordEditorHtml(name: string): string {
+  const row = (sex: "m" | "f", lbl: string) => {
+    const ref = worldRecordRef(name, sex);
+    const inp = (field: "kg" | "bw", val: number | undefined, ph: string) =>
+      `<label class="fac-cell"><span class="fac-lvl">${field === "kg" ? "kg" : "@ bw"}</span>` +
+      `<input class="wr-input" type="number" step="1" min="0" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${sex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
+    return `<div class="fac-dim"><div class="fac-dim-h">${lbl}</div><div class="fac-cells">${inp("kg", ref?.kg, "record kg")}${inp("bw", ref?.bw, "at kg bw")}</div></div>`;
+  };
+  return (
+    `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
+    `<div class="ex-group-why muted">The best 1RM-equivalent (kg) at a reference bodyweight, per sex — scaled to each athlete's bodyweight (strength ≈ bw^⅔). A few powerlifting lifts are seeded; set the rest (incl. calisthenics) yourself. Drives the “% of world record” graph metric.</div>` +
+    row("m", "men") + row("f", "women") +
+    `</details>`
+  );
+}
+
 /** The global "Difficulty multipliers" overlay: every family's editable factors. */
 function renderModelEditor(): void {
   els.modelEditor.innerHTML = Object.keys(FAMILIES)
@@ -6168,7 +6214,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
 }
 
 /** Inline editors for an exercise's identity & physical model — moved here from
@@ -7222,6 +7268,15 @@ async function init() {
     // Edit a difficulty-model factor. Keep it light so you can edit many in a row:
     // save + recolour just this cell (no rebuild of the editor you're in → focus &
     // scroll stay put), and apply to the rest of the app debounced after you pause.
+    // World-record inputs: read both kg + bw for that exercise/sex and save together.
+    const wr = (e.target as HTMLElement).closest<HTMLInputElement>(".wr-input");
+    if (wr?.dataset.wrEx && (wr.dataset.wrSex === "m" || wr.dataset.wrSex === "f")) {
+      const scope = wr.closest(".fac-dim");
+      const num = (f: string) => { const el = scope?.querySelector<HTMLInputElement>(`[data-wr-f="${f}"]`); return el && el.value !== "" ? Number(el.value) : null; };
+      setWorldRecord(wr.dataset.wrEx, wr.dataset.wrSex, num("kg"), num("bw"));
+      scheduleModelFactorsApply();
+      return;
+    }
     const fac = (e.target as HTMLElement).closest<HTMLInputElement>(".fac-input");
     if (fac?.dataset.facFam && fac.dataset.facDim && fac.dataset.facLvl !== undefined) {
       const v = Number(fac.value);
@@ -9781,9 +9836,10 @@ function renderWaGraph(): void {
         records: athleteRecs,
         metrics: [...waMetrics],
         config: waGraphConfig,
-        codeOf: codeFor,
+        codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
         perBodyweight: waPerBodyweight,
         bodyweight: athProfile(els.athlete.value)?.weight ?? null,
+        worldRecordKg: (ex) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
       })
     : 0;
   // Relocate the chart's legend up into the top bar so it sits beside Graph options

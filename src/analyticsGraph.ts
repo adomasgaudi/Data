@@ -34,6 +34,9 @@ export interface AnalyticsGraphInput {
   perBodyweight?: boolean;
   /** The athlete's bodyweight in kg, for the per-bodyweight view. */
   bodyweight?: number | null;
+  /** Bodyweight+sex-scaled world record (kg) for an exercise, for the "% of world
+   * record" metric; null when none is set. */
+  worldRecordKg?: (exercise: string) => number | null;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -78,6 +81,18 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   let ci = 0;
   for (const g of groups) {
     for (const m of metrics) {
+      // "% of world record": each set's added-weight 1RM ÷ this exercise's
+      // (bodyweight+sex-scaled) world record × 100. Needs the e1rm compute + the WR.
+      if (m.id === "pctWR") {
+        const wr = input.worldRecordKg?.(g.records[0]?.exerciseName ?? "");
+        const e1rm = graphMetric("e1rm");
+        if (!wr || wr <= 0 || !e1rm?.compute) continue;
+        const pts = e1rm.compute(g.records, input.config)
+          .filter((p) => p.y != null)
+          .map((p) => ({ x: p.x, y: Math.round((p.y! / wr) * 1000) / 10 }));
+        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · % WR` : "% of world record", color: SERIES_COLORS[ci++ % SERIES_COLORS.length]!, type: "scatter", points: pts as SvgPoint[], axis: "right" });
+        continue;
+      }
       if (!m.compute) continue; // registered-but-not-computed metric
       let pts: GraphPoint[] = m.compute(g.records, input.config);
       // Decay can also be applied to plain strength/1RM lines via the config.

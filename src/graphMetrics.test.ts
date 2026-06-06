@@ -12,10 +12,10 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 14 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(14);
+  it("registers all 15 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(15);
     for (const id of [
-      "weight", "weightRange", "e1rm", "strength", "strengthDecay", "predicted",
+      "weight", "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
       "volume", "volumeLoad", "reps", "sets", "frequency", "pr", "trend", "movingAvg",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
@@ -39,7 +39,9 @@ describe("graph metric registry (TASK 26)", () => {
   });
 
   it("every registered metric now has a compute (TASKS 31–41)", () => {
-    for (const m of GRAPH_METRICS) expect(m.compute, m.id).toBeTypeOf("function");
+    // pctWR is computed specially in analyticsGraph (needs sex/bodyweight/the WR),
+    // so it deliberately carries no registry compute.
+    for (const m of GRAPH_METRICS) if (m.id !== "pctWR") expect(m.compute, m.id).toBeTypeOf("function");
   });
 
   it("weight range is a range series with lo/hi (TASK 32)", () => {
