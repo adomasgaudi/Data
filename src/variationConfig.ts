@@ -40,16 +40,20 @@ export interface VariationConfig {
 export const FAMILIES: Record<string, FamilyDef> = {
   HSPU: {
     dims: {
-      // SUPPORT — one combined dimension for "how the body is held / assisted":
-      // wall help, leg shape (L-sit harder, tucked/hooked easier) and ladder-rung
-      // assistance all live here (merged from the old support / legs / ladder dims,
-      // since you pick ONE setup). free = freestanding straight legs (×1 reference).
+      // SUPPORT — the wall orientation / overall setup. The 3 main variations are
+      // BACK to wall (heels on the wall, can rest → easiest with a wall),
+      // FRONT to wall (chest/face to the wall, must stay vertical → harder), and
+      // LADDER (technically front-to-wall, legs on the rungs in an L → big assist).
+      // free = freestanding (×1 reference). Finer leg shapes / ladder-rung levels
+      // are kept below for resolving older notes. Calibrate the numbers.
       support: {
         free: 1.0,
-        wall: 0.85,
+        front_to_wall: 0.92,
+        back_to_wall: 0.82,
+        ladder: 0.55,
+        lsit: 1.1,
         tucked: 0.95,
         hooked: 0.8,
-        lsit: 1.1,
         lad3: 0.72,
         lad5: 0.6,
         lad6: 0.55,
@@ -80,12 +84,17 @@ export const FAMILIES: Record<string, FamilyDef> = {
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
   HSPU: {
-    // support / wall (a higher-priority "no wall" beats a bare "wall" in the note)
-    wall: { support: "wall" },
+    // wall orientation. Bare "wall" = back-to-wall (the common one); chest/face
+    // cues ("navel to wall", "close to wall") = front-to-wall. "no wall" wins.
+    wall: { support: "back_to_wall" },
+    "back to wall": { support: "back_to_wall", priority: 4 },
+    "b2 wall": { support: "back_to_wall", priority: 4 },
+    "front to wall": { support: "front_to_wall", priority: 4 },
+    "navel to wall": { support: "front_to_wall", priority: 4 },
+    "close to wall": { support: "front_to_wall", priority: 4 },
+    ladder: { support: "ladder" },
     "no wall": { support: "free", priority: 5 },
     freestanding: { support: "free" },
-    "navel to wall": { support: "wall" },
-    "close to wall": { support: "wall" },
     // assistance band — "guma N" by number (higher N = heavier = more help);
     // longest-match-first means "guma 5" beats "guma". Bare "guma" assumes a mid band.
     "guma 1": { band: "1" },
@@ -97,10 +106,10 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     guma: { band: "5" },
     // range of motion in cm (a raised block shortens it; parallettes/brick deepen
     // it). A block implies you're also against the wall. The yoga side = +5/15/23cm.
-    "l yoga": { rom: "+23cm", support: "wall" },
-    "m yoga": { rom: "+15cm", support: "wall" },
-    "yoga block": { rom: "+15cm", support: "wall" },
-    yoga: { rom: "+15cm", support: "wall" },
+    "l yoga": { rom: "+23cm", support: "back_to_wall" },
+    "m yoga": { rom: "+15cm", support: "back_to_wall" },
+    "yoga block": { rom: "+15cm", support: "back_to_wall" },
+    yoga: { rom: "+15cm", support: "back_to_wall" },
     paraletes: { rom: "-10cm" },
     parallettes: { rom: "-10cm" },
     brick: { rom: "-5cm" },
@@ -133,7 +142,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 3;
+export const CONFIG_VERSION = 4;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many

@@ -5531,36 +5531,58 @@ function poseSvgInner(name: string, note: string): { inner: string; scale: numbe
   const leanN = leanKeys.length;
   const romIdx = Math.max(0, romKeys.indexOf(effVec.rom!));
   const leanIdx = Math.max(0, leanKeys.indexOf(effVec.lean!));
-  const onWall = effVec.support === "wall";
-  const floorY = 200;
-  const wallX = 34;
-  const handX = 132;
+  const support = effVec.support ?? "free";
+  const onWall = support !== "free";
+  const isLadder = support === "ladder" || support.startsWith("lad");
+  const faceWall = support === "front_to_wall" || isLadder; // chest toward the wall
+  const noseDir = faceWall ? -1 : 1; // wall is on the left
+  const orientLbl =
+    support === "back_to_wall" ? "back to wall" : support === "front_to_wall" ? "front to wall" : isLadder ? "ladder" : support === "free" ? "free" : support;
+  const floorY = 206;
+  const wallX = 30;
+  const handX = 138;
   const handTop = 150;
-  const handBot = 222;
+  const handBot = 224;
   const handY = romN > 1 ? handTop + (romIdx * (handBot - handTop)) / (romN - 1) : 185;
-  const bodyLen = 96;
-  const leanMax = 54;
-  const feetX = handX - (leanN > 1 ? (leanIdx * leanMax) / (leanN - 1) : 0);
-  const feetY = handY - bodyLen;
-  const hipX = (handX + feetX) / 2;
-  const hipY = handY - bodyLen * 0.55;
-  const headY = handY - 16;
-  const block = handY < floorY - 2 ? `<rect x="${(handX - 22).toFixed(0)}" y="${(handY + 4).toFixed(1)}" width="44" height="${(floorY - handY - 4).toFixed(1)}" rx="2" class="pose-block"/>` : "";
-  const wall = `<rect x="0" y="34" width="${wallX}" height="${floorY - 34}" class="pose-wall${onWall ? " is-on" : ""}" data-posewall="1"/>`;
+  // Joint heights up the inverted body (hands at the bottom → feet at the top).
+  const elbowY = handY - 22;
+  const shoulderY = handY - 46;
+  const headY = handY - 30;
+  const hipY = handY - 86;
+  const kneeY = handY - 110;
+  const feetY = handY - 132;
+  // Forward lean shifts the upper body toward the wall (left).
+  const leanShift = leanN > 1 ? -(leanIdx * 50) / (leanN - 1) : 0;
+  const hipX = handX + leanShift * 0.45;
+  const kneeX = handX + leanShift * 0.78;
+  const feetX = handX + leanShift;
+  const f = (n: number) => n.toFixed(1);
+  const block = handY < floorY - 2 ? `<rect x="${f(handX - 24)}" y="${f(handY + 5)}" width="48" height="${f(floorY - handY - 5)}" rx="2" class="pose-block"/>` : "";
   const floor = `<line x1="0" y1="${floorY}" x2="${POSE_W}" y2="${floorY}" class="pose-floor"/>`;
-  const fig =
-    `<line x1="${handX}" y1="${handY.toFixed(1)}" x2="${handX}" y2="${(headY + 8).toFixed(1)}" class="pose-limb"/>` +
-    `<circle cx="${handX}" cy="${headY.toFixed(1)}" r="10" class="pose-head"/>` +
-    `<line x1="${handX}" y1="${(headY - 6).toFixed(1)}" x2="${hipX.toFixed(1)}" y2="${hipY.toFixed(1)}" class="pose-limb"/>` +
-    `<line x1="${hipX.toFixed(1)}" y1="${hipY.toFixed(1)}" x2="${feetX.toFixed(1)}" y2="${feetY.toFixed(1)}" class="pose-limb"/>` +
-    `<circle cx="${(handX - 6).toFixed(1)}" cy="${handY.toFixed(1)}" r="3.5" class="pose-hand"/>` +
-    `<circle cx="${(handX + 6).toFixed(1)}" cy="${handY.toFixed(1)}" r="3.5" class="pose-hand"/>`;
-  const romHandle = `<circle cx="${handX}" cy="${handY.toFixed(1)}" r="12" class="pose-handle" data-posedim="rom" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
-  const leanHandle = `<circle cx="${feetX.toFixed(1)}" cy="${feetY.toFixed(1)}" r="12" class="pose-handle" data-posedim="lean" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
+  const wall = onWall
+    ? `<rect x="0" y="28" width="${wallX}" height="${floorY - 28}" class="pose-wall is-on" data-posewall="1"/>` +
+      (isLadder ? [44, 78, 112, 146, 180].map((y) => `<line x1="0" y1="${y}" x2="${wallX}" y2="${y}" class="pose-rung"/>`).join("") : "")
+    : `<rect x="0" y="28" width="${wallX}" height="${floorY - 28}" class="pose-wall" data-posewall="1"/>`;
+  // Anatomical-ish figure: two arms (bent elbows), torso, two legs (bent knees),
+  // head with a nose showing which way it faces.
+  const arms =
+    `<polyline points="${f(handX - 9)},${f(handY)} ${f(handX - 13)},${f(elbowY)} ${f(handX - 8)},${f(shoulderY)}" class="pose-limb" fill="none"/>` +
+    `<polyline points="${f(handX + 9)},${f(handY)} ${f(handX + 13)},${f(elbowY)} ${f(handX + 8)},${f(shoulderY)}" class="pose-limb" fill="none"/>`;
+  const torso = `<line x1="${handX}" y1="${f(shoulderY)}" x2="${f(hipX)}" y2="${f(hipY)}" class="pose-torso"/>`;
+  const legs =
+    `<polyline points="${f(hipX)},${f(hipY)} ${f(kneeX - 4)},${f(kneeY)} ${f(feetX - 5)},${f(feetY)}" class="pose-limb" fill="none" opacity="0.55"/>` +
+    `<polyline points="${f(hipX)},${f(hipY)} ${f(kneeX + 3)},${f(kneeY)} ${f(feetX + 4)},${f(feetY)}" class="pose-limb" fill="none"/>`;
+  const neck = `<line x1="${handX}" y1="${f(shoulderY)}" x2="${handX}" y2="${f(headY - 7)}" class="pose-limb"/>`;
+  const head = `<circle cx="${handX}" cy="${f(headY)}" r="9" class="pose-head"/>`;
+  const nose = `<line x1="${handX}" y1="${f(headY)}" x2="${f(handX + noseDir * 12)}" y2="${f(headY + 2)}" class="pose-nose"/>`;
+  const hands = `<circle cx="${f(handX - 9)}" cy="${f(handY)}" r="3.5" class="pose-hand"/><circle cx="${f(handX + 9)}" cy="${f(handY)}" r="3.5" class="pose-hand"/>`;
+  const fig = neck + torso + legs + arms + head + nose + hands;
+  const romHandle = `<circle cx="${handX}" cy="${f(handY)}" r="13" class="pose-handle" data-posedim="rom" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
+  const leanHandle = `<circle cx="${f(feetX)}" cy="${f(feetY)}" r="13" class="pose-handle" data-posedim="lean" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"/>`;
   const labels =
-    `<text x="${feetX.toFixed(1)}" y="${(feetY - 16).toFixed(1)}" class="pose-lbl" text-anchor="middle">lean ${escapeHtml(effVec.lean!)}</text>` +
-    `<text x="${(handX + 28).toFixed(0)}" y="${(handY + 4).toFixed(1)}" class="pose-lbl" text-anchor="start">rom ${escapeHtml(effVec.rom!)}</text>` +
-    `<text x="${(wallX / 2).toFixed(0)}" y="28" class="pose-lbl" text-anchor="middle">${onWall ? "wall" : "free"}</text>`;
+    `<text x="${f(feetX)}" y="${f(feetY - 18)}" class="pose-lbl" text-anchor="middle">lean ${escapeHtml(effVec.lean!)}</text>` +
+    `<text x="${f(handX + 30)}" y="${f(handY + 4)}" class="pose-lbl" text-anchor="start">rom ${escapeHtml(effVec.rom!)}</text>` +
+    `<text x="${(wallX / 2).toFixed(0)}" y="20" class="pose-lbl pose-orient" text-anchor="middle">${escapeHtml(orientLbl)}</text>`;
   return { inner: wall + floor + block + fig + romHandle + leanHandle + labels, scale };
 }
 function notePoseHtml(name: string, note: string): string {
@@ -5568,7 +5590,7 @@ function notePoseHtml(name: string, note: string): string {
   return (
     `<div class="ex-var-pose">` +
     `<svg class="pose-svg" viewBox="0 0 ${POSE_W} ${POSE_H}" width="100%" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}">${inner}</svg>` +
-    `<div class="pose-hint muted">Drag the hands ↕ for range of motion, the feet ↔ for lean; tap the wall to lean on it.</div>` +
+    `<div class="pose-hint muted">Drag the hands ↕ for range of motion, the feet ↔ for lean; tap the wall to cycle free → back-to-wall → front-to-wall → ladder.</div>` +
     `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
     `</div>`
   );
@@ -6243,7 +6265,9 @@ async function init() {
     renderScaleEditor();
     refreshExerciseInfo();
   });
-  // Visual pose editor: tap the wall to lean on it (toggle support).
+  // Visual pose editor: tap the wall to cycle the orientation (free → back → front
+  // → ladder → free).
+  const ORIENT_CYCLE = ["free", "back_to_wall", "front_to_wall", "ladder"];
   document.addEventListener("click", (e) => {
     const w = (e.target as Element).closest?.("[data-posewall]");
     if (!w) return;
@@ -6251,8 +6275,10 @@ async function init() {
     const ex = svg?.dataset.poseex;
     const note = svg?.dataset.posenote;
     if (!ex || note === undefined || !svg) return;
-    const cur = noteVecOverride(ex, note).support ?? resolveNote(familyOf(ex)!, note).vec.support;
-    setNoteVecDim(ex, note, "support", cur === "wall" ? "free" : "wall");
+    const cur = noteVecOverride(ex, note).support ?? resolveNote(familyOf(ex)!, note).vec.support ?? "free";
+    const i = ORIENT_CYCLE.indexOf(cur);
+    const next = ORIENT_CYCLE[(i + 1) % ORIENT_CYCLE.length]!; // cur not in cycle (e.g. lsit) → starts at free
+    setNoteVecDim(ex, note, "support", next);
     redrawPoseSvg(svg, ex, note);
     if (scaleEditState) {
       scaleEditDirty = true;
