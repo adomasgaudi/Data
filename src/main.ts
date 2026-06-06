@@ -385,12 +385,15 @@ function nameForUsername(username: string | null): string {
  * `signedIn` flag only governs the one-time first-visit gate, never the view. */
 function showLoginPage(): void {
   document.documentElement.classList.remove("signed-in"); // override the "always hide" rule
+  populateLoginAthletes(); // refresh the name picker from the loaded roster
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
   const err = document.getElementById("loginErr");
   if (err) err.hidden = true; // clear any stale "wrong password"
+  const pass = document.getElementById("loginPass") as HTMLInputElement | null;
+  if (pass) pass.value = ""; // clear any stale password
   document.body.classList.add("locked");
-  (document.getElementById("loginUser") as HTMLInputElement | null)?.focus();
+  (document.getElementById("loginUser") as HTMLSelectElement | null)?.focus();
 }
 function hideLoginPage(): void {
   const gate = document.getElementById("loginGate");
@@ -402,18 +405,38 @@ function hideLoginPage(): void {
 /** Admin password. NOTE: client-side only — the site is public and this code is
  * readable, so it's a soft gate, not real security. */
 const ADMIN_PASSWORD = "ag";
-/** "Log in" — checks the admin password; on a match, enter admin view. */
+/** Fill the login screen's name picker with "Admin" + every athlete, mirroring
+ * the loaded #athlete options. Safe to call repeatedly (keeps the selection). */
+function populateLoginAthletes(): void {
+  const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
+  if (!sel) return;
+  const keep = sel.value;
+  sel.innerHTML =
+    `<option value="admin">Admin — everything</option>` +
+    [...els.athlete.options].map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.text)}</option>`).join("");
+  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+}
+/** The password expected for a login choice: the admin password for "admin",
+ * else the first two letters of that athlete's name, lower-cased. */
+function expectedLoginPass(choice: string): string {
+  if (choice === "admin") return ADMIN_PASSWORD;
+  return nameForUsername(choice).trim().slice(0, 2).toLowerCase();
+}
+/** "Log in" — checks the chosen name's password (first two letters of the name;
+ * admin uses its own). On a match, enter that athlete's user view (or admin). */
 function logIn(): void {
+  const choice = (document.getElementById("loginUser") as HTMLSelectElement | null)?.value ?? "admin";
   const pass = (document.getElementById("loginPass") as HTMLInputElement | null)?.value ?? "";
   const err = document.getElementById("loginErr");
-  if (pass !== ADMIN_PASSWORD) {
+  if (pass.trim().toLowerCase() !== expectedLoginPass(choice)) {
     if (err) err.hidden = false; // show "wrong password"
     (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
     return;
   }
   if (err) err.hidden = true;
   hideLoginPage();
-  setViewMode("admin");
+  if (choice === "admin") setViewMode("admin");
+  else setViewAs(choice); // lock the dashboard to that athlete's user view
 }
 /** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
 function viewAsSpectator(): void { hideLoginPage(); setViewMode("loggedout"); }
@@ -6444,6 +6467,8 @@ async function init() {
     `<option value="admin">Admin — everything</option>` +
     users.map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`).join("") +
     `<option value="loggedout">Logged out — Adomas only</option>`;
+  // The login screen's name picker mirrors the same roster (Admin + athletes).
+  populateLoginAthletes();
 
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).

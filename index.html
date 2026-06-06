@@ -18,18 +18,18 @@
       <div class="login-card">
         <h1 class="login-logo">🏛️ Colosseum</h1>
         <p class="muted" style="margin:.3rem 0 1.2rem">Strength training dashboard</p>
-        <input id="loginUser" class="login-input" type="text" placeholder="Username" autocomplete="username" />
-        <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
+        <select id="loginUser" class="login-input" aria-label="Choose your name"></select>
+        <input id="loginPass" class="login-input" type="password" placeholder="Password — first two letters of your name" autocomplete="current-password" />
         <p id="loginErr" class="login-err" hidden>Wrong password.</p>
         <button id="loginAdminBtn" type="button" class="login-btn">Log in</button>
         <button id="loginGuestBtn" type="button" class="login-btn login-btn--spectator">👁 View as spectator</button>
-        <p class="login-note muted">Admin needs a password; spectator is open. Soft gate only — the site is public.</p>
+        <p class="login-note muted">Pick your name, then type its first two letters (e.g. “Adomas” → “ad”). Admin uses its own password; spectator is open. Soft gate only — the site is public.</p>
       </div>
     </div>
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.5.25</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.5.26</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -54,12 +54,10 @@
               <label class="check"><input type="checkbox" id="showAloneRings" /> Mark “trained alone” days on the calendar</label>
             </div>
           </details>
-          <!-- Night mode + security (who you're signed in as) grouped together. -->
-          <label>View as
-            <select id="viewAsSelect">
-              <option value="admin">Admin — everything</option>
-            </select>
-          </label>
+          <!-- Night mode + security (who you're signed in as) grouped together.
+               "View as" is now chosen on the login screen, so its picker is kept
+               here only as a hidden, in-sync mirror (no longer shown in the menu). -->
+          <select id="viewAsSelect" hidden></select>
           <div class="settings-row">
             <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
             <button type="button" id="authBtn" class="settings-link">Log out</button>
