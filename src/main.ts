@@ -5628,17 +5628,24 @@ function notePickerHtml(name: string, note: string): string {
     const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
     const picked = override.rom !== undefined || override.lean !== undefined;
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
-    const mult = Math.round(romDims![rk]! * leanDims![lk]! * 100) / 100;
+    const romF = romDims![rk]!, leanF = leanDims![lk]!;
+    const mult = Math.round(romF * leanF * 100) / 100;
+    const lf = (leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 1) * 100;
+    const df = (romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 1) * 100;
     const da = `data-slex="${escapeHtml(name)}" data-slnote="${escapeHtml(note)}"`;
+    // A SQUARE pad: depth = vertical slider (left edge), lean = horizontal slider
+    // (bottom edge). The interior fills from the corner to the current point as you
+    // move, and the readout shows the formula lean-factor × depth-factor = total.
     return (
       `<div class="ex-var-dim ex-sl-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
-      `<div class="ex-slwrap">` +
-      `<div class="ex-sl-vcol"><input type="range" class="ex-sl ex-sl-v" ${da} data-sldim="rom" data-slkeys="${escapeHtml(romKeys.join("|"))}" min="0" max="${romKeys.length - 1}" step="1" value="${romIdx}" aria-label="depth" /><span class="ex-sl-vlbl muted">depth</span></div>` +
-      `<div class="ex-sl-col">` +
-      `<div class="ex-sl-read">depth <b class="ex-sl-rk">${escapeHtml(rk)}</b> · lean <b class="ex-sl-lk">${escapeHtml(lk)}</b> = <b class="ex-sl-mult">×${mult}</b></div>` +
+      `<div class="ex-pad-readout">lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span></div>` +
+      `<div class="ex-pad-grid">` +
+      `<input type="range" class="ex-sl ex-sl-v" ${da} data-sldim="rom" data-slkeys="${escapeHtml(romKeys.join("|"))}" min="0" max="${romKeys.length - 1}" step="1" value="${romIdx}" aria-label="depth" />` +
+      `<div class="ex-pad"><div class="ex-pad-fill" style="width:${lf.toFixed(1)}%;height:${df.toFixed(1)}%"></div><div class="ex-pad-dot" style="left:${lf.toFixed(1)}%;bottom:${df.toFixed(1)}%"></div></div>` +
+      `<span class="ex-pad-dlbl muted">depth ↑</span>` +
       `<input type="range" class="ex-sl ex-sl-h" ${da} data-sldim="lean" data-slkeys="${escapeHtml(leanKeys.join("|"))}" min="0" max="${leanKeys.length - 1}" step="1" value="${leanIdx}" aria-label="lean" />` +
-      `<div class="ex-sl-haxis muted"><span>${escapeHtml(leanKeys[0]!)}</span><span>lean →</span><span>${escapeHtml(leanKeys[leanKeys.length - 1]!)}</span></div>` +
-      `</div></div></div>`
+      `<span class="ex-pad-llbl muted">lean →</span>` +
+      `</div></div>`
     );
   };
   const dims = Object.keys(FAMILIES[fam]!.dims)
@@ -6467,13 +6474,24 @@ async function init() {
     const wrap = sl.closest(".ex-sl-dim");
     const vSl = wrap?.querySelector<HTMLInputElement>(".ex-sl-v");
     const hSl = wrap?.querySelector<HTMLInputElement>(".ex-sl-h");
-    const rk = (vSl?.dataset.slkeys?.split("|") ?? [])[Number(vSl?.value)] ?? "";
-    const lk = (hSl?.dataset.slkeys?.split("|") ?? [])[Number(hSl?.value)] ?? "";
+    const romKeys = vSl?.dataset.slkeys?.split("|") ?? [];
+    const leanKeys = hSl?.dataset.slkeys?.split("|") ?? [];
+    const rk = romKeys[Number(vSl?.value)] ?? "";
+    const lk = leanKeys[Number(hSl?.value)] ?? "";
     const dims = FAMILIES[fam]!.dims;
-    const mult = Math.round((dims.rom?.[rk] ?? 1) * (dims.lean?.[lk] ?? 1) * 100) / 100;
+    const romF = dims.rom?.[rk] ?? 1, leanF = dims.lean?.[lk] ?? 1;
+    const mult = Math.round(romF * leanF * 100) / 100;
     if (wrap) {
       const set = (sel: string, txt: string) => { const el = wrap.querySelector(sel); if (el) el.textContent = txt; };
       set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
+      set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
+      // Fill the square pad to the current (lean, depth) point.
+      const lf = (leanKeys.length > 1 ? Number(hSl!.value) / (leanKeys.length - 1) : 1) * 100;
+      const df = (romKeys.length > 1 ? Number(vSl!.value) / (romKeys.length - 1) : 1) * 100;
+      const fill = wrap.querySelector<HTMLElement>(".ex-pad-fill");
+      if (fill) { fill.style.width = `${lf.toFixed(1)}%`; fill.style.height = `${df.toFixed(1)}%`; }
+      const dot = wrap.querySelector<HTMLElement>(".ex-pad-dot");
+      if (dot) { dot.style.left = `${lf.toFixed(1)}%`; dot.style.bottom = `${df.toFixed(1)}%`; }
       wrap.classList.add("is-picked");
     }
     const prod = sl.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");

@@ -64,11 +64,11 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // the floor (full depth, the ×1 reference); a block/raised hands (+cm) shortens
       // the range → easier (<1); parallettes/brick go below the floor (−cm) → deeper,
       // harder (>1). A yoga block reads as +5 / +15 / +23cm depending on its side.
-      rom: { "+23cm": 0.6, "+15cm": 0.72, "+5cm": 0.88, "0cm": 1.0, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35 },
+      rom: { "+25cm": 0.56, "+23cm": 0.6, "+20cm": 0.66, "+15cm": 0.72, "+10cm": 0.8, "+5cm": 0.88, "+2cm": 0.94, "0cm": 1.0, "-3cm": 1.06, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35, "-20cm": 1.5 },
       // Forward lean, measured in cm. 0cm = straight against the wall (×1, the
       // easiest); leaning further forward demands more balance/strength toward a
       // freestanding/planche line → HARDER (>1). Same 5/15/23cm steps as a block.
-      lean: { "0cm": 1.0, "5cm": 1.08, "15cm": 1.18, "23cm": 1.3 },
+      lean: { "0cm": 1.0, "3cm": 1.05, "5cm": 1.08, "8cm": 1.12, "10cm": 1.14, "13cm": 1.16, "15cm": 1.18, "18cm": 1.22, "20cm": 1.26, "23cm": 1.3 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
@@ -141,7 +141,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 5;
+export const CONFIG_VERSION = 6;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
