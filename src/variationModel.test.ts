@@ -132,7 +132,10 @@ describe("live HSPU config (variationConfig.ts) on real notes", () => {
     // the explicit "no wall" applies), continuity uninterrupted.
     const uninterrupted = resolveNote("HSPU", "uninterupted", DEFAULT_VARIATION_CONFIG);
     expect(uninterrupted.vec.continuity).toBe("uninterrupted");
-    // a band token
-    expect(resolveNote("HSPU", "guma 5", DEFAULT_VARIATION_CONFIG).vec.band).toBe("light");
+    // a band token — bands are now numbered 1–6 ("guma 5" ⇒ band "5")
+    expect(resolveNote("HSPU", "guma 5", DEFAULT_VARIATION_CONFIG).vec.band).toBe("5");
+    // legs and ladder are now part of the merged "support" dimension
+    expect(resolveNote("HSPU", "l sit", DEFAULT_VARIATION_CONFIG).vec.support).toBe("lsit");
+    expect(resolveNote("HSPU", "lad5", DEFAULT_VARIATION_CONFIG).vec.support).toBe("lad5");
   });
 });

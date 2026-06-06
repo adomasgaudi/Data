@@ -40,30 +40,37 @@ export interface VariationConfig {
 export const FAMILIES: Record<string, FamilyDef> = {
   HSPU: {
     dims: {
-      // How much help from the wall (further from wall ≈ freestanding ≈ harder).
-      support: { free: 1.0, wall: 0.85 },
-      // Assistance band ("guma"); higher number = more assistance here (calibrate).
-      band: { none: 1.0, light: 0.85, medium: 0.75, heavy: 0.62 },
+      // SUPPORT — one combined dimension for "how the body is held / assisted":
+      // wall help, leg shape (L-sit harder, tucked/hooked easier) and ladder-rung
+      // assistance all live here (merged from the old support / legs / ladder dims,
+      // since you pick ONE setup). free = freestanding straight legs (×1 reference).
+      support: {
+        free: 1.0,
+        wall: 0.85,
+        tucked: 0.95,
+        hooked: 0.8,
+        lsit: 1.1,
+        lad3: 0.72,
+        lad5: 0.6,
+        lad6: 0.55,
+        lad9: 0.42,
+      },
+      // Assistance band ("guma") by its NUMBER (1–6). Lower number = thicker band =
+      // more help = lower factor; higher number = thinner = less help. Calibrate.
+      band: { none: 1.0, "1": 0.5, "2": 0.56, "3": 0.62, "4": 0.75, "5": 0.85, "6": 0.92 },
       // Range of motion measured as the hand height vs the floor, in cm. 0cm = to
       // the floor (full depth, the ×1 reference); a block/raised hands (+cm) shortens
       // the range → easier (<1); parallettes/brick go below the floor (−cm) → deeper,
       // harder (>1). A yoga block reads as +5 / +15 / +23cm depending on its side.
       rom: { "+23cm": 0.6, "+15cm": 0.72, "+5cm": 0.88, "0cm": 1.0, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35 },
-      // Leg shape: an L-sit is harder; hooked/tucked legs take some load off.
-      legs: { straight: 1.0, tucked: 0.95, lsit: 1.1, hooked: 0.8 },
       // Forward lean, measured in cm. 0cm = straight against the wall (×1, the
       // easiest); leaning further forward demands more balance/strength toward a
       // freestanding/planche line → HARDER (>1). Same 5/15/23cm steps as a block.
       lean: { "0cm": 1.0, "5cm": 1.08, "15cm": 1.18, "23cm": 1.3 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
-      // Ladder/wall-bar assist ("lad5" / "9lygis" / "5 level"): the legs rest on a
-      // rung at some height in an L-shape, so a chunk of bodyweight is held by the
-      // ladder — a LOT of assistance (×<1). Higher rung = more L-shape/closer = more
-      // help = lower. "none" = no ladder. Placeholders to calibrate.
-      ladder: { none: 1.0, l3: 0.72, l5: 0.6, l6: 0.55, l9: 0.42 },
     },
-    defaults: { support: "free", band: "none", rom: "0cm", legs: "straight", lean: "0cm", continuity: "paused", ladder: "none" },
+    defaults: { support: "free", band: "none", rom: "0cm", lean: "0cm", continuity: "paused" },
   },
   PUSHUP: {
     dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
@@ -79,12 +86,15 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     freestanding: { support: "free" },
     "navel to wall": { support: "wall" },
     "close to wall": { support: "wall" },
-    // band assistance — "guma N"; longest-match-first means "guma 5" beats "guma"
-    "guma 3": { band: "heavy" },
-    "guma 4": { band: "medium" },
-    "guma 5": { band: "light" },
-    "guma 6": { band: "light" },
-    guma: { band: "light" },
+    // assistance band — "guma N" by number; longest-match-first means "guma 5"
+    // beats "guma". Bare "guma" assumes a mid band (5).
+    "guma 1": { band: "1" },
+    "guma 2": { band: "2" },
+    "guma 3": { band: "3" },
+    "guma 4": { band: "4" },
+    "guma 5": { band: "5" },
+    "guma 6": { band: "6" },
+    guma: { band: "5" },
     // range of motion in cm (a raised block shortens it; parallettes/brick deepen
     // it). A block implies you're also against the wall. The yoga side = +5/15/23cm.
     "l yoga": { rom: "+23cm", support: "wall" },
@@ -95,23 +105,23 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     parallettes: { rom: "-10cm" },
     brick: { rom: "-5cm" },
     limited: { rom: "+5cm" },
-    // legs
-    "l sit": { legs: "lsit" },
-    "l-sit": { legs: "lsit" },
-    lsit: { legs: "lsit" },
-    "užkabintos kojos": { legs: "hooked", support: "wall" }, // hooked legs (assisted)
+    // legs → now part of SUPPORT
+    "l sit": { support: "lsit" },
+    "l-sit": { support: "lsit" },
+    lsit: { support: "lsit" },
+    "užkabintos kojos": { support: "hooked" }, // hooked legs (assisted)
     // lean / continuity
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
     uninterrupted: { continuity: "uninterrupted" },
-    // ladder / wall-bar assist level ("lad5", "6lad", "9lygis", "5 level")
-    "lad3": { ladder: "l3" },
-    "lad5": { ladder: "l5" },
-    "lad6": { ladder: "l6" },
-    "6lad": { ladder: "l6" },
-    "9lygis": { ladder: "l9" },
-    "5 level": { ladder: "l5" },
-    "5 lygis": { ladder: "l5" },
+    // ladder / wall-bar assist level → now part of SUPPORT ("lad5", "9lygis", …)
+    "lad3": { support: "lad3" },
+    "lad5": { support: "lad5" },
+    "lad6": { support: "lad6" },
+    "6lad": { support: "lad6" },
+    "9lygis": { support: "lad9" },
+    "5 level": { support: "lad5" },
+    "5 lygis": { support: "lad5" },
   },
   PUSHUP: {
     /* token → { incline: "lN" } — the owner fills this in. */
@@ -123,7 +133,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
