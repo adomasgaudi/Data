@@ -67,6 +67,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.5.2", title: "Real 3-D pose model", sp: 5, note: "Replaced the flat 2-D pose drawing with a real 3-D handstand figure you can spin around: drag inside the picture to orbit the camera and look at the handstand from any angle. The body is built in 3-D (head, arms, torso, legs, hands on the floor) and reacts to your choices — the wall appears behind it for back-to-wall, the figure turns to face the wall for front-to-wall, ladder rungs show for the ladder variation, range-of-motion raises the hands onto a block (or drops them onto parallettes for a deficit), and forward lean tilts the whole body toward the wall. Under the figure are simple tap chips for Support / Range / Lean (with their ×factors); tapping one re-poses the model and updates the ×multiplier live. This adds a real 3-D engine (three.js) to the app, so the page download is bigger — the trade-off for an actual 3-D model as you asked." },
   { version: "b.2.5.1", title: "Editable category / muscle / tier", sp: 3, note: "On the Exercise info panel, the lift's Category, Muscle group and Tier are now editable too (alongside Code, Short name and Bodyweight part) — pick from a dropdown, or “Auto” to fall back to the automatic guess. The override is saved on this device and flows everywhere: the groupings, the calendar colour pills, the lists and the colours all follow your choice. The factual rows (total sets, athletes, best 1RM, dates) stay read-only since they're computed from your logged data." },
   { version: "b.2.5.0", title: "Version 2.5 milestone", sp: 1, note: "Reorganised the version history back into named chapters by version era (b.2.5, b.2.4, b.2.3 ...), each auto-split into ~30-SP sub-groups and built from the flat release list. Bumped to b.2.5." },
   { version: "b.2.4.50", title: "Chips/Pose toggle keeps the editor open", sp: 1, note: "Fixed the modifier editor closing when you tapped “Chips” or “🧍 Pose” to switch views (or tapped the wall in Pose) — switching a view re-drew the popover, which the “click outside to close” logic mistook for an outside click. It now stays open; only a genuine tap outside (or the ✕, or picking a difficulty) closes it." },
@@ -558,7 +559,7 @@ export interface Component {
   sp: number;
 }
 export const COMPONENTS: Component[] = [
-  { name: "Exercises", sp: 80 }, // drill-ins, categories, tiers, merges, rep-max header, best-sets, compare+sets, Index info + inspector + browse groups, active-exercises filter, combinable/comparable lifts
+  { name: "Exercises", sp: 130 }, // drill-ins, categories, tiers, merges, rep-max header, best-sets, compare+sets, Index info + inspector + browse groups, active-exercises filter, combinable/comparable lifts, variation-difficulty model + 3-D pose editor
   { name: "Graphs", sp: 80 }, // SVG engine; real time axis + calendar bands, dashed reps, current strength, scatter, legend toggles, merged drill-in graph, sets/week bars, log trend
   { name: "Workouts", sp: 30 }, // day/week list, muscle-group view, rest days, year heatmap + day numbers + alone-tags, sets-over-time, RIR difficulty
   { name: "Athlete", sp: 22 }, // per-athlete pages, sticky chips, muscle map, momentum, training mix, four-tab view
