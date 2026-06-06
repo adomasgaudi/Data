@@ -56,7 +56,7 @@ import {
 } from "./metrics";
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf, FAMILIES } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES } from "./variationConfig";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
@@ -967,6 +967,30 @@ function bandFactorsFor(family: string): Record<string, number> {
     out[key] = Math.max(0.1, Math.round((1 - a) * 1000) / 1000);
   }
   return out;
+}
+
+// ---- Per-exercise difficulty MODEL assignment ----. The built-in map only knows
+// a few exact names; this lets the owner attach a model (e.g. HSPU) to ANY lift —
+// a hand-created handstand, a renamed one — so it gets the editable multipliers.
+// "" = explicitly no model. Saved on device + in the backup.
+const FAMILY_LABELS: Record<string, string> = { HSPU: "Handstand push-up", PUSHUP: "Push-up" };
+const EX_FAMILY_KEY = "colosseum.exerciseFamily.v1";
+const exerciseFamilyOverrides: Record<string, string> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(EX_FAMILY_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+/** Which difficulty model a lift uses: the owner's assignment wins, else the
+ * built-in name map. (Shadows the imported baseFamilyOf so every call honours it.) */
+function familyOf(exerciseName: string): string | null {
+  const o = exerciseFamilyOverrides[exerciseName];
+  if (o !== undefined) return o || null; // "" → explicitly none
+  return baseFamilyOf(exerciseName);
+}
+function setExerciseFamily(exerciseName: string, key: string): void {
+  // Clear the override when it matches the built-in default; else store the choice.
+  if (key === (baseFamilyOf(exerciseName) ?? "")) delete exerciseFamilyOverrides[exerciseName];
+  else exerciseFamilyOverrides[exerciseName] = key;
+  try { localStorage.setItem(EX_FAMILY_KEY, JSON.stringify(exerciseFamilyOverrides)); } catch { /* ignore */ }
 }
 
 function famLevels(family: string, dim: string): Record<string, number> {
@@ -6019,6 +6043,16 @@ function exerciseInfoHtml(name: string): string {
     item("Muscle group", escapeHtml(mg)),
     item("Tier", escapeHtml(tierLabel)),
     item("Tags", `<span class="ex-tags">${tagChips}</span>`),
+    // Difficulty model: assign one so ANY lift (even a hand-created handstand) gets
+    // the editable variation multipliers; "None" falls back to the flat per-note ×.
+    item(
+      "Difficulty model",
+      `<select class="ex-edit-model" data-editex="${escapeHtml(name)}"><option value="">None</option>` +
+        Object.keys(FAMILIES)
+          .map((k) => `<option value="${escapeHtml(k)}"${k === (familyOf(name) ?? "") ? " selected" : ""}>${escapeHtml(FAMILY_LABELS[k] ?? k)}</option>`)
+          .join("") +
+        `</select>`,
+    ),
     item("Bodyweight part", coeff > 0 ? pct(coeff) : "—"),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
@@ -7410,6 +7444,10 @@ async function init() {
     if (mg?.dataset.editex) { setMetaOverride("mg", mg.dataset.editex, mg.value); refreshExerciseInfo(); renderAll(); return; }
     const tier = t.closest<HTMLSelectElement>(".ex-edit-tier");
     if (tier?.dataset.editex) { setMetaOverride("tier", tier.dataset.editex, tier.value); refreshExerciseInfo(); renderAll(); return; }
+    // Difficulty-model assignment: attach (or clear) a model so the lift gets the
+    // editable variation multipliers.
+    const model = t.closest<HTMLSelectElement>(".ex-edit-model");
+    if (model?.dataset.editex) { setExerciseFamily(model.dataset.editex, model.value); refreshAfterDifficultyEdit(); return; }
   });
   // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {
