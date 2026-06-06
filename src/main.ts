@@ -6085,7 +6085,7 @@ function worldRecordEditorHtml(name: string): string {
     : "";
   return (
     `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
-    `<div class="ex-group-why muted">Your NATTY world record as the TOTAL 1RM in kg — bodyweight included (e.g. a weighted pull-up record = bodyweight + the plate) — at a reference bodyweight, per sex. Scaled to each athlete's bodyweight (strength ≈ bw^⅔). Drives the “% of world record” graph, which compares your bodyweight-inclusive 1RM to this, so it never goes below 0.</div>` +
+    `<div class="ex-group-why muted">Natty record — total 1RM (bodyweight + plate), per sex. Scaled to each athlete's bodyweight.</div>` +
     forLine + row("m", "men") + row("f", "women") +
     `</details>`
   );
@@ -6107,7 +6107,6 @@ function exerciseInfoHtml(name: string): string {
   const recs = computedRecords().filter((r) => r.exerciseName === name);
   const cat = catFor(name);
   const mg = mgFor(name);
-  const tierLabel = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" }[tierFor(name)];
   const coeff = coeffFor(name);
   // A user-created merge (this lift combines several exercises) vs auto spelling-merges.
   const userMergeDef = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
@@ -6134,10 +6133,28 @@ function exerciseInfoHtml(name: string): string {
     ? tags.map((t) => `<button type="button" class="ex-tag" data-tagjump="${escapeHtml(t.label)}" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</button>`).join("")
     : `<span class="muted">none</span>`;
 
+  // Editable controls, folded straight into the info rows — there is no separate
+  // "Edit this exercise" section, every value here that CAN be changed is its own
+  // input/select (same classes + data-editex the change handlers already key off).
+  const code = codeFor(name), short = shortFor(name);
+  const opt = (v: string, label: string, cur: string) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(label)}</option>`;
+  const codeInput = `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />`;
+  const shortInput = `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />`;
+  const catSel = `<select class="ex-edit-cat" data-editex="${escapeHtml(name)}" aria-label="Category for ${escapeHtml(name)}">` +
+    TRAINING_CATEGORIES.map((c) => opt(c, c, cat)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
+  const mgSel = `<select class="ex-edit-mg" data-editex="${escapeHtml(name)}" aria-label="Muscle group for ${escapeHtml(name)}">` +
+    MUSCLE_GROUPS.map((m) => opt(m, m, mg)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
+  const tierSel = `<select class="ex-edit-tier" data-editex="${escapeHtml(name)}" aria-label="Tier for ${escapeHtml(name)}">` +
+    (["main", "second", "third"] as ExerciseTier[]).map((tv) => opt(tv, TIER_LABELS[tv], tierFor(name))).join("") +
+    opt("auto", "↺ Auto", "__never") + `</select>`;
+  const coeffInput = `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" />`;
+
   const rows = [
-    item("Category", escapeHtml(cat)),
-    item("Muscle group", escapeHtml(mg)),
-    item("Tier", escapeHtml(tierLabel)),
+    item("Code", codeInput),
+    item("Short name", shortInput),
+    item("Category", catSel),
+    item("Muscle group", mgSel),
+    item("Tier", tierSel),
     item("Tags", `<span class="ex-tags">${tagChips}</span>`),
     // Difficulty model: assign one so ANY lift (even a hand-created handstand) gets
     // the editable variation multipliers; "None" falls back to the flat per-note ×.
@@ -6149,7 +6166,7 @@ function exerciseInfoHtml(name: string): string {
           .join("") +
         `</select>`,
     ),
-    item("Bodyweight part", coeff > 0 ? pct(coeff) : "—"),
+    item("Bodyweight part", coeffInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -6222,49 +6239,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
-}
-
-/** Inline editors for an exercise's identity & physical model — moved here from
- * the Codes tab (code / short name) and the Index page (bodyweight part) so the
- * More-info page is the one place to edit a lift. Reuses the same stores, so
- * edits show everywhere. (Tags, group membership, category/tier and taxonomy are
- * next — see the roadmap.) */
-function exerciseEditHtml(name: string): string {
-  const code = codeFor(name);
-  const codeDef = exerciseCode(name);
-  const short = shortFor(name);
-  const coeff = coeffFor(name);
-  // Category / Muscle group / Tier are editable selects: the current effective
-  // value is pre-selected, and an "Auto" option resets to the keyword default.
-  const opt = (v: string, label: string, cur: string) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(label)}</option>`;
-  const curCat = catFor(name), curMg = mgFor(name), curTier = tierFor(name);
-  const catSel =
-    `<select class="ex-edit-cat" data-editex="${escapeHtml(name)}" aria-label="Category for ${escapeHtml(name)}">` +
-    TRAINING_CATEGORIES.map((c) => opt(c, c, curCat)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
-  const mgSel =
-    `<select class="ex-edit-mg" data-editex="${escapeHtml(name)}" aria-label="Muscle group for ${escapeHtml(name)}">` +
-    MUSCLE_GROUPS.map((m) => opt(m, m, curMg)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
-  const tierSel =
-    `<select class="ex-edit-tier" data-editex="${escapeHtml(name)}" aria-label="Tier for ${escapeHtml(name)}">` +
-    (["main", "second", "third"] as ExerciseTier[]).map((tv) => opt(tv, TIER_LABELS[tv], curTier)).join("") +
-    opt("auto", "↺ Auto", "__never") + `</select>`;
-  return (
-    `<div class="ex-edit"><div class="ex-info-section-hd">Edit this exercise</div>` +
-    `<div class="ex-edit-grid">` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Code</span>` +
-    `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" /></label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Short name</span>` +
-    `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" /></label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Category</span>${catSel}</label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Muscle group</span>${mgSel}</label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Tier</span>${tierSel}</label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Bodyweight part</span>` +
-    `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></label>` +
-    `</div>` +
-    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables (code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset). Category, muscle group and tier drive the groupings and colours everywhere; pick “Auto” to fall back to the automatic guess. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Saved on this device.</p>` +
-    `</div>`
-  );
+  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
 }
 
 /** The modifier picker for one note: a row of clickable level chips per dimension
@@ -6603,7 +6578,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   if (byNote.size === 0)
     return (
       `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty</div>` +
-      `<p class="muted">No notes logged for this lift yet. Log a note like “incline” or “knee” on a set and it'll appear here, so you can set its relative difficulty.</p></div>`
+      `<p class="muted">No notes logged yet.</p></div>`
     );
   const fam = familyOf(name);
   const entries = [...byNote.values()].sort((a, b) => b.count - a.count);
@@ -6632,7 +6607,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
         : "";
       // Each note can get a difficulty, OR be marked NOT COMPARABLE (sets keep
       // reps/sets, drop 1RM & volume).
-      const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark these sets not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘ ${notCmp ? "not comparable" : "not comparable?"}</button>`;
+      const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘</button>`;
       // Model lift → a row of dimension dropdowns (pick the setup); the × is the
       // resulting product, read-only. No model → the plain × number input.
       const picker = fam && !notCmp ? notePickerHtml(name, e.display) : "";
@@ -6652,7 +6627,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
             `<button type="button" class="ex-var-jump" data-jumpuser="${escapeHtml(s.username)}" data-jumpex="${escapeHtml(name)}" data-jumpdate="${escapeHtml(s.date)}" title="Go to ${escapeHtml(s.user)}'s ${escapeHtml(name)} on ${escapeHtml(shortDate(s.date))}">${escapeHtml(s.user)} · ${escapeHtml(shortDate(s.date))}</button>`,
         )
         .join("");
-      const sessFold = `<details class="ex-var-sessions"${needsReview ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
+      const sessFold = `<details class="ex-var-sessions"${needsReview ? " open" : ""}><summary class="ex-var-sessions-sum" title="Who &amp; when logged this note">👤 ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
       // The full difficulty editor (chips / pad / support / band, etc.) starts
       // COLLAPSED — tap "⚙ Edit difficulty" to open it. Open state is remembered
       // (openVarNotes) so editing, which re-renders, keeps it open.
@@ -6667,11 +6642,11 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
         `<div class="ex-var-row">` +
         `<span class="ex-var-note">` +
         `<input class="ex-var-rename" type="text" value="${escapeHtml(displayNote(name, e.display))}" data-rename-ex="${escapeHtml(name)}" data-rename-note="${escapeHtml(e.display)}" aria-label="Edit this note's text" title="Edit this note's text — applies everywhere it shows. Blank to restore the original." />` +
-        ` ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
+        ` ${review}<span class="muted ex-var-count"> · ${e.count}s</span></span>` +
         editArea +
+        sessFold +
         `</div>` +
         ncNote +
-        sessFold +
         `</div>`
       );
     })
@@ -6679,7 +6654,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   const badge = needReview ? ` <span class="ex-var-needbadge">${needReview} to review</span>` : "";
   return (
     `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty${badge}</div>` +
-    `<p class="muted ex-vars-help">Each distinct note logged for this lift. <strong>Tap a note's text to rename it</strong> (e.g. a cryptic “guma 4” → “deficit HSPU”) — the new name shows everywhere that note appears; blank it to restore the original. The ×number is its relative difficulty (×1 = no effect, &lt;1 easier, &gt;1 harder); it rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise.${fam ? " This lift has a difficulty model, so the value is <strong>suggested</strong> from the note's setup (support, range, lean…); type your own to pin it (↺ unpins)." : ""} Or mark a note <strong>⊘ not comparable</strong> — its sets keep counting reps &amp; sets but get no 1RM or volume (e.g. a static hold). ⚠ flags variation-like notes you haven't handled yet.</p>` +
+    `<p class="muted ex-vars-help">Tap to rename. ×N = relative difficulty. ⊘ = not comparable. ⚠ = needs review.</p>` +
     rowsHtml +
     `</div>`
   );
@@ -7264,6 +7239,14 @@ async function init() {
     els.exInfoPage.hidden = true;
     exInfoName = null;
     refreshPoseViz(); // tear down the visual editors when the overlay closes
+  });
+  // "↩ All exercises index" — close the overlay and jump to the full, filterable,
+  // category-grouped index (the Index tab), one row per exercise.
+  document.getElementById("exInfoIndexLink")?.addEventListener("click", () => {
+    els.exInfoPage.hidden = true;
+    exInfoName = null;
+    refreshPoseViz();
+    switchTopTab("bwparts");
   });
   // "More info" buttons (Analysis single mode, drill-in) open the overlay.
   document.addEventListener("click", (e) => {

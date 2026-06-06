@@ -1895,9 +1895,16 @@ sup.wr-bw { font-size: 0.85em; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.3rem 0.2rem; }
-.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; }
+.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; align-items: center; }
 .ex-info-lbl { flex: 0 0 8.5rem; color: var(--muted); font-weight: 600; }
-.ex-info-val { flex: 1 1 auto; }
+.ex-info-val { flex: 1 1 auto; min-width: 0; }
+/* Editable controls folded straight into the info rows — blue = editable. */
+.ex-info-val > input, .ex-info-val > select { font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--accent); font-weight: 600; max-width: 100%; min-width: 0; }
+.ex-info-val > input[type="text"] { width: 100%; }
+.ex-info-val > input:focus, .ex-info-val > select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* "↩ All exercises index" link at the top of the More-info overlay. */
+.ex-index-link { font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--accent); background: none; border: none; padding: 0; text-decoration: underline; }
+.ex-index-link:hover { color: var(--text); }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
   cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
@@ -1960,8 +1967,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-block.needs-review { border-color: var(--warn, #c0603a); background: rgba(192, 96, 58, 0.07); }
 .ex-var-block.is-scaled { border-color: var(--accent); }
 .ex-var-block .ex-var-row { border: none; background: none; margin: 0; }
-/* "Who & when" list under a note — clickable athlete · date chips. */
-.ex-var-sessions { padding: 0 0.55rem 0.4rem; }
+/* "Who & when" — sits inline in the note row (just "👤 N"), expands full-width. */
+.ex-var-sessions { flex: 0 0 auto; padding: 0; }
+.ex-var-sessions[open] { flex: 1 1 100%; padding-top: 0.1rem; }
 /* Collapsible difficulty editor inside each note row — collapsed by default. */
 .ex-var-edit-fold { border-top: 1px solid var(--line); }
 .ex-var-edit-sum { cursor: pointer; list-style: none; font-size: 0.76rem; font-weight: 700; color: var(--accent); padding: 0.3rem 0.55rem; }
@@ -2074,7 +2082,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pose-ctl .ex-var-lvl-f { opacity: 0.7; font-size: 0.92em; }
 .pose-ctl.is-on .ex-var-lvl-f { opacity: 0.85; }
 /* Per-note "not comparable" toggle + state. */
-.ex-var-nc-btn { font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 0.4rem; white-space: nowrap; }
+.ex-var-nc-btn { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 3px 6px; white-space: nowrap; }
 .ex-var-nc-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ex-var-nc-btn.is-on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .ex-var-block.is-nc { border-color: var(--accent); }
