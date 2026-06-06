@@ -2163,6 +2163,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* "Other" parent holds the minor disciplines as indented sub-groups. */
 .bw-cat-other > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
 .bw-cat-other > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
+/* Per-group app-wide filter buttons (only / hide / show) in the group header. */
+.bw-cat-filter { display: inline-flex; gap: 3px; margin-left: 0.5rem; }
+.bw-filt { font: inherit; font-size: 0.7rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.bw-filt:hover { border-color: var(--accent); color: var(--accent); }
 /* Strength sub-grouping: the muscle/function picker + the nested sub-groups. */
 .bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; }
 .bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }

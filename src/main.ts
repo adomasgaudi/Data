@@ -1770,20 +1770,32 @@ const loadJsonArray = (key: string): string[] => {
   try { const a = JSON.parse(localStorage.getItem(key) ?? "[]"); return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []; }
   catch { return []; }
 };
+const ACTIVE_SOLO_KEY = "colosseum.activeSet.solo.v1";
 let activeCutoff: string | null = (() => { try { const v = localStorage.getItem(ACTIVE_CUTOFF_KEY); return v && v !== "none" ? v : null; } catch { return null; } })();
 let activeInclude = new Set<string>(loadJsonArray(ACTIVE_INCLUDE_KEY));
 let activeExclude = new Set<string>(loadJsonArray(ACTIVE_EXCLUDE_KEY));
+// "Solo" = show ONLY these exercises app-wide (a group's "Only these" action). When
+// set it replaces the tier cutoff as the base; include/exclude still apply on top.
+let activeSolo: Set<string> | null = (() => { const a = loadJsonArray(ACTIVE_SOLO_KEY); return a.length ? new Set(a) : null; })();
 /** The allowed-exercise set, or null when the filter is off. Rebuilt by refreshActiveSet(). */
 let activeSet: Set<string> | null = null;
 
 /** Recompute activeSet from the cutoff + overrides against the current data. Call
  * after data loads or any active-set control changes, then re-render. */
 function refreshActiveSet(): void {
-  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0) {
+  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo) {
     activeSet = null; // filter fully off → no filtering at all
     return;
   }
-  activeSet = buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
+  // Solo mode shows exactly its set as the base; otherwise the tier cutoff does.
+  const base = activeSolo
+    ? new Set(activeSolo)
+    : buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
+  if (activeSolo) { // include/exclude still layer on top of a solo base
+    for (const n of activeInclude) base.add(n);
+    for (const n of activeExclude) base.delete(n);
+  }
+  activeSet = base;
 }
 
 /** Persist the active-set controls to localStorage. */
@@ -1792,7 +1804,23 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_CUTOFF_KEY, activeCutoff ?? "none");
     localStorage.setItem(ACTIVE_INCLUDE_KEY, JSON.stringify([...activeInclude]));
     localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
+    localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
   } catch { /* storage may be unavailable */ }
+}
+
+/** Apply a group's "Only / Hide / Show" filter to the app-wide active set. */
+function applyGroupFilter(mode: string, names: string[]): void {
+  if (mode === "only") {
+    activeSolo = new Set(names);
+    for (const n of names) activeExclude.delete(n);
+  } else if (mode === "hide") {
+    for (const n of names) { activeExclude.add(n); activeInclude.delete(n); activeSolo?.delete(n); }
+  } else { // "show" — clear any hiding of these, and drop solo so nothing's restricted to others
+    for (const n of names) activeExclude.delete(n);
+    activeSolo = null;
+  }
+  saveActiveSet();
+  renderAll();
 }
 
 /** Raw logged records, filtered to the active exercise set (or all, if off). The
@@ -5770,9 +5798,9 @@ function renderActiveSetBar(totalExercises: number): void {
   const opt = (val: string, label: string) =>
     `<option value="${val}"${(activeCutoff ?? "none") === val ? " selected" : ""}>${label}</option>`;
   const tierOpts = FREQ_TIERS.map((t) => opt(t.tier, t.label)).join("");
-  const overrides = activeInclude.size + activeExclude.size;
+  const overrides = activeInclude.size + activeExclude.size + (activeSolo ? 1 : 0);
   const status = activeSet
-    ? `<span class="as-status is-on">Showing ${active} of ${totalExercises} exercises app-wide</span>`
+    ? `<span class="as-status is-on">Showing ${active} of ${totalExercises} exercises app-wide${activeSolo ? " (only-these)" : ""}</span>`
     : `<span class="as-status muted">Showing all ${totalExercises} exercises (filter off)</span>`;
   const clear = overrides
     ? ` · <button type="button" class="as-clear" data-asclear="1">clear ${overrides} manual override${overrides === 1 ? "" : "s"}</button>`
@@ -5796,6 +5824,7 @@ function onActiveCutoffChange(value: string): void {
 function clearActiveOverrides(): void {
   activeInclude = new Set();
   activeExclude = new Set();
+  activeSolo = null;
   saveActiveSet();
   renderAll();
 }
@@ -5873,6 +5902,15 @@ function renderBwParts() {
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
+  // Per-group app-wide filter actions (Only these / Hide these / Show these). The
+  // members are read from the group's rows in the DOM when clicked.
+  const groupFilterBtns =
+    `<span class="bw-cat-filter">` +
+    `<button type="button" class="bw-filt" data-grpfilter="only" title="Show ONLY these exercises app-wide">only</button>` +
+    `<button type="button" class="bw-filt" data-grpfilter="hide" title="Hide these exercises app-wide">hide</button>` +
+    `<button type="button" class="bw-filt" data-grpfilter="show" title="Show these (clear any hiding)">show</button>` +
+    `</span>`;
+
   // One group's collapsible <details> (a coloured title + its exercise table). The
   // active-set filter splits it: active lifts stay; the rest go under "Show hidden".
   const bucketHtml = (b: IndexBucket, sub = false): string => {
@@ -5895,6 +5933,7 @@ function renderBwParts() {
       `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
       `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
       `<span class="bw-cat-meta muted">${meta}</span>` +
+      groupFilterBtns +
       `</summary>` +
       shownBlock +
       hiddenBlock +
@@ -5915,6 +5954,7 @@ function renderBwParts() {
       `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
       `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
       `<span class="bw-cat-meta muted">${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}</span>` +
+      groupFilterBtns +
       `</summary>` +
       sel +
       subs.map((s) => bucketHtml(s, true)).join("") +
@@ -5935,6 +5975,7 @@ function renderBwParts() {
         `<span class="bw-cat-dot" style="background:#9aa1ac"></span>` +
         `<span class="bw-cat-name">Other</span>` +
         `<span class="bw-cat-meta muted">${otherNames.size} exercise${otherNames.size === 1 ? "" : "s"} · ${minor.length} groups</span>` +
+        groupFilterBtns +
         `</summary>` +
         minor.map((b) => bucketHtml(b, true)).join("") +
         `</details>`
@@ -8270,6 +8311,18 @@ async function init() {
   });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
+    // Group header "only / hide / show" — read the group's lifts from its rows and
+    // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
+    const filt = (e.target as HTMLElement).closest<HTMLElement>(".bw-filt");
+    if (filt?.dataset.grpfilter) {
+      e.preventDefault();
+      const cat = filt.closest<HTMLElement>(".bw-cat");
+      const names = cat
+        ? [...cat.querySelectorAll<HTMLTableRowElement>("tr[data-exrow]")].map((tr) => tr.dataset.exrow).filter((n): n is string => !!n)
+        : [];
+      applyGroupFilter(filt.dataset.grpfilter, [...new Set(names)]);
+      return;
+    }
     // Per-exercise active-set overrides in the inspector (force in / out).
     const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
     if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
