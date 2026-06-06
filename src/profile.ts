@@ -396,6 +396,12 @@ export const COMBINABLE_GROUPS: RegistryTag[] = [
       { exerciseName: "Squat", ratio: 1 },
       { exerciseName: "Smith Machine Squat", ratio: 1 },
     ] },
+  { id: "combine.pull-mix", kind: "combinable-group", label: "Pull/Chin", derivedName: "Pull/Chin",
+    why: "Pull-ups and chin-ups are the same vertical pull at the same loading — combined into one staple for volume / frequency / progress. The pure lifts stay untouched; in the active-set filter each member still passes or fails on its own count.",
+    members: [
+      { exerciseName: "Pull Ups", ratio: 1 },
+      { exerciseName: "Chin Ups", ratio: 1 },
+    ] },
 ];
 
 /**
@@ -412,6 +418,18 @@ export const COMPARABLE_GROUPS: RegistryTag[] = [
       { exerciseName: "Romanian Deadlift", ratio: 0.8 },
       { exerciseName: "Straight Leg Deadlift", ratio: 0.8 },
       { exerciseName: "Stiff Leg Deadlift", ratio: 0.8 },
+    ] },
+  { id: "compare.squat-pattern", kind: "comparable-group", label: "Squat pattern", derivedName: "Squat pattern",
+    why: "Back squat and front squat are the same pattern at different loads — the front squat sits around 85% of a back squat for the same effort, so it's scaled onto one curve. A NEW synthetic lift; the pure squats are never altered.",
+    members: [
+      { exerciseName: "Squat", ratio: 1.0 },
+      { exerciseName: "Front Squat", ratio: 0.85 },
+    ] },
+  { id: "compare.bench-pattern", kind: "comparable-group", label: "Bench pattern", derivedName: "Bench pattern",
+    why: "Barbell and dumbbell bench press train the same push at different loads — dumbbells sit around 90% of the barbell for the same effort, so they're scaled onto one curve. A NEW synthetic lift; the pure presses are never altered.",
+    members: [
+      { exerciseName: "Bench Press", ratio: 1.0 },
+      { exerciseName: "Dumbbell Bench Press", ratio: 0.9 },
     ] },
 ];
 
@@ -613,7 +631,7 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
  * multi-select; this returns the single best-guess PRIMARY for a fresh lift.
  */
 export type Discipline =
-  | "Bodybuilding/strength"
+  | "Strength"
   | "Calisthenics"
   | "Mobility"
   | "Dynamic"
@@ -624,11 +642,11 @@ export type Discipline =
   | "Parkour"
   | "Climbing";
 export const DISCIPLINES: Discipline[] = [
-  "Bodybuilding/strength", "Calisthenics", "Mobility", "Dynamic", "Posture",
+  "Strength", "Calisthenics", "Mobility", "Dynamic", "Posture",
   "Cardio", "Skill", "Balance", "Parkour", "Climbing",
 ];
 /** Best-guess primary discipline by keyword; everything loaded falls to
- * Bodybuilding/strength (the owner re-tags from there as needed). */
+ * Strength (the owner re-tags from there as needed). */
 export function exerciseDiscipline(exerciseName: string): Discipline {
   const n = exerciseName.toLowerCase();
   const has = (...k: string[]) => k.some((s) => n.includes(s));
@@ -646,7 +664,7 @@ export function exerciseDiscipline(exerciseName: string): Discipline {
   // Calisthenics = BODYWEIGHT moves; a "machine" anything is strength, not calisthenics.
   if (!n.includes("machine") && has("pull up", "pullup", "pull-up", "chin up", "chinup", "push up", "pushup", "push-up", "pushups", "dip", "ring", "bodyweight", "pistol", "bar muscle", "inverted row", "australian"))
     return "Calisthenics";
-  return "Bodybuilding/strength";
+  return "Strength";
 }
 /** All disciplines a lift defaults into (one or more): the primary, plus any extra
  * that clearly also applies — e.g. a wall climb / run-up / vault is also Parkour. */

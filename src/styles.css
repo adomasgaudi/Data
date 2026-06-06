@@ -2163,6 +2163,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* "Other" parent holds the minor disciplines as indented sub-groups. */
 .bw-cat-other > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
 .bw-cat-other > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
+/* Strength sub-grouping: the muscle/function picker + the nested sub-groups. */
+.bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; }
+.bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
+.bw-cat > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 .bw-cat-summary::-webkit-details-marker { display: none; }
 .bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
 .bw-cat[open] > .bw-cat-summary::after { content: "▾"; }

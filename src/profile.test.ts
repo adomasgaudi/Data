@@ -404,7 +404,9 @@ describe("exercise tag registry", () => {
   it("returns the DL-pattern comparable group for its members only", () => {
     expect(comparableGroupsFor("Deadlift").map((t) => t.id)).toContain("compare.dl-pattern");
     expect(comparableGroupsFor("Romanian Deadlift").map((t) => t.id)).toContain("compare.dl-pattern");
-    expect(comparableGroupsFor("Squat")).toEqual([]);
+    expect(comparableGroupsFor("Deadlift").map((t) => t.id)).not.toContain("compare.squat-pattern");
+    // Squat now sits in its own squat-pattern comparable group (back vs front squat).
+    expect(comparableGroupsFor("Squat").map((t) => t.id)).toEqual(["compare.squat-pattern"]);
   });
 
   it("keeps the registry internally consistent (unique ids, valid ratios)", () => {

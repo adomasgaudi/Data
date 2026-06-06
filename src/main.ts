@@ -2536,13 +2536,15 @@ const muscleColor = (m: MuscleGroup): string =>
 
 // Discipline (training-style) colours for the Index "By discipline" grouping.
 const DISCIPLINE_COLORS: Record<Discipline, string> = {
-  "Bodybuilding/strength": "#284e86", Calisthenics: "#2e7d52", Mobility: "#1f8a8a",
+  "Strength": "#284e86", Calisthenics: "#2e7d52", Mobility: "#1f8a8a",
   Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b", Skill: "#b8902f",
   Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
 };
 const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";
 // The two "main" disciplines shown at the Index top level; the rest nest under "Other".
-const MAJOR_DISCIPLINES: Discipline[] = ["Bodybuilding/strength", "Calisthenics"];
+const MAJOR_DISCIPLINES: Discipline[] = ["Strength", "Calisthenics"];
+// Inside the big "Strength" discipline, slice its lifts further by muscle or function.
+let strengthSubMode: "muscle" | "function" = "muscle";
 
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
@@ -5890,9 +5892,29 @@ function renderBwParts() {
     );
   };
 
-  // In Discipline mode the two MAIN disciplines (Bodybuilding/strength, Calisthenics)
-  // sit at the top level; everything else is nested as sub-groups under one "Other"
-  // header, since it's less central to the training.
+  // The big "Strength" discipline is sliced further into sub-groups by muscle or
+  // function (the owner picks which). Its lifts re-run through indexBuckets in the
+  // chosen sub-mode and render as nested sub-groups, with a little selector on top.
+  const strengthBucketHtml = (b: IndexBucket): string => {
+    const subs = indexBuckets(b.rows, strengthSubMode);
+    const opt = (m: "muscle" | "function", lbl: string) => `<option value="${m}"${strengthSubMode === m ? " selected" : ""}>${lbl}</option>`;
+    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscle", "Muscle group")}${opt("function", "Function")}</select></div>`;
+    return (
+      `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+      `<summary class="bw-cat-summary">` +
+      `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
+      `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
+      `<span class="bw-cat-meta muted">${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}</span>` +
+      `</summary>` +
+      sel +
+      subs.map((s) => bucketHtml(s, true)).join("") +
+      `</details>`
+    );
+  };
+
+  // In Discipline mode the two MAIN disciplines (Strength, Calisthenics) sit at the
+  // top level — Strength gets the muscle/function sub-grouping — and everything else
+  // nests as sub-groups under one "Other" header, since it's less central.
   if (bwGroupMode === "discipline") {
     const major = buckets.filter((b) => MAJOR_DISCIPLINES.includes(b.key as Discipline));
     const minor = buckets.filter((b) => !MAJOR_DISCIPLINES.includes(b.key as Discipline));
@@ -5907,7 +5929,8 @@ function renderBwParts() {
         minor.map((b) => bucketHtml(b, true)).join("") +
         `</details>`
       : "";
-    els.bwGroups.innerHTML = major.map((b) => bucketHtml(b)).join("") + otherBlock;
+    const majorHtml = major.map((b) => (b.key === "Strength" ? strengthBucketHtml(b) : bucketHtml(b))).join("");
+    els.bwGroups.innerHTML = majorHtml + otherBlock;
     return;
   }
 
@@ -6860,6 +6883,12 @@ function jumpToExerciseInfo(exName: string) {
 /** Apply an edited bodyweight coefficient and refresh every dependent view. */
 function onBwInputChange(e: Event) {
   const input = e.target as HTMLElement;
+  // The "Sub-group by" picker inside the Strength discipline (muscle / function).
+  if (input.classList.contains("bw-substrat")) {
+    strengthSubMode = (input as HTMLSelectElement).value === "function" ? "function" : "muscle";
+    renderBwParts();
+    return;
+  }
   if (!input.classList.contains("bw-input")) return;
   const el = input as HTMLInputElement;
   const name = el.dataset.ex;
