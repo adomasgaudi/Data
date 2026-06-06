@@ -99,6 +99,7 @@ import {
   TRAINING_CATEGORIES,
   type TrainingCategory,
   type MuscleGroup,
+  type ExerciseTier,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
@@ -568,6 +569,50 @@ function setCoeff(exerciseName: string, value: number) {
     /* storage may be unavailable (e.g. private mode) — edits still apply this session */
   }
 }
+
+// ---- Metadata overrides: Category / Muscle group / Tier, editable + saved ----
+// Same layering as the coefficient: profile.ts derives a default from the lift's
+// name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
+// are the read points used across the app so an edit shows everywhere.
+const META_OVERRIDE_KEY = "colosseum.metaOverrides.v1";
+type MetaOverrides = { cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string> };
+const metaOverrides: MetaOverrides = (() => {
+  try {
+    const raw = localStorage.getItem(META_OVERRIDE_KEY);
+    const o = raw ? (JSON.parse(raw) as MetaOverrides) : {};
+    return { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {} };
+  } catch {
+    return { cat: {}, mg: {}, tier: {} };
+  }
+})();
+function saveMetaOverrides() {
+  try { localStorage.setItem(META_OVERRIDE_KEY, JSON.stringify(metaOverrides)); } catch { /* storage may be unavailable */ }
+}
+/** Primary training category — the owner's override if set, else the keyword default. */
+function catFor(name: string): TrainingCategory {
+  return (metaOverrides.cat![name] as TrainingCategory) ?? exerciseCategory(name);
+}
+/** Muscle group — override if set, else the default. */
+function mgFor(name: string): MuscleGroup {
+  return (metaOverrides.mg![name] as MuscleGroup) ?? muscleGroup(name);
+}
+/** Tier — override if set, else the default. */
+function tierFor(name: string): ExerciseTier {
+  return (metaOverrides.tier![name] as ExerciseTier) ?? exerciseTier(name);
+}
+/** Set or clear (empty/"auto" → back to default) one metadata override. */
+function setMetaOverride(kind: "cat" | "mg" | "tier", name: string, value: string) {
+  const map = metaOverrides[kind]!;
+  if (!value || value === "auto") delete map[name];
+  else map[name] = value;
+  saveMetaOverrides();
+}
+/** All muscle-group choices for the editor dropdown. */
+const MUSCLE_GROUPS: MuscleGroup[] = [
+  "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats (pulls)", "Lats (rows)",
+  "Chest", "Shoulders", "Biceps", "Triceps", "Core", "Cardio", "Mobility", "Skill", "Other",
+];
+const TIER_LABELS: Record<ExerciseTier, string> = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" };
 
 // ---- "Not comparable" NOTES (owner-marked, per note — not whole exercises) ----
 // A specific variation can be unmeasurable by 1RM/volume — e.g. a static
@@ -1941,7 +1986,7 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
   };
 
   if (mode === "muscle") {
-    const by = groupBy((r) => muscleGroup(r.name));
+    const by = groupBy((r) => mgFor(r.name));
     return INDEX_MUSCLES.filter((m) => by.has(m)).map((m) => ({ key: m, label: m, color: muscleColor(m), rows: by.get(m)! }));
   }
   if (mode === "function") {
@@ -1961,7 +2006,7 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
     return buckets;
   }
   // category (default): the one primary training bucket per lift.
-  const by = groupBy((r) => exerciseCategory(r.name));
+  const by = groupBy((r) => catFor(r.name));
   return TRAINING_CATEGORIES.filter((c) => by.has(c)).map((c) => ({ key: c, label: c, color: CATEGORY_COLORS[c], rows: by.get(c)! }));
 }
 
@@ -2213,7 +2258,7 @@ function renderTrainBreakdown() {
   const byCat = new Map<TrainingCategory, number>();
   let total = 0;
   for (const c of counts) {
-    const cat = exerciseCategory(c.exerciseName);
+    const cat = catFor(c.exerciseName);
     byCat.set(cat, (byCat.get(cat) ?? 0) + c.count);
     total += c.count;
   }
@@ -2885,7 +2930,7 @@ function renderExercisesPage() {
   }
   // Fold out 3rd-tier (cardio / mobility / warm-up) exercises unless the toggle
   // is on — they're not really strength, so they just clutter the list.
-  if (!exerciseShowThird) items = items.filter((it) => exerciseTier(it.exerciseName) !== "third");
+  if (!exerciseShowThird) items = items.filter((it) => tierFor(it.exerciseName) !== "third");
   // Search filter (case-insensitive substring on the exercise name).
   const q = exerciseSearch.trim().toLowerCase();
   if (q) items = items.filter((it) => it.exerciseName.toLowerCase().includes(q));
@@ -3005,7 +3050,7 @@ function renderExercisesPage() {
       // a row under a collapsed category is skipped (its abs is unchanged, so the
       // click→exercise mapping still lines up when reopened). `_cat` is the bucket
       // this copy was placed in (a lift can appear under several categories).
-      const cat = it._cat ?? exerciseCategory(it.exerciseName);
+      const cat = it._cat ?? catFor(it.exerciseName);
       let header = "";
       if (cat !== prevCat) {
         const collapsed = !expandedExCats.has(cat);
@@ -3670,8 +3715,8 @@ function filterMatchSets(d: WorkoutDay, filter: string): number {
   const kind = filter.slice(0, sep);
   const val = filter.slice(sep + 1);
   const match = (name: string): boolean => {
-    if (kind === "cat") return exerciseCategory(name) === val;
-    if (kind === "mus") return muscleGroup(name) === val;
+    if (kind === "cat") return catFor(name) === val;
+    if (kind === "mus") return mgFor(name) === val;
     if (kind === "fun") return tagsForExercise(name).some((t) => t.kind === "functional-pattern" && t.label === val);
     if (kind === "ex") return name === val;
     return false;
@@ -3686,7 +3731,7 @@ function filterColor(filter: string): string | null {
   const kind = filter.slice(0, i);
   const val = filter.slice(i + 1);
   if (kind === "cat") return CATEGORY_COLORS[val as TrainingCategory] ?? null;
-  if (kind === "ex") return CATEGORY_COLORS[exerciseCategory(val) as TrainingCategory] ?? null;
+  if (kind === "ex") return CATEGORY_COLORS[catFor(val) as TrainingCategory] ?? null;
   return null;
 }
 
@@ -3702,8 +3747,8 @@ const HEAT_COLOR_LABELS: Record<HeatColorDim, string> = {
 
 /** The group value an exercise falls under for a colour dimension (or null). */
 function exerciseGroupValue(name: string, dim: HeatColorDim): string | null {
-  if (dim === "cat") return exerciseCategory(name);
-  if (dim === "mus") return muscleGroup(name);
+  if (dim === "cat") return catFor(name);
+  if (dim === "mus") return mgFor(name);
   if (dim === "fun") return tagsForExercise(name).find((t) => t.kind === "functional-pattern")?.label ?? null;
   if (dim === "ex") return name;
   return null;
@@ -4160,7 +4205,7 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
   const counts = new Map<string, number>();
   for (const e of exercises) {
     let labels: string[];
-    if (dim === "muscles") labels = [muscleGroup(e.exerciseName)];
+    if (dim === "muscles") labels = [mgFor(e.exerciseName)];
     else if (dim === "functional") labels = tagsForExercise(e.exerciseName).filter((t) => t.kind === "functional-pattern").map((t) => t.label);
     else if (dim === "combined") labels = combinableGroupsFor(e.exerciseName).map((t) => t.label);
     else if (dim === "compared") labels = comparableGroupsFor(e.exerciseName).map((t) => t.label);
@@ -5361,9 +5406,9 @@ function setupStatsEdit(): void {
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   const recs = computedRecords().filter((r) => r.exerciseName === name);
-  const cat = exerciseCategory(name);
-  const mg = muscleGroup(name);
-  const tierLabel = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" }[exerciseTier(name)];
+  const cat = catFor(name);
+  const mg = mgFor(name);
+  const tierLabel = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" }[tierFor(name)];
   const coeff = coeffFor(name);
   const variants = exerciseOrigin(name).filter((v) => v !== name);
 
@@ -5452,6 +5497,20 @@ function exerciseEditHtml(name: string): string {
   const codeDef = exerciseCode(name);
   const short = shortFor(name);
   const coeff = coeffFor(name);
+  // Category / Muscle group / Tier are editable selects: the current effective
+  // value is pre-selected, and an "Auto" option resets to the keyword default.
+  const opt = (v: string, label: string, cur: string) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(label)}</option>`;
+  const curCat = catFor(name), curMg = mgFor(name), curTier = tierFor(name);
+  const catSel =
+    `<select class="ex-edit-cat" data-editex="${escapeHtml(name)}" aria-label="Category for ${escapeHtml(name)}">` +
+    TRAINING_CATEGORIES.map((c) => opt(c, c, curCat)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
+  const mgSel =
+    `<select class="ex-edit-mg" data-editex="${escapeHtml(name)}" aria-label="Muscle group for ${escapeHtml(name)}">` +
+    MUSCLE_GROUPS.map((m) => opt(m, m, curMg)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
+  const tierSel =
+    `<select class="ex-edit-tier" data-editex="${escapeHtml(name)}" aria-label="Tier for ${escapeHtml(name)}">` +
+    (["main", "second", "third"] as ExerciseTier[]).map((tv) => opt(tv, TIER_LABELS[tv], curTier)).join("") +
+    opt("auto", "↺ Auto", "__never") + `</select>`;
   return (
     `<div class="ex-edit"><div class="ex-info-section-hd">Edit this exercise</div>` +
     `<div class="ex-edit-grid">` +
@@ -5459,10 +5518,13 @@ function exerciseEditHtml(name: string): string {
     `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" /></label>` +
     `<label class="ex-edit-f"><span class="ex-edit-lbl">Short name</span>` +
     `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" /></label>` +
+    `<label class="ex-edit-f"><span class="ex-edit-lbl">Category</span>${catSel}</label>` +
+    `<label class="ex-edit-f"><span class="ex-edit-lbl">Muscle group</span>${mgSel}</label>` +
+    `<label class="ex-edit-f"><span class="ex-edit-lbl">Tier</span>${tierSel}</label>` +
     `<label class="ex-edit-f"><span class="ex-edit-lbl">Bodyweight part</span>` +
     `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></label>` +
     `</div>` +
-    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset. Saved on this device. <em>(“Not comparable” is now per note — set it on each variation below.)</em></p>` +
+    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables (code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset). Category, muscle group and tier drive the groupings and colours everywhere; pick “Auto” to fall back to the automatic guess. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Saved on this device.</p>` +
     `</div>`
   );
 }
@@ -6363,6 +6425,13 @@ async function init() {
       renderAll();
       return;
     }
+    // Metadata selects: Category / Muscle group / Tier overrides.
+    const cat = t.closest<HTMLSelectElement>(".ex-edit-cat");
+    if (cat?.dataset.editex) { setMetaOverride("cat", cat.dataset.editex, cat.value); refreshExerciseInfo(); renderAll(); return; }
+    const mg = t.closest<HTMLSelectElement>(".ex-edit-mg");
+    if (mg?.dataset.editex) { setMetaOverride("mg", mg.dataset.editex, mg.value); refreshExerciseInfo(); renderAll(); return; }
+    const tier = t.closest<HTMLSelectElement>(".ex-edit-tier");
+    if (tier?.dataset.editex) { setMetaOverride("tier", tier.dataset.editex, tier.value); refreshExerciseInfo(); renderAll(); return; }
   });
   // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {
@@ -6964,8 +7033,8 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
         dataNum(setVolume(logged, r.reps)),
         r.dropset ? "TRUE" : "",
         dataNum(r.percentile),
-        exerciseCategory(r.exerciseName),
-        exerciseTier(r.exerciseName),
+        catFor(r.exerciseName),
+        tierFor(r.exerciseName),
         r.notes,
       ],
     };

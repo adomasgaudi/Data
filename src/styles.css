@@ -1868,8 +1868,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; }
 .ex-edit-f { display: flex; flex-direction: column; gap: 2px; flex: 1 1 8rem; min-width: 0; }
 .ex-edit-lbl { font-size: 0.74rem; font-weight: 600; color: var(--muted); }
-.ex-edit-f input { font: inherit; font-size: 0.86rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); min-width: 0; }
-.ex-edit-f input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ex-edit-f input, .ex-edit-f select { font: inherit; font-size: 0.86rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); min-width: 0; }
+.ex-edit-f input:focus, .ex-edit-f select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .ex-edit-help { font-size: 0.74rem; margin: 0.35rem 0 0; }
 /* "Not comparable" toggle. */
 .ex-nc { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.5rem 0 0; }
