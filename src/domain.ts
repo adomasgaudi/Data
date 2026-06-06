@@ -61,6 +61,12 @@ export interface SetRecord {
    * the ground): its reps/sets still count, but no 1RM or volume is computed —
    * those numbers are meaningless. Tagged from a per-exercise override at compute. */
   notComparable?: boolean;
+  /** Machine-type verdict for a gravity-or-cable lift (e.g. Lat Pulldown) when the
+   * exercise is in "gravity" or "mixed" mode. "gravity" means the strength weight
+   * was scaled to its cable-equivalent (×0.6, logged value kept in origWeight);
+   * "review" means a mixed-mode set was too ambiguous to trust and needs checking.
+   * Absent on cable / unconfigured exercises. */
+  machineType?: "gravity" | "cable" | "review";
   /** Set on SYNTHETIC records only: the id of the combinable/comparable registry
    * group this record was derived for (e.g. "combine.sq-mix", "compare.dl-pattern").
    * Pure logged records never carry it. Lets views/filters tell synthetics apart. */
