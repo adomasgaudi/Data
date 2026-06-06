@@ -1192,6 +1192,8 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
+/* The day's record (best) estimated 1RM for a lift, shown after its sets. */
+.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
 sup.wr-bw { font-size: 0.85em; }
 .heat-filter {

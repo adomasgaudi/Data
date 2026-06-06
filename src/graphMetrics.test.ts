@@ -49,6 +49,17 @@ describe("graph metric registry (TASK 26)", () => {
     expect(graphMetric("weightRange")!.type).toBe("range");
   });
 
+  it("weight range plots bodyweight lifts (origWeight null → added 0)", () => {
+    // A pure bodyweight set (no plate) has origWeight null; it must still produce
+    // a range bar (lo at 0), not be dropped as "not enough data".
+    const pts = graphMetric("weightRange")!.compute!(
+      [rec({ exerciseName: "Pull Up", weight: 80, origWeight: null, reps: 5 })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    expect(pts.length).toBe(1);
+    expect(pts[0]!.lo).toBe(0);
+  });
+
   it("strength score never drops (running max), decay can dip (TASKS 34–35)", () => {
     const recs = [rec({ date: "2024-01-01", weight: 100, reps: 1 }), rec({ date: "2024-02-01", weight: 80, reps: 1 })];
     const s = graphMetric("strength")!.compute!(recs, DEFAULT_GRAPH_CONFIG);

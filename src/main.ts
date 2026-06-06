@@ -4608,6 +4608,7 @@ function setDisplay(raw: SetRecord): string {
 
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
+  const workoutFormula = currentFormula();
   const byWeek = workoutViewMode === "week";
   syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
@@ -4633,16 +4634,26 @@ function renderWorkoutsPage() {
         // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
         did = g.exercises
           .map((e) => {
-            const setsTxt = g.sets
-              .filter((s) => s.exerciseName === e.exerciseName)
-              .map((s) => setDisplay(s))
-              .join(" ");
+            const exSets = g.sets.filter((s) => s.exerciseName === e.exerciseName);
+            const setsTxt = exSets.map((s) => setDisplay(s)).join(" ");
             const name = displayName(e.exerciseName);
+            // The day's record 1RM for this lift: the best estimated 1RM across
+            // its sets that day (same calc as everywhere — bodyweight folded in,
+            // variation difficulty applied). Shown next to the sets, not just the
+            // set count.
+            const e1rms = exSets
+              .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))
+              .filter((v): v is number => v !== null && Number.isFinite(v));
+            const best = e1rms.length ? Math.max(...e1rms) : null;
+            const rmTxt =
+              best === null
+                ? ""
+                : ` <span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
             const addBtn = showAddSets
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
               : "";
-            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${addBtn}`;
+            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${rmTxt}${addBtn}`;
           })
           .join("<br>");
       } else {

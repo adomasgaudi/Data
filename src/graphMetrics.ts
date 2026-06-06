@@ -198,9 +198,13 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
       const times = setTimes(rs);
       const out: GraphPoint[] = [];
       for (const r of rs) {
-        const lo = added(r);
+        // A pure bodyweight set carries no bar weight (origWeight null) — its
+        // "added" load is 0, matching addedWeight1RM's own treatment. Without this
+        // every bodyweight lift (e.g. handstand push-ups) was dropped from the
+        // range entirely, so the graph read "not enough data".
+        const lo = added(r) ?? 0;
         const hi = addedWeight1RM(r, cfg.formula);
-        if (lo == null || hi == null) continue;
+        if (hi == null) continue;
         // Section the bar by rep: the value at each rep k is what THIS weight done
         // for k reps estimates as a 1RM, from k=1 (the weight itself) up to the
         // logged rep count (the full estimated 1RM at the top). Splits the bar into
