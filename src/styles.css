@@ -1191,14 +1191,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 .seg-btn.is-active { color: #fff; background: var(--accent); }
 /* Workouts session line: each set written as weight^reps. */
 .wo-exname { font-weight: 600; }
-.wo-setlist { font-size: 0.85rem; }
+.wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
 /* Each exercise on its own flex line so the day's record 1RM right-aligns. */
 .wo-ex-line { display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
-.wo-scale { font-weight: 700; color: var(--gold); }
+.wo-scale { font-weight: 700; color: var(--accent); } /* multiplier in blue (workout history) */
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
