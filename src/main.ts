@@ -7385,10 +7385,13 @@ async function init() {
   // Replace every native <select> with a custom HTML/CSS dropdown. Done last, so
   // each select already has its options and current value. (#athlete stays hidden
   // behind its chip row; #exerciseRange is already a custom dropdown.)
+  // NOTE: #viewAsSelect is intentionally NOT enhanced — it's a hidden, in-sync
+  // mirror only (who you are is chosen on the login screen), so it must not get a
+  // visible .xdd dropdown twin in the Settings menu.
   enhanceSelect(els.exercise, { wide: true });
   enhanceSelect(els.dataExercise, { wide: true });
   for (const sel of [
-    els.formula, els.rank, els.sexFilter, els.viewAsSelect,
+    els.formula, els.rank, els.sexFilter,
     els.workoutGrouping, els.testAthlete, els.testExercise,
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
