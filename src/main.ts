@@ -5633,7 +5633,14 @@ function exerciseInfoHtml(name: string): string {
       ? item("Best 1RM (anyone)", `${fmt(best.e1rm)} kg <span class="muted">(${escapeHtml(best.who)} · ${best.w === null ? "—" : fmt(best.w)}×${best.reps} · ${shortDate(best.date)})</span>`)
       : item("Best 1RM (anyone)", "—"),
     first && last ? item("Logged", `${shortDate(first)} → ${shortDate(last)}`) : "",
-    variants.length ? item("Also logged as", escapeHtml(variants.join(", "))) : "",
+    // Always state merge status explicitly, so a standalone lift is confirmed as
+    // such (not just silently lacking an "also logged as" line).
+    item(
+      "Sources",
+      variants.length
+        ? `<strong>Merged</strong> from ${variants.length + 1} spellings: ${escapeHtml([name, ...variants].join(", "))}`
+        : `Standalone — logged under one name only`,
+    ),
   ].join("");
 
   // Combinable / comparable group membership, with members present in the data
@@ -8879,7 +8886,7 @@ function renderWorkoutAnalysis(): void {
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
     if (contentTitle)
-      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${waSelected[0]}` : `${athleteLabel()} — selected lifts`;
+      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${waSelected[0]}${originBadge(waSelected[0]!, true)}` : `${athleteLabel()} — selected lifts`;
     // Single mode: a "More info" button for the one selected lift (its details +
     // the editable difficulty of each note-identified variation).
     if (stats) {
