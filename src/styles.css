@@ -1622,14 +1622,8 @@ sup.wr-bw { font-size: 0.85em; }
 .mm-views figcaption { font-size: 0.72rem; margin-bottom: 0.25rem; }
 .body-svg { width: 132px; height: auto; }
 .body-svg g[style] { transition: fill-opacity 0.2s; cursor: default; }
-/* Anatomy-chart look: every muscle/part gets a thin darker outline; non-scored
-   muscles are a neutral tone, skin/joint parts light grey, ab lines hairline. */
-.body-svg path, .body-svg ellipse, .body-svg circle, .body-svg rect {
-  stroke: rgba(70, 52, 34, 0.5); stroke-width: 0.7; stroke-linejoin: round;
-}
-.body-svg .mm-skin { fill: #e7e6e1; }
-.body-svg .mm-anat { fill: #c9b291; }
-.body-svg .mm-lines path { fill: none; stroke: rgba(70, 52, 34, 0.45); stroke-width: 0.7; }
+/* Thin outlines so adjacent muscles read as separate shapes (anatomical look). */
+.body-svg polygon { stroke: rgba(40, 44, 58, 0.18); stroke-width: 0.4; }
 .mm-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; justify-content: center; margin: 0.75rem 0 0; font-size: 0.78rem; }
 .mm-leg { display: inline-flex; align-items: center; gap: 0.3rem; }
 .mm-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
