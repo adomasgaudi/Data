@@ -106,6 +106,9 @@ import {
   type TrainingCategory,
   type MuscleGroup,
   type ExerciseTier,
+  DISCIPLINES,
+  type Discipline,
+  exerciseDiscipline,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
@@ -581,7 +584,12 @@ function coliseumFilterNote(): string {
 // Starts from the profile.ts defaults; user edits are layered on top and stored
 // in the browser so they survive reloads. coeffFor() is read everywhere.
 const COEFF_STORE_KEY = "colosseum.bwCoeffs.v1";
+const COEFF_RANGE_KEY = "colosseum.bwCoeffRange.v1";
 const coeffOverrides: Record<string, number> = loadCoeffOverrides();
+// The bodyweight part can be set as a RANGE (a lift's leverage varies by variation);
+// the value actually used in the 1RM is the average of min & max. A single-value
+// edit (the Index table) and a range edit are mutually exclusive — the last one wins.
+const coeffRanges: Record<string, { min: number; max: number }> = loadCoeffRanges();
 
 function loadCoeffOverrides(): Record<string, number> {
   try {
@@ -591,17 +599,54 @@ function loadCoeffOverrides(): Record<string, number> {
     return {};
   }
 }
+function loadCoeffRanges(): Record<string, { min: number; max: number }> {
+  try {
+    const raw = localStorage.getItem(COEFF_RANGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, { min: number; max: number }>) : {};
+  } catch {
+    return {};
+  }
+}
 
-function coeffFor(exerciseName: string): number {
+/** The base (non-range) bodyweight part: the owner's single pin, else the heuristic. */
+function coeffBase(exerciseName: string): number {
   if (Object.prototype.hasOwnProperty.call(coeffOverrides, exerciseName)) return coeffOverrides[exerciseName]!;
-  // Pinned value first, otherwise the leverage-aware heuristic (front lever ≈ 0.1…).
   return EXERCISE_BW_COEFF[exerciseName] ?? defaultBwCoeff(exerciseName);
+}
+
+/** The bodyweight part used everywhere — the average of the range if one is set. */
+function coeffFor(exerciseName: string): number {
+  const r = coeffRanges[exerciseName];
+  if (r) return Math.round(((r.min + r.max) / 2) * 1000) / 1000;
+  return coeffBase(exerciseName);
+}
+
+/** The min/max to show in the editor — the override range, else the base as both. */
+function coeffRangeFor(exerciseName: string): { min: number; max: number } {
+  const r = coeffRanges[exerciseName];
+  if (r) return r;
+  const b = coeffBase(exerciseName);
+  return { min: b, max: b };
 }
 
 function setCoeff(exerciseName: string, value: number) {
   coeffOverrides[exerciseName] = value;
+  delete coeffRanges[exerciseName]; // a single value supersedes any range
+  saveCoeffs();
+}
+
+/** Set the bodyweight-part range (min/max). The average is what the 1RM uses. */
+function setCoeffRange(exerciseName: string, min: number, max: number) {
+  const lo = Math.min(min, max), hi = Math.max(min, max);
+  coeffRanges[exerciseName] = { min: lo, max: hi };
+  delete coeffOverrides[exerciseName]; // a range supersedes a single pin
+  saveCoeffs();
+}
+
+function saveCoeffs() {
   try {
     localStorage.setItem(COEFF_STORE_KEY, JSON.stringify(coeffOverrides));
+    localStorage.setItem(COEFF_RANGE_KEY, JSON.stringify(coeffRanges));
   } catch {
     /* storage may be unavailable (e.g. private mode) — edits still apply this session */
   }
@@ -612,22 +657,23 @@ function setCoeff(exerciseName: string, value: number) {
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
 // are the read points used across the app so an edit shows everywhere.
 const META_OVERRIDE_KEY = "colosseum.metaOverrides.v1";
-type MetaKind = "cat" | "mg" | "tier";
-// An exercise can fit SEVERAL categories / muscle groups / tiers, so each override
-// is a LIST. The legacy single maps (cat/mg/tier) are kept in sync with each list's
-// first (primary) value, so older backups and every single-value reader keep working.
+type MetaKind = "cat" | "mg" | "tier" | "disc";
+// An exercise can fit SEVERAL disciplines / muscle groups / tiers, so each override
+// is a LIST. The legacy single maps are kept in sync with each list's first (primary)
+// value, so older backups and every single-value reader keep working. ("cat" is the
+// old internal training-category dimension; "disc" is the owner-facing Discipline.)
 type MetaOverrides = {
-  cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string>;
-  catSet?: Record<string, string[]>; mgSet?: Record<string, string[]>; tierSet?: Record<string, string[]>;
+  cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string>; disc?: Record<string, string>;
+  catSet?: Record<string, string[]>; mgSet?: Record<string, string[]>; tierSet?: Record<string, string[]>; discSet?: Record<string, string[]>;
 };
 const metaOverrides: MetaOverrides = (() => {
-  const empty = (): MetaOverrides => ({ cat: {}, mg: {}, tier: {}, catSet: {}, mgSet: {}, tierSet: {} });
+  const empty = (): MetaOverrides => ({ cat: {}, mg: {}, tier: {}, disc: {}, catSet: {}, mgSet: {}, tierSet: {}, discSet: {} });
   try {
     const raw = localStorage.getItem(META_OVERRIDE_KEY);
     const o = raw ? (JSON.parse(raw) as MetaOverrides) : {};
-    const m: MetaOverrides = { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {}, catSet: o.catSet ?? {}, mgSet: o.mgSet ?? {}, tierSet: o.tierSet ?? {} };
+    const m: MetaOverrides = { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {}, disc: o.disc ?? {}, catSet: o.catSet ?? {}, mgSet: o.mgSet ?? {}, tierSet: o.tierSet ?? {}, discSet: o.discSet ?? {} };
     // Migrate any legacy single override into its list form (once).
-    for (const k of ["cat", "mg", "tier"] as MetaKind[]) {
+    for (const k of ["cat", "mg", "tier", "disc"] as MetaKind[]) {
       const single = m[k]!, set = m[`${k}Set` as const]!;
       for (const [name, v] of Object.entries(single)) if (v && !set[name]?.length) set[name] = [v];
     }
@@ -656,10 +702,18 @@ function mgsFor(name: string): MuscleGroup[] {
 function tiersFor(name: string): ExerciseTier[] {
   return (metaSet("tier", name) as ExerciseTier[]) ?? [exerciseTier(name)];
 }
+/** All disciplines a lift belongs to — the owner's list, else the single default. */
+function discsFor(name: string): Discipline[] {
+  return (metaSet("disc", name) as Discipline[]) ?? [exerciseDiscipline(name)];
+}
 /** Primary (first) of each dimension — what every single-value reader uses. */
 function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
 function mgFor(name: string): MuscleGroup { return mgsFor(name)[0]!; }
 function tierFor(name: string): ExerciseTier { return tiersFor(name)[0]!; }
+/** The auto-default value for a dimension (used when seeding a fresh toggle). */
+function metaDefault(kind: MetaKind, name: string): string {
+  return kind === "cat" ? exerciseCategory(name) : kind === "mg" ? muscleGroup(name) : kind === "disc" ? exerciseDiscipline(name) : exerciseTier(name);
+}
 /** Replace the whole override list for one dimension (empty → back to auto default). */
 function setMetaSet(kind: MetaKind, name: string, values: string[]) {
   const set = metaOverrides[`${kind}Set` as const]!, single = metaOverrides[kind]!;
@@ -670,17 +724,17 @@ function setMetaSet(kind: MetaKind, name: string, values: string[]) {
 /** Toggle one value in a dimension's list (starting from whatever is shown now). */
 function toggleMetaOverride(kind: MetaKind, name: string, value: string) {
   if (!value || value === "auto") { setMetaSet(kind, name, []); return; } // ↺ reset to default
-  const effective = metaSet(kind, name) ?? [kind === "cat" ? exerciseCategory(name) : kind === "mg" ? muscleGroup(name) : exerciseTier(name)];
+  const effective = metaSet(kind, name) ?? [metaDefault(kind, name)];
   const next = new Set(effective);
   if (next.has(value)) next.delete(value); else next.add(value);
   setMetaSet(kind, name, [...next]);
 }
 /** All muscle-group choices for the editor dropdown. */
 const MUSCLE_GROUPS: MuscleGroup[] = [
-  "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats (pulls)", "Lats (rows)",
-  "Chest", "Shoulders", "Biceps", "Triceps", "Core", "Cardio", "Mobility", "Skill", "Other",
+  "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats",
+  "Chest", "Shoulders", "Biceps", "Triceps", "Core",
 ];
-const TIER_LABELS: Record<ExerciseTier, string> = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" };
+const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary" };
 
 // ---- "Not comparable" NOTES (owner-marked, per note — not whole exercises) ----
 // A specific variation can be unmeasurable by 1RM/volume — e.g. a static
@@ -2394,14 +2448,14 @@ const hiddenExCats = new Set<string>((() => {
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
 
-// How the Index page groups its exercise rows. "category" is the primary training
-// bucket (one per lift); the others let the owner slice the same lifts by fine
-// muscle, by functional movement pattern (multi-membership), or by the
-// combinable / comparable synthetic-group membership.
-type IndexGroupMode = "category" | "muscle" | "function" | "combinable" | "comparable";
-let bwGroupMode: IndexGroupMode = "category";
+// How the Index page groups its exercise rows. "discipline" is the training style
+// (multi-membership — a lift can sit under several); the others slice the same lifts
+// by fine muscle, by functional movement pattern, or by combinable / comparable
+// synthetic-group membership.
+type IndexGroupMode = "discipline" | "muscle" | "function" | "combinable" | "comparable";
+let bwGroupMode: IndexGroupMode = "discipline";
 const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
-  { mode: "category", label: "Category" },
+  { mode: "discipline", label: "Discipline" },
   { mode: "muscle", label: "Muscle group" },
   { mode: "function", label: "Function (movement)" },
   { mode: "combinable", label: "Combinable" },
@@ -2411,17 +2465,25 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
 // CATEGORY_COLORS shades; the rest reuse them).
 const INDEX_MUSCLES: MuscleGroup[] = [
   "Quads", "Hamstrings", "Glutes", "Calves",
-  "Lower back", "Upper back", "Lats (pulls)", "Lats (rows)",
+  "Lower back", "Upper back", "Lats",
   "Chest", "Shoulders", "Biceps", "Triceps",
-  "Core", "Cardio", "Mobility", "Skill", "Other",
+  "Core", "Other",
 ];
 const muscleColor = (m: MuscleGroup): string =>
   (({
     Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf",
-    "Lower back": "#3b66a6", "Upper back": "#4f79b8", "Lats (pulls)": "#5f86c2", "Lats (rows)": "#7497ce",
+    "Lower back": "#3b66a6", "Upper back": "#4f79b8", Lats: "#5f86c2",
     Biceps: "#9c5bb8", Triceps: "#b07fc9",
   } as Record<string, string>)[m]) ??
   CATEGORY_COLORS[m as TrainingCategory] ?? CATEGORY_COLORS.Other;
+
+// Discipline (training-style) colours for the Index "By discipline" grouping.
+const DISCIPLINE_COLORS: Record<Discipline, string> = {
+  "Bodybuilding/strength": "#284e86", Calisthenics: "#2e7d52", Mobility: "#1f8a8a",
+  Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b", Skill: "#b8902f",
+  Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
+};
+const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";
 
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
@@ -2457,9 +2519,9 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
       buckets.push({ key: "__ungrouped", label: mode === "combinable" ? "Not in a combinable group" : "Not in a comparable group", color: CATEGORY_COLORS.Other, rows: rest });
     return buckets;
   }
-  // category (default): a lift shows under every category it's tagged with.
-  const by = groupByMulti((r) => catsFor(r.name));
-  return TRAINING_CATEGORIES.filter((c) => by.has(c)).map((c) => ({ key: c, label: c, color: CATEGORY_COLORS[c], rows: by.get(c)! }));
+  // discipline (default): a lift shows under every discipline it's tagged with.
+  const by = groupByMulti((r) => discsFor(r.name));
+  return DISCIPLINES.filter((d) => by.has(d)).map((d) => ({ key: d, label: d, color: disciplineColor(d), rows: by.get(d)! }));
 }
 
 /** Build the custom athlete chip row from the (hidden) select's options. */
@@ -6157,23 +6219,31 @@ function exerciseInfoHtml(name: string): string {
   const code = codeFor(name), short = shortFor(name);
   const codeInput = `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />`;
   const shortInput = `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />`;
-  // Category / Muscle group / Tier are MULTI-select: a lift can fit several at once,
-  // so each is a row of toggle chips (tap to add/remove), highlighted = selected.
-  // The ↺ chip clears the override back to the automatic guess.
+  // Discipline / Muscle group / Tier are MULTI-select: a lift can fit several at
+  // once, so each is a row of toggle chips (tap to add/remove), highlighted =
+  // selected. The ↺ chip clears the override back to the automatic guess.
   const metaChips = (kind: MetaKind, all: readonly string[], labelOf: (v: string) => string, sel: readonly string[]) =>
     `<span class="ex-meta-chips">` +
     all.map((v) => `<button type="button" class="ex-meta-chip${sel.includes(v) ? " is-on" : ""}" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="${escapeHtml(v)}">${escapeHtml(labelOf(v))}</button>`).join("") +
     (metaSet(kind, name) ? `<button type="button" class="ex-meta-reset" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
     `</span>`;
-  const catChips = metaChips("cat", TRAINING_CATEGORIES, (v) => v, catsFor(name));
+  const discChips = metaChips("disc", DISCIPLINES, (v) => v, discsFor(name));
   const mgChips = metaChips("mg", MUSCLE_GROUPS, (v) => v, mgsFor(name));
   const tierChips = metaChips("tier", ["main", "second", "third"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
-  const coeffInput = `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" />`;
+  // Bodyweight part is a RANGE (min–max); the 1RM uses the average (shown in gold).
+  const cr = coeffRangeFor(name);
+  const coeffInput =
+    `<span class="ex-coeff-range">` +
+    `<input class="ex-edit-coeff-min" type="number" step="0.05" min="0" max="2" value="${cr.min}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part min for ${escapeHtml(name)}" />` +
+    `<span class="ex-coeff-dash">–</span>` +
+    `<input class="ex-edit-coeff-max" type="number" step="0.05" min="0" max="2" value="${cr.max}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part max for ${escapeHtml(name)}" />` +
+    `<span class="ex-coeff-avg" title="Average of the range — this is what the 1RM uses">avg ${coeff}</span>` +
+    `</span>`;
 
   const rows = [
     item("Code", codeInput),
     item("Short name", shortInput),
-    item("Category", catChips),
+    item("Discipline", discChips),
     item("Muscle group", mgChips),
     item("Tier", tierChips),
     item("Tags", `<span class="ex-tags">${tagChips}</span>`),
@@ -7529,17 +7599,20 @@ async function init() {
   document.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
     const code = t.closest<HTMLInputElement>(".ex-edit-code");
-    if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); refreshExerciseInfo(); renderAll(); return; }
+    if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); renderAll(); reopenIndexDetail(code.dataset.editex); return; }
     const short = t.closest<HTMLInputElement>(".ex-edit-short");
     if (short?.dataset.editex) { setShortOverride(short.dataset.editex, short.value); refreshExerciseInfo(); return; }
-    const coeff = t.closest<HTMLInputElement>(".ex-edit-coeff");
-    if (coeff?.dataset.editex) {
-      let v = parseFloat(coeff.value);
-      if (!Number.isFinite(v)) v = 0;
-      v = Math.min(2, Math.max(0, v));
-      setCoeff(coeff.dataset.editex, v);
-      refreshExerciseInfo();
+    // Bodyweight part RANGE: read both ends, store the range (1RM uses the average).
+    const coeffEnd = t.closest<HTMLInputElement>(".ex-edit-coeff-min, .ex-edit-coeff-max");
+    if (coeffEnd?.dataset.editex) {
+      const ex = coeffEnd.dataset.editex;
+      const wrap = coeffEnd.closest(".ex-coeff-range");
+      const clampv = (s: string | undefined) => { let v = parseFloat(s ?? ""); if (!Number.isFinite(v)) v = 0; return Math.min(2, Math.max(0, v)); };
+      const mn = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-min")?.value);
+      const mx = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-max")?.value);
+      setCoeffRange(ex, mn, mx);
       renderAll();
+      reopenIndexDetail(ex);
       return;
     }
     // Difficulty-model assignment: attach (or clear) a model so the lift gets the

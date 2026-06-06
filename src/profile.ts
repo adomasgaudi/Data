@@ -304,15 +304,6 @@ export interface RegistryTag {
  * "handstand … push" → Shoulders, and a trailing deadlift/clean/snatch → Back.
  */
 export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
-  { id: "muscle.mobility", kind: "muscle-group", label: "Mobility",
-    why: "Stretching, splits, poses, breathwork — not a loaded muscle.",
-    keywords: ["stretch", "split", "pancake", "pose", "mobility", "ankle", "posture", "breath", "cold shower", "meditation"] },
-  { id: "muscle.cardio", kind: "muscle-group", label: "Cardio",
-    why: "Conditioning / calorie work — not a strength muscle group.",
-    keywords: ["run", "bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie"] },
-  { id: "muscle.skill", kind: "muscle-group", label: "Skill",
-    why: "Calisthenic skills (levers, planche, handstands, flags) — whole-body skill, not one muscle. A handstand PUSH-up is the exception: it trains shoulders.",
-    keywords: ["front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "balance"] },
   { id: "muscle.core", kind: "muscle-group", label: "Core",
     why: "Trunk work: crunches, planks, leg/knee raises, rotation. Checked before legs/arms so an 'ab' or 'leg raise' doesn't read as legs.",
     keywords: ["crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "knee raise", "knee tuck", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "woodchop", "pallof", "rollout", "twist", "bicycle", "mountain climber", "vacuum", "l-sit", "l sit", "lsit"] },
@@ -330,7 +321,7 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
     keywords: ["squat", "leg press", "leg extension", "lunge", "hack", "sissy", "step up", "step-up", "pistol", "wall sit", "split squat", "bulgarian", "cossack", "belt squat", "quad"] },
   { id: "muscle.shoulders", kind: "muscle-group", label: "Shoulders",
     why: "Overhead and lateral delt work. Checked before chest/back so a press isn't misread. (Shrugs/traps go to Upper back.)",
-    keywords: ["shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military", "behind the neck", "arnold", "delt"] },
+    keywords: ["shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military", "behind the neck", "arnold", "delt", "handstand push", "handstand pushup", "handstand push-up", "hspu"] },
   { id: "muscle.triceps", kind: "muscle-group", label: "Triceps",
     why: "Elbow-extension: pushdowns, skulls, JM press, close-grip bench. Before chest so close-grip bench reads triceps.",
     keywords: ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"] },
@@ -349,12 +340,9 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
   { id: "muscle.upper-back", kind: "muscle-group", label: "Upper back",
     why: "The 'upper-upper' back — traps and rhomboids: shrugs, rack pulls, face pulls, scapular work. Sits above the lats.",
     keywords: ["shrug", "trap ", "rhomboid", "face pull", "scapular", "rack pull", "high pull"] },
-  { id: "muscle.lats-pulls", kind: "muscle-group", label: "Lats (pulls)",
-    why: "Lats trained by VERTICAL pulling: pull-ups, chin-ups, pulldowns, pullovers.",
-    keywords: ["pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "pull over", "pullover", "lat pull", "lat "] },
-  { id: "muscle.lats-rows", kind: "muscle-group", label: "Lats (rows)",
-    why: "Lats / mid-back trained by HORIZONTAL pulling: barbell, dumbbell, cable and machine rows; inverted rows.",
-    keywords: ["row", "inverted row", "seal row"],
+  { id: "muscle.lats", kind: "muscle-group", label: "Lats",
+    why: "Lats / mid-back: vertical pulls (pull-ups, chin-ups, pulldowns, pullovers) and horizontal rows (barbell, dumbbell, cable, machine, inverted).",
+    keywords: ["pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "pull over", "pullover", "lat pull", "lat ", "row", "inverted row", "seal row"],
     include: ["Inverted deadlift"] },
 ];
 
@@ -615,26 +603,65 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
   return "Other";
 }
 
+/**
+ * Training DISCIPLINE — the *style* of training a lift belongs to, the dimension
+ * the owner edits as "Discipline" (muscle group covers anatomy separately). A lift
+ * can fit several (handstand = Skill + Balance + Calisthenics), so the editor is
+ * multi-select; this returns the single best-guess PRIMARY for a fresh lift.
+ */
+export type Discipline =
+  | "Bodybuilding/strength"
+  | "Calisthenics"
+  | "Mobility"
+  | "Dynamic"
+  | "Posture"
+  | "Cardio"
+  | "Skill"
+  | "Balance"
+  | "Parkour"
+  | "Climbing";
+export const DISCIPLINES: Discipline[] = [
+  "Bodybuilding/strength", "Calisthenics", "Mobility", "Dynamic", "Posture",
+  "Cardio", "Skill", "Balance", "Parkour", "Climbing",
+];
+/** Best-guess primary discipline by keyword; everything loaded falls to
+ * Bodybuilding/strength (the owner re-tags from there as needed). */
+export function exerciseDiscipline(exerciseName: string): Discipline {
+  const n = exerciseName.toLowerCase();
+  const has = (...k: string[]) => k.some((s) => n.includes(s));
+  if (has("climb", "campus", "hangboard", "fingerboard", "crimp", "boulder")) return "Climbing";
+  if (has("parkour", "vault", "kong", "precision jump", "cat leap", "wall run", "wall climb")) return "Parkour";
+  if (has("stretch", "split", "pancake", "tailor", "mobility", "ankle", "breath", "cold shower", "meditation", "pose")) return "Mobility";
+  if (/^pos\b|^post\b|posture/.test(n)) return "Posture";
+  if (/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie")) return "Cardio";
+  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "l-sit", "l sit", "lsit", "lever", "flag")) return "Skill";
+  if (has("balance", "slackline", "beam", "one-leg", "single-leg balance")) return "Balance";
+  if (has("jump", "plyo", "hop", "explosive", "clap", "throw", "slam", "ballistic", "bound")) return "Dynamic";
+  if (has("pull up", "pullup", "pull-up", "chin up", "chinup", "push up", "pushup", "push-up", "pushups", "dip", "ring", "bodyweight", "pistol", "bar muscle", "inverted row", "australian"))
+    return "Calisthenics";
+  return "Bodybuilding/strength";
+}
+
 /** Finer muscle groups than {@link exerciseCategory} — the legs split into
  * Quads / Hamstrings / Glutes / Calves, and the upper body into Chest / Back /
  * Shoulders / Biceps / Triceps. Used by the Workouts view's "muscle groups"
  * mode. One PRIMARY group per exercise (the prime mover), chosen by keyword. */
+// Muscle group = ANATOMY only (no Cardio / Mobility / Skill — those are training
+// disciplines now; see {@link Discipline}). The lats are one group (vertical pulls
+// and horizontal rows together). "Other" is the internal fallback for a lift with
+// no clear prime mover; it is not offered as a pickable option.
 export type MuscleGroup =
   | "Quads" | "Hamstrings" | "Glutes" | "Calves"
-  | "Lower back" | "Upper back" | "Lats (pulls)" | "Lats (rows)"
+  | "Lower back" | "Upper back" | "Lats"
   | "Chest" | "Shoulders" | "Biceps" | "Triceps"
-  | "Core" | "Cardio" | "Mobility" | "Skill" | "Other";
+  | "Core" | "Other";
 
 export function muscleGroup(exerciseName: string): MuscleGroup {
   const n = exerciseName.toLowerCase();
   // First matching MUSCLE_GROUP_TAGS entry wins (the table is in priority order,
   // the same ordering this function used to hold inline — see the registry).
   const prime = MUSCLE_GROUP_TAGS.find((t) => tagMatches(n, t));
-  if (prime) {
-    // Special case: a handstand PUSH-up trains shoulders, not "skill".
-    if (prime.id === "muscle.skill" && n.includes("push")) return "Shoulders";
-    return prime.label as MuscleGroup;
-  }
+  if (prime) return prime.label as MuscleGroup;
   // A bare deadlift/clean/snatch has no muscle keyword → its erectors brace the
   // load, so it falls to the lower back.
   if (n.includes("deadlift") || n.includes("clean") || n.includes("snatch")) return "Lower back";
