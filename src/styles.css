@@ -1203,7 +1203,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 .rm-derive { font-family: Georgia, "Times New Roman", serif; font-size: 0.82rem; color: var(--text); margin: 0.2rem 0; }
 .rm-step { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.12rem 0; border-bottom: 1px dotted var(--line); }
 .rm-step:last-child { border-bottom: none; }
-.rm-lbl { flex: 0 0 6.5rem; font-family: var(--ui-font, system-ui, sans-serif); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); text-align: right; }
+.rm-lbl { flex: 0 0 6.5rem; font-family: var(--ui-font, system-ui, sans-serif); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); text-align: left; }
 .rm-eq { flex: 1; }
 .rm-eq i { color: var(--accent); font-style: italic; }
 .rm-eq b { font-weight: 700; }
