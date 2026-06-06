@@ -334,7 +334,10 @@ main { padding-bottom: 8.5rem; }
   padding: 0.7rem 0.8rem; cursor: pointer;
 }
 .other-item:hover { background: var(--accent-soft); }
-.other-ico { width: 1.6rem; text-align: center; font-size: 1.15rem; flex: none; }
+.other-item:hover .other-ico { color: var(--accent); }
+/* Minimal line icons (inline SVG): muted by default, accent on hover. */
+.other-ico { width: 1.5rem; height: 1.5rem; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.other-ico svg, svg.other-ico { width: 1.35rem; height: 1.35rem; display: block; }
 
 /* Group view: one card per movement pattern / muscle group. */
 .groups-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; margin: 0 0 1rem; }
@@ -1607,6 +1610,11 @@ sup.wr-bw { font-size: 0.85em; }
 /* Site map (mind map) — horizontal scroll when wider than the screen. */
 .sitemap-box { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
 .sitemap-svg { display: block; }
+/* Fills set via CSS, not SVG presentation attributes: var() in a fill="…"
+   attribute isn't resolved by some mobile WebViews (left the map blank on
+   Android), but CSS custom properties always apply. */
+.sitemap-svg .sm-node { fill: var(--card); }
+.sitemap-svg .sm-text { fill: var(--text); }
 .exercise-compare-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
   font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;

@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.6.22</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.6.23</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -150,9 +150,10 @@
 
       </div>
 
-      <!-- LEGACY athlete view, kept while we iterate on the Analysis tab.
-           Reachable via Other → "Legacy exercises". The four-tab bar below
-           still works end-to-end as a fallback while we finish Analysis parity. -->
+      <!-- Hidden host for the panels the Analysis view borrows (athlete picker,
+           Workouts, Exercises drill-in, calendar) and returns here on tab switch.
+           No longer user-reachable — the "Legacy exercises" menu entry was removed
+           (Analysis supersedes it); this stays only as the panels' home in the DOM. -->
       <div id="tab-athlete" class="tab-panel" hidden>
         <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
              start of the same row as the horizontally-scrolling name chips. -->
@@ -184,11 +185,9 @@
           </div>
         </details>
 
-        <!-- Athlete-view tabs, shared above both sub-panels so they stay visible
-             whichever shows: Workouts (the sessions view) | List & stats | Compare
-             | Single (the one-exercise drill-in). RESTORED (b.2.3.13): we walked
-             back the single-home removal — the legacy view stays available behind
-             Other → "Legacy exercises" while we iterate on Analysis. -->
+        <!-- Athlete-view tabs (Workouts | List & stats | Compare | Single). These
+             live in the hidden host above; the Analysis view drives them now that
+             the user-facing "Legacy exercises" entry is gone. -->
         <div id="exercisesTabs" class="ex-tabs ath-tabs" role="tablist">
           <button type="button" class="ex-tab" data-extab="workouts" role="tab">Workouts</button>
           <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
@@ -369,7 +368,7 @@
 
       <div id="tab-test" class="tab-panel" hidden>
         <section class="panel">
-          <h2>Calculator — see the maths</h2>
+          <h2>Formulas — see the maths</h2>
           <p class="muted" style="margin: 0 0 1rem">
             Pick an athlete and exercise to load their top set, or just type your own numbers —
             either way each formula recomputes live. This is the exact code the leaderboards use.
@@ -1016,7 +1015,7 @@
       <div id="tab-statsedit" class="tab-panel" hidden>
         <section class="panel">
           <div class="groups-head">
-            <h2>Edit athlete stats</h2>
+            <h2>Athletes</h2>
             <p class="muted" style="margin: 0.25rem 0 0">
               Edit a person's weight, height, age, sex and body-fat. Body fat is a
               range (95% / 50% confidence band + average), so every value built from it
@@ -1132,18 +1131,17 @@
       <div class="other-sheet-backdrop" data-other-close></div>
       <div class="other-sheet-card" role="menu" aria-label="Other views">
         <div class="other-sheet-grip"></div>
-        <button class="other-item" data-tab="athlete" role="menuitem"><span class="other-ico">🏃</span> Legacy exercises</button>
-        <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
-        <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
-        <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
-<button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
-        <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
-        <button class="other-item" data-tab="codes" role="menuitem"><span class="other-ico">🏷️</span> Exercise codes</button>
-        <button class="other-item" data-tab="statsedit" role="menuitem"><span class="other-ico">📝</span> Edit athlete stats</button>
-        <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
-        <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
-        <button class="other-item" data-tab="sitemap" role="menuitem"><span class="other-ico">🗺️</span> Site map</button>
-        <button class="other-item" data-tab="guide" role="menuitem"><span class="other-ico">📖</span> Guide</button>
+        <button class="other-item" data-tab="leaderboards" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/><path d="M19 21V10"/><path d="M3 10l9-6 9 6"/></svg> Colosseum</button>
+        <button class="other-item" data-tab="team" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.5a4 4 0 0 1 0 7"/></svg> Group view</button>
+        <button class="other-item" data-tab="groups" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5" rx="0.5"/><rect x="12" y="8" width="3" height="9" rx="0.5"/><rect x="17" y="14" width="3" height="3" rx="0.5"/></svg> Stats view</button>
+        <button class="other-item" data-tab="add" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8.5v7M8.5 12h7"/></svg> Add a set</button>
+        <button class="other-item" data-tab="bwparts" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="0.7" fill="currentColor" stroke="none"/></svg> Index</button>
+        <button class="other-item" data-tab="codes" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-8.1-8.1V2.5h10l8.1 8.1a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.3"/></svg> Exercise codes</button>
+        <button class="other-item" data-tab="statsedit" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg> Athletes</button>
+        <button class="other-item" data-tab="data" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"/><path d="M4.5 5v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V5"/><path d="M4.5 11v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-6"/></svg> Data</button>
+        <button class="other-item" data-tab="test" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 6.5h8"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/></svg> Formulas</button>
+        <button class="other-item" data-tab="sitemap" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3 3 5.5v15l6-2.5 6 2.5 6-2.5v-15L15 5.5 9 3z"/><path d="M9 3v15M15 5.5v15"/></svg> Site map</button>
+        <button class="other-item" data-tab="guide" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Guide</button>
       </div>
     </div>
 

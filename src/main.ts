@@ -2127,7 +2127,7 @@ const SITE_MAP: MapNode = {
       { label: "Hand-log a set" },
       { label: "Export / import" },
     ] },
-    { label: "Test", children: [
+    { label: "Formulas", children: [
       { label: "Weight↔reps curve" },
     ] },
     { label: "Settings", children: [
@@ -2187,8 +2187,8 @@ function renderSiteMap() {
     .map(
       (p) =>
         `<g transform="translate(${p.x},${p.y})">` +
-        `<rect width="${NODE_W}" height="${NODE_H}" rx="6" fill="var(--card)" stroke="${p.color}" stroke-width="1.5"/>` +
-        `<text x="9" y="${NODE_H / 2 + 4}" font-size="11.5" fill="var(--text)">${escapeHtml(p.label)}</text>` +
+        `<rect class="sm-node" width="${NODE_W}" height="${NODE_H}" rx="6" stroke="${p.color}" stroke-width="1.5"/>` +
+        `<text class="sm-text" x="9" y="${NODE_H / 2 + 4}" font-size="11.5">${escapeHtml(p.label)}</text>` +
         `</g>`,
     )
     .join("");
