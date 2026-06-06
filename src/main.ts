@@ -5735,26 +5735,26 @@ function notePickerHtml(name: string, note: string): string {
     // The pad is a side-view scene. y: TOP = higher/easier (raised block, head only
     // dips to the corner), BOTTOM = deeper/harder. The fill grows UP FROM THE FLOOR
     // (bottom) to the handle — a taller fill = a higher block = easier. lean is
-    // REVERSED: rightmost = no lean (less). For front-to-wall / ladder the whole
-    // thing MIRRORS (wall on the right, lean grows the other way).
+    // REVERSED: rightmost = no lean (less). The wall + ladder ALWAYS sit on the
+    // left — front-to-wall vs back-to-wall is shown by WHERE you drag (the lean),
+    // not by flipping the scene — so the pad never mirrors.
     const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
     const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
     const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
     const picked = override.rom !== undefined || override.lean !== undefined;
     const support = String(effVec.support ?? "free");
-    const mirror = support === "front_to_wall" || support === "ladder";
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
     const romF = romDims![rk]!, leanF = leanDims![lk]!;
     const mult = Math.round(romF * leanF * 100) / 100;
     const leanFrac = leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
     const depthTop = romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 0; // 0 top(easy)..1 bottom(hard)
-    const dotLeft = (mirror ? leanFrac : 1 - leanFrac) * 100; // not-mirror: lean 0 at right
+    const dotLeft = (1 - leanFrac) * 100; // rightmost = no lean (wall is on the left)
     const dotTop = depthTop * 100;
     const fillH = 100 - dotTop; // bottom-anchored, up to the handle
-    const fillW = mirror ? 100 - dotLeft : dotLeft;
-    const fillSide = mirror ? `right:0` : `left:0`;
+    const fillW = dotLeft;
+    const fillSide = `left:0`;
     const pd =
-      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="${mirror ? 1 : 0}" ` +
+      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0" ` +
       `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(leanKeys.join("|"))}"`;
     return (
       `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
@@ -5765,7 +5765,7 @@ function notePickerHtml(name: string, note: string): string {
       `<div class="ex-pad-dot" style="left:${dotLeft.toFixed(1)}%;top:${dotTop.toFixed(1)}%"></div>` +
       `<span class="ex-pad-ylbl ex-pad-yt muted">↑ easier</span>` +
       `<span class="ex-pad-ylbl ex-pad-yb muted">↓ harder</span>` +
-      `<span class="ex-pad-xlbl muted">lean ${mirror ? "→" : "←"}</span>` +
+      `<span class="ex-pad-xlbl muted">lean ←</span>` +
       `</div></div>`
     );
   };
@@ -5790,14 +5790,13 @@ function notePickerHtml(name: string, note: string): string {
   return `${toggle}<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div></div>`;
 }
 
-/** A little side-view scene for the depth × lean pad: the floor, the wall on the
- * correct side (LEFT for back-to-wall / free, RIGHT and mirrored for front-to-wall
- * / ladder), with rungs drawn for a ladder. Crisp boundaries (rigid look). */
+/** A little side-view scene for the depth × lean pad: the floor and the wall —
+ * ALWAYS on the LEFT (for back-to-wall, front-to-wall and ladder alike), with
+ * rungs drawn for a ladder. Crisp boundaries (rigid look). */
 function padSceneSvg(support: string): string {
-  const mirror = support === "front_to_wall" || support === "ladder";
   const hasWall = support !== "free";
   const isLadder = support === "ladder";
-  const wx = mirror ? 90 : 2; // wall rect x (width 8)
+  const wx = 2; // wall rect x (width 8) — wall + ladder always on the left
   const floor = `<line x1="0" y1="97" x2="100" y2="97" class="pad-floor" />`;
   const wall = hasWall ? `<rect x="${wx}" y="2" width="8" height="95" class="pad-wall" />` : "";
   const rungs = isLadder
@@ -6639,9 +6638,10 @@ async function init() {
     else { refreshExerciseInfo(); renderAll(); }
   });
   // Depth × lean SQUARE pad: drag the handle anywhere to set BOTH at once. y: TOP =
-  // higher/easier, BOTTOM = deeper/harder. x: rightmost = no lean (reversed); for
-  // front-to-wall / ladder (data-mirror) the lean direction + fill side flip. The
-  // fill grows up from the floor to the handle; readout = lean × depth; sync deferred.
+  // higher/easier, BOTTOM = deeper/harder. x: rightmost = no lean (reversed). The
+  // wall is always on the left (data-mirror is kept at 0), so the lean direction and
+  // fill side never flip. The fill grows up from the floor to the handle; readout =
+  // lean × depth; sync deferred.
   let padDrag: HTMLElement | null = null;
   const padSet = (pad: HTMLElement, clientX: number, clientY: number) => {
     const ex = pad.dataset.padex, note = pad.dataset.padnote;
