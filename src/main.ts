@@ -6768,6 +6768,23 @@ function refreshAfterDifficultyEdit(): void {
   requestAnimationFrame(() => window.scrollTo(0, y));
 }
 
+// Editing model ×factors should feel instant: each change just saves + recolours
+// the one cell (no editor rebuild → focus/scroll kept), and the heavy view refresh
+// (leaderboard / workouts / analysis — NOT the open editor) runs once, debounced,
+// after you pause. This is what lets you edit many multipliers in a row smoothly.
+let modelFactorsTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleModelFactorsApply(): void {
+  if (modelFactorsTimer) clearTimeout(modelFactorsTimer);
+  modelFactorsTimer = setTimeout(() => {
+    modelFactorsTimer = null;
+    const y = window.scrollY;
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    window.scrollTo(0, y);
+  }, 600);
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
@@ -7021,14 +7038,17 @@ async function init() {
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works in the overlay AND the Index page's expandable row.
   document.addEventListener("change", (e) => {
-    // Edit a difficulty-model factor (Settings-free, on the exercise info page).
+    // Edit a difficulty-model factor. Keep it light so you can edit many in a row:
+    // save + recolour just this cell (no rebuild of the editor you're in → focus &
+    // scroll stay put), and apply to the rest of the app debounced after you pause.
     const fac = (e.target as HTMLElement).closest<HTMLInputElement>(".fac-input");
     if (fac?.dataset.facFam && fac.dataset.facDim && fac.dataset.facLvl !== undefined) {
       const v = Number(fac.value);
       if (Number.isFinite(v) && v > 0) {
         setFamFactor(fac.dataset.facFam, fac.dataset.facDim, fac.dataset.facLvl, Math.round(v * 1000) / 1000);
-        refreshAfterDifficultyEdit();
-        if (!els.modelPage.hidden) renderModelEditor(); // refresh the overlay's overridden-highlight
+        const isOv = famFactorOverrides[fac.dataset.facFam]?.[fac.dataset.facDim]?.[fac.dataset.facLvl] !== undefined;
+        fac.closest(".fac-cell")?.classList.toggle("is-ov", isOv);
+        scheduleModelFactorsApply();
       }
       return;
     }
