@@ -1922,29 +1922,26 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-grid-cell { font: inherit; font-size: 0.6rem; padding: 4px 1px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--muted); cursor: pointer; min-width: 0; }
 .ex-grid-cell:hover { border-color: var(--accent); color: var(--accent); }
 .ex-grid-cell.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
-/* Depth × lean as a SQUARE pad: vertical depth slider down the left edge, a
-   horizontal lean slider along the bottom; the square fills to the current point. */
-.ex-sl-dim { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+/* Depth × lean as a draggable SQUARE: drag the corner handle to set both. x = lean,
+   y = depth (TOP = higher/easier, BOTTOM = deeper/harder). The square fills toward
+   the hard (bottom-right) corner. */
+.ex-pad-dim { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
 .ex-pad-readout { font-size: 0.82rem; }
 .ex-pad-readout b { color: var(--accent); }
-.ex-pad-grid {
-  display: grid; grid-template-columns: 1.5rem minmax(0, 14rem); grid-template-rows: auto 1.5rem;
-  gap: 4px; align-items: stretch; max-width: 16rem;
-}
-.ex-sl { accent-color: var(--accent); cursor: pointer; }
-.ex-sl-v { writing-mode: vertical-lr; direction: rtl; width: 1.5rem; height: 100%; grid-column: 1; grid-row: 1; }
-.ex-sl-h { width: 100%; grid-column: 2; grid-row: 2; }
 .ex-pad {
-  position: relative; aspect-ratio: 1; width: 100%; grid-column: 2; grid-row: 1;
+  position: relative; aspect-ratio: 1; width: 100%; max-width: 15rem;
   border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg);
+  touch-action: none; cursor: crosshair; user-select: none;
 }
-.ex-pad-fill { position: absolute; left: 0; bottom: 0; background: var(--accent-soft); }
+.ex-pad-fill { position: absolute; left: 0; top: 0; background: var(--accent-soft); pointer-events: none; }
 .ex-pad-dot {
-  position: absolute; width: 12px; height: 12px; margin: 0 0 -6px -6px; border-radius: 50%;
-  background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+  background: var(--accent); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); pointer-events: none;
 }
-.ex-pad-dlbl { grid-column: 1; grid-row: 2; font-size: 0.58rem; align-self: center; justify-self: center; }
-.ex-pad-llbl { grid-column: 2; grid-row: 2; font-size: 0.58rem; text-align: right; align-self: center; display: none; }
+.ex-pad-ylbl, .ex-pad-xlbl { position: absolute; font-size: 0.58rem; pointer-events: none; }
+.ex-pad-yt { top: 3px; left: 5px; }
+.ex-pad-yb { bottom: 3px; left: 5px; }
+.ex-pad-xlbl { bottom: 3px; right: 5px; }
 .ex-var-lvl { font: inherit; font-size: 0.72rem; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); white-space: nowrap; }
 .ex-var-lvl:hover { border-color: var(--accent); }
 .ex-var-lvl.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }

@@ -5626,6 +5626,11 @@ function notePickerHtml(name: string, note: string): string {
   const romDims = FAMILIES[fam]!.dims.rom, leanDims = FAMILIES[fam]!.dims.lean;
   const hasGrid = !!(romDims && leanDims);
   const romLeanGrid = (): string => {
+    // romKeys run easiest→hardest (raised/+cm → deep/−cm). Higher on the pad =
+    // easier (a higher block = your head only dips to the corner = shorter range),
+    // so index 0 (most raised) sits at the TOP. leanKeys: left = no lean (easier),
+    // right = more lean. Drag the corner handle to set both at once; the square
+    // fills toward the hard (bottom-right) corner.
     const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
     const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
     const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
@@ -5633,21 +5638,20 @@ function notePickerHtml(name: string, note: string): string {
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
     const romF = romDims![rk]!, leanF = leanDims![lk]!;
     const mult = Math.round(romF * leanF * 100) / 100;
-    const lf = (leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 1) * 100;
-    const df = (romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 1) * 100;
-    const da = `data-slex="${escapeHtml(name)}" data-slnote="${escapeHtml(note)}"`;
-    // A SQUARE pad: depth = vertical slider (left edge), lean = horizontal slider
-    // (bottom edge). The interior fills from the corner to the current point as you
-    // move, and the readout shows the formula lean-factor × depth-factor = total.
+    const lf = (leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 1) * 100; // 0..100 across
+    const df = (romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 1) * 100; // 0 top(easy) .. 100 bottom(hard)
+    const pd =
+      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" ` +
+      `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(leanKeys.join("|"))}"`;
     return (
-      `<div class="ex-var-dim ex-sl-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
+      `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
       `<div class="ex-pad-readout">lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span></div>` +
-      `<div class="ex-pad-grid">` +
-      `<input type="range" class="ex-sl ex-sl-v" ${da} data-sldim="rom" data-slkeys="${escapeHtml(romKeys.join("|"))}" min="0" max="${romKeys.length - 1}" step="1" value="${romIdx}" aria-label="depth" />` +
-      `<div class="ex-pad"><div class="ex-pad-fill" style="width:${lf.toFixed(1)}%;height:${df.toFixed(1)}%"></div><div class="ex-pad-dot" style="left:${lf.toFixed(1)}%;bottom:${df.toFixed(1)}%"></div></div>` +
-      `<span class="ex-pad-dlbl muted">depth ↑</span>` +
-      `<input type="range" class="ex-sl ex-sl-h" ${da} data-sldim="lean" data-slkeys="${escapeHtml(leanKeys.join("|"))}" min="0" max="${leanKeys.length - 1}" step="1" value="${leanIdx}" aria-label="lean" />` +
-      `<span class="ex-pad-llbl muted">lean →</span>` +
+      `<div class="ex-pad" ${pd}>` +
+      `<div class="ex-pad-fill" style="width:${lf.toFixed(1)}%;height:${df.toFixed(1)}%"></div>` +
+      `<div class="ex-pad-dot" style="left:${lf.toFixed(1)}%;top:${df.toFixed(1)}%"></div>` +
+      `<span class="ex-pad-ylbl ex-pad-yt muted">higher · easier</span>` +
+      `<span class="ex-pad-ylbl ex-pad-yb muted">deeper · harder</span>` +
+      `<span class="ex-pad-xlbl muted">lean →</span>` +
       `</div></div>`
     );
   };
@@ -6502,54 +6506,58 @@ async function init() {
     if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
     else { refreshExerciseInfo(); renderAll(); }
   });
-  // Depth (vertical) / lean (horizontal) sliders: each step snaps to a defined
-  // level. On drag, set the dim and update the multiplier readout LIVE (no full
-  // re-render, so the slider stays smooth); the multiplier = depthFactor ×
-  // leanFactor. The heavy table/graph sync is deferred to release / popover-close.
-  const onSliderInput = (sl: HTMLInputElement) => {
-    const ex = sl.dataset.slex, note = sl.dataset.slnote, dim = sl.dataset.sldim, keysStr = sl.dataset.slkeys;
-    if (!ex || note === undefined || !dim || !keysStr) return;
+  // Depth × lean SQUARE pad: drag the corner handle anywhere in the square to set
+  // BOTH at once. x = lean (left none → right more), y = depth (TOP = higher block
+  // = easier; BOTTOM = deeper = harder). The square fills toward the hard corner
+  // and the readout updates live (lean-factor × depth-factor); heavy sync deferred.
+  let padDrag: HTMLElement | null = null;
+  const padSet = (pad: HTMLElement, clientX: number, clientY: number) => {
+    const ex = pad.dataset.padex, note = pad.dataset.padnote;
+    const romKeys = (pad.dataset.romkeys ?? "").split("|"), leanKeys = (pad.dataset.leankeys ?? "").split("|");
+    if (!ex || note === undefined || romKeys.length === 0 || leanKeys.length === 0) return;
     const fam = familyOf(ex);
     if (!fam) return;
-    const key = keysStr.split("|")[Number(sl.value)] ?? keysStr.split("|")[0]!;
-    setNoteVecDim(ex, note, dim, key);
-    const wrap = sl.closest(".ex-sl-dim");
-    const vSl = wrap?.querySelector<HTMLInputElement>(".ex-sl-v");
-    const hSl = wrap?.querySelector<HTMLInputElement>(".ex-sl-h");
-    const romKeys = vSl?.dataset.slkeys?.split("|") ?? [];
-    const leanKeys = hSl?.dataset.slkeys?.split("|") ?? [];
-    const rk = romKeys[Number(vSl?.value)] ?? "";
-    const lk = leanKeys[Number(hSl?.value)] ?? "";
+    const r = pad.getBoundingClientRect();
+    const xf = Math.max(0, Math.min(1, r.width ? (clientX - r.left) / r.width : 0));
+    const yf = Math.max(0, Math.min(1, r.height ? (clientY - r.top) / r.height : 0));
+    const li = Math.round(xf * (leanKeys.length - 1));
+    const di = Math.round(yf * (romKeys.length - 1)); // 0 = top = easiest
+    const rk = romKeys[di]!, lk = leanKeys[li]!;
+    setNoteVecDim(ex, note, "rom", rk);
+    setNoteVecDim(ex, note, "lean", lk);
     const dims = FAMILIES[fam]!.dims;
     const romF = dims.rom?.[rk] ?? 1, leanF = dims.lean?.[lk] ?? 1;
     const mult = Math.round(romF * leanF * 100) / 100;
-    if (wrap) {
-      const set = (sel: string, txt: string) => { const el = wrap.querySelector(sel); if (el) el.textContent = txt; };
-      set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
-      set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
-      // Fill the square pad to the current (lean, depth) point.
-      const lf = (leanKeys.length > 1 ? Number(hSl!.value) / (leanKeys.length - 1) : 1) * 100;
-      const df = (romKeys.length > 1 ? Number(vSl!.value) / (romKeys.length - 1) : 1) * 100;
-      const fill = wrap.querySelector<HTMLElement>(".ex-pad-fill");
-      if (fill) { fill.style.width = `${lf.toFixed(1)}%`; fill.style.height = `${df.toFixed(1)}%`; }
-      const dot = wrap.querySelector<HTMLElement>(".ex-pad-dot");
-      if (dot) { dot.style.left = `${lf.toFixed(1)}%`; dot.style.bottom = `${df.toFixed(1)}%`; }
-      wrap.classList.add("is-picked");
-    }
-    const prod = sl.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");
-    if (prod) {
-      const eff = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
-      prod.textContent = `×${scalarFromVec(fam, eff)}`;
-    }
+    const lf = (leanKeys.length > 1 ? li / (leanKeys.length - 1) : 1) * 100;
+    const df = (romKeys.length > 1 ? di / (romKeys.length - 1) : 1) * 100;
+    const wrap = pad.closest(".ex-pad-dim");
+    const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
+    set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
+    set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
+    const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
+    if (fill) { fill.style.width = `${lf.toFixed(1)}%`; fill.style.height = `${df.toFixed(1)}%`; }
+    const dot = pad.querySelector<HTMLElement>(".ex-pad-dot");
+    if (dot) { dot.style.left = `${lf.toFixed(1)}%`; dot.style.top = `${df.toFixed(1)}%`; }
+    wrap?.classList.add("is-picked");
+    const prod = pad.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");
+    if (prod) prod.textContent = `×${scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) })}`;
     if (scaleEditState) scaleEditDirty = true;
   };
-  document.addEventListener("input", (e) => {
-    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-sl");
-    if (sl) onSliderInput(sl);
+  document.addEventListener("pointerdown", (e) => {
+    const pad = (e.target as HTMLElement).closest<HTMLElement>(".ex-pad");
+    if (!pad) return;
+    padDrag = pad;
+    try { pad.setPointerCapture((e as PointerEvent).pointerId); } catch { /* ignore */ }
+    padSet(pad, (e as PointerEvent).clientX, (e as PointerEvent).clientY);
+    e.preventDefault();
   });
-  document.addEventListener("change", (e) => {
-    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-sl");
-    if (sl && !scaleEditState) { refreshExerciseInfo(); renderAll(); } // sync on release (More-info page)
+  document.addEventListener("pointermove", (e) => {
+    if (padDrag) padSet(padDrag, (e as PointerEvent).clientX, (e as PointerEvent).clientY);
+  });
+  document.addEventListener("pointerup", () => {
+    if (!padDrag) return;
+    padDrag = null;
+    if (!scaleEditState) { refreshExerciseInfo(); renderAll(); } // sync on release (More-info page)
   });
   // Chips / Stickman / 3D model toggle for the modifier editor.
   document.addEventListener("click", (e) => {
