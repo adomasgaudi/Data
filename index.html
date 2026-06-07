@@ -130,6 +130,9 @@
           <button type="button" id="backlogBtn" class="settings-link">
             Tasks &amp; roadmap
           </button>
+          <button type="button" id="testingBtn" class="settings-link">
+            🧪 Testing
+          </button>
         </div>
       </div>
     </header>
@@ -1185,6 +1188,17 @@
         </div>
         <p class="muted">The cleanup backlog and feature roadmap, shown straight from the docs/ files.</p>
         <div id="backlog" class="md-doc"></div>
+      </div>
+    </div>
+
+    <div id="testingPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>🧪 Testing</h2>
+          <button type="button" id="testingClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">Experimental surface for trying graph variants. The chart below is the <b>old, non-interactive graph</b> (no drag-to-pan / pinch-zoom) of your current exercise selection — try scrolling the page up and down with your finger ON the chart and tell me if it scrolls.</p>
+        <div id="testGraphChart" class="wa-graph-chart"></div>
       </div>
     </div>
 

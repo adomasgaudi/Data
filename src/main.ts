@@ -208,6 +208,10 @@ const els = {
   backlogPage: $("backlogPage"),
   backlogClose: $<HTMLButtonElement>("backlogClose"),
   backlog: $("backlog"),
+  testingBtn: $<HTMLButtonElement>("testingBtn"),
+  testingPage: $("testingPage"),
+  testingClose: $<HTMLButtonElement>("testingClose"),
+  testGraphChart: $("testGraphChart"),
   modelBtn: $<HTMLButtonElement>("modelBtn"),
   modelPage: $("modelPage"),
   modelClose: $<HTMLButtonElement>("modelClose"),
@@ -2174,6 +2178,29 @@ function openBacklog() {
     renderTaskDoc(parseTaskDoc(cleanupBacklogMd)) +
     renderTaskDoc(parseTaskDoc(roadmapMd));
   els.backlogPage.hidden = false;
+}
+
+/** Settings → 🧪 Testing: render the current exercise selection as a NON-interactive
+ * graph (no drag-pan / pinch-zoom gesture capture) so the owner can check whether a
+ * static old-style chart lets the page scroll freely on a phone. Same data + engine
+ * as the main analysis graph, just `interactive: false`. */
+function openTesting() {
+  setSettingsOpen(false);
+  const ath = els.athlete.value;
+  const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === ath));
+  const prof = athProfile(ath);
+  renderAnalyticsGraph(els.testGraphChart, {
+    exercises: waSelected.slice(0, WA_GRAPH_MAX),
+    records: recs,
+    metrics: [...waMetrics],
+    config: waGraphConfig,
+    codeOf: displayName,
+    perBodyweight: S.waPerBodyweight,
+    bodyweight: prof?.weight ?? null,
+    worldRecordKg: (ex: string) => worldRecordKg(ex, prof?.sex ?? "m", prof?.weight ?? null),
+    interactive: false,
+  });
+  els.testingPage.hidden = false;
 }
 
 // ---- Exercise "More info" — now an inline, expandable dropdown on the Index
@@ -7740,6 +7767,10 @@ async function init() {
   els.backlogBtn.addEventListener("click", openBacklog);
   els.backlogClose.addEventListener("click", () => {
     els.backlogPage.hidden = true;
+  });
+  els.testingBtn.addEventListener("click", openTesting);
+  els.testingClose.addEventListener("click", () => {
+    els.testingPage.hidden = true;
   });
   // Exercise-settings overlay: ✕ closes it; Esc closes it; the per-exercise
   // active-set force-in/out buttons live inside it, so handle them here too.

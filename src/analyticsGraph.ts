@@ -37,6 +37,9 @@ export interface AnalyticsGraphInput {
   /** Bodyweight+sex-scaled world record (kg) for an exercise, for the "% of world
    * record" metric; null when none is set. */
   worldRecordKg?: (exercise: string) => number | null;
+  /** Disable pan/zoom gesture capture (a static chart that never hijacks scroll).
+   * Defaults to true (interactive). */
+  interactive?: boolean;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -140,6 +143,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   const showsWr = metrics.some((m) => m.id === "pctWR");
   const config = {
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
+    interactive: input.interactive ?? true,
     yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
     rightHeadroom: input.config.rightHeadroom,
     // Horizontal pan/zoom only: vertical dragging would scroll the right-axis
