@@ -10515,6 +10515,17 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
 function waGroupKey(name: string): string {
   return waGroupBy === "none" ? "" : (waMeta(name, waGroupBy)[0] ?? "Unassigned");
 }
+/** Sort rank for a selector group header: Discipline & Muscle group follow their
+ * curated order (so Strength leads the disciplines, not alphabetical); other
+ * dimensions fall through to an alphabetical tiebreak. Unknown keys sort last. */
+function waGroupRank(key: string): number {
+  const order: readonly string[] =
+    waGroupBy === "discipline" ? DISCIPLINES
+    : waGroupBy === "muscleGroup" ? INDEX_MUSCLES
+    : [];
+  const i = order.indexOf(key);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
 /** waChipListBase minus the exercises in turned-off groups (used by Select-all). */
 function waChipList(): { name: string; identity: ExerciseIdentity; missing?: boolean }[] {
   if (waGroupBy === "none" || waGroupsOff.size === 0) return waChipListBase();
@@ -10549,7 +10560,7 @@ function renderWaChips(): void {
   }
   const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity, e.missing)).join("")}</div>`;
   box.innerHTML = [...groups.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
+    .sort((a, b) => (waGroupRank(a[0]) - waGroupRank(b[0])) || a[0].localeCompare(b[0]))
     .map(([g, items]) => {
       // The group HEADER is a toggle: tap to filter that whole group in / out of the
       // picker (replaces the old Filter button). An off group shows just its header.
@@ -10637,7 +10648,7 @@ function waCatPillsHtml(list: readonly WaItem[]): string {
   const groupsCovered = [...groups.values()].filter((g) => waSelCount(g) > 0).length;
   const allPill = waCatPill("__all", "all", waSelCount(list), list.length, groupsCovered, groups.size, dimShort);
   const pills = [...groups.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
+    .sort((a, b) => (waGroupRank(a[0]) - waGroupRank(b[0])) || a[0].localeCompare(b[0]))
     .map(([k, items]) => {
       const cov = waSubgroupCoverage(items);
       return waCatPill(k, k, waSelCount(items), items.length, cov.sel, cov.total, "sub");
