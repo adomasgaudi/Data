@@ -10775,6 +10775,10 @@ function updateBottomNav() {
     const active = nav === "analysis" ? analysisOpen : nav === "other" ? !analysisOpen : false;
     b.classList.toggle("is-active", active);
   }
+  // Label the Analysis button by which page it leads to, so you can tell the
+  // simplified S-ANL page apart from the full analysis.
+  const lbl = document.getElementById("navAnalysisLabel");
+  if (lbl) lbl.textContent = analysisTabName() === "s-analysis" ? "S-Analysis" : "Analysis";
 }
 
 function setOtherSheetOpen(open: boolean) {
