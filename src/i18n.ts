@@ -66,6 +66,11 @@ const LT: Record<string, string> = {
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",
   "Language": "Kalba",
+  // ---- Landing / login ----
+  "Enter": "Įeiti",
+  "Log in as admin": "Prisijungti kaip administratorius",
+  "Password": "Slaptažodis",
+  "Wrong password.": "Neteisingas slaptažodis.",
   // ---- Body stats card ----
   "Body stats": "Kūno rodikliai",
   "Body fat": "Kūno riebalai",

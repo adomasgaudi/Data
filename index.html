@@ -16,14 +16,25 @@
          logged out (Adomas only). Re-openable later from Settings → Log in. -->
     <div id="loginGate" class="login-gate">
       <div class="login-card">
-        <h1 class="login-logo">🏛️ Colosseum</h1>
-        <p class="muted" style="margin:.3rem 0 1.2rem">Strength training dashboard</p>
-        <select id="loginUser" class="login-input" aria-label="Choose your name"></select>
-        <input id="loginPass" class="login-input" type="password" placeholder="Password — first two letters of your name" autocomplete="current-password" />
-        <p id="loginErr" class="login-err" hidden>Wrong password.</p>
-        <button id="loginAdminBtn" type="button" class="login-btn">Log in</button>
-        <button id="loginGuestBtn" type="button" class="login-btn login-btn--spectator">👁 View as spectator</button>
-        <p class="login-note muted">Pick your name, then type its first two letters (e.g. “Adomas” → “ad”). Admin uses its own password; spectator is open. Soft gate only — the site is public.</p>
+        <div class="login-logo" aria-hidden="true">
+          <svg viewBox="0 0 64 44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 41h58"/>
+            <path d="M6 41V16a26 11 0 0 1 52 0v25"/>
+            <path d="M6 27h52"/>
+            <path d="M19 16v11M32 14.5v12.5M45 16v11"/>
+            <path d="M16 41V31a4 4 0 0 1 8 0v10"/>
+            <path d="M28 41V31a4 4 0 0 1 8 0v10"/>
+            <path d="M40 41V31a4 4 0 0 1 8 0v10"/>
+          </svg>
+        </div>
+        <button id="loginGuestBtn" type="button" class="login-btn login-btn--enter">Enter</button>
+        <details class="login-admin">
+          <summary class="login-admin-sum">Log in as admin</summary>
+          <select id="loginUser" class="login-input" aria-label="Choose your name"></select>
+          <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
+          <p id="loginErr" class="login-err" hidden>Wrong password.</p>
+          <button id="loginAdminBtn" type="button" class="login-btn">Log in</button>
+        </details>
       </div>
     </div>
 
@@ -33,7 +44,7 @@
           <h1>Colosseum</h1>
           <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.6.50</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.6.51</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <button id="moreBtn" class="icon-btn" aria-label="More views" aria-haspopup="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
