@@ -68,6 +68,7 @@ import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
+import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph } from "./analyticsGraph";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
@@ -2914,7 +2915,7 @@ function renderSAnalysis() {
     `<div class="s-bs-item"><div class="s-bs-row"><span class="s-bs-name">${name}</span><span class="s-bs-val">${value}</span></div>` +
     `<p class="s-bs-exp muted">${exp}</p></div>`;
   const items = [
-    item("Body fat", `${Math.round(dist.avg * 100)}%`, "The share of your bodyweight that's fat. Lower is leaner — though very low isn't always healthier."),
+    item("Body fat", `${Math.round(dist.low95 * 100)}–${Math.round(dist.high95 * 100)}%`, "The share of your bodyweight that's fat — shown as a range because it's only an estimate. Lower is leaner, though very low isn't always healthier."),
     item("Lean weight", `${f1s(mass.lean.avg)} kg`, "Everything that isn't fat — muscle, bone, organs, water. More lean weight generally means more strength."),
     item("Fat mass", `${f1s(mass.fat.avg)} kg`, "The actual kilograms of fat you carry — your weight times your body-fat %."),
   ];
@@ -8348,6 +8349,26 @@ async function init() {
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);
+
+  // Language (EN/LT) toggle in Settings. Switching reloads; LT then applies via
+  // the translation pass. Done last so the toggle reflects the saved language.
+  setupLanguage();
+  initI18n();
+}
+
+/** Wire the Settings language toggle: highlight the current language; a tap on the
+ * other one saves it and reloads (initI18n then translates the whole site to LT). */
+function setupLanguage(): void {
+  const toggle = document.getElementById("langToggle");
+  if (!toggle) return;
+  const cur = getLang();
+  for (const b of toggle.querySelectorAll<HTMLButtonElement>(".lang-opt")) {
+    b.classList.toggle("is-active", b.dataset.lang === cur);
+    b.addEventListener("click", () => {
+      const l = b.dataset.lang as Lang;
+      if (l && l !== getLang()) setLang(l);
+    });
+  }
 }
 
 /** Read the target page index from a pager button click, or null. */

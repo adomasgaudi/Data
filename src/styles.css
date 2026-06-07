@@ -206,6 +206,12 @@ body.on-s-anl .appfoot { display: none; }
 /* Night mode + Log in/out side by side. */
 .settings-row { display: flex; gap: 0.45rem; }
 .settings-row > .settings-link { flex: 1; justify-content: center; }
+/* Language EN/LT segmented toggle in Settings. */
+.lang-row { align-items: center; justify-content: space-between; margin: 0.2rem 0; }
+.lang-lbl { font-size: 0.85rem; font-weight: 600; }
+.lang-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang-opt { font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; color: var(--muted); background: none; border: none; padding: 4px 12px; }
+.lang-opt.is-active { background: var(--accent); color: #fff; }
 /* "Refresh data" call-to-action in the Data tab. */
 .refresh-panel h2 { margin-top: 0; }
 .refresh-btn {

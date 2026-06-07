@@ -33,7 +33,7 @@
           <h1>Colosseum</h1>
           <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.6.40</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.6.41</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
@@ -64,6 +64,14 @@
               <p class="settings-hint">Changes every exercise name across the whole site at once — code (e.g. HS-PU), your short name, or the full name.</p>
             </div>
           </details>
+          <!-- Language: English ↔ Lithuanian (whole site). Reloads on switch. -->
+          <div class="settings-row lang-row">
+            <span class="lang-lbl">Language</span>
+            <div class="lang-toggle" id="langToggle" role="group" aria-label="Language">
+              <button type="button" class="lang-opt" data-lang="en">EN</button>
+              <button type="button" class="lang-opt" data-lang="lt">LT</button>
+            </div>
+          </div>
           <!-- Simplified ↔ Advanced view: a top-level toggle so it's always visible. -->
           <label class="check"><input type="checkbox" id="simplifiedToggle" /> Simplified view (S-Analysis)</label>
           <p class="settings-hint">On = the “Analysis” button opens a stripped-down page (S-ANL). Off = the full analysis. Defaults on for spectators.</p>
