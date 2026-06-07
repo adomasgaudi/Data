@@ -7334,6 +7334,18 @@ function deferRender(fn: () => void): void {
 function scheduleRender(after?: () => void): void {
   deferRender(() => { renderAll(); after?.(); });
 }
+// The exercise selector can fire many picks in a row; rebuilding the graph +
+// history + filtered chips on each one is heavy enough to block the thread, so the
+// next tap has to wait for it. Debounce that rebuild: the tapped pill/chip updates
+// itself synchronously (instant), waSelected updates now, and the heavy analysis
+// re-render only runs once you pause — so you can rip through chips and the graph
+// "catches up" behind you (the closest we get to off-thread without a worker,
+// which can't touch the DOM anyway). CLAUDE.md rule 17 / #prune SNAP.
+let waRenderTimer: ReturnType<typeof setTimeout> | null = null;
+function debounceWaRender(): void {
+  if (waRenderTimer) clearTimeout(waRenderTimer);
+  waRenderTimer = setTimeout(() => { waRenderTimer = null; renderWorkoutAnalysis(); }, 200);
+}
 
 /**
  * Re-render everything a difficulty / scale / note edit affects. renderAll covers
@@ -10106,6 +10118,9 @@ function renderWorkoutAnalysis(): void {
     // Snapshot open state of the (now single) Exercises fold before innerHTML wipes it.
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
     if (prevFold) S.waChipsFoldOpen = prevFold.open;
+    // Snapshot the picker's own scroll — sel.innerHTML below rebuilds .wa-chips-wrap,
+    // so without this the menu snaps back to the top after every pick.
+    const prevChipScroll = prevFold?.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
     // ONE dropdown now: the old Filter button + ⚙ Settings are folded in here.
     // Settings (which identities to include + how names show) sit at the top; tools
     // (Select all / Clear / Group by) next; then the grouped chips — and tapping a
@@ -10136,6 +10151,8 @@ function renderWorkoutAnalysis(): void {
     const assignBox = document.getElementById("waAssign");
     if (assignBox) assignBox.innerHTML = assignUi;
     renderWaChips();
+    const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
+    if (newWrap) newWrap.scrollTop = prevChipScroll; // keep the menu where it was
   }
   renderWaGraph();
 }
@@ -10677,7 +10694,7 @@ function setupWorkoutAnalysis(): void {
     if (selPill?.dataset.waselpill) {
       selPill.remove(); // instant feedback; the deferred re-render rebuilds the rest
       waSelected = waSelected.filter((x) => x !== selPill.dataset.waselpill);
-      deferRender(renderWorkoutAnalysis);
+      debounceWaRender();
       return;
     }
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
@@ -10687,7 +10704,7 @@ function setupWorkoutAnalysis(): void {
       const on = waSelected.includes(n);
       chip.classList.toggle("is-on", on); // instant feedback before the heavy re-render
       chip.setAttribute("aria-pressed", String(on));
-      deferRender(renderWorkoutAnalysis);
+      debounceWaRender();
       return;
     }
     if (t.closest("#waSelectAll")) {
@@ -10695,12 +10712,12 @@ function setupWorkoutAnalysis(): void {
       // identity-includes / filters / search). History + calendar then show them
       // all; the graph still caps at the first 10 (see renderWaGraph).
       waSelected = waChipList().map((e) => e.name);
-      deferRender(renderWorkoutAnalysis);
+      debounceWaRender();
       return;
     }
     if (t.closest("#waClear")) {
       waSelected = [];
-      deferRender(renderWorkoutAnalysis);
+      debounceWaRender();
       return;
     }
     // Create a user exercise def (dissolved variant / combined / comparison group).
