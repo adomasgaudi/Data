@@ -3004,7 +3004,7 @@ const muscleColor = (m: MuscleGroup): string =>
 
 // Discipline (training-style) colours for the Index "By discipline" grouping.
 const DISCIPLINE_COLORS: Record<Discipline, string> = {
-  "Strength": "#284e86", Calisthenics: "#2e7d52", Mobility: "#1f8a8a",
+  "Strength": "#284e86", Calisthenics: "#2e7d52", Statics: "#5e708a", Mobility: "#1f8a8a",
   Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b", Skill: "#b8902f",
   Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
 };

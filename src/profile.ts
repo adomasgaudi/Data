@@ -647,6 +647,7 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
 export type Discipline =
   | "Strength"
   | "Calisthenics"
+  | "Statics"
   | "Mobility"
   | "Dynamic"
   | "Posture"
@@ -656,7 +657,7 @@ export type Discipline =
   | "Parkour"
   | "Climbing";
 export const DISCIPLINES: Discipline[] = [
-  "Strength", "Calisthenics", "Mobility", "Dynamic", "Posture",
+  "Strength", "Calisthenics", "Statics", "Mobility", "Dynamic", "Posture",
   "Cardio", "Skill", "Balance", "Parkour", "Climbing",
 ];
 /** Best-guess primary discipline by keyword; everything loaded falls to
@@ -672,6 +673,12 @@ export function exerciseDiscipline(exerciseName: string): Discipline {
   // that merely share a word, so those are excluded and fall through to strength.
   if ((/\brun/.test(n) || has("bike", "cardio", "stairs", "hike", "sprint", "cycle", "sled", "slege", "erg", "elliptical", "treadmill", "jump rope", "skipping", "stairmaster", "calorie")) && !/crunch|leg press|leg-press/.test(n))
     return "Cardio";
+  // Statics — TIME-BASED holds (reps logged as seconds): planks, L-sits, dead
+  // hangs, supports, wall sits, isometric holds. Checked AFTER Cardio & flexibility
+  // (Mobility) above so those time-based styles stay where they belong. Also catch
+  // a few inherently-static skills (levers / planche / flag / iron cross) that hold
+  // a position even when the name omits "hold".
+  if (isIsometric(n) || has("wall sit", "front lever", "planche", "human flag", "iron cross", "maltese") ) return "Statics";
   if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "l-sit", "l sit", "lsit", "lever", "flag")) return "Skill";
   if (has("balance", "slackline", "beam", "one-leg", "single-leg balance")) return "Balance";
   if (has("jump", "plyo", "hop", "explosive", "clap", "throw", "slam", "ballistic", "bound")) return "Dynamic";

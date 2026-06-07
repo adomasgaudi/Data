@@ -179,6 +179,7 @@ const LT: Record<string, string> = {
   "Group by": "Grupuoti pagal",
   "Sub-group by": "Pogrupis pagal",
   "Discipline": "Disciplina",
+  "Statics": "Statika",
   "Muscle group": "Raumenų grupė",
   "Body part": "Kūno dalis",
   "Joint": "Sąnarys",
