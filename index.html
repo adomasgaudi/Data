@@ -1197,8 +1197,11 @@
           <h2>🧪 Testing</h2>
           <button type="button" id="testingClose" class="overlay-close" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Experimental surface for trying graph variants. The chart below is the <b>old, non-interactive graph</b> (no drag-to-pan / pinch-zoom) of your current exercise selection — try scrolling the page up and down with your finger ON the chart and tell me if it scrolls.</p>
+        <p class="muted">Scroll test. The chart below is the <b>OLD static graph</b>: no drag-to-pan, no pinch-zoom, and <b>touch-action: auto</b> — it never grabs your finger. Put your finger ON the chart and swipe up/down: the page should scroll from the ⬆ TOP marker to the ⬇ BOTTOM marker straight through the chart. Tell me whether it scrolls.</p>
+        <div class="test-marker">⬆ TOP — scroll DOWN from here, finger on the chart</div>
         <div id="testGraphChart" class="wa-graph-chart"></div>
+        <div class="test-spacer muted">↕ keep swiping vertically with your finger on the chart above ↕</div>
+        <div class="test-marker">⬇ BOTTOM — if you reached here by swiping over the chart, scroll WORKS</div>
       </div>
     </div>
 

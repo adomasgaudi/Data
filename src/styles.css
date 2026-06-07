@@ -493,6 +493,13 @@ main { padding-bottom: 5rem; }
    while horizontal drags still pan the chart and wheel / double-tap-to-fit still
    zoom. (Was `none`, which captured every gesture and froze page scroll over a chart.) */
 .svgc-svg { display: block; touch-action: pan-y; }
+/* 🧪 Testing page only: force the OLD static-graph behaviour — the chart never
+   claims the touch, so a vertical swipe ON the chart scrolls the page like any
+   plain content. `auto` (not pan-y) leaves zero room for a browser quirk. */
+#testGraphChart .svgc-plot,
+#testGraphChart .svgc-svg { touch-action: auto !important; cursor: default; }
+.test-marker { padding: 0.6rem 0; font-weight: 700; text-align: center; color: var(--accent, #6cf); }
+.test-spacer { min-height: 55vh; display: flex; align-items: center; justify-content: center; }
 /* Themed chart structural elements (so charts follow light/dark). */
 .svgc-grid { stroke: var(--chart-grid); }
 .svgc-band { fill: var(--chart-band); }
