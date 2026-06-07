@@ -14,6 +14,20 @@ Every entry groups the contents into two tiers (the same split the app's
 
 ---
 
+## 2026-06-07 · app b.2.7.53 · exported 19:44
+
+**🆕 since the 13:18 snapshot** (what you added/changed):
+- **App-wide filter is now SOLO (only-these)** — cutoff "S" plus a big hand-picked list of ~250 lifts pinned as the active set (was empty before).
+- **Bodyweight-part ranges set**: Dumbbell Lunge 0.6, Hip Thrust 0.3.
+- **More renames** — short names +3 (Push Ups→"Push Up", Dumbbell Lunge→"dLunge", Smith Machine Incline Close Grip Push Up→"smPush Up"); codes +3 (Dumbbell Lunge→"dLunge", Smith Machine Incline Close Grip Push Up→"smPU", Standing abductor→"standH-AB").
+- **More category overrides** — Push Ups→Chest(+Triceps); Dumbbell Lunge→Quads(+Glutes); Smith Machine Incline Close Grip Push Up→Chest(+Triceps); Hip Thrust→Glutes(+Quads, Hamstrings, Lower back) and promoted to **main** tier.
+- **Allowed-graphs review widened** (now a per-metric review state, not a flat list): Pull Ups, Bench Press, Deadlift, Push Ups fully enabled; Lat Pulldown, Romanian Deadlift, Dumbbell Bench/Shoulder Press, Smith Machine Squat, Squat, Dumbbell Lunge reviewed at state 1; Shoulder Press at 3.
+- Hard-sets-only turned **off**; last-viewed athlete now "dzuljeta" (you're still signed in as adomasgaudi).
+
+**🟢 KEEP — unchanged from 13:18**: the 3 hand-logged sets; body stats (29 m, 90.5 kg, 180 cm, bf ~13–23%); 2 HSPU set-note edits; 3 deleted sets; world records (Bench 200/140, Pull Ups 100/60, Squat 360/260); HSPU multiplier tuning + ~11 per-note variation picks; not-comparable "HSPU | static from bottom".
+
+---
+
 ## 2026-06-07 · app b.2.7.16 · exported 13:18
 
 ### 🟢 KEEP — your data
