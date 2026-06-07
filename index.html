@@ -29,7 +29,7 @@
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.6.34</span> <span id="effortSummary" class="effort-inline"></span></h1>
+        <h1>Colosseum <span class="version">b.2.6.35</span> <span id="effortSummary" class="effort-inline"></span></h1>
         <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
       </div>
       <div class="topbar-right">
@@ -59,10 +59,11 @@
                 </div>
               </div>
               <p class="settings-hint">Changes every exercise name across the whole site at once — code (e.g. HS-PU), your short name, or the full name.</p>
-              <label class="check"><input type="checkbox" id="simplifiedToggle" /> Simplified view</label>
-              <p class="settings-hint">When on, the bottom “Analysis” button opens a simplified page (S-ANL) instead of the full analysis.</p>
             </div>
           </details>
+          <!-- Simplified ↔ Advanced view: a top-level toggle so it's always visible. -->
+          <label class="check"><input type="checkbox" id="simplifiedToggle" /> Simplified view (S-Analysis)</label>
+          <p class="settings-hint">On = the “Analysis” button opens a stripped-down page (S-ANL). Off = the full analysis. Defaults on for spectators.</p>
           <!-- Night mode + security (who you're signed in as) grouped together.
                "View as" is now chosen on the login screen, so its picker is kept
                here only as a hidden, in-sync mirror (no longer shown in the menu). -->

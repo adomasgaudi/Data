@@ -330,13 +330,13 @@ let viewUser: string | null = (() => {
 })();
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
-// Non-admin (user / spectator) views get the SIMPLIFIED analysis page (S-ANL), not
-// the full ANL — so the full analysis never shows outside admin.
-const USER_VIEW_TABS = new Set(["s-analysis", "athlete", "guide"]);
-/** Which analysis page the bottom "Analysis" button opens: the simplified S-ANL for
- * non-admin views or when the Simplified-view toggle is on; else the full ANL. */
+// Both analysis pages are allowed in non-admin views; the Simplified-view toggle
+// (defaulting ON outside admin) decides which one the Analysis button opens.
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide"]);
+/** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
+ * Simplified-view toggle is on, else the full ANL. */
 function analysisTabName(): string {
-  return viewMode !== "admin" || simplifiedView ? "s-analysis" : "analysis";
+  return simplifiedView ? "s-analysis" : "analysis";
 }
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
@@ -360,7 +360,7 @@ function setViewMode(mode: ViewMode) {
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
     if (!USER_VIEW_TABS.has(current)) {
-      switchTopTab("s-analysis"); // non-admin's analysis home is the simplified page
+      switchTopTab(analysisTabName()); // analysis home (simplified by default outside admin)
     }
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
@@ -2592,8 +2592,16 @@ let exerciseSort: "sets" | "category" | "tier" = "category";
 // "Legs (all)" is a broad umbrella that overlaps the narrower leg splits, so it's
 // hidden from the By-category list by default; a Settings toggle brings it back.
 let showLegsAll = (() => { try { return localStorage.getItem("colosseum.legsAll") === "1"; } catch { return false; } })();
-// Simplified view: when on, the bottom "Analysis" button opens the empty S-ANL page.
-let simplifiedView = (() => { try { return localStorage.getItem("colosseum.simplifiedView") === "1"; } catch { return false; } })();
+// Simplified view: when on, the bottom "Analysis" button opens the S-ANL page.
+// Defaults ON outside admin (spectator/user), OFF for admin — until explicitly set.
+let simplifiedView = (() => {
+  try {
+    const v = localStorage.getItem("colosseum.simplifiedView");
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* ignore */ }
+  return viewMode !== "admin";
+})();
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
@@ -7442,11 +7450,15 @@ async function init() {
     renderExercisesPage();
   });
 
-  // Simplified view: routes the bottom "Analysis" button to the empty S-ANL page.
+  // Simplified view ↔ Advanced. Switches the Analysis home (S-ANL ↔ full ANL) and
+  // re-navigates immediately if you're already on an analysis page.
   els.simplifiedToggle.checked = simplifiedView;
   els.simplifiedToggle.addEventListener("change", () => {
     simplifiedView = els.simplifiedToggle.checked;
     try { localStorage.setItem("colosseum.simplifiedView", simplifiedView ? "1" : "0"); } catch { /* ignore */ }
+    const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+    if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
+    updateBottomNav();
   });
 
   // The red "trained alone" rings on the calendar (off by default).
@@ -10677,6 +10689,8 @@ function switchTopTab(name: string) {
   // Panels aren't all backed by a .tab button (e.g. #tab-groups), so toggle by id.
   for (const panel of document.querySelectorAll<HTMLElement>(".tab-panel"))
     panel.hidden = panel.id !== `tab-${name}`;
+  // The simplified S-ANL page gets a clean chrome (no SP, no data-summary footer).
+  document.body.classList.toggle("on-s-anl", name === "s-analysis");
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
