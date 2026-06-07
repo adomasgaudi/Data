@@ -247,7 +247,6 @@ const els = {
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutCalendar: $("workoutCalendar"),
-  workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutViewToggle: $<HTMLButtonElement>("workoutViewToggle"),
@@ -316,7 +315,6 @@ let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
-let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
@@ -2869,7 +2867,6 @@ function renderAthlete() {
   renderMuscleMap();
   renderExercisesPage();
   renderWorkoutCalendar();
-  renderWorkoutSetsChart();
   renderWorkoutsPage();
   // Analysis hosts the legacy panels via relocation, but its OWN UI (the
   // exercise selector, mode readout, etc.) needs an athlete-aware refresh too.
@@ -5083,47 +5080,8 @@ function jumpToWorkoutDate(iso: string) {
  * lumped into a grey "Other" so the legend stays readable. Same per-set range
  * idea as the compare graph, but mixing every exercise. Collapsed by default.
  */
-function renderWorkoutSetsChart() {
-  const box = document.getElementById("workoutSetsChart");
-  if (!box) return;
+// renderWorkoutSetsChart() warehoused (CUT-2): warehouse/2026-06-07-cut2-workout-sets-chart/
 
-  const username = els.athlete.value;
-  const formula = currentFormula();
-  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked, requireWeightAndReps: true });
-  const mine = recs.filter((r) => r.username === username);
-  if (mine.length === 0) {
-    els.workoutSetsNote.textContent = "No sets with a usable 1RM yet.";
-    if (workoutSetsSvg) workoutSetsSvg.update({ series: [] });
-    return;
-  }
-
-  // Colour the athlete's most-trained exercises; everything else is "Other".
-  const ranked = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
-  const named = new Map<string, string>();
-  ranked.slice(0, COMPARE_COLORS.length - 1).forEach((name, i) => named.set(name, COMPARE_COLORS[i]!));
-  const OTHER = "#9aa3b2";
-  const ts = (d: string) => Date.parse(d);
-
-  type Bar = { x: number; lo: number; hi: number; meta: string };
-  const groups = new Map<string, { color: string; points: Bar[] }>();
-  for (const s of mine) {
-    const e1rm = addedWeight1RM(s, formula);
-    if (e1rm === null) continue;
-    const label = named.has(s.exerciseName) ? s.exerciseName : "Other";
-    const color = named.get(s.exerciseName) ?? OTHER;
-    const g = groups.get(label) ?? groups.set(label, { color, points: [] }).get(label)!;
-    const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${displayName(s.exerciseName)} ×${s.reps ?? 0}` });
-  }
-  const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
-  const series: SvgSeries[] = order.map((label) => ({ name: label, color: groups.get(label)!.color, type: "range", points: groups.get(label)!.points }));
-
-  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
-  if (!workoutSetsSvg) workoutSetsSvg = mountSvgChart(box, config);
-  else workoutSetsSvg.update(config);
-  els.workoutSetsNote.textContent =
-    `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel to zoom · tap a bar.`;
-}
 
 /** Sum a session's exercise set-counts into the chosen grouping dimension
  * (muscle / functional pattern / combined / comparable), biggest first. An
@@ -7337,7 +7295,6 @@ function refreshAfterDifficultyEdit(): void {
   refreshExerciseInfo();
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-  renderWorkoutSetsChart();
   renderWaCompareGraph();
   if (selectedExercise) renderExerciseProgressChart(selectedExercise);
   window.scrollTo(0, y);
@@ -9119,7 +9076,6 @@ function onInlineAddGo(form: HTMLElement) {
   renderWorkoutsPage();
   reopenWorkoutGroups(openDates);
   renderWorkoutCalendar();
-  renderWorkoutSetsChart();
   renderDataTab();
 }
 
@@ -9988,16 +9944,14 @@ function renderWorkoutAnalysis(): void {
     }
     workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
-    renderWorkoutSetsChart();
-  } else {
+    } else {
     // All (nothing selected): the live Workouts panel — its history list.
     waListExerciseFilter = [];
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = `${athleteLabel()} — workouts`;
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
-    renderWorkoutSetsChart();
-  }
+    }
   renderWaCompareGraph(); // compare overlay dropdown (only shown in compare mode)
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing

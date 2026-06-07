@@ -254,13 +254,9 @@
                 </div>
             </details>
             </div>
-            <details id="workoutSets" class="workout-sets">
-              <summary class="workout-sets-summary">Sets over time <span class="ws-caret">▾</span></summary>
-              <div class="workout-sets-body">
-                <div id="workoutSetsChart"></div>
-                <p class="muted" id="workoutSetsNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
-              </div>
-            </details>
+            <!-- CUT-2: "Sets over time" chart warehoused (warehouse/2026-06-07-cut2-workout-sets-chart).
+                 Empty #workoutSets kept as the calendar's relocation anchor (setAnalysisCalendar). -->
+            <details id="workoutSets" class="workout-sets" hidden></details>
             <div id="workoutCalendar" class="wo-calendar"></div>
             <table id="workoutsTable" class="data-table"></table>
             <div id="workoutsPager" class="pager"></div>
