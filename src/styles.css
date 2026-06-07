@@ -2687,6 +2687,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
 .wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
+/* A selected lift that's actually ON the graph gets the accent border + 📈 mark;
+   the ones past the graph's limit read dimmer so the split is obvious. */
+.wa-sel-pill.is-graphed { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.wa-sel-pill.is-ungraphed { opacity: 0.6; }
+.wa-sel-graphdot { font-size: 0.66rem; line-height: 1; }
+.wa-match-graph { white-space: nowrap; }
 /* Sticky selector bar: sits at the top of the Analysis card in normal flow, then
    pins to the top of the screen as you scroll the content below it. The card must
    not be an overflow scroll container or sticky can't pin to the viewport. */

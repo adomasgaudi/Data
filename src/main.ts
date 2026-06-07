@@ -10316,15 +10316,27 @@ function renderWorkoutAnalysis(): void {
     // compact tools row beside the title (they all open as floating menus, so the
     // layout never shifts). The machine-type toggle (single mode) drops below.
     // Selected exercises shown as removable pills right in the sticky bar, so you
-    // always see what's plotted and can drop one with a tap (EXR-SEL-PILLS).
+    // always see what's plotted and can drop one with a tap (EXR-SEL-PILLS). The
+    // first WA_GRAPH_MAX are the ones the graph actually plots (its point budget);
+    // they're marked 📈 so you can see selection-vs-graph at a glance, and "Match
+    // graph" trims the selection to exactly those so the history/calendar match.
+    const onGraph = new Set(waSelected.slice(0, WA_GRAPH_MAX));
+    const overCap = waSelected.length > WA_GRAPH_MAX;
     const selPills = waSelected.length
       ? `<div class="wa-sel-pills">` +
-        waSelected.map((n) => `<button type="button" class="wa-sel-pill" data-waselpill="${escapeHtml(n)}" title="Remove ${escapeHtml(n)}">${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`).join("") +
+        waSelected.map((n) => {
+          const g = onGraph.has(n);
+          const title = g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${WA_GRAPH_MAX}-lift limit · tap to remove ${n}`;
+          return `<button type="button" class="wa-sel-pill${g ? " is-graphed" : " is-ungraphed"}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${g ? `<span class="wa-sel-graphdot" aria-hidden="true">📈</span>` : ""}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
+        }).join("") +
         `</div>`
+      : "";
+    const matchBtn = overCap
+      ? `<button type="button" id="waMatchGraph" class="wa-clear wa-match-graph" title="Trim the selection to just the ${WA_GRAPH_MAX} lifts on the graph, so the workout history & calendar show exactly what's plotted">Match graph (${WA_GRAPH_MAX})</button>`
       : "";
     sel.innerHTML =
       `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${exercisesFold}</div>` +
+      `<div class="wa-sel-tools">${exercisesFold}${matchBtn}</div>` +
       selPills +
       `</div>`;
     // Pills wrap onto up to 2 lines; if the wrapped block would need MORE than 2
@@ -11022,6 +11034,13 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest("#waClear")) {
       waSelected = [];
+      debounceWaRender();
+      return;
+    }
+    // "Match graph" — drop the selected lifts the graph can't fit, so the history
+    // and calendar (which follow the selection) match exactly what's plotted.
+    if (t.closest("#waMatchGraph")) {
+      waSelected = waSelected.slice(0, WA_GRAPH_MAX);
       debounceWaRender();
       return;
     }
