@@ -511,10 +511,11 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   // on a bodyweight lift, so the added weight is 0 and the body is the whole load.
   const addedWeight = record.origWeight === undefined ? effectiveLoad : (record.origWeight ?? 0);
   const bodyweightLoad = effectiveLoad - addedWeight;
-  // Peel the ADJUSTED bodyweight (scaled by the same difficulty) — since the load
-  // fed to the curve was scaled, the bodyweight reference must be scaled too, not
-  // the full bodyweight. (mult = 1 → unchanged for ordinary lifts.)
-  return effective1RM - bodyweightLoad * mult;
+  // Peel the FULL bodyweight share (NOT scaled by the difficulty multiplier): the
+  // 1RM is the load above bodyweight, and bodyweight itself doesn't shrink with an
+  // easier variation. An easy bodyweight variation therefore reads a negative
+  // added-weight 1RM (you'd need that much assistance to do the baseline move).
+  return effective1RM - bodyweightLoad;
 }
 
 /**
