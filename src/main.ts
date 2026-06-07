@@ -7423,7 +7423,7 @@ async function init() {
     renderLeaderboard();
     renderPersonalRecords(); // PRs are scoped to the selected exercise
   });
-  els.rank.addEventListener("change", renderLeaderboard);
+  els.rank.addEventListener("change", () => deferRender(renderLeaderboard));
 
   // Coliseum comparison filters: re-render both the chart and the PR table, which
   // share the sex/bodyweight filter. The axis inputs only affect the chart, but
@@ -7435,8 +7435,8 @@ async function init() {
   els.sexFilter.addEventListener("change", refreshColiseum);
   els.bwMin.addEventListener("input", refreshColiseum);
   els.bwMax.addEventListener("input", refreshColiseum);
-  els.axisMin.addEventListener("input", renderLeaderboard);
-  els.axisMax.addEventListener("input", renderLeaderboard);
+  els.axisMin.addEventListener("input", () => deferRender(renderLeaderboard));
+  els.axisMax.addEventListener("input", () => deferRender(renderLeaderboard));
   els.axisReset.addEventListener("click", () => {
     els.axisMin.value = "";
     els.axisMax.value = "";
@@ -8034,9 +8034,9 @@ async function init() {
       gotoNoteSet(j.dataset.jumpuser, j.dataset.jumpex, j.dataset.jumpdate);
   });
 
-  els.formula.addEventListener("change", renderAll);
-  els.excludeDropsets.addEventListener("change", renderAll);
-  els.athlete.addEventListener("change", renderAthlete);
+  els.formula.addEventListener("change", () => scheduleRender());
+  els.excludeDropsets.addEventListener("change", () => scheduleRender());
+  els.athlete.addEventListener("change", () => deferRender(renderAthlete));
   // Clicking a custom chip drives the hidden <select> (single source of truth).
   els.athleteSexFilter.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
@@ -8193,7 +8193,7 @@ async function init() {
     applyNameModeChange();
   });
   syncNameModeButtons();
-  els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
+  els.workoutGrouping.addEventListener("change", () => deferRender(renderWorkoutsPage));
   els.workoutsPageBtn.addEventListener("click", () => {
     workoutsPageSize = workoutsPageSize === 50 ? 20 : 50;
     workoutsPage = 0;
@@ -9706,7 +9706,7 @@ function renderGroupsView() {
 }
 
 function setupGroupsView() {
-  els.groupsAthlete.addEventListener("change", renderGroupsView);
+  els.groupsAthlete.addEventListener("change", () => deferRender(renderGroupsView));
   renderGroupsView(); // populate the athlete picker before first open
 }
 
@@ -10254,7 +10254,12 @@ function exerciseSubgroup(name: string): string | null {
 let waGraphRaf = 0;
 function scheduleWaGraph(): void {
   if (waGraphRaf) return;
-  waGraphRaf = requestAnimationFrame(() => { waGraphRaf = 0; renderWaGraph(); });
+  const y = window.scrollY; // renderWaGraph rebuilds the graph block (innerHTML) →
+  waGraphRaf = requestAnimationFrame(() => { // would shift the page; pin scroll.
+    waGraphRaf = 0;
+    renderWaGraph();
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  });
 }
 // A chart-ONLY re-plot, set up at the end of each renderWaGraph: re-runs the SVG
 // chart with the current config but does NOT rebuild the options menu — so a live
@@ -10664,8 +10669,7 @@ function setupWorkoutAnalysis(): void {
     if (hard) {
       waHardOnly = hard.checked;
       saveHardOnly();
-      renderWaGraph();
-      renderWorkoutCalendar();
+      deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); }); // pin scroll
       return;
     }
     const perBw = target.closest<HTMLInputElement>("#waPerBw");
@@ -10725,14 +10729,14 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest("#waFiltersClear")) {
       for (const d of FILTER_DIMS) delete waFilterValues[d];
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     if (t.closest("#waSearchClear")) {
       waSearchQuery = "";
       const cmd = document.getElementById("cmdInput") as HTMLInputElement | null;
       if (cmd) cmd.value = "";
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     // Group header in the Exercises dropdown → filter that whole group in / out.
@@ -10749,7 +10753,7 @@ function setupWorkoutAnalysis(): void {
       const id = incBtn.dataset.waident as ExerciseIdentity;
       if (waIncludeIdentities.has(id)) waIncludeIdentities.delete(id);
       else waIncludeIdentities.add(id);
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     // Chip label mode → set the GLOBAL name mode (code / short / full), site-wide.
@@ -10767,7 +10771,7 @@ function setupWorkoutAnalysis(): void {
       const cur = new Set(waFilterValues[dim] ?? []);
       if (cur.has(val)) cur.delete(val); else cur.add(val);
       if (cur.size) waFilterValues[dim] = [...cur]; else delete waFilterValues[dim];
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     // Graph metric toggle (TASK 27): enable/disable a metric, re-render the graph.
