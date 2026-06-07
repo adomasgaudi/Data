@@ -38,7 +38,7 @@ ones, re-grade as the code changes.
 
 ## 🟣 Creative Director — cut or re-present whole features
 - **CUT-1** — Cut / 2D-replace / lazy-load the 3D handstand (3 MB + heaviest dependency).
-- **CUT-2** — One graph, not two: finish the unified-graph migration, retire the legacy charts. *(in progress)*
+- **CUT-2** — One graph, not two: finish the unified-graph migration, retire the legacy charts. *(in progress — Stage 1 DONE: `GRAPH-2` CSS already hides the legacy drill-in/compare/workout-sets charts in Analysis, and the standalone Exercises/Compare/Workouts tabs are no longer in the More menu, so the legacy charts are invisible dead weight. Remaining = Stage 3: warehouse/delete the dead chart code — `exerciseSvg`/`compareSvg`/`workoutSetsSvg` + `renderExerciseProgressChart`/`renderCompareChart` + their containers — WITHOUT touching the still-visible panels/tables they sit beside. Stage 2 parity is moot: legacy-only chart features are already not shown.)*
 - **CUT-3** — Move the Guide tab (410 lines, 35% of `index.html`) out of the app.
 - **CUT-4** — Commit to or cut the half-built taxonomy (16 joints / 27 movements, ~10 lifts seeded).
 - **CUT-5** — Externalise the changelog data (180 KB, 85% data).
