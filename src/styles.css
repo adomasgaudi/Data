@@ -1072,6 +1072,7 @@ main { padding-bottom: 5rem; }
    .xdd-wide is used for the big leaderboard exercise picker. */
 .dd-native { display: none !important; }
 .xdd { position: relative; display: inline-block; vertical-align: middle; }
+.xdd[hidden] { display: none; } /* enhanced selects can be hidden via the [hidden] attr */
 .xdd-btn {
   cursor: pointer; display: inline-flex; align-items: center; justify-content: space-between; gap: 0.4rem;
   width: 100%; padding: 6px 11px; border: 1px solid var(--line); border-radius: 8px;

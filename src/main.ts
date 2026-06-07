@@ -2878,7 +2878,10 @@ const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "A
 function syncWorkoutToggles(): void {
   els.workoutViewToggle.textContent = S.workoutViewMode === "day" ? "Day" : "Week";
   els.workoutShowToggle.textContent = S.workoutShowMode === "exercises" ? "Exer" : "Group";
-  els.workoutGrouping.hidden = S.workoutShowMode !== "groups";
+  // The group-dimension dropdown only applies to GROUP mode. It's been enhanced into
+  // a .xdd twin, so hide BOTH the <select> and its twin (hiding the select alone left
+  // the visible dropdown showing in exercise mode).
+  setEnhancedSelectHidden(els.workoutGrouping, S.workoutShowMode !== "groups");
   els.workoutNameToggle.hidden = S.workoutShowMode !== "exercises"; // names only apply to the exercise view
   // This button is now a shortcut to the GLOBAL name mode (cycles code → short → full).
   els.workoutNameToggle.textContent = nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full";
@@ -11680,6 +11683,15 @@ function enhanceSelectTree(el: HTMLElement): void {
     if (sel.id === "athlete" || sel.id === "viewAsSelect" || sel.closest("[data-no-xdd]")) continue;
     enhanceSelect(sel, sel.classList.contains("dd-wide") ? { wide: true } : {});
   }
+}
+
+/** Show/hide a <select> that may have been enhanced into a .xdd twin — toggles the
+ * `hidden` attr on BOTH, so a hidden enhanced dropdown actually disappears (the
+ * visible control is the twin, not the now-`dd-native`-hidden select). */
+function setEnhancedSelectHidden(sel: HTMLSelectElement, hidden: boolean): void {
+  sel.hidden = hidden;
+  const twin = sel.nextElementSibling;
+  if (twin instanceof HTMLElement && twin.classList.contains("xdd")) twin.hidden = hidden;
 }
 
 function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
