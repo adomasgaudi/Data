@@ -10,6 +10,29 @@ committed `CAT-n` is derived at commit time (rule 8). Risky deletions go via the
 attic/warehouse tiers (rule 10). Keep this file updated — mark items done, add new
 ones, re-grade as the code changes.
 
+## ▶ Recommended order (chronology for the CUT-/ARCH- work)
+
+Principles: **subtract before you restructure** (every cut = less to split later);
+**build the test safety-net before risky moves**; **docs last** (they re-drift while
+the architecture moves). The ROI items are pointers, not separate work
+(ROI-1→ARCH-1, ROI-2→CLN-1+CUT-1, ROI-3→CUT-2). Critical path: **2→3→4→8→9**.
+
+1. **CLN-1** — untrack `dist` (free, ROI-2).
+2. **CUT-2 Stage 3** — warehouse the now-invisible legacy chart code (lowest-risk removal; shrinks main.ts; finishes ROI-3).
+3. **DEL-1** — warehouse dead scaffolding (unused → safe; shrinks profile/domain/main).
+4. **ARCH-0 (safety net)** — jsdom smoke tests (ARCH-1 step 1; also de-risks 5–8). Build once, here.
+5. **CUT-1** — 3D handstand: decide lazy-load vs cut, then execute (biggest weight win, ROI-2). *owner decision*
+6. **CUT-3** — move the Guide tab out of the app (~35% of index.html). *owner decision*
+7. **CUT-4** — taxonomy: commit-or-cut; if cut, must precede ARCH-3. *owner decision*
+8. **ARCH-2** — move untested coupled compute (strength-fade, world-record, difficulty) into tested modules.
+9. **ARCH-1** — split main.ts (`let`→state-object → ~7 feature modules). Highest ROI; now small + net-covered.
+10. **ARCH-3** — merge over-split clusters (after CUT-4 + ARCH-1).
+11. **CUT-5** — externalise changelog data (independent; slot anytime).
+12. **DOC-1** — reconcile drifted docs (last, once stable).
+
+Steps 5–7 are subtraction that should land before ARCH-1 but each needs an owner
+decision; 11 is parallelizable; 12 is last.
+
 ## 🟢 Junior — safe, do-now
 - **CLN-1** — Untrack `dist/index.html` (6.1 MB; CI rebuilds it).
 - **CLN-2** — Fix the `var(--card)` bug (undefined, used 5× → transparent login card / sitemap / RPE buttons).
