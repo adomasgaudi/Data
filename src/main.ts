@@ -10235,6 +10235,27 @@ function restoreAnalysisPanels(): void {
  *   • single/compare → the same history, scoped to the picked lift(s)
  * The universal graph (and, for compare, the overlay dropdown) sit above it. It
  * also re-paints the Filters mode readout and the exercise-selector chips. */
+/** The workout-history exercise filter, honouring an active Analysis search: with
+ * no query it's the passed base (the selection, or [] = all); with a query it's
+ * EVERY lift in this athlete's log whose name/code matches — even unselected ones —
+ * so a lift buried deep in history is findable from the ONE search bar. Expanded to
+ * raw member names; a no-match query maps to a sentinel so the list reads empty. */
+function historyFilterWithSearch(base: string[]): string[] {
+  const q = waSearchQuery.trim().toLowerCase();
+  if (!q) return base;
+  const matching = exerciseCountsForUser(activeRecords(), els.athlete.value)
+    .map((e) => e.exerciseName)
+    .filter((n) => n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q));
+  return matching.length ? expandToRawExercises(matching) : [" no-history-match"];
+}
+/** Recompute the history filter (mode base + search) — for the light keystroke
+ * update that refreshes the history without rebuilding the whole Analysis view. */
+function refreshHistorySearch(): void {
+  const mode = waMode();
+  const base = mode === "single" || mode === "compare" ? expandToRawExercises(waSelected) : [];
+  waListExerciseFilter = historyFilterWithSearch(base);
+}
+
 function renderWorkoutAnalysis(): void {
   // First time in: pre-select the top-10 tier-1 lifts so the view opens as a real
   // selection (pills shown), not the implicit aggregate. Clearing later is allowed.
@@ -10253,7 +10274,7 @@ function renderWorkoutAnalysis(): void {
     // list is the relocated Workouts panel, filtered via waListExerciseFilter.
     selectedExercise = null;
     combinedWith = [];
-    waListExerciseFilter = expandToRawExercises(waSelected);
+    waListExerciseFilter = historyFilterWithSearch(expandToRawExercises(waSelected));
     setAnalysisMainPanel("workouts");
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
@@ -10276,12 +10297,16 @@ function renderWorkoutAnalysis(): void {
     renderWorkoutsPage();
     } else {
     // All (nothing selected): the live Workouts panel — its history list.
-    waListExerciseFilter = [];
+    waListExerciseFilter = historyFilterWithSearch([]);
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = `${athleteLabel()} — workouts`;
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     }
+  // An active search re-titles the history so it's clear it's showing matches, not
+  // the selection (the history list is filtered to them by historyFilterWithSearch).
+  if (waSearchQuery.trim() && contentTitle)
+    contentTitle.textContent = `${athleteLabel()} — “${waSearchQuery.trim()}” in history`;
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing
   // selected it keeps the user's own calendar filter (saved/restored around a
@@ -11020,6 +11045,14 @@ function setupCommandBar(): void {
     } else {
       openSelectorFolds();
       renderWaChips(); // light update so the input keeps focus
+      // The ONE search bar also filters the workout HISTORY: surface matching lifts
+      // (even unselected, buried ones) without a full re-render that'd drop focus.
+      refreshHistorySearch();
+      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+      const ct = document.getElementById("waTableSummary");
+      if (ct) ct.textContent = waSearchQuery.trim()
+        ? `${athleteLabel()} — “${waSearchQuery.trim()}” in history`
+        : `${athleteLabel()} — ${waSelected.length ? "selected lifts" : "workouts"}`;
     }
   });
   input.addEventListener("keydown", (e) => {
