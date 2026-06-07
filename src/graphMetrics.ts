@@ -31,7 +31,7 @@ export interface GraphMetricDef {
   id: string;
   label: string;
   /** Series kind (default "line"). "range" uses lo/hi; "scatter" = dots. */
-  type?: "line" | "range" | "scatter";
+  type?: "line" | "range" | "scatter" | "bars";
   /** Which y-axis (most share the left). */
   axis?: "left" | "right";
   /** Per-exercise point builder. Absent = registered but not computed yet. */
@@ -241,8 +241,8 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // scale when shown alongside weight/1RM (TASK 42). These are raw per-day totals
   // that bounce around with what you chose to do, so they read as scatter (a dot
   // per day) — only Frequency is a smoothed cadence, so it stays a line.
-  { id: "volume", label: "Volume", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps))) },
-  { id: "volumeLoad", label: "Volume Load", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps))) },
+  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps))) },
+  { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps))) },
   { id: "reps", label: "Reps", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
   { id: "sets", label: "Sets", type: "scatter", axis: "right", compute: (rs) => setsPerDay(rs) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },

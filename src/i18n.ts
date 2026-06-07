@@ -127,6 +127,9 @@ const LT: Record<string, string> = {
   "ideal wt": "idealus svoris",
   "50% / 95% come from your body-fat band": "50% / 95% kyla iš tavo kūno riebalų intervalo",
   "your estimate — edit on the Athletes page": "tavo įvertis — keisk Sportininkų puslapyje",
+  // ---- Graph options ----
+  "Opacity": "Permatomumas",
+  "Right axis ↕": "Dešinė ašis ↕",
   // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
   "Tags": "Žymos",

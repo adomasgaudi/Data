@@ -257,9 +257,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (Number.isFinite(re.yMin)) {
       const ryPad = (re.yMax - re.yMin) * 0.08 || 1;
       ry = { yMin: re.yMin - (cfg.rightBeginAtZero ? 0 : ryPad), yMax: re.yMax + ryPad };
-      // Stretch the top so these series sit low (don't tower over the left-axis data).
+      // Scale the right-axis top: >1 squishes its series lower, <1 makes them taller
+      // (the relative-axis knob). 1 = auto.
       const hf = cfg.rightHeadroom ?? 1;
-      if (hf > 1) ry = { yMin: ry.yMin, yMax: ry.yMin + (ry.yMax - ry.yMin) * hf };
+      if (hf > 0 && hf !== 1) ry = { yMin: ry.yMin, yMax: ry.yMin + (ry.yMax - ry.yMin) * hf };
     } else {
       ry = { yMin: 0, yMax: 1 };
     }

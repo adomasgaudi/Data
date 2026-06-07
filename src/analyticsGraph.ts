@@ -122,7 +122,11 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // One group → label by metric only; several → prefix the exercise.
       const name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
       if (pts.length)
-        series.push({ name, color, type: m.type ?? "line", points: pts as SvgPoint[], ...(m.axis ? { axis: m.axis } : {}) });
+        series.push({
+          name, color, type: m.type ?? "line", points: pts as SvgPoint[],
+          ...(m.axis ? { axis: m.axis } : {}),
+          ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
+        });
     }
   }
 
@@ -132,6 +136,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   const config = {
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
     yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
+    rightHeadroom: input.config.rightHeadroom,
     ...(showsWr ? { yBands: [
       { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
       { from: 0.6, fill: "rgba(120,120,120,0.12)" },
