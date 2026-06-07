@@ -8032,19 +8032,21 @@ async function init() {
     // Delegated on document because the dropdown lives at the body root (it floats).
     const catPill = t.closest<HTMLElement>(".wa-cat-pill");
     if (catPill?.dataset.wacat !== undefined) {
+      const scope = (catPill.closest<HTMLElement>("[data-selscope]")?.dataset.selscope as SelScope) ?? "hist";
       if (waCatMenuKey === catPill.dataset.wacat) closeWaCatMenu();
-      else openWaCatMenu(catPill.dataset.wacat, catPill);
+      else openWaCatMenu(catPill.dataset.wacat, catPill, scope);
       return;
     }
     const catMenu = document.getElementById("waCatMenu");
     if (catMenu && !catMenu.hidden && waCatMenuKey !== null) {
+      curSelScope = waCatMenuScope; // the menu edits whichever selector opened it
       if (t.closest(".wa-catclose")) { closeWaCatMenu(); return; }
       const allBtn = t.closest<HTMLElement>(".wa-catall");
       if (allBtn) {
         const turnOn = allBtn.dataset.catallon === "1";
-        const set = new Set(waSelected);
+        const set = new Set(selArr());
         for (const it of waCatItems(waCatMenuKey)) { if (turnOn) set.add(it.name); else set.delete(it.name); }
-        waSelected = [...set];
+        setSelArr([...set]);
         renderWaCatMenu();   // refresh the dropdown + its all-toggle label
         renderWaChips();     // refresh the category-pill counts behind it
         debounceWaRender();  // graph / history / calendar catch up
@@ -8055,8 +8057,8 @@ async function init() {
       const mchip = t.closest<HTMLElement>(".wa-ex-chip");
       if (mchip?.dataset.waex && catMenu.contains(mchip)) {
         const n = mchip.dataset.waex;
-        waSelected = waSelected.includes(n) ? waSelected.filter((x) => x !== n) : [...waSelected, n];
-        const on = waSelected.includes(n);
+        setSelArr(selArr().includes(n) ? selArr().filter((x) => x !== n) : [...selArr(), n]);
+        const on = selArr().includes(n);
         mchip.classList.toggle("is-on", on); // instant feedback (don't rebuild the menu)
         mchip.setAttribute("aria-pressed", String(on));
         // Update just the head count + all-toggle, so the menu keeps its scroll.
@@ -10249,9 +10251,21 @@ function setupTeamView() {
 // mode flag to keep in sync. `waSelected` lives at module scope, so it survives
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
+// TWO independent exercise selections (EXR-SEL, two copies): `waSelected` drives
+// the calendar + workout history (and the view mode / title / single-lift extras);
+// `waGraphSel` drives ONLY the graph. Match buttons copy one into the other.
 let waSelected: string[] = [];
-// One-time seed: the beginning ANL view is a real PRE-SELECTION of the top-10
-// tier-1 (Primary) lifts (so the pills show), not a special aggregate view.
+let waGraphSel: string[] = [];
+// Which selection the SELECTOR rendering / handlers currently act on. Set per
+// selector instance while rendering, and from the clicked container's
+// data-selscope in handlers. Consumers outside the selector (calendar pills,
+// history, drill-in, palette) always use waSelected directly.
+type SelScope = "graph" | "hist";
+let curSelScope: SelScope = "hist";
+function selArr(): string[] { return curSelScope === "graph" ? waGraphSel : waSelected; }
+function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel = v; else waSelected = v; }
+// One-time seed: the beginning ANL view is a real PRE-SELECTION of ALL the
+// athlete's lifts (so the pills show), not a special aggregate view.
 let analysisSeeded = false;
 /** The default analysis selection: ALL of the athlete's logged lifts (most-trained
  * first). The graph still caps at WA_GRAPH_MAX, so extras are listed, not drawn. */
@@ -10315,6 +10329,7 @@ const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["discipline", "muscleGroup", "func
 let waChipsMode: "exercises" | "categories" = "exercises";
 // Which category's floating exercise dropdown is open (a group key, "__all", or null).
 let waCatMenuKey: string | null = null;
+let waCatMenuScope: SelScope = "hist";
 // Short labels for the category-pill sub-line count (e.g. "4/5 func").
 const WA_DIM_SHORT: Partial<Record<ExerciseFilterDim, string>> = {
   function: "func", bodyPart: "part", muscleGroup: "musc", joint: "joint",
@@ -10490,9 +10505,14 @@ function refreshHistorySearch(): void {
 }
 
 function renderWorkoutAnalysis(): void {
-  // First time in: pre-select ALL of the athlete's lifts so the view opens as a
-  // real selection (pills shown), not the implicit aggregate. Clearing later is allowed.
-  if (!analysisSeeded) { analysisSeeded = true; if (waSelected.length === 0) waSelected = defaultSelection(); }
+  // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
+  // view opens as a real selection (pills shown), not the implicit aggregate.
+  if (!analysisSeeded) {
+    analysisSeeded = true;
+    const all = defaultSelection();
+    if (waSelected.length === 0) waSelected = all;
+    if (waGraphSel.length === 0) waGraphSel = [...all];
+  }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
   // The Workout-history section's collapsible summary doubles as its title, so it
@@ -10561,148 +10581,124 @@ function renderWorkoutAnalysis(): void {
     setAnalysisCalendar(true);
     renderWorkoutCalendar();
   }
-  const sel = document.getElementById("waExerciseSelector");
-  if (sel) {
-    // Identity-inclusion toggles (all on by default). Each can be flipped
-    // independently; they filter the chips (suggestions/search) below.
-    const idLabels: [ExerciseIdentity, string][] = [
-      ["original", "Original"],
-      ["dissolved", "Dissolved"],
-      ["combined", "Combined"],
-      ["comparison_group", "Comparison groups"],
-    ];
-    const toggles = idLabels
-      .map(
-        ([id, label]) =>
-          `<button type="button" class="wa-name-opt wa-inc-btn${waIncludeIdentities.has(id) ? " is-on" : ""}" data-waident="${id}" aria-pressed="${waIncludeIdentities.has(id)}">${label}</button>`,
-      )
-      .join("");
-    // Chip label mode — drives the GLOBAL name mode (code / short / full), so it
-    // matches the rest of the site rather than being an analysis-only toggle.
-    const nameOpt = (m: NameMode, lbl: string) =>
-      `<button type="button" class="wa-name-opt name-mode-opt${nameMode === m ? " is-on" : ""}" data-waname="${m}">${lbl}</button>`;
-    const nameToggle =
-      `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
-      nameOpt("code", "Code") + nameOpt("short", "Short") + nameOpt("full", "Full name") + `</div>`;
-    const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
-    // Search box (TASK 43) + Group By (TASK 45). The chips themselves live in
-    // #waChips and are (re)filled by renderWaChips() so typing keeps focus.
-    const groupOpts =
-      `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
-      WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
-    // The exercise search lives in the always-on command bar at the bottom. When a
-    // query is active we show a clearable readout (inside the Exercises fold); no
-    // placeholder hint otherwise.
-    const searchActive = waSearchQuery.trim()
-      ? `<button type="button" id="waSearchClear" class="wa-search-active" title="Clear search">🔎 “${escapeHtml(waSearchQuery.trim())}” ✕</button>`
-      : "";
-    // Group by + Clear selection now live INSIDE the Exercises fold (below) so the
-    // selector body stays compact.
-    const modeToggle = waGroupBy !== "none"
-      ? `<button type="button" id="waChipsMode" class="wa-clear" title="Switch the pills between individual exercises and whole categories">Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}</button>`
-      : "";
-    // How many lifts exist but aren't shown (filtered out or never trained) — the
-    // toggle reveals them greyed-out so the count is never a mystery.
-    const missingCount = waMissingExercises().length;
-    const missingToggle = (missingCount > 0 || waShowMissing)
-      ? `<button type="button" id="waShowMissing" class="wa-name-opt${waShowMissing ? " is-on" : ""}" title="${waShowMissing ? "Hide the greyed-out exercises this athlete hasn't done / are filtered out." : "Show greyed-out exercises that exist but aren't here — filtered out or never trained."}">${waShowMissing ? "Hide missing" : `Show missing <span class="wa-miss-n">(${missingCount})</span>`}</button>`
-      : "";
-    const foldTools =
-      `<div class="wa-chips-tools">` +
-      `<button type="button" id="waSelectAll" class="wa-clear">Select all</button>` +
-      `<button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button>` +
-      `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
-      modeToggle +
-      missingToggle +
-      searchActive +
-      `</div>`;
-    // (Create variant / group moved to the Index page — see createVariantFormHtml.)
-    // Machine-type toggle (cable / gravity / mixed) for the selected lift, when
-    // eligible. The TAXONOMY editor moved to the Index inspector (More info) —
-    // see taxonomyEditorHtml — so it's no longer shown here in Analysis.
-    const assignUi = mode === "single" && waSelected[0] ? machineModeControl(waSelected[0]) : "";
-    // Snapshot open state of the (now single) Exercises fold before innerHTML wipes it.
-    const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
-    if (prevFold) S.waChipsFoldOpen = prevFold.open;
-    // Snapshot the picker's own scroll — sel.innerHTML below rebuilds .wa-chips-wrap,
-    // so without this the menu snaps back to the top after every pick.
-    const prevChipScroll = prevFold?.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
-    // ONE dropdown now: the old Filter button + ⚙ Settings are folded in here.
-    // Settings (which identities to include + how names show) sit at the top; tools
-    // (Select all / Clear / Group by) next; then the grouped chips — and tapping a
-    // group header filters that group in/out (replacing the Filter button).
-    const settingsBlock =
-      `<div class="wa-fold-settings"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>`;
-    const exercisesFold =
-      `<details class="wa-chips-fold"${S.waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></summary>` +
-      `<div class="wa-fe-menu">` +
-      foldTools +
-      settingsBlock +
-      `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
-    // Everything — Filter, Exercises, Settings (⚙), Create (+) — sits on ONE
-    // compact tools row beside the title (they all open as floating menus, so the
-    // layout never shifts). The machine-type toggle (single mode) drops below.
-    // Selected exercises shown as removable pills right in the sticky bar, so you
-    // always see what's plotted and can drop one with a tap (EXR-SEL-PILLS). The
-    // first WA_GRAPH_MAX are the ones the graph actually plots (its point budget);
-    // they're marked 📈 so you can see selection-vs-graph at a glance, and "Match
-    // graph" trims the selection to exactly those so the history/calendar match.
-    const onGraph = new Set(waSelected.slice(0, WA_GRAPH_MAX));
-    const overCap = waSelected.length > WA_GRAPH_MAX;
-    // The sticky pills follow the same Exercises⇄Categories toggle as the picker:
-    // in Categories mode the SELECTED lifts collapse to one pill per category
-    // (count + ✕ removes the whole category; tap opens its floating dropdown).
-    const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
-    let selPills = "";
-    if (waSelected.length && stickyCats) {
-      const groups = new Map<string, string[]>();
-      for (const n of waSelected) { const k = waGroupKey(n); (groups.get(k) ?? groups.set(k, []).get(k)!).push(n); }
-      selPills = `<div class="wa-sel-pills">` +
-        [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, names]) => {
-          const title = `${k} — ${names.length} selected · tap to open, ✕ to remove all`;
-          return `<span class="wa-sel-pill wa-sel-catpill" data-waselcat="${escapeHtml(k)}" title="${escapeHtml(title)}">${escapeHtml(k)} <span class="wa-cat-count">${names.length}</span><span class="wa-sel-pill-x" data-waselcatx="${escapeHtml(k)}">✕</span></span>`;
-        }).join("") +
-        `</div>`;
-    } else if (waSelected.length) {
-      selPills = `<div class="wa-sel-pills">` +
-        waSelected.map((n) => {
-          const g = onGraph.has(n);
-          const title = g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${WA_GRAPH_MAX}-lift limit · tap to remove ${n}`;
-          return `<button type="button" class="wa-sel-pill${g ? " is-graphed" : " is-ungraphed"}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${g ? `<span class="wa-sel-graphdot" aria-hidden="true">📈</span>` : ""}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
-        }).join("") +
-        `</div>`;
-    }
-    const matchBtn = overCap
-      ? `<button type="button" id="waMatchGraph" class="wa-clear wa-match-graph" title="Trim the selection to just the ${WA_GRAPH_MAX} lifts on the graph, so the workout history & calendar show exactly what's plotted">Match graph (${WA_GRAPH_MAX})</button>`
-      : "";
-    sel.innerHTML =
-      `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${exercisesFold}${matchBtn}</div>` +
-      selPills +
-      `</div>`;
-    // Pills wrap onto up to 2 lines; if the wrapped block would need MORE than 2
-    // rows, collapse it to a single horizontally-scrolling row instead of growing
-    // ever taller. Measured in wrap mode (scrollHeight reports the full content).
-    const pillsEl = sel.querySelector<HTMLElement>(".wa-sel-pills");
-    if (pillsEl) {
-      pillsEl.classList.remove("wa-sel-pills--scroll");
-      const rowH = (pillsEl.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
-      if (rowH && pillsEl.scrollHeight > rowH * 2 + 8) pillsEl.classList.add("wa-sel-pills--scroll");
-    }
-    // The machine-type toggle renders into its own section BELOW the sticky bar.
-    const assignBox = document.getElementById("waAssign");
-    if (assignBox) assignBox.innerHTML = assignUi;
-    renderWaChips();
-    const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
-    if (newWrap) newWrap.scrollTop = prevChipScroll; // keep the menu where it was
-  }
+  // Two independent exercise selectors: one for the GRAPH, one (sticky) for the
+  // calendar + workout history. See renderSelector.
+  renderSelector("graph");
+  renderSelector("hist");
+  // Single-lift extras (machine-type cable/gravity toggle) follow the HISTORY
+  // selector (waSelected), per the two-selector design.
+  const assignBox = document.getElementById("waAssign");
+  if (assignBox) assignBox.innerHTML = (mode === "single" && waSelected[0]) ? machineModeControl(waSelected[0]) : "";
   renderWaGraph();
+}
+
+/** Render ONE exercise selector instance. `scope` chooses which selection it edits
+ * and draws (graph vs the calendar/history). The two share the ancillary settings
+ * (group-by, name mode, identities, search, show-missing); only the SELECTION is
+ * per-scope. A "match" button copies the OTHER selector's picks into this one. */
+function renderSelector(scope: SelScope): void {
+  const sel = document.getElementById(scope === "graph" ? "waExerciseSelector" : "waExerciseSelectorHist");
+  if (!sel) return;
+  curSelScope = scope;
+  sel.dataset.selscope = scope;
+  const cur = selArr();
+  const scopeLabel = scope === "graph" ? "Graph lifts" : "Calendar & history lifts";
+  // Identity-inclusion toggles (shared) — they filter the chips below.
+  const idLabels: [ExerciseIdentity, string][] = [
+    ["original", "Original"], ["dissolved", "Dissolved"], ["combined", "Combined"], ["comparison_group", "Comparison groups"],
+  ];
+  const toggles = idLabels
+    .map(([id, label]) => `<button type="button" class="wa-name-opt wa-inc-btn${waIncludeIdentities.has(id) ? " is-on" : ""}" data-waident="${id}" aria-pressed="${waIncludeIdentities.has(id)}">${label}</button>`)
+    .join("");
+  // Chip label mode (shared global name mode: code / short / full).
+  const nameOpt = (m: NameMode, lbl: string) =>
+    `<button type="button" class="wa-name-opt name-mode-opt${nameMode === m ? " is-on" : ""}" data-waname="${m}">${lbl}</button>`;
+  const nameToggle =
+    `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
+    nameOpt("code", "Code") + nameOpt("short", "Short") + nameOpt("full", "Full name") + `</div>`;
+  const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+  const groupOpts =
+    `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
+    WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
+  const searchActive = waSearchQuery.trim()
+    ? `<button type="button" class="wa-searchclear wa-search-active" title="Clear search">🔎 “${escapeHtml(waSearchQuery.trim())}” ✕</button>`
+    : "";
+  const modeToggle = waGroupBy !== "none"
+    ? `<button type="button" class="wa-chipsmode wa-clear" title="Switch the pills between individual exercises and whole categories">Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}</button>`
+    : "";
+  const missingCount = waMissingExercises().length;
+  const missingToggle = (missingCount > 0 || waShowMissing)
+    ? `<button type="button" class="wa-showmissing wa-name-opt${waShowMissing ? " is-on" : ""}" title="${waShowMissing ? "Hide the greyed-out exercises this athlete hasn't done / are filtered out." : "Show greyed-out exercises that exist but aren't here — filtered out or never trained."}">${waShowMissing ? "Hide missing" : `Show missing <span class="wa-miss-n">(${missingCount})</span>`}</button>`
+    : "";
+  // "Match" button: copy the OTHER selector's selection into this one.
+  const matchSrc = scope === "graph" ? "hist" : "graph";
+  const matchLabel = scope === "graph" ? "Match history" : "Match graph";
+  const matchBtn = `<button type="button" class="wa-clear wa-match" data-matchfrom="${matchSrc}" title="Copy the other selector's picks here">${matchLabel}</button>`;
+  const foldTools =
+    `<div class="wa-chips-tools">` +
+    `<button type="button" class="wa-selectall wa-clear">Select all</button>` +
+    `<button type="button" class="wa-clearsel wa-clear"${cur.length ? "" : " disabled"}>Clear selection</button>` +
+    matchBtn +
+    `<label class="wa-gcfg-f">Group by<select class="wa-groupby">${groupOpts}</select></label>` +
+    modeToggle +
+    missingToggle +
+    searchActive +
+    `</div>`;
+  const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
+  const foldOpen = prevFold ? prevFold.open : !!S.waChipsFoldOpen;
+  const prevChipScroll = prevFold?.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
+  const settingsBlock = `<div class="wa-fold-settings"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>`;
+  const exercisesFold =
+    `<details class="wa-chips-fold"${foldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">${escapeHtml(scopeLabel)} <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></summary>` +
+    `<div class="wa-fe-menu">` + foldTools + settingsBlock +
+    `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap"></div></div></details>`;
+  // Selected pills. For the GRAPH selector the first WA_GRAPH_MAX are marked 📈 (the
+  // graph's point budget) with a "Trim to N" button; the history selector has no cap.
+  const onGraph = scope === "graph" ? new Set(cur.slice(0, WA_GRAPH_MAX)) : new Set<string>();
+  const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
+  let selPills = "";
+  if (cur.length && stickyCats) {
+    const groups = new Map<string, string[]>();
+    for (const n of cur) { const k = waGroupKey(n); (groups.get(k) ?? groups.set(k, []).get(k)!).push(n); }
+    selPills = `<div class="wa-sel-pills">` +
+      [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, names]) => {
+        const title = `${k} — ${names.length} selected · tap to open, ✕ to remove all`;
+        return `<span class="wa-sel-pill wa-sel-catpill" data-waselcat="${escapeHtml(k)}" title="${escapeHtml(title)}">${escapeHtml(k)} <span class="wa-cat-count">${names.length}</span><span class="wa-sel-pill-x" data-waselcatx="${escapeHtml(k)}">✕</span></span>`;
+      }).join("") + `</div>`;
+  } else if (cur.length) {
+    selPills = `<div class="wa-sel-pills">` +
+      cur.map((n) => {
+        const g = onGraph.has(n);
+        const dot = g ? `<span class="wa-sel-graphdot" aria-hidden="true">📈</span>` : "";
+        const title = scope === "graph"
+          ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${WA_GRAPH_MAX}-lift limit · tap to remove ${n}`)
+          : `Tap to remove ${n}`;
+        return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
+      }).join("") + `</div>`;
+  }
+  const trimBtn = (scope === "graph" && cur.length > WA_GRAPH_MAX)
+    ? `<button type="button" class="wa-clear wa-trimgraph wa-match-graph" title="Trim this graph selection to just the ${WA_GRAPH_MAX} lifts the graph plots">Trim to ${WA_GRAPH_MAX}</button>`
+    : "";
+  sel.innerHTML =
+    `<div class="wa-sel-header">` +
+    `<div class="wa-sel-tools">${exercisesFold}${trimBtn}</div>` +
+    selPills +
+    `</div>`;
+  const pillsEl = sel.querySelector<HTMLElement>(".wa-sel-pills");
+  if (pillsEl) {
+    pillsEl.classList.remove("wa-sel-pills--scroll");
+    const rowH = (pillsEl.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
+    if (rowH && pillsEl.scrollHeight > rowH * 2 + 8) pillsEl.classList.add("wa-sel-pills--scroll");
+  }
+  renderWaChipsScope(scope);
+  const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
+  if (newWrap) newWrap.scrollTop = prevChipScroll;
 }
 
 /** One chip for an exercise (selected state + identity). `missing` greys it out:
  * a lift that exists but isn't in this athlete's picker (filtered / never done). */
 function waChipHtml(name: string, identity: ExerciseIdentity, missing = false): string {
-  const on = waSelected.includes(name);
+  const on = selArr().includes(name);
   const label = displayName(name);
   // Tapping the chip selects/deselects; the trailing ⓘ opens its More-info overlay
   // (so you can check a lift that's buried in history without hunting for it).
@@ -10746,10 +10742,16 @@ function waChipList(): { name: string; identity: ExerciseIdentity; missing?: boo
   return waChipListBase().filter((e) => !waGroupsOff.has(waGroupKey(e.name)));
 }
 
-/** Fill #waChips — flat, or grouped under headers by the Group By dimension
- * (TASK 45). Re-rendered alone on search/group changes so typing keeps focus. */
+/** Re-fill BOTH selectors' chip lists (each from its own selection). */
 function renderWaChips(): void {
-  const box = document.getElementById("waChips");
+  renderWaChipsScope("graph");
+  renderWaChipsScope("hist");
+}
+/** Fill ONE selector's chips — flat, or grouped under headers by the Group By
+ * dimension. Re-rendered alone on search/group changes so typing keeps focus. */
+function renderWaChipsScope(scope: SelScope): void {
+  curSelScope = scope;
+  const box = document.getElementById(`waChips-${scope}`);
   if (!box) return;
   const list = waChipListBase(); // ALL groups (so an off group still shows its header)
   if (list.length === 0) {
@@ -10824,7 +10826,7 @@ function exerciseSubgroup(name: string): string | null {
 type WaItem = { name: string; identity: ExerciseIdentity };
 /** How many of these picker items are currently selected. */
 function waSelCount(items: readonly WaItem[]): number {
-  const sel = new Set(waSelected);
+  const sel = new Set(selArr());
   let n = 0;
   for (const e of items) if (sel.has(e.name)) n++;
   return n;
@@ -10832,7 +10834,7 @@ function waSelCount(items: readonly WaItem[]): number {
 /** Sub-group coverage within a category: how many of its finer families have at
  * least one exercise selected, out of the total number of families present. */
 function waSubgroupCoverage(items: readonly WaItem[]): { sel: number; total: number } {
-  const sel = new Set(waSelected);
+  const sel = new Set(selArr());
   const has = new Map<string, boolean>(); // subgroup key → any selected?
   for (const e of items) {
     const sg = exerciseSubgroup(e.name) ?? "·"; // ungrouped lifts share one bucket
@@ -10875,8 +10877,9 @@ function waCatItems(key: string): WaItem[] {
   const list = waChipListBase();
   return key === "__all" ? list : list.filter((e) => waGroupKey(e.name) === key);
 }
-function openWaCatMenu(key: string, anchor: HTMLElement): void {
+function openWaCatMenu(key: string, anchor: HTMLElement, scope: SelScope): void {
   waCatMenuKey = key;
+  waCatMenuScope = scope;
   let m = document.getElementById("waCatMenu");
   if (!m) {
     m = document.createElement("div");
@@ -10904,6 +10907,7 @@ function closeWaCatMenu(): void {
 function renderWaCatMenu(): void {
   const m = document.getElementById("waCatMenu");
   if (!m || waCatMenuKey === null) return;
+  curSelScope = waCatMenuScope;
   const items = waCatItems(waCatMenuKey);
   const sel = waSelCount(items);
   const label = waCatMenuKey === "__all" ? "All exercises" : waCatMenuKey;
@@ -10957,10 +10961,10 @@ function renderWaGraph(): void {
     waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
   }
   const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => r.username === els.athlete.value));
-  const autoDefault = waSelected.length === 0;
+  const autoDefault = waGraphSel.length === 0;
   const baseExercises = autoDefault
     ? exerciseCountsForUser(athleteRecs, els.athlete.value).map((e) => e.exerciseName)
-    : waSelected;
+    : waGraphSel;
   const graphExercises = baseExercises.slice(0, WA_GRAPH_MAX);
   const graphExcluded = baseExercises.slice(WA_GRAPH_MAX);
   // A metric may draw only when EVERY plotted exercise allows it (intersection)
@@ -11232,17 +11236,18 @@ function goToAnalysis(): void {
   if (document.getElementById(`tab-${tab}`)?.hidden !== false) switchTopTab(tab);
   else if (tab === "analysis") renderWorkoutAnalysis();
 }
-/** Open the Exercise-selector fold + its chip list so search results are visible. */
+/** Open BOTH exercise-selector folds + their chip lists so search results show. */
 function openSelectorFolds(): void {
-  const sel = document.getElementById("waExerciseSelector");
-  sel?.closest("details")?.setAttribute("open", "");
-  document.querySelector<HTMLDetailsElement>(".wa-chips-fold")?.setAttribute("open", "");
+  for (const id of ["waExerciseSelector", "waExerciseSelectorHist"]) {
+    document.getElementById(id)?.closest("details")?.setAttribute("open", "");
+  }
+  for (const f of document.querySelectorAll<HTMLDetailsElement>(".wa-chips-fold")) f.setAttribute("open", "");
 }
 
 function commandList(): CmdSpec[] {
   return [
-    { cmd: ".all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
-    { cmd: ".clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
+    { cmd: ".all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; waGraphSel = []; goToAnalysis(); } },
+    { cmd: ".clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; waGraphSel = []; goToAnalysis(); } },
     { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
@@ -11436,10 +11441,10 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
-    const grp = target.closest<HTMLSelectElement>("#waGroupBy");
+    const grp = target.closest<HTMLSelectElement>(".wa-groupby");
     if (grp) {
       waGroupBy = (grp.value === "none" ? "none" : grp.value) as typeof waGroupBy;
-      renderWaChips();
+      deferRender(renderWorkoutAnalysis); // rebuild both selectors so they stay in sync
       return;
     }
     // "Hard sets only" lens — re-render the graph(s) AND the training calendar,
@@ -11471,26 +11476,30 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // Which selector (graph vs calendar/history) was clicked — its root carries
+    // data-selscope. Selector actions below operate on that scope's selection.
+    const scopeRoot = t.closest<HTMLElement>("[data-selscope]");
+    if (scopeRoot) curSelScope = (scopeRoot.dataset.selscope as SelScope) ?? "hist";
     // Sticky CATEGORY pill (categories mode): ✕ drops the whole category; tapping
     // the pill opens that category's floating exercise dropdown.
     const stickyCatX = t.closest<HTMLElement>("[data-waselcatx]");
     if (stickyCatX?.dataset.waselcatx) {
       const k = stickyCatX.dataset.waselcatx;
-      waSelected = waSelected.filter((n) => waGroupKey(n) !== k);
+      setSelArr(selArr().filter((n) => waGroupKey(n) !== k));
       debounceWaRender();
       return;
     }
     const stickyCat = t.closest<HTMLElement>(".wa-sel-catpill");
     if (stickyCat?.dataset.waselcat) {
       if (waCatMenuKey === stickyCat.dataset.waselcat) closeWaCatMenu();
-      else openWaCatMenu(stickyCat.dataset.waselcat, stickyCat);
+      else openWaCatMenu(stickyCat.dataset.waselcat, stickyCat, curSelScope);
       return;
     }
     // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
     const selPill = t.closest<HTMLElement>(".wa-sel-pill");
     if (selPill?.dataset.waselpill) {
       selPill.remove(); // instant feedback; the deferred re-render rebuilds the rest
-      waSelected = waSelected.filter((x) => x !== selPill.dataset.waselpill);
+      setSelArr(selArr().filter((x) => x !== selPill.dataset.waselpill));
       debounceWaRender();
       return;
     }
@@ -11500,45 +11509,48 @@ function setupWorkoutAnalysis(): void {
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
     if (chip?.dataset.waex) {
       const n = chip.dataset.waex;
-      waSelected = waSelected.includes(n) ? waSelected.filter((x) => x !== n) : [...waSelected, n];
-      const on = waSelected.includes(n);
+      setSelArr(selArr().includes(n) ? selArr().filter((x) => x !== n) : [...selArr(), n]);
+      const on = selArr().includes(n);
       chip.classList.toggle("is-on", on); // instant feedback before the heavy re-render
       chip.setAttribute("aria-pressed", String(on));
       debounceWaRender();
       return;
     }
-    if (t.closest("#waSelectAll")) {
+    // "Match" — copy the OTHER selector's selection into this one.
+    const matchBtn = t.closest<HTMLElement>(".wa-match");
+    if (matchBtn?.dataset.matchfrom) {
+      const from = matchBtn.dataset.matchfrom as SelScope;
+      setSelArr([...(from === "graph" ? waGraphSel : waSelected)]);
+      debounceWaRender();
+      return;
+    }
+    if (t.closest(".wa-selectall")) {
       // Select every exercise currently shown in the picker (respects the active
-      // identity-includes / filters / search). History + calendar then show them
-      // all; the graph still caps at the first 10 (see renderWaGraph).
-      waSelected = waChipList().filter((e) => !e.missing).map((e) => e.name);
+      // identity-includes / filters / search), into THIS scope.
+      setSelArr(waChipList().filter((ex) => !ex.missing).map((ex) => ex.name));
       debounceWaRender();
       return;
     }
-    if (t.closest("#waClear")) {
-      waSelected = [];
+    if (t.closest(".wa-clearsel")) {
+      setSelArr([]);
       debounceWaRender();
       return;
     }
-    // "Match graph" — drop the selected lifts the graph can't fit, so the history
-    // and calendar (which follow the selection) match exactly what's plotted.
-    if (t.closest("#waMatchGraph")) {
-      waSelected = waSelected.slice(0, WA_GRAPH_MAX);
+    // "Trim to N" — drop the graph-selection lifts past the graph's plot budget.
+    if (t.closest(".wa-trimgraph")) {
+      waGraphSel = waGraphSel.slice(0, WA_GRAPH_MAX);
       debounceWaRender();
       return;
     }
-    // Flip the picker between individual-exercise pills and category pills. Light:
-    // just update this button's label + re-fill the chips (fold/scroll preserved).
-    if (t.closest("#waChipsMode")) {
+    // Flip BOTH pickers between individual-exercise pills and category pills.
+    if (t.closest(".wa-chipsmode")) {
       waChipsMode = waChipsMode === "categories" ? "exercises" : "categories";
-      const btn = document.getElementById("waChipsMode");
-      if (btn) btn.textContent = `Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}`;
       closeWaCatMenu();
-      renderWaChips();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     // Reveal / hide the greyed-out "missing" exercises (filtered or never trained).
-    if (t.closest("#waShowMissing")) {
+    if (t.closest(".wa-showmissing")) {
       waShowMissing = !waShowMissing;
       deferRender(renderWorkoutAnalysis); // rebuilds the toggle label + chips
       return;
@@ -11553,7 +11565,7 @@ function setupWorkoutAnalysis(): void {
       deferRender(renderWorkoutAnalysis);
       return;
     }
-    if (t.closest("#waSearchClear")) {
+    if (t.closest(".wa-searchclear")) {
       waSearchQuery = "";
       searchFindHistory = false;
       const cmd = document.getElementById("cmdInput") as HTMLInputElement | null;
@@ -11566,7 +11578,7 @@ function setupWorkoutAnalysis(): void {
     if (grpOff?.dataset.grpoff !== undefined) {
       const g = grpOff.dataset.grpoff;
       if (waGroupsOff.has(g)) waGroupsOff.delete(g); else waGroupsOff.add(g);
-      renderWaChips();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     // Identity-include toggle button (Original / Dissolved / Combined / …).
@@ -11635,6 +11647,7 @@ function setupWorkoutAnalysis(): void {
     if (t.closest("tr.ex-row") && document.getElementById("exercisesPanel")?.closest("#tab-analysis")) {
       if (selectedExercise && waSelected.join("|") !== selectedExercise) {
         waSelected = [selectedExercise];
+        waGraphSel = [selectedExercise]; // explicit drill-in focuses BOTH selectors
         renderWorkoutAnalysis();
       }
     }
@@ -11696,7 +11709,11 @@ function createUserExerciseDef(): void {
  * right exercises already selected.
  */
 function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
-  if (opts.exercises) waSelected = opts.exercises.filter((n) => n.length > 0);
+  if (opts.exercises) {
+    const ex = opts.exercises.filter((n) => n.length > 0);
+    waSelected = ex;
+    waGraphSel = [...ex]; // an explicit "show this lift" focuses BOTH selectors
+  }
   switchTopTab(analysisTabName()); // full or simplified per the detail flag (no drift)
 }
 

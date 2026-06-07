@@ -145,6 +145,10 @@ const LT: Record<string, string> = {
   "Volume shift": "Tūrio poslinkis",
   "All graphs": "Visi grafikai",
   "Approved only": "Tik patvirtinti",
+  "Match graph": "Atitikti grafiką",
+  "Match history": "Atitikti istoriją",
+  "Graph lifts": "Grafiko pratimai",
+  "Calendar & history lifts": "Kalendoriaus ir istorijos pratimai",
   "Hide missing": "Slėpti trūkstamus",
   "Show missing": "Rodyti trūkstamus",
   // ---- Allowed-graphs review (per exercise) ----

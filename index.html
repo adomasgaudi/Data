@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.75</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.76</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1073,14 +1073,19 @@
                sticky bar: it sits at the top of the card normally and sticks to
                the top of the screen as you scroll the content below it. The other
                sections stay collapsible disclosures. -->
-          <div id="waExerciseSelector" class="wa-section wa-selector-sticky"></div>
-          <!-- Taxonomy editor (single mode) renders here, BELOW the sticky bar, so
-               the sticky tools row stays compact. -->
-          <div id="waAssign" class="wa-section"></div>
+          <!-- GRAPH exercise selector (one of two copies, EXR-SEL): drives only the
+               graph below it. -->
+          <div id="waExerciseSelector" class="wa-section"></div>
           <details class="wa-fold" open>
             <summary class="wa-fold-sum">Graph</summary>
             <div id="waGraph" class="wa-section"></div>
           </details>
+          <!-- CALENDAR + WORKOUTS exercise selector (the second copy): sticky, so it
+               stays on screen while you scroll the calendar and history below it. -->
+          <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
+          <!-- Taxonomy / machine-type editor (single mode) follows the history
+               selector, BELOW the sticky bar. -->
+          <div id="waAssign" class="wa-section"></div>
           <!-- The training-year heatmap (#workoutCalendar) is relocated here in
                EVERY mode so it never disappears; with exercises selected it
                highlights only those lifts' squares. Returned to #workoutsPanel
