@@ -2221,7 +2221,7 @@ function renderChangelog() {
   const header =
     `<p class="cl-summary muted">${releaseCount} releases · <strong>${fmtSp(TOTAL_LOG_SP)} SP</strong> logged in total ` +
     `<span class="cl-effort-note">· whole-site effort grade ${WEBSITE_EXACT_SP} (≈ ${WEBSITE_SP})</span></p>` +
-    `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by release)</div>` +
+    `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by day)</div>` +
     `<div id="spHistoryChart"></div></div>`;
   // Effort per part — exact SP and the Fibonacci grade it snaps to.
   const sections =
@@ -2274,15 +2274,14 @@ function renderChangelog() {
   const spBox = document.getElementById("spHistoryChart");
   const timeline = buildSpTimeline();
   if (spBox && timeline.length) {
-    const points = timeline.map((p, i) => ({
-      x: i,
+    const points = timeline.map((p) => ({
+      x: Date.parse(p.date),
       y: p.cumulative,
-      meta: `${p.version} · +${fmtSp(p.sp)} → ${fmtSp(p.cumulative)} SP`,
+      meta: `${p.version} · ${p.date} · +${fmtSp(p.sp)} → ${fmtSp(p.cumulative)} SP`,
     }));
     mountSvgChart(spBox, {
       series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],
-      xKind: "linear", compactable: false, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
-      formatX: () => "",
+      xKind: "time", compactable: false, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
     });
   }
 }
