@@ -1899,13 +1899,23 @@ function tagUserExerciseDef(r: SetRecord, byName: Map<string, UserExerciseDef>):
   return r;
 }
 
+let computedRecordsCache: SetRecord[] | null = null;
 function computedRecords(): SetRecord[] {
+  // Memoised within the current synchronous pass only. A single render
+  // (list + calendar + graph + chips) calls this ~10×, each time re-deriving the
+  // whole record set (override → 1RM → identity-tag → synthetic groups) over every
+  // logged set — the dominant cost behind tap lag. Cache it and clear on the next
+  // microtask, so within one render they share one compute, but any edit on a
+  // later task always recomputes fresh — no staleness (CLAUDE.md #prune).
+  if (computedRecordsCache) return computedRecordsCache;
   // Active-filtered logged records with bodyweight folded in (and tagged with any
   // user exercise-def identity), PLUS the synthetic combinable/comparable group
   // records derived from those computed loads. Pure source lifts are never mutated.
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
   const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
-  return [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
+  computedRecordsCache = [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
+  queueMicrotask(() => { computedRecordsCache = null; });
+  return computedRecordsCache;
 }
 
 /**
