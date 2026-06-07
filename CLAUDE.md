@@ -22,6 +22,8 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 9. **No-code project — optimise code/docs for AI, NOT humans:** owner never reads code, only AIs touch it; favour what's easiest for an AI to parse/verify/change safely (small files, tests, machine-readable structure) over human conventions/readability. (Owner *chat* stays plain-language.)
 10. **Removing code — 3 tiers, default is just DELETE (git is the net):** for ordinary changes, delete freely — history has it. Only in big refactors / legacy pruning: park *undecided* chunks in **`attic/`** (closest, fastest back) and *decided-out* chunks in **`warehouse/`** (+ restore manifest, trashed after ~100 SP of further work unused). Restore ONE piece at a time; expect friction. The AI judges the tier — no owner command. See `warehouse/README.md`.
 11. **Pickable task codes:** whenever you present suggestions / options / a backlog, tag every item with a short code (e.g. `CLN-3`) so the owner can choose by code alone; the real committed `CAT-n` is still derived at commit time (rule 8).
+12. **S-ANL is its own view:** write `S-ANL` code fresh, using full-`ANL` as *inspiration* not copy-paste/relocation — prefer rewriting over sharing, to avoid "creeping in" coupled code.
+13. **Translate everything:** any new/changed user-facing text MUST get its Lithuanian entry in `src/i18n.ts` (`LT` dict) in the SAME change — the site must never show English when LT is selected.
 
 ## Commands the owner types (act on these even with no other context)
 

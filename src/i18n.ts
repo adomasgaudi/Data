@@ -83,16 +83,31 @@ const LT: Record<string, string> = {
   "No profile on file": "Profilio nėra",
   "Muscle map": "Raumenų žemėlapis",
   // Simplified-card explanations (exact sentences rendered by the app).
-  "The share of your bodyweight that's fat — shown as a range because it's only an estimate. Lower is leaner, though very low isn't always healthier.":
-    "Kūno svorio dalis, kuri yra riebalai — rodoma kaip intervalas, nes tai tik įvertis. Mažiau reiškia liesesnį kūną, tačiau labai mažai ne visada sveikiau.",
+  "The share of your bodyweight that's fat — shown as a likely range because it's only an estimate. Lower is leaner, though very low isn't always healthier.":
+    "Kūno svorio dalis, kuri yra riebalai — rodoma kaip tikėtinas intervalas, nes tai tik įvertis. Mažiau reiškia liesesnį kūną, tačiau labai mažai ne visada sveikiau.",
   "Everything that isn't fat — muscle, bone, organs, water. More lean weight generally means more strength.":
     "Viskas, kas nėra riebalai — raumenys, kaulai, organai, vanduo. Daugiau liesosios masės paprastai reiškia daugiau jėgos.",
   "The actual kilograms of fat you carry — your weight times your body-fat %.":
     "Tikri riebalų kilogramai, kuriuos nešioji — tavo svoris padaugintas iš kūno riebalų %.",
   "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling.":
     "Raumeningumo pagal ūgį rodiklis — kaip KMI, bet skaičiuojama tik liesoji masė. Apytiksliai: ~18 netreniruotas, ~22 gerai treniruotas, ~25 natūrali riba.",
-  // ---- Workouts ----
+  // ⓘ math-popover labels (complex Body stats).
+  "lean": "liesoji",
+  "spread": "sklaida",
+  "body fat": "kūno riebalai",
+  "50% band": "50% intervalas",
+  "95% band": "95% intervalas",
+  "ceiling": "riba",
+  "lean cap": "liesosios riba",
+  "carry at": "esant",
+  "ideal wt": "idealus svoris",
+  "50% / 95% come from your body-fat band": "50% / 95% kyla iš tavo kūno riebalų intervalo",
+  "your estimate — edit on the Athletes page": "tavo įvertis — keisk Sportininkų puslapyje",
+  // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
+  "Filter by exercise…": "Filtruoti pagal pratimą…",
+  "No workouts.": "Treniruočių nėra.",
+  "No workouts for that filter.": "Nėra treniruočių pagal šį filtrą.",
   "⚙ Display options": "⚙ Rodymo parinktys",
   "alone": "vienas",
   "+ set": "+ serija",
