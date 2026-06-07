@@ -10326,7 +10326,7 @@ function renderWaGraph(): void {
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
     `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
-    `<label class="wa-gcfg-f" title="Slide the Volume bars left/right along the time axis, relative to the 1RM and other lines — line volume up against the strength it produced. 0 = real dates.">Volume shift<span class="wa-shift-val"> ${c.volumeXShift > 0 ? "+" : ""}${c.volumeXShift}d</span><input class="wa-cfg" data-wacfg="volumeXShift" type="range" min="-60" max="60" step="1" value="${c.volumeXShift}" /></label>` +
+    `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates — the two only differ by axis, so the shift is vertical, not in time. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
     `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${S.waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
@@ -10644,12 +10644,12 @@ function setupWorkoutAnalysis(): void {
   // re-plot just the chart as you drag (rule 17 — the tap/drag updates its own
   // control instantly; no full menu rebuild that would yank the slider mid-drag).
   panel.addEventListener("input", (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLInputElement>('.wa-cfg[data-wacfg="volumeXShift"]');
+    const el = (e.target as HTMLElement).closest<HTMLInputElement>('.wa-cfg[data-wacfg="volumeYShift"]');
     if (!el) return;
-    const v = Math.min(60, Math.max(-60, Math.round(Number(el.value) || 0)));
-    waGraphConfig.volumeXShift = v;
+    const v = Math.min(0.8, Math.max(-0.8, Number(el.value) || 0));
+    waGraphConfig.volumeYShift = v;
     const lbl = el.parentElement?.querySelector<HTMLElement>(".wa-shift-val");
-    if (lbl) lbl.textContent = ` ${v > 0 ? "+" : ""}${v}d`;
+    if (lbl) lbl.textContent = ` ${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
     scheduleWaChartOnly();
   });
   panel.addEventListener("change", (e) => {
@@ -10681,7 +10681,7 @@ function setupWorkoutAnalysis(): void {
       else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
-      else if (key === "volumeXShift") waGraphConfig.volumeXShift = Math.min(60, Math.max(-60, Math.round(Number((el as HTMLInputElement).value) || 0)));
+      else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
       scheduleWaGraph();

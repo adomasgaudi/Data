@@ -63,6 +63,11 @@ export interface SvgSeries {
   outline?: boolean;
   /** Fill opacity 0..1 (e.g. bars you want see-through over other series). Default 1. */
   fillOpacity?: number;
+  /** Vertical shift for THIS series only, as a fraction of the plot height
+   * (+ = up, − = down). A pure visual reposition — moves the whole series (bars
+   * move with their baseline) without changing its values; used to lift the
+   * Volume bars off the strength line so the two don't overlap. Default 0. */
+  yShiftFrac?: number;
 }
 export interface SvgChartConfig {
   series: SvgSeries[];
@@ -376,7 +381,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             `<span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`,
         );
       if (!visible(s)) continue; // hidden: in the legend, but not drawn
-      const ymap = yOf(s);
+      // Optional per-series vertical shift (a fraction of the plot height, + = up):
+      // a pure visual offset applied to every y-pixel for THIS series, so e.g. the
+      // Volume bars can be lifted off the strength line. Bars shift with their
+      // baseline because ymap(0) is offset too.
+      const baseYmap = yOf(s);
+      const yShiftPx = (s.yShiftFrac ?? 0) * plotH;
+      const ymap = yShiftPx ? (v: number) => baseYmap(v) - yShiftPx : baseYmap;
       if (s.type === "line") {
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
         body += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-opacity="0.9"/>`;
@@ -448,7 +459,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         for (let i = 1; i < xs.length; i++) { const d = xs[i]! - xs[i - 1]!; if (d > 0 && d < step) step = d; }
         const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / Math.max(1, inView.length);
         const bw = Math.max(2, stepPx * 0.63); // ~30% thinner than a full week
-        const base = Math.min(h - M.b, Math.max(M.t, ymap(0)));
+        // Baseline = the (possibly shifted) zero line. Both the baseline and each
+        // bar's top are clamped to the plot, so a vertically-shifted series stays
+        // rigid and just clips at the floor/ceiling instead of stretching.
+        const base = ymap(0);
+        const clampY = (y: number) => Math.min(h - M.b, Math.max(M.t, y));
         // Bars can be outline-only or a translucent fill so they don't hide other series.
         const paint = s.outline
           ? `fill="none" stroke="${s.color}" stroke-width="1.3"`
@@ -457,7 +472,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           const x = xPix(p.x);
           if (x < M.l - bw || x > W - M.r + bw) continue;
           const top = ymap(p.y ?? 0);
-          body += `<rect x="${(x - bw / 2).toFixed(1)}" y="${Math.min(top, base).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(base - top).toFixed(1)}" rx="2" ${paint}/>`;
+          const yTop = clampY(Math.min(top, base));
+          const yBot = clampY(Math.max(top, base));
+          if (yBot - yTop < 0.2) continue; // fully clipped out of the plot
+          body += `<rect x="${(x - bw / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
         }
       }
     }

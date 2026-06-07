@@ -104,13 +104,6 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
       }
       if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
-      // Volume x-shift: slide ONLY the volume bars along the time axis relative to
-      // the other series, so you can line training volume up against the strength
-      // it later produced. Shift is in days (config.volumeXShift), bars only.
-      if ((m.id === "volume" || m.id === "volumeLoad") && input.config.volumeXShift) {
-        const dx = input.config.volumeXShift * 86_400_000;
-        pts = pts.map((p) => ({ ...p, x: p.x + dx }));
-      }
       // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
       // read as multiples of BW; the count metrics (right axis) are left alone.
       if (input.perBodyweight && input.bodyweight && input.bodyweight > 0 && m.axis !== "right") {
@@ -128,11 +121,16 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       ci++;
       // One group → label by metric only; several → prefix the exercise.
       const name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
+      // Vertical shift (fraction of plot height) for the Volume bars only — lifts
+      // them off the strength line. Both share the same dates, so we shift in y,
+      // never x. Applied as a per-series render offset by the chart.
+      const isVolume = m.id === "volume" || m.id === "volumeLoad";
       if (pts.length)
         series.push({
           name, color, type: m.type ?? "line", points: pts as SvgPoint[],
           ...(m.axis ? { axis: m.axis } : {}),
           ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
+          ...(isVolume && input.config.volumeYShift ? { yShiftFrac: input.config.volumeYShift } : {}),
         });
     }
   }

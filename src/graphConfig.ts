@@ -26,11 +26,11 @@ export interface GraphConfig {
   /** Right-axis height scale: 1 = auto; >1 makes the right-axis series (counts /
    * volume) sit shorter, <1 makes them taller — a relative-axis knob. */
   rightHeadroom: number;
-  /** Slide ONLY the Volume / Volume Load bars left/right along the x-axis by this
-   * many days, relative to the other series (1RM lines etc.) on the same chart.
-   * 0 = aligned to their real dates; negative shifts the bars earlier, positive
-   * later — used to line volume up against the strength it produced. */
-  volumeXShift: number;
+  /** Shift ONLY the Volume / Volume Load bars UP or DOWN, as a fraction of the
+   * plot height (+ = up, − = down, 0 = on the floor). Both series share the same
+   * dates as the 1RM lines, so a horizontal shift is meaningless — this vertical
+   * offset lifts the bars off the strength line so the two don't overlap. */
+  volumeYShift: number;
 }
 
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
@@ -43,5 +43,5 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   predictionDays: 90,
   opacity: 0.6,
   rightHeadroom: 1,
-  volumeXShift: 0,
+  volumeYShift: 0,
 };
