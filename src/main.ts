@@ -78,7 +78,7 @@ import { mountPoseDraw, type PoseDraw } from "./poseDraw";
 import { POSE_FRAMES } from "./poseFrames";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
-import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
+import { FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
@@ -9821,6 +9821,10 @@ const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
+// Groups (of the current Group-by dimension) turned OFF — their exercises are
+// filtered out of the picker. Tap a group header in the Exercises dropdown to
+// toggle. Replaces the old separate Filter button.
+const waGroupsOff = new Set<string>();
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
@@ -10043,10 +10047,7 @@ function renderWorkoutAnalysis(): void {
     const nameToggle =
       `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
       nameOpt("code", "Code") + nameOpt("short", "Short") + nameOpt("full", "Full name") + `</div>`;
-    // Metadata-filter controls (TASK 44): one multi-select per dimension that has
-    // values among the identity-included exercises.
     const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
-    const filterUi = waFilterControls(byIdentity.map((e) => e.name));
     // Search box (TASK 43) + Group By (TASK 45). The chips themselves live in
     // #waChips and are (re)filled by renderWaChips() so typing keeps focus.
     const groupOpts =
@@ -10071,25 +10072,20 @@ function renderWorkoutAnalysis(): void {
     // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
     // selected exercise; saved metadata then drives the filters above.
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
-    // Snapshot open state of the collapsibles before innerHTML wipes the DOM.
-    const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-settings-fold");
-    if (prevCog) S.waCogOpen = prevCog.open;
+    // Snapshot open state of the (now single) Exercises fold before innerHTML wipes it.
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
     if (prevFold) S.waChipsFoldOpen = prevFold.open;
-    // Settings (identity toggles + name mode) is a small square ⚙ button, also
-    // with a floating menu — so it doesn't push the layout either.
-    const settingsFold =
-      `<details class="wa-sq-fold wa-settings-fold"${S.waCogOpen ? " open" : ""}>` +
-      `<summary class="wa-sq-sum" title="Settings">⚙<span class="wa-sq-caret">▾</span></summary>` +
-      `<div class="wa-sq-menu"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>` +
-      `</details>`;
-    // Filter + Exercises sit side by side; their summaries stay in the row while
-    // the expanded bodies FLOAT (overlay) like Settings/Create, so opening them
-    // never pushes the layout down. Body wrapped in .wa-fe-menu for that float.
+    // ONE dropdown now: the old Filter button + ⚙ Settings are folded in here.
+    // Settings (which identities to include + how names show) sit at the top; tools
+    // (Select all / Clear / Group by) next; then the grouped chips — and tapping a
+    // group header filters that group in/out (replacing the Filter button).
+    const settingsBlock =
+      `<div class="wa-fold-settings"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>`;
     const exercisesFold =
       `<details class="wa-chips-fold"${S.waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
       `<div class="wa-fe-menu">` +
       foldTools +
+      settingsBlock +
       `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
     // Everything — Filter, Exercises, Settings (⚙), Create (+) — sits on ONE
     // compact tools row beside the title (they all open as floating menus, so the
@@ -10103,7 +10099,7 @@ function renderWorkoutAnalysis(): void {
       : "";
     sel.innerHTML =
       `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}</div></div>` +
+      `<div class="wa-sel-tools">${exercisesFold}</div></div>` +
       selPills;
     // Taxonomy editor renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
@@ -10122,14 +10118,21 @@ function waChipHtml(name: string, identity: ExerciseIdentity): string {
 
 /** The selector's current exercise list: identity-included, metadata-filtered
  * (TASK 44) and search-narrowed (TASK 43). */
-function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+/** Identity-included + search-narrowed (ALL groups). Group headers are built from
+ * this so a turned-off group still shows its header (to switch back on). */
+function waChipListBase(): { name: string; identity: ExerciseIdentity }[] {
   const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
-  const activeFilters = FILTER_DIMS.map((d) => ({ dim: d, values: waFilterValues[d] ?? [] }));
-  const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
   const q = waSearchQuery.trim().toLowerCase();
-  return byIdentity.filter(
-    (e) => keep.has(e.name) && (!q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q)),
-  );
+  return byIdentity.filter((e) => !q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q));
+}
+/** The group key (of the current Group-by dimension) an exercise falls under. */
+function waGroupKey(name: string): string {
+  return waGroupBy === "none" ? "" : (waMeta(name, waGroupBy)[0] ?? "Unassigned");
+}
+/** waChipListBase minus the exercises in turned-off groups (used by Select-all). */
+function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+  if (waGroupBy === "none" || waGroupsOff.size === 0) return waChipListBase();
+  return waChipListBase().filter((e) => !waGroupsOff.has(waGroupKey(e.name)));
 }
 
 /** Fill #waChips — flat, or grouped under headers by the Group By dimension
@@ -10137,9 +10140,9 @@ function waChipList(): { name: string; identity: ExerciseIdentity }[] {
 function renderWaChips(): void {
   const box = document.getElementById("waChips");
   if (!box) return;
-  const list = waChipList();
+  const list = waChipListBase(); // ALL groups (so an off group still shows its header)
   if (list.length === 0) {
-    box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search / filters.</p>`;
+    box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search.</p>`;
     return;
   }
   if (waGroupBy === "none") {
@@ -10148,13 +10151,20 @@ function renderWaChips(): void {
   }
   const groups = new Map<string, typeof list>();
   for (const e of list) {
-    const key = waMeta(e.name, waGroupBy)[0] ?? "Unassigned";
+    const key = waGroupKey(e.name);
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
   }
   const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
   box.innerHTML = [...groups.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([g, items]) => {
+      // The group HEADER is a toggle: tap to filter that whole group in / out of the
+      // picker (replaces the old Filter button). An off group shows just its header.
+      const off = waGroupsOff.has(g);
+      const header =
+        `<button type="button" class="wa-group-h${off ? " is-off" : ""}" data-grpoff="${escapeHtml(g)}" ` +
+        `title="${off ? "Show this group" : "Hide this group"}">${escapeHtml(g)} <span class="muted">(${items.length})</span>${off ? " · hidden" : ""}</button>`;
+      if (off) return `<div class="wa-group">${header}</div>`;
       // Within a group, cluster related families (e.g. all handstand variants) under
       // a nested sub-header; everything else stays directly under the group.
       const direct: typeof list = [];
@@ -10172,7 +10182,7 @@ function renderWaChips(): void {
         )
         .join("");
       return (
-        `<div class="wa-group"><div class="wa-group-h">${escapeHtml(g)} <span class="muted">(${items.length})</span></div>` +
+        `<div class="wa-group">${header}` +
         (direct.length ? chips(direct) : "") + subHtml + `</div>`
       );
     })
@@ -10327,36 +10337,6 @@ function renderWaCompareGraph(): void {
   else waCompareSvg.update(config);
 }
 
-/** Build the metadata-filter controls: a row of toggle CHIPS per dimension that
- * has any values among `names` (no ugly native multi-selects). Active values
- * reflect waFilterValues; tapping a chip toggles it. */
-function waFilterControls(names: readonly string[]): string {
-  const blocks: string[] = [];
-  for (const dim of FILTER_DIMS) {
-    const values = new Set<string>();
-    for (const n of names) for (const v of waMeta(n, dim)) values.add(v);
-    if (values.size === 0) continue;
-    const sorted = [...values].sort((a, b) => a.localeCompare(b));
-    const sel = new Set(waFilterValues[dim] ?? []);
-    const chips = sorted
-      .map(
-        (v) =>
-          `<button type="button" class="wa-fchip${sel.has(v) ? " is-on" : ""}" data-wadim="${dim}" data-wafval="${escapeHtml(v)}" aria-pressed="${sel.has(v)}">${escapeHtml(v)}</button>`,
-      )
-      .join("");
-    blocks.push(
-      `<div class="wa-filter-dim"><span class="wa-filter-lbl">${escapeHtml(FILTER_DIM_LABELS[dim])}</span>` +
-        `<div class="wa-filter-chips">${chips}</div></div>`,
-    );
-  }
-  if (blocks.length === 0) return "";
-  const active = FILTER_DIMS.reduce((n, d) => n + (waFilterValues[d]?.length ? 1 : 0), 0);
-  return (
-    `<details class="wa-filters"${active ? " open" : ""}><summary class="wa-filters-sum">🔎 Filter${active ? ` · ${active} active` : ""}</summary>` +
-    `<div class="wa-filters-body wa-fe-menu">${blocks.join("")}` +
-    `<button type="button" id="waFiltersClear" class="wa-clear"${active ? "" : " disabled"}>Clear filters</button></div></details>`
-  );
-}
 
 /** The TASK 24 assignment editor for one exercise: joint / movement / plane
  * multi-selects prefilled with its current (saved-or-seeded) values + Save. */
@@ -10642,6 +10622,14 @@ function setupWorkoutAnalysis(): void {
       const cmd = document.getElementById("cmdInput") as HTMLInputElement | null;
       if (cmd) cmd.value = "";
       renderWorkoutAnalysis();
+      return;
+    }
+    // Group header in the Exercises dropdown → filter that whole group in / out.
+    const grpOff = t.closest<HTMLElement>(".wa-group-h");
+    if (grpOff?.dataset.grpoff !== undefined) {
+      const g = grpOff.dataset.grpoff;
+      if (waGroupsOff.has(g)) waGroupsOff.delete(g); else waGroupsOff.add(g);
+      renderWaChips();
       return;
     }
     // Chip label mode → set the GLOBAL name mode (code / short / full), site-wide.

@@ -2752,7 +2752,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-search { flex: 1 1 12rem; font: inherit; font-size: 0.85rem; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
 .wa-chips-wrap { max-height: 16rem; overflow-y: auto; }
 .wa-group { margin: 0 0 0.5rem; }
-.wa-group-h { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; margin: 0.3rem 0 0.25rem; }
+/* Group header is a TAP-TO-FILTER toggle (replaces the old Filter button). */
+.wa-group-h { display: block; width: 100%; text-align: left; cursor: pointer; background: none; border: none; padding: 0.3rem 0 0.25rem; font: inherit; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
+.wa-group-h:hover { color: var(--accent); }
+.wa-group-h.is-off { opacity: 0.55; text-decoration: line-through; }
+.wa-fold-settings { margin: 0.2rem 0 0.3rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--line); }
 /* A nested family subgroup (e.g. Handstand) inside a group: indented, with a
    lighter sub-header and a guide line on the left. */
 .wa-subgroup { margin: 0.15rem 0 0.3rem 0.5rem; padding-left: 0.5rem; border-left: 2px solid var(--line); }
