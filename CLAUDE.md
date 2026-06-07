@@ -44,6 +44,10 @@ Shortcuts the owner may type in any session. **A new command is added here as ON
   4. **Safety first:** before anything hard to undo (delete / overwrite / deploy), back up or confirm.
 - **`#senior <task>`** — reason as architect not junior: name the single source of truth, keep other views read-only projections (no drifting copies), protect invariants, fix root cause not symptom, hand trivial wiring to "juniors"; answer RECOMMENDATION → TRADEOFFS → CONSTRAINTS.
 - **`#research <topic>`** — research best practices inline and grade each source (GRADE: High/Moderate/Low/Very Low + one-line reason), but re-judge every practice for this AI-maintained no-build single-file app (rule 9), not human teams.
+- **`#co-work <task>`** — other AIs are editing this repo at the SAME time; don't interfere, but never strand finished work:
+  1. **Don't camp on hot files:** `git fetch` + merge the canonical branch OFTEN, keep changes small and focused, prefer files/areas the others aren't in, and RE-derive the version + task code at commit (rule 8) so numbers never clash.
+  2. **Always close the loop — DEPLOY:** the moment a piece is done and verified (typecheck + tests + build), merge it into the canonical branch and push so it goes LIVE — never leave verified work sitting un-merged on a side branch, because the owner only sees the live site and will forget a stranded branch.
+  3. **Expect churn:** many small clean merges beat one big risky one; on a conflict, take theirs in their area and yours in yours.
 - **`#prune <mistake-type>`** — pick ONE class of mistake/anti-pattern and hunt it across the WHOLE codebase over MANY turns, fixing instances from outright bugs up to working-but-improvable code that should follow a better principle; go breadth-first, present a severity-tagged find-list (rule 11) each turn, fix one safe batch per turn, and keep going across prompts until that class is gone.
 
 ## Rules to remember
