@@ -68,7 +68,9 @@ const LT: Record<string, string> = {
   "Language": "Kalba",
   // ---- Landing / login ----
   "Enter": "Įeiti",
-  "Log in as admin": "Prisijungti kaip administratorius",
+  "Sign in": "Prisijungimas",
+  "Strength leaderboards for you and your friends — track every lift, see your estimated 1RMs, and climb the ranks.":
+    "Jėgos lyderių lentelės tau ir tavo draugams — fiksuok kiekvieną pakėlimą, matyk apytiksles 1RM ir kopk lentelėje.",
   "Password": "Slaptažodis",
   "Wrong password.": "Neteisingas slaptažodis.",
   // ---- Body stats card ----

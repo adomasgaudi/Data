@@ -71,9 +71,11 @@ html.signed-in .login-gate { display: none; }
   border: 1px solid var(--line); border-radius: 16px; padding: 2.2rem 1.5rem;
   box-shadow: 0 10px 40px rgba(20, 24, 38, 0.18);
 }
-/* Minimalist Colosseum mark (no wordmark) — the landing page's whole identity. */
-.login-logo { margin: 0 0 1.4rem; color: var(--accent); line-height: 0; }
-.login-logo svg { width: 92px; height: auto; }
+/* Minimalist Colosseum mark + wordmark — the landing page's identity. */
+.login-logo { margin: 0; color: var(--accent); line-height: 0; }
+.login-logo svg { width: 96px; height: auto; }
+.login-title { margin: 0.5rem 0 0; font-size: 1.9rem; font-weight: 800; letter-spacing: 0.01em; }
+.login-tagline { margin: 0.5rem 0 1.4rem; font-size: 0.92rem; line-height: 1.45; color: var(--muted); }
 .login-input {
   width: 100%; box-sizing: border-box; margin: 0 0 0.6rem; padding: 0.6rem 0.75rem;
   font: inherit; font-size: 0.95rem; color: var(--text); background: var(--bg);
@@ -87,15 +89,10 @@ html.signed-in .login-gate { display: none; }
 .login-btn:hover { filter: brightness(1.08); }
 /* "Enter": the big, inviting primary call-to-action (spectator entry). */
 .login-btn--enter { padding: 1rem; font-size: 1.15rem; letter-spacing: 0.02em; }
-/* Admin login tucked behind a small disclosure so the page reads as a landing,
-   not a sign-in form. */
-.login-admin { margin-top: 1.1rem; }
-.login-admin-sum {
-  font-size: 0.82rem; color: var(--muted); cursor: pointer; list-style: none; user-select: none;
-}
-.login-admin-sum::-webkit-details-marker { display: none; }
-.login-admin-sum:hover { color: var(--accent); }
-.login-admin[open] .login-admin-sum { margin-bottom: 0.7rem; }
+/* Sign-in block: clearly visible below Enter, separated by a thin rule. */
+.login-signin { margin-top: 1.3rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
+.login-signin-lbl { margin: 0 0 0.6rem; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.login-btn--admin { background: var(--accent-soft); color: var(--accent); }
 .login-link {
   width: 100%; margin: 0.7rem 0 0; padding: 0.3rem; font: inherit; font-size: 0.85rem;
   color: var(--accent); background: none; border: 0; cursor: pointer; text-decoration: underline;
