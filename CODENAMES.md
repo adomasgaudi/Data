@@ -88,8 +88,7 @@ file first, then it will understand requests like "put EXR-CMP into S-ANL" or
   - `CARD-COMBINE` — Combinable-group chips.
   - `CARD-COMPARE` — Comparable-group chips (+ ratio box).
   - `CARD-BW` — Bodyweight-part range (min–max, gold average).
-  - `CARD-TAGS` — auto tags (read-only labels).
-  - `CARD-MODEL` — Difficulty-model picker + the ⚙ multiplier editor.
+  - `CARD-MODEL` — the ⚙ difficulty-multiplier editor (shown only for auto-detected model lifts — HSPU / push-ups; there is NO model picker, the family is inferred from the name).
   - `CARD-WR` — **World-record** editor (per sex, with the ≈est. guesstimate).
   - `CARD-VARS` — **Note variations & difficulty** list (per-note × + who & when).
   - `CARD-FACTS` — read-only facts (Total sets, Athletes, Best 1RM, Logged, Sources).

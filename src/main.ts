@@ -1073,14 +1073,11 @@ function bandAssistKg(family: string, level: string): number {
 // a few exact names; this lets the owner attach a model (e.g. HSPU) to ANY lift —
 // a hand-created handstand, a renamed one — so it gets the editable multipliers.
 // "" = explicitly no model. Saved on device + in the backup.
-const FAMILY_LABELS: Record<string, string> = { HSPU: "Handstand push-up", PUSHUP: "Push-up" };
-const EX_FAMILY_KEY = "colosseum.exerciseFamily.v1";
-const exerciseFamilyOverrides = loadJsonObject<Record<string, string>>(EX_FAMILY_KEY);
-/** Which difficulty model a lift uses: the owner's assignment wins, else the
- * built-in name map. (Shadows the imported baseFamilyOf so every call honours it.) */
+/** Which difficulty-variation model a lift uses — purely AUTO-DETECTED from its
+ * name (HSPU for every handstand push-up, PUSHUP for push-ups). The name is the
+ * single source of truth: no per-exercise picker, so every handstand push-up is
+ * always editable with variations and none can drift to a different/none model. */
 function familyOf(exerciseName: string): string | null {
-  const o = exerciseFamilyOverrides[exerciseName];
-  if (o !== undefined) return o || null; // "" → explicitly none
   return baseFamilyOf(exerciseName);
 }
 // ---- World-record reference per exercise (for "% of world record") ----. Seed
@@ -1148,12 +1145,6 @@ function setWorldRecord(exerciseName: string, sex: "m" | "f", kg: number | null,
   saveJson(WR_KEY, worldRecordOverrides);
 }
 
-function setExerciseFamily(exerciseName: string, key: string): void {
-  // Clear the override when it matches the built-in default; else store the choice.
-  if (key === (baseFamilyOf(exerciseName) ?? "")) delete exerciseFamilyOverrides[exerciseName];
-  else exerciseFamilyOverrides[exerciseName] = key;
-  saveJson(EX_FAMILY_KEY, exerciseFamilyOverrides);
-}
 
 function famLevels(family: string, dim: string): Record<string, number> {
   // Per-support lean tables ("lean:back_to_wall", …): start from that support's
@@ -1237,15 +1228,15 @@ function variationReviewed(exerciseName: string, note: string): boolean {
   return notePin(exerciseName, note) !== undefined || noteHasVecOverride(exerciseName, note);
 }
 /** The note used for a set's variation lookup: its real note, or — for a family
- * lift logged WITHOUT a note — a per-set synthetic key, so a hand-added handstand
- * can still get its own banded/lean/ROM form (active once the owner tunes it). */
+ * lift logged WITHOUT a note (unspecified from StrengthLevel) — a per-set synthetic
+ * key, so EVERY such set carries the family's IMPLIED default variation (free / full
+ * ROM / no band → ×1) and is always editable with its own banded/lean/ROM form. */
 function variationNote(r: SetRecord): string {
   const note = (r.notes ?? "").trim();
   if (note) return note;
   const fam = familyOf(r.exerciseName);
   if (!fam) return "";
-  const key = `__set:${setId(r)}`;
-  return noteHasVecOverride(r.exerciseName, key) ? key : "";
+  return `__set:${setId(r)}`; // implied default variation for an unspecified model-lift set
 }
 /** A set's note-variation factor (1 when it has no note/per-set variation). */
 function noteVariationScale(r: SetRecord): number {
@@ -6520,13 +6511,6 @@ function exerciseInfoHtml(name: string): string {
   const item = (label: string, value: string) =>
     `<div class="ex-info-item"><span class="ex-info-lbl">${escapeHtml(label)}</span><span class="ex-info-val">${value}</span></div>`;
 
-  // Registry tags this exercise carries (muscle / pattern / group membership),
-  // each chip explains its WHY on hover.
-  const tags = tagsForExercise(name);
-  const tagChips = tags.length
-    ? tags.map((t) => `<span class="ex-tag" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</span>`).join("")
-    : `<span class="muted">none</span>`;
-
   // Editable controls, folded straight into the info rows — there is no separate
   // "Edit this exercise" section, every value here that CAN be changed is its own
   // input/select (same classes + data-editex the change handlers already key off).
@@ -6582,17 +6566,6 @@ function exerciseInfoHtml(name: string): string {
     item("Tier", tierChips),
     item("Combinable", combineChips),
     item("Comparable", compareChips),
-    item("Tags", `<span class="ex-tags">${tagChips}</span>`),
-    // Difficulty model: assign one so ANY lift (even a hand-created handstand) gets
-    // the editable variation multipliers; "None" falls back to the flat per-note ×.
-    item(
-      "Difficulty model",
-      `<select class="ex-edit-model" data-editex="${escapeHtml(name)}"><option value="">None</option>` +
-        Object.keys(FAMILIES)
-          .map((k) => `<option value="${escapeHtml(k)}"${k === (familyOf(name) ?? "") ? " selected" : ""}>${escapeHtml(FAMILY_LABELS[k] ?? k)}</option>`)
-          .join("") +
-        `</select>`,
-    ),
     item("Bodyweight part", coeffInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
@@ -8157,10 +8130,6 @@ async function init() {
       scheduleRender(() => reopenIndexDetail(ex));
       return;
     }
-    // Difficulty-model assignment: attach (or clear) a model so the lift gets the
-    // editable variation multipliers.
-    const model = t.closest<HTMLSelectElement>(".ex-edit-model");
-    if (model?.dataset.editex) { setExerciseFamily(model.dataset.editex, model.value); refreshAfterDifficultyEdit(); return; }
   });
   // Category / Muscle group / Tier are multi-select chips — tap to toggle membership
   // (a lift can belong to several at once); the ↺ chip resets to the auto default.
