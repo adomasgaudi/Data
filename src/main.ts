@@ -132,7 +132,7 @@ import {
   jointMovements,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename } from "./backup";
 import defaultCache from "./data/defaultCache.json";
@@ -2225,7 +2225,7 @@ function renderChangelog() {
     `<div id="spHistoryChart"></div></div>`;
   // Effort per part — exact SP and the Fibonacci grade it snaps to.
   const sections =
-    `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per part — exact SP (≈ Fibonacci)</div>` +
+    `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per task code — exact SP (≈ Fibonacci)</div>` +
     `<div class="cl-sections-row">` +
     COMPONENTS.map(
       (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
@@ -2245,6 +2245,11 @@ function renderChangelog() {
       (r.note ? `<p class="cl-bodynote">${escapeHtml(r.note)}</p>` : "") +
       (r.details?.length
         ? `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
+        : "") +
+      (r.children?.length
+        ? `<div class="cl-sections-row cl-catbd">` +
+          categoryBreakdown(r).map((b) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(b.name)}</span>` +
+            `<span class="cv-ver">${fmtSp(b.sp)}</span></span>`).join("") + `</div>`
         : "") +
       (r.children?.length ? r.children.map((c) => renderNode(c, depth + 1)).join("") : "") +
       `</div>`;

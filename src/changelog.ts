@@ -69,6 +69,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.7.21", title: "Effort chips show task codes", sp: 2, note: "The “Effort per part” chips now read the actual task-code categories from the git commits (EXR, CHART, WO, META …) instead of invented part names, and every grouping in the version history (each chapter) now shows its own per-category SP breakdown — so you can see exactly which tasks the story points came from.", cat: "META" },
   { version: "b.2.7.20", title: "Volume shift is now vertical, not horizontal", sp: 1, note: "Fixed the “Volume shift” slider in Graph options. It used to slide the Volume bars left/right along the TIME axis — but the bars and the 1RM line share the exact same dates, so a horizontal shift just misaligned them in time for no reason. It's now a VERTICAL shift: it moves the Volume bars up or down (as a % of the chart height) so you can lift them clear of the strength line when the two overlap — the bars (and their baseline) move together as a block and clip cleanly at the floor/ceiling, and the value reads as a percent. 0 = bars on the floor as before.", cat: "CHART" },
   { version: "b.2.7.19", title: "Graph options & filters no longer jump the page", sp: 3, note: "Swept a whole class of bug, not just the one reported: tapping a graph option or filter used to rebuild part of the page and scroll you somewhere else. Now every one of them keeps your scroll exactly where it is — “Hard sets only”, the metric and identity toggles, the body-part / search / filter chips, Aggregate / Interval / smoothing / opacity / per-bodyweight, and the app-wide formula, dropset, athlete, rank, grouping and leaderboard-axis controls. Tap anything in the options and the page stays put.", cat: "PERF" },
   { version: "b.2.7.18", title: "Internal: more of the big file's state moved to the shared container", sp: 2, note: "Housekeeping only — nothing changed on the site. Continued breaking up the giant code file: moved another batch of settings (the Index grouping + open categories, and the Data tab's view + search) onto the shared state container. Compiler-checked, all tests green.", cat: "META" },
@@ -724,43 +725,31 @@ export function fibSp(n: number): number {
  */
 export interface Component { name: string; sp: number; }
 
-/** Map a task-code category to the effort "part" it counts toward. Unknown
- *  categories count under their own code, so a newly-coined category is never
- *  lost — its SP just shows under that code until it's mapped here. */
-const CATEGORY_TO_PART: Record<string, string> = {
-  EXR: "Exercises", LIFT: "Exercises", SEL: "Exercises", IDN: "Exercises", TAX: "Exercises",
-  VAR: "Exercises", MERGE: "Exercises", CAT: "Exercises", SET: "Exercises", UNI: "Exercises",
-  NAME: "Exercises", MACH: "Exercises",
-  CHART: "Graphs", GRAPH: "Graphs", ANL: "Graphs", SANL: "Graphs", WR: "Graphs", RIR: "Graphs",
-  "LIFT-DM": "Skills & pose", WAV: "Skills & pose",
-  WO: "Workouts", NOTE: "Workouts",
-  ATH: "Athlete", STAT: "Athlete",
-  DATA: "Data", BAK: "Data",
-  CALC: "Calculator", CAL: "Calculator",
-  LB: "Leaderboard",
-  ROLE: "Accounts", AUTH: "Accounts", LOGIN: "Accounts",
-  ADD: "Add",
-  META: "Navigation & process", NAV: "Navigation & process", REF: "Navigation & process",
-  ARCH: "Navigation & process", DOC: "Navigation & process", CODE: "Navigation & process",
-  UX: "Navigation & process", UI: "Navigation & process", CLN: "Navigation & process",
-  CUT: "Navigation & process", I18N: "Navigation & process", MIG: "Navigation & process",
-  EDIT: "Exercises", PROF: "Athlete", "S-ANL": "Graphs",
-};
-
-function partOf(cat: string | undefined): string {
-  if (!cat) return "Other";
-  return CATEGORY_TO_PART[cat] ?? cat;
+/** SP per task-code category under a node, sorted by SP. The category is the
+ *  code straight from each release's git commit ({@link Release.cat}, e.g.
+ *  "EXR", "CHART", "META") — so every grouping shows which tasks its story
+ *  points came from. */
+export function categoryBreakdown(node: Release): Component[] {
+  const sums = new Map<string, number>();
+  const walk = (r: Release) => {
+    if (r.soon) return;
+    if (r.children?.length) r.children.forEach(walk);
+    else sums.set(r.cat ?? "?", (sums.get(r.cat ?? "?") ?? 0) + r.sp);
+  };
+  walk(node);
+  return [...sums.entries()]
+    .map(([name, sp]) => ({ name, sp: Math.round(sp * 10) / 10 }))
+    .sort((a, b) => b.sp - a.sp);
 }
 
-/** Effort per part, summed AUTOMATICALLY from each release's task-code category
- *  ({@link Release.cat}). Updates itself whenever a release is added — no
- *  hand-grading, so the chips can never lag behind the log again. */
+/** Whole-log effort per task-code category — summed AUTOMATICALLY from every
+ *  release's {@link Release.cat}; updates itself whenever a release is added. */
 export function computeComponents(): Component[] {
   const sums = new Map<string, number>();
   for (const r of RELEASES) {
     if (r.soon) continue;
-    const p = partOf(r.cat);
-    sums.set(p, (sums.get(p) ?? 0) + r.sp);
+    const k = r.cat ?? "?";
+    sums.set(k, (sums.get(k) ?? 0) + r.sp);
   }
   return [...sums.entries()]
     .map(([name, sp]) => ({ name, sp: Math.round(sp * 10) / 10 }))
@@ -768,7 +757,7 @@ export function computeComponents(): Component[] {
 }
 export const COMPONENTS: Component[] = computeComponents();
 
-/** Whole-site EXACT story points (sum of every part) and its Fibonacci grade. */
+/** Whole-site EXACT story points (sum of every category) and its Fibonacci grade. */
 export const WEBSITE_EXACT_SP = Math.round(COMPONENTS.reduce((s, c) => s + c.sp, 0) * 10) / 10;
 export const WEBSITE_SP = fibSp(WEBSITE_EXACT_SP);
 
