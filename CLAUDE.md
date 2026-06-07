@@ -122,6 +122,10 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   minute or two later. No manual build/upload. **Ignore `netlify.toml` — it's stale;
   deployment is GitHub Pages, not Netlify.** This standing rule is the explicit
   permission to push to the deploy branch for deploys.
+- **Live site (Colosseum) is at https://adomasgaudi.github.io/Data/** — published by
+  GitHub Pages from the deploy branch. After deploying I can **browse it to check how
+  a change actually looks** (verify appearance/layout and that the header version
+  number matches what I shipped).
 - **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
   the header bar.
 
