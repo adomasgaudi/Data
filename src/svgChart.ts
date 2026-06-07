@@ -380,6 +380,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // shouldn't be hide-able into a blank chart).
     const legendCount = cfg.series.filter((s) => !s.noLegend).length;
     const toggleable = legendCount >= 2;
+    // Bar series are drawn SIDE BY SIDE (grouped) within each x-slot, not stacked
+    // on top of each other — so when several volume/count bars share a bucket you
+    // can read each one's height. Each visible bar series gets its own lane.
+    const visBars = geomSeries().filter((s) => s.type === "bars" && visible(s));
+    const barN = Math.max(1, visBars.length);
     for (const s of geomSeries()) {
       if (!s.noLegend)
         keyHtml.push(
@@ -482,18 +487,25 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // rigid and just clips at the floor/ceiling instead of stretching.
         const base = ymap(0);
         const clampY = (y: number) => Math.min(h - M.b, Math.max(M.t, y));
+        // Split the histogram slot into one lane per visible bar series and offset
+        // THIS series into its lane, so the bars sit side by side (centred on x as a
+        // group) instead of overlapping. One series → full-width bar as before.
+        const lane = bw / barN;
+        const bi = Math.max(0, visBars.indexOf(s));
+        const laneCenter = (bi - (barN - 1) / 2) * lane;
+        const rectW = barN > 1 ? Math.max(1.2, lane * 0.86) : bw; // small gap between lanes
         // Bars can be outline-only or a translucent fill so they don't hide other series.
         const paint = s.outline
           ? `fill="none" stroke="${s.color}" stroke-width="1.3"`
           : `fill="${s.color}" fill-opacity="${s.fillOpacity ?? 1}"`;
         for (const p of s.points) {
-          const x = xPix(p.x);
+          const x = xPix(p.x) + laneCenter;
           if (x < M.l - bw || x > W - M.r + bw) continue;
           const top = ymap(p.y ?? 0);
           const yTop = clampY(Math.min(top, base));
           const yBot = clampY(Math.max(top, base));
           if (yBot - yTop < 0.2) continue; // fully clipped out of the plot
-          body += `<rect x="${(x - bw / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
+          body += `<rect x="${(x - rectW / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${rectW.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
         }
       }
     }
