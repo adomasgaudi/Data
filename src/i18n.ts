@@ -144,6 +144,8 @@ const LT: Record<string, string> = {
   "Volume shift": "Tūrio poslinkis",
   "All graphs": "Visi grafikai",
   "Approved only": "Tik patvirtinti",
+  "Hide missing": "Slėpti trūkstamus",
+  "Show missing": "Rodyti trūkstamus",
   // ---- Allowed-graphs review (per exercise) ----
   "Allowed graphs": "Leidžiami grafikai",
   "Tap to cycle: no → 1 experimental → 2 confirmed → 3 certain. Any level ≥ 1 shows the graph for this lift.": "Spustelėkite keisti: ne → 1 eksperimentinis → 2 patvirtintas → 3 tikras. Bet koks lygis ≥ 1 rodo šio pratimo grafiką.",

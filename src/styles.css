@@ -2655,6 +2655,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-catclose { font: inherit; font-size: 0.9rem; cursor: pointer; background: none; border: none; color: var(--muted); padding: 2px 6px; }
 .wa-catclose:hover { color: var(--accent); }
 .wa-cat-menu-chips { max-height: 46vh; overflow-y: auto; }
+/* "Missing" chips: lifts that exist but aren't this athlete's (filtered out or
+   never trained) — greyed and dashed so they read as not-really-here, but still
+   tappable to select. */
+.wa-ex-chip.is-missing { color: var(--muted); border-style: dashed; opacity: 0.6; background: transparent; }
+.wa-ex-chip.is-missing:hover { opacity: 0.85; }
+.wa-ex-chip.is-missing.is-on { background: var(--muted); border-style: solid; color: #fff; opacity: 0.9; }
 
 /* The Overview/Table/Charts/Stats layout switcher was removed — the Analysis
    content always shows in full (the universal #waGraph on top, then the workout

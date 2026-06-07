@@ -10106,6 +10106,11 @@ const WA_DIM_SHORT: Partial<Record<ExerciseFilterDim, string>> = {
   function: "func", bodyPart: "part", muscleGroup: "musc", joint: "joint",
   movement: "move", plane: "plane", equipment: "equip", difficulty: "diff", tier: "tier",
 };
+// Show "missing" exercises too: lifts that exist in the data but aren't in this
+// athlete's picker — because they're filtered out (active-set / group toggles) or
+// the athlete simply never trained them. Rendered greyed-out so you can see how
+// many are hidden, and still tap one to select it.
+let waShowMissing = false;
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
@@ -10137,6 +10142,20 @@ function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
   // before any sets are logged to them, and their declared identity always wins
   // (a defined name's name was rejected if it shadowed an existing lift).
   for (const d of userExerciseDefs) out.set(d.name, d.identity);
+  return [...out].map(([name, identity]) => ({ name, identity }));
+}
+/** Exercises that EXIST in the data but aren't in this athlete's picker — either
+ * filtered out (active-set / hidden sets) or never trained by them. Drawn from the
+ * RAW, unfiltered dataset (so active-set–filtered lifts surface too), minus what
+ * the selector already shows. Greyed-out "missing" chips, for awareness. */
+function waMissingExercises(): { name: string; identity: ExerciseIdentity }[] {
+  const shown = new Set(waSelectorExercises().map((e) => e.name));
+  const out = new Map<string, ExerciseIdentity>();
+  for (const r of data.records) {
+    const n = r.exerciseName;
+    if (n === "" || shown.has(n) || out.has(n)) continue;
+    out.set(n, "original"); // raw logged lifts read as "original" in the picker
+  }
   return [...out].map(([name, identity]) => ({ name, identity }));
 }
 function waMode(): WaMode {
@@ -10343,12 +10362,19 @@ function renderWorkoutAnalysis(): void {
     const modeToggle = waGroupBy !== "none"
       ? `<button type="button" id="waChipsMode" class="wa-clear" title="Switch the pills between individual exercises and whole categories">Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}</button>`
       : "";
+    // How many lifts exist but aren't shown (filtered out or never trained) — the
+    // toggle reveals them greyed-out so the count is never a mystery.
+    const missingCount = waMissingExercises().length;
+    const missingToggle = (missingCount > 0 || waShowMissing)
+      ? `<button type="button" id="waShowMissing" class="wa-name-opt${waShowMissing ? " is-on" : ""}" title="${waShowMissing ? "Hide the greyed-out exercises this athlete hasn't done / are filtered out." : "Show greyed-out exercises that exist but aren't here — filtered out or never trained."}">${waShowMissing ? "Hide missing" : `Show missing <span class="wa-miss-n">(${missingCount})</span>`}</button>`
+      : "";
     const foldTools =
       `<div class="wa-chips-tools">` +
       `<button type="button" id="waSelectAll" class="wa-clear">Select all</button>` +
       `<button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button>` +
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
       modeToggle +
+      missingToggle +
       searchActive +
       `</div>`;
     // (Create variant / group moved to the Index page — see createVariantFormHtml.)
@@ -10434,30 +10460,38 @@ function renderWorkoutAnalysis(): void {
   renderWaGraph();
 }
 
-/** One chip for an exercise (selected state + identity). */
-function waChipHtml(name: string, identity: ExerciseIdentity): string {
+/** One chip for an exercise (selected state + identity). `missing` greys it out:
+ * a lift that exists but isn't in this athlete's picker (filtered / never done). */
+function waChipHtml(name: string, identity: ExerciseIdentity, missing = false): string {
   const on = waSelected.includes(name);
   const label = displayName(name);
   // Tapping the chip selects/deselects; the trailing ⓘ opens its More-info overlay
   // (so you can check a lift that's buried in history without hunting for it).
-  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}<span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
+  const title = missing ? `${name} — hidden (filtered out or never trained)` : `${name} (${identity})`;
+  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)}<span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
  * (TASK 44) and search-narrowed (TASK 43). */
 /** Identity-included + search-narrowed (ALL groups). Group headers are built from
  * this so a turned-off group still shows its header (to switch back on). */
-function waChipListBase(): { name: string; identity: ExerciseIdentity }[] {
+function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?: boolean }[] {
   const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
+  // When "Show missing" is on, append the hidden/never-trained lifts (greyed) so
+  // the picker reveals the whole catalogue, not just what this athlete has done.
+  const list: { name: string; identity: ExerciseIdentity; missing?: boolean }[] = [
+    ...byIdentity,
+    ...(waShowMissing ? waMissingExercises().map((e) => ({ ...e, missing: true })) : []),
+  ];
   const q = waSearchQuery.trim().toLowerCase();
-  return byIdentity.filter((e) => !q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q));
+  return list.filter((e) => !q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q));
 }
 /** The group key (of the current Group-by dimension) an exercise falls under. */
 function waGroupKey(name: string): string {
   return waGroupBy === "none" ? "" : (waMeta(name, waGroupBy)[0] ?? "Unassigned");
 }
 /** waChipListBase minus the exercises in turned-off groups (used by Select-all). */
-function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+function waChipList(): { name: string; identity: ExerciseIdentity; missing?: boolean }[] {
   if (waGroupBy === "none" || waGroupsOff.size === 0) return waChipListBase();
   return waChipListBase().filter((e) => !waGroupsOff.has(waGroupKey(e.name)));
 }
@@ -10480,7 +10514,7 @@ function renderWaChips(): void {
     return;
   }
   if (waGroupBy === "none") {
-    box.innerHTML = `<div class="wa-ex-chips">${list.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
+    box.innerHTML = `<div class="wa-ex-chips">${list.map((e) => waChipHtml(e.name, e.identity, e.missing)).join("")}</div>`;
     return;
   }
   const groups = new Map<string, typeof list>();
@@ -10488,7 +10522,7 @@ function renderWaChips(): void {
     const key = waGroupKey(e.name);
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
   }
-  const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
+  const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity, e.missing)).join("")}</div>`;
   box.innerHTML = [...groups.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([g, items]) => {
@@ -11151,7 +11185,7 @@ function setupWorkoutAnalysis(): void {
       // Select every exercise currently shown in the picker (respects the active
       // identity-includes / filters / search). History + calendar then show them
       // all; the graph still caps at the first 10 (see renderWaGraph).
-      waSelected = waChipList().map((e) => e.name);
+      waSelected = waChipList().filter((e) => !e.missing).map((e) => e.name);
       debounceWaRender();
       return;
     }
@@ -11175,6 +11209,12 @@ function setupWorkoutAnalysis(): void {
       if (btn) btn.textContent = `Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}`;
       closeWaCatMenu();
       renderWaChips();
+      return;
+    }
+    // Reveal / hide the greyed-out "missing" exercises (filtered or never trained).
+    if (t.closest("#waShowMissing")) {
+      waShowMissing = !waShowMissing;
+      deferRender(renderWorkoutAnalysis); // rebuilds the toggle label + chips
       return;
     }
     // Create a user exercise def (dissolved variant / combined / comparison group).
