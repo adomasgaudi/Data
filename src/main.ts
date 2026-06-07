@@ -143,6 +143,7 @@ const els = {
   showAloneRings: $<HTMLInputElement>("showAloneRings"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
   simplifiedToggle: $<HTMLInputElement>("simplifiedToggle"),
+  sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
   rank: $<HTMLSelectElement>("rank"),
@@ -2769,6 +2770,7 @@ function renderAthlete() {
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   initHeatYear();
   renderAthleteProfile();
+  renderSAnalysis();
   renderAthleteStats();
   renderMomentum();
   renderTrainBreakdown();
@@ -2783,55 +2785,21 @@ function renderAthlete() {
 }
 
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
-/** A tiny inline range bar: a light 95% track, a darker 50% band, and a marker at
- * the estimate — a one-glance "predicted ± 50 / 95" picture (like the nFFMI ±). */
-function miniRangeBar(r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, title: string): string {
-  const span = (r.hi95 - r.lo95) || 1;
-  const pos = (v: number) => Math.max(0, Math.min(100, ((v - r.lo95) / span) * 100));
+/** Build one body-stat "value chip" for the compact line (label + number, plus a
+ * tappable ⓘ that toggles its math panel) and the matching hidden panel. */
+function bcChip(id: string, label: string, valueStr: string): string {
   return (
-    `<span class="bc-bar" title="${escapeHtml(title)}">` +
-    `<span class="bc-bar-50" style="left:${pos(r.lo50).toFixed(1)}%;right:${(100 - pos(r.hi50)).toFixed(1)}%"></span>` +
-    `<span class="bc-bar-avg" style="left:${pos(r.avg).toFixed(1)}%"></span>` +
-    `</span>`
+    `<span class="bc-chip"><span class="bc-c-lbl muted">${escapeHtml(label)}</span> <b class="bc-c-val">${valueStr}</b>` +
+    `<button type="button" class="bc-info" data-bcinfo="${id}" aria-label="How ${escapeHtml(label)} is calculated" title="How this is calculated">ⓘ</button></span>`
   );
 }
-/** Body stats card: show each value either as ±margin or as a lo–hi range
- * (toggled by the little ±/range button). Saved on this device. */
-let bcShowRange = (() => { try { return localStorage.getItem("colosseum.bcShowRange") === "1"; } catch { return false; } })();
-
-/** One body-composition row: label · range bar · value with BOTH the 50% and 95%
- * spreads (as ± margins or lo–hi ranges, per the toggle), plus an optional ℹ info
- * button that expands a math derivation of how the value was calculated. */
-function bcRow(
-  label: string,
-  r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number },
-  unit: string,
-  deriveHtml?: string,
-): string {
-  const ci95 = (r.hi95 - r.lo95) / 2;
-  const ci50 = (r.hi50 - r.lo50) / 2;
-  const f = (n: number) => (Math.round(n * 10) / 10).toString();
-  const title = `est ${f(r.avg)}${unit} · 50% ${f(r.lo50)}–${f(r.hi50)} · 95% ${f(r.lo95)}–${f(r.hi95)}`;
-  const spread =
-    ci95 < 0.05
-      ? ""
-      : bcShowRange
-        ? ` <span class="muted bc-ci">${f(r.lo50)}–${f(r.hi50)}<sup>50</sup> ${f(r.lo95)}–${f(r.hi95)}<sup>95</sup></span>`
-        : ` <span class="muted bc-ci">±${f(ci50)}<sup>50</sup> ±${f(ci95)}<sup>95</sup></span>`;
-  const info = deriveHtml ? ` <button type="button" class="bc-info" aria-label="How ${escapeHtml(label)} is calculated" title="How this is calculated">ℹ</button>` : "";
-  return (
-    `<div class="bc-row"><span class="bc-lbl">${escapeHtml(label)}</span>` +
-    miniRangeBar(r, title) +
-    `<span class="bc-val">${f(r.avg)}${unit}${spread}${info}</span></div>` +
-    (deriveHtml ? `<div class="bc-derive" hidden>${deriveHtml}</div>` : "")
-  );
-}
+const bcPanel = (id: string, deriveHtml: string): string => `<div class="bc-panel" data-bcpanel="${id}" hidden>${deriveHtml}</div>`;
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
  * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
   const username = els.athlete.value;
   const p = athProfile(username);
-  const editBtn = `<button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button>`;
+  const editBtn = `<div class="profile-edit-row"><button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button></div>`;
   if (!p) {
     els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
@@ -2849,27 +2817,18 @@ function renderAthleteProfile() {
     els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  // nFFMI = lean-mass index normalised to 1.8 m, shown with BOTH error margins
-  // the body-fat band implies (half the 50% and half the 95% width).
-  const ci95 = (range.hi95 - range.lo95) / 2;
-  const ci50 = (range.hi50 - range.lo50) / 2;
   const f1 = (n: number) => n.toFixed(1);
+  const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
+  // nFFMI badge — headline number only; the detail lives in the line + ⓘ math.
   const badge =
-    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling. 50% band ${f1(range.lo50)}–${f1(range.hi50)}, 95% band ${f1(range.lo95)}–${f1(range.hi95)} from the body-fat uncertainty.">` +
+    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling.">` +
     `<span class="nffmi-val">${range.avg.toFixed(1)}</span>` +
     `<span class="nffmi-lbl">nFFMI</span>` +
-    (ci95 >= 0.05 ? `<span class="nffmi-ci">±${f1(ci50)}<sup>50</sup> ±${f1(ci95)}<sup>95</sup></span>` : "") +
     `</span>`;
   // Body-composition ranges derived from the body-fat band: lean mass and fat
   // mass (kg), each as a predicted value ± with a little 50/95 range bar — the
   // same uncertainty the nFFMI carries, made visual.
   const mass = bodyMassRanges(p.weight, dist);
-  // Body fat as a 0–100 % range (the dist is stored as fractions), so it slots
-  // into the same value ± row as the rest.
-  const bfPctRange = {
-    lo95: dist.low95 * 100, lo50: dist.low50 * 100, avg: dist.avg * 100,
-    hi50: dist.high50 * 100, hi95: dist.high95 * 100,
-  };
   // ---- ℹ derivations: how each value is calculated, in the same math style as
   // the workouts list's 1RM (rm-derive / rm-step). ----
   const hM = p.height / 100;
@@ -2890,13 +2849,19 @@ function renderAthleteProfile() {
     dstep("50% band", `${bfPct(dist.low50)} – ${bfPct(dist.high50)}`),
     dstep("95% band", `${bfPct(dist.low95)} – ${bfPct(dist.high95)}`),
   ]);
+  // Compact numbers line (no bars / ranges / ±). Each value carries a ⓘ that
+  // toggles its math panel, shown below the line.
+  const sep = ` <span class="bc-sep">·</span> `;
   const bodyComp =
-    `<div class="bodycomp">` +
-    `<div class="bc-toolbar"><button type="button" class="bc-mode" title="Switch how the spread is shown">${bcShowRange ? "range" : "± margin"}</button></div>` +
-    bcRow("nFFMI", range, "", nffmiDerive) +
-    bcRow("Lean", mass.lean, " kg", leanDerive) +
-    bcRow("Fat", mass.fat, " kg", fatDerive) +
-    bcRow("Body fat", bfPctRange, "%", bfDerive) +
+    `<div class="bodycomp"><div class="bc-line">` +
+    [
+      bcChip("bf", "Body fat", bfPct(dist.avg)),
+      bcChip("lean", "Lean", `${f1s(mass.lean.avg)} kg`),
+      bcChip("fat", "Fat", `${f1s(mass.fat.avg)} kg`),
+      bcChip("nffmi", "nFFMI", f1(range.avg)),
+    ].join(sep) +
+    `</div>` +
+    bcPanel("bf", bfDerive) + bcPanel("lean", leanDerive) + bcPanel("fat", fatDerive) + bcPanel("nffmi", nffmiDerive) +
     `</div>`;
   // Likely lifetime NATURAL potential: the drug-free lean ceiling at this height,
   // and the ideal bodyweight to carry it at each sport's typical body fat.
@@ -2915,14 +2880,50 @@ function renderAthleteProfile() {
         return (
           `<div class="bodycomp bodycomp-pot">` +
           `<div class="bc-head muted" title="Likely lifetime natural ceiling at nFFMI ≈ ${pot.ceilingNffmi} for ${sexLbl} (Kouri et al.), at this height. Ideal weights put that lean ceiling at a sport-typical body fat: calisthenics ${Math.round(pot.caliBf * 100)}%, power/weightlifting ${Math.round(pot.powerBf * 100)}%. Estimates — genetics & frame vary.">Natural potential (est.)</div>` +
-          bcRow("Lean cap", pot.leanLimit, " kg", capDerive) +
-          bcRow("Cali wt", pot.idealCalisthenics, " kg", wtDerive(pot.caliBf, pot.idealCalisthenics.avg, "calisthenics")) +
-          bcRow("Power wt", pot.idealPower, " kg", wtDerive(pot.powerBf, pot.idealPower.avg, "power")) +
+          `<div class="bc-line">` +
+          [
+            bcChip("leancap", "Lean cap", `${f1s(pot.leanLimit.avg)} kg`),
+            bcChip("cali", "Cali wt", `${f1s(pot.idealCalisthenics.avg)} kg`),
+            bcChip("power", "Power wt", `${f1s(pot.idealPower.avg)} kg`),
+          ].join(sep) +
+          `</div>` +
+          bcPanel("leancap", capDerive) +
+          bcPanel("cali", wtDerive(pot.caliBf, pot.idealCalisthenics.avg, "calisthenics")) +
+          bcPanel("power", wtDerive(pot.powerBf, pot.idealPower.avg, "power")) +
           `</div>`
         );
       })()
     : "";
-  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn + bodyComp + potBlock;
+  els.athleteProfile.innerHTML = editBtn + badge + " " + specLine + bodyComp + potBlock;
+}
+
+/** Simplified S-ANL body-stats card: explained, fewer numbers, no ranges/±, and
+ * no muscle map / momentum. Height·age·weight sit small + unexplained up top. */
+function renderSAnalysis() {
+  if (!els.sAnalysis) return;
+  const username = els.athlete.value;
+  const p = athProfile(username);
+  if (!p) { els.sAnalysis.innerHTML = `<p class="muted">No profile on file.</p>`; return; }
+  const dist = bfDistFor(username);
+  const range = nffmiRange(p.weight, p.height, dist);
+  const mass = bodyMassRanges(p.weight, dist);
+  const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
+  const specs = [`${p.weight} kg`, `${p.height} cm`];
+  if (p.age != null) specs.push(`age ${p.age}`);
+  const item = (name: string, value: string, exp: string) =>
+    `<div class="s-bs-item"><div class="s-bs-row"><span class="s-bs-name">${name}</span><span class="s-bs-val">${value}</span></div>` +
+    `<p class="s-bs-exp muted">${exp}</p></div>`;
+  const items = [
+    item("Body fat", `${Math.round(dist.avg * 100)}%`, "The share of your bodyweight that's fat. Lower is leaner — though very low isn't always healthier."),
+    item("Lean weight", `${f1s(mass.lean.avg)} kg`, "Everything that isn't fat — muscle, bone, organs, water. More lean weight generally means more strength."),
+    item("Fat mass", `${f1s(mass.fat.avg)} kg`, "The actual kilograms of fat you carry — your weight times your body-fat %."),
+  ];
+  if (range) items.push(item("nFFMI", range.avg.toFixed(1), "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling."));
+  els.sAnalysis.innerHTML =
+    `<details class="s-bodystats" open><summary class="s-bodystats-sum">Body stats</summary>` +
+    `<div class="s-bs-body"><div class="s-bs-specs muted">${specs.join("  ·  ")}</div>` +
+    items.join("") +
+    `</div></details>`;
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).
@@ -7397,18 +7398,12 @@ async function init() {
   setupStatsEdit();
   els.athleteProfile.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
-    // ℹ on a value row → toggle its math derivation (the next .bc-derive sibling).
+    // ⓘ on a value chip → toggle that value's math panel (matched by id).
     const info = target.closest<HTMLElement>(".bc-info");
     if (info) {
-      const d = info.closest(".bc-row")?.nextElementSibling;
-      if (d?.classList.contains("bc-derive")) { d.toggleAttribute("hidden"); info.classList.toggle("is-open"); }
-      return;
-    }
-    // ±/range toggle → flip how every value's spread is shown, save, re-render.
-    if (target.closest(".bc-mode")) {
-      bcShowRange = !bcShowRange;
-      try { localStorage.setItem("colosseum.bcShowRange", bcShowRange ? "1" : "0"); } catch { /* ignore */ }
-      renderAthleteProfile();
+      const id = info.dataset.bcinfo;
+      const panel = info.closest(".bodycomp")?.querySelector<HTMLElement>(`.bc-panel[data-bcpanel="${id}"]`);
+      if (panel) { panel.toggleAttribute("hidden"); info.classList.toggle("is-open"); }
       return;
     }
     const btn = target.closest<HTMLElement>("[data-editstats]");
@@ -10691,6 +10686,7 @@ function switchTopTab(name: string) {
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
   if (name === "sitemap") renderSiteMap();
+  if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "statsedit") renderStatsEdit();

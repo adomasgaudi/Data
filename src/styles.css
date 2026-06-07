@@ -572,31 +572,43 @@ main { padding-bottom: 8.5rem; }
 .nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
 .nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
 .nffmi-ci { font-size: 0.7rem; font-weight: 700; opacity: 0.85; }
-/* Body-composition ranges (nFFMI / lean / fat): label · 50-95 range bar · value ±. */
-.bodycomp { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.6rem 0 0.2rem; max-width: 22rem; }
-.bc-row { display: grid; grid-template-columns: 2.6rem 1fr auto; align-items: center; gap: 0.5rem; }
-.bc-lbl { font-size: 0.74rem; font-weight: 700; color: var(--muted); }
-.bc-bar { position: relative; height: 8px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
-.bc-bar-50 { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: 0.45; }
-.bc-bar-avg { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--accent); transform: translateX(-1px); }
-.bc-val { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
-/* The 50% / 95% margins after a value: the tiny 50/95 marks which CI each ± is. */
-.bc-ci { font-weight: 600; }
-.bc-ci sup, .nffmi-ci sup { font-size: 0.62em; font-weight: 700; opacity: 0.8; margin-left: 0.5px; }
-/* ℹ info button + its expandable math derivation; ±/range mode toggle. */
-.bc-info { font-size: 0.72rem; cursor: pointer; color: var(--muted); background: none; border: none; padding: 0 1px; margin-left: 1px; }
-.bc-info:hover, .bc-info.is-open { color: var(--accent); }
-.bc-derive { margin: 0.1rem 0 0.25rem; padding: 0.35rem 0.55rem; background: var(--accent-soft); border-radius: 8px; }
-.bc-toolbar { display: flex; justify-content: flex-end; margin-bottom: 0.15rem; }
-.bc-mode { font: inherit; font-size: 0.66rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
-.bc-mode:hover { color: var(--accent); border-color: var(--accent); }
+/* Body composition (complex view): one compact line of "label value" chips, each
+   with a ⓘ that expands its math panel below. No bars / ranges / ±. */
+.bodycomp { margin: 0.5rem 0 0.2rem; }
+.bc-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.4rem; font-size: 0.85rem; }
+.bc-chip { display: inline-flex; align-items: baseline; gap: 0.25rem; white-space: nowrap; }
+.bc-c-lbl { font-size: 0.74rem; font-weight: 700; }
+.bc-c-val { font-weight: 800; }
+.bc-sep { color: var(--muted); }
+/* ⓘ info button — comfortably tappable (was tiny). */
+.bc-info {
+  font-size: 1rem; line-height: 1; cursor: pointer; color: var(--muted);
+  background: none; border: none; padding: 2px 4px; border-radius: 6px;
+}
+.bc-info:hover, .bc-info.is-open { color: var(--accent); background: var(--accent-soft); }
+.bc-panel { margin: 0.35rem 0 0.1rem; padding: 0.4rem 0.55rem; background: var(--accent-soft); border-radius: 8px; }
 .bodycomp-pot { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
 .bc-head { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; cursor: help; }
+/* Edit button sits on its own row ABOVE the stats (not beside them as a column). */
+.profile-edit-row { flex-basis: 100%; width: 100%; order: -1; margin-bottom: 0.1rem; }
 .profile-edit {
   font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 0.4rem;
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
 }
 .profile-edit:hover { color: var(--accent); border-color: var(--accent); }
+/* Simplified S-ANL body-stats card: explained, fewer numbers. */
+.s-analysis { margin-top: 0.5rem; }
+.s-bodystats { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1rem; }
+.s-bodystats-sum { font-weight: 800; font-size: 1.05rem; color: var(--accent); cursor: pointer; list-style: none; }
+.s-bodystats-sum::-webkit-details-marker { display: none; }
+.s-bs-body { margin-top: 0.6rem; }
+.s-bs-specs { font-size: 0.82rem; margin-bottom: 0.7rem; }
+.s-bs-item { padding: 0.55rem 0; border-top: 1px solid var(--line); }
+.s-bs-item:first-of-type { border-top: none; }
+.s-bs-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.s-bs-name { font-weight: 700; }
+.s-bs-val { font-weight: 800; font-size: 1.1rem; color: var(--accent); }
+.s-bs-exp { margin: 0.2rem 0 0; font-size: 0.85rem; line-height: 1.4; }
 /* Edit-athlete-stats page. */
 .statsedit-body { margin-top: 0.85rem; max-width: 560px; }
 .se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; min-width: 0; }
