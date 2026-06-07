@@ -8690,6 +8690,18 @@ async function init() {
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);
+  // PRUNE (DROP-1): the app has many DYNAMICALLY-rendered menus (Index Group-by /
+  // Show-app-wide / sub-group, calendar Group-by, picker Group-by, graph Aggregate
+  // / Interval, Create-variant type, stats editor…) that were left as native
+  // <select>s and showed the OS picker. Auto-enhance every native single select —
+  // those already on screen now, and (via the observer) any rendered later — so the
+  // whole app uses ONE consistent .xdd dropdown and no new native picker can creep
+  // in. Multi-selects + the hidden mirror selects are left alone (see enhanceSelectTree).
+  enhanceSelectTree(document.body);
+  new MutationObserver((muts) => {
+    for (const m of muts)
+      for (const n of m.addedNodes) if (n instanceof HTMLElement) enhanceSelectTree(n);
+  }).observe(document.body, { childList: true, subtree: true });
 
   setupSAnalysis();
   // Language (EN/LT) toggle in Settings. Switching reloads; LT then applies via
@@ -11364,6 +11376,22 @@ function setupTabs() {
  * keep working untouched. A MutationObserver re-syncs the custom UI whenever the
  * options are repopulated; selecting an option sets `.value` and fires "change".
  */
+/** Enhance an element + its descendant native single <select>s into the app's
+ * .xdd dropdown — so the UI NEVER falls back to the OS picker (which looks
+ * different on every device and ignores our styling). Idempotent: already-
+ * enhanced (.dd-native) and multi-selects are skipped, as are the two hidden
+ * mirror selects (#athlete behind its chip row, #viewAsSelect) and anything under
+ * [data-no-xdd]. A select tagged .dd-wide gets the wide menu. */
+function enhanceSelectTree(el: HTMLElement): void {
+  const list = el.matches("select") ? [el as HTMLSelectElement] : [];
+  for (const s of el.querySelectorAll<HTMLSelectElement>("select")) list.push(s);
+  for (const sel of list) {
+    if (sel.classList.contains("dd-native") || sel.multiple) continue;
+    if (sel.id === "athlete" || sel.id === "viewAsSelect" || sel.closest("[data-no-xdd]")) continue;
+    enhanceSelect(sel, sel.classList.contains("dd-wide") ? { wide: true } : {});
+  }
+}
+
 function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   sel.classList.add("dd-native");
   const dd = document.createElement("div");

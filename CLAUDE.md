@@ -30,6 +30,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 17. **Snappy clicks:** a tap updates ITS OWN control instantly; defer heavy/app-wide re-renders to the next frame, COALESCED (rAF/debounce) — never block the tap or rebuild the whole UI synchronously on click.
 18. **Version code-names (DISPLAY only):** on screen the minor shows as a Bleach zanpakutō name + `v.<patch>` (no `b.2`); internal version string stays `b.MAJOR.MINOR.PATCH`. Tables/logic in `src/versionName.ts` — major 2 = Espada (reverse rank, minor 9 = Aizen's Kyōka Suigetsu), major 3 = Gotei-13 captains.
 19. **Never claim a UI/visual/scroll fix "works" — you can't see the live site.** Verified = build + tests pass (say that). UNVERIFIED = whether it actually looks/scrolls/behaves right on the owner's phone — for those, say "I changed X, please check," never "it's fixed." Repeating "fixed" on something you can't observe is hallucination; when a fix fails twice, stop guessing and give the owner something testable instead.
+20. **Dropdowns are the custom `.xdd` CSS/HTML dropdown, NEVER the native OS `<select>` picker** (native looks different on every device + ignores our styling). Every native single-`<select>` is auto-enhanced (`enhanceSelectTree` + a `MutationObserver` in init), so just emit a normal `<select>` and it's converted; never hand-roll a native picker. Exempt only: `<select multiple>`, the hidden mirrors (`#athlete`, `#viewAsSelect`), and anything under `[data-no-xdd]`.
 
 ## Commands the owner types (act on these even with no other context)
 
