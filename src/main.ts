@@ -148,7 +148,6 @@ const els = {
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
-  viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   showAloneRings: $<HTMLInputElement>("showAloneRings"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
@@ -353,10 +352,8 @@ function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
   const locked = lockedUsername(); // null in admin, else the locked athlete
-  // Badge by the title shows the state; the Settings dropdown + auth button mirror it.
-  els.viewBadge.hidden = mode === "admin";
-  if (mode === "user") els.viewBadge.textContent = `👤 ${nameForUsername(locked)} (user view)`;
-  else if (mode === "loggedout") els.viewBadge.textContent = `🔒 ${nameForUsername(locked)} (logged out)`;
+  // The mode toggle in the header shows the current view; the Settings dropdown +
+  // auth button mirror it.
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
   els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
   // The "Other" sheet: non-admin keeps only the Guide; admin shows everything.
@@ -390,26 +387,17 @@ function setSimplified(on: boolean): void {
   renderViewSwitch();
 }
 
-/** Build the quick view switcher: a mode segment (Admin / User / Spectator) and a
- * detail segment (Advanced / Simplified). It's a soft, owner-facing switch — the
- * auth gate is already non-enforced, so the modes are all reachable here too. */
+/** Build the quick view switcher: TWO compact cycling toggles — one for the mode
+ * (Admin → User → Spectator) and one for the detail level (Simplified ⇄ Advanced).
+ * Each shows its current value and advances on tap. Soft, owner-facing switch. */
 function renderViewSwitch(): void {
   const box = document.getElementById("viewSwitch");
   if (!box) return;
-  const seg = (active: boolean, attr: string, label: string) =>
-    `<button type="button" class="vs-btn${active ? " is-active" : ""}" ${attr}>${label}</button>`;
-  const modes =
-    `<div class="vs-group">` +
-    seg(viewMode === "admin", `data-vmode="admin"`, "Admin") +
-    seg(viewMode === "user", `data-vmode="user"`, "User") +
-    seg(viewMode === "loggedout", `data-vmode="spectator"`, "Spectator") +
-    `</div>`;
-  const detail =
-    `<div class="vs-group">` +
-    seg(!simplifiedView, `data-vsimple="0"`, "Advanced") +
-    seg(simplifiedView, `data-vsimple="1"`, "Simplified") +
-    `</div>`;
-  box.innerHTML = modes + detail;
+  const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spectator";
+  const detailLabel = simplifiedView ? "Simplified" : "Advanced";
+  box.innerHTML =
+    `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` +
+    `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: Simplified · Advanced">${detailLabel}</button>`;
 }
 
 /** The "Colosseum" title acts as a Back-to-home button (jumps to the analysis
@@ -427,12 +415,13 @@ function setupBrandTitle(): void {
 function setupViewSwitch(): void {
   setupBrandTitle();
   document.getElementById("viewSwitch")?.addEventListener("click", (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-btn");
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-toggle");
     if (!b) return;
-    if (b.dataset.vmode === "admin") setViewAs("admin");
-    else if (b.dataset.vmode === "spectator") setViewAs("loggedout");
-    else if (b.dataset.vmode === "user") setViewAs(els.athlete.value || adomasUsername() || "");
-    else if (b.dataset.vsimple) setSimplified(b.dataset.vsimple === "1");
+    if (b.dataset.vcycle === "detail") { setSimplified(!simplifiedView); return; }
+    // Mode toggle cycles admin → user → spectator → admin.
+    if (viewMode === "admin") setViewAs(els.athlete.value || adomasUsername() || "");
+    else if (viewMode === "user") setViewAs("loggedout");
+    else setViewAs("admin");
   });
 }
 

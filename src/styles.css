@@ -133,19 +133,14 @@ body {
   color: var(--accent); background: var(--accent-soft);
   border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px;
 }
-/* Quick view switcher bar: two segmented controls (mode + detail level). */
-.view-switch {
-  display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; justify-content: center; align-items: center;
-  padding: 0.4rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line);
+/* Quick view switcher: two compact cycling toggles in the header (no wrap). */
+.view-switch { display: inline-flex; gap: 0.3rem; flex: none; white-space: nowrap; }
+.vs-toggle {
+  font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 7px;
 }
-.view-switch:empty { display: none; }
-.vs-group { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
-.vs-btn {
-  font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer;
-  color: var(--muted); background: none; border: none; padding: 4px 11px;
-}
-.vs-btn + .vs-btn { border-left: 1px solid var(--line); }
-.vs-btn.is-active { background: var(--accent); color: #fff; }
+.vs-toggle:hover { filter: brightness(0.97); }
 /* Effort badge on the tiny version line. */
 .effort-inline {
   font-size: 0.6rem; color: var(--muted); font-weight: 600;
@@ -170,7 +165,8 @@ body.on-s-anl .appfoot { display: none; }
 .cv-chip--total .cv-name { color: var(--text); }
 .cv-chip--total .cv-ver { color: var(--gold); }
 .status { color: var(--muted); font-size: 0.85rem; }
-.topbar-right { position: relative; display: flex; align-items: center; gap: 0.75rem; }
+.topbar-right { position: relative; display: flex; align-items: center; gap: 0.4rem; flex: none; }
+.topbar-title { flex: 0 1 auto; }
 .icon-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);
   font-size: 1rem; line-height: 1; cursor: pointer;

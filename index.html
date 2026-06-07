@@ -48,11 +48,11 @@
       <div class="topbar-title">
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
-          <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.6.63</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.6.64</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
+        <div id="viewSwitch" class="view-switch"></div>
         <button id="moreBtn" class="icon-btn" aria-label="More views" aria-haspopup="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
@@ -126,10 +126,6 @@
         </div>
       </div>
     </header>
-
-    <!-- Quick view switcher: jump between Admin / User / Spectator and the
-         Simplified ⇄ Advanced detail level. Filled by renderViewSwitch(). -->
-    <div id="viewSwitch" class="view-switch"></div>
 
     <nav class="tabs" role="tablist">
       <button class="tab" data-tab="leaderboards" role="tab">Colosseum</button>
