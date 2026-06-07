@@ -253,13 +253,13 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   { id: "strengthDecay", label: "Strength Score With Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
-  // scale when shown alongside weight/1RM (TASK 42). These are raw per-day totals
-  // that bounce around with what you chose to do, so they read as scatter (a dot
-  // per day) — only Frequency is a smoothed cadence, so it stays a line.
+  // scale when shown alongside weight/1RM (TASK 42). Per-day totals read best as
+  // bars (a column per day, like Volume); only Frequency is a smoothed cadence, so
+  // it stays a line.
   { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps))) },
   { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps))) },
-  { id: "reps", label: "Reps", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
-  { id: "sets", label: "Sets", type: "scatter", axis: "right", compute: (rs) => setsPerDay(rs) },
+  { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
+  { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs) => setsPerDay(rs) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },
   { id: "pr", label: "Personal Records", type: "scatter", compute: (rs, cfg) => prMarkers(rs, cfg.formula) },
   { id: "trend", label: "Trend Line", compute: (rs, cfg) => trendLine(rs, cfg.formula) },
