@@ -129,13 +129,20 @@ function predict(pts: { x: number; y: number }[], horizonDays: number): GraphPoi
 }
 
 const WEEK = 7 * DAY;
-/** Start-of-bucket timestamp for a time, by interval (day / week / month). Weeks
- * align to fixed 7-day blocks from the epoch (same as Frequency); months to the
- * 1st (UTC). Default bucket is the WEEK (per the default graph config). */
-function bucketStart(t: number, interval: GraphConfig["interval"]): number {
-  if (interval === "day") return Math.floor(t / DAY) * DAY;
-  if (interval === "month") { const d = new Date(t); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); }
-  return Math.floor(t / WEEK) * WEEK; // week
+/** Plot x for a time's bucket: the MIDDLE of the period (day / week / month), so a
+ * bar (drawn centred on its x) sits OVER the period it covers rather than pinned to
+ * its left edge / the month gridline. Weeks use fixed 7-day blocks from the epoch
+ * (same as Frequency); months use the true mid-point between the 1st and the next
+ * 1st. The value is also a stable per-bucket key for grouping. */
+function bucketCenter(t: number, interval: GraphConfig["interval"]): number {
+  if (interval === "day") return Math.floor(t / DAY) * DAY + DAY / 2;
+  if (interval === "month") {
+    const d = new Date(t);
+    const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+    return (start + next) / 2;
+  }
+  return Math.floor(t / WEEK) * WEEK + WEEK / 2; // week
 }
 /** Sum a per-set value into one point per time bucket (volume / reps "by date").
  * Buckets by the configured interval — week by default — so the count/volume bars
@@ -147,7 +154,7 @@ function byBucketSum(records: readonly SetRecord[], sel: (r: SetRecord) => numbe
     if (v == null || !Number.isFinite(v)) continue;
     const t = ts(r.date);
     if (!Number.isFinite(t)) continue;
-    const key = bucketStart(t, interval);
+    const key = bucketCenter(t, interval);
     m.set(key, (m.get(key) ?? 0) + v);
   }
   return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([x, y]) => ({ x, y: r1(y) }));
