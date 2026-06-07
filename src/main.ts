@@ -134,6 +134,7 @@ import {
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
+import { versionParts, displayVersion } from "./versionName";
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename } from "./backup";
 import defaultCache from "./data/defaultCache.json";
 
@@ -2235,7 +2236,7 @@ function renderChangelog() {
     return (
       `<details class="cl-row cl-d${depth}${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
-      `<span class="cl-ver">${escapeHtml(r.version)}</span>` +
+      `<span class="cl-ver">${escapeHtml(displayVersion(r.version))}</span>` +
       `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span></span>` +
       spOrTag +
       `<span class="cl-caret">▾</span>` +
@@ -7466,17 +7467,17 @@ async function init() {
   // clickable — it opens the Version history page.
   const verEl = document.querySelector<HTMLElement>(".version");
   if (verEl) {
-    // Split the version so the b.MAJOR.MINOR base reads big & golden and the
-    // trailing patch (+ tweak) segment reads small & grey — a glanceable hierarchy.
-    const vm = CURRENT_VERSION.match(/^(b\.\d+\.\d+)(.*)$/);
-    verEl.innerHTML = vm
-      ? `<span class="ver-major">${escapeHtml(vm[1] ?? "")}</span><span class="ver-patch">${escapeHtml(vm[2] ?? "")}</span>`
+    // The minor shows as a Bleach code-name (Espada zanpakutō, reverse rank — see
+    // versionName.ts) in small gold; the patch the AIs bump reads as a grey "v.N".
+    const vp = versionParts(CURRENT_VERSION);
+    verEl.innerHTML = vp
+      ? `<span class="ver-name">${escapeHtml(vp.name)}</span>${vp.patch ? `<span class="ver-patch"> ${escapeHtml(vp.patch)}</span>` : ""}`
       : escapeHtml(CURRENT_VERSION);
     verEl.title = "Version history";
     verEl.style.cursor = "pointer";
     verEl.addEventListener("click", openChangelog);
   }
-  els.changelogVer.textContent = CURRENT_VERSION;
+  els.changelogVer.textContent = displayVersion(CURRENT_VERSION);
   renderChangelog();
 
   const effortSummary = document.getElementById("effortSummary");
