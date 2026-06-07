@@ -23,12 +23,15 @@ export interface GraphPoint {
    * section per rep, each ending at that rep's 1RM-equivalent. */
   bands?: number[];
   meta?: string; // tooltip text
+  fail?: boolean; // the set's note contained "fail" — drawn as a red ✕
 }
+/** A set whose note marks it as a failed attempt. */
+const isFail = (r: SetRecord): boolean => /fail/i.test(r.notes ?? "");
 export interface GraphMetricDef {
   id: string;
   label: string;
   /** Series kind (default "line"). "range" uses lo/hi; "scatter" = dots. */
-  type?: "line" | "range" | "scatter";
+  type?: "line" | "range" | "scatter" | "bars";
   /** Which y-axis (most share the left). */
   axis?: "left" | "right";
   /** Per-exercise point builder. Absent = registered but not computed yet. */
@@ -74,7 +77,7 @@ function perSet(
     const y = sel(r);
     if (y != null && Number.isFinite(y)) {
       const x = times.get(r) ?? ts(r.date);
-      out.push(metaOf ? { x, y, meta: metaOf(r) } : { x, y });
+      out.push({ x, y, ...(metaOf ? { meta: metaOf(r) } : {}), ...(isFail(r) ? { fail: true } : {}) });
     }
   }
   return out.sort((a, b) => a.x - b.x);
@@ -198,30 +201,39 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
       const times = setTimes(rs);
       const out: GraphPoint[] = [];
       for (const r of rs) {
-        const lo = added(r);
-        const hi = addedWeight1RM(r, cfg.formula);
-        if (lo == null || hi == null) continue;
-        // Section the bar by rep: the value at each rep k is what THIS weight done
-        // for k reps estimates as a 1RM, from k=1 (the weight itself) up to the
-        // logged rep count (the full estimated 1RM at the top). Splits the bar into
-        // one section per rep so each set reads as its rep-by-rep 1RM ladder.
         const reps = r.reps ?? 0;
+        // Plot on the SAME added-weight basis as the 1RM shown everywhere else (the
+        // set list, the 1RM metric): from the plate you added (0 for a pure
+        // bodyweight set) up to the set's added-weight 1RM. Using the bodyweight-
+        // inclusive effective load here instead made the bars read ~bodyweight
+        // (e.g. pull-ups at 90–130 kg — numbers that never appear in the set) — the
+        // bug this fixes. addedWeight1RM is null for not-comparable / isometric.
+        const lo = added(r) ?? 0;
+        const hi = addedWeight1RM(r, cfg.formula);
+        if (hi == null) continue;
+        // Section the bar by rep: the value at each rep k is what THIS load done for
+        // k reps estimates as a 1RM, from k=1 (the load itself) up to the logged rep
+        // count (the full estimated 1RM at the top) — a rep-by-rep 1RM ladder.
         const bands: number[] = [];
         for (let k = 1; k <= reps; k++) {
           const v = addedWeight1RM({ ...r, reps: k }, cfg.formula);
           if (v != null) bands.push(r1(v));
         }
-        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${lo}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
       }
       return out.sort((a, b) => a.x - b.x);
     },
   },
   {
     id: "e1rm",
-    label: "Estimated 1RM",
+    label: "1RM",
     type: "scatter",
     compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`),
   },
+  // "% of world record" — computed specially in analyticsGraph (needs the athlete's
+  // sex + bodyweight + the per-exercise record); carries no compute. Shown as a
+  // FRACTION of the record (1.0 = world record), so it shares the left value axis.
+  { id: "pctWR", label: "% of world record", type: "scatter" },
   { id: "strength", label: "Strength Score", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
   { id: "strengthDecay", label: "Strength Score With Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
@@ -229,8 +241,8 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // scale when shown alongside weight/1RM (TASK 42). These are raw per-day totals
   // that bounce around with what you chose to do, so they read as scatter (a dot
   // per day) — only Frequency is a smoothed cadence, so it stays a line.
-  { id: "volume", label: "Volume", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps))) },
-  { id: "volumeLoad", label: "Volume Load", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps))) },
+  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps))) },
+  { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps))) },
   { id: "reps", label: "Reps", type: "scatter", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
   { id: "sets", label: "Sets", type: "scatter", axis: "right", compute: (rs) => setsPerDay(rs) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },

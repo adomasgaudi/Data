@@ -45,6 +45,8 @@ export interface SvgPoint {
   bands?: number[];
   /** Extra text shown in the tooltip (e.g. "120×5"). */
   meta?: string;
+  /** A failed attempt (note contained "fail") — drawn as a red ✕ on scatters. */
+  fail?: boolean;
 }
 export interface SvgSeries {
   name: string;
@@ -93,6 +95,9 @@ export interface SvgChartConfig {
   panMode?: "x" | "xy";
   /** Note shown under the legend. */
   note?: string;
+  /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
+   * region as you approach a target. Drawn behind everything. */
+  yBands?: { from: number; to?: number; fill: string }[];
 }
 export interface SvgChart {
   update(cfg: Partial<SvgChartConfig>): void;
@@ -252,9 +257,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (Number.isFinite(re.yMin)) {
       const ryPad = (re.yMax - re.yMin) * 0.08 || 1;
       ry = { yMin: re.yMin - (cfg.rightBeginAtZero ? 0 : ryPad), yMax: re.yMax + ryPad };
-      // Stretch the top so these series sit low (don't tower over the left-axis data).
+      // Scale the right-axis top: >1 squishes its series lower, <1 makes them taller
+      // (the relative-axis knob). 1 = auto.
       const hf = cfg.rightHeadroom ?? 1;
-      if (hf > 1) ry = { yMin: ry.yMin, yMax: ry.yMin + (ry.yMax - ry.yMin) * hf };
+      if (hf > 0 && hf !== 1) ry = { yMin: ry.yMin, yMax: ry.yMin + (ry.yMax - ry.yMin) * hf };
     } else {
       ry = { yMin: 0, yMax: 1 };
     }
@@ -276,28 +282,46 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
     let grid = "";
     let yLabels = "";
-    for (const v of niceTicks(view.yMin, view.yMax, 6)) {
+    // Format ticks with decimals when the step is sub-1 (e.g. a 0–1 fraction axis),
+    // else as integers — otherwise Math.round() collapses 0.1/0.2… to 0.
+    const fmtTick = (v: number, ticks: number[]): string => {
+      const stepT = ticks.length > 1 ? Math.abs(ticks[1]! - ticks[0]!) : Math.abs(v) || 1;
+      if (stepT >= 1 || stepT === 0) return String(Math.round(v));
+      return v.toFixed(Math.min(3, Math.ceil(-Math.log10(stepT))));
+    };
+    const yT = niceTicks(view.yMin, view.yMax, 6);
+    for (const v of yT) {
       const py = yL(v);
       if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
       grid += `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${W - M.r}" y2="${py.toFixed(1)}" class="svgc-grid" stroke-width="1"/>`;
       yLabels += inside()
-        ? halo((M.l + 4).toString(), (py - 3).toFixed(1), "start", String(Math.round(v)))
-        : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" class="svgc-axislabel" font-size="11">${Math.round(v)}</text>`;
+        ? halo((M.l + 4).toString(), (py - 3).toFixed(1), "start", fmtTick(v, yT))
+        : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" class="svgc-axislabel" font-size="11">${fmtTick(v, yT)}</text>`;
     }
     // right-axis labels (no gridlines, to avoid a double grid)
     if (hasRight()) {
-      for (const v of niceTicks(ry.yMin, ry.yMax, 6)) {
+      const ryT = niceTicks(ry.yMin, ry.yMax, 6);
+      for (const v of ryT) {
         const py = yR(v);
         if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
         yLabels += inside()
-          ? halo((W - M.r - 4).toString(), (py - 3).toFixed(1), "end", String(Math.round(v)))
-          : `<text x="${W - M.r + 6}" y="${(py + 4).toFixed(1)}" text-anchor="start" class="svgc-axislabel" font-size="11">${Math.round(v)}</text>`;
+          ? halo((W - M.r - 4).toString(), (py - 3).toFixed(1), "end", fmtTick(v, ryT))
+          : `<text x="${W - M.r + 6}" y="${(py + 4).toFixed(1)}" text-anchor="start" class="svgc-axislabel" font-size="11">${fmtTick(v, ryT)}</text>`;
       }
     }
 
+    // Horizontal value-zone bands on the left axis (e.g. "approaching the record"),
+    // drawn first so everything else sits on top.
+    let bands = "";
+    for (const b of cfg.yBands ?? []) {
+      const yTop = yL(Math.min(b.to ?? view.yMax, view.yMax));
+      const yBot = yL(Math.max(b.from, view.yMin));
+      const top = Math.max(M.t, Math.min(yTop, yBot));
+      const bot = Math.min(h - M.b, Math.max(yTop, yBot));
+      if (bot - top > 0.5) bands += `<rect x="${M.l}" y="${top.toFixed(1)}" width="${plotW.toFixed(1)}" height="${(bot - top).toFixed(1)}" fill="${b.fill}"/>`;
+    }
     // x bands + gridlines + thinned labels.
     let xLabels = "";
-    let bands = "";
     const clampX = (px: number) => Math.max(M.l, Math.min(W - M.r, px));
     if (xKind() === "time" && !useCompact()) {
       // Calendar bands (day/week/month/year): alternating background stripes give
@@ -361,7 +385,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // Dots only, no connecting line — for values that jump around (e.g. a
         // day's est-1RM) where a line would imply a trend that isn't there. Slight
         // transparency so overlapping same-day sets read as a denser blob (depth).
-        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
+        for (const p of s.points) {
+          const cx = xPix(p.x), cy = ymap(p.y ?? 0);
+          if (p.fail) {
+            // A failed attempt → a red ✕ instead of the dot.
+            const d = 3.8;
+            body += `<g stroke="#d4322a" stroke-width="1.8" stroke-linecap="round"><line x1="${(cx - d).toFixed(1)}" y1="${(cy - d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy + d).toFixed(1)}"/><line x1="${(cx - d).toFixed(1)}" y1="${(cy + d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy - d).toFixed(1)}"/></g>`;
+          } else {
+            body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
+          }
+        }
       } else if (s.type === "range") {
         const bars: { px: number; yTop: number; yBot: number }[] = [];
         for (const p of s.points) {

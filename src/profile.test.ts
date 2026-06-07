@@ -326,21 +326,22 @@ describe("muscleGroup (fine split)", () => {
     expect(muscleGroup("Bench Press")).toBe("Chest");
     expect(muscleGroup("Seated Shoulder Press")).toBe("Shoulders");
   });
-  it("splits the back into lower / upper / lats (pulls vs rows)", () => {
-    expect(muscleGroup("Bent Over Row")).toBe("Lats (rows)");
-    expect(muscleGroup("Seated Cable Row")).toBe("Lats (rows)");
-    expect(muscleGroup("Lat Pulldown")).toBe("Lats (pulls)");
-    expect(muscleGroup("Pull Ups")).toBe("Lats (pulls)");
+  it("splits the back into lower / upper / lats (pulls and rows are one Lats group)", () => {
+    expect(muscleGroup("Bent Over Row")).toBe("Lats");
+    expect(muscleGroup("Seated Cable Row")).toBe("Lats");
+    expect(muscleGroup("Lat Pulldown")).toBe("Lats");
+    expect(muscleGroup("Pull Ups")).toBe("Lats");
     expect(muscleGroup("Back Extension")).toBe("Lower back");
     expect(muscleGroup("Deadlift")).toBe("Lower back"); // erectors brace the load
     expect(muscleGroup("Barbell Shrug")).toBe("Upper back");
     expect(muscleGroup("Face Pull")).toBe("Upper back");
-    expect(muscleGroup("Inverted deadlift")).toBe("Lats (rows)"); // a lat row, not a deadlift
+    expect(muscleGroup("Inverted deadlift")).toBe("Lats"); // a lat row, not a deadlift
   });
   it("keeps core and non-lifts out of the muscle splits", () => {
     expect(muscleGroup("Hanging Leg Raise")).toBe("Core");
     expect(muscleGroup("Plank")).toBe("Core");
-    expect(muscleGroup("Treadmill Run")).toBe("Cardio");
+    // Cardio / mobility / skill are disciplines now, not muscle groups → Other.
+    expect(muscleGroup("Treadmill Run")).toBe("Other");
     expect(muscleGroup("KG - track food")).toBe("Other");
   });
 });
@@ -403,7 +404,9 @@ describe("exercise tag registry", () => {
   it("returns the DL-pattern comparable group for its members only", () => {
     expect(comparableGroupsFor("Deadlift").map((t) => t.id)).toContain("compare.dl-pattern");
     expect(comparableGroupsFor("Romanian Deadlift").map((t) => t.id)).toContain("compare.dl-pattern");
-    expect(comparableGroupsFor("Squat")).toEqual([]);
+    expect(comparableGroupsFor("Deadlift").map((t) => t.id)).not.toContain("compare.squat-pattern");
+    // Squat now sits in its own squat-pattern comparable group (back vs front squat).
+    expect(comparableGroupsFor("Squat").map((t) => t.id)).toEqual(["compare.squat-pattern"]);
   });
 
   it("keeps the registry internally consistent (unique ids, valid ratios)", () => {
@@ -464,7 +467,7 @@ describe("deadlift pattern vs accessory (hand-curated include/exclude)", () => {
     expect(ids("Inverted deadlift")).not.toContain("pattern.deadlift");
     expect(ids("Inverted deadlift")).not.toContain("pattern.deadlift-accessory");
     expect(ids("Inverted deadlift")).not.toContain("pattern.hinge");
-    expect(muscleGroup("Inverted deadlift")).toBe("Lats (rows)");
+    expect(muscleGroup("Inverted deadlift")).toBe("Lats");
   });
 });
 

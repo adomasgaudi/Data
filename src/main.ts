@@ -4,6 +4,20 @@
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
 import { niceTicks, MS_DAY } from "./chartAxis";
+import {
+  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, dowLetter,
+  isoWeekNumber, todayIso, trainingDuration,
+} from "./format";
+import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
+import { escapeHtml } from "./html";
+// Tasks & roadmap (Settings overlay) are shown straight from the docs/ markdown,
+// imported as raw text so the panel is always a projection of the files and can
+// never drift from them (single source of truth).
+import cleanupBacklogMd from "../docs/cleanup-backlog.md?raw";
+import roadmapMd from "../docs/roadmap.md?raw";
+import { loadJsonObject, saveJson } from "./storage";
+import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
+import { S, type HeatColorDim } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -20,6 +34,7 @@ import {
   weeksForUser,
   exerciseProgressByWeek,
   addedWeight1RM,
+  effectiveE1RM,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -56,18 +71,20 @@ import {
 } from "./metrics";
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf, FAMILIES } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
 import { POSE_FRAMES } from "./poseFrames";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
-import { filterExercises, FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
+import { FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
+import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph } from "./analyticsGraph";
+import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
@@ -89,23 +106,17 @@ import {
   normalizeBodyFatDist,
   nffmiRange,
   bodyMassRanges,
+  bodyComposition,
   naturalPotential,
   defaultBwCoeff,
   realPullupWeight,
   exerciseCategory,
   exerciseCategories,
-  trainingCategories,
-  isStatic,
   muscleGroup,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
-  MUSCLE_GROUP_TAGS,
-  FUNCTIONAL_PATTERN_TAGS,
   tagsForExercise,
-  combinableGroupsFor,
-  comparableGroupsFor,
   membersOfGroup,
-  exercisesForTag,
   type RegistryTag,
   LIST_CATEGORIES,
   exerciseCode,
@@ -115,10 +126,30 @@ import {
   type TrainingCategory,
   type MuscleGroup,
   type ExerciseTier,
+  DISCIPLINES,
+  type Discipline,
+  exerciseDiscipline,
+  exerciseDisciplines,
+  JOINT_MOVEMENTS,
+  jointMovements,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, type Release } from "./changelog";
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename } from "./backup";
+import defaultCache from "./data/defaultCache.json";
+
+// Bundled "global cache" — the owner's baseline setup (overrides, world records,
+// difficulty factors, manual/edited sets…). On any FRESH browser (or one missing a
+// key) we seed it in; existing keys are left untouched, so a device's own later
+// edits always win. Runs before any colosseum.* loader below reads storage.
+(function seedDefaultCache() {
+  try {
+    for (const [k, v] of Object.entries(defaultCache as Record<string, string>))
+      if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
+  } catch {
+    /* storage may be unavailable (e.g. private mode) */
+  }
+})();
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -132,10 +163,11 @@ const els = {
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
-  viewBadge: $("viewBadge"),
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   showAloneRings: $<HTMLInputElement>("showAloneRings"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
+  simplifiedToggle: $<HTMLInputElement>("simplifiedToggle"),
+  sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
   rank: $<HTMLSelectElement>("rank"),
@@ -166,10 +198,15 @@ const els = {
   changelogPage: $("changelogPage"),
   changelogClose: $<HTMLButtonElement>("changelogClose"),
   changelog: $("changelog"),
-  exInfoPage: $("exInfoPage"),
-  exInfoClose: $<HTMLButtonElement>("exInfoClose"),
-  exInfoTitle: $("exInfoTitle"),
-  exInfo: $("exInfo"),
+  backlogBtn: $<HTMLButtonElement>("backlogBtn"),
+  backlogPage: $("backlogPage"),
+  backlogClose: $<HTMLButtonElement>("backlogClose"),
+  backlog: $("backlog"),
+  modelBtn: $<HTMLButtonElement>("modelBtn"),
+  modelPage: $("modelPage"),
+  modelClose: $<HTMLButtonElement>("modelClose"),
+  modelEditor: $("modelEditor"),
+  modelResetAll: $<HTMLButtonElement>("modelResetAll"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
@@ -220,7 +257,6 @@ const els = {
   exercisesPager: $("exercisesPager"),
   workoutsTitle: $("workoutsTitle"),
   workoutCalendar: $("workoutCalendar"),
-  workoutSetsNote: $("workoutSetsNote"),
   workoutsTable: $<HTMLTableElement>("workoutsTable"),
   workoutsPager: $("workoutsPager"),
   workoutViewToggle: $<HTMLButtonElement>("workoutViewToggle"),
@@ -230,6 +266,7 @@ const els = {
   workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
+  aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -239,6 +276,7 @@ const els = {
   addVariant: $<HTMLInputElement>("addVariant"),
   addVariantField: $("addVariantField"),
   addVariantLabel: $("addVariantLabel"),
+  addNote: $<HTMLInputElement>("addNote"),
   addWeight: $<HTMLInputElement>("addWeight"),
   addReps: $<HTMLInputElement>("addReps"),
   addSets: $<HTMLInputElement>("addSets"),
@@ -256,10 +294,7 @@ const els = {
   activeSetBar: $("activeSetBar"),
   bwGroupBar: $("bwGroupBar"),
   bwGroups: $("bwGroups"),
-  codesTable: $("codesTable"),
   statsEditBody: $("statsEditBody"),
-  codesSearch: $<HTMLInputElement>("codesSearch"),
-  groupBrowser: $("groupBrowser"),
   mergeList: $("mergeList"),
   calcWeight: $<HTMLInputElement>("calcWeight"),
   calcReps: $<HTMLInputElement>("calcReps"),
@@ -291,7 +326,6 @@ let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
-let workoutSetsSvg: SvgChart | null = null; // Workouts view: all sets over time (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
@@ -324,15 +358,20 @@ let viewUser: string | null = (() => {
 })();
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
-const USER_VIEW_TABS = new Set(["analysis", "athlete", "guide"]);
+// Both analysis pages are allowed in non-admin views; the Simplified-view toggle
+// (defaulting ON outside admin) decides which one the Analysis button opens.
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide"]);
+/** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
+ * Simplified-view toggle is on, else the full ANL. */
+function analysisTabName(): string {
+  return simplifiedView ? "s-analysis" : "analysis";
+}
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
   const locked = lockedUsername(); // null in admin, else the locked athlete
-  // Badge by the title shows the state; the Settings dropdown + auth button mirror it.
-  els.viewBadge.hidden = mode === "admin";
-  if (mode === "user") els.viewBadge.textContent = `👤 ${nameForUsername(locked)} (user view)`;
-  else if (mode === "loggedout") els.viewBadge.textContent = `🔒 ${nameForUsername(locked)} (logged out)`;
+  // The mode toggle in the header shows the current view; the Settings dropdown +
+  // auth button mirror it.
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
   els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
   // The "Other" sheet: non-admin keeps only the Guide; admin shows everything.
@@ -347,10 +386,68 @@ function setViewMode(mode: ViewMode) {
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
     if (!USER_VIEW_TABS.has(current)) {
-      switchTopTab("analysis"); // single home for exercise views
+      switchTopTab(analysisTabName()); // analysis home (simplified by default outside admin)
     }
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
+  renderViewSwitch(); // reflect the new mode in the quick switcher
+}
+
+/** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
+ * label), keep the Settings checkbox + the quick switcher in sync. */
+function setSimplified(on: boolean): void {
+  simplifiedView = on;
+  try { localStorage.setItem("colosseum.simplifiedView", on ? "1" : "0"); } catch { /* ignore */ }
+  if (els.simplifiedToggle) els.simplifiedToggle.checked = on;
+  const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+  if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
+  updateBottomNav();
+  renderViewSwitch();
+}
+
+/** Build the quick view switcher: TWO compact cycling toggles — one for the mode
+ * (Admin → User → Spectator) and one for the detail level (Simplified ⇄ Advanced).
+ * Each shows its current value and advances on tap. Soft, owner-facing switch. */
+function renderViewSwitch(): void {
+  const box = document.getElementById("viewSwitch");
+  if (!box) return;
+  const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spec";
+  const detailLabel = simplifiedView ? "Simple" : "Adv";
+  box.innerHTML =
+    `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` +
+    `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: Simplified · Advanced">${detailLabel}</button>`;
+}
+
+/** The "Colosseum" title acts as a Back-to-home button (jumps to the analysis
+ * page; on home it just re-lands there). Click or Enter/Space. */
+function goHome(): void { switchTopTab(analysisTabName()); }
+function setupBrandTitle(): void {
+  const el = document.getElementById("brandTitle");
+  el?.addEventListener("click", goHome);
+  el?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter" || (e as KeyboardEvent).key === " ") { e.preventDefault(); goHome(); }
+  });
+}
+
+/** Wire the quick switcher (delegated, survives re-renders). */
+function setupViewSwitch(): void {
+  setupBrandTitle();
+  document.getElementById("viewSwitch")?.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-toggle");
+    if (!b) return;
+    if (b.dataset.vcycle === "detail") {
+      // Decide from the page ACTUALLY shown (not the saved flag, which can drift),
+      // so one tap always flips simplified ⇄ full — never a wasted first tap.
+      const onSimplified = document.getElementById("tab-s-analysis")?.hidden === false;
+      const onFull = document.getElementById("tab-analysis")?.hidden === false;
+      setSimplified(onSimplified ? false : onFull ? true : !simplifiedView);
+      return;
+    }
+    // Mode toggle cycles admin → user → spectator → admin.
+    if (viewMode === "admin") setViewAs(els.athlete.value || adomasUsername() || "");
+    else if (viewMode === "user") setViewAs("loggedout");
+    else setViewAs("admin");
+  });
 }
 
 /** Settings → "View as": admin (everything), logged out (Adomas), or lock to one athlete. */
@@ -451,74 +548,9 @@ function logIn(): void {
 /** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
 function viewAsSpectator(): void { hideLoginPage(); setViewMode("loggedout"); }
 
-// Display a number at no more than 3 significant figures: 2 by default, but 3
-// when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
-// a kg / volume / 1RM number is shown.
-const fmt = (n: number): string => {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  const abs = Math.abs(n);
-  const lead = Math.floor(abs / 10 ** Math.floor(Math.log10(abs))); // first significant digit, 1–9
-  const sf = lead <= 3 ? 3 : 2;
-  return Number(n.toPrecision(sf)).toLocaleString();
-};
-
-/** A 0..1 fraction as a whole-number percent, e.g. 0.6 → "60%". One place so
- * every percentage (coefficients, percentile, body fat, training mix) reads the
- * same way across the app. */
-const pct = (fraction: number): string => `${Math.round(fraction * 100)}%`;
-
-/** A bodyweight-multiple, always 2 dp, e.g. "1.25 BW". Single source so the
- * leaderboard, per-athlete detail and Test tab agree. */
-const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
-
-/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header.
- * When there's no (added) weight — bodyweight reps, holds — the meaningless "0"
- * base is dropped and just the reps show as the superscript. Negative (assisted)
- * weights keep their number. */
-const wr = (weight: number | null, reps: number | null): string =>
-  weight === null || weight === 0
-    ? (reps === null ? "—" : `<sup class="wr-bw">${reps}</sup>`)
-    : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
-
-/** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
-const MONTH_ABBR = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-const shortDate = (iso: string): string => {
-  const [, m, d] = iso.split("-");
-  const mon = MONTH_ABBR[Number(m) - 1];
-  return mon && d ? `${mon} ${Number(d)}` : iso;
-};
-
-/** One/two-letter weekday for an ISO day: M T W Th F Sa Su (UTC, to match keys). */
-const DOW_ABBR = ["Su", "M", "T", "W", "Th", "F", "Sa"]; // index = getUTCDay()
-const dowLetter = (iso: string): string => {
-  const t = Date.parse(iso);
-  return Number.isNaN(t) ? "" : (DOW_ABBR[new Date(t).getUTCDay()] ?? "");
-};
-
-/**
- * ISO-8601 week number (1–53) for a "YYYY-MM-DD" date: weeks start Monday and
- * week 1 is the one containing the year's first Thursday. Matches the app's
- * Monday-start weeks, so an exercise's weekly rows can be labelled "Week 15"
- * instead of a date. Returns 0 only on an unparseable input.
- */
-const isoWeekNumber = (iso: string): number => {
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return 0;
-  // Shift to the Thursday of this week, then count weeks from Jan 1.
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const day = (date.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
-  date.setUTCDate(date.getUTCDate() - day + 3); // move to Thursday
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
-  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 86_400_000));
-};
-
-/** Today as an ISO YYYY-MM-DD string — the reference point for "this week" and
- * the trailing-window sets-per-week averages. */
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
+// Number / date / weekday display helpers (fmt, pct, bwMult, wr, shortDate,
+// dowLetter, isoWeekNumber, todayIso, trainingDuration) are pure and live in
+// ./format so they can be unit-tested without the DOM. Imported at the top.
 
 // "Current strength" mode: when on, 1RM achievements fade with time off the lift
 // (detraining model in metrics.ts) instead of showing the all-time peak. Toggled
@@ -528,18 +560,6 @@ let decayStrength = localStorage.getItem("colosseum.decayStrength") === "1";
  * strength" is on, otherwise undefined (keep all-time peaks). Passed into the
  * leaderboard / personal-record aggregators. */
 const strengthAsOf = (): string | undefined => (decayStrength ? todayIso() : undefined);
-
-/** Elapsed training time from first to last logged date, in the unit that reads
- * cleanest at that scale: days under 2 weeks, weeks under ~2 months, months
- * under 2 years, otherwise years. */
-const trainingDuration = (firstIso: string, lastIso: string): string => {
-  const days = Math.max(0, Math.round((Date.parse(lastIso) - Date.parse(firstIso)) / 86_400_000));
-  const unit = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
-  if (days < 14) return unit(days, "day");
-  if (days < 60) return unit(Math.round(days / 7), "week");
-  if (days < 730) return unit(Math.round(days / 30.44), "month");
-  return `${(days / 365.25).toFixed(1)} years`;
-};
 
 function currentFormula(): OneRepMaxFormula {
   const v = els.formula.value;
@@ -588,7 +608,12 @@ function coliseumFilterNote(): string {
 // Starts from the profile.ts defaults; user edits are layered on top and stored
 // in the browser so they survive reloads. coeffFor() is read everywhere.
 const COEFF_STORE_KEY = "colosseum.bwCoeffs.v1";
+const COEFF_RANGE_KEY = "colosseum.bwCoeffRange.v1";
 const coeffOverrides: Record<string, number> = loadCoeffOverrides();
+// The bodyweight part can be set as a RANGE (a lift's leverage varies by variation);
+// the value actually used in the 1RM is the average of min & max. A single-value
+// edit (the Index table) and a range edit are mutually exclusive — the last one wins.
+const coeffRanges: Record<string, { min: number; max: number }> = loadCoeffRanges();
 
 function loadCoeffOverrides(): Record<string, number> {
   try {
@@ -598,17 +623,54 @@ function loadCoeffOverrides(): Record<string, number> {
     return {};
   }
 }
+function loadCoeffRanges(): Record<string, { min: number; max: number }> {
+  try {
+    const raw = localStorage.getItem(COEFF_RANGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, { min: number; max: number }>) : {};
+  } catch {
+    return {};
+  }
+}
 
-function coeffFor(exerciseName: string): number {
+/** The base (non-range) bodyweight part: the owner's single pin, else the heuristic. */
+function coeffBase(exerciseName: string): number {
   if (Object.prototype.hasOwnProperty.call(coeffOverrides, exerciseName)) return coeffOverrides[exerciseName]!;
-  // Pinned value first, otherwise the leverage-aware heuristic (front lever ≈ 0.1…).
   return EXERCISE_BW_COEFF[exerciseName] ?? defaultBwCoeff(exerciseName);
+}
+
+/** The bodyweight part used everywhere — the average of the range if one is set. */
+function coeffFor(exerciseName: string): number {
+  const r = coeffRanges[exerciseName];
+  if (r) return Math.round(((r.min + r.max) / 2) * 1000) / 1000;
+  return coeffBase(exerciseName);
+}
+
+/** The min/max to show in the editor — the override range, else the base as both. */
+function coeffRangeFor(exerciseName: string): { min: number; max: number } {
+  const r = coeffRanges[exerciseName];
+  if (r) return r;
+  const b = coeffBase(exerciseName);
+  return { min: b, max: b };
 }
 
 function setCoeff(exerciseName: string, value: number) {
   coeffOverrides[exerciseName] = value;
+  delete coeffRanges[exerciseName]; // a single value supersedes any range
+  saveCoeffs();
+}
+
+/** Set the bodyweight-part range (min/max). The average is what the 1RM uses. */
+function setCoeffRange(exerciseName: string, min: number, max: number) {
+  const lo = Math.min(min, max), hi = Math.max(min, max);
+  coeffRanges[exerciseName] = { min: lo, max: hi };
+  delete coeffOverrides[exerciseName]; // a range supersedes a single pin
+  saveCoeffs();
+}
+
+function saveCoeffs() {
   try {
     localStorage.setItem(COEFF_STORE_KEY, JSON.stringify(coeffOverrides));
+    localStorage.setItem(COEFF_RANGE_KEY, JSON.stringify(coeffRanges));
   } catch {
     /* storage may be unavailable (e.g. private mode) — edits still apply this session */
   }
@@ -619,44 +681,84 @@ function setCoeff(exerciseName: string, value: number) {
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
 // are the read points used across the app so an edit shows everywhere.
 const META_OVERRIDE_KEY = "colosseum.metaOverrides.v1";
-type MetaOverrides = { cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string> };
+type MetaKind = "cat" | "mg" | "tier" | "disc";
+// An exercise can fit SEVERAL disciplines / muscle groups / tiers, so each override
+// is a LIST. The legacy single maps are kept in sync with each list's first (primary)
+// value, so older backups and every single-value reader keep working. ("cat" is the
+// old internal training-category dimension; "disc" is the owner-facing Discipline.)
+type MetaOverrides = {
+  cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string>; disc?: Record<string, string>;
+  catSet?: Record<string, string[]>; mgSet?: Record<string, string[]>; tierSet?: Record<string, string[]>; discSet?: Record<string, string[]>;
+};
 const metaOverrides: MetaOverrides = (() => {
+  const empty = (): MetaOverrides => ({ cat: {}, mg: {}, tier: {}, disc: {}, catSet: {}, mgSet: {}, tierSet: {}, discSet: {} });
   try {
     const raw = localStorage.getItem(META_OVERRIDE_KEY);
     const o = raw ? (JSON.parse(raw) as MetaOverrides) : {};
-    return { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {} };
+    const m: MetaOverrides = { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {}, disc: o.disc ?? {}, catSet: o.catSet ?? {}, mgSet: o.mgSet ?? {}, tierSet: o.tierSet ?? {}, discSet: o.discSet ?? {} };
+    // Migrate any legacy single override into its list form (once).
+    for (const k of ["cat", "mg", "tier", "disc"] as MetaKind[]) {
+      const single = m[k]!, set = m[`${k}Set` as const]!;
+      for (const [name, v] of Object.entries(single)) if (v && !set[name]?.length) set[name] = [v];
+    }
+    return m;
   } catch {
-    return { cat: {}, mg: {}, tier: {} };
+    return empty();
   }
 })();
 function saveMetaOverrides() {
-  try { localStorage.setItem(META_OVERRIDE_KEY, JSON.stringify(metaOverrides)); } catch { /* storage may be unavailable */ }
+  saveJson(META_OVERRIDE_KEY, metaOverrides);
 }
-/** Primary training category — the owner's override if set, else the keyword default. */
-function catFor(name: string): TrainingCategory {
-  return (metaOverrides.cat![name] as TrainingCategory) ?? exerciseCategory(name);
+/** The owner's full override LIST for one dimension, or null if none is set. */
+function metaSet(kind: MetaKind, name: string): string[] | null {
+  const arr = metaOverrides[`${kind}Set` as const]![name];
+  return arr && arr.length ? arr : null;
 }
-/** Muscle group — override if set, else the default. */
-function mgFor(name: string): MuscleGroup {
-  return (metaOverrides.mg![name] as MuscleGroup) ?? muscleGroup(name);
+/** All training categories a lift belongs to — the owner's list, else the single default. */
+function catsFor(name: string): TrainingCategory[] {
+  return (metaSet("cat", name) as TrainingCategory[]) ?? [exerciseCategory(name)];
 }
-/** Tier — override if set, else the default. */
-function tierFor(name: string): ExerciseTier {
-  return (metaOverrides.tier![name] as ExerciseTier) ?? exerciseTier(name);
+/** All muscle groups a lift belongs to — the owner's list, else the single default. */
+function mgsFor(name: string): MuscleGroup[] {
+  return (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
 }
-/** Set or clear (empty/"auto" → back to default) one metadata override. */
-function setMetaOverride(kind: "cat" | "mg" | "tier", name: string, value: string) {
-  const map = metaOverrides[kind]!;
-  if (!value || value === "auto") delete map[name];
-  else map[name] = value;
+/** All tiers a lift belongs to — the owner's list, else the single default. */
+function tiersFor(name: string): ExerciseTier[] {
+  return (metaSet("tier", name) as ExerciseTier[]) ?? [exerciseTier(name)];
+}
+/** All disciplines a lift belongs to — the owner's list, else the single default. */
+function discsFor(name: string): Discipline[] {
+  return (metaSet("disc", name) as Discipline[]) ?? exerciseDisciplines(name);
+}
+/** Primary (first) of each dimension — what every single-value reader uses. */
+function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
+function mgFor(name: string): MuscleGroup { return mgsFor(name)[0]!; }
+function tierFor(name: string): ExerciseTier { return tiersFor(name)[0]!; }
+/** The auto-default value for a dimension (used when seeding a fresh toggle). */
+function metaDefault(kind: MetaKind, name: string): string {
+  return kind === "cat" ? exerciseCategory(name) : kind === "mg" ? muscleGroup(name) : kind === "disc" ? exerciseDiscipline(name) : exerciseTier(name);
+}
+/** Replace the whole override list for one dimension (empty → back to auto default). */
+function setMetaSet(kind: MetaKind, name: string, values: string[]) {
+  const set = metaOverrides[`${kind}Set` as const]!, single = metaOverrides[kind]!;
+  if (!values.length) { delete set[name]; delete single[name]; }
+  else { set[name] = values; single[name] = values[0]!; }
   saveMetaOverrides();
+}
+/** Toggle one value in a dimension's list (starting from whatever is shown now). */
+function toggleMetaOverride(kind: MetaKind, name: string, value: string) {
+  if (!value || value === "auto") { setMetaSet(kind, name, []); return; } // ↺ reset to default
+  const effective = metaSet(kind, name) ?? [metaDefault(kind, name)];
+  const next = new Set(effective);
+  if (next.has(value)) next.delete(value); else next.add(value);
+  setMetaSet(kind, name, [...next]);
 }
 /** All muscle-group choices for the editor dropdown. */
 const MUSCLE_GROUPS: MuscleGroup[] = [
-  "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats (pulls)", "Lats (rows)",
-  "Chest", "Shoulders", "Biceps", "Triceps", "Core", "Cardio", "Mobility", "Skill", "Other",
+  "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats",
+  "Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Core",
 ];
-const TIER_LABELS: Record<ExerciseTier, string> = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" };
+const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary" };
 
 // ---- "Not comparable" NOTES (owner-marked, per note — not whole exercises) ----
 // A specific variation can be unmeasurable by 1RM/volume — e.g. a static
@@ -680,8 +782,7 @@ function setNoteNotComparable(exerciseName: string, note: string, on: boolean): 
   const k = `${exerciseName}|${normNote(note)}`;
   if (on) notComparableNotes.add(k);
   else notComparableNotes.delete(k);
-  try { localStorage.setItem(NOT_COMPARABLE_KEY, JSON.stringify([...notComparableNotes])); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(NOT_COMPARABLE_KEY, [...notComparableNotes]);
 }
 
 // ---- Exercise code overrides (the short codes shown in lists/tooltips) ----
@@ -708,8 +809,7 @@ function codeFor(exerciseName: string): string {
 }
 
 function saveCodeOverrides() {
-  try { localStorage.setItem(CODE_STORE_KEY, JSON.stringify(codeOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(CODE_STORE_KEY, codeOverrides);
 }
 
 /** Set or clear (blank → back to default) one exercise's code override. */
@@ -738,8 +838,9 @@ function loadShortOverrides(): Record<string, string> {
   }
 }
 
-/** The default short name for an exercise: for now, the same as its (effective)
- * code — so it follows any code override until the owner sets a distinct short. */
+/** The default short name for an exercise: its effective CODE, so "short" mode
+ * actually reads short (the tiny code) until the owner types a friendlier short
+ * name for a lift. */
 function defaultShort(exerciseName: string): string {
   return codeFor(exerciseName);
 }
@@ -752,8 +853,7 @@ function shortFor(exerciseName: string): string {
 }
 
 function saveShortOverrides() {
-  try { localStorage.setItem(SHORT_STORE_KEY, JSON.stringify(shortOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(SHORT_STORE_KEY, shortOverrides);
 }
 
 /** Set or clear (blank or equal to the default code → back to default) one
@@ -763,6 +863,43 @@ function setShortOverride(exerciseName: string, short: string) {
   if (!trimmed || trimmed === defaultShort(exerciseName)) delete shortOverrides[exerciseName];
   else shortOverrides[exerciseName] = trimmed;
   saveShortOverrides();
+}
+
+// ---- GLOBAL exercise-name display mode (ONE switch for the WHOLE site) ----
+// Every place that prints an exercise name reads displayName(), which follows
+// this single setting: "code" = the tiny code (HS-PU), "short" = the owner's
+// short name, "full" = the full logged name. Default is "short". Changing it
+// re-labels every view in lockstep — no per-view name toggles.
+type NameMode = "code" | "short" | "full";
+const NAME_MODE_KEY = "colosseum.nameMode.v1";
+let nameMode: NameMode = (() => {
+  try { const v = localStorage.getItem(NAME_MODE_KEY); return v === "code" || v === "full" ? v : "short"; } catch { return "short"; }
+})();
+function setNameMode(m: NameMode): void {
+  nameMode = m;
+  try { localStorage.setItem(NAME_MODE_KEY, m); } catch { /* ignore */ }
+}
+/** The exercise name to SHOW anywhere on the site, per the global name mode. */
+function displayName(exerciseName: string): string {
+  return nameMode === "code" ? codeFor(exerciseName) : nameMode === "full" ? exerciseName : shortFor(exerciseName);
+}
+/** Re-render every view after the global name mode changes — names appear across
+ * all of them. Scroll preserved so the page doesn't jump. */
+function applyNameModeChange(): void {
+  const y = window.scrollY;
+  syncWorkoutToggles();
+  syncNameModeButtons();
+  populateExercisePicker();
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  window.scrollTo(0, y);
+}
+/** Light up the active name-mode button in the Settings picker. */
+function syncNameModeButtons(): void {
+  for (const b of document.querySelectorAll<HTMLElement>("#nameModeRow .name-mode-opt"))
+    b.classList.toggle("is-on", b.dataset.namemode === nameMode);
 }
 
 // ---- Per-LEVEL technique scaling factors (the squat-rack holes), editable ----
@@ -851,8 +988,7 @@ function noteHasVecOverride(exerciseName: string, note: string): boolean {
   return Object.keys(noteVecOverride(exerciseName, note)).length > 0;
 }
 function saveVariationVecs(): void {
-  try { localStorage.setItem(VARIATION_VEC_KEY, JSON.stringify(variationVecOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(VARIATION_VEC_KEY, variationVecOverrides);
 }
 function setNoteVecDim(exerciseName: string, note: string, dim: string, level: string): void {
   const k = variationKey(exerciseName, note);
@@ -881,8 +1017,7 @@ const noteRenames: Record<string, string> = (() => {
   }
 })();
 function saveNoteRenames(): void {
-  try { localStorage.setItem(NOTE_RENAME_KEY, JSON.stringify(noteRenames)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(NOTE_RENAME_KEY, noteRenames);
 }
 /** The owner's readable label for a note, or the note itself when unrenamed. */
 function displayNote(exerciseName: string, note: string): string {
@@ -897,6 +1032,157 @@ function setNoteRename(exerciseName: string, originalNote: string, text: string)
   else noteRenames[k] = trimmed;
   saveNoteRenames();
 }
+
+// ---- Editable difficulty-model factors ----. The handstand model's per-level
+// ×factors (Band 5 = ×0.56, depth +25cm = ×0.56, …) live in FAMILIES, but the
+// owner can re-tune any of them here; overrides are keyed family→dim→level and
+// layered over the defaults by famLevels(), the single read point. Saved on device.
+const FAM_FACTORS_KEY = "colosseum.famFactors.v1";
+const famFactorOverrides = loadJsonObject<Record<string, Record<string, Record<string, number>>>>(FAM_FACTORS_KEY);
+/** A family dimension's levels with any owner factor overrides layered on (base
+ * key order preserved, so the pad axis stays consistent). */
+// ---- Band assistance: ONE knob, measured in KILOGRAMS ----.
+// A band removes a roughly constant force, so its help is a kg amount SUBTRACTED
+// from the load (not a multiplier). The levels still compound by the owner's rule
+// "2× band-k = band-(k+2)" → kg doubles every 2 levels → kg(k) = A·√2^(k-1), where
+// the single knob A is band-1's assistance in kg. none = 0 kg.
+const BAND_RATIO = Math.SQRT2;
+function defaultBandKnob(family: string): number {
+  return FAMILIES[family]?.dims.band ? 5 : 0; // band-1 ≈ 5 kg by default; owner tunes it
+}
+function bandKnob(family: string): number {
+  return famFactorOverrides[family]?.["bandKnob"]?.["a"] ?? defaultBandKnob(family);
+}
+/** Band assistance for one level, in kg: a(k)=A·√2^(k-1); none/unknown = 0. */
+function bandAssistKg(family: string, level: string): number {
+  const k = Number(level);
+  if (level === "none" || !Number.isFinite(k)) return 0;
+  return Math.round(bandKnob(family) * Math.pow(BAND_RATIO, k - 1) * 10) / 10;
+}
+
+// ---- Per-exercise difficulty MODEL assignment ----. The built-in map only knows
+// a few exact names; this lets the owner attach a model (e.g. HSPU) to ANY lift —
+// a hand-created handstand, a renamed one — so it gets the editable multipliers.
+// "" = explicitly no model. Saved on device + in the backup.
+const FAMILY_LABELS: Record<string, string> = { HSPU: "Handstand push-up", PUSHUP: "Push-up" };
+const EX_FAMILY_KEY = "colosseum.exerciseFamily.v1";
+const exerciseFamilyOverrides = loadJsonObject<Record<string, string>>(EX_FAMILY_KEY);
+/** Which difficulty model a lift uses: the owner's assignment wins, else the
+ * built-in name map. (Shadows the imported baseFamilyOf so every call honours it.) */
+function familyOf(exerciseName: string): string | null {
+  const o = exerciseFamilyOverrides[exerciseName];
+  if (o !== undefined) return o || null; // "" → explicitly none
+  return baseFamilyOf(exerciseName);
+}
+// ---- World-record reference per exercise (for "% of world record") ----. Seed
+// (WORLD_RECORDS_SEED) layered with owner edits; each is a kg at a reference
+// bodyweight, scaled allometrically to the viewed athlete's bodyweight. Saved.
+const WR_KEY = "colosseum.worldRecords.v1";
+const worldRecordOverrides = loadJsonObject<Record<string, { m?: WrRef; f?: WrRef }>>(WR_KEY);
+/** The record reference for an exercise + sex (owner edit wins over the seed). */
+function worldRecordRef(exerciseName: string, sex: "m" | "f"): WrRef | null {
+  return worldRecordOverrides[exerciseName]?.[sex] ?? WORLD_RECORDS_SEED[exerciseName]?.[sex] ?? null;
+}
+/** Best bodyweight-inclusive 1RM ever logged for an exercise by a lifter of the
+ * given sex, with that lifter's bodyweight — the basis for a record guesstimate. */
+function bestLoggedE1RM(exerciseName: string, sex: "m" | "f"): { e1rm: number; bw: number } | null {
+  const formula = currentFormula();
+  let best: { e1rm: number; bw: number } | null = null;
+  for (const r of computedRecords()) {
+    if (r.exerciseName !== exerciseName) continue;
+    const prof = athProfile(r.username);
+    if (prof?.sex && (prof.sex === "f" ? "f" : "m") !== sex) continue;
+    const e = effectiveE1RM(r, formula);
+    if (e == null || e <= 0) continue;
+    if (!best || e > best.e1rm) best = { e1rm: e, bw: prof?.weight ?? (sex === "f" ? 60 : 80) };
+  }
+  return best;
+}
+/** How far the best logged effort sits below a real record, LEARNED from the lifts
+ * that already have a record set (median ratio). Falls back to ~1.6× when none. */
+function wrHeadroom(sex: "m" | "f"): number {
+  const ratios: number[] = [];
+  for (const ex of new Set([...Object.keys(worldRecordOverrides), ...Object.keys(WORLD_RECORDS_SEED)])) {
+    const ref = worldRecordRef(ex, sex);
+    const best = ref && bestLoggedE1RM(ex, sex);
+    if (!ref || !best || best.e1rm <= 0) continue;
+    const ratio = (best.bw ? scaleWr(ref, best.bw) : ref.kg) / best.e1rm;
+    if (Number.isFinite(ratio) && ratio > 0) ratios.push(ratio);
+  }
+  if (!ratios.length) return 1.6;
+  ratios.sort((a, b) => a - b);
+  return ratios[Math.floor(ratios.length / 2)]!;
+}
+/** A GUESSTIMATED record for a lift with no explicit value — the best logged effort
+ * scaled up by the learned headroom. null when nothing's been logged for it. */
+function guessWorldRecord(exerciseName: string, sex: "m" | "f"): WrRef | null {
+  const best = bestLoggedE1RM(exerciseName, sex);
+  if (!best) return null;
+  return { kg: Math.round(best.e1rm * wrHeadroom(sex)), bw: Math.round(best.bw) };
+}
+/** Explicit record if the owner set one, else the guesstimate (used by graph + editor). */
+function worldRecordRefEffective(exerciseName: string, sex: "m" | "f"): WrRef | null {
+  return worldRecordRef(exerciseName, sex) ?? guessWorldRecord(exerciseName, sex);
+}
+/** The world record (kg) scaled to a bodyweight; uses the guesstimate when unset. */
+function worldRecordKg(exerciseName: string, sex: "m" | "f", bodyweight: number | null): number | null {
+  const ref = worldRecordRefEffective(exerciseName, sex);
+  if (!ref || !bodyweight || bodyweight <= 0) return ref ? ref.kg : null;
+  return scaleWr(ref, bodyweight);
+}
+/** Set or clear (blank → remove) a world-record field for an exercise/sex. */
+function setWorldRecord(exerciseName: string, sex: "m" | "f", kg: number | null, bw: number | null): void {
+  const cur = (worldRecordOverrides[exerciseName] ??= {});
+  if (kg === null || !Number.isFinite(kg) || kg <= 0 || bw === null || !Number.isFinite(bw) || bw <= 0) delete cur[sex];
+  else cur[sex] = { kg: Math.round(kg * 10) / 10, bw: Math.round(bw * 10) / 10 };
+  if (!cur.m && !cur.f) delete worldRecordOverrides[exerciseName];
+  saveJson(WR_KEY, worldRecordOverrides);
+}
+
+function setExerciseFamily(exerciseName: string, key: string): void {
+  // Clear the override when it matches the built-in default; else store the choice.
+  if (key === (baseFamilyOf(exerciseName) ?? "")) delete exerciseFamilyOverrides[exerciseName];
+  else exerciseFamilyOverrides[exerciseName] = key;
+  saveJson(EX_FAMILY_KEY, exerciseFamilyOverrides);
+}
+
+function famLevels(family: string, dim: string): Record<string, number> {
+  // Per-support lean tables ("lean:back_to_wall", …): start from that support's
+  // default (b2w = 15cm-graced, others = base) then layer any owner overrides.
+  if (dim.startsWith("lean:")) {
+    const base = defaultLeanTable(family, dim.slice(5));
+    const ov = famFactorOverrides[family]?.[dim];
+    return ov ? { ...base, ...ov } : base;
+  }
+  const base = FAMILIES[family]?.dims[dim] ?? {};
+  const ov = famFactorOverrides[family]?.[dim];
+  return ov ? { ...base, ...ov } : base;
+}
+/** Lean's effect depends on support (back- vs front-to-wall differ), so a
+ * "lean:<support>" override wins over the shared base lean. */
+function leanFactorFor(family: string, support: string, level: string): number {
+  return famLevels(family, `lean:${support}`)[level] ?? famLevels(family, "lean")[level] ?? 1;
+}
+function saveFamFactors(): void {
+  saveJson(FAM_FACTORS_KEY, famFactorOverrides);
+}
+/** Set or clear (value === default → clear) one model factor. */
+function setFamFactor(family: string, dim: string, level: string, value: number): void {
+  const def = FAMILIES[family]?.dims[dim]?.[level]
+    ?? (dim.startsWith("lean:") ? defaultLeanTable(family, dim.slice(5))[level] : undefined)
+    ?? (dim === "bandKnob" && level === "a" ? defaultBandKnob(family) : undefined);
+  const fam = (famFactorOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  if (def !== undefined && Math.abs(value - def) < 1e-9) {
+    delete d[level];
+    if (Object.keys(d).length === 0) delete fam[dim];
+    if (Object.keys(fam).length === 0) delete famFactorOverrides[family];
+  } else {
+    d[level] = value;
+  }
+  saveFamFactors();
+}
+
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
   const fam = FAMILIES[family];
@@ -906,7 +1192,14 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     // The ladder grip / height only apply when the support is actually "ladder";
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
-    const f = fam.dims[dim]![vec[dim] ?? ""];
+    if (dim === "band") continue; // band is a kg subtraction (assistKg), not a multiplier
+    if (dim === "lean") {
+      // Lean applies to ALL supports (most sets just use 0 = ×1). Its factor is
+      // support-specific — free, back-to-wall and front-to-wall can each differ.
+      s *= leanFactorFor(family, vec.support ?? "free", vec.lean ?? "");
+      continue;
+    }
+    const f = famLevels(family, dim)[vec[dim] ?? ""];
     if (typeof f === "number") s *= f;
   }
   return Math.round(s * 1e6) / 1e6;
@@ -916,11 +1209,17 @@ function notePin(exerciseName: string, note: string): number | undefined {
   const k = variationKey(exerciseName, note);
   return Object.prototype.hasOwnProperty.call(variationScaleOverrides, k) ? variationScaleOverrides[k] : undefined;
 }
+/** resolveNote, but a SYNTHETIC per-set note ("__set:…", which carries no readable
+ * tokens) resolves to the family's neutral defaults rather than being parsed — so a
+ * hand-added set starts from a clean form the owner then tunes. */
+function rNote(family: string, note: string) {
+  return resolveNote(family, note.startsWith("__set:") ? "" : note);
+}
 /** This note's EFFECTIVE relative-difficulty factor. Model lift → product of the
  * resolved-plus-picked attribute vector; otherwise the pin, else 1. */
 function variationScaleFor(exerciseName: string, note: string): number {
   const fam = familyOf(exerciseName);
-  if (fam) return scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+  if (fam) return scalarFromVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
   return notePin(exerciseName, note) ?? 1;
 }
 /** Whether the owner has reviewed this note: pinned a number (non-model) or picked
@@ -928,14 +1227,32 @@ function variationScaleFor(exerciseName: string, note: string): number {
 function variationReviewed(exerciseName: string, note: string): boolean {
   return notePin(exerciseName, note) !== undefined || noteHasVecOverride(exerciseName, note);
 }
-/** A set's note-variation factor (1 when it has no note). */
-function noteVariationScale(r: SetRecord): number {
+/** The note used for a set's variation lookup: its real note, or — for a family
+ * lift logged WITHOUT a note — a per-set synthetic key, so a hand-added handstand
+ * can still get its own banded/lean/ROM form (active once the owner tunes it). */
+function variationNote(r: SetRecord): string {
   const note = (r.notes ?? "").trim();
+  if (note) return note;
+  const fam = familyOf(r.exerciseName);
+  if (!fam) return "";
+  const key = `__set:${setId(r)}`;
+  return noteHasVecOverride(r.exerciseName, key) ? key : "";
+}
+/** A set's note-variation factor (1 when it has no note/per-set variation). */
+function noteVariationScale(r: SetRecord): number {
+  const note = variationNote(r);
   return note ? variationScaleFor(r.exerciseName, note) : 1;
 }
+/** A set's band assistance in kg (0 when no model/note/band). */
+function noteAssistKg(r: SetRecord): number {
+  const fam = familyOf(r.exerciseName);
+  const note = variationNote(r);
+  if (!fam || !note) return 0;
+  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  return bandAssistKg(fam, vec.band ?? "none");
+}
 function saveVariationScales(): void {
-  try { localStorage.setItem(VARIATION_SCALE_KEY, JSON.stringify(variationScaleOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(VARIATION_SCALE_KEY, variationScaleOverrides);
 }
 function setVariationScale(exerciseName: string, note: string, value: number): void {
   variationScaleOverrides[variationKey(exerciseName, note)] = value;
@@ -967,7 +1284,7 @@ const athleteOverrides: Record<string, AthleteStatsOverride> = (() => {
   }
 })();
 function saveAthleteOverrides() {
-  try { localStorage.setItem(ATHLETE_STATS_KEY, JSON.stringify(athleteOverrides)); } catch { /* storage may be unavailable */ }
+  saveJson(ATHLETE_STATS_KEY, athleteOverrides);
 }
 
 /** Effective profile for an athlete: the ATHLETES baseline with any on-device
@@ -1040,7 +1357,7 @@ let aloneTags = new Set<string>();
 // toggle shows them. While actively tagging (paint mode) they always show so you
 // can see what you're marking.
 let showAloneRings = (() => { try { return localStorage.getItem("colosseum.showAloneRings") === "1"; } catch { return false; } })();
-const aloneRingsVisible = (): boolean => showAloneRings || aloneTagMode;
+const aloneRingsVisible = (): boolean => showAloneRings || S.aloneTagMode;
 
 /** Stable tag key for a workout: the athlete + the session's ISO day. */
 const aloneKey = (date: string): string => `${els.athlete.value}|${date}`;
@@ -1145,10 +1462,42 @@ let rpeGrades: Record<string, string> = (() => {
 /** Stable id for one set. */
 const setId = (r: SetRecord): string => `${r.username}|${r.exerciseName}|${r.date}|${r.setNumber}`;
 const rpeFor = (r: SetRecord): string | undefined => rpeGrades[setId(r)];
+
+// ---- On-device "deleted" (hidden) sets ----. A bad logged set can be hidden
+// across the WHOLE app without touching the source CSV: its setId is stored here
+// and activeRecords() filters it out everywhere. Reversible (restore in Data
+// health) and carried in the backup. CSV re-imports bring the set back unless it's
+// still listed here.
+const DELETED_SETS_KEY = "colosseum.deletedSets.v1";
+const deletedSets: Set<string> = (() => {
+  try { const a = JSON.parse(localStorage.getItem(DELETED_SETS_KEY) ?? "[]"); return new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []); }
+  catch { return new Set(); }
+})();
+function saveDeletedSets(): void {
+  saveJson(DELETED_SETS_KEY, [...deletedSets]);
+}
+function setDeleted(id: string, on: boolean): void {
+  if (on) deletedSets.add(id); else deletedSets.delete(id);
+  saveDeletedSets();
+}
+
+// ---- Per-set "not comparable" ----. The variations editor marks a whole NOTE
+// not comparable; this marks ONE specific set (by id) — reachable right from the
+// in-workout set editor. Either path drops the set's 1RM & volume (reps/sets still
+// count). Saved on device + in the backup.
+const NC_SETS_KEY = "colosseum.notComparableSets.v1";
+const notComparableSets: Set<string> = (() => {
+  try { const a = JSON.parse(localStorage.getItem(NC_SETS_KEY) ?? "[]"); return new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []); }
+  catch { return new Set(); }
+})();
+function setSetNotComparable(id: string, on: boolean): void {
+  if (on) notComparableSets.add(id); else notComparableSets.delete(id);
+  saveJson(NC_SETS_KEY, [...notComparableSets]);
+}
 function setRpe(id: string, v: string | null) {
   if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
   else rpeGrades[id] = v;
-  try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(rpeGrades)); } catch { /* ignore */ }
+  saveJson(RPE_STORE_KEY, rpeGrades);
 }
 
 // ---- Per-set edits (weight / reps / bodyweight / scaling factor) -------------
@@ -1165,7 +1514,7 @@ let setOverrides: Record<string, SetOverride> = (() => {
   } catch { return {}; }
 })();
 const saveSetOverrides = () => {
-  try { localStorage.setItem(SET_OVR_KEY, JSON.stringify(setOverrides)); } catch { /* ignore */ }
+  saveJson(SET_OVR_KEY, setOverrides);
   clearMachineCache(); // per-set edits change a set's e1RM → mixed verdicts may shift
 };
 
@@ -1188,7 +1537,7 @@ function machineModeFor(exerciseName: string): MachineMode {
 function setMachineMode(exerciseName: string, mode: MachineMode) {
   if (mode === "cable") delete machineModes[exerciseName];
   else machineModes[exerciseName] = mode;
-  try { localStorage.setItem(MACHINE_MODE_KEY, JSON.stringify(machineModes)); } catch { /* ignore */ }
+  saveJson(MACHINE_MODE_KEY, machineModes);
   clearMachineCache();
 }
 
@@ -1324,8 +1673,17 @@ function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight"
 /** Public computeRecord: the bodyweight-aware compute, then tag the owner's
  * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
 function computeRecord(r: SetRecord): SetRecord {
-  const out = computeRecordBase(r);
-  return out.notes && isNoteNotComparable(out.exerciseName, out.notes) ? { ...out, notComparable: true } : out;
+  const base = computeRecordBase(r);
+  // Stamp the per-NOTE variation difficulty so the 1RM (addedWeight1RM) scales the
+  // load by it — an easier variation reports a lower / negative 1RM. ×1 → unstamped.
+  const mult = noteVariationScale(base);
+  const kg = noteAssistKg(base); // band assistance (kg) subtracted from the load
+  let out = base;
+  if (mult !== 1) out = { ...out, difficultyMult: mult };
+  if (kg > 0) out = { ...out, assistKg: kg };
+  // Not comparable if THIS set is marked (per-set), or its NOTE is (per-note).
+  const nc = notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
+  return nc ? { ...out, notComparable: true } : out;
 }
 function computeRecordBase(r: SetRecord): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
@@ -1350,15 +1708,85 @@ function computeRecordBase(r: SetRecord): SetRecord {
   return applyMachineMode({ ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight });
 }
 
-/** The combinable + comparable registry groups, in the shape withSyntheticGroups
- * wants (id, derivedName, member→quotient map). Combinable members use ratio 1. */
-const SYNTHETIC_GROUP_DEFS: SyntheticGroupDef[] = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].map(
-  (t: RegistryTag): SyntheticGroupDef => ({
-    id: t.id,
-    derivedName: t.derivedName ?? t.label,
-    members: Object.fromEntries((t.members ?? []).map((m) => [m.exerciseName, m.ratio])),
-  }),
-);
+// ---- Owner-editable combinable/comparable membership ------------------------
+// The built-in groups (COMBINABLE_GROUPS / COMPARABLE_GROUPS) define a base member
+// list; the owner can ADD lifts (with a ratio for comparable) or REMOVE base ones,
+// per group, saved here. Every read goes through the "effective" helpers below so
+// the edits flow into grouping, the info panel AND the synthetic combine/compare
+// computation.
+const GROUP_MEMBER_KEY = "colosseum.groupMembers.v1";
+type GroupMemberOverride = { add?: Record<string, number>; remove?: string[] };
+const groupMemberOverrides = loadJsonObject<Record<string, GroupMemberOverride>>(GROUP_MEMBER_KEY);
+function saveGroupMembers() { saveJson(GROUP_MEMBER_KEY, groupMemberOverrides); }
+/** A registry group with the owner's member add/remove overrides applied. */
+function withMemberOverrides(g: RegistryTag): RegistryTag {
+  const ov = groupMemberOverrides[g.id];
+  if (!ov || (!ov.add && !ov.remove)) return g;
+  const removed = new Set(ov.remove ?? []);
+  const base = (g.members ?? []).filter((m) => !removed.has(m.exerciseName));
+  const baseNames = new Set(base.map((m) => m.exerciseName));
+  const added = Object.entries(ov.add ?? {})
+    .filter(([ex]) => !removed.has(ex) && !baseNames.has(ex))
+    .map(([exerciseName, ratio]) => ({ exerciseName, ratio }));
+  return { ...g, members: [...base, ...added] };
+}
+const effectiveCombinableGroups = (): RegistryTag[] => COMBINABLE_GROUPS.map(withMemberOverrides);
+const effectiveComparableGroups = (): RegistryTag[] => COMPARABLE_GROUPS.map(withMemberOverrides);
+const combinableGroupsForEx = (name: string): RegistryTag[] => effectiveCombinableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
+const comparableGroupsForEx = (name: string): RegistryTag[] => effectiveComparableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
+/** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
+function toggleGroupMembership(groupId: string, exName: string): void {
+  const g = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].find((x) => x.id === groupId);
+  if (!g) return;
+  const inBase = (g.members ?? []).some((m) => m.exerciseName === exName);
+  const isMember = (withMemberOverrides(g).members ?? []).some((m) => m.exerciseName === exName);
+  const ov = (groupMemberOverrides[groupId] ??= {});
+  if (isMember) {
+    if (ov.add) delete ov.add[exName];
+    if (inBase) ov.remove = [...new Set([...(ov.remove ?? []), exName])];
+  } else {
+    ov.remove = (ov.remove ?? []).filter((x) => x !== exName);
+    (ov.add ??= {})[exName] = 1;
+  }
+  if (ov.add && !Object.keys(ov.add).length) delete ov.add;
+  if (ov.remove && !ov.remove.length) delete ov.remove;
+  if (!ov.add && !ov.remove) delete groupMemberOverrides[groupId];
+  saveGroupMembers();
+}
+/** Set the comparable ratio for an owner-added member. */
+function setGroupRatio(groupId: string, exName: string, ratio: number): void {
+  const ov = (groupMemberOverrides[groupId] ??= {});
+  (ov.add ??= {})[exName] = Math.min(2, Math.max(0.05, ratio));
+  saveGroupMembers();
+}
+
+/** The combinable + comparable registry groups (with owner member edits applied),
+ * in the shape withSyntheticGroups wants (id, derivedName, member→quotient map). */
+function syntheticGroupDefs(): SyntheticGroupDef[] {
+  return [...effectiveCombinableGroups(), ...effectiveComparableGroups()].map(
+    (t: RegistryTag): SyntheticGroupDef => ({
+      id: t.id,
+      derivedName: t.derivedName ?? t.label,
+      members: Object.fromEntries((t.members ?? []).map((m) => [m.exerciseName, m.ratio])),
+    }),
+  );
+}
+
+/** User "combined" defs as synthetic-group defs (quotient 1 = a pure merge, no
+ * scaling). Feeding these to withSyntheticGroups makes a user-merged lift behave
+ * as ONE lift across EVERY view — picker, leaderboard, Estimated-1RM graph,
+ * calendar, PRs — exactly like the built-in combinable groups. (Before, a
+ * "combined" def only TAGGED its members, so the merge showed in the workouts
+ * list but the graph/calendar still saw separate lifts.) */
+function userCombinedGroupDefs(): SyntheticGroupDef[] {
+  return userExerciseDefs
+    .filter((d) => d.identity === "combined" && d.members && d.members.length > 0)
+    .map((d) => ({
+      id: `combine.user:${d.name}`,
+      derivedName: d.name,
+      members: Object.fromEntries(d.members!.map((m) => [m, 1])),
+    }));
+}
 
 /* ---- Global "active exercise set" filter (app-wide) ----------------------
  * Restrict the WHOLE app to a chosen subset of exercises: a frequency-tier
@@ -1375,20 +1803,32 @@ const loadJsonArray = (key: string): string[] => {
   try { const a = JSON.parse(localStorage.getItem(key) ?? "[]"); return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []; }
   catch { return []; }
 };
+const ACTIVE_SOLO_KEY = "colosseum.activeSet.solo.v1";
 let activeCutoff: string | null = (() => { try { const v = localStorage.getItem(ACTIVE_CUTOFF_KEY); return v && v !== "none" ? v : null; } catch { return null; } })();
 let activeInclude = new Set<string>(loadJsonArray(ACTIVE_INCLUDE_KEY));
 let activeExclude = new Set<string>(loadJsonArray(ACTIVE_EXCLUDE_KEY));
+// "Solo" = show ONLY these exercises app-wide (a group's "Only these" action). When
+// set it replaces the tier cutoff as the base; include/exclude still apply on top.
+let activeSolo: Set<string> | null = (() => { const a = loadJsonArray(ACTIVE_SOLO_KEY); return a.length ? new Set(a) : null; })();
 /** The allowed-exercise set, or null when the filter is off. Rebuilt by refreshActiveSet(). */
 let activeSet: Set<string> | null = null;
 
 /** Recompute activeSet from the cutoff + overrides against the current data. Call
  * after data loads or any active-set control changes, then re-render. */
 function refreshActiveSet(): void {
-  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0) {
+  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo) {
     activeSet = null; // filter fully off → no filtering at all
     return;
   }
-  activeSet = buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
+  // Solo mode shows exactly its set as the base; otherwise the tier cutoff does.
+  const base = activeSolo
+    ? new Set(activeSolo)
+    : buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
+  if (activeSolo) { // include/exclude still layer on top of a solo base
+    for (const n of activeInclude) base.add(n);
+    for (const n of activeExclude) base.delete(n);
+  }
+  activeSet = base;
 }
 
 /** Persist the active-set controls to localStorage. */
@@ -1397,15 +1837,45 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_CUTOFF_KEY, activeCutoff ?? "none");
     localStorage.setItem(ACTIVE_INCLUDE_KEY, JSON.stringify([...activeInclude]));
     localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
+    localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
   } catch { /* storage may be unavailable */ }
 }
+
+/** Apply a group's "Only / Hide / Show" filter to the app-wide active set. */
+function applyGroupFilter(mode: string, names: string[]): void {
+  if (mode === "only") {
+    activeSolo = new Set(names);
+    for (const n of names) activeExclude.delete(n);
+  } else if (mode === "hide") {
+    for (const n of names) { activeExclude.add(n); activeInclude.delete(n); activeSolo?.delete(n); }
+  } else { // "show" — clear any hiding of these, and drop solo so nothing's restricted to others
+    for (const n of names) activeExclude.delete(n);
+    activeSolo = null;
+  }
+  saveActiveSet();
+  renderAll();
+}
+
+/** A group's current app-wide filter state, for the single cycling toggle:
+ * "only" (restricted to these), "hide" (these hidden), or "off" (neither). */
+function groupFilterState(names: string[]): "only" | "hide" | "off" {
+  if (names.length === 0) return "off";
+  if (names.every((n) => activeExclude.has(n))) return "hide";
+  if (activeSolo && names.every((n) => activeSolo!.has(n))) return "only";
+  return "off";
+}
+/** The next state in the cycle off → only → hide → off, as a grpfilter mode. */
+const GROUP_FILTER_NEXT: Record<"only" | "hide" | "off", string> = { off: "only", only: "hide", hide: "show" };
 
 /** Raw logged records, filtered to the active exercise set (or all, if off). The
  * single choke point every view/graph/list reads instead of data.records. */
 function activeRecords(): SetRecord[] {
-  if (!activeSet) return data.records;
+  // Hidden (on-device "deleted") sets drop out everywhere; then the active-set
+  // exercise filter, if on.
+  const live = deletedSets.size ? data.records.filter((r) => !deletedSets.has(setId(r))) : data.records;
+  if (!activeSet) return live;
   const allow = activeSet;
-  return data.records.filter((r) => allow.has(r.exerciseName));
+  return live.filter((r) => allow.has(r.exerciseName));
 }
 
 /** User-created exercise definitions (TASKS 13–15), saved on this device: a
@@ -1446,7 +1916,7 @@ function computedRecords(): SetRecord[] {
   // records derived from those computed loads. Pure source lifts are never mutated.
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
   const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
-  return [...pure, ...withSyntheticGroups(pure, SYNTHETIC_GROUP_DEFS)];
+  return [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
 }
 
 /**
@@ -1460,7 +1930,7 @@ function populateExercisePicker(): void {
   // The synthetic combinable/comparable lifts (SQ mix, DL pattern) whose members
   // are present — surfaced in a labelled group at the TOP so they're easy to find.
   const synth = availableSyntheticNames(pure);
-  const opt = (e: string) => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`;
+  const opt = (e: string) => `<option value="${escapeHtml(e)}">${escapeHtml(displayName(e))}</option>`;
   const synthGroup = synth.length
     ? `<optgroup label="✦ Combined lifts">${synth.map(opt).join("")}</optgroup>`
     : "";
@@ -1511,7 +1981,10 @@ function mergeVariantsFor(name: string): string[] {
 
 /** The other spellings folded into a merged name, or [] for a plain lift. */
 function exerciseOrigin(name: string): string[] {
-  return mergeVariantsFor(name);
+  // Spelling variants auto-folded into this name, PLUS the member lifts of a
+  // user-defined merge (so a merged lift's title/badge lists what it contains).
+  const def = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
+  return def?.members?.length ? [...mergeVariantsFor(name), ...def.members] : mergeVariantsFor(name);
 }
 
 /** Inline "(also: A, B)" badge for a name, or "" when there's nothing to note.
@@ -1551,29 +2024,157 @@ function openChangelog() {
   els.changelogPage.hidden = false;
 }
 
-// ---- Exercise "More info" overlay (details + note-variation difficulty editor) ----
-let exInfoName: string | null = null;
-/** Open the More-info overlay for one exercise (its details + the editable
- * difficulty of each note-identified variation). Works for any exercise. */
-function openExerciseInfo(name: string): void {
-  exInfoName = name;
-  els.exInfoTitle.textContent = name;
-  els.exInfo.innerHTML = exerciseInfoHtml(name);
-  els.exInfoPage.hidden = false;
-  refreshPoseViz();
-}
-/** Re-render the open More-info overlay (after a difficulty edit). */
-function refreshExerciseInfo(): void {
-  if (exInfoName && !els.exInfoPage.hidden) {
-    els.exInfo.innerHTML = exerciseInfoHtml(exInfoName);
-    refreshPoseViz();
+/** Minimal Markdown → HTML for the docs/ task files. Supports just what those
+ * files use: headings, **bold**, `code`, bullet lists, GitHub tables, `---`
+ * rules and paragraphs. Text is HTML-escaped first, so the docs can't inject. */
+function mdToHtml(md: string): string {
+  const inline = (s: string) =>
+    escapeHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code>$1</code>");
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  let para: string[] = [];
+  let list: string[] = [];
+  const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const flushList = () => {
+    if (list.length) { out.push(`<ul>${list.map((l) => `<li>${inline(l)}</li>`).join("")}</ul>`); list = []; }
+  };
+  const cells = (row: string) =>
+    row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  let i = 0;
+  while (i < lines.length) {
+    const t = (lines[i] ?? "").trim();
+    if (t.startsWith("|") && /^\|[\s:|-]+\|$/.test((lines[i + 1] ?? "").trim())) {
+      flushPara(); flushList();
+      const head = cells(t);
+      i += 2;
+      const body: string[][] = [];
+      while (i < lines.length && (lines[i] ?? "").trim().startsWith("|")) { body.push(cells((lines[i] ?? "").trim())); i++; }
+      out.push(
+        `<table><thead><tr>${head.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>` +
+        `<tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+      );
+      continue;
+    }
+    if (t === "") { flushPara(); flushList(); i++; continue; }
+    if (/^---+$/.test(t)) { flushPara(); flushList(); out.push("<hr>"); i++; continue; }
+    const h = /^(#{1,6})\s+(.*)$/.exec(t);
+    if (h) { flushPara(); flushList(); const lvl = h[1]!.length; out.push(`<h${lvl}>${inline(h[2]!)}</h${lvl}>`); i++; continue; }
+    const li = /^[-*]\s+(.*)$/.exec(t);
+    if (li) { flushPara(); list.push(li[1]!); i++; continue; }
+    flushList(); para.push(t); i++;
   }
+  flushPara(); flushList();
+  return out.join("\n");
+}
+
+/** A parsed task item from a docs/ backlog/roadmap file. */
+interface TaskItem { sev: string; code: string; part: string; sp: number; detail: string; done: boolean; }
+interface TaskSection { heading: string; prose: string[]; items: TaskItem[]; }
+interface TaskDoc { title: string; intro: string[]; sections: TaskSection[]; }
+
+// "- 🟠 **CODE** [part] (SP:n) — detail" — severity, part and SP are all optional.
+const TASK_ITEM_RE = /^-\s*(✅|🔴|🟠|🟢)?\s*\*\*(.+?)\*\*\s*(?:\[(.+?)\])?\s*(?:\(SP:([\d.]+)\))?\s*[—-]\s*([\s\S]*)$/;
+
+/** Parse a cleanup-backlog / roadmap markdown file into doc → sections → items. */
+function parseTaskDoc(md: string): TaskDoc {
+  const doc: TaskDoc = { title: "", intro: [], sections: [] };
+  let sec: TaskSection | null = null;
+  let item: TaskItem | null = null;
+  for (const raw of md.replace(/\r\n/g, "\n").split("\n")) {
+    const t = raw.trim();
+    const h1 = /^#\s+(.*)$/.exec(t);
+    if (h1) { doc.title = h1[1]!; item = null; continue; }
+    const h2 = /^##\s+(.*)$/.exec(t);
+    if (h2) { sec = { heading: h2[1]!, prose: [], items: [] }; doc.sections.push(sec); item = null; continue; }
+    const m = sec ? TASK_ITEM_RE.exec(t) : null;
+    if (m && sec) {
+      item = { sev: m[1] ?? "", code: m[2]!, part: m[3] ?? "", sp: m[4] ? parseFloat(m[4]) : 0, detail: m[5]!.trim(), done: m[1] === "✅" };
+      sec.items.push(item);
+      continue;
+    }
+    if (t === "") { item = null; continue; }
+    // A wrapped continuation line of the current item, else section/intro prose.
+    if (item && !t.startsWith("- ") && !t.startsWith("#")) { item.detail += " " + t; continue; }
+    if (sec) sec.prose.push(t); else doc.intro.push(t);
+  }
+  return doc;
+}
+
+/** Render a parsed task doc as a Version-history-style nested <details> tree:
+ * doc (open) → sections → items, each item carrying part + SP chips. Reuses the
+ * changelog (`cl-*`, `cv-chip`) styling so it matches Version history. */
+function renderTaskDoc(doc: TaskDoc): string {
+  const fmt = (n: number) => String(Math.round(n * 10) / 10);
+  const sumSp = (its: TaskItem[]) => its.reduce((a, it) => a + it.sp, 0);
+  const docSp = doc.sections.reduce((a, s) => a + sumSp(s.items), 0);
+  const short = (s: string) => (s.length > 90 ? s.slice(0, 88) + "…" : s);
+  const itemRow = (it: TaskItem) =>
+    `<details class="cl-row cl-d2 bk-item${it.done ? " bk-done" : ""}">` +
+    `<summary class="cl-sum">` +
+    `<span class="cl-ver">${it.sev ? it.sev + " " : ""}${escapeHtml(it.code)}</span>` +
+    `<span class="cl-mid"><span class="cl-title">${escapeHtml(short(it.detail))}</span></span>` +
+    (it.part ? `<span class="cv-chip"><span class="cv-name">${escapeHtml(it.part)}</span></span>` : "") +
+    (it.sp ? `<span class="cl-sp" title="${fmt(it.sp)} story points">SP ${fmt(it.sp)}</span>` : "") +
+    `<span class="cl-caret">▾</span>` +
+    `</summary>` +
+    `<div class="cl-body"><p class="cl-bodynote">${escapeHtml(it.detail)}</p></div>` +
+    `</details>`;
+  const sectionRow = (s: TaskSection) => {
+    const sp = sumSp(s.items);
+    const prose = s.prose.length ? mdToHtml(s.prose.join("\n")) : "";
+    return `<details class="cl-row cl-d1">` +
+      `<summary class="cl-sum">` +
+      `<span class="cl-mid"><span class="cl-title">${escapeHtml(s.heading)}</span></span>` +
+      (s.items.length ? `<span class="bk-count muted">${s.items.length}</span>` : "") +
+      (sp ? `<span class="cl-sp" title="${fmt(sp)} story points">SP ${fmt(sp)}</span>` : "") +
+      `<span class="cl-caret">▾</span>` +
+      `</summary>` +
+      `<div class="cl-body">${prose}${s.items.map(itemRow).join("")}</div>` +
+      `</details>`;
+  };
+  const intro = doc.intro.length ? `<p class="muted">${escapeHtml(doc.intro.join(" "))}</p>` : "";
+  return `<details class="cl-row cl-d0" open>` +
+    `<summary class="cl-sum">` +
+    `<span class="cl-mid"><span class="cl-title">${escapeHtml(doc.title)}</span></span>` +
+    `<span class="cl-sp" title="${fmt(docSp)} story points">SP ${fmt(docSp)}</span>` +
+    `<span class="cl-caret">▾</span>` +
+    `</summary>` +
+    `<div class="cl-body">${intro}${doc.sections.map(sectionRow).join("")}</div>` +
+    `</details>`;
+}
+
+/** Open the tasks/roadmap overlay from Settings (parsed from the docs/ md). */
+function openBacklog() {
+  setSettingsOpen(false);
+  els.backlog.innerHTML =
+    `<p class="cl-summary muted">Cleanup backlog + roadmap, straight from the docs/ files. SP are AI estimates — open Version history to see what an SP actually buys.</p>` +
+    renderTaskDoc(parseTaskDoc(cleanupBacklogMd)) +
+    renderTaskDoc(parseTaskDoc(roadmapMd));
+  els.backlogPage.hidden = false;
+}
+
+// ---- Exercise "More info" — now an inline, expandable dropdown on the Index
+// page (no separate overlay). Each Index row expands to the same details +
+// note-variation difficulty editor; the helpers below keep open panels fresh. ----
+/** Re-render every open inline info panel in the Index (after an edit anywhere
+ * in it), so the dropdown stays in sync without collapsing. */
+function refreshExerciseInfo(): void {
+  let any = false;
+  for (const detail of Array.from(els.bwGroups.querySelectorAll<HTMLTableRowElement>("tr.detail-row"))) {
+    const row = detail.previousElementSibling as HTMLTableRowElement | null;
+    const name = row?.dataset.exrow;
+    if (!name) continue;
+    const cell = detail.querySelector("td");
+    if (cell) cell.innerHTML = exerciseInfoHtml(name);
+    any = true;
+  }
+  if (any) refreshPoseViz();
 }
 /** From a note's "who & when" entry: switch to that athlete, open the Analysis
  * view for this lift (single mode), and scroll to that date in the history. */
 function gotoNoteSet(username: string, exName: string, date: string): void {
-  els.exInfoPage.hidden = true; // close the overlay if it's open
-  exInfoName = null;
   if (els.athlete.value !== username) {
     els.athlete.value = username;
     renderAthlete(); // rebuilds athleteWorkouts for the new athlete
@@ -1701,7 +2302,7 @@ const SITE_MAP: MapNode = {
       { label: "Hand-log a set" },
       { label: "Export / import" },
     ] },
-    { label: "Test", children: [
+    { label: "Formulas", children: [
       { label: "Weight↔reps curve" },
     ] },
     { label: "Settings", children: [
@@ -1761,8 +2362,8 @@ function renderSiteMap() {
     .map(
       (p) =>
         `<g transform="translate(${p.x},${p.y})">` +
-        `<rect width="${NODE_W}" height="${NODE_H}" rx="6" fill="var(--card)" stroke="${p.color}" stroke-width="1.5"/>` +
-        `<text x="9" y="${NODE_H / 2 + 4}" font-size="11.5" fill="var(--text)">${escapeHtml(p.label)}</text>` +
+        `<rect class="sm-node" width="${NODE_W}" height="${NODE_H}" rx="6" stroke="${p.color}" stroke-width="1.5"/>` +
+        `<text class="sm-text" x="9" y="${NODE_H / 2 + 4}" font-size="11.5">${escapeHtml(p.label)}</text>` +
         `</g>`,
     )
     .join("");
@@ -1778,6 +2379,19 @@ function renderHealth() {
   els.healthBadge.textContent = total === 0 ? "✓ clear" : `⚠ ${total}`;
 
   const lines: string[] = [];
+  // Hidden (on-device "deleted") sets — listed with a per-set restore and a
+  // restore-all, so a delete is never permanent.
+  if (deletedSets.size) {
+    lines.push(`<h3 class="health-section">Hidden sets (${deletedSets.size}) <button type="button" class="health-restore-all">Restore all</button></h3>`);
+    lines.push(`<p class="muted" style="margin:0 0 0.5rem;font-size:0.8rem">These sets are hidden from the whole site (your source data is unchanged). Restore any to bring it back.</p>`);
+    for (const id of [...deletedSets].slice(0, 80)) {
+      const [user, ex, date, setNo] = id.split("|");
+      lines.push(
+        `<div class="health-item dup"><span>${escapeHtml(user ?? "")} — ${escapeHtml(displayName(ex ?? ""))} <span class="muted">${escapeHtml(date ?? "")} · set ${escapeHtml(setNo ?? "")}</span></span> ` +
+        `<button type="button" class="health-restore" data-restoreset="${escapeHtml(id)}">↺ Restore</button></div>`,
+      );
+    }
+  }
   for (const issue of data.issues.slice(0, 50))
     lines.push(`<div class="health-item warn">Row ${issue.index}: ${escapeHtml(issue.message)}</div>`);
   for (const w of data.warnings.slice(0, 50))
@@ -1913,7 +2527,7 @@ function renderLeaderboard() {
   const metricNote = rel ? "per bodyweight" : `est. 1RM, ${formula}`;
   // Groups are scaled cross-exercise estimates — label them clearly so a grouped
   // number is never mistaken for a real single-exercise lift.
-  els.lbTitle.textContent = `${exercise}${originBadge(exercise, true)} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
+  els.lbTitle.textContent = `${displayName(exercise)}${originBadge(exercise, true)} · ${metricNote} · best per rep band${coliseumFilterNote()}`;
   renderLeaderboardTable(rows, rel);
   renderLeaderboardChart(rows, bandData, rel);
 }
@@ -2023,6 +2637,11 @@ function renderLeaderboardChart(
     `</svg>`;
 }
 
+// Which note-variation editors are expanded in the More-info page. Empty by
+// default (all collapsed); keyed by variationKey so an edit (which re-renders the
+// page) keeps the one you're working in open instead of snapping it shut.
+const openVarNotes = new Set<string>();
+
 function renderPersonalRecords() {
   const formula = currentFormula();
   const exercise = els.exercise.value;
@@ -2083,10 +2702,11 @@ let workoutsPage = 0;
 let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
 let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default: day)
 let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
-let workoutNameMode: "code" | "full" = "code"; // exercise codes vs full names (exercise view)
 // Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
 // default (cleaner list); toggled + remembered via the "+ set buttons" button.
 let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+// The "alone" day tags in the workout history are HIDDEN by default; "Tags" shows them.
+let showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 let showRestDays = false; // "Rest" toggle: include rest days in the day view
 // Short labels for the compact "Alone filter" DJ button (cycles through these).
 const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
@@ -2097,14 +2717,17 @@ function syncWorkoutToggles(): void {
   els.workoutViewToggle.textContent = workoutViewMode === "day" ? "Day" : "Week";
   els.workoutShowToggle.textContent = workoutShowMode === "exercises" ? "Exer" : "Group";
   els.workoutGrouping.hidden = workoutShowMode !== "groups";
-  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // codes only apply to the exercise view
-  els.workoutNameToggle.textContent = workoutNameMode === "code" ? "Code" : "Full";
+  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // names only apply to the exercise view
+  // This button is now a shortcut to the GLOBAL name mode (cycles code → short → full).
+  els.workoutNameToggle.textContent = nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full";
   els.workoutsPageBtn.textContent = String(workoutsPageSize);
   els.restToggle.hidden = workoutViewMode === "week"; // rest days only make sense per day
   els.restToggle.classList.toggle("is-active", showRestDays);
   els.restToggle.setAttribute("aria-pressed", showRestDays ? "true" : "false");
   els.addSetsToggle.classList.toggle("is-active", showAddSets);
   els.addSetsToggle.setAttribute("aria-pressed", showAddSets ? "true" : "false");
+  els.aloneTagToggle.classList.toggle("is-active", showAloneTags);
+  els.aloneTagToggle.setAttribute("aria-pressed", showAloneTags ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
 }
@@ -2115,6 +2738,16 @@ let exerciseSort: "sets" | "category" | "tier" = "category";
 // "Legs (all)" is a broad umbrella that overlaps the narrower leg splits, so it's
 // hidden from the By-category list by default; a Settings toggle brings it back.
 let showLegsAll = (() => { try { return localStorage.getItem("colosseum.legsAll") === "1"; } catch { return false; } })();
+// Simplified view: when on, the bottom "Analysis" button opens the S-ANL page.
+// Defaults ON outside admin (spectator/user), OFF for admin — until explicitly set.
+let simplifiedView = (() => {
+  try {
+    const v = localStorage.getItem("colosseum.simplifiedView");
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch { /* ignore */ }
+  return viewMode !== "admin";
+})();
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
@@ -2142,16 +2775,16 @@ const hiddenExCats = new Set<string>((() => {
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
 let bwOpenCats: Set<string> | null = null;
 
-// How the Index page groups its exercise rows. "category" is the primary training
-// bucket (one per lift); the others let the owner slice the same lifts by fine
-// muscle, by functional movement pattern (multi-membership), or by the
-// combinable / comparable synthetic-group membership.
-type IndexGroupMode = "category" | "muscle" | "function" | "combinable" | "comparable";
-let bwGroupMode: IndexGroupMode = "category";
+// How the Index page groups its exercise rows. "discipline" is the training style
+// (multi-membership — a lift can sit under several); the others slice the same lifts
+// by fine muscle, by functional movement pattern, or by combinable / comparable
+// synthetic-group membership.
+type IndexGroupMode = "discipline" | "muscle" | "function" | "combinable" | "comparable";
+let bwGroupMode: IndexGroupMode = "discipline";
 const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
-  { mode: "category", label: "Category" },
+  { mode: "discipline", label: "Discipline" },
   { mode: "muscle", label: "Muscle group" },
-  { mode: "function", label: "Function (movement)" },
+  { mode: "function", label: "Joint movement" },
   { mode: "combinable", label: "Combinable" },
   { mode: "comparable", label: "Comparable" },
 ];
@@ -2159,17 +2792,29 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
 // CATEGORY_COLORS shades; the rest reuse them).
 const INDEX_MUSCLES: MuscleGroup[] = [
   "Quads", "Hamstrings", "Glutes", "Calves",
-  "Lower back", "Upper back", "Lats (pulls)", "Lats (rows)",
-  "Chest", "Shoulders", "Biceps", "Triceps",
-  "Core", "Cardio", "Mobility", "Skill", "Other",
+  "Lower back", "Upper back", "Lats",
+  "Chest", "Shoulders", "Biceps", "Triceps", "Forearms",
+  "Core", "Other",
 ];
 const muscleColor = (m: MuscleGroup): string =>
   (({
     Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf",
-    "Lower back": "#3b66a6", "Upper back": "#4f79b8", "Lats (pulls)": "#5f86c2", "Lats (rows)": "#7497ce",
-    Biceps: "#9c5bb8", Triceps: "#b07fc9",
+    "Lower back": "#3b66a6", "Upper back": "#4f79b8", Lats: "#5f86c2",
+    Biceps: "#9c5bb8", Triceps: "#b07fc9", Forearms: "#c79fd8",
   } as Record<string, string>)[m]) ??
   CATEGORY_COLORS[m as TrainingCategory] ?? CATEGORY_COLORS.Other;
+
+// Discipline (training-style) colours for the Index "By discipline" grouping.
+const DISCIPLINE_COLORS: Record<Discipline, string> = {
+  "Strength": "#284e86", Calisthenics: "#2e7d52", Mobility: "#1f8a8a",
+  Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b", Skill: "#b8902f",
+  Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
+};
+const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";
+// The two "main" disciplines shown at the Index top level; the rest nest under "Other".
+const MAJOR_DISCIPLINES: Discipline[] = ["Strength", "Calisthenics"];
+// Inside the big "Strength" discipline, slice its lifts further by muscle or function.
+let strengthSubMode: "muscle" | "function" = "muscle";
 
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
@@ -2179,27 +2824,25 @@ interface IndexBucket { key: string; label: string; color: string; rows: IndexRo
  * pattern buckets); "combinable"/"comparable" show each synthetic group's members
  * plus a trailing bucket for everything not in such a group. */
 function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
-  const groupBy = <K extends string>(key: (r: IndexRow) => K): Map<K, IndexRow[]> => {
+  // A lift can sit in SEVERAL muscle groups / categories, so it appears under each.
+  const groupByMulti = <K extends string>(keys: (r: IndexRow) => readonly K[]): Map<K, IndexRow[]> => {
     const by = new Map<K, IndexRow[]>();
-    for (const r of rows) {
-      const k = key(r);
-      const list = by.get(k);
-      if (list) list.push(r); else by.set(k, [r]);
-    }
+    for (const r of rows) for (const k of keys(r)) { const list = by.get(k); if (list) list.push(r); else by.set(k, [r]); }
     return by;
   };
-
   if (mode === "muscle") {
-    const by = groupBy((r) => mgFor(r.name));
+    const by = groupByMulti((r) => mgsFor(r.name));
     return INDEX_MUSCLES.filter((m) => by.has(m)).map((m) => ({ key: m, label: m, color: muscleColor(m), rows: by.get(m)! }));
   }
   if (mode === "function") {
-    return LIST_CATEGORIES
-      .map((c) => ({ key: c, label: c, color: listCatColor(c), rows: rows.filter((r) => exerciseCategories(r.name).includes(c)) }))
+    // Joint movements (shoulder abd/add, flexion/extension at each joint…), not
+    // muscle groups — a lift shows under every joint action it trains.
+    return JOINT_MOVEMENTS
+      .map((c) => ({ key: c, label: c, color: hashHueHex(c), rows: rows.filter((r) => jointMovements(r.name).includes(c)) }))
       .filter((b) => b.rows.length);
   }
   if (mode === "combinable" || mode === "comparable") {
-    const groups = mode === "combinable" ? COMBINABLE_GROUPS : COMPARABLE_GROUPS;
+    const groups = mode === "combinable" ? effectiveCombinableGroups() : effectiveComparableGroups();
     const buckets: IndexBucket[] = groups
       .map((g) => ({ key: g.id, label: g.label, color: "#1f6f8b", rows: rows.filter((r) => g.members?.some((m) => m.exerciseName === r.name)) }))
       .filter((b) => b.rows.length);
@@ -2209,9 +2852,9 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
       buckets.push({ key: "__ungrouped", label: mode === "combinable" ? "Not in a combinable group" : "Not in a comparable group", color: CATEGORY_COLORS.Other, rows: rest });
     return buckets;
   }
-  // category (default): the one primary training bucket per lift.
-  const by = groupBy((r) => catFor(r.name));
-  return TRAINING_CATEGORIES.filter((c) => by.has(c)).map((c) => ({ key: c, label: c, color: CATEGORY_COLORS[c], rows: by.get(c)! }));
+  // discipline (default): a lift shows under every discipline it's tagged with.
+  const by = groupByMulti((r) => discsFor(r.name));
+  return DISCIPLINES.filter((d) => by.has(d)).map((d) => ({ key: d, label: d, color: disciplineColor(d), rows: by.get(d)! }));
 }
 
 /** Build the custom athlete chip row from the (hidden) select's options. */
@@ -2272,13 +2915,13 @@ function renderAthlete() {
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   initHeatYear();
   renderAthleteProfile();
+  renderSAnalysis();
   renderAthleteStats();
   renderMomentum();
   renderTrainBreakdown();
   renderMuscleMap();
   renderExercisesPage();
   renderWorkoutCalendar();
-  renderWorkoutSetsChart();
   renderWorkoutsPage();
   // Analysis hosts the legacy panels via relocation, but its OWN UI (the
   // exercise selector, mode readout, etc.) needs an athlete-aware refresh too.
@@ -2286,44 +2929,30 @@ function renderAthlete() {
 }
 
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
-/** A tiny inline range bar: a light 95% track, a darker 50% band, and a marker at
- * the estimate — a one-glance "predicted ± 50 / 95" picture (like the nFFMI ±). */
-function miniRangeBar(r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, title: string): string {
-  const span = (r.hi95 - r.lo95) || 1;
-  const pos = (v: number) => Math.max(0, Math.min(100, ((v - r.lo95) / span) * 100));
+/** Build one body-stat "value chip" for the compact line (label + number, plus a
+ * tappable ⓘ that toggles its math panel) and the matching hidden panel. */
+function bcChip(id: string, label: string, valueStr: string): string {
   return (
-    `<span class="bc-bar" title="${escapeHtml(title)}">` +
-    `<span class="bc-bar-50" style="left:${pos(r.lo50).toFixed(1)}%;right:${(100 - pos(r.hi50)).toFixed(1)}%"></span>` +
-    `<span class="bc-bar-avg" style="left:${pos(r.avg).toFixed(1)}%"></span>` +
-    `</span>`
+    `<span class="bc-chip"><span class="bc-c-lbl muted">${escapeHtml(label)}</span> <b class="bc-c-val">${valueStr}</b>` +
+    `<button type="button" class="bc-info" data-bcinfo="${id}" aria-label="How ${escapeHtml(label)} is calculated" title="How this is calculated">ⓘ</button></span>`
   );
 }
-/** One body-composition row: label · range bar · value ± (95% half-width). */
-function bcRow(label: string, r: { lo95: number; lo50: number; avg: number; hi50: number; hi95: number }, unit: string): string {
-  const ci = (r.hi95 - r.lo95) / 2;
-  const f = (n: number) => (Math.round(n * 10) / 10).toString();
-  const title = `est ${f(r.avg)}${unit} · 50% ${f(r.lo50)}–${f(r.hi50)} · 95% ${f(r.lo95)}–${f(r.hi95)}`;
-  return (
-    `<div class="bc-row"><span class="bc-lbl">${escapeHtml(label)}</span>` +
-    miniRangeBar(r, title) +
-    `<span class="bc-val">${f(r.avg)}${unit}${ci >= 0.05 ? ` <span class="muted">±${f(ci)}</span>` : ""}</span></div>`
-  );
-}
+const bcPanel = (id: string, deriveHtml: string): string => `<div class="bc-panel" data-bcpanel="${id}" hidden>${deriveHtml}</div>`;
 /** Profile line for the selected athlete: a lead nFFMI badge (computed from
  * weight / height / body fat) followed by the raw specs it's built from. */
 function renderAthleteProfile() {
   const username = els.athlete.value;
   const p = athProfile(username);
-  const editBtn = `<button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button>`;
+  const editBtn = `<div class="profile-edit-row"><button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button></div>`;
   if (!p) {
     els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
-  // Body fat is a band, not a point — show its average with the 95% spread, so
-  // any value derived from it reads with its uncertainty.
+  // Body fat is a band, not a point. It no longer sits on the spec line — it's
+  // shown as its own row in the derived-values list below (with the same 50/95 ±
+  // margins as nFFMI / lean / fat), so all the uncertain values read together.
   const dist = bfDistFor(username);
-  const bfLine = `${pct(dist.avg)} body fat <span class="muted">(95% ${pct(dist.low95)}–${pct(dist.high95)})</span>`;
-  const specs = [`${p.weight} kg`, `${p.height} cm`, bfLine];
+  const specs = [`${p.weight} kg`, `${p.height} cm`];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
 
@@ -2332,37 +2961,179 @@ function renderAthleteProfile() {
     els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  // nFFMI = lean-mass index normalised to 1.8 m, shown with the ± error margin
-  // the body-fat band implies (half the 95% width).
-  const ci = (range.hi95 - range.lo95) / 2;
+  const f1 = (n: number) => n.toFixed(1);
+  const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
+  // nFFMI badge — headline number only; the detail lives in the line + ⓘ math.
   const badge =
-    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling. 95% band ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} from the body-fat uncertainty.">` +
+    `<span class="nffmi-badge" title="Normalised fat-free mass index (lean mass ÷ height², scaled to 1.8 m). ~22 trained, ~25 natural ceiling.">` +
     `<span class="nffmi-val">${range.avg.toFixed(1)}</span>` +
     `<span class="nffmi-lbl">nFFMI</span>` +
-    (ci >= 0.05 ? `<span class="nffmi-ci">±${ci.toFixed(1)}</span>` : "") +
     `</span>`;
   // Body-composition ranges derived from the body-fat band: lean mass and fat
   // mass (kg), each as a predicted value ± with a little 50/95 range bar — the
   // same uncertainty the nFFMI carries, made visual.
   const mass = bodyMassRanges(p.weight, dist);
+  // ---- ℹ derivations: how each value is calculated, in the same math style as
+  // the workouts list's 1RM (rm-derive / rm-step). ----
+  const hM = p.height / 100;
+  const comp = bodyComposition({ weight: p.weight, height: p.height, bodyFat: dist.avg });
+  const bfPct = (n: number) => `${f1(n * 100)}%`;
+  const dstep = (lbl: string, eq: string) => `<div class="rm-step"><span class="rm-lbl">${lbl}</span><span class="rm-eq">${eq}</span></div>`;
+  const derive = (steps: string[]) => `<div class="rm-derive">${steps.filter(Boolean).join("")}</div>`;
+  const nffmiDerive = derive([
+    dstep("lean", `${p.weight} kg × (1 − ${bfPct(dist.avg)}) = <b>${f1(range.leanAvg)} kg</b>`),
+    comp ? dstep("FFMI", `${f1(range.leanAvg)} ÷ ${f1(hM)}² = <b>${f1(comp.ffmi)}</b>`) : "",
+    dstep("nFFMI", `FFMI + 6.1 × (1.8 − ${f1(hM)}) = <b class="rm-result">${f1(range.avg)}</b>`),
+    dstep("spread", `50% / 95% come from your body-fat band`),
+  ]);
+  const leanDerive = derive([dstep("lean", `${p.weight} kg × (1 − ${bfPct(dist.avg)}) = <b class="rm-result">${f1(mass.lean.avg)} kg</b>`)]);
+  const fatDerive = derive([dstep("fat", `${p.weight} kg × ${bfPct(dist.avg)} = <b class="rm-result">${f1(mass.fat.avg)} kg</b>`)]);
+  const bfDerive = derive([
+    dstep("body fat", `your estimate — edit on the Athletes page`),
+    dstep("50% band", `${bfPct(dist.low50)} – ${bfPct(dist.high50)}`),
+    dstep("95% band", `${bfPct(dist.low95)} – ${bfPct(dist.high95)}`),
+  ]);
+  // Compact numbers line (no bars / ranges / ±). Each value carries a ⓘ that
+  // toggles its math panel, shown below the line.
+  const sep = ` <span class="bc-sep">·</span> `;
   const bodyComp =
-    `<div class="bodycomp">` +
-    bcRow("nFFMI", range, "") +
-    bcRow("Lean", mass.lean, " kg") +
-    bcRow("Fat", mass.fat, " kg") +
+    `<div class="bodycomp"><div class="bc-line">` +
+    [
+      bcChip("bf", "Body fat", bfPct(dist.avg)),
+      bcChip("lean", "Lean", `${f1s(mass.lean.avg)} kg`),
+      bcChip("fat", "Fat", `${f1s(mass.fat.avg)} kg`),
+      bcChip("nffmi", "nFFMI", f1(range.avg)),
+    ].join(sep) +
+    `</div>` +
+    bcPanel("bf", bfDerive) + bcPanel("lean", leanDerive) + bcPanel("fat", fatDerive) + bcPanel("nffmi", nffmiDerive) +
     `</div>`;
   // Likely lifetime NATURAL potential: the drug-free lean ceiling at this height,
   // and the ideal bodyweight to carry it at each sport's typical body fat.
   const pot = p.sex ? naturalPotential(p.height, p.sex) : null;
   const potBlock = pot
-    ? `<div class="bodycomp bodycomp-pot">` +
-      `<div class="bc-head muted" title="Likely lifetime natural ceiling at nFFMI ≈ ${pot.ceilingNffmi} for ${p.sex === "f" ? "women" : "men"} (Kouri et al.), at this height. Ideal weights put that lean ceiling at a sport-typical body fat: calisthenics ${Math.round(pot.caliBf * 100)}%, power/weightlifting ${Math.round(pot.powerBf * 100)}%. Estimates — genetics & frame vary.">Natural potential (est.)</div>` +
-      bcRow("Lean cap", pot.leanLimit, " kg") +
-      bcRow("Cali wt", pot.idealCalisthenics, " kg") +
-      bcRow("Power wt", pot.idealPower, " kg") +
-      `</div>`
+    ? (() => {
+        const sexLbl = p.sex === "f" ? "women" : "men";
+        const capDerive = derive([
+          dstep("ceiling", `natural nFFMI ≈ ${pot.ceilingNffmi} (${sexLbl}, Kouri et al.)`),
+          dstep("lean cap", `(${pot.ceilingNffmi} − 6.1 × (1.8 − ${f1(hM)})) × ${f1(hM)}² = <b class="rm-result">${f1(pot.leanLimit.avg)} kg</b>`),
+        ]);
+        const wtDerive = (bf: number, ideal: number, sport: string) => derive([
+          dstep("carry at", `${Math.round(bf * 100)}% body fat (${sport})`),
+          dstep("ideal wt", `${f1(pot.leanLimit.avg)} ÷ (1 − ${Math.round(bf * 100)}%) = <b class="rm-result">${f1(ideal)} kg</b>`),
+        ]);
+        return (
+          `<div class="bodycomp bodycomp-pot">` +
+          `<div class="bc-head muted" title="Likely lifetime natural ceiling at nFFMI ≈ ${pot.ceilingNffmi} for ${sexLbl} (Kouri et al.), at this height. Ideal weights put that lean ceiling at a sport-typical body fat: calisthenics ${Math.round(pot.caliBf * 100)}%, power/weightlifting ${Math.round(pot.powerBf * 100)}%. Estimates — genetics & frame vary.">Natural potential (est.)</div>` +
+          `<div class="bc-line">` +
+          [
+            bcChip("leancap", "Lean cap", `${f1s(pot.leanLimit.avg)} kg`),
+            bcChip("cali", "Cali wt", `${f1s(pot.idealCalisthenics.avg)} kg`),
+            bcChip("power", "Power wt", `${f1s(pot.idealPower.avg)} kg`),
+          ].join(sep) +
+          `</div>` +
+          bcPanel("leancap", capDerive) +
+          bcPanel("cali", wtDerive(pot.caliBf, pot.idealCalisthenics.avg, "calisthenics")) +
+          bcPanel("power", wtDerive(pot.powerBf, pot.idealPower.avg, "power")) +
+          `</div>`
+        );
+      })()
     : "";
-  els.athleteProfile.innerHTML = badge + specLine + " " + editBtn + bodyComp + potBlock;
+  els.athleteProfile.innerHTML = editBtn + badge + " " + specLine + bodyComp + potBlock;
+}
+
+// ===========================================================================
+// Simplified analysis page (S-ANL). Built from scratch (CLAUDE.md rule 12) — it
+// uses the shared PURE data helpers (athProfile, workoutsForUser…) but none of
+// the full-ANL rendering code. Two sections so far: Body stats + Workouts.
+// ===========================================================================
+
+/** Free-text exercise filter for the S-ANL workouts list ("" = all). */
+let sAnlExFilter = "";
+
+/** Render the whole S-ANL page: the explained Body-stats card, then a fresh
+ * Workouts history with an exercise filter. */
+function renderSAnalysis() {
+  if (!els.sAnalysis) return;
+  els.sAnalysis.innerHTML = sBodyStatsHtml() + sWorkoutsHtml();
+  renderSWoList();
+}
+
+/** S-ANL Body stats: explained, fewer numbers (50% likely ranges), no muscle
+ * map / momentum. Height·age·weight sit small + unexplained up top. */
+function sBodyStatsHtml(): string {
+  const username = els.athlete.value;
+  const p = athProfile(username);
+  if (!p) return `<p class="muted">No profile on file.</p>`;
+  const dist = bfDistFor(username);
+  const range = nffmiRange(p.weight, p.height, dist);
+  const mass = bodyMassRanges(p.weight, dist);
+  const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
+  const specs = [`${p.weight} kg`, `${p.height} cm`];
+  if (p.age != null) specs.push(`age ${p.age}`);
+  const item = (name: string, value: string, exp: string) =>
+    `<div class="s-bs-item"><div class="s-bs-row"><span class="s-bs-name">${name}</span><span class="s-bs-val">${value}</span></div>` +
+    `<p class="s-bs-exp muted">${exp}</p></div>`;
+  // Everything below derives from the body-fat estimate, so each is shown as its
+  // 50% (likely) range — same confidence band as the body-fat figure above.
+  const items = [
+    item("Body fat", `${Math.round(dist.low50 * 100)}–${Math.round(dist.high50 * 100)}%`, "The share of your bodyweight that's fat — shown as a likely range because it's only an estimate. Lower is leaner, though very low isn't always healthier."),
+    item("Lean weight", `${f1s(mass.lean.lo50)}–${f1s(mass.lean.hi50)} kg`, "Everything that isn't fat — muscle, bone, organs, water. More lean weight generally means more strength."),
+    item("Fat mass", `${f1s(mass.fat.lo50)}–${f1s(mass.fat.hi50)} kg`, "The actual kilograms of fat you carry — your weight times your body-fat %."),
+  ];
+  if (range) items.push(item("nFFMI", `${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}`, "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling."));
+  return (
+    `<details class="s-bodystats" open><summary class="s-bodystats-sum">Body stats</summary>` +
+    `<div class="s-bs-body"><div class="s-bs-specs muted">${specs.join("  ·  ")}</div>` +
+    items.join("") +
+    `</div></details>`
+  );
+}
+
+/** S-ANL Workouts shell: a filter box + an (initially empty) list filled by
+ * renderSWoList — so typing in the filter only re-renders the list, not the box. */
+function sWorkoutsHtml(): string {
+  return (
+    `<details class="s-wo" open><summary class="s-bodystats-sum">Workouts</summary>` +
+    `<div class="s-wo-body">` +
+    `<input type="search" class="s-wo-search" placeholder="Filter by exercise…" aria-label="Filter workouts by exercise" value="${escapeHtml(sAnlExFilter)}" />` +
+    `<div id="sWoList" class="s-wo-list"></div>` +
+    `</div></details>`
+  );
+}
+
+/** Fill the S-ANL workouts list: one row per training day (newest first), each
+ * with its exercises and set counts, narrowed to the exercise filter. */
+function renderSWoList(): void {
+  const box = document.getElementById("sWoList");
+  if (!box) return;
+  const username = els.athlete.value;
+  const q = sAnlExFilter.trim().toLowerCase();
+  const matchEx = (name: string): boolean =>
+    !q || displayName(name).toLowerCase().includes(q) || name.toLowerCase().includes(q);
+  const days = workoutsForUser(activeRecords(), username)
+    .filter((d) => d.totalSets > 0)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const rows: string[] = [];
+  for (const d of days) {
+    const exes = d.exercises.filter((e) => matchEx(e.exerciseName));
+    if (exes.length === 0) continue;
+    const line = exes
+      .map((e) => {
+        const n = d.sets.filter((s) => s.exerciseName === e.exerciseName).length;
+        return `${escapeHtml(displayName(e.exerciseName))} <span class="muted">×${n}</span>`;
+      })
+      .join(" · ");
+    rows.push(`<div class="s-wo-day"><span class="s-wo-date">${escapeHtml(shortDate(d.date))}</span><span class="s-wo-did">${line}</span></div>`);
+  }
+  box.innerHTML = rows.join("") || `<p class="muted">${q ? "No workouts for that filter." : "No workouts."}</p>`;
+}
+
+/** Wire the S-ANL filter input (delegated, so it survives re-renders). */
+function setupSAnalysis(): void {
+  els.sAnalysis?.addEventListener("input", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".s-wo-search");
+    if (inp) { sAnlExFilter = inp.value; renderSWoList(); }
+  });
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).
@@ -2802,19 +3573,6 @@ function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): (T & { _ca
 /** Frequency tiers by how many times an exercise has been logged (set count),
  * like a tier list: S = a staple, down to D = barely touched. Thresholds are
  * set-count cutoffs; an untrained (count 0) exercise has no tier. */
-const FREQ_TIERS: { tier: string; min: number; label: string }[] = [
-  { tier: "S", min: 25, label: "S · staples (25+ sets)" },
-  { tier: "A", min: 15, label: "A · regulars (15–24)" },
-  { tier: "B", min: 8, label: "B · occasional (8–14)" },
-  { tier: "C", min: 3, label: "C · rare (3–7)" },
-  { tier: "D", min: 1, label: "D · tried once or twice (1–2)" },
-];
-
-function frequencyTier(count: number): { tier: string; label: string } | null {
-  for (const t of FREQ_TIERS) if (count >= t.min) return { tier: t.tier, label: t.label };
-  return null;
-}
-
 function sumCounts(items: readonly ExerciseCount[]): number {
   return items.reduce((s, c) => s + c.count, 0);
 }
@@ -3364,12 +4122,67 @@ function renderCombineBar(exName: string, username: string) {
     `<button type="button" class="xdd-btn ex-combine-btn">＋ combine with…<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
     `</div>`;
+  // Persist the current "viewing together" set as ONE permanent merged lift
+  // (a user "combined" def). Once saved it merges everywhere — graph, calendar,
+  // leaderboard, PRs — not just this drill-in.
+  const alreadyMerged = userExerciseDefs.some((d) => d.identity === "combined" && d.name === exName);
+  const saveBtn =
+    combinedWith.length && !alreadyMerged
+      ? `<button type="button" class="ex-combine-save" title="Save these as one permanent merged lift (applies everywhere)">✓ Save as one lift</button>`
+      : "";
   els.exCombineBar.hidden = false;
   els.exCombineBar.innerHTML =
     `<span class="ex-combine-lbl muted">Viewing together:</span>` +
     `<span class="ex-combine-chip is-primary">${escapeHtml(exName)}</span>` +
     chips +
-    picker;
+    picker +
+    saveBtn;
+}
+
+/** Persist the current drill-in "viewing together" set as a permanent merged
+ * lift. Asks for a name (defaults to "<primary> (merged)"), saves a user
+ * "combined" def, and selects it so every view shows the one merged lift. */
+function saveCurrentCombine(): void {
+  if (selectedExercise === null || combinedWith.length === 0) return;
+  const members = [selectedExercise, ...combinedWith];
+  const fallback = `${selectedExercise} (merged)`;
+  const name = (window.prompt("Name for the merged lift:", fallback) ?? "").trim() || fallback;
+  // Guard against clashing with an existing lift/def name.
+  if (selectableExercises(data.records).includes(name) || userExerciseDefs.some((d) => d.name === name)) {
+    els.exerciseProgressNote.textContent = `“${name}” already exists — pick another name.`;
+    return;
+  }
+  userExerciseDefs.push({ name, identity: "combined", members });
+  saveUserExerciseDefs();
+  combinedWith = [];
+  selectedExercise = name; // jump straight to the new merged lift
+  populateExercisePicker();
+  renderAll();
+  renderExerciseDetail(name);
+}
+
+/** Pull one member back out of a merged lift. If fewer than two remain it's no
+ * longer a merge, so the whole def is dropped. */
+function separateMergeMember(mergeName: string, member: string): void {
+  const def = userExerciseDefs.find((d) => d.name === mergeName && d.identity === "combined");
+  if (!def?.members) return;
+  def.members = def.members.filter((m) => m !== member);
+  if (def.members.length < 2) {
+    userExerciseDefs = userExerciseDefs.filter((d) => d !== def);
+    if (selectedExercise === mergeName) selectedExercise = null;
+  }
+  saveUserExerciseDefs();
+  populateExercisePicker();
+  refreshAfterDifficultyEdit();
+}
+
+/** Un-merge a lift entirely: drop its user "combined" def. Originals are untouched. */
+function dissolveMerge(mergeName: string): void {
+  userExerciseDefs = userExerciseDefs.filter((d) => !(d.name === mergeName && d.identity === "combined"));
+  if (selectedExercise === mergeName) selectedExercise = null;
+  saveUserExerciseDefs();
+  populateExercisePicker();
+  refreshAfterDifficultyEdit();
 }
 
 /**
@@ -3725,7 +4538,11 @@ function renderExerciseProgressChart(exName: string) {
     const x = base + frac * MS_DAY;
     const meta = `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM · ${shortDate(s.date)}` + (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : "");
     strengthRaw.push({ x, y: e1rm, meta });
-    scaledRaw.push({ x, y: e1rm * scaleForRecord(s) });
+    // The note-variation factor is already folded into e1rm now, so the "Scaled
+    // effort" line only needs the REMAINING factors (squat-rack level × per-set
+    // scale) — dividing it out avoids double-counting the variation difficulty.
+    const nv = noteVariationScale(s) || 1;
+    scaledRaw.push({ x, y: e1rm * (scaleForRecord(s) / nv) });
   }
   const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
   const hasLevels = sets.some((s) => s.levelValue !== undefined);
@@ -3768,6 +4585,8 @@ function onExerciseRowClick(e: MouseEvent) {
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
+  if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
+  if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -3888,17 +4707,10 @@ function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
 }
 
 // ---- Workouts overview: a per-year heatmap of training days ----
-let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
-// "ribbon" = one continuous strip flowing across years (default); "single" = one
-// calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
-let heatScope: "ribbon" | "single" | "all" = "ribbon";
-let heatFilters: string[] = []; // multi-select; empty = all exercises (default)
-// When the Analysis view forces the calendar to the selected exercises, the
-// user's own "all-mode" filter is parked here and restored when the selection clears.
-let heatFiltersSaved: string[] | null = null;
-// When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
-// instead of jumping to that day — so you can tag many days quickly in one go.
-let aloneTagMode = false;
+// Heatmap state lives on S (appState): S.heatYear (year in single mode), S.heatScope
+// (ribbon/single/all), S.heatFilters (multi-select; empty = all), S.heatFiltersSaved
+// (parked all-mode filter while the Analysis selection scopes the calendar),
+// S.aloneTagMode (tap-to-tag paint mode), S.heatColorBy.
 
 /** The workout days the heatmap (year analysis) draws from: the athlete's full
  * history, or — when the "Hard sets only" lens is on — a rebuild that drops easy
@@ -3948,8 +4760,7 @@ function filterColor(filter: string): string | null {
 // "Colour by" for the all-exercises calendar (only when no filter is active):
 // paint each day by the dominant group in a chosen dimension; the day's set count
 // still drives the intensity (opacity). "none" = the classic single-colour scale.
-type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
-let heatColorBy: HeatColorDim = "cat"; // default: colour every exercise by body part
+// S.heatColorBy (HeatColorDim) lives on S (appState); HeatColorDim imported at top.
 const HEAT_COLOR_DIMS: HeatColorDim[] = ["none", "cat", "mus", "fun", "ex"];
 const HEAT_COLOR_LABELS: Record<HeatColorDim, string> = {
   none: "One colour", cat: "Body part", mus: "Muscle group", fun: "Function", ex: "Exercise",
@@ -3977,56 +4788,29 @@ function heatGroupColor(dim: HeatColorDim, value: string): string | null {
   if (dim === "cat") return CATEGORY_COLORS[value as TrainingCategory] ?? hashHueHex(value);
   return hashHueHex(value);
 }
-function hashHueHex(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
-  return hslToHex(((h % 360) + 360) % 360, 60, 45);
-}
-function hslToHex(h: number, s: number, l: number): string {
-  const sa = s / 100, la = l / 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = sa * Math.min(la, 1 - la);
-  const f = (n: number) => Math.round(255 * (la - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
-  const to2 = (v: number) => v.toString(16).padStart(2, "0");
-  return `#${to2(f(0))}${to2(f(8))}${to2(f(4))}`;
-}
-
-/** Background color for a heatmap cell given intensity level and optional category hex. */
-function cellBgColor(level: number, catHex: string | null): string {
-  if (level === 0) return "";
-  if (level === 5) return "#f5c800"; // shining — always gold
-  const hex = catHex ?? "#1e4fa3"; // default blue
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  if (level === 4) return `rgb(${Math.round(r * 0.55)},${Math.round(g * 0.55)},${Math.round(b * 0.55)})`;
-  const t = level === 1 ? 0.28 : level === 2 ? 0.58 : 1.0;
-  return `rgb(${Math.round(255+(r-255)*t)},${Math.round(255+(g-255)*t)},${Math.round(255+(b-255)*t)})`;
-}
-
-/** Training dates → { sets, catHex } honouring the active heatFilters. */
+/** Training dates → { sets, catHex } honouring the active S.heatFilters. */
 function filteredDayCounts(): Map<string, { sets: number; catHex: string | null; label?: string | null }> {
   const m = new Map<string, { sets: number; catHex: string | null; label?: string | null }>();
   for (const d of heatWorkoutDays()) {
-    if (heatFilters.length === 0) {
+    if (S.heatFilters.length === 0) {
       if (d.totalSets <= 0) continue;
-      if (heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
+      if (S.heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
       // No filter but a colour dimension is chosen: paint by the day's DOMINANT
       // group in that dimension (intensity still = total sets).
       const tally = new Map<string, number>();
       for (const e of d.exercises) {
-        const v = exerciseGroupValue(e.exerciseName, heatColorBy);
+        const v = exerciseGroupValue(e.exerciseName, S.heatColorBy);
         if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
       }
       let domV = "", domN = 0;
       for (const [v, n] of tally) if (n > domN) { domN = n; domV = v; }
-      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(heatColorBy, domV) : null, label: domV || null });
+      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(S.heatColorBy, domV) : null, label: domV || null });
       continue;
     }
     let totalSets = 0;
     let dominantFilter = "";
     let dominantSets = 0;
-    for (const f of heatFilters) {
+    for (const f of S.heatFilters) {
       const n = filterMatchSets(d, f);
       totalSets += n;
       if (n > dominantSets) { dominantSets = n; dominantFilter = f; }
@@ -4042,26 +4826,16 @@ function filteredDayCounts(): Map<string, { sets: number; catHex: string | null;
 function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
   const y = Number(latest?.slice(0, 4));
-  if (Number.isFinite(y)) heatYear = y;
-  heatFilters = []; // default to all exercises (coloured by body part)
-  heatFiltersSaved = null; // don't carry a parked filter across athletes
-  aloneTagMode = false; // start each athlete in normal tap-to-jump mode
-}
-
-/** Intensity bucket for a day's set count: 0 rest, 1/2/4/10/20 sets. */
-function heatLevel(sets: number): number {
-  if (sets <= 0) return 0;
-  if (sets < 2)  return 1; // 1 set — light
-  if (sets < 4)  return 2; // 2–3 — darker
-  if (sets < 10) return 3; // 4–9 — dark + outline
-  if (sets < 20) return 4; // 10–19 — deep + double outline
-  return 5;                // 20+  — shining
+  if (Number.isFinite(y)) S.heatYear = y;
+  S.heatFilters = []; // default to all exercises (coloured by body part)
+  S.heatFiltersSaved = null; // don't carry a parked filter across athletes
+  S.aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
 /** The years (descending) that have any training, for the ‹ › year nav. */
 function dataYears(trained: Map<string, number>): number[] {
   const years = [...new Set([...trained.keys()].map((d) => Number(d.slice(0, 4))))].sort((a, b) => b - a);
-  return years.length ? years : [heatYear];
+  return years.length ? years : [S.heatYear];
 }
 
 /** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
@@ -4214,32 +4988,32 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
 function heatPillControls(): string {
   const groupBy =
     `<label class="hm-groupby">Group by <select class="hm-groupby-sel">` +
-    HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
+    HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${S.heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
     `</select></label>`;
   // Pills now mirror the analysis SELECTION (waSelected) — they are one and the
   // same filter for the whole page. "All" is on when nothing's selected.
   const selectedSet = new Set(waSelected);
   const allOn = waSelected.length === 0;
   const allPill = `<button type="button" class="hm-pill hm-pill-all${allOn ? " is-on" : ""}" data-heatall="1">All</button>`;
-  if (heatColorBy === "none")
+  if (S.heatColorBy === "none")
     return `<div class="hm-pills">${groupBy}${allPill}<span class="muted hm-pill-hint">· one colour, lighter = fewer sets</span></div>`;
   // Tally the groups present for this athlete, most-trained first.
   const tally = new Map<string, number>();
   for (const d of athleteWorkouts) for (const e of d.exercises) {
-    const v = exerciseGroupValue(e.exerciseName, heatColorBy);
+    const v = exerciseGroupValue(e.exerciseName, S.heatColorBy);
     if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
   }
   const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
   const cap = 16;
   const shown = sorted.slice(0, cap);
   const pill = (v: string) => {
-    const val = `${heatColorBy}:${v}`;
+    const val = `${S.heatColorBy}:${v}`;
     // A group pill is "on" when every one of its lifts is in the selection (or, for
     // the Exercise dimension, when that lift is selected).
-    const on = heatColorBy === "ex"
+    const on = S.heatColorBy === "ex"
       ? selectedSet.has(v)
-      : (() => { const exs = exercisesInGroup(heatColorBy, v); return exs.length > 0 && exs.every((e) => selectedSet.has(e)); })();
-    const col = heatGroupColor(heatColorBy, v) ?? "#888";
+      : (() => { const exs = exercisesInGroup(S.heatColorBy, v); return exs.length > 0 && exs.every((e) => selectedSet.has(e)); })();
+    const col = heatGroupColor(S.heatColorBy, v) ?? "#888";
     return `<button type="button" class="hm-pill${on ? " is-on" : ""}" data-heatpill="${escapeHtml(val)}" style="--pc:${col}"><span class="hm-pill-dot"></span>${escapeHtml(v)}</button>`;
   };
   const more = sorted.length > cap ? `<span class="muted hm-pill-hint">+${sorted.length - cap} more</span>` : "";
@@ -4250,7 +5024,7 @@ function heatPillControls(): string {
  * years stacked; filterable to one category or exercise. Tap a day to jump. */
 function renderWorkoutCalendar() {
   const years = dataYears(trainingDays()); // year list from ALL training (filter-independent)
-  if (!years.includes(heatYear)) heatYear = years[0]!;
+  if (!years.includes(S.heatYear)) S.heatYear = years[0]!;
   const counts = filteredDayCounts(); // colouring honours the filter
   // Scope (Timeline / Year / All) + the Tag-alone arm button live in ONE compact
   // ⚙ settings dropdown BELOW the calendar — a tight DJ-console row of tiny toggle
@@ -4258,12 +5032,12 @@ function renderWorkoutCalendar() {
   const calSettingsOpen = els.workoutCalendar.querySelector<HTMLDetailsElement>(".cal-settings")?.open ?? false;
   const scopeBtns = ([["ribbon", "Time"], ["single", "Year"], ["all", "All"]] as const)
     .map(([s, l]) =>
-      `<button type="button" class="wo-dj-btn cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}" ` +
+      `<button type="button" class="wo-dj-btn cal-mode-btn${S.heatScope === s ? " is-active" : ""}" data-heat-scope="${s}" ` +
       `title="${s === "ribbon" ? "Timeline — one continuous strip" : s === "single" ? "Single year" : "All years stacked"}">${l}</button>`)
     .join("");
   const tagDjBtn =
-    `<button type="button" class="wo-dj-btn cal-tagmode${aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
-    `title="${aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${aloneTagMode ? "Done" : "Tag"}</button>`;
+    `<button type="button" class="wo-dj-btn cal-tagmode${S.aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
+    `title="${S.aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${S.aloneTagMode ? "Done" : "Tag"}</button>`;
   const calSettings =
     `<details class="wo-controls-fold cal-settings"${calSettingsOpen ? " open" : ""}><summary class="wo-controls-sum">⚙</summary>` +
     `<div class="wo-controls wo-dj">${scopeBtns}${tagDjBtn}</div></details>`;
@@ -4274,21 +5048,17 @@ function renderWorkoutCalendar() {
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
-  if (heatScope === "ribbon") {
+  if (S.heatScope === "ribbon") {
     const g = ribbonGridHtml(counts);
-    const oldest = years[years.length - 1]!;
-    const newest = years[0]!;
-    const span = oldest === newest ? `${newest}` : `${oldest}–${newest}`;
-    els.workoutCalendar.innerHTML =
-      `<div class="cal-head"><strong>${span}</strong>${count(g)}</div>` +
-      g.html +
-      legend;
-    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    // No header line here — the calendar sits right at the top (the year span +
+    // day/set count were redundant clutter).
+    els.workoutCalendar.innerHTML = g.html + legend;
+    els.workoutCalendar.classList.toggle("cal-tagging", S.aloneTagMode);
     scrollHeatmapToEnd();
     return;
   }
 
-  if (heatScope === "all") {
+  if (S.heatScope === "all") {
     const blocks = years
       .map((y) => {
         const g = yearGridHtml(y, counts);
@@ -4296,25 +5066,25 @@ function renderWorkoutCalendar() {
       })
       .join("");
     els.workoutCalendar.innerHTML = blocks + legend;
-    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    els.workoutCalendar.classList.toggle("cal-tagging", S.aloneTagMode);
     scrollHeatmapToEnd();
     return;
   }
 
-  const g = yearGridHtml(heatYear, counts);
-  const idx = years.indexOf(heatYear);
+  const g = yearGridHtml(S.heatYear, counts);
+  const idx = years.indexOf(S.heatYear);
   const olderExists = idx < years.length - 1; // a smaller (older) year exists
   const newerExists = idx > 0; // a larger (newer) year exists
   els.workoutCalendar.innerHTML =
     `<div class="cal-head">` +
     `<button type="button" class="cal-nav" data-heat="prev" aria-label="Previous year"${olderExists ? "" : " disabled"}>‹</button>` +
-    `<strong>${heatYear}</strong>` +
+    `<strong>${S.heatYear}</strong>` +
     `<button type="button" class="cal-nav" data-heat="next" aria-label="Next year"${newerExists ? "" : " disabled"}>›</button>` +
     count(g) +
     `</div>` +
     g.html +
     legend;
-  els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+  els.workoutCalendar.classList.toggle("cal-tagging", S.aloneTagMode);
   scrollHeatmapToEnd();
 }
 
@@ -4330,10 +5100,10 @@ function scrollHeatmapToEnd() {
 /** Step the heatmap to an adjacent year that has data (‹ older / › newer). */
 function shiftHeatYear(delta: number) {
   const years = dataYears(trainingDays()); // descending
-  const idx = years.indexOf(heatYear);
+  const idx = years.indexOf(S.heatYear);
   const next = years[idx - delta]; // -1 = older (later in list), +1 = newer
   if (next !== undefined) {
-    heatYear = next;
+    S.heatYear = next;
     renderWorkoutCalendar();
   }
 }
@@ -4365,47 +5135,8 @@ function jumpToWorkoutDate(iso: string) {
  * lumped into a grey "Other" so the legend stays readable. Same per-set range
  * idea as the compare graph, but mixing every exercise. Collapsed by default.
  */
-function renderWorkoutSetsChart() {
-  const box = document.getElementById("workoutSetsChart");
-  if (!box) return;
+// renderWorkoutSetsChart() warehoused (CUT-2): warehouse/2026-06-07-cut2-workout-sets-chart/
 
-  const username = els.athlete.value;
-  const formula = currentFormula();
-  const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked, requireWeightAndReps: true });
-  const mine = recs.filter((r) => r.username === username);
-  if (mine.length === 0) {
-    els.workoutSetsNote.textContent = "No sets with a usable 1RM yet.";
-    if (workoutSetsSvg) workoutSetsSvg.update({ series: [] });
-    return;
-  }
-
-  // Colour the athlete's most-trained exercises; everything else is "Other".
-  const ranked = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
-  const named = new Map<string, string>();
-  ranked.slice(0, COMPARE_COLORS.length - 1).forEach((name, i) => named.set(name, COMPARE_COLORS[i]!));
-  const OTHER = "#9aa3b2";
-  const ts = (d: string) => Date.parse(d);
-
-  type Bar = { x: number; lo: number; hi: number; meta: string };
-  const groups = new Map<string, { color: string; points: Bar[] }>();
-  for (const s of mine) {
-    const e1rm = addedWeight1RM(s, formula);
-    if (e1rm === null) continue;
-    const label = named.has(s.exerciseName) ? s.exerciseName : "Other";
-    const color = named.get(s.exerciseName) ?? OTHER;
-    const g = groups.get(label) ?? groups.set(label, { color, points: [] }).get(label)!;
-    const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-    g.points.push({ x: ts(s.date), lo: added, hi: e1rm, meta: `${codeFor(s.exerciseName)} ×${s.reps ?? 0}` });
-  }
-  const order = [...ranked.filter((n) => groups.has(n)), ...(groups.has("Other") ? ["Other"] : [])];
-  const series: SvgSeries[] = order.map((label) => ({ name: label, color: groups.get(label)!.color, type: "range", points: groups.get(label)!.points }));
-
-  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
-  if (!workoutSetsSvg) workoutSetsSvg = mountSvgChart(box, config);
-  else workoutSetsSvg.update(config);
-  els.workoutSetsNote.textContent =
-    `Every set's weight → its own estimated 1RM (${formula}), coloured per exercise. Drag to pan · wheel to zoom · tap a bar.`;
-}
 
 /** Sum a session's exercise set-counts into the chosen grouping dimension
  * (muscle / functional pattern / combined / comparable), biggest first. An
@@ -4417,8 +5148,8 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
     let labels: string[];
     if (dim === "muscles") labels = [mgFor(e.exerciseName)];
     else if (dim === "functional") labels = tagsForExercise(e.exerciseName).filter((t) => t.kind === "functional-pattern").map((t) => t.label);
-    else if (dim === "combined") labels = combinableGroupsFor(e.exerciseName).map((t) => t.label);
-    else if (dim === "compared") labels = comparableGroupsFor(e.exerciseName).map((t) => t.label);
+    else if (dim === "combined") labels = combinableGroupsForEx(e.exerciseName).map((t) => t.label);
+    else if (dim === "compared") labels = comparableGroupsForEx(e.exerciseName).map((t) => t.label);
     else labels = [];
     for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + e.count);
   }
@@ -4429,6 +5160,23 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
  * bodyweight/placeholder load (0 or 1 — StrengthLevel sometimes forbids 0) that
  * carries a note shows the NOTE as the base (it's really the difficulty/variation)
  * with the reps as a superscript. */
+/** Compact chips summarising a set's resolved variation (support, band, lean) for
+ * model lifts — so the workout history shows b2w / f2w / ladder / free / band at a
+ * glance, not just the ×multiplier. Empty for non-model lifts or noteless sets. */
+function variationChipsHtml(r: SetRecord): string {
+  const fam = familyOf(r.exerciseName);
+  const note = (r.notes ?? "").trim();
+  if (!fam || !note) return "";
+  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  const SUP: Record<string, string> = { free: "free", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ladder" };
+  const chips: string[] = [];
+  const sup = String(vec.support ?? "free");
+  chips.push(`<span class="wo-var-chip wo-var-sup">${escapeHtml(SUP[sup] ?? sup)}</span>`);
+  if (vec.band && vec.band !== "none") chips.push(`<span class="wo-var-chip wo-var-band">band ${escapeHtml(String(vec.band))}</span>`);
+  if (vec.lean && vec.lean !== "0cm") chips.push(`<span class="wo-var-chip">lean ${escapeHtml(String(vec.lean))}</span>`);
+  return `<span class="wo-var-chips">${chips.join("")}</span>`;
+}
+
 function setDisplay(raw: SetRecord): string {
   // Apply the on-device per-set edits (note text, weight, reps…) FIRST, so the
   // compact line resolves the SAME effective note — and therefore the same
@@ -4438,10 +5186,11 @@ function setDisplay(raw: SetRecord): string {
   const s = applySetOverride(raw);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
+  const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
   // A "not comparable" note (e.g. a static hold) has no meaningful multiplier —
   // show "UN" with the reps instead of a ×number.
   if (note && isNoteNotComparable(s.exerciseName, note))
-    return `<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}`;
+    return `${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}`;
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -4451,16 +5200,17 @@ function setDisplay(raw: SetRecord): string {
   if (scaled) {
     const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
     return bw
-      ? `<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
-      : `${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
+      ? `${chips}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
+      : `${chips}${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
   }
   if (bw && note)
-    return `<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
-  return wr(s.weight, s.reps);
+    return `${chips}<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+  return `${chips}${wr(s.weight, s.reps)}`;
 }
 
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
+  const workoutFormula = currentFormula();
   const byWeek = workoutViewMode === "week";
   syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
@@ -4486,18 +5236,28 @@ function renderWorkoutsPage() {
         // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
         did = g.exercises
           .map((e) => {
-            const setsTxt = g.sets
-              .filter((s) => s.exerciseName === e.exerciseName)
-              .map((s) => setDisplay(s))
-              .join(" ");
-            const name = workoutNameMode === "code" ? codeFor(e.exerciseName) : e.exerciseName;
+            const exSets = g.sets.filter((s) => s.exerciseName === e.exerciseName);
+            const setsTxt = exSets.map((s) => setDisplay(s)).join(" ");
+            const name = displayName(e.exerciseName);
+            // The day's record 1RM for this lift: the best estimated 1RM across
+            // its sets that day (same calc as everywhere — bodyweight folded in,
+            // variation difficulty applied). Shown next to the sets, not just the
+            // set count.
+            const e1rms = exSets
+              .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))
+              .filter((v): v is number => v !== null && Number.isFinite(v));
+            const best = e1rms.length ? Math.max(...e1rms) : null;
+            const rmTxt =
+              best === null
+                ? ""
+                : ` <span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
             const addBtn = showAddSets
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
               : "";
-            return `<span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist muted">${setsTxt}</span>${addBtn}`;
+            return `<div class="wo-ex-line"><span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist">${setsTxt}</span>${addBtn}${rmTxt}</div>`;
           })
-          .join("<br>");
+          .join("");
       } else {
         // Group view: sum each exercise's sets into the chosen grouping dimension.
         did = groupSessionCounts(g.exercises, els.workoutGrouping.value)
@@ -4505,9 +5265,11 @@ function renderWorkoutsPage() {
           .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
       const tagged = aloneTags.has(aloneKey(g.date));
-      const tagBtn =
-        `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
-        `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`;
+      // Day tags ("alone") are hidden unless the "Tags" display option is on.
+      const tagBtn = showAloneTags
+        ? `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
+          `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`
+        : "";
       // "+ exercise" adds a brand-new exercise to this session (shown with the
       // rest of the quick-add UI).
       const addExBtn = showAddSets
@@ -4531,6 +5293,8 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
+  if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
+  if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -4609,7 +5373,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
         : "";
       const header =
         `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
+        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
         `${addBtn}</td></tr>`;
       const sets = group.sets
         .filter((s) => s.exerciseName === e.exerciseName)
@@ -4714,60 +5478,59 @@ const SETS_HEAD =
 const NOTE_PREVIEW_LEN = 8;
 
 /**
- * Plain-text explanation of how a set's estimated 1RM was produced, with the
- * actual numbers plugged in. Takes a COMPUTED record (bodyweight already folded
- * into `weight`, logged bar weight in `origWeight`) so the reveal shows the full
- * chain — bodyweight share, effective load, the formula, then peeling the body
- * share back off — and always matches the bodyweight-aware number displayed.
+ * A readable, math-paper-style derivation of a set's estimated 1RM — one step per
+ * line, with a real fraction bar for the rep-curve division. Returns HTML (the
+ * caller inserts it unescaped). Takes a COMPUTED record (bodyweight folded into
+ * `weight`, logged bar weight in `origWeight`, difficultyMult / assistKg stamped).
  */
 function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const effLoad = c.weight; // bodyweight-inclusive load
   const r = c.reps;
-  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return "Needs a weight and reps to estimate a 1RM.";
+  const wrap = (s: string) => `<div class="rm-derive">${s}</div>`;
+  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return wrap(`<div class="rm-step">Needs a weight and reps to estimate a 1RM.</div>`);
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
-  // Bar weight vs the body's share folded in by computeRecord.
+  const kg = (n: number) => `${f2(n)} kg`;
+  const frac = (n: string, d: string) => `<span class="rm-frac"><span class="rm-num">${n}</span><span class="rm-den">${d}</span></span>`;
+  const step = (lbl: string, eq: string) => `<div class="rm-step"><span class="rm-lbl">${lbl}</span><span class="rm-eq">${eq}</span></div>`;
   const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
   const bodyLoad = effLoad - added;
   const hasBody = bodyLoad > 0.01;
-  // Above the cap there is no reliable 1RM — say so, show "—", don't estimate.
-  if (r > MAX_1RM_REPS) {
-    return (
-      (hasBody ? `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg. ` : "") +
-      `${r} reps is above the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable, so no 1RM is shown (—).`
-    );
-  }
-  const eff1rm = estimate1RM(effLoad, r, formula);
-  const added1rm = addedWeight1RM(c, formula);
-  const addedTxt = added1rm === null ? "—" : `${f2(added1rm)} kg`;
+  if (r > MAX_1RM_REPS)
+    return wrap(step("reps", `${r} reps is past the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable — no 1RM shown.`));
 
-  const parts: string[] = [];
-  if (hasBody) {
-    parts.push(
-      `Effective load = bar ${f2(added)} + bodyweight share ${f2(bodyLoad)} = ${f2(effLoad)} kg.`,
-    );
-  }
-  if (r === 1) {
-    parts.push(`${formula}: a single is the 1RM → ${f2(effLoad)} kg.`);
+  const mult = c.difficultyMult ?? 1;
+  const assist = c.assistKg ?? 0;
+  const scaledLoad = effLoad * mult;
+  const curveLoad = scaledLoad - assist; // what the rep-curve runs on (matches addedWeight1RM)
+  const eff1rm = curveLoad > 0 ? estimate1RM(curveLoad, r, formula) : curveLoad;
+  const added1rm = addedWeight1RM(c, formula);
+
+  const lines: string[] = [];
+  // 1) Effective load = bar + bodyweight share.
+  lines.push(step("effective load", hasBody ? `<i>L</i> = ${kg(added)} + ${kg(bodyLoad)} = <b>${kg(effLoad)}</b>` : `<i>L</i> = <b>${kg(effLoad)}</b>`));
+  // 2) Variation difficulty (multiplier on the load).
+  let cur = effLoad;
+  if (mult !== 1) { lines.push(step("× difficulty", `${kg(effLoad)} × ${f2(mult)} = <b>${kg(scaledLoad)}</b>`)); cur = scaledLoad; }
+  // 3) Band assistance (kg subtracted).
+  if (assist > 0) { lines.push(step("− band", `${kg(cur)} − ${kg(assist)} = <b>${kg(curveLoad)}</b>`)); cur = curveLoad; }
+  // 4) Rep curve → the 1RM of that load.
+  if (curveLoad <= 0) {
+    lines.push(step(formula, `load ≤ 0 — the band more than covers it, so 1RM = <b>${kg(curveLoad)}</b>`));
+  } else if (r === 1) {
+    lines.push(step(formula, `a single rep IS the 1RM = <b>${kg(curveLoad)}</b>`));
   } else if (formula === "brzycki") {
-    parts.push(
-      r >= 37
-        ? "Brzycki is undefined at 37+ reps."
-        : `Brzycki: load × 36 / (37 − reps) = ${f2(effLoad)} × 36 / (37 − ${r}) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
-    );
+    lines.push(step("Brzycki", `1RM = ${frac(`${f2(curveLoad)} × 36`, `37 − ${r}`)} = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b>`));
   } else if (formula === "nuzzo") {
     const pct = benchPctForReps(r);
-    parts.push(
-      `Nuzzo bench curve: ${r} reps ≈ ${f2(pct)}% of 1RM, so load ÷ that % = ${f2(effLoad)} ÷ ${f2(pct)}% = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
-    );
+    lines.push(step("Nuzzo curve", `1RM = ${frac(`${kg(curveLoad)}`, `${f2(pct)}%`)} = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b> <span class="rm-note">(${r} reps ≈ ${f2(pct)}% of 1RM)</span>`));
   } else {
-    parts.push(
-      `Epley: load × (1 + reps/30) = ${f2(effLoad)} × (1 + ${r}/30) = ${eff1rm === null ? "—" : `${f2(eff1rm)} kg`}.`,
-    );
+    lines.push(step("Epley", `1RM = ${f2(curveLoad)} × (1 + ${frac(`${r}`, "30")}) = <b>${eff1rm === null ? "—" : kg(eff1rm)}</b>`));
   }
+  // 5) Peel the FULL bodyweight share (not scaled by difficulty) → added-weight 1RM.
   if (hasBody && eff1rm !== null) {
-    parts.push(`Peel the bodyweight share back off: ${f2(eff1rm)} − ${f2(bodyLoad)} = ${addedTxt} added-weight 1RM.`);
+    lines.push(step("added-weight 1RM", `${kg(eff1rm)} − ${kg(bodyLoad)} = <b class="rm-result">${added1rm === null ? "—" : kg(added1rm)}</b>`));
   }
-  return parts.join(" ");
+  return wrap(lines.join(""));
 }
 
 /**
@@ -4853,12 +5616,16 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const scaleVal = scaleForRecord(s);
   const scaleNum = Math.round(scaleVal * 100) / 100;
   const scaleNote = (s.notes ?? "").trim();
+  // The note the editor edits: a real note, or — for a difficulty-model lift with NO
+  // note (e.g. a hand-added handstand) — a per-set synthetic key, so its banded/lean/
+  // ROM form is editable just like a logged-note set.
+  const editNote = scaleNote || (familyOf(s.exerciseName) ? `__set:${sid}` : "");
   // A "not comparable" note has no meaningful multiplier — the chip reads "UN".
   const uncmp = !!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote);
   const chipLabel = uncmp ? "UN" : `×${scaleNum}`;
-  const scaleTag = scaleNote
-    ? // A noted set → an editable chip that opens the floating modifier editor.
-      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(scaleNote)}" title="${uncmp ? "Not comparable — tap to edit" : "Tap to edit this note's difficulty modifiers"}">${chipLabel} ▾</button>`
+  const scaleTag = editNote
+    ? // Editable chip that opens the floating modifier editor (note OR per-set form).
+      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
     : Math.abs(scaleVal - 1) > 1e-6
       ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
       : "";
@@ -4895,7 +5662,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const formulaRow =
     e1rm === null
       ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(oneRmFormulaText(computed, formula))}</td></tr>`;
+      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${oneRmFormulaText(computed, formula)}</td></tr>`;
   const prirRow =
     predRir === null || !prirText
       ? ""
@@ -4919,7 +5686,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
+    `<button type="button" class="set-edit-nc${notComparableSets.has(sid) ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${notComparableSets.has(sid)}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${notComparableSets.has(sid) ? "not comparable" : "not comparable?"}</button>` +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
+    `<button type="button" class="set-edit-delete" data-setid="${escapeHtml(sid)}" title="Hide this set everywhere on the site (the source data is never changed; restore in Settings → Data health)">🗑 Delete set</button>` +
     `</div></td></tr>`;
   return main + noteRow + formulaRow + prirRow + editRow;
 }
@@ -5006,8 +5775,9 @@ let scaleEditDirty = false; // an edit was made while the popover was open
 function renderScaleEditor(): void {
   const pop = document.getElementById("scaleEditPop");
   if (!pop || !scaleEditState) return;
+  const title = scaleEditState.note.startsWith("__set:") ? "This set's variation" : scaleEditState.note;
   pop.innerHTML =
-    `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(scaleEditState.note)}</span>` +
+    `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(title)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     notePickerHtml(scaleEditState.ex, scaleEditState.note);
   refreshPoseViz();
@@ -5128,6 +5898,38 @@ function resetSetEdit(target: HTMLElement): boolean {
   return true;
 }
 
+/** Click "Delete set": hide this set everywhere (on-device only — the source CSV
+ * is untouched). Confirm first; restorable in Data health. */
+function deleteSetEdit(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-delete");
+  if (!btn?.dataset.setid) return false;
+  if (!window.confirm("Hide this set from the whole site? Your source data isn't changed, and you can restore it later in Settings → Data health.")) return true;
+  setDeleted(btn.dataset.setid, true);
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  renderHealth();
+  window.scrollTo(0, y);
+  return true;
+}
+
+/** Click "⊘ not comparable" in the set editor: toggle THIS set's not-comparable
+ * flag (drops its 1RM & volume; reps/sets still count), then re-render. */
+function toggleSetNotComparable(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-nc");
+  if (!btn?.dataset.setid) return false;
+  setSetNotComparable(btn.dataset.setid, !notComparableSets.has(btn.dataset.setid));
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  window.scrollTo(0, y);
+  return true;
+}
+
 /** A set-edit input changed: save the override (weight/reps/bodyweight/scale) and
  * re-render so the new value flows everywhere (1RM, volume, leaderboard, graphs). */
 function onSetEditInput(e: Event): void {
@@ -5208,9 +6010,9 @@ function renderActiveSetBar(totalExercises: number): void {
   const opt = (val: string, label: string) =>
     `<option value="${val}"${(activeCutoff ?? "none") === val ? " selected" : ""}>${label}</option>`;
   const tierOpts = FREQ_TIERS.map((t) => opt(t.tier, t.label)).join("");
-  const overrides = activeInclude.size + activeExclude.size;
+  const overrides = activeInclude.size + activeExclude.size + (activeSolo ? 1 : 0);
   const status = activeSet
-    ? `<span class="as-status is-on">Showing ${active} of ${totalExercises} exercises app-wide</span>`
+    ? `<span class="as-status is-on">Showing ${active} of ${totalExercises} exercises app-wide${activeSolo ? " (only-these)" : ""}</span>`
     : `<span class="as-status muted">Showing all ${totalExercises} exercises (filter off)</span>`;
   const clear = overrides
     ? ` · <button type="button" class="as-clear" data-asclear="1">clear ${overrides} manual override${overrides === 1 ? "" : "s"}</button>`
@@ -5234,6 +6036,7 @@ function onActiveCutoffChange(value: string): void {
 function clearActiveOverrides(): void {
   activeInclude = new Set();
   activeExclude = new Set();
+  activeSolo = null;
   saveActiveSet();
   renderAll();
 }
@@ -5270,51 +6073,10 @@ function openAncestorDetails(el: HTMLElement): void {
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
-/** "Browse groups" on the Index page: two levels of native <details> — open a
- * dimension (Muscle groups / Functional groups / Combined lifts), then a group,
- * to read its plain-language explanation and the exercises that fall under it. */
-function renderGroupBrowser() {
-  const names = distinctExercises(data.records);
-  const groupBlock = (t: RegistryTag): string => {
-    const ex = exercisesForTag(t, names);
-    const list = ex.length
-      ? ex.map((e) => `<span class="gb-ex">${escapeHtml(e)}</span>`).join("")
-      : `<span class="muted">none logged</span>`;
-    return (
-      `<details class="gb-group" data-gb="${escapeHtml(t.label)}">` +
-      `<summary class="gb-sum"><span class="caret">▸</span>${escapeHtml(t.label)} ` +
-      `<span class="gb-count muted">${ex.length}</span></summary>` +
-      `<div class="gb-why">${escapeHtml(t.why)}</div>` +
-      `<div class="gb-exlist">${list}</div></details>`
-    );
-  };
-  const dim = (title: string, tags: readonly RegistryTag[]): string =>
-    `<details class="gb-dim"><summary class="gb-dim-sum"><span class="caret">▸</span>${escapeHtml(title)} ` +
-    `<span class="gb-count muted">${tags.length}</span></summary>` +
-    `<div class="gb-dim-body">${tags.map(groupBlock).join("")}</div></details>`;
-  els.groupBrowser.innerHTML =
-    dim("Muscle groups", MUSCLE_GROUP_TAGS) +
-    dim("Functional groups", FUNCTIONAL_PATTERN_TAGS) +
-    dim("Combined lifts", [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS]);
-}
-
-/** Open the Browse-groups panel to a specific group (from an inspector tag chip):
- * expand its dimension + the group, scroll to it and flash. */
-function jumpToGroup(label: string): void {
-  const group = els.groupBrowser.querySelector<HTMLDetailsElement>(`details.gb-group[data-gb="${CSS.escape(label)}"]`);
-  if (!group) return;
-  group.closest<HTMLDetailsElement>("details.gb-dim")?.setAttribute("open", "");
-  group.open = true;
-  requestAnimationFrame(() => {
-    group.scrollIntoView({ behavior: "smooth", block: "center" });
-    group.classList.add("wo-flash");
-    window.setTimeout(() => group.classList.remove("wo-flash"), 1600);
-  });
-}
-
 function renderBwParts() {
   renderMergeList();
-  renderGroupBrowser();
+  const createBox = document.getElementById("idxCreate");
+  if (createBox) createBox.innerHTML = createVariantFormHtml();
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
@@ -5323,9 +6085,7 @@ function renderBwParts() {
     // Most-trained first (by set count), then alphabetical - kept inside each group.
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  const withPart = rows.filter((r) => r.coeff > 0).length;
-  els.bwTitle.innerHTML =
-    `Exercises <span class="muted">(${rows.length} · ${withPart} with a bodyweight part · edit to update all stats)</span>`;
+  els.bwTitle.textContent = "Exercises";
   renderActiveSetBar(rows.length);
   renderBwGroupBar();
 
@@ -5356,36 +6116,93 @@ function renderBwParts() {
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
-  els.bwGroups.innerHTML = buckets
-    .map((b) => {
-      // Split the group by the app-wide active-set filter: active lifts stay in
-      // the main list; the rest are greyed under a "Show hidden" sub-dropdown.
-      const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
-      const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
-      const partCount = b.rows.filter((r) => r.coeff > 0).length;
-      const partNote = partCount > 0 ? ` · ${partCount} with a BW part` : "";
-      const meta = activeSet
-        ? `${shown.length} shown${hidden.length ? ` · ${hidden.length} hidden` : ""}${partNote}`
-        : `${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}${partNote}`;
-      const shownBlock = shown.length
-        ? table(shown, false)
-        : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
-      const hiddenBlock = hidden.length
-        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
-        : "";
-      return (
-        `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+  // Per-group app-wide filter: ONE cycling toggle (show all → only these →
+  // hidden → …) instead of three buttons. Its label shows the current state; the
+  // members are read from the group's rows in the DOM when clicked.
+  const groupFilterToggle = (names: string[]): string => {
+    const st = groupFilterState(names);
+    const label = st === "only" ? "only these" : st === "hide" ? "hidden" : "show all";
+    return (
+      `<span class="bw-cat-filter">` +
+      `<button type="button" class="bw-filt bw-filt-toggle is-${st}" data-grpcycle="1" ` +
+      `title="App-wide filter — tap to cycle: show all → only these → hidden">${label}</button>` +
+      `</span>`
+    );
+  };
+
+  // One group's collapsible <details> (a coloured title + its exercise table). The
+  // active-set filter splits it: active lifts stay; the rest go under "Show hidden".
+  const bucketHtml = (b: IndexBucket, sub = false): string => {
+    const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
+    const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
+    const meta = activeSet
+      ? `${shown.length}${hidden.length ? ` <span class="bw-cat-hidden">${hidden.length} hidden</span>` : ""}`
+      : `${b.rows.length}`;
+    const shownBlock = shown.length
+      ? table(shown, false)
+      : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
+    const hiddenBlock = hidden.length
+      ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
+      : "";
+    return (
+      `<details class="bw-cat${sub ? " bw-cat-sub" : ""}" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+      `<summary class="bw-cat-summary">` +
+      `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
+      `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
+      `<span class="bw-cat-meta muted">${meta}</span>` +
+      groupFilterToggle(b.rows.map((r) => r.name)) +
+      `</summary>` +
+      shownBlock +
+      hiddenBlock +
+      `</details>`
+    );
+  };
+
+  // The big "Strength" discipline is sliced further into sub-groups by muscle or
+  // function (the owner picks which). Its lifts re-run through indexBuckets in the
+  // chosen sub-mode and render as nested sub-groups, with a little selector on top.
+  const strengthBucketHtml = (b: IndexBucket): string => {
+    const subs = indexBuckets(b.rows, strengthSubMode);
+    const opt = (m: "muscle" | "function", lbl: string) => `<option value="${m}"${strengthSubMode === m ? " selected" : ""}>${lbl}</option>`;
+    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscle", "Muscle group")}${opt("function", "Joint movement")}</select></div>`;
+    return (
+      `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+      `<summary class="bw-cat-summary">` +
+      `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
+      `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
+      `<span class="bw-cat-meta muted">${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}</span>` +
+      groupFilterToggle(b.rows.map((r) => r.name)) +
+      `</summary>` +
+      sel +
+      subs.map((s) => bucketHtml(s, true)).join("") +
+      `</details>`
+    );
+  };
+
+  // In Discipline mode the two MAIN disciplines (Strength, Calisthenics) sit at the
+  // top level — Strength gets the muscle/function sub-grouping — and everything else
+  // nests as sub-groups under one "Other" header, since it's less central.
+  if (bwGroupMode === "discipline") {
+    const major = buckets.filter((b) => MAJOR_DISCIPLINES.includes(b.key as Discipline));
+    const minor = buckets.filter((b) => !MAJOR_DISCIPLINES.includes(b.key as Discipline));
+    const otherNames = new Set(minor.flatMap((b) => b.rows.map((r) => r.name)));
+    const otherBlock = minor.length
+      ? `<details class="bw-cat bw-cat-other" data-cat="__other"${open("__other") ? " open" : ""}>` +
         `<summary class="bw-cat-summary">` +
-        `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
-        `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
-        `<span class="bw-cat-meta muted">${meta}</span>` +
+        `<span class="bw-cat-dot" style="background:#9aa1ac"></span>` +
+        `<span class="bw-cat-name">Other</span>` +
+        `<span class="bw-cat-meta muted">${otherNames.size} exercise${otherNames.size === 1 ? "" : "s"} · ${minor.length} groups</span>` +
+        groupFilterToggle([...otherNames]) +
         `</summary>` +
-        shownBlock +
-        hiddenBlock +
+        minor.map((b) => bucketHtml(b, true)).join("") +
         `</details>`
-      );
-    })
-    .join("");
+      : "";
+    const majorHtml = major.map((b) => (b.key === "Strength" ? strengthBucketHtml(b) : bucketHtml(b))).join("");
+    els.bwGroups.innerHTML = majorHtml + otherBlock;
+    return;
+  }
+
+  els.bwGroups.innerHTML = buckets.map((b) => bucketHtml(b)).join("");
 }
 
 /** The "Group by" picker above the Index exercise groups. */
@@ -5395,141 +6212,6 @@ function renderBwGroupBar(): void {
     .join("");
   els.bwGroupBar.innerHTML =
     `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>`;
-}
-
-// ---- Exercise codes tab: rename the short code shown for each lift ----
-let codesQuery = "";
-// Which category sections are collapsed in the Codes list, remembered on device.
-const CODES_COLLAPSED_KEY = "colosseum.codesCollapsed.v1";
-const codesCollapsed: Set<string> = (() => {
-  try {
-    const a = JSON.parse(localStorage.getItem(CODES_COLLAPSED_KEY) ?? "[]");
-    return new Set<string>(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : []);
-  } catch {
-    return new Set<string>();
-  }
-})();
-function saveCodesCollapsed() {
-  try { localStorage.setItem(CODES_COLLAPSED_KEY, JSON.stringify([...codesCollapsed])); } catch { /* storage may be unavailable */ }
-}
-
-/** Render the editable exercise-code list, GROUPED BY CATEGORY (most-trained
- * first within each), searchable — so the codes aren't a confusing mix. */
-function renderCodesTab(): void {
-  const counts = new Map<string, number>();
-  for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
-  for (const name of Object.keys(codeOverrides)) if (!counts.has(name)) counts.set(name, 0); // keep edited-but-absent lifts visible
-  for (const name of Object.keys(shortOverrides)) if (!counts.has(name)) counts.set(name, 0);
-  const q = codesQuery.trim().toLowerCase();
-  const names = [...counts.keys()]
-    .filter((n) => !q || n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q) || shortFor(n).toLowerCase().includes(q))
-    .sort((a, b) => (counts.get(b)! - counts.get(a)!) || a.localeCompare(b));
-
-  // Bucket the (already most-trained-first) names by training category. An
-  // exercise can belong to several categories, so it appears under each — a
-  // deadlift shows under Legs, Back and Core; a front lever under Skill, Back
-  // and Core.
-  const byCat = new Map<TrainingCategory, string[]>();
-  for (const name of names) {
-    for (const c of trainingCategories(name)) {
-      const list = byCat.get(c);
-      if (list) list.push(name); else byCat.set(c, [name]);
-    }
-  }
-
-  const rowHtml = (name: string) => {
-    const overridden = !!(codeOverrides[name] && codeOverrides[name]!.trim());
-    const def = exerciseCode(name);
-    const shortOver = !!(shortOverrides[name] && shortOverrides[name]!.trim());
-    const shortDef = defaultShort(name);
-    const staticTag = isStatic(name) ? ` <span class="codes-static" title="Isometric hold">static</span>` : "";
-    // Code + Short share ONE cell, each on its own labelled line — so neither
-    // input gets squeezed into a sliver on a phone (the old 4-column layout did).
-    return (
-      `<tr data-coderow="${escapeHtml(name)}"><td>${escapeHtml(name)}${staticTag}</td>` +
-      `<td class="codes-cell">` +
-      `<div class="codes-field"><span class="codes-flabel">Code</span>` +
-      `<input class="codes-input${overridden ? " is-custom" : ""}" type="text" maxlength="10" spellcheck="false" autocomplete="off" ` +
-      `value="${escapeHtml(codeFor(name))}" data-ex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />` +
-      (overridden
-        ? `<button type="button" class="codes-reset" data-reset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(def)})">↺ ${escapeHtml(def)}</button>`
-        : `<span class="codes-def muted">default</span>`) +
-      `</div>` +
-      `<div class="codes-field"><span class="codes-flabel">Short</span>` +
-      `<input class="codes-input codes-short${shortOver ? " is-custom" : ""}" type="text" maxlength="40" spellcheck="false" autocomplete="off" ` +
-      `value="${escapeHtml(shortFor(name))}" data-exshort="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />` +
-      (shortOver
-        ? `<button type="button" class="codes-reset" data-shortreset="${escapeHtml(name)}" title="Reset to default (${escapeHtml(shortDef)})">↺</button>`
-        : `<span class="codes-def muted">= code</span>`) +
-      `</div>` +
-      `</td>` +
-      `<td class="num">${(counts.get(name) ?? 0).toLocaleString()}</td></tr>`
-    );
-  };
-
-  const head = `<thead><tr><th>Exercise</th><th>Code &amp; short</th><th class="num">Sets</th></tr></thead>`;
-  // While searching, force every section open so matches aren't hidden in a
-  // collapsed group.
-  const searching = q.length > 0;
-  const body = TRAINING_CATEGORIES.filter((c) => byCat.has(c))
-    .map((cat) => {
-      const list = byCat.get(cat)!;
-      const collapsed = !searching && codesCollapsed.has(cat);
-      const header =
-        `<tr class="codes-cat${collapsed ? " is-collapsed" : ""}" data-codescat="${escapeHtml(cat)}"><td colspan="3">` +
-        `<span class="codes-cat-caret">${collapsed ? "▸" : "▾"}</span>` +
-        `<span class="codes-cat-dot" style="background:${CATEGORY_COLORS[cat]}"></span>` +
-        `${escapeHtml(cat)} <span class="muted">${list.length}</span></td></tr>`;
-      const rows = collapsed ? "" : list.map(rowHtml).join("");
-      return header + rows;
-    })
-    .join("");
-  els.codesTable.innerHTML = names.length
-    ? head + `<tbody>${body}</tbody>`
-    : `<tbody><tr><td class="muted">No exercises match.</td></tr></tbody>`;
-}
-
-/** Wire the Codes tab's search box, per-row code edits and reset buttons. */
-function setupCodesTab(): void {
-  els.codesSearch.addEventListener("input", () => { codesQuery = els.codesSearch.value; renderCodesTab(); });
-  // Commit a typed code on blur/Enter (change), then refresh everywhere it shows.
-  els.codesTable.addEventListener("change", (e) => {
-    const input = (e.target as HTMLElement).closest<HTMLInputElement>(".codes-input");
-    if (!input) return;
-    if (input.dataset.exshort) {
-      setShortOverride(input.dataset.exshort, input.value);
-      renderCodesTab();
-      return;
-    }
-    if (!input.dataset.ex) return;
-    setCodeOverride(input.dataset.ex, input.value);
-    renderCodesTab();
-    renderAll();
-  });
-  els.codesTable.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    // Collapse / expand a category section.
-    const catRow = target.closest<HTMLElement>("tr.codes-cat");
-    if (catRow?.dataset.codescat) {
-      const cat = catRow.dataset.codescat;
-      if (codesCollapsed.has(cat)) codesCollapsed.delete(cat);
-      else codesCollapsed.add(cat);
-      saveCodesCollapsed();
-      renderCodesTab();
-      return;
-    }
-    const shortBtn = target.closest<HTMLElement>("[data-shortreset]");
-    if (shortBtn?.dataset.shortreset) {
-      setShortOverride(shortBtn.dataset.shortreset, ""); // blank clears the override
-      renderCodesTab();
-      return;
-    }
-    const btn = target.closest<HTMLElement>("[data-reset]");
-    if (!btn?.dataset.reset) return;
-    setCodeOverride(btn.dataset.reset, ""); // blank clears the override
-    renderCodesTab();
-    renderAll();
-  });
 }
 
 // ---- Edit athlete stats page ----
@@ -5577,7 +6259,10 @@ function renderStatsEdit(): void {
     `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high)</div><div class="se-bf-grid">` +
     num("se-bf-low95", "95% low", bfPct(dist.low95), "0.5") +
     num("se-bf-low50", "50% low", bfPct(dist.low50), "0.5") +
-    num("se-bf-avg", "average", bfPct(dist.avg), "0.5") +
+    // Average is auto-calculated (middle of the 95% band) — read-only, not editable.
+    `<label class="se-field"><span class="se-lbl">average</span>` +
+    `<output class="se-bf-avg-out" title="Auto-calculated — the middle of the 95% band">${Math.round((dist.low95 + dist.high95) / 2 * 1000) / 10}</output>` +
+    `<span class="se-hint muted">auto</span></label>` +
     num("se-bf-high50", "50% high", bfPct(dist.high50), "0.5") +
     num("se-bf-high95", "95% high", bfPct(dist.high95), "0.5") +
     `</div></div>` +
@@ -5605,12 +6290,15 @@ function saveStatsEdit(): void {
     return v === undefined ? fallback : v / 100; // % → fraction
   };
   const d = bfDistFor(username);
+  const low95 = bf("se-bf-low95", d.low95);
+  const high95 = bf("se-bf-high95", d.high95);
   const ov: AthleteStatsOverride = {
     age: ageVal,
     sex: (root.querySelector<HTMLSelectElement>(".se-sex")?.value as "m" | "f") ?? "m",
     bf: normalizeBodyFatDist({
-      low95: bf("se-bf-low95", d.low95), low50: bf("se-bf-low50", d.low50),
-      avg: bf("se-bf-avg", d.avg), high50: bf("se-bf-high50", d.high50), high95: bf("se-bf-high95", d.high95),
+      low95, low50: bf("se-bf-low50", d.low50),
+      // Average is derived (middle of the 95% band), never typed.
+      avg: (low95 + high95) / 2, high50: bf("se-bf-high50", d.high50), high95,
     }),
   };
   const w = numOf("se-weight"); if (w !== undefined) ov.weight = w;
@@ -5625,6 +6313,16 @@ function setupStatsEdit(): void {
   els.statsEditBody.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
     if (t.id === "seAthlete") { statsEditUser = (t as HTMLSelectElement).value; renderStatsEdit(); }
+  });
+  // Keep the auto-calculated average (middle of the 95% band) live as you type.
+  els.statsEditBody.addEventListener("input", (e) => {
+    const t = e.target as HTMLElement;
+    if (!t.classList.contains("se-bf-low95") && !t.classList.contains("se-bf-high95")) return;
+    const root = els.statsEditBody;
+    const out = root.querySelector<HTMLOutputElement>(".se-bf-avg-out");
+    const lo = parseFloat(root.querySelector<HTMLInputElement>(".se-bf-low95")?.value ?? "");
+    const hi = parseFloat(root.querySelector<HTMLInputElement>(".se-bf-high95")?.value ?? "");
+    if (out && Number.isFinite(lo) && Number.isFinite(hi)) out.textContent = String(Math.round((lo + hi) / 2 * 10) / 10);
   });
   els.statsEditBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -5641,14 +6339,114 @@ function setupStatsEdit(): void {
 /** Expanded info panel for one exercise on the Index page: category / muscle /
  * tier, bodyweight part, merged spellings, total sets, who trains it, the best
  * estimated 1RM ever logged (any athlete) and the date span. */
+/** The editable ×factor table for one difficulty family: every dimension's levels
+ * with a number input. Shared by the per-exercise panel and the global editor. */
+function familyFactorTableHtml(fam: string): string {
+  if (!FAMILIES[fam]) return "";
+  // One editable table for a dim (or a per-support lean table keyed "lean:<support>").
+  const table = (dimKey: string, label: string): string => {
+    const levels = famLevels(fam, dimKey);
+    const cells = Object.keys(levels)
+      .map((lvl) => {
+        const ov = famFactorOverrides[fam]?.[dimKey]?.[lvl] !== undefined;
+        return (
+          `<label class="fac-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${escapeHtml(lvl)}</span>` +
+          `<input class="fac-input" type="number" step="0.01" min="0.05" value="${levels[lvl]}" data-fac-fam="${escapeHtml(fam)}" data-fac-dim="${escapeHtml(dimKey)}" data-fac-lvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(label)} ${escapeHtml(lvl)} multiplier" /></label>`
+        );
+      })
+      .join("");
+    return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(label)}</div><div class="fac-cells">${cells}</div></div>`;
+  };
+  // Band is ONE knob (band-1 assistance); all 6 bands derive from it (assistance
+  // doubles every 2 levels). Show the knob + a live preview of the resulting bands.
+  const bandKnobTable = (): string => {
+    const A = bandKnob(fam);
+    const ov = famFactorOverrides[fam]?.["bandKnob"]?.["a"] !== undefined;
+    return (
+      `<div class="fac-dim"><div class="fac-dim-h">band assistance — kg (one knob)</div>` +
+      `<div class="fac-cells"><label class="fac-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">band-1 = kg</span>` +
+      `<input class="fac-input" type="number" step="0.5" min="0.5" max="80" value="${A}" data-fac-fam="${escapeHtml(fam)}" data-fac-dim="bandKnob" data-fac-lvl="a" aria-label="band-1 assistance in kg" /></label></div>` +
+      `<div class="ex-group-why muted">Bands assist in kg, SUBTRACTED from the load. All scale from this knob: kg doubles every 2 levels (2× a band = +2 levels). → <span class="band-knob-preview" data-fam="${escapeHtml(fam)}">${escapeHtml(bandPreviewText(fam))}</span></div></div>`
+    );
+  };
+  // Lean is rendered once per wall support, since its effect differs (back- vs
+  // front-to-wall); each starts from the shared base lean until tuned.
+  const LEAN_SUPPORTS: [string, string][] = [["free", "lean — free"], ["back_to_wall", "lean — back to wall"], ["front_to_wall", "lean — front to wall"]];
+  return Object.keys(FAMILIES[fam]!.dims)
+    .flatMap((dim) =>
+      dim === "band" ? [bandKnobTable()] : dim === "lean" ? LEAN_SUPPORTS.map(([sup, lbl]) => table(`lean:${sup}`, lbl)) : [table(dim, dim)],
+    )
+    .join("");
+}
+
+/** "1=−5kg  2=−7.1kg  …  6=−28.3kg" — the kg the current knob produces per band. */
+function bandPreviewText(fam: string): string {
+  const keys = Object.keys(FAMILIES[fam]?.dims.band ?? {}).filter((k) => k !== "none");
+  return keys.map((k) => `${k}=−${bandAssistKg(fam, k)}kg`).join("  ");
+}
+
+/** Editable difficulty-model factors for a family lift: every dimension's levels
+ * with an editable ×factor input. Edits are shared across the whole family and
+ * apply everywhere; clearing back to the default removes the override. */
+function modelFactorsEditorHtml(name: string): string {
+  const fam = familyOf(name);
+  if (!fam || !FAMILIES[fam]) return "";
+  return (
+    `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">⚙ Edit difficulty multipliers</summary>` +
+    `<div class="ex-group-why muted">Re-tune any level's ×factor for the “${escapeHtml(fam)}” difficulty model. Changes apply to every set of this family everywhere on the site; set a value back to its default to clear the edit. (Also under Settings → ✎ Difficulty multipliers.)</div>` +
+    familyFactorTableHtml(fam) +
+    `</details>`
+  );
+}
+
+/** Editable world record (per sex) for an exercise — a kg at a reference
+ * bodyweight; scaled to each athlete's bodyweight for the "% of world record". */
+function worldRecordEditorHtml(name: string): string {
+  const row = (sex: "m" | "f", lbl: string) => {
+    const explicit = worldRecordRef(name, sex);
+    const ref = explicit ?? guessWorldRecord(name, sex); // guess fills an unset record
+    const est = !explicit && !!ref;
+    const inp = (field: "kg" | "bw", val: number | undefined, ph: string) =>
+      `<label class="fac-cell"><span class="fac-lvl">${field === "kg" ? "kg" : "@ bw"}</span>` +
+      `<input class="wr-input${est ? " is-guess" : ""}" type="number" step="1" min="0" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${sex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
+    const tag = est ? ` <span class="wr-est" title="Estimated from your logged bests — edit either box to lock in your own value">≈ est.</span>` : "";
+    return `<div class="fac-dim"><div class="fac-dim-h">${lbl}${tag}</div><div class="fac-cells">${inp("kg", ref?.kg, "record kg")}${inp("bw", ref?.bw, "at kg bw")}</div></div>`;
+  };
+  // The record scaled to the currently-selected athlete (their sex + bodyweight).
+  const prof = athProfile(els.athlete.value);
+  const sex: "m" | "f" = prof?.sex === "f" ? "f" : "m";
+  const bw = prof?.weight ?? null;
+  const scaled = worldRecordKg(name, sex, bw);
+  const isEst = !worldRecordRef(name, sex) && scaled != null;
+  const forLine = scaled
+    ? `<div class="ex-group-why"><strong>For ${escapeHtml(athleteLabel())}</strong> (${sex === "f" ? "♀" : "♂"}${bw ? `, ${fmt(bw)} kg` : ""}): world record ${isEst ? "≈ <i>(est.)</i> " : "≈ "}<b>${fmt(scaled)} kg</b> at this bodyweight.</div>`
+    : "";
+  return (
+    `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
+    `<div class="ex-group-why muted">Natty record — total 1RM (bodyweight + plate), per sex. Scaled to each athlete's bodyweight. <b>No value set?</b> We estimate one from your logged bests (shown faint, marked “≈ est.”) so the “% of world record” still works — edit either box to lock in your own.</div>` +
+    forLine + row("m", "men") + row("f", "women") +
+    `</details>`
+  );
+}
+
+/** The global "Difficulty multipliers" overlay: every family's editable factors. */
+function renderModelEditor(): void {
+  els.modelEditor.innerHTML = Object.keys(FAMILIES)
+    .map((fam) => `<details class="model-fam ex-model-fold" open><summary class="ex-group-hd">“${escapeHtml(fam)}” model</summary>${familyFactorTableHtml(fam)}</details>`)
+    .join("");
+}
+function openModelEditor(): void {
+  renderModelEditor();
+  els.modelPage.hidden = false;
+}
+
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   const recs = computedRecords().filter((r) => r.exerciseName === name);
-  const cat = catFor(name);
-  const mg = mgFor(name);
-  const tierLabel = { main: "Main lift", second: "Secondary", third: "Cardio/mobility" }[tierFor(name)];
   const coeff = coeffFor(name);
-  const variants = exerciseOrigin(name).filter((v) => v !== name);
+  // A user-created merge (this lift combines several exercises) vs auto spelling-merges.
+  const userMergeDef = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
+  const spellingVariants = mergeVariantsFor(name);
 
   const athletes = new Map<string, string>();
   let first = "", last = "", setCount = 0;
@@ -5668,28 +6466,99 @@ function exerciseInfoHtml(name: string): string {
   // each chip explains its WHY on hover.
   const tags = tagsForExercise(name);
   const tagChips = tags.length
-    ? tags.map((t) => `<button type="button" class="ex-tag" data-tagjump="${escapeHtml(t.label)}" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</button>`).join("")
+    ? tags.map((t) => `<span class="ex-tag" title="${escapeHtml(t.why)}">${escapeHtml(t.label)}</span>`).join("")
     : `<span class="muted">none</span>`;
 
+  // Editable controls, folded straight into the info rows — there is no separate
+  // "Edit this exercise" section, every value here that CAN be changed is its own
+  // input/select (same classes + data-editex the change handlers already key off).
+  const code = codeFor(name), short = shortFor(name);
+  const codeInput = `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />`;
+  const shortInput = `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />`;
+  // Discipline / Muscle group / Tier are MULTI-select: a lift can fit several at
+  // once, so each is a row of toggle chips (tap to add/remove), highlighted =
+  // selected. The ↺ chip clears the override back to the automatic guess.
+  const metaChips = (kind: MetaKind, all: readonly string[], labelOf: (v: string) => string, sel: readonly string[]) =>
+    `<span class="ex-meta-chips">` +
+    all.map((v) => `<button type="button" class="ex-meta-chip${sel.includes(v) ? " is-on" : ""}" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="${escapeHtml(v)}">${escapeHtml(labelOf(v))}</button>`).join("") +
+    (metaSet(kind, name) ? `<button type="button" class="ex-meta-reset" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
+    `</span>`;
+  const discChips = metaChips("disc", DISCIPLINES, (v) => v, discsFor(name));
+  const mgChips = metaChips("mg", MUSCLE_GROUPS, (v) => v, mgsFor(name));
+  const tierChips = metaChips("tier", ["main", "second", "third"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
+  // Combinable / Comparable membership chips — tap to add/remove this lift from a
+  // group (comparable also gets a ratio input when it's an owner-added member).
+  const groupChips = (all: RegistryTag[], kind: "combine" | "compare") => {
+    const memberIds = new Set((kind === "combine" ? combinableGroupsForEx(name) : comparableGroupsForEx(name)).map((g) => g.id));
+    return (
+      `<span class="ex-meta-chips">` +
+      all.map((g) => {
+        const on = memberIds.has(g.id);
+        const added = groupMemberOverrides[g.id]?.add?.[name];
+        const ratio = on && kind === "compare" && added !== undefined
+          ? `<input class="ex-grp-ratio" type="number" step="0.05" min="0.05" max="2" value="${added}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-ex="${escapeHtml(name)}" title="Ratio vs the reference lift" />`
+          : "";
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratio}`;
+      }).join("") +
+      (all.length ? "" : `<span class="muted">none</span>`) +
+      `</span>`
+    );
+  };
+  const combineChips = groupChips(COMBINABLE_GROUPS, "combine");
+  const compareChips = groupChips(COMPARABLE_GROUPS, "compare");
+  // Bodyweight part is a RANGE (min–max); the 1RM uses the average (shown in gold).
+  const cr = coeffRangeFor(name);
+  const coeffInput =
+    `<span class="ex-coeff-range">` +
+    `<input class="ex-edit-coeff-min" type="number" step="0.05" min="0" max="2" value="${cr.min}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part min for ${escapeHtml(name)}" />` +
+    `<span class="ex-coeff-dash">–</span>` +
+    `<input class="ex-edit-coeff-max" type="number" step="0.05" min="0" max="2" value="${cr.max}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part max for ${escapeHtml(name)}" />` +
+    `<span class="ex-coeff-avg" title="Average of the range — this is what the 1RM uses">avg ${coeff}</span>` +
+    `</span>`;
+
   const rows = [
-    item("Category", escapeHtml(cat)),
-    item("Muscle group", escapeHtml(mg)),
-    item("Tier", escapeHtml(tierLabel)),
+    item("Code", codeInput),
+    item("Short name", shortInput),
+    item("Discipline", discChips),
+    item("Muscle group", mgChips),
+    item("Tier", tierChips),
+    item("Combinable", combineChips),
+    item("Comparable", compareChips),
     item("Tags", `<span class="ex-tags">${tagChips}</span>`),
-    item("Bodyweight part", coeff > 0 ? pct(coeff) : "—"),
+    // Difficulty model: assign one so ANY lift (even a hand-created handstand) gets
+    // the editable variation multipliers; "None" falls back to the flat per-note ×.
+    item(
+      "Difficulty model",
+      `<select class="ex-edit-model" data-editex="${escapeHtml(name)}"><option value="">None</option>` +
+        Object.keys(FAMILIES)
+          .map((k) => `<option value="${escapeHtml(k)}"${k === (familyOf(name) ?? "") ? " selected" : ""}>${escapeHtml(FAMILY_LABELS[k] ?? k)}</option>`)
+          .join("") +
+        `</select>`,
+    ),
+    item("Bodyweight part", coeffInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
       ? item("Best 1RM (anyone)", `${fmt(best.e1rm)} kg <span class="muted">(${escapeHtml(best.who)} · ${best.w === null ? "—" : fmt(best.w)}×${best.reps} · ${shortDate(best.date)})</span>`)
       : item("Best 1RM (anyone)", "—"),
     first && last ? item("Logged", `${shortDate(first)} → ${shortDate(last)}`) : "",
-    variants.length ? item("Also logged as", escapeHtml(variants.join(", "))) : "",
+    // Always state merge status explicitly, so a standalone lift is confirmed as
+    // such (not just silently lacking an "also logged as" line). A user-created
+    // merge, an auto spelling-merge, and a plain standalone all read clearly.
+    item(
+      "Sources",
+      userMergeDef?.members?.length
+        ? `<strong>Merged lift</strong> — combines ${userMergeDef.members.length} exercises into one (see below to separate/dissolve)`
+        : spellingVariants.length
+          ? `<strong>Merged</strong> from ${spellingVariants.length + 1} spellings: ${escapeHtml([name, ...spellingVariants].join(", "))}`
+          : `Standalone — logged under one name only`,
+    ),
   ].join("");
 
   // Combinable / comparable group membership, with members present in the data
   // and the plain-language WHY behind the grouping.
   const presentNames = distinctExercises(data.records);
-  const groups = [...combinableGroupsFor(name), ...comparableGroupsFor(name)];
+  const groups = [...combinableGroupsForEx(name), ...comparableGroupsForEx(name)];
   const groupHtml = groups
     .map((g) => {
       const members = membersOfGroup(g, presentNames);
@@ -5705,6 +6574,23 @@ function exerciseInfoHtml(name: string): string {
       );
     })
     .join("");
+
+  // User-merge controls: list the merged-in exercises, each with a "Separate"
+  // (pull it back out) button, plus "Dissolve" to un-merge them all at once.
+  const mergePanel = userMergeDef?.members?.length
+    ? `<div class="ex-group ex-merge"><div class="ex-group-hd">Merged lift — separate or dissolve</div>` +
+      `<div class="ex-group-why muted">This lift combines the exercises below into one across every view (leaderboard, graph, calendar, PRs). Separate one to pull it back out, or dissolve to un-merge them all. The original lifts are never changed.</div>` +
+      `<div class="ex-merge-members">` +
+      userMergeDef.members
+        .map(
+          (m) =>
+            `<span class="ex-merge-chip">${escapeHtml(m)} <button type="button" class="ex-merge-sep" data-sepmerge="${escapeHtml(name)}" data-sepmember="${escapeHtml(m)}" title="Separate ${escapeHtml(m)} back out">✕</button></span>`,
+        )
+        .join("") +
+      `</div>` +
+      `<button type="button" class="ex-merge-dissolve" data-dissolvemerge="${escapeHtml(name)}">↺ Dissolve — un-merge all</button>` +
+      `</div>`
+    : "";
 
   // Active-set status + per-exercise force-in / force-out overrides.
   const incl = activeInclude.has(name);
@@ -5722,7 +6608,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}${exerciseEditHtml(name)}${groupHtml}${variationsEditorHtml(name, recs)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${graphPermsHtml(name)}${activeHtml}</div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
@@ -5750,48 +6636,6 @@ function graphPermsHtml(name: string): string {
     `<button type="button" class="settings-link gp-bulk" data-graphperm-all="${escapeHtml(name)}">Allow all</button>` +
     `<button type="button" class="settings-link gp-bulk" data-graphperm-none="${escapeHtml(name)}">Block all</button>` +
     `</div></div>`
-  );
-}
-
-/** Inline editors for an exercise's identity & physical model — moved here from
- * the Codes tab (code / short name) and the Index page (bodyweight part) so the
- * More-info page is the one place to edit a lift. Reuses the same stores, so
- * edits show everywhere. (Tags, group membership, category/tier and taxonomy are
- * next — see the roadmap.) */
-function exerciseEditHtml(name: string): string {
-  const code = codeFor(name);
-  const codeDef = exerciseCode(name);
-  const short = shortFor(name);
-  const coeff = coeffFor(name);
-  // Category / Muscle group / Tier are editable selects: the current effective
-  // value is pre-selected, and an "Auto" option resets to the keyword default.
-  const opt = (v: string, label: string, cur: string) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(label)}</option>`;
-  const curCat = catFor(name), curMg = mgFor(name), curTier = tierFor(name);
-  const catSel =
-    `<select class="ex-edit-cat" data-editex="${escapeHtml(name)}" aria-label="Category for ${escapeHtml(name)}">` +
-    TRAINING_CATEGORIES.map((c) => opt(c, c, curCat)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
-  const mgSel =
-    `<select class="ex-edit-mg" data-editex="${escapeHtml(name)}" aria-label="Muscle group for ${escapeHtml(name)}">` +
-    MUSCLE_GROUPS.map((m) => opt(m, m, curMg)).join("") + opt("auto", "↺ Auto", "__never") + `</select>`;
-  const tierSel =
-    `<select class="ex-edit-tier" data-editex="${escapeHtml(name)}" aria-label="Tier for ${escapeHtml(name)}">` +
-    (["main", "second", "third"] as ExerciseTier[]).map((tv) => opt(tv, TIER_LABELS[tv], curTier)).join("") +
-    opt("auto", "↺ Auto", "__never") + `</select>`;
-  return (
-    `<div class="ex-edit"><div class="ex-info-section-hd">Edit this exercise</div>` +
-    `<div class="ex-edit-grid">` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Code</span>` +
-    `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" /></label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Short name</span>` +
-    `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" /></label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Category</span>${catSel}</label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Muscle group</span>${mgSel}</label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Tier</span>${tierSel}</label>` +
-    `<label class="ex-edit-f"><span class="ex-edit-lbl">Bodyweight part</span>` +
-    `<input class="ex-edit-coeff" type="number" step="0.05" min="0" max="2" value="${coeff}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part for ${escapeHtml(name)}" /></label>` +
-    `</div>` +
-    `<p class="muted ex-edit-help">Code &amp; short name are the labels shown in lists, graphs and tables (code default: <strong>${escapeHtml(codeDef)}</strong>; clear a box to reset). Category, muscle group and tier drive the groupings and colours everywhere; pick “Auto” to fall back to the automatic guess. Bodyweight part is how much of your bodyweight this lift loads (0–2), used for bodyweight-aware 1RMs. Saved on this device.</p>` +
-    `</div>`
   );
 }
 
@@ -5828,7 +6672,7 @@ function notePickerHtml(name: string, note: string): string {
   if (familyPosable(fam) && noteEditMode === "photo") return toggle + notePhotoHtml(name, note);
   if (familyPosable(fam) && noteEditMode === "pose") return toggle + notePoseHtml(name, note);
   const override = noteVecOverride(name, note);
-  const effVec = { ...resolveNote(fam, note).vec, ...override };
+  const effVec = { ...rNote(fam, note).vec, ...override };
   const scale = scalarFromVec(fam, effVec);
   // SUPPORT is a nested dropdown: a primary picker (free / f2w / b2w / ladder), and
   // when "ladder" is chosen, two sub-dropdowns appear — a leg grip and a rung
@@ -5840,7 +6684,7 @@ function notePickerHtml(name: string, note: string): string {
   // A custom floating CSS/HTML dropdown (the app's .xdd pattern) — NEVER a native
   // <select>. The button shows the current level; the floating menu lists options.
   const vecSelect = (dim: string, labelMap: Record<string, string>): string => {
-    const levels = FAMILIES[fam]!.dims[dim]!;
+    const levels = famLevels(fam, dim);
     const cur = String(effVec[dim] ?? "");
     const curLbl = `${labelMap[cur] ?? cur} ×${levels[cur] ?? 1}`;
     const opts = Object.keys(levels)
@@ -5866,8 +6710,8 @@ function notePickerHtml(name: string, note: string): string {
   // with a VERTICAL depth slider + a HORIZONTAL lean slider (each step = a defined
   // level, so it scales to many levels without a giant grid). The multiplier is the
   // formula depthFactor × leanFactor, recomputed live from the two slider positions.
-  const romDims = FAMILIES[fam]!.dims.rom, leanDims = FAMILIES[fam]!.dims.lean;
-  const hasGrid = !!(romDims && leanDims);
+  const romDims = famLevels(fam, "rom"), leanDims = famLevels(fam, "lean");
+  const hasGrid = Object.keys(romDims).length > 0 && Object.keys(leanDims).length > 0;
   const romLeanGrid = (): string => {
     // The pad is a side-view scene. y: TOP = higher/easier (raised block, head only
     // dips to the corner), BOTTOM = deeper/harder. The fill grows UP FROM THE FLOOR
@@ -5877,32 +6721,43 @@ function notePickerHtml(name: string, note: string): string {
     // not by flipping the scene — so the pad never mirrors.
     const romKeys = Object.keys(romDims!), leanKeys = Object.keys(leanDims!);
     const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
-    const leanIdx = Math.max(0, leanKeys.indexOf(String(effVec.lean)));
-    const picked = override.rom !== undefined || override.lean !== undefined;
     const support = String(effVec.support ?? "free");
+    // FREE handstands have no wall to lean toward → no lean, only vertical depth.
+    const noLean = false; // lean now applies to every support (default 0 = no extra lean)
+    const leanIdx = noLean ? 0 : Math.max(0, leanKeys.indexOf(String(effVec.lean)));
+    const picked = override.rom !== undefined || (!noLean && override.lean !== undefined);
     const rk = romKeys[romIdx]!, lk = leanKeys[leanIdx]!;
-    const romF = romDims![rk]!, leanF = leanDims![lk]!;
+    const romF = romDims![rk]!, leanF = noLean ? 1 : leanFactorFor(fam, support, lk);
     const mult = Math.round(romF * leanF * 100) / 100;
-    const leanFrac = leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
+    const leanFrac = !noLean && leanKeys.length > 1 ? leanIdx / (leanKeys.length - 1) : 0;
     const depthTop = romKeys.length > 1 ? romIdx / (romKeys.length - 1) : 0; // 0 top(easy)..1 bottom(hard)
-    const dotLeft = (1 - leanFrac) * 100; // rightmost = no lean (wall is on the left)
+    const dotLeft = noLean ? 50 : (1 - leanFrac) * 100; // rightmost = no lean (wall is on the left)
     const dotTop = depthTop * 100;
     const fillH = 100 - dotTop; // bottom-anchored, up to the handle
-    const fillW = dotLeft;
+    const fillW = noLean ? 100 : dotLeft; // free: full width (depth only)
     const fillSide = `left:0`;
+    // Reference line where depth = 0 cm (the ×1 neutral — hands at floor height).
+    const zeroIdx = romKeys.findIndex((k) => Math.abs((romDims![k] ?? 1) - 1) < 1e-9);
+    const zeroTop = zeroIdx >= 0 && romKeys.length > 1 ? (zeroIdx / (romKeys.length - 1)) * 100 : null;
+    // Free locks lean to the no-lean level so x-drags can't change it.
+    const dataLeanKeys = noLean ? [leanKeys[0] ?? ""] : leanKeys;
     const pd =
-      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0" ` +
-      `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(leanKeys.join("|"))}"`;
+      `data-padex="${escapeHtml(name)}" data-padnote="${escapeHtml(note)}" data-mirror="0" data-support="${escapeHtml(support)}"${noLean ? ` data-nolean="1"` : ""} ` +
+      `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(dataLeanKeys.join("|"))}"`;
+    const readout = noLean
+      ? `depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`
+      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
     return (
-      `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">depth × lean</span>` +
-      `<div class="ex-pad-readout">lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span></div>` +
+      `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}${noLean ? " ex-pad-nolean" : ""}"><span class="ex-var-dim-lbl">${noLean ? "depth (free — no lean)" : "depth × lean"}</span>` +
+      `<div class="ex-pad-readout">${readout}</div>` +
       `<div class="ex-pad" ${pd}>` +
       padSceneSvg(support) +
+      (zeroTop !== null ? `<div class="ex-pad-zero" style="top:${zeroTop.toFixed(1)}%"><span class="ex-pad-zero-lbl">0cm</span></div>` : "") +
       `<div class="ex-pad-fill" style="${fillSide};bottom:0;width:${fillW.toFixed(1)}%;height:${fillH.toFixed(1)}%"></div>` +
       `<div class="ex-pad-dot" style="left:${dotLeft.toFixed(1)}%;top:${dotTop.toFixed(1)}%"></div>` +
       `<span class="ex-pad-ylbl ex-pad-yt muted">↑ easier</span>` +
       `<span class="ex-pad-ylbl ex-pad-yb muted">↓ harder</span>` +
-      `<span class="ex-pad-xlbl muted">lean ←</span>` +
+      (noLean ? "" : `<span class="ex-pad-xlbl muted">lean ←</span>`) +
       `</div></div>`
     );
   };
@@ -5912,13 +6767,15 @@ function notePickerHtml(name: string, note: string): string {
     .map((dim) => {
       if (dim === "support") return supportBlock;
       if (dim === "rom" && hasGrid) return romLeanGrid();
-      const levels = FAMILIES[fam]!.dims[dim]!;
+      const levels = famLevels(fam, dim)!;
       const cur = effVec[dim];
       const picked = override[dim] !== undefined;
+      // Band assists in kg (subtracted), so its chips read "−Xkg"; other dims are ×factors.
+      const facLabel = (l: string) => (dim === "band" ? (l === "none" ? "0kg" : `−${bandAssistKg(fam, l)}kg`) : `×${levels[l]}`);
       const chips = Object.keys(levels)
         .map(
           (l) =>
-            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`,
+            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">${facLabel(l)}</span></button>`,
         )
         .join("");
       return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
@@ -5960,10 +6817,10 @@ const SUPPORT_LBL: Record<string, string> = {
  * tap-to-pose control rows for the visual dimensions, and the live multiplier. */
 function notePoseHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const ctlRow = (dim: string): string => {
-    const levels = FAMILIES[fam]!.dims[dim];
+    const levels = famLevels(fam, dim);
     if (!levels) return "";
     const cur = effVec[dim];
     const chips = Object.keys(levels)
@@ -5990,10 +6847,10 @@ function notePoseHtml(name: string, note: string): string {
  * leans, the hands sit on the block — plus the same tap-to-pick control rows. */
 function noteStickmanHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const ctl = (dim: string): string => {
-    const levels = FAMILIES[fam]!.dims[dim];
+    const levels = famLevels(fam, dim);
     if (!levels) return "";
     const cur = effVec[dim];
     const chips = Object.keys(levels)
@@ -6030,7 +6887,7 @@ function noteStickmanHtml(name: string, note: string): string {
  * plain <img> whose src the slider swaps. */
 function notePhotoHtml(name: string, note: string): string {
   const fam = familyOf(name)!;
-  const effVec = { ...resolveNote(fam, note).vec, ...noteVecOverride(name, note) };
+  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
   const scale = scalarFromVec(fam, effVec);
   const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
   const N = POSE_FRAMES.length;
@@ -6038,7 +6895,7 @@ function notePhotoHtml(name: string, note: string): string {
   // Map the current depth (rom) onto the nearest frame (top→bottom).
   const frameIdx = romKeys.length > 1 ? Math.round((romIdx / (romKeys.length - 1)) * (N - 1)) : 0;
   const ctl = (dim: string): string => {
-    const levels = FAMILIES[fam]!.dims[dim];
+    const levels = famLevels(fam, dim);
     if (!levels) return "";
     const cur = effVec[dim];
     const chips = Object.keys(levels)
@@ -6075,7 +6932,7 @@ function refreshPose3d(): void {
   const ex = el.dataset.poseex ?? "";
   const note = el.dataset.posenote ?? "";
   const fam = familyOf(ex);
-  const vec = fam ? { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
+  const vec = fam ? { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
   activePose3d = { scene: mountPoseScene(el, vec), el };
 }
 /** The currently-mounted drawn (2-D) figure (one at a time). */
@@ -6089,7 +6946,7 @@ function refreshDrawn(): void {
   const ex = el.dataset.poseex ?? "";
   const note = el.dataset.posenote ?? "";
   const fam = familyOf(ex);
-  const vec = fam ? { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
+  const vec = fam ? { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
   activeDrawn = { fig: mountPoseDraw(el, vec), el };
 }
 /** Sync both visual editors (3-D + drawn figure) after any editor render. */
@@ -6118,7 +6975,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   if (byNote.size === 0)
     return (
       `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty</div>` +
-      `<p class="muted">No notes logged for this lift yet. Log a note like “incline” or “knee” on a set and it'll appear here, so you can set its relative difficulty.</p></div>`
+      `<p class="muted">No notes logged yet.</p></div>`
     );
   const fam = familyOf(name);
   const entries = [...byNote.values()].sort((a, b) => b.count - a.count);
@@ -6129,7 +6986,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       const reviewed = variationReviewed(name, e.display); // pinned a number OR picked attributes
       const handled = reviewed || notCmp;
       const scale = variationScaleFor(name, e.display);
-      const resolved = fam ? resolveNote(fam, e.display) : null;
+      const resolved = fam ? rNote(fam, e.display) : null;
       // Flags: real resolver flags (unreviewed fragments / conflicting tokens) for
       // model lifts; the keyword heuristic only for lifts without a model.
       const realFlags = (resolved?.flags ?? []).filter((f) => f.type === "unreviewed" || f.type === "conflict");
@@ -6147,7 +7004,7 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
         : "";
       // Each note can get a difficulty, OR be marked NOT COMPARABLE (sets keep
       // reps/sets, drop 1RM & volume).
-      const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark these sets not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘ ${notCmp ? "not comparable" : "not comparable?"}</button>`;
+      const ncBtn = `<button type="button" class="ex-var-nc-btn${notCmp ? " is-on" : ""}" data-nc-ex="${escapeHtml(name)}" data-nc-note="${escapeHtml(e.display)}" aria-pressed="${notCmp}" title="${notCmp ? "Comparable again — restore 1RM/volume for these sets." : "Mark not comparable — keep reps/sets, drop 1RM & volume (e.g. a static hold)."}">⊘</button>`;
       // Model lift → a row of dimension dropdowns (pick the setup); the × is the
       // resulting product, read-only. No model → the plain × number input.
       const picker = fam && !notCmp ? notePickerHtml(name, e.display) : "";
@@ -6167,20 +7024,26 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
             `<button type="button" class="ex-var-jump" data-jumpuser="${escapeHtml(s.username)}" data-jumpex="${escapeHtml(name)}" data-jumpdate="${escapeHtml(s.date)}" title="Go to ${escapeHtml(s.user)}'s ${escapeHtml(name)} on ${escapeHtml(shortDate(s.date))}">${escapeHtml(s.user)} · ${escapeHtml(shortDate(s.date))}</button>`,
         )
         .join("");
-      const sessFold = `<details class="ex-var-sessions"${needsReview ? " open" : ""}><summary class="ex-var-sessions-sum">who &amp; when · ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
+      const sessFold = `<details class="ex-var-sessions"${needsReview ? " open" : ""}><summary class="ex-var-sessions-sum" title="Who &amp; when logged this note">👤 ${sessions.length}</summary><div class="ex-var-session-list">${sessBtns}</div></details>`;
+      // The full difficulty editor (chips / pad / support / band, etc.) starts
+      // COLLAPSED — tap "⚙ Edit difficulty" to open it. Open state is remembered
+      // (openVarNotes) so editing, which re-renders, keeps it open.
+      const editOpen = openVarNotes.has(variationKey(name, e.display));
       const ncNote = notCmp
         ? `<div class="ex-var-nc-note muted">Not comparable — reps &amp; sets still count, but no 1RM or volume for these sets.</div>`
-        : picker;
+        : picker
+          ? `<details class="ex-var-edit-fold"${editOpen ? " open" : ""} data-editfold-ex="${escapeHtml(name)}" data-editfold-note="${escapeHtml(e.display)}"><summary class="ex-var-edit-sum">⚙ Edit difficulty</summary>${picker}</details>`
+          : "";
       return (
         `<div class="ex-var-block${needsReview ? " needs-review" : ""}${notCmp ? " is-nc" : scale !== 1 ? " is-scaled" : ""}">` +
         `<div class="ex-var-row">` +
         `<span class="ex-var-note">` +
         `<input class="ex-var-rename" type="text" value="${escapeHtml(displayNote(name, e.display))}" data-rename-ex="${escapeHtml(name)}" data-rename-note="${escapeHtml(e.display)}" aria-label="Edit this note's text" title="Edit this note's text — applies everywhere it shows. Blank to restore the original." />` +
-        ` ${review}<span class="muted ex-var-count"> · ${e.count} set${e.count === 1 ? "" : "s"}</span></span>` +
+        ` ${review}<span class="muted ex-var-count"> · ${e.count}s</span></span>` +
         editArea +
+        sessFold +
         `</div>` +
         ncNote +
-        sessFold +
         `</div>`
       );
     })
@@ -6188,21 +7051,27 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   const badge = needReview ? ` <span class="ex-var-needbadge">${needReview} to review</span>` : "";
   return (
     `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty${badge}</div>` +
-    `<p class="muted ex-vars-help">Each distinct note logged for this lift. <strong>Tap a note's text to rename it</strong> (e.g. a cryptic “guma 4” → “deficit HSPU”) — the new name shows everywhere that note appears; blank it to restore the original. The ×number is its relative difficulty (×1 = no effect, &lt;1 easier, &gt;1 harder); it rescales the “effort” numbers only — the real weight &amp; 1RM stay, and it's still ONE exercise.${fam ? " This lift has a difficulty model, so the value is <strong>suggested</strong> from the note's setup (support, range, lean…); type your own to pin it (↺ unpins)." : ""} Or mark a note <strong>⊘ not comparable</strong> — its sets keep counting reps &amp; sets but get no 1RM or volume (e.g. a static hold). ⚠ flags variation-like notes you haven't handled yet.</p>` +
+    `<p class="muted ex-vars-help">Tap to rename. ×N = relative difficulty. ⊘ = not comparable. ⚠ = needs review.</p>` +
     rowsHtml +
     `</div>`
   );
 }
 
-/** Open the Exercises (merges & data) page and scroll to one exercise's row,
- * opening its category dropdown and flashing the row. Called from the per-athlete
- * drill-in's "Exercise info" button — the same exercise, but with no person. */
+/** Open the Index page, EXPAND one exercise's inline info dropdown, scroll to it
+ * and flash it. The single entry point for "more info" from anywhere (the Index
+ * ℹ button, the per-athlete drill-in, the Analysis panel) now the standalone
+ * overlay is gone. */
 function jumpToExerciseInfo(exName: string) {
   switchTopTab("bwparts");
   const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(exName)}"]`);
   if (!row) return;
   openAncestorDetails(row); // group + "Show hidden" sub-dropdown if the lift is filtered out
-  // Let the just-opened <details> lay out before scrolling to the row.
+  // Expand the inline info panel if it isn't already open.
+  if (!row.nextElementSibling?.classList.contains("detail-row")) {
+    insertDetail(row, 3, exerciseInfoHtml(exName));
+    refreshPoseViz();
+  }
+  // Let the just-opened rows lay out before scrolling to the row.
   requestAnimationFrame(() => {
     row.scrollIntoView({ behavior: "smooth", block: "center" });
     row.classList.add("wo-flash");
@@ -6224,6 +7093,12 @@ function reviewGraphsForExercise(exName: string) {
 /** Apply an edited bodyweight coefficient and refresh every dependent view. */
 function onBwInputChange(e: Event) {
   const input = e.target as HTMLElement;
+  // The "Sub-group by" picker inside the Strength discipline (muscle / function).
+  if (input.classList.contains("bw-substrat")) {
+    strengthSubMode = (input as HTMLSelectElement).value === "function" ? "function" : "muscle";
+    renderBwParts();
+    return;
+  }
   if (!input.classList.contains("bw-input")) return;
   const el = input as HTMLInputElement;
   const name = el.dataset.ex;
@@ -6248,7 +7123,7 @@ function populateTestExercises(username: string) {
   }
   const exercises = exerciseCountsForUser(activeRecords(), username);
   els.testExercise.innerHTML = exercises
-    .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(e.exerciseName)}</option>`)
+    .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</option>`)
     .join("");
   // Default to Squat when this athlete has it, else their most-trained lift.
   const squat = exercises.find((e) => e.exerciseName.toLowerCase() === "squat");
@@ -6516,15 +7391,27 @@ function refreshAfterDifficultyEdit(): void {
   refreshExerciseInfo();
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-  renderWorkoutSetsChart();
   renderWaCompareGraph();
   if (selectedExercise) renderExerciseProgressChart(selectedExercise);
   window.scrollTo(0, y);
   requestAnimationFrame(() => window.scrollTo(0, y));
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+// Editing model ×factors should feel instant: each change just saves + recolours
+// the one cell (no editor rebuild → focus/scroll kept), and the heavy view refresh
+// (leaderboard / workouts / analysis — NOT the open editor) runs once, debounced,
+// after you pause. This is what lets you edit many multipliers in a row smoothly.
+let modelFactorsTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleModelFactorsApply(): void {
+  if (modelFactorsTimer) clearTimeout(modelFactorsTimer);
+  modelFactorsTimer = setTimeout(() => {
+    modelFactorsTimer = null;
+    const y = window.scrollY;
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    window.scrollTo(0, y);
+  }, 600);
 }
 
 /**
@@ -6668,10 +7555,18 @@ async function init() {
   renderDataTab();
   setupAddTab();
   void setupBackup();
-  setupCodesTab();
   setupStatsEdit();
   els.athleteProfile.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-editstats]");
+    const target = e.target as HTMLElement;
+    // ⓘ on a value chip → toggle that value's math panel (matched by id).
+    const info = target.closest<HTMLElement>(".bc-info");
+    if (info) {
+      const id = info.dataset.bcinfo;
+      const panel = info.closest(".bodycomp")?.querySelector<HTMLElement>(`.bc-panel[data-bcpanel="${id}"]`);
+      if (panel) { panel.toggleAttribute("hidden"); info.classList.toggle("is-open"); }
+      return;
+    }
+    const btn = target.closest<HTMLElement>("[data-editstats]");
     if (btn?.dataset.editstats !== undefined) openStatsEditor(btn.dataset.editstats);
   });
   setupWorkoutAnalysis();
@@ -6693,7 +7588,9 @@ async function init() {
   );
 
   // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
+  setupViewSwitch();
   setViewMode(viewMode);
+  updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
@@ -6705,6 +7602,11 @@ async function init() {
     try { localStorage.setItem("colosseum.legsAll", showLegsAll ? "1" : "0"); } catch { /* ignore */ }
     renderExercisesPage();
   });
+
+  // Simplified view ↔ Advanced. Switches the Analysis home (S-ANL ↔ full ANL) and
+  // re-navigates immediately if you're already on an analysis page.
+  els.simplifiedToggle.checked = simplifiedView;
+  els.simplifiedToggle.addEventListener("change", () => setSimplified(els.simplifiedToggle.checked));
 
   // The red "trained alone" rings on the calendar (off by default).
   els.showAloneRings.checked = showAloneRings;
@@ -6738,6 +7640,14 @@ async function init() {
   els.status.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".badge-link")) openHealth();
   });
+  // Restore hidden ("deleted") sets from the Data-health list.
+  els.health.addEventListener("click", (e) => {
+    const one = (e.target as HTMLElement).closest<HTMLElement>(".health-restore");
+    if (one?.dataset.restoreset) { setDeleted(one.dataset.restoreset, false); renderHealth(); renderAll(); renderWorkoutsPage(); return; }
+    if ((e.target as HTMLElement).closest(".health-restore-all")) {
+      deletedSets.clear(); saveDeletedSets(); renderHealth(); renderAll(); renderWorkoutsPage();
+    }
+  });
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
   });
@@ -6745,15 +7655,25 @@ async function init() {
   els.changelogClose.addEventListener("click", () => {
     els.changelogPage.hidden = true;
   });
-  els.exInfoClose.addEventListener("click", () => {
-    els.exInfoPage.hidden = true;
-    exInfoName = null;
-    refreshPoseViz(); // tear down the visual editors when the overlay closes
+  els.backlogBtn.addEventListener("click", openBacklog);
+  els.backlogClose.addEventListener("click", () => {
+    els.backlogPage.hidden = true;
   });
-  // "More info" buttons (Analysis single mode, drill-in) open the overlay.
+  // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
+  els.modelBtn.addEventListener("click", openModelEditor);
+  els.modelClose.addEventListener("click", () => { els.modelPage.hidden = true; });
+  els.modelResetAll.addEventListener("click", () => {
+    if (!window.confirm("Reset every difficulty multiplier back to its default?")) return;
+    for (const k of Object.keys(famFactorOverrides)) delete famFactorOverrides[k];
+    saveFamFactors();
+    renderModelEditor();
+    refreshAfterDifficultyEdit();
+  });
+  // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all jump to the
+  // Index page and expand that exercise's inline info dropdown.
   document.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-moreinfoex]");
-    if (btn?.dataset.moreinfoex) openExerciseInfo(btn.dataset.moreinfoex);
+    if (btn?.dataset.moreinfoex) jumpToExerciseInfo(btn.dataset.moreinfoex);
   });
   // "Allowed graphs" review chips + bulk buttons. Delegated on document so they
   // work both in the More-info overlay and the Index page's expandable inspector.
@@ -6773,8 +7693,36 @@ async function init() {
     if (review?.dataset.graphreview) { reviewGraphsForExercise(review.dataset.graphreview); return; }
   });
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
-  // document so it works in the overlay AND the Index page's expandable row.
+  // document so it works inside the Index page's expandable info dropdown.
   document.addEventListener("change", (e) => {
+    // Edit a difficulty-model factor. Keep it light so you can edit many in a row:
+    // save + recolour just this cell (no rebuild of the editor you're in → focus &
+    // scroll stay put), and apply to the rest of the app debounced after you pause.
+    // World-record inputs: read both kg + bw for that exercise/sex and save together.
+    const wr = (e.target as HTMLElement).closest<HTMLInputElement>(".wr-input");
+    if (wr?.dataset.wrEx && (wr.dataset.wrSex === "m" || wr.dataset.wrSex === "f")) {
+      const scope = wr.closest(".fac-dim");
+      const num = (f: string) => { const el = scope?.querySelector<HTMLInputElement>(`[data-wr-f="${f}"]`); return el && el.value !== "" ? Number(el.value) : null; };
+      setWorldRecord(wr.dataset.wrEx, wr.dataset.wrSex, num("kg"), num("bw"));
+      scheduleModelFactorsApply();
+      return;
+    }
+    const fac = (e.target as HTMLElement).closest<HTMLInputElement>(".fac-input");
+    if (fac?.dataset.facFam && fac.dataset.facDim && fac.dataset.facLvl !== undefined) {
+      const v = Number(fac.value);
+      if (Number.isFinite(v) && v > 0) {
+        setFamFactor(fac.dataset.facFam, fac.dataset.facDim, fac.dataset.facLvl, Math.round(v * 1000) / 1000);
+        const isOv = famFactorOverrides[fac.dataset.facFam]?.[fac.dataset.facDim]?.[fac.dataset.facLvl] !== undefined;
+        fac.closest(".fac-cell")?.classList.toggle("is-ov", isOv);
+        // The band knob drives all 6 bands — update its live preview in place.
+        if (fac.dataset.facDim === "bandKnob") {
+          const famEsc = fac.dataset.facFam;
+          document.querySelectorAll<HTMLElement>(`.band-knob-preview[data-fam="${CSS.escape(famEsc)}"]`).forEach((el) => { el.textContent = bandPreviewText(famEsc); });
+        }
+        scheduleModelFactorsApply();
+      }
+      return;
+    }
     // Rename a note (its readable label) — applies wherever the note is shown.
     const ren = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-var-rename");
     if (ren?.dataset.renameEx && ren.dataset.renameNote !== undefined) {
@@ -6844,19 +7792,19 @@ async function init() {
     const fam = familyOf(ex);
     if (!fam) return;
     const mirror = pad.dataset.mirror === "1";
+    const noLean = pad.dataset.nolean === "1"; // free handstand → depth only, lean locked
     const r = pad.getBoundingClientRect();
     const xf = Math.max(0, Math.min(1, r.width ? (clientX - r.left) / r.width : 0));
     const yf = Math.max(0, Math.min(1, r.height ? (clientY - r.top) / r.height : 0));
     const leanFrac = mirror ? xf : 1 - xf; // not-mirror: rightmost = no lean
-    const li = Math.round(leanFrac * (leanKeys.length - 1));
+    const li = noLean ? 0 : Math.round(leanFrac * (leanKeys.length - 1));
     const di = Math.round(yf * (romKeys.length - 1)); // 0 = top = easiest
     const rk = romKeys[di]!, lk = leanKeys[li]!;
     setNoteVecDim(ex, note, "rom", rk);
-    setNoteVecDim(ex, note, "lean", lk);
-    const dims = FAMILIES[fam]!.dims;
-    const romF = dims.rom?.[rk] ?? 1, leanF = dims.lean?.[lk] ?? 1;
+    if (!noLean) setNoteVecDim(ex, note, "lean", lk);
+    const romF = famLevels(fam, "rom")[rk] ?? 1, leanF = noLean ? 1 : leanFactorFor(fam, pad.dataset.support ?? "", lk);
     const mult = Math.round(romF * leanF * 100) / 100;
-    const dotLeft = xf * 100, dotTop = yf * 100;
+    const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
     const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
     set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
@@ -6864,14 +7812,14 @@ async function init() {
     const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
     if (fill) {
       fill.style.left = mirror ? "auto" : "0"; fill.style.right = mirror ? "0" : "auto"; fill.style.bottom = "0";
-      fill.style.width = `${(mirror ? 100 - dotLeft : dotLeft).toFixed(1)}%`;
+      fill.style.width = `${(noLean ? 100 : mirror ? 100 - dotLeft : dotLeft).toFixed(1)}%`;
       fill.style.height = `${(100 - dotTop).toFixed(1)}%`;
     }
     const dot = pad.querySelector<HTMLElement>(".ex-pad-dot");
     if (dot) { dot.style.left = `${dotLeft.toFixed(1)}%`; dot.style.top = `${dotTop.toFixed(1)}%`; }
     wrap?.classList.add("is-picked");
     const prod = pad.closest(".ex-var-picker")?.querySelector(".ex-var-product strong");
-    if (prod) prod.textContent = `×${scalarFromVec(fam, { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) })}`;
+    if (prod) prod.textContent = `×${scalarFromVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) })}`;
     if (scaleEditState) scaleEditDirty = true;
   };
   document.addEventListener("pointerdown", (e) => {
@@ -6914,7 +7862,7 @@ async function init() {
     const fam = familyOf(ex);
     if (!fam) return;
     setNoteVecDim(ex, note, dim, level);
-    const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+    const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
     // Update the live figure(s) without remounting (keep orbit / rep loop going).
     if (activePose3d) activePose3d.scene.update(vec);
     if (activeDrawn) activeDrawn.fig.update(vec);
@@ -6947,7 +7895,7 @@ async function init() {
     const idx = Math.max(0, Math.min(romKeys.length - 1, parseInt(sl.value, 10) || 0));
     const frac = idx / (romKeys.length - 1);
     setNoteVecDim(ex, note, "rom", romKeys[idx]!);
-    const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+    const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
     if (activeDrawn) { activeDrawn.fig.update(vec); activeDrawn.fig.scrub(frac); } // hold at this depth
     const pose = sl.closest(".ex-var-pose");
     const prod = pose?.querySelector(".ex-var-product strong");
@@ -6987,7 +7935,7 @@ async function init() {
     if (romKeys.length > 1) {
       const romIdx = Math.round((fIdx / (N - 1)) * (romKeys.length - 1));
       setNoteVecDim(ex, note, "rom", romKeys[romIdx]!);
-      const vec = { ...resolveNote(fam, note).vec, ...noteVecOverride(ex, note) };
+      const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
       const prod = pose?.querySelector(".ex-var-product strong");
       if (prod) prod.textContent = `×${scalarFromVec(fam, vec)}`;
       pose?.querySelectorAll<HTMLElement>('.pose-ctl[data-posectl-dim="rom"]').forEach((c) => c.classList.toggle("is-on", c.dataset.posectlLevel === romKeys[romIdx]));
@@ -7005,26 +7953,57 @@ async function init() {
   document.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
     const code = t.closest<HTMLInputElement>(".ex-edit-code");
-    if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); refreshExerciseInfo(); renderAll(); return; }
+    if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); renderAll(); reopenIndexDetail(code.dataset.editex); return; }
     const short = t.closest<HTMLInputElement>(".ex-edit-short");
     if (short?.dataset.editex) { setShortOverride(short.dataset.editex, short.value); refreshExerciseInfo(); return; }
-    const coeff = t.closest<HTMLInputElement>(".ex-edit-coeff");
-    if (coeff?.dataset.editex) {
-      let v = parseFloat(coeff.value);
-      if (!Number.isFinite(v)) v = 0;
-      v = Math.min(2, Math.max(0, v));
-      setCoeff(coeff.dataset.editex, v);
-      refreshExerciseInfo();
+    // Bodyweight part RANGE: read both ends, store the range (1RM uses the average).
+    const coeffEnd = t.closest<HTMLInputElement>(".ex-edit-coeff-min, .ex-edit-coeff-max");
+    if (coeffEnd?.dataset.editex) {
+      const ex = coeffEnd.dataset.editex;
+      const wrap = coeffEnd.closest(".ex-coeff-range");
+      const clampv = (s: string | undefined) => { let v = parseFloat(s ?? ""); if (!Number.isFinite(v)) v = 0; return Math.min(2, Math.max(0, v)); };
+      const mn = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-min")?.value);
+      const mx = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-max")?.value);
+      setCoeffRange(ex, mn, mx);
       renderAll();
+      reopenIndexDetail(ex);
       return;
     }
-    // Metadata selects: Category / Muscle group / Tier overrides.
-    const cat = t.closest<HTMLSelectElement>(".ex-edit-cat");
-    if (cat?.dataset.editex) { setMetaOverride("cat", cat.dataset.editex, cat.value); refreshExerciseInfo(); renderAll(); return; }
-    const mg = t.closest<HTMLSelectElement>(".ex-edit-mg");
-    if (mg?.dataset.editex) { setMetaOverride("mg", mg.dataset.editex, mg.value); refreshExerciseInfo(); renderAll(); return; }
-    const tier = t.closest<HTMLSelectElement>(".ex-edit-tier");
-    if (tier?.dataset.editex) { setMetaOverride("tier", tier.dataset.editex, tier.value); refreshExerciseInfo(); renderAll(); return; }
+    // Difficulty-model assignment: attach (or clear) a model so the lift gets the
+    // editable variation multipliers.
+    const model = t.closest<HTMLSelectElement>(".ex-edit-model");
+    if (model?.dataset.editex) { setExerciseFamily(model.dataset.editex, model.value); refreshAfterDifficultyEdit(); return; }
+  });
+  // Category / Muscle group / Tier are multi-select chips — tap to toggle membership
+  // (a lift can belong to several at once); the ↺ chip resets to the auto default.
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip, .ex-meta-reset");
+    const ex = chip?.dataset.metaEx, kind = chip?.dataset.metaKind, val = chip?.dataset.metaVal;
+    if (!ex || !kind || val === undefined) return;
+    toggleMetaOverride(kind as MetaKind, ex, val);
+    renderAll(); // grouping/colours depend on it; rebuilds the Index list
+    reopenIndexDetail(ex); // keep the inline panel open (it may have moved groups)
+    refreshPoseViz();
+  });
+  // Combinable / Comparable membership chips — toggle this lift in/out of a group.
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip[data-grp-id]");
+    const ex = chip?.dataset.grpEx, gid = chip?.dataset.grpId;
+    if (!ex || !gid) return;
+    toggleGroupMembership(gid, ex);
+    renderAll();
+    reopenIndexDetail(ex);
+    refreshPoseViz();
+  });
+  // The comparable-ratio input next to a selected comparable group chip.
+  document.addEventListener("change", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".ex-grp-ratio");
+    const ex = inp?.dataset.grpratioEx, gid = inp?.dataset.grpratioId;
+    if (!ex || !gid) return;
+    const v = parseFloat(inp.value);
+    if (Number.isFinite(v)) setGroupRatio(gid, ex, v);
+    renderAll();
+    reopenIndexDetail(ex);
   });
   // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {
@@ -7042,6 +8021,25 @@ async function init() {
     else clearVariationScale(rb.dataset.varresetEx, rb.dataset.varresetNote);
     if (scaleEditState) { scaleEditDirty = true; closeScaleEditor(); return; }
     refreshAfterDifficultyEdit();
+  });
+  // Remember which note-variation editors are expanded (the `toggle` event doesn't
+  // bubble, so listen in the capture phase) — so an edit-driven re-render keeps the
+  // one you're working in open.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!d.classList || !d.classList.contains("ex-var-edit-fold")) return;
+    const ex = d.dataset.editfoldEx, note = d.dataset.editfoldNote;
+    if (!ex || note === undefined) return;
+    const k = variationKey(ex, note);
+    if ((d as HTMLDetailsElement).open) openVarNotes.add(k); else openVarNotes.delete(k);
+  }, true);
+  // Merged-lift controls on the exercise info page: separate one member back out,
+  // or dissolve the whole merge.
+  document.addEventListener("click", (e) => {
+    const sep = (e.target as HTMLElement).closest<HTMLElement>(".ex-merge-sep");
+    if (sep?.dataset.sepmerge && sep.dataset.sepmember) { separateMergeMember(sep.dataset.sepmerge, sep.dataset.sepmember); return; }
+    const dis = (e.target as HTMLElement).closest<HTMLElement>(".ex-merge-dissolve");
+    if (dis?.dataset.dissolvemerge) { dissolveMerge(dis.dataset.dissolvemerge); return; }
   });
   // A "who & when" entry under a note: jump to that athlete's Analysis for this
   // lift, scrolled to the date where the note was logged.
@@ -7085,7 +8083,7 @@ async function init() {
       return;
     }
     if (target.closest("[data-heatclear]")) {
-      heatFilters = [];
+      S.heatFilters = [];
       // close the dropdown
       const dd = target.closest<HTMLElement>(".xdd-heat");
       dd?.querySelector<HTMLElement>(".xdd-menu")?.toggleAttribute("hidden", true);
@@ -7095,9 +8093,9 @@ async function init() {
     const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt:not(.xdd-clear)");
     if (heatOpt?.dataset.heatval !== undefined) {
       const val = heatOpt.dataset.heatval;
-      const idx = heatFilters.indexOf(val);
-      if (idx >= 0) heatFilters.splice(idx, 1);
-      else heatFilters.push(val);
+      const idx = S.heatFilters.indexOf(val);
+      if (idx >= 0) S.heatFilters.splice(idx, 1);
+      else S.heatFilters.push(val);
       // Don't close the dropdown — let the user pick multiple
       return renderWorkoutCalendar();
     }
@@ -7137,7 +8135,7 @@ async function init() {
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
       const v = scopeBtn.dataset.heatScope;
-      heatScope = v === "all" ? "all" : v === "single" ? "single" : "ribbon";
+      S.heatScope = v === "all" ? "all" : v === "single" ? "single" : "ribbon";
       return renderWorkoutCalendar();
     }
     const nav = target.closest<HTMLElement>(".cal-nav");
@@ -7145,13 +8143,13 @@ async function init() {
     if (nav?.dataset.heat === "next") return shiftHeatYear(1); // newer year
     // "Tag alone": arm/disarm paint mode so day taps toggle the alone tag.
     if (target.closest<HTMLElement>(".cal-tagmode")) {
-      aloneTagMode = !aloneTagMode;
+      S.aloneTagMode = !S.aloneTagMode;
       return renderWorkoutCalendar();
     }
     const cell = target.closest<HTMLElement>(".hm-cell[data-date]");
     // In paint mode, tapping a trained day toggles its "alone" tag in place
     // (no jump) so many days can be tagged quickly without scrolling the list.
-    if (aloneTagMode && cell?.dataset.date) {
+    if (S.aloneTagMode && cell?.dataset.date) {
       const key = aloneKey(cell.dataset.date);
       if (aloneTags.has(key)) aloneTags.delete(key);
       else aloneTags.add(key);
@@ -7168,7 +8166,7 @@ async function init() {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".hm-groupby-sel");
     // Changing the colour/grouping dimension only re-buckets the pills + recolours;
     // it must NOT clear the shared selection (that would un-sync from the graph).
-    if (sel) { heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
+    if (sel) { S.heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
   });
   // Close the heatmap filter menu on any click outside it.
   document.addEventListener("click", (e) => {
@@ -7214,9 +8212,17 @@ async function init() {
     renderWorkoutsPage();
   });
   els.workoutNameToggle.addEventListener("click", () => {
-    workoutNameMode = workoutNameMode === "code" ? "full" : "code";
-    renderWorkoutsPage();
+    setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code");
+    applyNameModeChange();
   });
+  // Settings → "Exercise names shown as" — the global name-mode picker.
+  document.getElementById("nameModeRow")?.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(".name-mode-opt");
+    if (!b?.dataset.namemode) return;
+    setNameMode(b.dataset.namemode as NameMode);
+    applyNameModeChange();
+  });
+  syncNameModeButtons();
   els.workoutGrouping.addEventListener("change", renderWorkoutsPage);
   els.workoutsPageBtn.addEventListener("click", () => {
     workoutsPageSize = workoutsPageSize === 50 ? 20 : 50;
@@ -7231,6 +8237,11 @@ async function init() {
   els.addSetsToggle.addEventListener("click", () => {
     showAddSets = !showAddSets;
     localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
+    renderWorkoutsPage();
+  });
+  els.aloneTagToggle.addEventListener("click", () => {
+    showAloneTags = !showAloneTags;
+    localStorage.setItem("colosseum.showAloneTags", showAloneTags ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
@@ -7303,6 +8314,8 @@ async function init() {
   // Combine bar: add (select) / remove (chip ✕) an exercise to view together.
   els.exCombineBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // Save the current "viewing together" set as a permanent merged lift.
+    if (t.closest(".ex-combine-save")) { saveCurrentCombine(); return; }
     // Toggle the custom "+ combine with…" dropdown.
     const btn = t.closest(".ex-combine-btn");
     if (btn) {
@@ -7469,11 +8482,25 @@ async function init() {
     bwGroupMode = sel.value as IndexGroupMode;
     renderBwParts();
   });
+  // "Create variant / group" form (moved here from the Analysis bar) — its Create
+  // button lives in #idxCreate on the Index page.
+  document.getElementById("idxCreate")?.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("#waNewCreate")) createUserExerciseDef();
+  });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
-    // A tag chip in the inspector jumps to that group in the Browse-groups panel.
-    const tagJump = (e.target as HTMLElement).closest<HTMLElement>("[data-tagjump]");
-    if (tagJump?.dataset.tagjump) { jumpToGroup(tagJump.dataset.tagjump); return; }
+    // Group header "only / hide / show" — read the group's lifts from its rows and
+    // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
+    const filt = (e.target as HTMLElement).closest<HTMLElement>(".bw-filt");
+    if (filt?.dataset.grpcycle) {
+      e.preventDefault();
+      const cat = filt.closest<HTMLElement>(".bw-cat");
+      const names = [...new Set(cat
+        ? [...cat.querySelectorAll<HTMLTableRowElement>("tr[data-exrow]")].map((tr) => tr.dataset.exrow).filter((n): n is string => !!n)
+        : [])];
+      applyGroupFilter(GROUP_FILTER_NEXT[groupFilterState(names)], names);
+      return;
+    }
     // Per-exercise active-set overrides in the inspector (force in / out).
     const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
     if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
@@ -7508,6 +8535,27 @@ async function init() {
     els.dataUser, els.groupsAthlete, els.addAthlete,
   ])
     enhanceSelect(sel);
+
+  setupSAnalysis();
+  // Language (EN/LT) toggle in Settings. Switching reloads; LT then applies via
+  // the translation pass. Done last so the toggle reflects the saved language.
+  setupLanguage();
+  initI18n();
+}
+
+/** Wire the Settings language toggle: highlight the current language; a tap on the
+ * other one saves it and reloads (initI18n then translates the whole site to LT). */
+function setupLanguage(): void {
+  const toggle = document.getElementById("langToggle");
+  if (!toggle) return;
+  const cur = getLang();
+  for (const b of toggle.querySelectorAll<HTMLButtonElement>(".lang-opt")) {
+    b.classList.toggle("is-active", b.dataset.lang === cur);
+    b.addEventListener("click", () => {
+      const l = b.dataset.lang as Lang;
+      if (l && l !== getLang()) setLang(l);
+    });
+  }
 }
 
 /** Read the target page index from a pager button click, or null. */
@@ -7836,6 +8884,9 @@ interface ManualEntry {
   exerciseName: string;
   weight: number | null;
   reps: number | null;
+  /** Free-text note (the variation circumstances, e.g. a handstand's setup) so a
+   * hand-logged set joins the same note-based variation system as CSV sets. */
+  notes?: string;
   /** Squat-rack hole chosen on the Add form, stored per set — the difficulty
    * selection that replaces added weight for incline push-ups. */
   levelValue?: number;
@@ -7862,17 +8913,19 @@ function saveManual() {
 
 /** Turn a stored entry into a SetRecord matching the CSV shape, so every view
  * treats it identically. Bodyweight comes from the athlete profile table. */
-function manualToRecord(m: ManualEntry): SetRecord {
+function manualToRecord(m: ManualEntry, setNumber: number): SetRecord {
   return {
     user: m.user,
     username: m.username,
     date: m.date,
     bodyweight: athProfile(m.username)?.weight ?? null,
     exerciseName: m.exerciseName,
-    setNumber: 1,
+    setNumber,
     weight: m.weight,
     reps: m.reps,
-    notes: "",
+    // The note carries the variation (e.g. a handstand's "b2w, +15cm") so a
+    // hand-logged set resolves + edits its difficulty exactly like a CSV set.
+    notes: m.notes ?? "",
     dropset: false,
     percentile: null,
     ...(m.levelValue !== undefined
@@ -7887,7 +8940,9 @@ let csvRecordCount = 0; // how many of data.records came from the CSV (the prefi
 function mergeManualSets() {
   // Keep the first csvRecordCount records (the CSV) and re-append manual ones.
   data.records.length = csvRecordCount;
-  for (const m of manualEntries) data.records.push(manualToRecord(m));
+  // A high, unique set number per entry → a stable, collision-free setId (so each
+  // hand-logged set edits/tags independently and never clashes with a CSV set).
+  manualEntries.forEach((m, i) => data.records.push(manualToRecord(m, 100000 + i)));
 }
 
 /** Populate the Add form's athlete dropdown + exercise suggestions and the table. */
@@ -8139,7 +9194,6 @@ function onInlineAddGo(form: HTMLElement) {
   renderWorkoutsPage();
   reopenWorkoutGroups(openDates);
   renderWorkoutCalendar();
-  renderWorkoutSetsChart();
   renderDataTab();
 }
 
@@ -8166,6 +9220,7 @@ function onAddSubmit() {
     !els.addVariantField.hidden && Number.isFinite(holeRaw) ? Math.round(holeRaw) : undefined;
   const weight = parseFloat(els.addWeight.value);
   const reps = Math.round(parseFloat(els.addReps.value));
+  const note = els.addNote.value.trim(); // variation circumstances (resolves + editable like CSV)
   const date = els.addDate.value || todayIso();
   // How many identical sets to log at once (blank/1 = a single set).
   const setsRaw = Math.round(parseFloat(els.addSets.value));
@@ -8187,6 +9242,7 @@ function onAddSubmit() {
       exerciseName,
       weight: Number.isFinite(weight) ? weight : null,
       reps,
+      ...(note ? { notes: note } : {}),
       ...(levelValue !== undefined ? { levelValue } : {}),
     });
   }
@@ -8278,10 +9334,11 @@ async function restoreFromFile(file: File) {
     const when = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : "an unknown time";
     const ok = window.confirm(
       `Restore ${count} saved setting${count === 1 ? "" : "s"} from this backup (taken ${when})?\n\n` +
-        `Anything in the backup overwrites what's here now. The page will reload.`,
+        `Smart merge: this backup wins on any conflict, but anything you've edited ` +
+        `on THIS device that the backup doesn't mention is kept. The page will reload.`,
     );
     if (!ok) return;
-    applyBackup(localStorage, backup, "merge");
+    applyBackup(localStorage, backup, "deep");
     window.location.reload();
   } catch (err) {
     setAutoBackupStatus(`Couldn't restore: ${String(err instanceof Error ? err.message : err)}`, true);
@@ -8792,6 +9849,15 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
+// One-time seed: the beginning ANL view is a real PRE-SELECTION of the top-10
+// tier-1 (Primary) lifts (so the pills show), not a special aggregate view.
+let analysisSeeded = false;
+/** The athlete's 10 most-trained Primary-tier lifts (the default analysis selection). */
+function defaultTopTierSelection(): string[] {
+  const counts = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+  const tier1 = counts.filter((n) => tierFor(n) === "main");
+  return (tier1.length ? tier1 : counts).slice(0, 10);
+}
 /** Max exercises plotted on the analysis graph at once — past this the SVG
  * redraw lags, so extra selections are listed but not drawn (see renderWaGraph). */
 const WA_GRAPH_MAX = 10;
@@ -8802,7 +9868,6 @@ let waListExerciseFilter: string[] = [];
 // The Analysis compare-graph dropdown (own SVG instance + view toggle), shown
 // only with 2+ exercises picked.
 let waCompareSvg: SvgChart | null = null;
-let waCompareView: "trend" | "perset" = "trend";
 /** Expand selected names to the raw logged exercise names they cover: a combined
  * or comparison group becomes its members; everything else is itself. */
 function expandToRawExercises(names: readonly string[]): string[] {
@@ -8829,17 +9894,16 @@ const waIncludeIdentities = new Set<ExerciseIdentity>(["original", "dissolved", 
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
-let waGroupBy: "none" | ExerciseFilterDim = "none";
-let waChipsFoldOpen = false;
-let waCogOpen = false;
-let waCreateOpen = false;
-// Selector chip labels: "code" (short tag, e.g. BPR) or "full" exercise name.
-let waChipNameMode: "code" | "full" = "code";
-let waGraphFoldOpen = false;
+let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
+// Groups (of the current Group-by dimension) turned OFF — their exercises are
+// filtered out of the picker. Tap a group header in the Exercises dropdown to
+// toggle. Replaces the old separate Filter button.
+const waGroupsOff = new Set<string>();
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+// S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
 let userTaxonomy: UserAssignments = (() => {
@@ -8966,6 +10030,9 @@ function restoreAnalysisPanels(): void {
  * The universal graph (and, for compare, the overlay dropdown) sit above it. It
  * also re-paints the Filters mode readout and the exercise-selector chips. */
 function renderWorkoutAnalysis(): void {
+  // First time in: pre-select the top-10 tier-1 lifts so the view opens as a real
+  // selection (pills shown), not the implicit aggregate. Clearing later is allowed.
+  if (!analysisSeeded) { analysisSeeded = true; if (waSelected.length === 0) waSelected = defaultTopTierSelection(); }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
   // The Workout-history section's collapsible summary doubles as its title, so it
@@ -8985,7 +10052,7 @@ function renderWorkoutAnalysis(): void {
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
     if (contentTitle)
-      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${waSelected[0]}` : `${athleteLabel()} — selected lifts`;
+      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${displayName(waSelected[0]!)}${originBadge(waSelected[0]!, true)}` : `${athleteLabel()} — selected lifts`;
     // Single mode: a "More info" button for the one selected lift (its details +
     // the editable difficulty of each note-identified variation).
     if (stats) {
@@ -8999,16 +10066,14 @@ function renderWorkoutAnalysis(): void {
     }
     workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
-    renderWorkoutSetsChart();
-  } else {
+    } else {
     // All (nothing selected): the live Workouts panel — its history list.
     waListExerciseFilter = [];
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = `${athleteLabel()} — workouts`;
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
-    renderWorkoutSetsChart();
-  }
+    }
   renderWaCompareGraph(); // compare overlay dropdown (only shown in compare mode)
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing
@@ -9017,16 +10082,16 @@ function renderWorkoutAnalysis(): void {
   // visible tab — otherwise the legacy view's own calendar would be hijacked.
   if (document.getElementById("tab-analysis")?.hidden === false) {
     if ((mode === "single" || mode === "compare") && waSelected.length) {
-      if (heatFiltersSaved === null) heatFiltersSaved = heatFilters;
+      if (S.heatFiltersSaved === null) S.heatFiltersSaved = S.heatFilters;
       // Expand combined/comparison lifts to their raw member names — the same
       // expansion the history list uses (waListExerciseFilter) — so the calendar
       // counts EVERY set of the selection, not just those logged under the parent
       // name. Without this a merged lift shows all sets in the list but only a few
       // on the calendar.
-      heatFilters = expandToRawExercises(waSelected).map((n) => `ex:${n}`);
-    } else if (heatFiltersSaved !== null) {
-      heatFilters = heatFiltersSaved;
-      heatFiltersSaved = null;
+      S.heatFilters = expandToRawExercises(waSelected).map((n) => `ex:${n}`);
+    } else if (S.heatFiltersSaved !== null) {
+      S.heatFilters = S.heatFiltersSaved;
+      S.heatFiltersSaved = null;
     }
     setAnalysisCalendar(true);
     renderWorkoutCalendar();
@@ -9044,18 +10109,17 @@ function renderWorkoutAnalysis(): void {
     const toggles = idLabels
       .map(
         ([id, label]) =>
-          `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
+          `<button type="button" class="wa-name-opt wa-inc-btn${waIncludeIdentities.has(id) ? " is-on" : ""}" data-waident="${id}" aria-pressed="${waIncludeIdentities.has(id)}">${label}</button>`,
       )
       .join("");
-    // Chip label mode: show the short code (e.g. BPR) or the full exercise name.
+    // Chip label mode — drives the GLOBAL name mode (code / short / full), so it
+    // matches the rest of the site rather than being an analysis-only toggle.
+    const nameOpt = (m: NameMode, lbl: string) =>
+      `<button type="button" class="wa-name-opt name-mode-opt${nameMode === m ? " is-on" : ""}" data-waname="${m}">${lbl}</button>`;
     const nameToggle =
       `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
-      `<button type="button" class="wa-name-opt${waChipNameMode === "code" ? " is-on" : ""}" data-waname="code">Code</button>` +
-      `<button type="button" class="wa-name-opt${waChipNameMode === "full" ? " is-on" : ""}" data-waname="full">Full name</button></div>`;
-    // Metadata-filter controls (TASK 44): one multi-select per dimension that has
-    // values among the identity-included exercises.
+      nameOpt("code", "Code") + nameOpt("short", "Short") + nameOpt("full", "Full name") + `</div>`;
     const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
-    const filterUi = waFilterControls(byIdentity.map((e) => e.name));
     // Search box (TASK 43) + Group By (TASK 45). The chips themselves live in
     // #waChips and are (re)filled by renderWaChips() so typing keeps focus.
     const groupOpts =
@@ -9076,57 +10140,39 @@ function renderWorkoutAnalysis(): void {
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
       searchActive +
       `</div>`;
-    // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
-    const exOptions = selectableExercises(data.records)
-      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
-      .join("");
-    // Create variant / group is now a small square "+" button with a FLOATING
-    // menu (absolute, so it never shifts the layout).
-    const createForm =
-      `<details class="wa-sq-fold wa-create"${waCreateOpen ? " open" : ""}>` +
-      `<summary class="wa-sq-sum" title="Create variant / group">+<span class="wa-sq-caret">▾</span></summary>` +
-      `<div class="wa-sq-menu wa-create-body">` +
-      `<div class="wa-sq-title">Create variant / group</div>` +
-      `<label class="wa-create-f">Type<select id="waNewType">` +
-      `<option value="dissolved">Dissolved variant (1 parent)</option>` +
-      `<option value="combined">Combined group (members)</option>` +
-      `<option value="comparison_group">Comparison group (members)</option>` +
-      `</select></label>` +
-      `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
-      `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
-      `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>` +
-      `</div></details>`;
+    // (Create variant / group moved to the Index page — see createVariantFormHtml.)
     // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
     // selected exercise; saved metadata then drives the filters above.
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
-    // Snapshot open state of the collapsibles before innerHTML wipes the DOM.
-    const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-settings-fold");
-    if (prevCog) waCogOpen = prevCog.open;
-    const prevCreate = sel.querySelector<HTMLDetailsElement>(".wa-create");
-    if (prevCreate) waCreateOpen = prevCreate.open;
+    // Snapshot open state of the (now single) Exercises fold before innerHTML wipes it.
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
-    if (prevFold) waChipsFoldOpen = prevFold.open;
-    // Settings (identity toggles + name mode) is a small square ⚙ button, also
-    // with a floating menu — so it doesn't push the layout either.
-    const settingsFold =
-      `<details class="wa-sq-fold wa-settings-fold"${waCogOpen ? " open" : ""}>` +
-      `<summary class="wa-sq-sum" title="Settings">⚙<span class="wa-sq-caret">▾</span></summary>` +
-      `<div class="wa-sq-menu"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>` +
-      `</details>`;
-    // Filter + Exercises sit side by side; their summaries stay in the row while
-    // the expanded bodies FLOAT (overlay) like Settings/Create, so opening them
-    // never pushes the layout down. Body wrapped in .wa-fe-menu for that float.
+    if (prevFold) S.waChipsFoldOpen = prevFold.open;
+    // ONE dropdown now: the old Filter button + ⚙ Settings are folded in here.
+    // Settings (which identities to include + how names show) sit at the top; tools
+    // (Select all / Clear / Group by) next; then the grouped chips — and tapping a
+    // group header filters that group in/out (replacing the Filter button).
+    const settingsBlock =
+      `<div class="wa-fold-settings"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>`;
     const exercisesFold =
-      `<details class="wa-chips-fold"${waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      `<details class="wa-chips-fold"${S.waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
       `<div class="wa-fe-menu">` +
       foldTools +
+      settingsBlock +
       `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
     // Everything — Filter, Exercises, Settings (⚙), Create (+) — sits on ONE
     // compact tools row beside the title (they all open as floating menus, so the
     // layout never shifts). Taxonomy editor (single mode) drops below.
+    // Selected exercises shown as removable pills right in the sticky bar, so you
+    // always see what's plotted and can drop one with a tap (EXR-SEL-PILLS).
+    const selPills = waSelected.length
+      ? `<div class="wa-sel-pills">` +
+        waSelected.map((n) => `<button type="button" class="wa-sel-pill" data-waselpill="${escapeHtml(n)}" title="Remove ${escapeHtml(n)}">${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`).join("") +
+        `</div>`
+      : "";
     sel.innerHTML =
       `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>`;
+      `<div class="wa-sel-tools">${exercisesFold}</div></div>` +
+      selPills;
     // Taxonomy editor renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
     if (assignBox) assignBox.innerHTML = assignUi;
@@ -9138,20 +10184,27 @@ function renderWorkoutAnalysis(): void {
 /** One chip for an exercise (selected state + identity). */
 function waChipHtml(name: string, identity: ExerciseIdentity): string {
   const on = waSelected.includes(name);
-  const label = waChipNameMode === "full" ? name : codeFor(name);
-  return `<button type="button" class="wa-ex-chip${waChipNameMode === "full" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
+  const label = displayName(name);
+  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
  * (TASK 44) and search-narrowed (TASK 43). */
-function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+/** Identity-included + search-narrowed (ALL groups). Group headers are built from
+ * this so a turned-off group still shows its header (to switch back on). */
+function waChipListBase(): { name: string; identity: ExerciseIdentity }[] {
   const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
-  const activeFilters = FILTER_DIMS.map((d) => ({ dim: d, values: waFilterValues[d] ?? [] }));
-  const keep = new Set(filterExercises(byIdentity.map((e) => e.name), activeFilters, waMeta));
   const q = waSearchQuery.trim().toLowerCase();
-  return byIdentity.filter(
-    (e) => keep.has(e.name) && (!q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q)),
-  );
+  return byIdentity.filter((e) => !q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q));
+}
+/** The group key (of the current Group-by dimension) an exercise falls under. */
+function waGroupKey(name: string): string {
+  return waGroupBy === "none" ? "" : (waMeta(name, waGroupBy)[0] ?? "Unassigned");
+}
+/** waChipListBase minus the exercises in turned-off groups (used by Select-all). */
+function waChipList(): { name: string; identity: ExerciseIdentity }[] {
+  if (waGroupBy === "none" || waGroupsOff.size === 0) return waChipListBase();
+  return waChipListBase().filter((e) => !waGroupsOff.has(waGroupKey(e.name)));
 }
 
 /** Fill #waChips — flat, or grouped under headers by the Group By dimension
@@ -9159,9 +10212,9 @@ function waChipList(): { name: string; identity: ExerciseIdentity }[] {
 function renderWaChips(): void {
   const box = document.getElementById("waChips");
   if (!box) return;
-  const list = waChipList();
+  const list = waChipListBase(); // ALL groups (so an off group still shows its header)
   if (list.length === 0) {
-    box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search / filters.</p>`;
+    box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search.</p>`;
     return;
   }
   if (waGroupBy === "none") {
@@ -9170,17 +10223,55 @@ function renderWaChips(): void {
   }
   const groups = new Map<string, typeof list>();
   for (const e of list) {
-    const key = waMeta(e.name, waGroupBy)[0] ?? "Unassigned";
+    const key = waGroupKey(e.name);
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
   }
+  const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
   box.innerHTML = [...groups.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(
-      ([g, items]) =>
-        `<div class="wa-group"><div class="wa-group-h">${escapeHtml(g)} <span class="muted">(${items.length})</span></div>` +
-        `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div></div>`,
-    )
+    .map(([g, items]) => {
+      // The group HEADER is a toggle: tap to filter that whole group in / out of the
+      // picker (replaces the old Filter button). An off group shows just its header.
+      const off = waGroupsOff.has(g);
+      const header =
+        `<button type="button" class="wa-group-h${off ? " is-off" : ""}" data-grpoff="${escapeHtml(g)}" ` +
+        `title="${off ? "Show this group" : "Hide this group"}">${escapeHtml(g)} <span class="muted">(${items.length})</span>${off ? " · hidden" : ""}</button>`;
+      if (off) return `<div class="wa-group">${header}</div>`;
+      // Within a group, cluster related families (e.g. all handstand variants) under
+      // a nested sub-header; everything else stays directly under the group.
+      const direct: typeof list = [];
+      const subs = new Map<string, typeof list>();
+      for (const e of items) {
+        const sg = exerciseSubgroup(e.name);
+        if (sg) (subs.get(sg) ?? subs.set(sg, []).get(sg)!).push(e);
+        else direct.push(e);
+      }
+      const subHtml = [...subs.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(
+          ([sg, sgItems]) =>
+            `<div class="wa-subgroup"><div class="wa-subgroup-h">${escapeHtml(sg)} <span class="muted">(${sgItems.length})</span></div>${chips(sgItems)}</div>`,
+        )
+        .join("");
+      return (
+        `<div class="wa-group">${header}` +
+        (direct.length ? chips(direct) : "") + subHtml + `</div>`
+      );
+    })
     .join("");
+}
+
+/** A finer "family" subgroup within a group — all handstand variants cluster under
+ * "Handstand". null = no subgroup (the chip sits directly under its group). */
+function exerciseSubgroup(name: string): string | null {
+  const n = name.toLowerCase();
+  if (/handstand/.test(n)) return "Handstand";
+  // Deadlift family split into finer sub-headers (most-specific first, so a
+  // "Romanian Deadlift" reads as hamstring, not the plain deadlift bucket).
+  if (/rdl|romanian|stiff[ -]?leg|nordic|leg curl|hamstring/.test(n)) return "Stiff-leg / RDL (hamstring)";
+  if (/back extension|hyperextension|reverse hyper|good ?morning|superman|jefferson/.test(n)) return "Back extension";
+  if (/deadlift|rack pull/.test(n)) return "Deadlift";
+  return null;
 }
 
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
@@ -9219,13 +10310,16 @@ function renderWaGraph(): void {
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
     `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
     `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
+    `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
+    `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
+    `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${S.waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
     `<label class="wa-inc" title="Drop easy / warm-up sets (high reps-in-reserve) — keep only hard working sets. Also applies to the training calendar."><input type="checkbox" id="waHardOnly"${waHardOnly ? " checked" : ""} /> Hard sets only</label>` +
     `<button type="button" class="wa-name-opt${compact ? " is-on" : ""}" data-watime="1" title="${compact ? "Showing compacted time (gaps squeezed). Tap for real spacing." : "Showing real time spacing. Tap to squeeze gaps so all sets fit."}">${compact ? "⇄ Compacted time" : "⇄ Realistic time"}</button>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
-  if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
+  if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open;
   // GRAPH-3: the metric chips + advanced options (formula/aggregation/interval/
   // smoothing/prediction/decay) all live inside the collapsible "Graph options"
   // disclosure, so the section stays compact — just the chart shows by default.
@@ -9239,7 +10333,7 @@ function renderWaGraph(): void {
   // draws (its innerHTML keeps updating in place wherever it lives).
   box.innerHTML =
     `<div class="wa-graph-bar">` +
-    `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
+    `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
     `</details>` +
@@ -9256,7 +10350,10 @@ function renderWaGraph(): void {
         records: athleteRecs,
         metrics: drawMetricIds,
         config: waGraphConfig,
-        codeOf: codeFor,
+        codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
+        perBodyweight: S.waPerBodyweight,
+        bodyweight: athProfile(els.athlete.value)?.weight ?? null,
+        worldRecordKg: (ex) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
       })
     : 0;
   // Relocate the chart's legend up into the top bar so it sits beside Graph options
@@ -9334,7 +10431,7 @@ function renderWaCompareGraph(): void {
   }
   // Light up the active view button.
   for (const b of fold.querySelectorAll<HTMLElement>("[data-wacompareview]"))
-    b.classList.toggle("is-active", b.dataset.wacompareview === waCompareView);
+    b.classList.toggle("is-active", b.dataset.wacompareview === S.waCompareView);
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(applyHardSetsFilter(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
@@ -9351,7 +10448,7 @@ function renderWaCompareGraph(): void {
     if (note) note.innerHTML = graphReviewPromptHtml(blockedEx[0] ?? cmpAll[0] ?? "", cmpAll);
     return;
   }
-  const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, waCompareView);
+  const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, S.waCompareView);
   if (note) {
     const blockedNote = blockedEx.length
       ? `<span class="wa-gb-inline">${blockedEx.length} hidden — need review · <button type="button" class="wa-gb-link" data-graphreview="${escapeHtml(blockedEx[0]!)}">review</button></span>`
@@ -9368,36 +10465,6 @@ function renderWaCompareGraph(): void {
   else waCompareSvg.update(config);
 }
 
-/** Build the metadata-filter controls: a row of toggle CHIPS per dimension that
- * has any values among `names` (no ugly native multi-selects). Active values
- * reflect waFilterValues; tapping a chip toggles it. */
-function waFilterControls(names: readonly string[]): string {
-  const blocks: string[] = [];
-  for (const dim of FILTER_DIMS) {
-    const values = new Set<string>();
-    for (const n of names) for (const v of waMeta(n, dim)) values.add(v);
-    if (values.size === 0) continue;
-    const sorted = [...values].sort((a, b) => a.localeCompare(b));
-    const sel = new Set(waFilterValues[dim] ?? []);
-    const chips = sorted
-      .map(
-        (v) =>
-          `<button type="button" class="wa-fchip${sel.has(v) ? " is-on" : ""}" data-wadim="${dim}" data-wafval="${escapeHtml(v)}" aria-pressed="${sel.has(v)}">${escapeHtml(v)}</button>`,
-      )
-      .join("");
-    blocks.push(
-      `<div class="wa-filter-dim"><span class="wa-filter-lbl">${escapeHtml(FILTER_DIM_LABELS[dim])}</span>` +
-        `<div class="wa-filter-chips">${chips}</div></div>`,
-    );
-  }
-  if (blocks.length === 0) return "";
-  const active = FILTER_DIMS.reduce((n, d) => n + (waFilterValues[d]?.length ? 1 : 0), 0);
-  return (
-    `<details class="wa-filters"${active ? " open" : ""}><summary class="wa-filters-sum">🔎 Filter${active ? ` · ${active} active` : ""}</summary>` +
-    `<div class="wa-filters-body wa-fe-menu">${blocks.join("")}` +
-    `<button type="button" id="waFiltersClear" class="wa-clear"${active ? "" : " disabled"}>Clear filters</button></div></details>`
-  );
-}
 
 /** The TASK 24 assignment editor for one exercise: joint / movement / plane
  * multi-selects prefilled with its current (saved-or-seeded) values + Save. */
@@ -9474,10 +10541,11 @@ function waAssignEditor(name: string): string {
 // commands are easy to add to commandList() below.
 interface CmdSpec { cmd: string; desc: string; run: () => void }
 
-/** Jump to the Analysis tab and (re)render it. */
+/** Jump to the Analysis home (full ANL for admin, simplified S-ANL otherwise). */
 function goToAnalysis(): void {
-  if (document.getElementById("tab-analysis")?.hidden !== false) switchTopTab("analysis");
-  else renderWorkoutAnalysis();
+  const tab = analysisTabName();
+  if (document.getElementById(`tab-${tab}`)?.hidden !== false) switchTopTab(tab);
+  else if (tab === "analysis") renderWorkoutAnalysis();
 }
 /** Open the Exercise-selector fold + its chip list so search results are visible. */
 function openSelectorFolds(): void {
@@ -9490,11 +10558,10 @@ function commandList(): CmdSpec[] {
   return [
     { cmd: ".all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
     { cmd: ".clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; goToAnalysis(); } },
-    { cmd: ".names", desc: "Toggle exercise labels: short code ↔ full name", run: () => { waChipNameMode = waChipNameMode === "code" ? "full" : "code"; goToAnalysis(); } },
+    { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
     { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
-    { cmd: ".codes", desc: "Open the Exercise codes page", run: () => switchTopTab("codes") },
     { cmd: ".add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
     { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
     { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },
@@ -9605,14 +10672,6 @@ function setupWorkoutAnalysis(): void {
       renderWaChips();
       return;
     }
-    const box = target.closest<HTMLInputElement>(".wa-inc-box");
-    if (box?.dataset.waident) {
-      const id = box.dataset.waident as ExerciseIdentity;
-      if (box.checked) waIncludeIdentities.add(id);
-      else waIncludeIdentities.delete(id);
-      renderWorkoutAnalysis();
-      return;
-    }
     // "Hard sets only" lens — re-render the graph(s) AND the training calendar,
     // since this filter applies to both.
     const hard = target.closest<HTMLInputElement>("#waHardOnly");
@@ -9624,6 +10683,8 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutCalendar();
       return;
     }
+    const perBw = target.closest<HTMLInputElement>("#waPerBw");
+    if (perBw) { S.waPerBodyweight = perBw.checked; renderWaGraph(); return; }
     // Graph config controls (TASK 29) — update config, re-render just the graph.
     const cfg = target.closest<HTMLElement>(".wa-cfg");
     if (cfg?.dataset.wacfg) {
@@ -9632,6 +10693,8 @@ function setupWorkoutAnalysis(): void {
       if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
       else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
       else if (key === "smoothing") waGraphConfig.smoothing = Math.max(0, Math.round(Number((el as HTMLInputElement).value) || 0));
+      else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
+      else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
       renderWaGraph();
@@ -9639,6 +10702,13 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
+    const selPill = t.closest<HTMLElement>(".wa-sel-pill");
+    if (selPill?.dataset.waselpill) {
+      waSelected = waSelected.filter((x) => x !== selPill.dataset.waselpill);
+      renderWorkoutAnalysis();
+      return;
+    }
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
     if (chip?.dataset.waex) {
       const n = chip.dataset.waex;
@@ -9676,11 +10746,28 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutAnalysis();
       return;
     }
-    // Chip label mode: show short codes or full exercise names in the selector.
+    // Group header in the Exercises dropdown → filter that whole group in / out.
+    const grpOff = t.closest<HTMLElement>(".wa-group-h");
+    if (grpOff?.dataset.grpoff !== undefined) {
+      const g = grpOff.dataset.grpoff;
+      if (waGroupsOff.has(g)) waGroupsOff.delete(g); else waGroupsOff.add(g);
+      renderWaChips();
+      return;
+    }
+    // Identity-include toggle button (Original / Dissolved / Combined / …).
+    const incBtn = t.closest<HTMLElement>(".wa-inc-btn");
+    if (incBtn?.dataset.waident) {
+      const id = incBtn.dataset.waident as ExerciseIdentity;
+      if (waIncludeIdentities.has(id)) waIncludeIdentities.delete(id);
+      else waIncludeIdentities.add(id);
+      renderWorkoutAnalysis();
+      return;
+    }
+    // Chip label mode → set the GLOBAL name mode (code / short / full), site-wide.
     const nameOpt = t.closest<HTMLElement>(".wa-name-opt");
     if (nameOpt?.dataset.waname) {
-      waChipNameMode = nameOpt.dataset.waname as "code" | "full";
-      renderWorkoutAnalysis();
+      setNameMode(nameOpt.dataset.waname as NameMode);
+      applyNameModeChange();
       return;
     }
     // Metadata-filter chip: toggle one value of one dimension on/off.
@@ -9712,7 +10799,7 @@ function setupWorkoutAnalysis(): void {
     // Compare-graph dropdown view toggle (current strength ↔ per-set range).
     const cmpView = t.closest<HTMLElement>("[data-wacompareview]");
     if (cmpView?.dataset.wacompareview) {
-      waCompareView = cmpView.dataset.wacompareview === "perset" ? "perset" : "trend";
+      S.waCompareView = cmpView.dataset.wacompareview === "perset" ? "perset" : "trend";
       renderWaCompareGraph();
       return;
     }
@@ -9743,6 +10830,25 @@ function setupWorkoutAnalysis(): void {
 
 /** Validate the create form and store a new user exercise def (dissolved /
  * combined / comparison_group), then surface it in the selector. */
+/** The "Create variant / group" form (dissolved variant / combined / comparison
+ * group). Lives on the Index page now; its #waNewCreate button calls
+ * createUserExerciseDef(). */
+function createVariantFormHtml(): string {
+  const exOptions = selectableExercises(data.records)
+    .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
+    .join("");
+  return (
+    `<label class="wa-create-f">Type<select id="waNewType">` +
+    `<option value="dissolved">Dissolved variant (1 parent)</option>` +
+    `<option value="combined">Combined group (members)</option>` +
+    `<option value="comparison_group">Comparison group (members)</option>` +
+    `</select></label>` +
+    `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
+    `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
+    `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>`
+  );
+}
+
 function createUserExerciseDef(): void {
   const typeEl = document.getElementById("waNewType") as HTMLSelectElement | null;
   const nameEl = document.getElementById("waNewName") as HTMLInputElement | null;
@@ -9766,6 +10872,7 @@ function createUserExerciseDef(): void {
   userExerciseDefs.push(def);
   saveUserExerciseDefs();
   waIncludeIdentities.add(identity); // so the new one shows immediately
+  renderAll(); // refresh the Index (where the form lives) + leaderboards/PRs/etc.
   renderWorkoutAnalysis();
 }
 
@@ -9777,7 +10884,7 @@ function createUserExerciseDef(): void {
  */
 function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
   if (opts.exercises) waSelected = opts.exercises.filter((n) => n.length > 0);
-  switchTopTab("analysis"); // re-renders the analysis view from the new state
+  switchTopTab(analysisTabName()); // full or simplified per the detail flag (no drift)
 }
 
 /**
@@ -9819,13 +10926,15 @@ function switchTopTab(name: string) {
   // Panels aren't all backed by a .tab button (e.g. #tab-groups), so toggle by id.
   for (const panel of document.querySelectorAll<HTMLElement>(".tab-panel"))
     panel.hidden = panel.id !== `tab-${name}`;
+  // The simplified S-ANL page gets a clean chrome (no SP, no data-summary footer).
+  document.body.classList.toggle("on-s-anl", name === "s-analysis");
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
   if (name === "sitemap") renderSiteMap();
+  if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
-  if (name === "codes") renderCodesTab();
   if (name === "statsedit") renderStatsEdit();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
@@ -9922,12 +11031,35 @@ function showSubtab(name: string) {
 /** Light up the right bottom-nav item: Workouts/Exercises when the Athlete tab
  * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
 function updateBottomNav() {
-  const analysisOpen = document.getElementById("tab-analysis")?.hidden === false;
-  for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
-    const nav = b.dataset.nav;
-    const active = nav === "analysis" ? analysisOpen : nav === "other" ? !analysisOpen : false;
-    b.classList.toggle("is-active", active);
-  }
+  // The bottom nav bar is gone; the only label to keep current is the Analysis
+  // entry in the "More" sheet (full ANL vs the simplified S-ANL page).
+  const lbl = document.getElementById("otherAnalysisLabel");
+  if (lbl) lbl.textContent = analysisTabName() === "s-analysis" ? "S-Analysis" : "Analysis";
+  updateBrand();
+}
+
+/** The "Colosseum" title doubles as a Back-to-home button: on any non-analysis
+ * page it shows a ‹ back arrow (and reads "back to Colosseum"); on the analysis
+ * home it's just the plain wordmark. */
+/** Page name shown in the top title, by tab id. The title reads the CURRENT page's
+ * name; off the home (analysis) pages it gets a ‹ back arrow to return home. */
+const PAGE_NAMES: Record<string, string> = {
+  analysis: "Analysis", "s-analysis": "S-Analysis", leaderboards: "Colosseum",
+  athlete: "Athlete", bwparts: "Index", groups: "Stats", team: "Group",
+  data: "Data", add: "Add", test: "Formulas", statsedit: "Athletes",
+  sitemap: "Site map", guide: "Guide",
+};
+function updateBrand() {
+  const el = document.getElementById("brandTitle");
+  if (!el) return;
+  const cur = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+  const onHome = cur === "analysis" || cur === "s-analysis";
+  const name = PAGE_NAMES[cur] ?? "Colosseum";
+  el.classList.toggle("is-back", !onHome);
+  // On a sub-page the title is that page's name with a ‹ back arrow; on home it's
+  // just the page name (no arrow). i18n translates the name via its text node.
+  el.innerHTML = onHome ? name : `<span class="brand-back" aria-hidden="true">‹</span>${name}`;
+  el.title = onHome ? name : "Back to home";
 }
 
 function setOtherSheetOpen(open: boolean) {
@@ -9935,27 +11067,19 @@ function setOtherSheetOpen(open: boolean) {
   document.body.classList.toggle("sheet-open", open);
 }
 
-/** Bottom nav (Analysis · Other). Analysis is the single home for every
- * exercise view (Workouts/List/Compare/Single live inside it now); "Other"
- * opens the sheet of secondary views. */
+/** Navigation: the top-bar "More" (⋯) button opens the sheet of all views. The
+ * bottom nav bar is gone (Analysis is the home page); the sheet's first item
+ * leads back to Analysis (full ANL, or simplified S-ANL per the toggle). */
 function setupBottomNav() {
-  for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
-    b.addEventListener("click", () => {
-      const nav = b.dataset.nav;
-      if (nav === "other") {
-        setOtherSheetOpen(els.otherSheet.hidden);
-        return;
-      }
-      // Analysis (default and only other nav target).
-      setOtherSheetOpen(false);
-      switchTopTab("analysis");
-    });
-  }
-  // Sheet items each open a top-tab panel and close the sheet.
+  document.getElementById("moreBtn")?.addEventListener("click", () => {
+    setOtherSheetOpen(els.otherSheet.hidden);
+  });
+  // Sheet items each open a view and close the sheet. The Analysis item routes to
+  // whichever analysis page is active (full or simplified); the rest use data-tab.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.addEventListener("click", () => {
       setOtherSheetOpen(false);
-      switchTopTab(item.dataset.tab ?? "");
+      switchTopTab(item.dataset.nav === "analysis" ? analysisTabName() : item.dataset.tab ?? "");
     });
   }
   // Tapping the backdrop (or anything marked data-other-close) dismisses it.

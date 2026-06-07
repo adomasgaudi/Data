@@ -61,6 +61,16 @@ export interface SetRecord {
    * the ground): its reps/sets still count, but no 1RM or volume is computed —
    * those numbers are meaningless. Tagged from a per-exercise override at compute. */
   notComparable?: boolean;
+  /** Per-NOTE variation difficulty (×1 = baseline). When set (and ≠ 1) the 1RM
+   * scales the effective load by it before peeling bodyweight, so an easier
+   * bodyweight variation (e.g. a partial/assisted handstand push-up at ×0.53)
+   * reports a lower — possibly negative — added-weight 1RM. Stamped by the app's
+   * computeRecord; absent on raw records (treated as ×1). */
+  difficultyMult?: number;
+  /** Band assistance in KILOGRAMS — a band removes a roughly constant force, so it
+   * is SUBTRACTED from the (multiplier-scaled) load before the 1RM curve, not
+   * multiplied. Stamped by computeRecord; absent / 0 means no band. */
+  assistKg?: number;
   /** Machine-type verdict for a gravity-or-cable lift (e.g. Lat Pulldown) when the
    * exercise is in "gravity" or "mixed" mode. "gravity" means the strength weight
    * was scaled to its cable-equivalent (×0.6, logged value kept in origWeight);

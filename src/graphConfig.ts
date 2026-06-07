@@ -20,6 +20,12 @@ export interface GraphConfig {
   formula: OneRepMaxFormula;
   /** How far ahead the Predicted Strength metric projects, in days. */
   predictionDays: number;
+  /** Fill opacity (0..1) for bar series (e.g. Volume), so they don't hide other
+   * series. Default 0.6 — a touch more solid than the scatter dots. */
+  opacity: number;
+  /** Right-axis height scale: 1 = auto; >1 makes the right-axis series (counts /
+   * volume) sit shorter, <1 makes them taller — a relative-axis knob. */
+  rightHeadroom: number;
 }
 
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
@@ -30,4 +36,6 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   decay: false,
   formula: "epley",
   predictionDays: 90,
+  opacity: 0.6,
+  rightHeadroom: 1,
 };

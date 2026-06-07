@@ -74,8 +74,9 @@ describe("regression — filtering across dimensions (TASK 54)", () => {
 
 describe("regression — every graph metric computes safely (TASK 54)", () => {
   const squat = RECORDS.filter((r) => r.exerciseName === "Squat");
-  it("all 14 metrics compute on data and on empty input without throwing", () => {
+  it("all computed metrics compute on data and on empty input without throwing", () => {
     for (const m of GRAPH_METRICS) {
+      if (m.id === "pctWR") continue; // computed specially in analyticsGraph (no registry compute)
       expect(m.compute, m.id).toBeTypeOf("function");
       expect(() => m.compute!(squat, DEFAULT_GRAPH_CONFIG), m.id).not.toThrow();
       expect(Array.isArray(m.compute!(squat, DEFAULT_GRAPH_CONFIG)), m.id).toBe(true);

@@ -11,7 +11,7 @@
  * through identically (it's name-based).
  */
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint } from "./svgChart";
-import { decayedStrengthSeries } from "./aggregate";
+import { decayedStrengthSeries, effectiveE1RM } from "./aggregate";
 import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import type { GraphConfig } from "./graphConfig";
@@ -30,6 +30,13 @@ export interface AnalyticsGraphInput {
   dateTo?: string;
   /** Short code for an exercise name (for series labels). */
   codeOf?: (name: string) => string;
+  /** Show kg metrics as multiples of bodyweight (divide by `bodyweight`). */
+  perBodyweight?: boolean;
+  /** The athlete's bodyweight in kg, for the per-bodyweight view. */
+  bodyweight?: number | null;
+  /** Bodyweight+sex-scaled world record (kg) for an exercise, for the "% of world
+   * record" metric; null when none is set. */
+  worldRecordKg?: (exercise: string) => number | null;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -74,6 +81,22 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   let ci = 0;
   for (const g of groups) {
     for (const m of metrics) {
+      // "% of world record": each set's added-weight 1RM ÷ this exercise's
+      // (bodyweight+sex-scaled) world record × 100. Needs the e1rm compute + the WR.
+      if (m.id === "pctWR") {
+        const wr = input.worldRecordKg?.(g.records[0]?.exerciseName ?? "");
+        if (!wr || wr <= 0) continue;
+        // Fraction of the world record (1.0 = the record). Uses the BODYWEIGHT-
+        // INCLUSIVE 1RM (effectiveE1RM) vs the bodyweight-inclusive record, so it
+        // stays ≥ 0 — a sub-bodyweight (assisted) effort reads low, not negative.
+        const pts = g.records
+          .filter((r) => r.date && effectiveE1RM(r, input.config.formula) != null)
+          .map((r) => ({ x: Date.parse(r.date), y: Math.round((effectiveE1RM(r, input.config.formula)! / wr) * 1000) / 1000 }))
+          .filter((p) => Number.isFinite(p.x))
+          .sort((a, b) => a.x - b.x);
+        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: SERIES_COLORS[ci++ % SERIES_COLORS.length]!, type: "scatter", points: pts as SvgPoint[] });
+        continue;
+      }
       if (!m.compute) continue; // registered-but-not-computed metric
       let pts: GraphPoint[] = m.compute(g.records, input.config);
       // Decay can also be applied to plain strength/1RM lines via the config.
@@ -81,16 +104,44 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
       }
       if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
+      // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
+      // read as multiples of BW; the count metrics (right axis) are left alone.
+      if (input.perBodyweight && input.bodyweight && input.bodyweight > 0 && m.axis !== "right") {
+        const bw = input.bodyweight;
+        const d = (v: number) => Math.round((v / bw) * 1000) / 1000;
+        pts = pts.map((p) => ({
+          ...p,
+          ...(p.y != null ? { y: d(p.y) } : {}),
+          ...(p.lo != null ? { lo: d(p.lo) } : {}),
+          ...(p.hi != null ? { hi: d(p.hi) } : {}),
+          ...(p.bands ? { bands: p.bands.map(d) } : {}),
+        }));
+      }
       const color = SERIES_COLORS[ci % SERIES_COLORS.length]!;
       ci++;
       // One group → label by metric only; several → prefix the exercise.
       const name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
       if (pts.length)
-        series.push({ name, color, type: m.type ?? "line", points: pts as SvgPoint[], ...(m.axis ? { axis: m.axis } : {}) });
+        series.push({
+          name, color, type: m.type ?? "line", points: pts as SvgPoint[],
+          ...(m.axis ? { axis: m.axis } : {}),
+          ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
+        });
     }
   }
 
-  const config = { series, xKind: "time" as const, compactable: true, noCompactToggle: true, yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true };
+  // "% of world record" view: shade the background grayer as you climb toward the
+  // record — a touch above 0.4, more above 0.6 (very light).
+  const showsWr = metrics.some((m) => m.id === "pctWR");
+  const config = {
+    series, xKind: "time" as const, compactable: true, noCompactToggle: true,
+    yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
+    rightHeadroom: input.config.rightHeadroom,
+    ...(showsWr ? { yBands: [
+      { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
+      { from: 0.6, fill: "rgba(120,120,120,0.12)" },
+    ] } : {}),
+  };
   const existing = charts.get(container);
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));

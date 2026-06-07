@@ -65,10 +65,11 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // the range → easier (<1); parallettes/brick go below the floor (−cm) → deeper,
       // harder (>1). A yoga block reads as +5 / +15 / +23cm depending on its side.
       rom: { "+25cm": 0.56, "+23cm": 0.6, "+20cm": 0.66, "+15cm": 0.72, "+10cm": 0.8, "+5cm": 0.88, "+2cm": 0.94, "0cm": 1.0, "-3cm": 1.06, "-5cm": 1.1, "-10cm": 1.22, "-15cm": 1.35, "-20cm": 1.5 },
-      // Forward lean, measured in cm. 0cm = straight against the wall (×1, the
-      // easiest); leaning further forward demands more balance/strength toward a
-      // freestanding/planche line → HARDER (>1). Same 5/15/23cm steps as a block.
-      lean: { "0cm": 1.0, "3cm": 1.05, "5cm": 1.08, "8cm": 1.12, "10cm": 1.14, "13cm": 1.16, "15cm": 1.18, "18cm": 1.22, "20cm": 1.26, "23cm": 1.3 },
+      // Forward lean, in cm. This BASE table is the IMMEDIATE one (free / front-to-
+      // wall / banded): lean gets harder from the first cm, ~×1.0 → ×1.2 over 0–23cm.
+      // Back-to-wall gets a 15cm "grace" applied in code (the scale shifted down
+      // 15cm), so against the wall the first 15cm of lean does nothing.
+      lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
     },
@@ -141,7 +142,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 6;
+export const CONFIG_VERSION = 8;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -161,4 +162,25 @@ export function familyOf(
   map: Record<string, string> = EXERCISE_FAMILY,
 ): string | null {
   return map[exerciseName] ?? null;
+}
+
+/** Centimetres encoded in a lean-level key (e.g. "15" → 15); 0 when unparseable. */
+const leanCm = (key: string): number => { const n = parseInt(key, 10); return Number.isFinite(n) ? n : 0; };
+
+/** Default lean table for a support. Back-to-wall gets a 15cm "grace": forward
+ * lean does nothing for the first 15cm (you're against the wall), so the scale is
+ * shifted DOWN 15cm — b2w factor(X) = base factor(X−15). Free / front-to-wall /
+ * ladder use the base table (immediate, harder from the first cm). */
+export function defaultLeanTable(family: string, support: string): Record<string, number> {
+  const base = FAMILIES[family]?.dims.lean ?? {};
+  if (support !== "back_to_wall") return base;
+  const keys = Object.keys(base);
+  const factorAtCm = (cm: number): number => {
+    let bestKey = keys[0] ?? "";
+    for (const k of keys) if (leanCm(k) <= cm && leanCm(k) >= leanCm(bestKey)) bestKey = k; // largest key ≤ cm
+    return base[bestKey] ?? 1;
+  };
+  const out: Record<string, number> = {};
+  for (const k of keys) out[k] = factorAtCm(Math.max(0, leanCm(k) - 15));
+  return out;
 }

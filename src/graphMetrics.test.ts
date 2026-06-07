@@ -12,10 +12,10 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 14 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(14);
+  it("registers all 15 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(15);
     for (const id of [
-      "weight", "weightRange", "e1rm", "strength", "strengthDecay", "predicted",
+      "weight", "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
       "volume", "volumeLoad", "reps", "sets", "frequency", "pr", "trend", "movingAvg",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
@@ -39,7 +39,9 @@ describe("graph metric registry (TASK 26)", () => {
   });
 
   it("every registered metric now has a compute (TASKS 31–41)", () => {
-    for (const m of GRAPH_METRICS) expect(m.compute, m.id).toBeTypeOf("function");
+    // pctWR is computed specially in analyticsGraph (needs sex/bodyweight/the WR),
+    // so it deliberately carries no registry compute.
+    for (const m of GRAPH_METRICS) if (m.id !== "pctWR") expect(m.compute, m.id).toBeTypeOf("function");
   });
 
   it("weight range is a range series with lo/hi (TASK 32)", () => {
@@ -47,6 +49,27 @@ describe("graph metric registry (TASK 26)", () => {
     expect(pts[0]!.lo).toBe(100);
     expect(pts[0]!.hi!).toBeGreaterThan(100); // up to the estimated 1RM
     expect(graphMetric("weightRange")!.type).toBe("range");
+  });
+
+  it("weight range uses the ADDED-weight 1RM (matches the set list), not the bodyweight load", () => {
+    // A pure bodyweight set (origWeight null) adds no plate → lo = 0, and the top
+    // is the added-weight 1RM (above bodyweight for a hard lift like pull-ups) —
+    // NOT the ~bodyweight effective load, which produced numbers never in the set.
+    const full = graphMetric("weightRange")!.compute!(
+      [rec({ exerciseName: "Pull Up", weight: 80, origWeight: null, reps: 5 })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    expect(full.length).toBe(1);
+    expect(full[0]!.lo).toBe(0); // no plate added
+    expect(full[0]!.hi!).toBeGreaterThan(0); // added-weight 1RM, above bodyweight
+    expect(full[0]!.hi!).toBeLessThan(80); // and well below the bodyweight-inclusive load
+
+    // An easy variation (×0.5) reads a NEGATIVE added-weight 1RM (needs assistance).
+    const easy = graphMetric("weightRange")!.compute!(
+      [rec({ exerciseName: "Handstand Push Up", weight: 80, origWeight: null, difficultyMult: 0.5, reps: 5 })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    expect(easy[0]!.hi!).toBeLessThan(0);
   });
 
   it("strength score never drops (running max), decay can dip (TASKS 34–35)", () => {
@@ -71,7 +94,7 @@ describe("graph config layer (TASK 29)", () => {
   it("has a default config with all settings", () => {
     expect(DEFAULT_GRAPH_CONFIG).toEqual({
       aggregation: "none", interval: "week", smoothing: 0, prediction: false, decay: false,
-      formula: "epley", predictionDays: 90,
+      formula: "epley", predictionDays: 90, opacity: 0.6, rightHeadroom: 1,
     });
   });
 });

@@ -67,11 +67,15 @@ body.locked { overflow: hidden; }
 /* Already signed in (set before paint by the head script): never show the gate. */
 html.signed-in .login-gate { display: none; }
 .login-card {
-  width: 100%; max-width: 340px; text-align: center; background: var(--card);
+  width: 100%; max-width: 340px; text-align: center; background: var(--panel);
   border: 1px solid var(--line); border-radius: 16px; padding: 2.2rem 1.5rem;
   box-shadow: 0 10px 40px rgba(20, 24, 38, 0.18);
 }
-.login-logo { margin: 0; font-size: 1.7rem; }
+/* Minimalist Colosseum mark + wordmark — the landing page's identity. */
+.login-logo { margin: 0; color: var(--accent); line-height: 0; }
+.login-logo svg { width: 96px; height: auto; }
+.login-title { margin: 0.5rem 0 0; font-size: 1.9rem; font-weight: 800; letter-spacing: 0.01em; }
+.login-tagline { margin: 0.5rem 0 1.4rem; font-size: 0.92rem; line-height: 1.45; color: var(--muted); }
 .login-input {
   width: 100%; box-sizing: border-box; margin: 0 0 0.6rem; padding: 0.6rem 0.75rem;
   font: inherit; font-size: 0.95rem; color: var(--text); background: var(--bg);
@@ -83,11 +87,12 @@ html.signed-in .login-gate { display: none; }
   color: #fff; background: var(--accent); border: 0; border-radius: 10px; cursor: pointer;
 }
 .login-btn:hover { filter: brightness(1.08); }
-/* "View as spectator": the big, prominent alternative to logging in. */
-.login-btn--spectator {
-  margin-top: 0.7rem; padding: 1rem; font-size: 1.1rem;
-  color: var(--accent); background: var(--accent-soft); border: 2px solid var(--accent);
-}
+/* "Enter": the big, inviting primary call-to-action (spectator entry). */
+.login-btn--enter { padding: 1rem; font-size: 1.15rem; letter-spacing: 0.02em; }
+/* Sign-in block: clearly visible below Enter, separated by a thin rule. */
+.login-signin { margin-top: 1.3rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
+.login-signin-lbl { margin: 0 0 0.6rem; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.login-btn--admin { background: var(--accent-soft); color: var(--accent); }
 .login-link {
   width: 100%; margin: 0.7rem 0 0; padding: 0.3rem; font: inherit; font-size: 0.85rem;
   color: var(--accent); background: none; border: 0; cursor: pointer; text-decoration: underline;
@@ -105,28 +110,47 @@ body {
 }
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
+  gap: 0.75rem;
+  padding: 0.85rem 1.5rem;
   border-bottom: 1px solid var(--line);
 }
-/* Title + (optional) "view as" badge stack vertically, so the badge wraps onto
-   its own line under the title instead of pushing Guide/⚙ down to a new row. */
-.topbar-title { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; min-width: 0; }
-.topbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.3px; }
-.topbar h1 .version { font-size: 0.7rem; font-weight: 500; color: var(--gold); letter-spacing: 0; vertical-align: middle; margin-left: 0.4rem; }
+/* Title block: "Colosseum" + scope badge on one line; a tiny version·SP line
+   tucked right under the title. Keeps the top bar to a single, thin row. */
+.topbar-title { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 0; flex: 1 1 auto; }
+.title-row { display: flex; align-items: center; gap: 0.45rem; min-width: 0; width: 100%; flex-wrap: nowrap; }
+.title-ver { font-size: 0.6rem; line-height: 1.1; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.title-ver .version { color: var(--gold); font-weight: 600; }
+.topbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
+/* The title doubles as a Back-to-home button. */
+.brand-title { cursor: pointer; display: inline-flex; align-items: center; }
+.brand-title:hover, .brand-title.is-back { color: var(--accent); }
+.brand-back { font-size: 1.4em; line-height: 0; margin-right: 0.1em; font-weight: 700; }
 .view-badge {
-  align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--accent); background: var(--accent-soft);
-  border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px;
 }
-/* Inline effort badge next to the title. */
+/* Quick view switcher: two compact cycling toggles in the header (no wrap). */
+.view-switch { display: inline-flex; gap: 0.3rem; flex: none; white-space: nowrap; }
+.vs-toggle {
+  font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 7px;
+}
+.vs-toggle:hover { filter: brightness(0.97); }
+/* Effort badge on the tiny version line. */
 .effort-inline {
-  font-size: 0.52rem; color: var(--muted); font-weight: 600;
-  letter-spacing: 0.02em; vertical-align: middle; margin-left: 0.15rem;
+  font-size: 0.6rem; color: var(--muted); font-weight: 600;
+  letter-spacing: 0.02em; margin-left: 0.25rem;
   font-variant-numeric: tabular-nums;
 }
+/* On the simplified S-ANL page, hide the SP figure and the data-summary footer
+   for a clean, minimal screen. */
+body.on-s-anl .effort-inline,
+body.on-s-anl .appfoot { display: none; }
 .effort-fib { color: var(--gold); font-weight: 700; margin-left: 0.15rem; }
 .cv-fib { color: var(--gold); font-weight: 700; margin-left: 0.25rem; font-size: 0.92em; }
 .cv-chip {
@@ -141,7 +165,8 @@ body {
 .cv-chip--total .cv-name { color: var(--text); }
 .cv-chip--total .cv-ver { color: var(--gold); }
 .status { color: var(--muted); font-size: 0.85rem; }
-.topbar-right { position: relative; display: flex; align-items: center; gap: 0.75rem; }
+.topbar-right { position: relative; display: flex; align-items: center; gap: 0.4rem; flex: none; }
+.topbar-title { flex: 0 1 auto; }
 .icon-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);
   font-size: 1rem; line-height: 1; cursor: pointer;
@@ -166,6 +191,11 @@ body {
 .settings-panel[hidden] { display: none; } /* flex display would otherwise override [hidden] */
 .settings-hint { margin: -0.15rem 0 0.1rem; font-size: 0.7rem; color: var(--muted); line-height: 1.3; max-width: 230px; }
 .settings-hint--warn { color: #c0563b; }
+/* Global exercise-name mode picker (code / short / full) in Settings. */
+.name-mode-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: var(--muted); }
+.name-mode-row { display: flex; gap: 4px; }
+.name-mode-opt { flex: 1; text-align: center; }
+.name-mode-opt.is-on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .settings-panel label { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: var(--muted); }
 /* Checkboxes sit inline with their text (not stacked) so the panel stays tight. */
 .settings-panel label.check { flex-direction: row; align-items: flex-start; gap: 7px; line-height: 1.3; }
@@ -194,6 +224,12 @@ body {
 /* Night mode + Log in/out side by side. */
 .settings-row { display: flex; gap: 0.45rem; }
 .settings-row > .settings-link { flex: 1; justify-content: center; }
+/* Language EN/LT segmented toggle in Settings. */
+.lang-row { align-items: center; justify-content: space-between; margin: 0.2rem 0; }
+.lang-lbl { font-size: 0.85rem; font-weight: 600; }
+.lang-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang-opt { font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; color: var(--muted); background: none; border: none; padding: 4px 12px; }
+.lang-opt.is-active { background: var(--accent); color: #fff; }
 /* "Refresh data" call-to-action in the Data tab. */
 .refresh-panel h2 { margin-top: 0; }
 .refresh-btn {
@@ -222,6 +258,25 @@ body {
 .overlay-inner { max-width: 760px; margin: 0 auto; }
 .overlay-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; }
 .overlay-head h2 { margin: 0; }
+
+/* Rendered Markdown (Settings → Tasks & roadmap). */
+.md-doc { line-height: 1.5; }
+.md-doc h1 { font-size: 1.4rem; margin: 1rem 0 0.5rem; }
+.md-doc h2 { font-size: 1.15rem; margin: 1.4rem 0 0.4rem; }
+.md-doc h3 { font-size: 1rem; margin: 1rem 0 0.3rem; }
+.md-doc p { margin: 0.5rem 0; }
+.md-doc ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+.md-doc li { margin: 0.2rem 0; }
+.md-doc code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; font-size: 0.85em; }
+.md-doc hr { border: none; border-top: 1px solid var(--line); margin: 1.2rem 0; }
+.md-doc table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; font-size: 0.9rem; }
+.md-doc th, .md-doc td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+.md-doc th { background: var(--panel); }
+
+/* Tasks & roadmap viewer (reuses the changelog cl-* / cv-chip styling). */
+.bk-item.bk-done > summary { opacity: 0.55; }
+.bk-count { font-size: 0.8em; margin-left: auto; }
+.bk-item .cl-bodynote { white-space: pre-wrap; }
 .overlay-close {
   background: none; border: 1px solid var(--line); color: var(--muted);
   border-radius: 8px; width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
@@ -263,17 +318,17 @@ html.kb-open .subtabs { display: none; }
 .subtab-ico { width: 22px; height: 22px; flex: none; }
 .subtab:hover { color: var(--text); }
 .subtab.is-active { color: var(--accent); border-top-color: var(--accent); background: var(--accent-soft); }
-/* Clearance so no panel's content hides behind the fixed bottom nav + the
-   always-on command bar that sits just above it. */
-main { padding-bottom: 8.5rem; }
+/* Clearance so no panel's content hides behind the always-on command bar pinned
+   at the bottom (the bottom nav bar was removed). */
+main { padding-bottom: 5rem; }
 
-/* Persistent command / search bar, pinned just above the bottom nav. */
+/* Persistent command / search bar, pinned at the bottom of the screen. */
 .cmd-bar {
   position: fixed; left: 0; right: 0; z-index: 55;
-  /* Sit above the bottom nav normally, but ride just above the on-screen
-   * keyboard when it's open (--wa-kb-inset = keyboard height, from the
-   * VisualViewport API in setupWorkoutAnalysis). Stays put while scrolling. */
-  bottom: max(calc(3.4rem + env(safe-area-inset-bottom, 0px)), var(--wa-kb-inset, 0px));
+  /* Sit at the bottom normally, but ride just above the on-screen keyboard when
+   * it's open (--wa-kb-inset = keyboard height, from the VisualViewport API in
+   * setupWorkoutAnalysis). Stays put while scrolling. */
+  bottom: max(env(safe-area-inset-bottom, 0px), var(--wa-kb-inset, 0px));
   padding: 0.45rem 0.8rem; background: var(--panel);
   border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(20, 24, 38, 0.06);
   transition: bottom 0.08s ease-out;
@@ -329,7 +384,10 @@ main { padding-bottom: 8.5rem; }
   padding: 0.7rem 0.8rem; cursor: pointer;
 }
 .other-item:hover { background: var(--accent-soft); }
-.other-ico { width: 1.6rem; text-align: center; font-size: 1.15rem; flex: none; }
+.other-item:hover .other-ico { color: var(--accent); }
+/* Minimal line icons (inline SVG): muted by default, accent on hover. */
+.other-ico { width: 1.5rem; height: 1.5rem; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.other-ico svg, svg.other-ico { width: 1.35rem; height: 1.35rem; display: block; }
 
 /* Group view: one card per movement pattern / muscle group. */
 .groups-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; margin: 0 0 1rem; }
@@ -557,21 +615,55 @@ main { padding-bottom: 8.5rem; }
 .nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
 .nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
 .nffmi-ci { font-size: 0.7rem; font-weight: 700; opacity: 0.85; }
-/* Body-composition ranges (nFFMI / lean / fat): label · 50-95 range bar · value ±. */
-.bodycomp { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.6rem 0 0.2rem; max-width: 22rem; }
-.bc-row { display: grid; grid-template-columns: 2.6rem 1fr auto; align-items: center; gap: 0.5rem; }
-.bc-lbl { font-size: 0.74rem; font-weight: 700; color: var(--muted); }
-.bc-bar { position: relative; height: 8px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
-.bc-bar-50 { position: absolute; top: 0; bottom: 0; background: var(--accent); opacity: 0.45; }
-.bc-bar-avg { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--accent); transform: translateX(-1px); }
-.bc-val { font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+/* Body composition (complex view): one compact line of "label value" chips, each
+   with a ⓘ that expands its math panel below. No bars / ranges / ±. */
+.bodycomp { margin: 0.5rem 0 0.2rem; }
+.bc-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.4rem; font-size: 0.85rem; }
+.bc-chip { display: inline-flex; align-items: baseline; gap: 0.25rem; white-space: nowrap; }
+.bc-c-lbl { font-size: 0.74rem; font-weight: 700; }
+.bc-c-val { font-weight: 800; }
+.bc-sep { color: var(--muted); }
+/* ⓘ info button — comfortably tappable (was tiny). */
+.bc-info {
+  font-size: 1rem; line-height: 1; cursor: pointer; color: var(--muted);
+  background: none; border: none; padding: 2px 4px; border-radius: 6px;
+}
+.bc-info:hover, .bc-info.is-open { color: var(--accent); background: var(--accent-soft); }
+.bc-panel { margin: 0.35rem 0 0.1rem; padding: 0.4rem 0.55rem; background: var(--accent-soft); border-radius: 8px; }
 .bodycomp-pot { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
 .bc-head { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; cursor: help; }
+/* Edit button sits on its own row ABOVE the stats (not beside them as a column). */
+.profile-edit-row { flex-basis: 100%; width: 100%; order: -1; margin-bottom: 0.1rem; }
 .profile-edit {
   font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; margin-left: 0.4rem;
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
 }
 .profile-edit:hover { color: var(--accent); border-color: var(--accent); }
+/* Simplified S-ANL body-stats card: explained, fewer numbers. */
+.s-analysis { margin-top: 0.5rem; }
+.s-bodystats { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1rem; }
+.s-bodystats-sum { font-weight: 800; font-size: 1.05rem; color: var(--accent); cursor: pointer; list-style: none; }
+.s-bodystats-sum::-webkit-details-marker { display: none; }
+.s-bs-body { margin-top: 0.6rem; }
+.s-bs-specs { font-size: 0.82rem; margin-bottom: 0.7rem; }
+.s-bs-item { padding: 0.55rem 0; border-top: 1px solid var(--line); }
+.s-bs-item:first-of-type { border-top: none; }
+.s-bs-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.s-bs-name { font-weight: 700; }
+.s-bs-val { font-weight: 800; font-size: 1.1rem; color: var(--accent); }
+.s-bs-exp { margin: 0.2rem 0 0; font-size: 0.85rem; line-height: 1.4; }
+/* S-ANL workouts history (built fresh, not from the full ANL). */
+.s-wo { margin-top: 0.8rem; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1rem; }
+.s-wo-body { margin-top: 0.6rem; }
+.s-wo-search {
+  width: 100%; font: inherit; font-size: 0.9rem; padding: 7px 12px; margin-bottom: 0.5rem;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text);
+}
+.s-wo-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.s-wo-day { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.4rem 0; border-top: 1px solid var(--line); }
+.s-wo-day:first-child { border-top: none; }
+.s-wo-date { flex: 0 0 4.2rem; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.s-wo-did { font-size: 0.88rem; }
 /* Edit-athlete-stats page. */
 .statsedit-body { margin-top: 0.85rem; max-width: 560px; }
 .se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; min-width: 0; }
@@ -582,6 +674,8 @@ main { padding-bottom: 8.5rem; }
 .se-bf-lead { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
 .se-bf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; }
 .se-bf-grid .se-lbl { font-size: 0.64rem; }
+/* Auto-calculated average: read-only, visibly not an input. */
+.se-bf-avg-out { display: block; width: 100%; box-sizing: border-box; font: inherit; font-weight: 700; padding: 6px 9px; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); }
 .se-live { padding: 0.5rem 0.7rem; background: var(--accent-soft); border-radius: 8px; font-size: 0.86rem; margin-bottom: 0.7rem; }
 .se-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .se-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 7px 16px; }
@@ -789,6 +883,19 @@ main { padding-bottom: 8.5rem; }
   background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
 }
 .set-edit-reset:hover { border-color: var(--accent); color: var(--accent); }
+.set-edit-delete {
+  align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--bad, #c0392b);
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+}
+.set-edit-delete:hover { border-color: var(--bad, #c0392b); background: rgba(192, 57, 43, 0.08); }
+.set-edit-nc {
+  align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+}
+.set-edit-nc:hover { border-color: var(--muted); }
+.set-edit-nc.is-on { color: #fff; background: var(--muted); border-color: var(--muted); }
+.health-restore, .health-restore-all { font: inherit; font-size: 0.74rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.health-restore:hover, .health-restore-all:hover { border-color: var(--accent); }
 /* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight).
    It's a label, not a link, so it reads in muted grey — blue is reserved for
    things you can actually tap through to. */
@@ -832,6 +939,18 @@ main { padding-bottom: 8.5rem; }
 }
 .ex-combine-chip.is-primary { cursor: default; background: var(--accent); color: #fff; border-color: var(--accent); }
 .ex-combine-chip[data-remove]:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
+/* "Save as one lift" — persist the current combine as a permanent merged lift. */
+.ex-combine-save {
+  border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: #fff;
+  font: inherit; font-size: 0.76rem; font-weight: 700; padding: 0.2rem 0.7rem; cursor: pointer;
+}
+.ex-combine-save:hover { filter: brightness(1.07); }
+/* Merged-lift separate/dissolve panel on the exercise info page. */
+.ex-merge-members { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
+.ex-merge-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft); font-size: 0.78rem; padding: 0.15rem 0.55rem; }
+.ex-merge-sep { border: none; background: none; color: var(--bad, #c0392b); font: inherit; font-weight: 700; cursor: pointer; padding: 0 0.1rem; }
+.ex-merge-dissolve { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0.25rem 0.6rem; cursor: pointer; }
+.ex-merge-dissolve:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
 /* The "+ combine with…" custom dropdown, sized to sit inline with the chips. */
 .ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: 999px; }
 .ex-combine-dd .xdd-menu { min-width: max(100%, 12rem); }
@@ -853,7 +972,7 @@ main { padding-bottom: 8.5rem; }
 .rm-col-input {
   width: 2.4em; text-align: right;
   border: 1px solid var(--line); border-radius: 5px;
-  background: var(--card); color: var(--text);
+  background: var(--panel); color: var(--text);
   font: inherit; font-size: 0.82rem; font-weight: 700;
   padding: 1px 3px; margin-right: 1px;
 }
@@ -1161,13 +1280,40 @@ select.subtle-select:hover, select.subtle-select:focus {
 .seg-btn.is-active { color: #fff; background: var(--accent); }
 /* Workouts session line: each set written as weight^reps. */
 .wo-exname { font-weight: 600; }
-.wo-setlist { font-size: 0.85rem; }
+.wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
-.wo-scale { font-weight: 700; color: var(--accent); }
+/* Each exercise on its own flex line so the day's record 1RM right-aligns. */
+.wo-ex-line { display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
+/* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
+   and the day 1RM are computed, so they read gold. */
+.wo-scale { font-weight: 700; color: var(--accent); } /* multiplier in blue (workout history) */
+/* 1RM derivation — a readable, math-paper-style breakdown (one step per line). */
+.rm-derive { font-family: Georgia, "Times New Roman", serif; font-size: 0.82rem; color: var(--text); margin: 0.2rem 0; }
+.rm-step { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.12rem 0; border-bottom: 1px dotted var(--line); }
+.rm-step:last-child { border-bottom: none; }
+.rm-lbl { flex: 0 0 6.5rem; font-family: var(--ui-font, system-ui, sans-serif); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); text-align: left; }
+.rm-eq { flex: 1; }
+.rm-eq i { color: var(--accent); font-style: italic; }
+.rm-eq b { font-weight: 700; }
+.rm-result { color: var(--gold); }
+.rm-note { font-family: var(--ui-font, system-ui, sans-serif); font-size: 0.66rem; color: var(--muted); }
+/* Stacked fraction with a real bar (numerator over denominator). */
+.rm-frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; margin: 0 0.15rem; }
+.rm-frac .rm-num { border-bottom: 1px solid currentColor; padding: 0 0.3rem; }
+.rm-frac .rm-den { padding: 0 0.3rem; }
+/* Variation chips (b2w / f2w / ladder / free / band …) shown per set. */
+.wo-var-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 4px; vertical-align: middle; }
+.wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: 4px; padding: 0 4px; line-height: 1.5; }
+.wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
+.wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
+/* The day's record (best) estimated 1RM for a lift, shown after its sets. */
+.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; margin-left: auto; }
+/* COLOUR RULE (other half): editable values you type are blue. */
+.set-edit-input, .set-edit-note, .ex-var-input, .ex-var-rename, .fac-input { color: var(--accent); font-weight: 600; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
 sup.wr-bw { font-size: 0.85em; }
 .heat-filter {
@@ -1458,7 +1604,7 @@ sup.wr-bw { font-size: 0.85em; }
 /* Workout-history title + Display options on one line, tight against the list. */
 .wo-head-row { display: flex; align-items: center; gap: 0.5rem 0.9rem; flex-wrap: wrap; margin: 0 0 0.4rem; }
 .wo-head-row #workoutsTitle { margin: 0; }
-.wo-head-row .wo-controls-fold { margin: 0; }
+.wo-head-row .wo-controls-fold { margin: 0 0 0 auto; } /* cog sits in the right corner */
 #workoutsPanel .data-table { margin-top: 0; }
 .wo-controls-fold { position: relative; margin-bottom: 0.6rem; }
 .wo-controls-sum {
@@ -1467,7 +1613,7 @@ sup.wr-bw { font-size: 0.85em; }
   border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px;
 }
 .wo-controls-sum::-webkit-details-marker { display: none; }
-.wo-controls-sum::after { content: " ▾"; color: var(--muted); }
+.wo-controls-sum::after { content: ""; } /* clean cog — no caret */
 .wo-controls-fold[open] .wo-controls-sum { border-color: var(--accent); background: var(--accent-soft); }
 .wo-controls-fold[open] .wo-controls {
   position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
@@ -1550,6 +1696,11 @@ sup.wr-bw { font-size: 0.85em; }
 /* Site map (mind map) — horizontal scroll when wider than the screen. */
 .sitemap-box { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
 .sitemap-svg { display: block; }
+/* Fills set via CSS, not SVG presentation attributes: var() in a fill="…"
+   attribute isn't resolved by some mobile WebViews (left the map blank on
+   Android), but CSS custom properties always apply. */
+.sitemap-svg .sm-node { fill: var(--panel); }
+.sitemap-svg .sm-text { fill: var(--text); }
 .exercise-compare-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
   font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
@@ -1679,9 +1830,9 @@ sup.wr-bw { font-size: 0.85em; }
    it's clickable with a dotted underline. */
 .e1rm-btn {
   border: none; background: none; padding: 0; cursor: pointer; font: inherit;
-  color: inherit; border-bottom: 1px dotted var(--muted);
+  color: var(--gold); font-weight: 700; border-bottom: 1px dotted var(--gold); /* calculated → gold */
 }
-.e1rm-btn:hover, .e1rm-btn.is-open { color: var(--accent); border-bottom-color: var(--accent); }
+.e1rm-btn:hover, .e1rm-btn.is-open { filter: brightness(0.9); border-bottom-style: solid; }
 /* 1RM = a weight done for 1 rep, shown as value¹ (like the weight column's
    weight^reps). The "1" is a muted superscript so the number still reads first. */
 .onerm-sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
@@ -1822,7 +1973,7 @@ sup.wr-bw { font-size: 0.85em; }
 .xdd-rpe { display: block; width: 100%; }
 .xdd-rpe .xdd-btn {
   padding: 2px 4px; font-size: 0.74rem; font-weight: 600; gap: 0.15rem;
-  border-radius: 6px; background: var(--card); color: var(--muted);
+  border-radius: 6px; background: var(--panel); color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .xdd-rpe .xdd-caret { font-size: 0.6rem; }
@@ -1838,9 +1989,28 @@ sup.wr-bw { font-size: 0.85em; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.3rem 0.2rem; }
-.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; }
-.ex-info-lbl { flex: 0 0 8.5rem; color: var(--muted); font-weight: 600; }
-.ex-info-val { flex: 1 1 auto; }
+.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; align-items: flex-start; }
+.ex-info-lbl { flex: 0 0 8.5rem; color: var(--muted); font-weight: 600; padding-top: 3px; }
+.ex-info-val { flex: 1 1 auto; min-width: 0; }
+/* Editable controls folded straight into the info rows — blue = editable. */
+.ex-info-val > input, .ex-info-val > select { font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--accent); font-weight: 600; max-width: 100%; min-width: 0; }
+.ex-info-val > input[type="text"] { width: 100%; }
+.ex-info-val > input:focus, .ex-info-val > select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Multi-select chips for Category / Muscle group / Tier (tap to toggle membership). */
+.ex-meta-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.ex-meta-chip:hover { border-color: var(--accent); color: var(--accent); }
+.ex-meta-chip.is-on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.ex-meta-reset { font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; }
+.ex-meta-reset:hover { border-color: var(--accent); color: var(--accent); }
+/* Bodyweight-part range: min – max inputs plus the gold (calculated) average. */
+.ex-coeff-range { display: inline-flex; align-items: center; gap: 5px; }
+.ex-coeff-range > input { width: 4rem; }
+.ex-coeff-dash { color: var(--muted); }
+.ex-coeff-avg { font-size: 0.78rem; font-weight: 700; color: var(--gold, #b8902f); margin-left: 4px; }
+/* World-record guesstimate: faint inputs + an "est." tag until the owner sets it. */
+.wr-input.is-guess { color: var(--muted); font-style: italic; }
+.wr-est { font-size: 0.7rem; font-weight: 600; color: var(--muted); }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
   cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
@@ -1903,8 +2073,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-block.needs-review { border-color: var(--warn, #c0603a); background: rgba(192, 96, 58, 0.07); }
 .ex-var-block.is-scaled { border-color: var(--accent); }
 .ex-var-block .ex-var-row { border: none; background: none; margin: 0; }
-/* "Who & when" list under a note — clickable athlete · date chips. */
-.ex-var-sessions { padding: 0 0.55rem 0.4rem; }
+/* "Who & when" — sits inline in the note row (just "👤 N"), expands full-width. */
+.ex-var-sessions { flex: 0 0 auto; padding: 0; }
+.ex-var-sessions[open] { flex: 1 1 100%; padding-top: 0.1rem; }
+/* Collapsible difficulty editor inside each note row — collapsed by default. */
+.ex-var-edit-fold { border-top: 1px solid var(--line); }
+.ex-var-edit-sum { cursor: pointer; list-style: none; font-size: 0.76rem; font-weight: 700; color: var(--accent); padding: 0.3rem 0.55rem; }
+.ex-var-edit-sum::-webkit-details-marker { display: none; }
+.ex-var-edit-sum::before { content: "▸ "; }
+.ex-var-edit-fold[open] > .ex-var-edit-sum::before { content: "▾ "; }
 .ex-var-sessions-sum { cursor: pointer; list-style: none; font-size: 0.74rem; font-weight: 600; color: var(--muted); padding: 0.15rem 0; }
 .ex-var-sessions-sum::-webkit-details-marker { display: none; }
 .ex-var-sessions-sum::before { content: "▸ "; }
@@ -1950,6 +2127,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-pad-scene .pad-rung { stroke: var(--accent); stroke-width: 1.4; }
 .ex-pad-scene .pad-floor { stroke: var(--text); stroke-width: 1.6; }
 .ex-pad-fill { position: absolute; left: 0; bottom: 0; background: var(--accent-soft); opacity: 0.7; pointer-events: none; }
+/* The 0 cm depth reference line (hands at floor height, ×1). */
+.ex-pad-zero { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--muted); pointer-events: none; }
+.ex-pad-zero-lbl { position: absolute; right: 3px; top: -0.62rem; font-size: 0.55rem; color: var(--muted); background: var(--bg); padding: 0 2px; }
+/* Editable difficulty-model factor table on the exercise info page. */
+.ex-model-fold .fac-dim { margin: 0.35rem 0; }
+.ex-model-fold .fac-dim-h { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; margin: 0.15rem 0; }
+.ex-model-fold .fac-cells { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ex-model-fold .fac-cell { display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px; font-size: 0.72rem; }
+.ex-model-fold .fac-cell.is-ov { border-color: var(--accent); }
+.ex-model-fold .fac-lvl { color: var(--muted); }
+.ex-model-fold .fac-input { width: 3.1rem; font: inherit; font-size: 0.72rem; border: none; background: none; color: var(--text); text-align: right; }
 .ex-pad-dot {
   position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
   background: var(--accent); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); pointer-events: none;
@@ -2000,7 +2188,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pose-ctl .ex-var-lvl-f { opacity: 0.7; font-size: 0.92em; }
 .pose-ctl.is-on .ex-var-lvl-f { opacity: 0.85; }
 /* Per-note "not comparable" toggle + state. */
-.ex-var-nc-btn { font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 0.4rem; white-space: nowrap; }
+.ex-var-nc-btn { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 3px 6px; white-space: nowrap; }
 .ex-var-nc-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ex-var-nc-btn.is-on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .ex-var-block.is-nc { border-color: var(--accent); }
@@ -2046,18 +2234,41 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
 /* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
 /* App-wide active-set control bar on the Index page. */
-.active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .active-set-bar .as-label { font-size: 0.85rem; font-weight: 600; }
 .active-set-bar .as-status { margin-left: 0.5rem; font-size: 0.82rem; }
 .active-set-bar .as-status.is-on { color: var(--accent); font-weight: 700; }
 .active-set-bar .as-clear { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.82rem; text-decoration: underline; padding: 0; }
 .active-set-bar .as-hint { margin: 0.4rem 0 0; font-size: 0.78rem; }
 .bw-groups { display: flex; flex-direction: column; gap: 6px; }
-.bw-cat { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+/* overflow stays visible (not hidden) so the group title + an expanded row can
+   position:sticky. */
+.bw-cat { border: 1px solid var(--line); border-radius: 10px; }
+/* The group title (discipline / muscle header) sticks to the top while you scroll
+   its list of exercises, then leaves as the next group's title takes over. */
 .bw-cat-summary {
+  position: sticky; top: 0; z-index: 4; background: var(--bg);
   cursor: pointer; list-style: none; display: flex; align-items: center; gap: 0.6rem;
   padding: 10px 12px; font-size: 0.92rem; font-weight: 600; user-select: none;
 }
+/* When a row is expanded, its collapsed header sticks just BELOW the group title
+   while you scroll the (often long) info panel below it. */
+#bwGroups tr.open > td { position: sticky; top: 2.6rem; z-index: 3; background: var(--bg); box-shadow: 0 1px 0 var(--line); }
+/* "Other" parent holds the minor disciplines as indented sub-groups. */
+.bw-cat-other > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
+.bw-cat-other > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
+/* Per-group app-wide filter buttons (only / hide / show) in the group header. */
+.bw-cat-filter { display: inline-flex; gap: 3px; margin-left: 0.5rem; }
+.bw-filt { font: inherit; font-size: 0.7rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.bw-filt:hover { border-color: var(--accent); color: var(--accent); }
+/* The single cycling group toggle: lights up when it's restricting the app. */
+.bw-filt-toggle { min-width: 4.6rem; font-weight: 600; }
+.bw-filt-toggle.is-only { border-color: var(--accent); color: #fff; background: var(--accent); }
+.bw-filt-toggle.is-hide { border-color: var(--muted); color: var(--text); background: var(--accent-soft); }
+/* Strength sub-grouping: the muscle/function picker + the nested sub-groups. */
+.bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; }
+.bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
+.bw-cat > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 .bw-cat-summary::-webkit-details-marker { display: none; }
 .bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
 .bw-cat[open] > .bw-cat-summary::after { content: "▾"; }
@@ -2066,6 +2277,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-cat-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .bw-cat-name { letter-spacing: 0.01em; }
 .bw-cat-meta { font-weight: 500; font-size: 0.8rem; }
+.bw-cat-hidden { font-size: 0.68rem; opacity: 0.75; }
 .bw-cat .data-table { min-width: 0; }
 /* AI-NOTE (Claude): Exercises tab must NOT scroll sideways — long exercise
    names should wrap. min-width:0 above + overflow-wrap below do this together.
@@ -2201,13 +2413,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    instead of crushing the columns. */
 .data-table { min-width: 460px; }
 .panel { overflow-x: auto; }
+/* …except the Index exercise list: its tables wrap (min-width:0) so they never need
+   sideways scroll, and a scrolling panel would disable the sticky group titles/rows. */
+.panel:has(#bwGroups) { overflow: visible; }
 
 /* Phones / small screens */
 @media (max-width: 640px) {
   body { font-size: 14px; }
-  .topbar { flex-wrap: wrap; gap: 0.5rem; padding: 0.85rem 1rem; }
-  main { padding: 1rem 1rem 8.5rem; } /* keep bottom clearance for the command bar + nav */
-  .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 7.5rem; } /* clear the command bar + fixed bottom nav */
+  .topbar { flex-wrap: nowrap; gap: 0.5rem; padding: 0.7rem 1rem; }
+  main { padding: 1rem 1rem 5rem; } /* clearance for the bottom command bar */
+  .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the bottom command bar */
   .panel { padding: 1rem; border-radius: 10px; }
   .chart-wrap { height: 220px; }
   /* Phone: fill the screen. dvh tracks the real viewport (browser chrome in/out);
@@ -2281,6 +2496,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    tappable to fold it back up) and the title text is hidden. */
 .wa-fold[open] > .wa-fold-sum { padding: 0.2rem 0; font-size: 0; color: transparent; }
 .wa-fold[open] > .wa-fold-sum::before { font-size: 0.85rem; }
+/* EXCEPTION: the Workout-history summary carries the selected exercise's name, so
+   keep it visible even when open — it's the page's "what am I looking at" title. */
+.wa-fold[open] > #waTableSummary { font-size: 0.95rem; color: var(--text); padding: 0.45rem 0; }
+.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; }
 
 /* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
 .wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }
@@ -2337,6 +2556,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    compact row beside the title; each opens as a floating menu so the layout
    never shifts. */
 .wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; width: 100%; align-items: center; justify-content: flex-start; }
+/* Selected-exercise pills inside the sticky selector bar (EXR-SEL-PILLS). */
+.wa-sel-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; width: 100%; margin-top: 0.35rem; }
+.wa-sel-pill { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.wa-sel-pill:hover { border-color: var(--accent); }
+.wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
 /* Sticky selector bar: sits at the top of the Analysis card in normal flow, then
    pins to the top of the screen as you scroll the content below it. The card must
    not be an overflow scroll container or sticky can't pin to the viewport. */
@@ -2487,6 +2711,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
 .wa-create-f input, .wa-create-f select { font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-create-act { display: flex; align-items: center; gap: 0.5rem; }
+/* "Create variant / group" on the Index page (moved from the Analysis bar). */
+.idx-create-sum { cursor: pointer; font-weight: 700; font-size: 0.95rem; color: var(--accent); list-style: none; }
+.idx-create-sum::-webkit-details-marker { display: none; }
+.idx-create { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; max-width: 22rem; }
 
 /* Controls moved inside the Exercises fold: Clear selection + Group by + search. */
 .wa-chips-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem 0.5rem 0.3rem; }
@@ -2546,4 +2774,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-search { flex: 1 1 12rem; font: inherit; font-size: 0.85rem; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
 .wa-chips-wrap { max-height: 16rem; overflow-y: auto; }
 .wa-group { margin: 0 0 0.5rem; }
-.wa-group-h { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; margin: 0.3rem 0 0.25rem; }
+/* Group header is a TAP-TO-FILTER toggle (replaces the old Filter button). */
+.wa-group-h { display: block; width: 100%; text-align: left; cursor: pointer; background: none; border: none; padding: 0.3rem 0 0.25rem; font: inherit; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
+.wa-group-h:hover { color: var(--accent); }
+.wa-group-h.is-off { opacity: 0.55; text-decoration: line-through; }
+.wa-fold-settings { margin: 0.2rem 0 0.3rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--line); }
+/* A nested family subgroup (e.g. Handstand) inside a group: indented, with a
+   lighter sub-header and a guide line on the left. */
+.wa-subgroup { margin: 0.15rem 0 0.3rem 0.5rem; padding-left: 0.5rem; border-left: 2px solid var(--line); }
+.wa-subgroup-h { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; margin: 0.15rem 0 0.2rem; }

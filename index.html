@@ -16,24 +16,44 @@
          logged out (Adomas only). Re-openable later from Settings → Log in. -->
     <div id="loginGate" class="login-gate">
       <div class="login-card">
-        <h1 class="login-logo">🏛️ Colosseum</h1>
-        <p class="muted" style="margin:.3rem 0 1.2rem">Strength training dashboard</p>
-        <select id="loginUser" class="login-input" aria-label="Choose your name"></select>
-        <input id="loginPass" class="login-input" type="password" placeholder="Password — first two letters of your name" autocomplete="current-password" />
-        <p id="loginErr" class="login-err" hidden>Wrong password.</p>
-        <button id="loginAdminBtn" type="button" class="login-btn">Log in</button>
-        <button id="loginGuestBtn" type="button" class="login-btn login-btn--spectator">👁 View as spectator</button>
-        <p class="login-note muted">Pick your name, then type its first two letters (e.g. “Adomas” → “ad”). Admin uses its own password; spectator is open. Soft gate only — the site is public.</p>
+        <div class="login-logo" aria-hidden="true">
+          <svg viewBox="0 0 80 58" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 53 H75"/>
+            <path d="M9 48 V18 Q40 11 71 18 V48"/>
+            <path d="M9 31 H71"/>
+            <path d="M15 48 V38 a5 5 0 0 1 10 0 V48"/>
+            <path d="M29 48 V38 a5 5 0 0 1 10 0 V48"/>
+            <path d="M43 48 V38 a5 5 0 0 1 10 0 V48"/>
+            <path d="M57 48 V38 a5 5 0 0 1 10 0 V48"/>
+            <path d="M15 31 V24 a5 5 0 0 1 10 0 V31"/>
+            <path d="M29 31 V24 a5 5 0 0 1 10 0 V31"/>
+            <path d="M43 31 V24 a5 5 0 0 1 10 0 V31"/>
+            <path d="M57 31 V24 a5 5 0 0 1 10 0 V31"/>
+          </svg>
+        </div>
+        <h1 class="login-title">Colosseum</h1>
+        <p class="login-tagline">Strength leaderboards for you and your friends — track every lift, see your estimated 1RMs, and climb the ranks.</p>
+        <button id="loginGuestBtn" type="button" class="login-btn login-btn--enter">Enter</button>
+        <div class="login-signin">
+          <p class="login-signin-lbl">Sign in</p>
+          <select id="loginUser" class="login-input" aria-label="Choose your name"></select>
+          <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
+          <p id="loginErr" class="login-err" hidden>Wrong password.</p>
+          <button id="loginAdminBtn" type="button" class="login-btn login-btn--admin">Log in</button>
+        </div>
       </div>
     </div>
 
     <header class="topbar">
       <div class="topbar-title">
-        <h1>Colosseum <span class="version">b.2.5.33</span> <span id="effortSummary" class="effort-inline"></span></h1>
-        <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
+        <div class="title-row">
+          <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
+        </div>
+        <div class="title-ver"><span class="version">b.2.6.77</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
-        <button id="guideBtn" class="guide-btn" data-tab="guide">Guide</button>
+        <div id="viewSwitch" class="view-switch"></div>
+        <button id="moreBtn" class="icon-btn" aria-label="More views" aria-haspopup="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
           <!-- Calculation & display settings, tucked under a collapsible to keep the menu short. -->
@@ -52,8 +72,27 @@
               <p class="settings-hint">Off = your all-time best 1RM. On = a “use it or lose it” estimate: a lift holds for two weeks, then fades — about 10% down a month later, slowing after that, never below half.</p>
               <label class="check"><input type="checkbox" id="showLegsAll" /> Show “Legs (all)” category in lists</label>
               <label class="check"><input type="checkbox" id="showAloneRings" /> Mark “trained alone” days on the calendar</label>
+              <div class="name-mode-field">Exercise names shown as
+                <div class="name-mode-row" id="nameModeRow">
+                  <button type="button" class="settings-link name-mode-opt" data-namemode="code">Code</button>
+                  <button type="button" class="settings-link name-mode-opt" data-namemode="short">Short</button>
+                  <button type="button" class="settings-link name-mode-opt" data-namemode="full">Full</button>
+                </div>
+              </div>
+              <p class="settings-hint">Changes every exercise name across the whole site at once — code (e.g. HS-PU), your short name, or the full name.</p>
             </div>
           </details>
+          <!-- Language: English ↔ Lithuanian (whole site). Reloads on switch. -->
+          <div class="settings-row lang-row">
+            <span class="lang-lbl">Language</span>
+            <div class="lang-toggle" id="langToggle" role="group" aria-label="Language">
+              <button type="button" class="lang-opt" data-lang="en">EN</button>
+              <button type="button" class="lang-opt" data-lang="lt">LT</button>
+            </div>
+          </div>
+          <!-- Simplified ↔ Advanced view: a top-level toggle so it's always visible. -->
+          <label class="check"><input type="checkbox" id="simplifiedToggle" /> Simplified view (S-Analysis)</label>
+          <p class="settings-hint">On = the “Analysis” button opens a stripped-down page (S-ANL). Off = the full analysis. Defaults on for spectators.</p>
           <!-- Night mode + security (who you're signed in as) grouped together.
                "View as" is now chosen on the login screen, so its picker is kept
                here only as a hidden, in-sync mirror (no longer shown in the menu). -->
@@ -75,11 +114,17 @@
               <p class="settings-hint" id="autoBackupHint">When on, the site silently re-saves your backup file every time you change something. Pick the file once; it stays current after that.</p>
             </div>
           </details>
+          <button type="button" id="modelBtn" class="settings-link">
+            ✎ Difficulty multipliers
+          </button>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
           </button>
           <button type="button" id="changelogBtn" class="settings-link">
             Version history <span id="changelogVer" class="muted"></span>
+          </button>
+          <button type="button" id="backlogBtn" class="settings-link">
+            Tasks &amp; roadmap
           </button>
         </div>
       </div>
@@ -139,9 +184,10 @@
 
       </div>
 
-      <!-- LEGACY athlete view, kept while we iterate on the Analysis tab.
-           Reachable via Other → "Legacy exercises". The four-tab bar below
-           still works end-to-end as a fallback while we finish Analysis parity. -->
+      <!-- Hidden host for the panels the Analysis view borrows (athlete picker,
+           Workouts, Exercises drill-in, calendar) and returns here on tab switch.
+           No longer user-reachable — the "Legacy exercises" menu entry was removed
+           (Analysis supersedes it); this stays only as the panels' home in the DOM. -->
       <div id="tab-athlete" class="tab-panel" hidden>
         <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
              start of the same row as the horizontally-scrolling name chips. -->
@@ -161,8 +207,8 @@
         <details id="athleteDetails" class="athlete-details">
           <summary class="athlete-details-summary">Body stats <span class="ad-caret">▾</span></summary>
           <div class="athlete-details-body">
-            <p id="athleteProfile" class="athlete-profile"></p>
             <div id="athleteStats" class="athlete-stats"></div>
+            <p id="athleteProfile" class="athlete-profile"></p>
             <div id="momentum" class="momentum"></div>
             <div id="trainBreakdown" class="train-breakdown"></div>
             <!-- Front/back muscle map shaded by how much each region is trained. -->
@@ -173,11 +219,9 @@
           </div>
         </details>
 
-        <!-- Athlete-view tabs, shared above both sub-panels so they stay visible
-             whichever shows: Workouts (the sessions view) | List & stats | Compare
-             | Single (the one-exercise drill-in). RESTORED (b.2.3.13): we walked
-             back the single-home removal — the legacy view stays available behind
-             Other → "Legacy exercises" while we iterate on Analysis. -->
+        <!-- Athlete-view tabs (Workouts | List & stats | Compare | Single). These
+             live in the hidden host above; the Analysis view drives them now that
+             the user-facing "Legacy exercises" entry is gone. -->
         <div id="exercisesTabs" class="ex-tabs ath-tabs" role="tablist">
           <button type="button" class="ex-tab" data-extab="workouts" role="tab">Workouts</button>
           <button type="button" class="ex-tab is-active" data-extab="list" role="tab">List &amp; stats</button>
@@ -190,7 +234,7 @@
             <div class="wo-head-row">
               <h2 id="workoutsTitle">Workouts</h2>
               <details class="wo-controls-fold">
-                <summary class="wo-controls-sum">⚙ Display options</summary>
+                <summary class="wo-controls-sum" title="Display options" aria-label="Display options">⚙</summary>
                 <!-- DJ-console style: every control is one small toggle button (no
                      labels), packed into a tight grid. Tapping a button flips it. -->
                 <div class="wo-controls wo-dj">
@@ -207,16 +251,13 @@
                   <button type="button" id="restToggle" class="wo-dj-btn" aria-pressed="false" title="Show rest days">Rest</button>
                   <button type="button" id="addSetsToggle" class="wo-dj-btn" aria-pressed="false" title="Show + set buttons">Sets+</button>
                   <button type="button" id="aloneFilter" class="wo-dj-btn" data-state="both" title="Alone filter: all ↔ only-alone ↔ not-alone">All</button>
+                  <button type="button" id="aloneTagToggle" class="wo-dj-btn" aria-pressed="false" title="Show/hide the “alone” day tags">Tags</button>
                 </div>
             </details>
             </div>
-            <details id="workoutSets" class="workout-sets">
-              <summary class="workout-sets-summary">Sets over time <span class="ws-caret">▾</span></summary>
-              <div class="workout-sets-body">
-                <div id="workoutSetsChart"></div>
-                <p class="muted" id="workoutSetsNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
-              </div>
-            </details>
+            <!-- CUT-2: "Sets over time" chart warehoused (warehouse/2026-06-07-cut2-workout-sets-chart).
+                 Empty #workoutSets kept as the calendar's relocation anchor (setAnalysisCalendar). -->
+            <details id="workoutSets" class="workout-sets" hidden></details>
             <div id="workoutCalendar" class="wo-calendar"></div>
             <table id="workoutsTable" class="data-table"></table>
             <div id="workoutsPager" class="pager"></div>
@@ -358,7 +399,7 @@
 
       <div id="tab-test" class="tab-panel" hidden>
         <section class="panel">
-          <h2>Calculator — see the maths</h2>
+          <h2>Formulas — see the maths</h2>
           <p class="muted" style="margin: 0 0 1rem">
             Pick an athlete and exercise to load their top set, or just type your own numbers —
             either way each formula recomputes live. This is the exact code the leaderboards use.
@@ -426,41 +467,20 @@
 
       <div id="tab-bwparts" class="tab-panel" hidden>
         <section class="panel">
-          <h2>Index — all exercises</h2>
-          <p class="muted" style="margin: 0 0 0.75rem">
-            The master list of every exercise across all athletes — merges and bodyweight
-            parts. (Not one person's training; for that, pick an athlete on the Exercises tab.)
-          </p>
-        </section>
-        <section class="panel">
-          <h2>Browse groups</h2>
-          <p class="muted" style="margin: 0 0 0.75rem">
-            How exercises are grouped. Open a dimension, then a group, to read what it means and
-            see exactly which lifts fall under it.
-          </p>
-          <div id="groupBrowser" class="group-browser"></div>
-        </section>
-        <section class="panel">
-          <h2>Merged exercises</h2>
-          <p class="muted" style="margin: 0 0 0.75rem">
-            Different spellings of the same lift are combined so one exercise isn't split
-            across the dashboard. Combining two genuinely different names (e.g. Chin Ups →
-            Pull Ups) is only ever done when confirmed as the same lift. Every combine is
-            listed here; the original logged name is kept on each set.
-          </p>
-          <div id="mergeList" class="merge-list"></div>
-        </section>
-        <section class="panel">
           <h2 id="bwTitle">Bodyweight parts</h2>
-          <p class="muted" style="margin: 0 0 0.75rem">
-            Share of bodyweight each movement lifts. The 1RM uses
-            <em>part × bodyweight + added weight</em>. Unlisted exercises are 0.
-            Choose how to group below; click a group to open or close it. When the
-            app-wide filter is on, lifts it hides are greyed under “Show hidden”.
-          </p>
           <div id="activeSetBar" class="active-set-bar"></div>
           <div id="bwGroupBar" class="bw-groupby"></div>
           <div id="bwGroups" class="bw-groups"></div>
+        </section>
+        <section class="panel">
+          <h2>Merged exercises</h2>
+          <div id="mergeList" class="merge-list"></div>
+        </section>
+        <section class="panel">
+          <details class="idx-create-fold">
+            <summary class="idx-create-sum">＋ Create variant / group</summary>
+            <div id="idxCreate" class="idx-create"></div>
+          </details>
         </section>
       </div>
 
@@ -956,6 +976,9 @@
             <label class="add-field add-field--sm">Date
               <input id="addDate" type="date" />
             </label>
+            <label class="add-field">Note / variation
+              <input id="addNote" type="text" placeholder="e.g. b2w, +15cm, uninterrupted" autocomplete="off" />
+            </label>
             <button type="button" id="addSubmit" class="primary-btn">+ Add set</button>
           </div>
           <p id="addHint" class="muted" style="margin: 0.5rem 0 0; font-size: 0.85rem"></p>
@@ -1009,27 +1032,10 @@
         </section>
       </div>
 
-      <div id="tab-codes" class="tab-panel" hidden>
-        <section class="panel">
-          <div class="groups-head">
-            <h2>Exercise codes</h2>
-            <p class="muted" style="margin: 0.25rem 0 0">
-              The short <strong>codes</strong> shown in the Workouts list, graphs and tables (e.g.
-              <strong>DL</strong>, <strong>HT</strong>, <strong>slRDL</strong>). The <strong>Short</strong>
-              name is a middle tier between the tiny code and the full name — it starts equal to the code,
-              but you can make it as long as you like (a rare lift can read almost like its full name).
-              Type to rename; clear the box (or ↺) to go back to the default. Saved on this device.
-            </p>
-          </div>
-          <input id="codesSearch" class="compare-search" type="search" placeholder="Search exercises…" autocomplete="off" style="margin: 0.75rem 0" />
-          <table id="codesTable" class="data-table"></table>
-        </section>
-      </div>
-
       <div id="tab-statsedit" class="tab-panel" hidden>
         <section class="panel">
           <div class="groups-head">
-            <h2>Edit athlete stats</h2>
+            <h2>Athletes</h2>
             <p class="muted" style="margin: 0.25rem 0 0">
               Edit a person's weight, height, age, sex and body-fat. Body fat is a
               range (95% / 50% confidence band + average), so every value built from it
@@ -1114,6 +1120,13 @@
           </details>
         </section>
       </div>
+
+      <!-- Simplified analysis (S-ANL): an intentionally EMPTY page, opened by the
+           bottom "Analysis" button when "Simplified view" is on in Settings. To be
+           filled in later. -->
+      <div id="tab-s-analysis" class="tab-panel" hidden>
+        <div id="sAnalysis" class="s-analysis"></div>
+      </div>
     </main>
 
     <!-- Persistent command / search bar, pinned just above the bottom nav and
@@ -1125,38 +1138,26 @@
              placeholder="Search exercises…   or type . for commands" aria-label="Search or command" />
     </div>
 
-    <!-- App-style bottom navigation: Analysis is the single home for all
-         exercise views (the old Workouts/List/Compare/Single tab bar is gone);
-         "Other" opens a sheet of secondary views. -->
-    <nav class="subtabs" role="tablist">
-      <button class="subtab is-active" data-nav="analysis" role="tab">
-        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span>Analysis</span>
-      </button>
-      <button class="subtab" data-nav="other" role="tab">
-        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-        <span>More</span>
-      </button>
-    </nav>
-
+    <!-- Secondary views live behind the top-bar "More" (⋯) button, which opens
+         this bottom-sheet. The old bottom nav bar is gone — Analysis is the home
+         page and is reachable from the first item in the sheet below. -->
     <!-- "Other" bottom-sheet: the umbrella of secondary views. Each item jumps
          to its top-tab panel (data-tab) and closes the sheet. -->
     <div id="otherSheet" class="other-sheet" hidden>
       <div class="other-sheet-backdrop" data-other-close></div>
       <div class="other-sheet-card" role="menu" aria-label="Other views">
         <div class="other-sheet-grip"></div>
-        <button class="other-item" data-tab="athlete" role="menuitem"><span class="other-ico">🏃</span> Legacy exercises</button>
-        <button class="other-item" data-tab="leaderboards" role="menuitem"><span class="other-ico">🏛️</span> Colosseum</button>
-        <button class="other-item" data-tab="team" role="menuitem"><span class="other-ico">👥</span> Group view</button>
-        <button class="other-item" data-tab="groups" role="menuitem"><span class="other-ico">📊</span> Stats view</button>
-<button class="other-item" data-tab="add" role="menuitem"><span class="other-ico">➕</span> Add a set</button>
-        <button class="other-item" data-tab="bwparts" role="menuitem"><span class="other-ico">🏋️</span> Index (all exercises &amp; body parts)</button>
-        <button class="other-item" data-tab="codes" role="menuitem"><span class="other-ico">🏷️</span> Exercise codes</button>
-        <button class="other-item" data-tab="statsedit" role="menuitem"><span class="other-ico">📝</span> Edit athlete stats</button>
-        <button class="other-item" data-tab="data" role="menuitem"><span class="other-ico">🗄️</span> Data</button>
-        <button class="other-item" data-tab="test" role="menuitem"><span class="other-ico">🧪</span> Test &amp; calculators</button>
-        <button class="other-item" data-tab="sitemap" role="menuitem"><span class="other-ico">🗺️</span> Site map</button>
-        <button class="other-item" data-tab="guide" role="menuitem"><span class="other-ico">📖</span> Guide</button>
+        <button class="other-item" data-nav="analysis" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> <span id="otherAnalysisLabel">Analysis</span></button>
+        <button class="other-item" data-tab="leaderboards" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/><path d="M19 21V10"/><path d="M3 10l9-6 9 6"/></svg> Colosseum</button>
+        <button class="other-item" data-tab="team" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.5a4 4 0 0 1 0 7"/></svg> Group view</button>
+        <button class="other-item" data-tab="groups" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5" rx="0.5"/><rect x="12" y="8" width="3" height="9" rx="0.5"/><rect x="17" y="14" width="3" height="3" rx="0.5"/></svg> Stats view</button>
+        <button class="other-item" data-tab="add" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8.5v7M8.5 12h7"/></svg> Add a set</button>
+        <button class="other-item" data-tab="bwparts" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="0.7" fill="currentColor" stroke="none"/></svg> Index</button>
+        <button class="other-item" data-tab="statsedit" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg> Athletes</button>
+        <button class="other-item" data-tab="data" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"/><path d="M4.5 5v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V5"/><path d="M4.5 11v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-6"/></svg> Data</button>
+        <button class="other-item" data-tab="test" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 6.5h8"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/></svg> Formulas</button>
+        <button class="other-item" data-tab="sitemap" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3 3 5.5v15l6-2.5 6 2.5 6-2.5v-15L15 5.5 9 3z"/><path d="M9 3v15M15 5.5v15"/></svg> Site map</button>
+        <button class="other-item" data-tab="guide" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Guide</button>
       </div>
     </div>
 
@@ -1175,14 +1176,15 @@
       </div>
     </div>
 
-    <div id="exInfoPage" class="overlay-page" hidden>
+    <div id="modelPage" class="overlay-page" hidden>
       <div class="overlay-inner">
         <div class="overlay-head">
-          <h2 id="exInfoTitle">Exercise info</h2>
-          <button type="button" id="exInfoClose" class="overlay-close" aria-label="Close">✕</button>
+          <h2>Difficulty multipliers</h2>
+          <button type="button" id="modelClose" class="overlay-close" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Details, groupings, and the relative difficulty of each note-identified variation of this lift.</p>
-        <div id="exInfo"></div>
+        <p class="muted">Edit the ×factor for every level of each difficulty model (band assistance, depth, lean, support…). Changes apply to every set of that family everywhere — leaderboard, graphs and 1RM included. Set a value back to its default to clear it. Saved on this device.</p>
+        <div class="settings-row" style="margin:0 0 0.6rem"><button type="button" id="modelResetAll" class="settings-link">↺ Reset all to defaults</button></div>
+        <div id="modelEditor"></div>
       </div>
     </div>
 
@@ -1194,6 +1196,17 @@
         </div>
         <p class="muted">Every released version, newest first — the same log as the git history.</p>
         <div id="changelog"></div>
+      </div>
+    </div>
+
+    <div id="backlogPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Tasks &amp; roadmap</h2>
+          <button type="button" id="backlogClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">The cleanup backlog and feature roadmap, shown straight from the docs/ files.</p>
+        <div id="backlog" class="md-doc"></div>
       </div>
     </div>
 

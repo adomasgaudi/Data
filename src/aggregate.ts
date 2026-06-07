@@ -498,15 +498,40 @@ export function addedWeight1RM(record: SetRecord, formula: OneRepMaxFormula = "e
   // rather than a clamped one. The Nuzzo curve is data-derived across the study's
   // full range (down to 15% of 1RM ≈ 127 reps), so it is EXEMPT from the cap.
   if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
-  const effective1RM = estimate1RM(record.weight, record.reps, formula);
-  if (effective1RM === null) return null;
+  // Variation difficulty scales the EFFECTIVE load before the 1RM curve; a band
+  // then SUBTRACTS a constant assistance in kg. ×1 / absent leaves it unchanged.
+  // The result can be ≤ 0 — handled linearly so the 1RM stays continuous.
+  const mult = record.difficultyMult ?? 1;
   const effectiveLoad = record.weight ?? 0;
+  const scaledLoad = effectiveLoad * mult - (record.assistKg ?? 0);
+  const effective1RM = scaledLoad > 0 ? estimate1RM(scaledLoad, record.reps, formula) : scaledLoad;
+  if (effective1RM === null) return null;
   // origWeight is undefined only for bar-only lifts (no bodyweight folded in) → the
   // whole load is "added". When it's explicitly null, it was a bodyweight-only set
   // on a bodyweight lift, so the added weight is 0 and the body is the whole load.
   const addedWeight = record.origWeight === undefined ? effectiveLoad : (record.origWeight ?? 0);
   const bodyweightLoad = effectiveLoad - addedWeight;
+  // Peel the FULL bodyweight share (NOT scaled by the difficulty multiplier): the
+  // 1RM is the load above bodyweight, and bodyweight itself doesn't shrink with an
+  // easier variation. An easy bodyweight variation therefore reads a negative
+  // added-weight 1RM (you'd need that much assistance to do the baseline move).
   return effective1RM - bodyweightLoad;
+}
+
+/**
+ * The bodyweight-INCLUSIVE estimated 1RM (the rep-curve result on the effective,
+ * difficulty-scaled, band-assisted load) — i.e. addedWeight1RM BEFORE the
+ * bodyweight share is peeled off. Always reflects the whole load moved, so it
+ * stays ≥ 0 for anyone who can do the movement at all (used for "% of world
+ * record", where a negative added-weight 1RM would wrongly read below 0).
+ */
+export function effectiveE1RM(record: SetRecord, formula: OneRepMaxFormula = "epley"): number | null {
+  if (record.notComparable) return null;
+  if (isIsometric(record.exerciseName)) return null;
+  if (formula !== "nuzzo" && record.reps !== null && record.reps > MAX_1RM_REPS) return null;
+  const mult = record.difficultyMult ?? 1;
+  const scaledLoad = (record.weight ?? 0) * mult - (record.assistKg ?? 0);
+  return scaledLoad > 0 ? estimate1RM(scaledLoad, record.reps, formula) : scaledLoad;
 }
 
 /**
