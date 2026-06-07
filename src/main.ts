@@ -3,7 +3,7 @@
  * call the pure compute functions, and paint the DOM. No business logic lives
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
-import { niceTicks, MS_DAY } from "./chartAxis";
+import { niceTicks } from "./chartAxis";
 import {
   fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, dowLetter,
   isoWeekNumber, todayIso, trainingDuration,
@@ -217,11 +217,6 @@ const els = {
   ecalcRows: $<HTMLTableSectionElement>("ecalcRows"),
   ecalcAddRow: $<HTMLButtonElement>("ecalcAddRow"),
   ecalcNote: $("ecalcNote"),
-  exerciseProgress: $("exerciseProgress"),
-  exerciseProgressNote: $("exerciseProgressNote"),
-  exerciseProgressCenter: $<HTMLButtonElement>("exerciseProgressCenter"),
-  exPersetBest: $<HTMLButtonElement>("exPersetBest"),
-  exProgCompact: $<HTMLButtonElement>("exProgCompact"),
   exCombineBar: $("exCombineBar"),
   exLevels: $("exLevels"),
   exerciseFilter: $("exerciseFilter"),
@@ -312,14 +307,12 @@ const els = {
 };
 
 let data: LoadedData;
-let exerciseSvg: SvgChart | null = null; // per-exercise drill-in progress graph (SVG engine)
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
-let exPersetBestOnly = false; // per-set range: show only each day's best set (top estimated 1RM)
 
 const PAGE_SIZE = 50; // List & stats page size
 
@@ -3841,7 +3834,6 @@ function renderExercisesPage() {
   els.exerciseTopSets.hidden = true;
   els.exerciseWeekly.hidden = true;
   els.exerciseTargets.hidden = true;
-  els.exerciseProgress.hidden = true; // per-exercise graph only in the drill-in (SVG engine stays mounted, just hidden)
   const cutoff = exerciseRangeCutoff();
   const base = activeRecords(); // honour the app-wide active exercise set
   const scoped = cutoff ? base.filter((r) => r.date && r.date >= cutoff) : base;
@@ -4040,7 +4032,6 @@ function renderExerciseDetail(exName: string) {
   renderExerciseWeekly(exName);
   renderExerciseTargets(pr);
   renderExerciseCalc(pr);
-  renderExerciseProgressChart(exName);
   const weeks = setsByWeek(setsForUserExercise(remapCombined(data.records), username, exName));
   const head = `<thead><tr><th>Week</th><th class="num">Sets</th></tr></thead>`;
   // Label each row by its ISO week-of-year number (e.g. "w15"), with the start
@@ -4111,7 +4102,7 @@ function saveCurrentCombine(): void {
   const name = (window.prompt("Name for the merged lift:", fallback) ?? "").trim() || fallback;
   // Guard against clashing with an existing lift/def name.
   if (selectableExercises(data.records).includes(name) || userExerciseDefs.some((d) => d.name === name)) {
-    els.exerciseProgressNote.textContent = `“${name}” already exists — pick another name.`;
+    window.alert(`“${name}” already exists — pick another name.`);
     return;
   }
   userExerciseDefs.push({ name, identity: "combined", members });
@@ -4440,105 +4431,6 @@ function decayingStrengthPoints<T extends { x: number; y: number }>(points: T[])
 }
 const CURRENT_STRENGTH_COLOR = "#2e7d52";
 
-/** Reflect the app-wide compacted-time state on the ⚙ menu's toggle button. */
-function syncExProgCompactBtn(): void {
-  const on = getTimeCompact();
-  els.exProgCompact.textContent = on ? "⇄ Compacted time" : "⇄ Realistic time";
-  els.exProgCompact.classList.toggle("is-active", on);
-  els.exProgCompact.setAttribute("aria-pressed", String(on));
-}
-
-/** One combined per-exercise graph (drill-in). Two views you can switch on/off by
- * tapping the legend: Est. 1RM (a dot for every set) and Current strength (best
- * 1RM so far, faded for time off). When the lift has squat-rack holes a "Scaled
- * effort" view is added too. View settings live in the ⚙ menu. */
-function renderExerciseProgressChart(exName: string) {
-  const box = document.getElementById("exerciseProgressChart");
-  if (!box) return;
-  const formula = currentFormula();
-  const username = els.athlete.value;
-  const mount = (config: SvgChartConfig) => {
-    if (!exerciseSvg) exerciseSvg = mountSvgChart(box, config);
-    else exerciseSvg.update(config);
-  };
-  els.exPersetBest.hidden = false; // "Best set only" filters the per-set views
-  els.exPersetBest.classList.toggle("is-active", exPersetBestOnly);
-  els.exPersetBest.setAttribute("aria-pressed", String(exPersetBestOnly));
-  syncExProgCompactBtn();
-
-  // ---- Per-set range: one weight→1RM bar per set on a real time axis; same-day
-  // sets fan out within the day. Optionally only each day's best set. ----
-  let sets = remapCombined(computedRecords())
-    .filter((r) => r.username === username && r.exerciseName === exName && r.weight !== null)
-    .slice()
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.setNumber - b.setNumber));
-  if (exPersetBestOnly) {
-    const bestByDay = new Map<string, SetRecord>();
-    const scoreOf = (r: SetRecord) =>
-      addedWeight1RM(r, formula) ?? (r.origWeight !== undefined ? (r.origWeight ?? 0) : (r.weight ?? 0));
-    for (const s of sets) {
-      const cur = bestByDay.get(s.date);
-      if (!cur || scoreOf(s) > scoreOf(cur)) bestByDay.set(s.date, s);
-    }
-    sets = [...bestByDay.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  }
-  const perDay = new Map<string, number>();
-  for (const s of sets) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
-  const seenInDay = new Map<string, number>();
-  const strengthRaw: { x: number; y: number; meta: string }[] = [];
-  const scaledRaw: { x: number; y: number }[] = []; // real 1RM × technique factor
-  for (const s of sets) {
-    const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-    const e1rm = addedWeight1RM(s, formula);
-    if (e1rm === null) continue;
-    const reps = s.reps ?? 0;
-    const base = Date.parse(s.date);
-    const total = perDay.get(s.date) ?? 1;
-    const idx = seenInDay.get(s.date) ?? 0;
-    seenInDay.set(s.date, idx + 1);
-    const frac = total > 1 ? (idx / (total - 1) - 0.5) * 0.7 : 0;
-    const x = base + frac * MS_DAY;
-    const meta = `${fmt(added)}×${reps} → ${fmt(e1rm)} 1RM · ${shortDate(s.date)}` + (rpeFor(s) ? ` · RIR ${rpeFor(s)}` : "");
-    strengthRaw.push({ x, y: e1rm, meta });
-    // The note-variation factor is already folded into e1rm now, so the "Scaled
-    // effort" line only needs the REMAINING factors (squat-rack level × per-set
-    // scale) — dividing it out avoids double-counting the variation difficulty.
-    const nv = noteVariationScale(s) || 1;
-    scaledRaw.push({ x, y: e1rm * (scaleForRecord(s) / nv) });
-  }
-  const strengthSorted = strengthRaw.slice().sort((a, b) => a.x - b.x);
-  const hasLevels = sets.some((s) => s.levelValue !== undefined);
-  const scaledPts = scaledRaw.slice().sort((a, b) => a.x - b.x).map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10 }));
-  const strengthPts = decayingStrengthPoints(strengthSorted.map((p) => ({ x: p.x, y: p.y })));
-  // A dot for EVERY set's estimated 1RM (per the request), not a weekly summary.
-  const e1rmPts = strengthSorted.map((p) => ({ x: p.x, y: Math.round(p.y * 10) / 10, meta: p.meta }));
-
-  if (e1rmPts.length === 0) {
-    els.exerciseProgress.hidden = true;
-    els.exerciseProgressNote.textContent = "";
-    return;
-  }
-  els.exerciseProgress.hidden = false;
-
-  const series: SvgSeries[] = [
-    // kg series share the LEFT axis so the dots and strength line align.
-    { name: "Est. 1RM (per set)", color: "#b8902f", type: "scatter", axis: "left", points: e1rmPts },
-    { name: "Current strength", color: CURRENT_STRENGTH_COLOR, type: "line", axis: "left", points: strengthPts },
-  ];
-  // Scaled effort: each set's real 1RM × its hole's technique factor — only added
-  // when this exercise has holes, so equal-effort holes line up (originals stay).
-  if (hasLevels)
-    series.push({ name: "Scaled effort", color: "#1f8a8a", type: "scatter", axis: "left", points: scaledPts });
-
-  mount({
-    series, xKind: "time", compactable: true, noCompactToggle: true, yBeginAtZero: true,
-    yUnit: "kg", insideLabels: true, height: 320,
-  });
-  els.exerciseProgressNote.textContent =
-    "Tap a label to show/hide a view: Est. 1RM (a dot for every set) and Current strength (best 1RM so far, faded for time off). Use ⚙ for graph settings." +
-    (hasLevels ? " Scaled effort = each set's real 1RM × its squat-rack hole's technique factor (tune the factors in the holes table); the real 1RM is never changed." : "") +
-    (exPersetBestOnly ? " Showing each day's best set only." : "");
-}
 
 
 /** Clicks within the Exercises panel: drill into an exercise, expand a week, or go back. */
@@ -5699,8 +5591,6 @@ function onSetRpeClick(target: HTMLElement): boolean {
     setRpe(dd.dataset.setid, v);
     // Swap in a freshly-rendered dropdown so the button label + is-set update.
     dd.outerHTML = rpeDropdownHtml(dd.dataset.setid, v ?? undefined);
-    // Refresh the drill-in graph so the new grade shows in the per-set tooltip.
-    if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
     return true;
   }
   return true; // a click inside the open menu (e.g. on a gap) — swallow it
@@ -7315,7 +7205,6 @@ function refreshAfterDifficultyEdit(): void {
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   renderWaCompareGraph();
-  if (selectedExercise) renderExerciseProgressChart(selectedExercise);
   window.scrollTo(0, y);
   requestAnimationFrame(() => window.scrollTo(0, y));
 }
@@ -8094,21 +7983,6 @@ async function init() {
     // isn't a genuine outside click, so the editor should stay open.
     const t = e.target as HTMLElement;
     if (scaleEditState && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
-  });
-  // "Center on data" snaps the drill-in chart's pan/zoom back to the data fit.
-  els.exerciseProgressCenter.addEventListener("click", () => {
-    if (selectedExercise) renderExerciseProgressChart(selectedExercise); // re-render resets the view
-  });
-  // Toggle the drill-in chart between the 1RM trend and the per-set weight→1RM range.
-  els.exPersetBest.addEventListener("click", () => {
-    exPersetBestOnly = !exPersetBestOnly;
-    if (selectedExercise !== null) renderExerciseProgressChart(selectedExercise);
-  });
-  // Compacted/realistic time toggle, surfaced in the ⚙ menu (the chart legend's
-  // own button is suppressed for this graph via noCompactToggle).
-  els.exProgCompact.addEventListener("click", () => {
-    setTimeCompact(!getTimeCompact());
-    syncExProgCompactBtn();
   });
   els.summariseBtn.addEventListener("click", runSummary);
   // Each control is one toggle button now: tap to flip its value (no segments).
