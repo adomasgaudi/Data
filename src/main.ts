@@ -10158,7 +10158,14 @@ function renderWaChips(): void {
 /** A finer "family" subgroup within a group — all handstand variants cluster under
  * "Handstand". null = no subgroup (the chip sits directly under its group). */
 function exerciseSubgroup(name: string): string | null {
-  return /handstand/i.test(name) ? "Handstand" : null;
+  const n = name.toLowerCase();
+  if (/handstand/.test(n)) return "Handstand";
+  // Deadlift family split into finer sub-headers (most-specific first, so a
+  // "Romanian Deadlift" reads as hamstring, not the plain deadlift bucket).
+  if (/rdl|romanian|stiff[ -]?leg|nordic|leg curl|hamstring/.test(n)) return "Stiff-leg / RDL (hamstring)";
+  if (/back extension|hyperextension|reverse hyper|good ?morning|superman|jefferson/.test(n)) return "Back extension";
+  if (/deadlift|rack pull/.test(n)) return "Deadlift";
+  return null;
 }
 
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
