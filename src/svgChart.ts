@@ -303,11 +303,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         ? halo((M.l + 4).toString(), (py - 3).toFixed(1), "start", fmtTick(v, yT))
         : `<text x="${M.l - 6}" y="${(py + 4).toFixed(1)}" text-anchor="end" class="svgc-axislabel" font-size="11">${fmtTick(v, yT)}</text>`;
     }
-    // right-axis labels (no gridlines, to avoid a double grid)
+    // right-axis labels (no gridlines, to avoid a double grid). Follow the same
+    // vertical shift the right-axis series uses (e.g. the Volume-shift knob) so the
+    // axis keeps describing where the bars actually sit.
     if (hasRight()) {
+      const rShiftPx = (rightSeries().find((s) => s.yShiftFrac)?.yShiftFrac ?? 0) * plotH;
       const ryT = niceTicks(ry.yMin, ry.yMax, 6);
       for (const v of ryT) {
-        const py = yR(v);
+        const py = yR(v) - rShiftPx;
         if (py < M.t - 0.5 || py > h - M.b + 0.5) continue;
         yLabels += inside()
           ? halo((W - M.r - 4).toString(), (py - 3).toFixed(1), "end", fmtTick(v, ryT))

@@ -142,6 +142,10 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
     yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
     rightHeadroom: input.config.rightHeadroom,
+    // Horizontal pan/zoom only: vertical dragging would scroll the right-axis
+    // (volume) series relative to the left-axis (1RM) one. The relative height is
+    // controlled by the Right-axis / Volume-shift knobs, not by panning.
+    panMode: "x" as const,
     ...(showsWr ? { yBands: [
       { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
       { from: 0.6, fill: "rgba(120,120,120,0.12)" },
