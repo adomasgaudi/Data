@@ -10696,16 +10696,29 @@ function renderWaGraph(): void {
   // never pushes the layout or needs a scroll). The legend element is rendered by
   // the SVG engine inside #waGraphChart; we relocate it down into this bar after the
   // chart draws (its innerHTML keeps updating in place wherever it lives).
-  box.innerHTML =
-    `<div id="waGraphChart"></div>` +
+  const graphBarHtml =
     `<div class="wa-graph-bar">` +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
     `</details>` +
-    `</div>` +
-    `<div class="muted wa-placeholder" id="waGraphNote"></div>`;
-  const chartBox = document.getElementById("waGraphChart");
+    `</div>`;
+  // Keep #waGraphChart alive across option/selection re-renders so pan/zoom isn't
+  // wiped and pointer listeners stay attached (innerHTML used to recreate it every time).
+  let chartBox = box.querySelector<HTMLElement>("#waGraphChart");
+  if (!chartBox) {
+    box.innerHTML =
+      `<div id="waGraphChart"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
+    chartBox = box.querySelector<HTMLElement>("#waGraphChart");
+  } else {
+    const bar = box.querySelector(".wa-graph-bar");
+    if (bar) bar.outerHTML = graphBarHtml;
+    else chartBox.insertAdjacentHTML("afterend", graphBarHtml);
+    if (!box.querySelector("#waGraphNote")) {
+      const afterBar = box.querySelector(".wa-graph-bar") ?? chartBox;
+      afterBar.insertAdjacentHTML("afterend", `<div class="muted wa-placeholder" id="waGraphNote"></div>`);
+    }
+  }
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.

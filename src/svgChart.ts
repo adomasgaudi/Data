@@ -614,6 +614,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
   const onMove = (e: PointerEvent) => {
     if (!pts.has(e.pointerId)) return;
+    if (pts.size > 0) e.preventDefault();
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const all = [...pts.values()];
     if (all.length >= 2 && pinch) {
@@ -669,6 +670,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      try { plotEl.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       if (wasTap) {
         const now = Date.now();
         if (lastTap && now - lastTap.t < 300 && Math.abs(e.clientX - lastTap.x) < 24) {
@@ -689,6 +691,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       window.addEventListener("pointercancel", onUp);
     }
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { plotEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     if (pts.size >= 2) {
       const [a, b] = [...pts.values()];
       pinch = { hx: Math.abs(a!.x - b!.x), vy: Math.abs(a!.y - b!.y), mx: (a!.x + b!.x) / 2, my: (a!.y + b!.y) / 2 };
@@ -698,6 +701,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     }
     e.preventDefault();
   });
+  // iOS Safari: pointer capture alone sometimes still scrolls the page mid-drag.
+  plotEl.addEventListener("touchmove", (e) => { if (pts.size > 0) e.preventDefault(); }, { passive: false });
   plotEl.addEventListener("pointermove", (e) => {
     if (pts.size > 0 || e.buttons !== 0) return;
     if (e.pointerType === "mouse") showTip(e.clientX);

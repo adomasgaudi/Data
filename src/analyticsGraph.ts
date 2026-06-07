@@ -146,16 +146,16 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     interactive: input.interactive ?? true,
     yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
     rightHeadroom: input.config.rightHeadroom,
-    // Horizontal pan/zoom only: vertical dragging would scroll the right-axis
-    // (volume) series relative to the left-axis (1RM) one. The relative height is
-    // controlled by the Right-axis / Volume-shift knobs, not by panning.
-    panMode: "x" as const,
+    // Free 2-D pan/zoom: both y-axes shift together, so volume and 1RM stay aligned;
+    // use Right-axis / Volume-shift knobs to separate overlapping series.
+    panMode: "xy" as const,
     ...(showsWr ? { yBands: [
       { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
       { from: 0.6, fill: "rgba(120,120,120,0.12)" },
     ] } : {}),
   };
   const existing = charts.get(container);
+  container.classList.add("svgc-freepan");
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));
   return series.length;
