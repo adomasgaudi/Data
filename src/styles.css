@@ -1993,10 +1993,13 @@ sup.wr-bw { font-size: 0.85em; }
 .bw-ex-name { cursor: pointer; user-select: none; }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
-.ex-info { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.3rem 0.2rem; }
-.ex-info-item { display: flex; gap: 0.6rem; font-size: 0.82rem; align-items: flex-start; }
-.ex-info-lbl { flex: 0 0 8.5rem; color: var(--muted); font-weight: 600; padding-top: 3px; }
-.ex-info-val { flex: 1 1 auto; min-width: 0; }
+.ex-info { display: flex; flex-direction: column; gap: 0; padding: 0.3rem 0.2rem; }
+/* Each field is its own STACKED section (label header on top, controls full-width
+   below) instead of a cramped label|value 2-column row — gives editing room. */
+.ex-info-item { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+.ex-info-item:last-child { border-bottom: none; }
+.ex-info-lbl { color: var(--muted); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.ex-info-val { width: 100%; min-width: 0; }
 /* Editable controls folded straight into the info rows — blue = editable. */
 .ex-info-val > input, .ex-info-val > select { font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--accent); font-weight: 600; max-width: 100%; min-width: 0; }
 .ex-info-val > input[type="text"] { width: 100%; }
