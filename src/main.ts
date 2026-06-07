@@ -9520,6 +9520,15 @@ function setupTeamView() {
 // re-renders and navigating away/back; nothing here touches the existing pages.
 type WaMode = "all" | "single" | "compare";
 let waSelected: string[] = [];
+// One-time seed: the beginning ANL view is a real PRE-SELECTION of the top-10
+// tier-1 (Primary) lifts (so the pills show), not a special aggregate view.
+let analysisSeeded = false;
+/** The athlete's 10 most-trained Primary-tier lifts (the default analysis selection). */
+function defaultTopTierSelection(): string[] {
+  const counts = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+  const tier1 = counts.filter((n) => tierFor(n) === "main");
+  return (tier1.length ? tier1 : counts).slice(0, 10);
+}
 /** Max exercises plotted on the analysis graph at once — past this the SVG
  * redraw lags, so extra selections are listed but not drawn (see renderWaGraph). */
 const WA_GRAPH_MAX = 10;
@@ -9693,6 +9702,9 @@ function restoreAnalysisPanels(): void {
  * The universal graph (and, for compare, the overlay dropdown) sit above it. It
  * also re-paints the Filters mode readout and the exercise-selector chips. */
 function renderWorkoutAnalysis(): void {
+  // First time in: pre-select the top-10 tier-1 lifts so the view opens as a real
+  // selection (pills shown), not the implicit aggregate. Clearing later is allowed.
+  if (!analysisSeeded) { analysisSeeded = true; if (waSelected.length === 0) waSelected = defaultTopTierSelection(); }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
   // The Workout-history section's collapsible summary doubles as its title, so it
@@ -10656,6 +10668,10 @@ function updateBottomNav() {
     const active = nav === "analysis" ? analysisOpen : nav === "other" ? !analysisOpen : false;
     b.classList.toggle("is-active", active);
   }
+  // Label the Analysis button by which page it leads to, so you can tell the
+  // simplified S-ANL page apart from the full analysis.
+  const lbl = document.getElementById("navAnalysisLabel");
+  if (lbl) lbl.textContent = analysisTabName() === "s-analysis" ? "S-Analysis" : "Analysis";
 }
 
 function setOtherSheetOpen(open: boolean) {
