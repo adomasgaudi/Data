@@ -12,7 +12,7 @@ import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
 import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
-import { S } from "./appState";
+import { S, type HeatColorDim } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -1330,7 +1330,7 @@ let aloneTags = new Set<string>();
 // toggle shows them. While actively tagging (paint mode) they always show so you
 // can see what you're marking.
 let showAloneRings = (() => { try { return localStorage.getItem("colosseum.showAloneRings") === "1"; } catch { return false; } })();
-const aloneRingsVisible = (): boolean => showAloneRings || aloneTagMode;
+const aloneRingsVisible = (): boolean => showAloneRings || S.aloneTagMode;
 
 /** Stable tag key for a workout: the athlete + the session's ISO day. */
 const aloneKey = (date: string): string => `${els.athlete.value}|${date}`;
@@ -4506,17 +4506,10 @@ function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
 }
 
 // ---- Workouts overview: a per-year heatmap of training days ----
-let heatYear = 2026; // the year shown in single-year mode (‹ › to change)
-// "ribbon" = one continuous strip flowing across years (default); "single" = one
-// calendar year with ‹ › nav; "all" = every year stacked as separate blocks.
-let heatScope: "ribbon" | "single" | "all" = "ribbon";
-let heatFilters: string[] = []; // multi-select; empty = all exercises (default)
-// When the Analysis view forces the calendar to the selected exercises, the
-// user's own "all-mode" filter is parked here and restored when the selection clears.
-let heatFiltersSaved: string[] | null = null;
-// When armed, tapping heatmap days toggles the "trained alone" tag (paint mode)
-// instead of jumping to that day — so you can tag many days quickly in one go.
-let aloneTagMode = false;
+// Heatmap state lives on S (appState): S.heatYear (year in single mode), S.heatScope
+// (ribbon/single/all), S.heatFilters (multi-select; empty = all), S.heatFiltersSaved
+// (parked all-mode filter while the Analysis selection scopes the calendar),
+// S.aloneTagMode (tap-to-tag paint mode), S.heatColorBy.
 
 /** The workout days the heatmap (year analysis) draws from: the athlete's full
  * history, or — when the "Hard sets only" lens is on — a rebuild that drops easy
@@ -4566,8 +4559,7 @@ function filterColor(filter: string): string | null {
 // "Colour by" for the all-exercises calendar (only when no filter is active):
 // paint each day by the dominant group in a chosen dimension; the day's set count
 // still drives the intensity (opacity). "none" = the classic single-colour scale.
-type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
-let heatColorBy: HeatColorDim = "cat"; // default: colour every exercise by body part
+// S.heatColorBy (HeatColorDim) lives on S (appState); HeatColorDim imported at top.
 const HEAT_COLOR_DIMS: HeatColorDim[] = ["none", "cat", "mus", "fun", "ex"];
 const HEAT_COLOR_LABELS: Record<HeatColorDim, string> = {
   none: "One colour", cat: "Body part", mus: "Muscle group", fun: "Function", ex: "Exercise",
@@ -4595,29 +4587,29 @@ function heatGroupColor(dim: HeatColorDim, value: string): string | null {
   if (dim === "cat") return CATEGORY_COLORS[value as TrainingCategory] ?? hashHueHex(value);
   return hashHueHex(value);
 }
-/** Training dates → { sets, catHex } honouring the active heatFilters. */
+/** Training dates → { sets, catHex } honouring the active S.heatFilters. */
 function filteredDayCounts(): Map<string, { sets: number; catHex: string | null; label?: string | null }> {
   const m = new Map<string, { sets: number; catHex: string | null; label?: string | null }>();
   for (const d of heatWorkoutDays()) {
-    if (heatFilters.length === 0) {
+    if (S.heatFilters.length === 0) {
       if (d.totalSets <= 0) continue;
-      if (heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
+      if (S.heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
       // No filter but a colour dimension is chosen: paint by the day's DOMINANT
       // group in that dimension (intensity still = total sets).
       const tally = new Map<string, number>();
       for (const e of d.exercises) {
-        const v = exerciseGroupValue(e.exerciseName, heatColorBy);
+        const v = exerciseGroupValue(e.exerciseName, S.heatColorBy);
         if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
       }
       let domV = "", domN = 0;
       for (const [v, n] of tally) if (n > domN) { domN = n; domV = v; }
-      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(heatColorBy, domV) : null, label: domV || null });
+      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(S.heatColorBy, domV) : null, label: domV || null });
       continue;
     }
     let totalSets = 0;
     let dominantFilter = "";
     let dominantSets = 0;
-    for (const f of heatFilters) {
+    for (const f of S.heatFilters) {
       const n = filterMatchSets(d, f);
       totalSets += n;
       if (n > dominantSets) { dominantSets = n; dominantFilter = f; }
@@ -4633,16 +4625,16 @@ function filteredDayCounts(): Map<string, { sets: number; catHex: string | null;
 function initHeatYear() {
   const latest = athleteWorkouts.find((d) => d.totalSets > 0)?.date ?? athleteWorkouts[0]?.date;
   const y = Number(latest?.slice(0, 4));
-  if (Number.isFinite(y)) heatYear = y;
-  heatFilters = []; // default to all exercises (coloured by body part)
-  heatFiltersSaved = null; // don't carry a parked filter across athletes
-  aloneTagMode = false; // start each athlete in normal tap-to-jump mode
+  if (Number.isFinite(y)) S.heatYear = y;
+  S.heatFilters = []; // default to all exercises (coloured by body part)
+  S.heatFiltersSaved = null; // don't carry a parked filter across athletes
+  S.aloneTagMode = false; // start each athlete in normal tap-to-jump mode
 }
 
 /** The years (descending) that have any training, for the ‹ › year nav. */
 function dataYears(trained: Map<string, number>): number[] {
   const years = [...new Set([...trained.keys()].map((d) => Number(d.slice(0, 4))))].sort((a, b) => b - a);
-  return years.length ? years : [heatYear];
+  return years.length ? years : [S.heatYear];
 }
 
 /** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
@@ -4795,32 +4787,32 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
 function heatPillControls(): string {
   const groupBy =
     `<label class="hm-groupby">Group by <select class="hm-groupby-sel">` +
-    HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
+    HEAT_COLOR_DIMS.map((k) => `<option value="${k}"${S.heatColorBy === k ? " selected" : ""}>${escapeHtml(HEAT_COLOR_LABELS[k])}</option>`).join("") +
     `</select></label>`;
   // Pills now mirror the analysis SELECTION (waSelected) — they are one and the
   // same filter for the whole page. "All" is on when nothing's selected.
   const selectedSet = new Set(waSelected);
   const allOn = waSelected.length === 0;
   const allPill = `<button type="button" class="hm-pill hm-pill-all${allOn ? " is-on" : ""}" data-heatall="1">All</button>`;
-  if (heatColorBy === "none")
+  if (S.heatColorBy === "none")
     return `<div class="hm-pills">${groupBy}${allPill}<span class="muted hm-pill-hint">· one colour, lighter = fewer sets</span></div>`;
   // Tally the groups present for this athlete, most-trained first.
   const tally = new Map<string, number>();
   for (const d of athleteWorkouts) for (const e of d.exercises) {
-    const v = exerciseGroupValue(e.exerciseName, heatColorBy);
+    const v = exerciseGroupValue(e.exerciseName, S.heatColorBy);
     if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
   }
   const sorted = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
   const cap = 16;
   const shown = sorted.slice(0, cap);
   const pill = (v: string) => {
-    const val = `${heatColorBy}:${v}`;
+    const val = `${S.heatColorBy}:${v}`;
     // A group pill is "on" when every one of its lifts is in the selection (or, for
     // the Exercise dimension, when that lift is selected).
-    const on = heatColorBy === "ex"
+    const on = S.heatColorBy === "ex"
       ? selectedSet.has(v)
-      : (() => { const exs = exercisesInGroup(heatColorBy, v); return exs.length > 0 && exs.every((e) => selectedSet.has(e)); })();
-    const col = heatGroupColor(heatColorBy, v) ?? "#888";
+      : (() => { const exs = exercisesInGroup(S.heatColorBy, v); return exs.length > 0 && exs.every((e) => selectedSet.has(e)); })();
+    const col = heatGroupColor(S.heatColorBy, v) ?? "#888";
     return `<button type="button" class="hm-pill${on ? " is-on" : ""}" data-heatpill="${escapeHtml(val)}" style="--pc:${col}"><span class="hm-pill-dot"></span>${escapeHtml(v)}</button>`;
   };
   const more = sorted.length > cap ? `<span class="muted hm-pill-hint">+${sorted.length - cap} more</span>` : "";
@@ -4831,7 +4823,7 @@ function heatPillControls(): string {
  * years stacked; filterable to one category or exercise. Tap a day to jump. */
 function renderWorkoutCalendar() {
   const years = dataYears(trainingDays()); // year list from ALL training (filter-independent)
-  if (!years.includes(heatYear)) heatYear = years[0]!;
+  if (!years.includes(S.heatYear)) S.heatYear = years[0]!;
   const counts = filteredDayCounts(); // colouring honours the filter
   // Scope (Timeline / Year / All) + the Tag-alone arm button live in ONE compact
   // ⚙ settings dropdown BELOW the calendar — a tight DJ-console row of tiny toggle
@@ -4839,12 +4831,12 @@ function renderWorkoutCalendar() {
   const calSettingsOpen = els.workoutCalendar.querySelector<HTMLDetailsElement>(".cal-settings")?.open ?? false;
   const scopeBtns = ([["ribbon", "Time"], ["single", "Year"], ["all", "All"]] as const)
     .map(([s, l]) =>
-      `<button type="button" class="wo-dj-btn cal-mode-btn${heatScope === s ? " is-active" : ""}" data-heat-scope="${s}" ` +
+      `<button type="button" class="wo-dj-btn cal-mode-btn${S.heatScope === s ? " is-active" : ""}" data-heat-scope="${s}" ` +
       `title="${s === "ribbon" ? "Timeline — one continuous strip" : s === "single" ? "Single year" : "All years stacked"}">${l}</button>`)
     .join("");
   const tagDjBtn =
-    `<button type="button" class="wo-dj-btn cal-tagmode${aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
-    `title="${aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${aloneTagMode ? "Done" : "Tag"}</button>`;
+    `<button type="button" class="wo-dj-btn cal-tagmode${S.aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
+    `title="${S.aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${S.aloneTagMode ? "Done" : "Tag"}</button>`;
   const calSettings =
     `<details class="wo-controls-fold cal-settings"${calSettingsOpen ? " open" : ""}><summary class="wo-controls-sum">⚙</summary>` +
     `<div class="wo-controls wo-dj">${scopeBtns}${tagDjBtn}</div></details>`;
@@ -4855,17 +4847,17 @@ function renderWorkoutCalendar() {
   const count = (g: { days: number; totalSets: number }) =>
     `<span class="cal-count muted">${g.days} day${g.days === 1 ? "" : "s"} · ${g.totalSets.toLocaleString()} sets</span>`;
 
-  if (heatScope === "ribbon") {
+  if (S.heatScope === "ribbon") {
     const g = ribbonGridHtml(counts);
     // No header line here — the calendar sits right at the top (the year span +
     // day/set count were redundant clutter).
     els.workoutCalendar.innerHTML = g.html + legend;
-    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    els.workoutCalendar.classList.toggle("cal-tagging", S.aloneTagMode);
     scrollHeatmapToEnd();
     return;
   }
 
-  if (heatScope === "all") {
+  if (S.heatScope === "all") {
     const blocks = years
       .map((y) => {
         const g = yearGridHtml(y, counts);
@@ -4873,25 +4865,25 @@ function renderWorkoutCalendar() {
       })
       .join("");
     els.workoutCalendar.innerHTML = blocks + legend;
-    els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+    els.workoutCalendar.classList.toggle("cal-tagging", S.aloneTagMode);
     scrollHeatmapToEnd();
     return;
   }
 
-  const g = yearGridHtml(heatYear, counts);
-  const idx = years.indexOf(heatYear);
+  const g = yearGridHtml(S.heatYear, counts);
+  const idx = years.indexOf(S.heatYear);
   const olderExists = idx < years.length - 1; // a smaller (older) year exists
   const newerExists = idx > 0; // a larger (newer) year exists
   els.workoutCalendar.innerHTML =
     `<div class="cal-head">` +
     `<button type="button" class="cal-nav" data-heat="prev" aria-label="Previous year"${olderExists ? "" : " disabled"}>‹</button>` +
-    `<strong>${heatYear}</strong>` +
+    `<strong>${S.heatYear}</strong>` +
     `<button type="button" class="cal-nav" data-heat="next" aria-label="Next year"${newerExists ? "" : " disabled"}>›</button>` +
     count(g) +
     `</div>` +
     g.html +
     legend;
-  els.workoutCalendar.classList.toggle("cal-tagging", aloneTagMode);
+  els.workoutCalendar.classList.toggle("cal-tagging", S.aloneTagMode);
   scrollHeatmapToEnd();
 }
 
@@ -4907,10 +4899,10 @@ function scrollHeatmapToEnd() {
 /** Step the heatmap to an adjacent year that has data (‹ older / › newer). */
 function shiftHeatYear(delta: number) {
   const years = dataYears(trainingDays()); // descending
-  const idx = years.indexOf(heatYear);
+  const idx = years.indexOf(S.heatYear);
   const next = years[idx - delta]; // -1 = older (later in list), +1 = newer
   if (next !== undefined) {
-    heatYear = next;
+    S.heatYear = next;
     renderWorkoutCalendar();
   }
 }
@@ -7867,7 +7859,7 @@ async function init() {
       return;
     }
     if (target.closest("[data-heatclear]")) {
-      heatFilters = [];
+      S.heatFilters = [];
       // close the dropdown
       const dd = target.closest<HTMLElement>(".xdd-heat");
       dd?.querySelector<HTMLElement>(".xdd-menu")?.toggleAttribute("hidden", true);
@@ -7877,9 +7869,9 @@ async function init() {
     const heatOpt = target.closest<HTMLElement>(".xdd-heat .xdd-opt:not(.xdd-clear)");
     if (heatOpt?.dataset.heatval !== undefined) {
       const val = heatOpt.dataset.heatval;
-      const idx = heatFilters.indexOf(val);
-      if (idx >= 0) heatFilters.splice(idx, 1);
-      else heatFilters.push(val);
+      const idx = S.heatFilters.indexOf(val);
+      if (idx >= 0) S.heatFilters.splice(idx, 1);
+      else S.heatFilters.push(val);
       // Don't close the dropdown — let the user pick multiple
       return renderWorkoutCalendar();
     }
@@ -7919,7 +7911,7 @@ async function init() {
     const scopeBtn = target.closest<HTMLElement>(".cal-mode-btn");
     if (scopeBtn?.dataset.heatScope) {
       const v = scopeBtn.dataset.heatScope;
-      heatScope = v === "all" ? "all" : v === "single" ? "single" : "ribbon";
+      S.heatScope = v === "all" ? "all" : v === "single" ? "single" : "ribbon";
       return renderWorkoutCalendar();
     }
     const nav = target.closest<HTMLElement>(".cal-nav");
@@ -7927,13 +7919,13 @@ async function init() {
     if (nav?.dataset.heat === "next") return shiftHeatYear(1); // newer year
     // "Tag alone": arm/disarm paint mode so day taps toggle the alone tag.
     if (target.closest<HTMLElement>(".cal-tagmode")) {
-      aloneTagMode = !aloneTagMode;
+      S.aloneTagMode = !S.aloneTagMode;
       return renderWorkoutCalendar();
     }
     const cell = target.closest<HTMLElement>(".hm-cell[data-date]");
     // In paint mode, tapping a trained day toggles its "alone" tag in place
     // (no jump) so many days can be tagged quickly without scrolling the list.
-    if (aloneTagMode && cell?.dataset.date) {
+    if (S.aloneTagMode && cell?.dataset.date) {
       const key = aloneKey(cell.dataset.date);
       if (aloneTags.has(key)) aloneTags.delete(key);
       else aloneTags.add(key);
@@ -7950,7 +7942,7 @@ async function init() {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".hm-groupby-sel");
     // Changing the colour/grouping dimension only re-buckets the pills + recolours;
     // it must NOT clear the shared selection (that would un-sync from the graph).
-    if (sel) { heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
+    if (sel) { S.heatColorBy = sel.value as HeatColorDim; renderWorkoutCalendar(); }
   });
   // Close the heatmap filter menu on any click outside it.
   document.addEventListener("click", (e) => {
@@ -9860,16 +9852,16 @@ function renderWorkoutAnalysis(): void {
   // visible tab — otherwise the legacy view's own calendar would be hijacked.
   if (document.getElementById("tab-analysis")?.hidden === false) {
     if ((mode === "single" || mode === "compare") && waSelected.length) {
-      if (heatFiltersSaved === null) heatFiltersSaved = heatFilters;
+      if (S.heatFiltersSaved === null) S.heatFiltersSaved = S.heatFilters;
       // Expand combined/comparison lifts to their raw member names — the same
       // expansion the history list uses (waListExerciseFilter) — so the calendar
       // counts EVERY set of the selection, not just those logged under the parent
       // name. Without this a merged lift shows all sets in the list but only a few
       // on the calendar.
-      heatFilters = expandToRawExercises(waSelected).map((n) => `ex:${n}`);
-    } else if (heatFiltersSaved !== null) {
-      heatFilters = heatFiltersSaved;
-      heatFiltersSaved = null;
+      S.heatFilters = expandToRawExercises(waSelected).map((n) => `ex:${n}`);
+    } else if (S.heatFiltersSaved !== null) {
+      S.heatFilters = S.heatFiltersSaved;
+      S.heatFiltersSaved = null;
     }
     setAnalysisCalendar(true);
     renderWorkoutCalendar();

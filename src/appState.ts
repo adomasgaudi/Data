@@ -8,6 +8,9 @@
  * moves another cohesive cluster of `let`s onto S (tsc catches any missed ref).
  * Keep this a plain data bag — no logic.
  */
+/** How the workout heatmap colours each day. */
+export type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
+
 export const S: {
   // Analysis view (Workout Analysis) — local UI flags.
   waCompareView: "trend" | "perset";
@@ -15,10 +18,23 @@ export const S: {
   waCogOpen: boolean;
   waGraphFoldOpen: boolean;
   waPerBodyweight: boolean;
+  // Workouts heatmap (year analysis) state.
+  heatYear: number;
+  heatScope: "ribbon" | "single" | "all";
+  heatFilters: string[];
+  heatFiltersSaved: string[] | null;
+  aloneTagMode: boolean;
+  heatColorBy: HeatColorDim;
 } = {
   waCompareView: "trend",
   waChipsFoldOpen: false,
   waCogOpen: false,
   waGraphFoldOpen: false,
   waPerBodyweight: false,
+  heatYear: 2026,
+  heatScope: "ribbon",
+  heatFilters: [],
+  heatFiltersSaved: null,
+  aloneTagMode: false,
+  heatColorBy: "cat",
 };
