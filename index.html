@@ -35,7 +35,7 @@
       <div class="topbar-right">
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
-          <div class="settings-row settings-version"><span class="version">b.2.6.29</span> <span id="effortSummary" class="muted"></span></div>
+          <div class="settings-row settings-version"><span class="version">b.2.6.30</span> <span id="effortSummary" class="muted"></span></div>
           <!-- Calculation & display settings, tucked under a collapsible to keep the menu short. -->
           <details class="settings-group">
             <summary class="settings-group-sum">Calculations &amp; display</summary>
@@ -60,6 +60,8 @@
                 </div>
               </div>
               <p class="settings-hint">Changes every exercise name across the whole site at once — code (e.g. HS-PU), your short name, or the full name.</p>
+              <label class="check"><input type="checkbox" id="simplifiedToggle" /> Simplified view</label>
+              <p class="settings-hint">When on, the bottom “Analysis” button opens a simplified page (S-ANL) instead of the full analysis.</p>
             </div>
           </details>
           <!-- Night mode + security (who you're signed in as) grouped together.
@@ -1082,6 +1084,13 @@
             </div>
           </details>
         </section>
+      </div>
+
+      <!-- Simplified analysis (S-ANL): an intentionally EMPTY page, opened by the
+           bottom "Analysis" button when "Simplified view" is on in Settings. To be
+           filled in later. -->
+      <div id="tab-s-analysis" class="tab-panel" hidden>
+        <div id="sAnalysis" class="s-analysis"></div>
       </div>
     </main>
 

@@ -2480,6 +2480,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    compact row beside the title; each opens as a floating menu so the layout
    never shifts. */
 .wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; width: 100%; align-items: center; justify-content: flex-start; }
+/* Selected-exercise pills inside the sticky selector bar (EXR-SEL-PILLS). */
+.wa-sel-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; width: 100%; margin-top: 0.35rem; }
+.wa-sel-pill { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.wa-sel-pill:hover { border-color: var(--accent); }
+.wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
 /* Sticky selector bar: sits at the top of the Analysis card in normal flow, then
    pins to the top of the screen as you scroll the content below it. The card must
    not be an overflow scroll container or sticky can't pin to the viewport. */

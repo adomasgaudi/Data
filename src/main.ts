@@ -142,6 +142,7 @@ const els = {
   showLegsAll: $<HTMLInputElement>("showLegsAll"),
   showAloneRings: $<HTMLInputElement>("showAloneRings"),
   decayStrength: $<HTMLInputElement>("decayStrength"),
+  simplifiedToggle: $<HTMLInputElement>("simplifiedToggle"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
   rank: $<HTMLSelectElement>("rank"),
@@ -2584,6 +2585,8 @@ let exerciseSort: "sets" | "category" | "tier" = "category";
 // "Legs (all)" is a broad umbrella that overlaps the narrower leg splits, so it's
 // hidden from the By-category list by default; a Settings toggle brings it back.
 let showLegsAll = (() => { try { return localStorage.getItem("colosseum.legsAll") === "1"; } catch { return false; } })();
+// Simplified view: when on, the bottom "Analysis" button opens the empty S-ANL page.
+let simplifiedView = (() => { try { return localStorage.getItem("colosseum.simplifiedView") === "1"; } catch { return false; } })();
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
@@ -7432,6 +7435,13 @@ async function init() {
     renderExercisesPage();
   });
 
+  // Simplified view: routes the bottom "Analysis" button to the empty S-ANL page.
+  els.simplifiedToggle.checked = simplifiedView;
+  els.simplifiedToggle.addEventListener("change", () => {
+    simplifiedView = els.simplifiedToggle.checked;
+    try { localStorage.setItem("colosseum.simplifiedView", simplifiedView ? "1" : "0"); } catch { /* ignore */ }
+  });
+
   // The red "trained alone" rings on the calendar (off by default).
   els.showAloneRings.checked = showAloneRings;
   els.showAloneRings.addEventListener("change", () => {
@@ -9955,9 +9965,17 @@ function renderWorkoutAnalysis(): void {
     // Everything — Filter, Exercises, Settings (⚙), Create (+) — sits on ONE
     // compact tools row beside the title (they all open as floating menus, so the
     // layout never shifts). Taxonomy editor (single mode) drops below.
+    // Selected exercises shown as removable pills right in the sticky bar, so you
+    // always see what's plotted and can drop one with a tap (EXR-SEL-PILLS).
+    const selPills = waSelected.length
+      ? `<div class="wa-sel-pills">` +
+        waSelected.map((n) => `<button type="button" class="wa-sel-pill" data-waselpill="${escapeHtml(n)}" title="Remove ${escapeHtml(n)}">${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`).join("") +
+        `</div>`
+      : "";
     sel.innerHTML =
       `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>`;
+      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>` +
+      selPills;
     // Taxonomy editor renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
     if (assignBox) assignBox.innerHTML = assignUi;
@@ -10452,6 +10470,13 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
+    const selPill = t.closest<HTMLElement>(".wa-sel-pill");
+    if (selPill?.dataset.waselpill) {
+      waSelected = waSelected.filter((x) => x !== selPill.dataset.waselpill);
+      renderWorkoutAnalysis();
+      return;
+    }
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
     if (chip?.dataset.waex) {
       const n = chip.dataset.waex;
@@ -10734,7 +10759,9 @@ function showSubtab(name: string) {
 /** Light up the right bottom-nav item: Workouts/Exercises when the Athlete tab
  * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
 function updateBottomNav() {
-  const analysisOpen = document.getElementById("tab-analysis")?.hidden === false;
+  // S-ANL counts as the Analysis home too (simplified view).
+  const analysisOpen = document.getElementById("tab-analysis")?.hidden === false
+    || document.getElementById("tab-s-analysis")?.hidden === false;
   for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
     const nav = b.dataset.nav;
     const active = nav === "analysis" ? analysisOpen : nav === "other" ? !analysisOpen : false;
@@ -10758,9 +10785,9 @@ function setupBottomNav() {
         setOtherSheetOpen(els.otherSheet.hidden);
         return;
       }
-      // Analysis (default and only other nav target).
+      // Analysis — or the simplified S-ANL page when "Simplified view" is on.
       setOtherSheetOpen(false);
-      switchTopTab("analysis");
+      switchTopTab(simplifiedView ? "s-analysis" : "analysis");
     });
   }
   // Sheet items each open a top-tab panel and close the sheet.
