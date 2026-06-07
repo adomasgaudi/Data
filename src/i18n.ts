@@ -67,12 +67,12 @@ const LT: Record<string, string> = {
   "Log in": "Prisijungti",
   "Language": "Kalba",
   "Back to Colosseum": "Atgal į Colosseum",
-  // ---- Quick view switcher ----
-  "Admin": "Administratorius",
-  "User": "Vartotojas",
-  "Spectator": "Žiūrovas",
-  "Advanced": "Išplėstinis",
-  "Simplified": "Supaprastintas",
+  // ---- Quick view switcher (short toggle labels) ----
+  "Admin": "Admin",
+  "User": "Vart.",
+  "Spec": "Žiūr.",
+  "Simple": "Papr.",
+  "Adv": "Išpl.",
   // ---- Athletes (stats editor) ----
   "average": "vidurkis",
   "auto": "automatiškai",

@@ -393,8 +393,8 @@ function setSimplified(on: boolean): void {
 function renderViewSwitch(): void {
   const box = document.getElementById("viewSwitch");
   if (!box) return;
-  const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spectator";
-  const detailLabel = simplifiedView ? "Simplified" : "Advanced";
+  const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spec";
+  const detailLabel = simplifiedView ? "Simple" : "Adv";
   box.innerHTML =
     `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` +
     `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: Simplified · Advanced">${detailLabel}</button>`;
