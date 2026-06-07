@@ -1844,7 +1844,7 @@ function applyGroupFilter(mode: string, names: string[]): void {
     activeSolo = null;
   }
   saveActiveSet();
-  renderAll();
+  scheduleRender();
 }
 
 /** A group's current app-wide filter state, for the single cycling toggle:
@@ -5025,7 +5025,7 @@ function jumpToWorkoutDate(iso: string) {
   for (let el: HTMLElement | null = row; el; el = el.parentElement)
     if (el instanceof HTMLDetailsElement) el.open = true;
   insertDetail(row, 2, workoutGroupHtml(grp)); // expand it like a tap would
-  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
 }
@@ -5794,7 +5794,7 @@ function resetSetEdit(target: HTMLElement): boolean {
   if (!btn?.dataset.setid) return false;
   delete setOverrides[btn.dataset.setid];
   saveSetOverrides();
-  renderAll();
+  scheduleRender();
   return true;
 }
 
@@ -5837,7 +5837,7 @@ function onSetEditInput(e: Event): void {
   const noteInp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-note");
   if (noteInp?.dataset.setid !== undefined) {
     setSetOverrideNote(noteInp.dataset.setid, noteInp.value, noteInp.dataset.orig ?? "");
-    renderAll();
+    scheduleRender();
     return;
   }
   const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-input");
@@ -5848,7 +5848,7 @@ function onSetEditInput(e: Event): void {
   if (v !== null && !Number.isFinite(v)) v = null;
   if (v !== null && field === "reps") v = Math.round(v);
   setSetOverrideField(inp.dataset.setid, field, v);
-  renderAll();
+  scheduleRender();
 }
 
 /**
@@ -5929,7 +5929,7 @@ function renderActiveSetBar(totalExercises: number): void {
 function onActiveCutoffChange(value: string): void {
   activeCutoff = value === "none" ? null : value;
   saveActiveSet();
-  renderAll();
+  scheduleRender();
 }
 
 /** Clear all manual include/exclude overrides (keeps the tier cutoff). */
@@ -5938,7 +5938,7 @@ function clearActiveOverrides(): void {
   activeExclude = new Set();
   activeSolo = null;
   saveActiveSet();
-  renderAll();
+  scheduleRender();
 }
 
 /** Toggle one exercise's force-IN (include) or force-OUT (exclude) override from
@@ -6206,7 +6206,7 @@ function saveStatsEdit(): void {
   athleteOverrides[username] = ov;
   saveAthleteOverrides();
   renderStatsEdit();
-  renderAll();
+  scheduleRender();
 }
 
 function setupStatsEdit(): void {
@@ -6231,7 +6231,7 @@ function setupStatsEdit(): void {
       delete athleteOverrides[statsEditUser];
       saveAthleteOverrides();
       renderStatsEdit();
-      renderAll();
+      scheduleRender();
     }
   });
 }
@@ -6973,7 +6973,7 @@ function jumpToExerciseInfo(exName: string) {
   }
   // Let the just-opened rows lay out before scrolling to the row.
   requestAnimationFrame(() => {
-    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
     row.classList.add("wo-flash");
     window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
   });
@@ -6986,7 +6986,7 @@ function reviewGraphsForExercise(exName: string) {
   requestAnimationFrame(() => {
     reopenIndexDetail(exName);           // expand the inspector (where the chips live)
     const panel = document.getElementById(`graphPerms-${exName}`);
-    panel?.scrollIntoView({ behavior: "smooth", block: "center" });
+    panel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 }
 
@@ -7278,6 +7278,26 @@ function renderAll() {
   renderTest();
 }
 
+// Coalesced, scroll-preserving renderAll for interaction handlers (CLAUDE.md
+// rule 17). Instead of rebuilding all five views synchronously on a tap — which
+// blocks the click's own paint and janks on rapid taps — defer the heavy render
+// to the next animation frame and collapse multiple calls in the same frame into
+// one. So a tap repaints its own control instantly and the app-wide refresh lags
+// one frame behind. Use this where renderAll() is the LAST action of a handler;
+// keep the synchronous renderAll() where following code reads the just-built DOM
+// (e.g. reopenIndexDetail / renderExerciseDetail right after).
+let renderScheduled = false;
+function scheduleRender(): void {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  const y = window.scrollY;
+  requestAnimationFrame(() => {
+    renderScheduled = false;
+    renderAll();
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  });
+}
+
 /**
  * Re-render everything a difficulty / scale / note edit affects. renderAll covers
  * the leaderboard, PRs, athlete and Index views, but NOT the Analysis workouts
@@ -7527,7 +7547,7 @@ async function init() {
   els.decayStrength.addEventListener("change", () => {
     decayStrength = els.decayStrength.checked;
     try { localStorage.setItem("colosseum.decayStrength", decayStrength ? "1" : "0"); } catch { /* ignore */ }
-    renderAll(); // every 1RM/leaderboard/PR view re-reads strengthAsOf()
+    scheduleRender(); // every 1RM/leaderboard/PR view re-reads strengthAsOf()
   });
 
   // Settings popover (holds the 1RM formula).
@@ -7823,7 +7843,7 @@ async function init() {
     if (scaleEditState) return; // popover syncs on close (scaleEditDirty already set)
     scaleEditDirty = false;
     refreshExerciseInfo();
-    renderAll();
+    scheduleRender();
   });
   // Photo scrubber: drag through the real video frames (top→bottom); swaps the
   // shown frame live and maps the position onto the range-of-motion (depth).
@@ -7854,7 +7874,7 @@ async function init() {
     if (scaleEditState) return;
     scaleEditDirty = false;
     refreshExerciseInfo();
-    renderAll();
+    scheduleRender();
   });
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
