@@ -10322,15 +10322,29 @@ function renderWorkoutAnalysis(): void {
     // graph" trims the selection to exactly those so the history/calendar match.
     const onGraph = new Set(waSelected.slice(0, WA_GRAPH_MAX));
     const overCap = waSelected.length > WA_GRAPH_MAX;
-    const selPills = waSelected.length
-      ? `<div class="wa-sel-pills">` +
+    // The sticky pills follow the same Exercises⇄Categories toggle as the picker:
+    // in Categories mode the SELECTED lifts collapse to one pill per category
+    // (count + ✕ removes the whole category; tap opens its floating dropdown).
+    const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
+    let selPills = "";
+    if (waSelected.length && stickyCats) {
+      const groups = new Map<string, string[]>();
+      for (const n of waSelected) { const k = waGroupKey(n); (groups.get(k) ?? groups.set(k, []).get(k)!).push(n); }
+      selPills = `<div class="wa-sel-pills">` +
+        [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, names]) => {
+          const title = `${k} — ${names.length} selected · tap to open, ✕ to remove all`;
+          return `<span class="wa-sel-pill wa-sel-catpill" data-waselcat="${escapeHtml(k)}" title="${escapeHtml(title)}">${escapeHtml(k)} <span class="wa-cat-count">${names.length}</span><span class="wa-sel-pill-x" data-waselcatx="${escapeHtml(k)}">✕</span></span>`;
+        }).join("") +
+        `</div>`;
+    } else if (waSelected.length) {
+      selPills = `<div class="wa-sel-pills">` +
         waSelected.map((n) => {
           const g = onGraph.has(n);
           const title = g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${WA_GRAPH_MAX}-lift limit · tap to remove ${n}`;
           return `<button type="button" class="wa-sel-pill${g ? " is-graphed" : " is-ungraphed"}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${g ? `<span class="wa-sel-graphdot" aria-hidden="true">📈</span>` : ""}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
         }).join("") +
-        `</div>`
-      : "";
+        `</div>`;
+    }
     const matchBtn = overCap
       ? `<button type="button" id="waMatchGraph" class="wa-clear wa-match-graph" title="Trim the selection to just the ${WA_GRAPH_MAX} lifts on the graph, so the workout history & calendar show exactly what's plotted">Match graph (${WA_GRAPH_MAX})</button>`
       : "";
@@ -11006,6 +11020,21 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // Sticky CATEGORY pill (categories mode): ✕ drops the whole category; tapping
+    // the pill opens that category's floating exercise dropdown.
+    const stickyCatX = t.closest<HTMLElement>("[data-waselcatx]");
+    if (stickyCatX?.dataset.waselcatx) {
+      const k = stickyCatX.dataset.waselcatx;
+      waSelected = waSelected.filter((n) => waGroupKey(n) !== k);
+      debounceWaRender();
+      return;
+    }
+    const stickyCat = t.closest<HTMLElement>(".wa-sel-catpill");
+    if (stickyCat?.dataset.waselcat) {
+      if (waCatMenuKey === stickyCat.dataset.waselcat) closeWaCatMenu();
+      else openWaCatMenu(stickyCat.dataset.waselcat, stickyCat);
+      return;
+    }
     // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
     const selPill = t.closest<HTMLElement>(".wa-sel-pill");
     if (selPill?.dataset.waselpill) {
