@@ -4,6 +4,12 @@
  * here — it's all in metrics.ts / aggregate.ts where it is tested.
  */
 import { niceTicks, MS_DAY } from "./chartAxis";
+import {
+  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, dowLetter,
+  isoWeekNumber, todayIso, trainingDuration,
+} from "./format";
+import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
+import { escapeHtml } from "./html";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -464,74 +470,9 @@ function logIn(): void {
 /** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
 function viewAsSpectator(): void { hideLoginPage(); setViewMode("loggedout"); }
 
-// Display a number at no more than 3 significant figures: 2 by default, but 3
-// when the leading digit is 1–3 (those read wrong with only 2). Used everywhere
-// a kg / volume / 1RM number is shown.
-const fmt = (n: number): string => {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  const abs = Math.abs(n);
-  const lead = Math.floor(abs / 10 ** Math.floor(Math.log10(abs))); // first significant digit, 1–9
-  const sf = lead <= 3 ? 3 : 2;
-  return Number(n.toPrecision(sf)).toLocaleString();
-};
-
-/** A 0..1 fraction as a whole-number percent, e.g. 0.6 → "60%". One place so
- * every percentage (coefficients, percentile, body fat, training mix) reads the
- * same way across the app. */
-const pct = (fraction: number): string => `${Math.round(fraction * 100)}%`;
-
-/** A bodyweight-multiple, always 2 dp, e.g. "1.25 BW". Single source so the
- * leaderboard, per-athlete detail and Test tab agree. */
-const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
-
-/** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header.
- * When there's no (added) weight — bodyweight reps, holds — the meaningless "0"
- * base is dropped and just the reps show as the superscript. Negative (assisted)
- * weights keep their number. */
-const wr = (weight: number | null, reps: number | null): string =>
-  weight === null || weight === 0
-    ? (reps === null ? "—" : `<sup class="wr-bw">${reps}</sup>`)
-    : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
-
-/** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
-const MONTH_ABBR = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-const shortDate = (iso: string): string => {
-  const [, m, d] = iso.split("-");
-  const mon = MONTH_ABBR[Number(m) - 1];
-  return mon && d ? `${mon} ${Number(d)}` : iso;
-};
-
-/** One/two-letter weekday for an ISO day: M T W Th F Sa Su (UTC, to match keys). */
-const DOW_ABBR = ["Su", "M", "T", "W", "Th", "F", "Sa"]; // index = getUTCDay()
-const dowLetter = (iso: string): string => {
-  const t = Date.parse(iso);
-  return Number.isNaN(t) ? "" : (DOW_ABBR[new Date(t).getUTCDay()] ?? "");
-};
-
-/**
- * ISO-8601 week number (1–53) for a "YYYY-MM-DD" date: weeks start Monday and
- * week 1 is the one containing the year's first Thursday. Matches the app's
- * Monday-start weeks, so an exercise's weekly rows can be labelled "Week 15"
- * instead of a date. Returns 0 only on an unparseable input.
- */
-const isoWeekNumber = (iso: string): number => {
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return 0;
-  // Shift to the Thursday of this week, then count weeks from Jan 1.
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const day = (date.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
-  date.setUTCDate(date.getUTCDate() - day + 3); // move to Thursday
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
-  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 86_400_000));
-};
-
-/** Today as an ISO YYYY-MM-DD string — the reference point for "this week" and
- * the trailing-window sets-per-week averages. */
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
+// Number / date / weekday display helpers (fmt, pct, bwMult, wr, shortDate,
+// dowLetter, isoWeekNumber, todayIso, trainingDuration) are pure and live in
+// ./format so they can be unit-tested without the DOM. Imported at the top.
 
 // "Current strength" mode: when on, 1RM achievements fade with time off the lift
 // (detraining model in metrics.ts) instead of showing the all-time peak. Toggled
@@ -541,18 +482,6 @@ let decayStrength = localStorage.getItem("colosseum.decayStrength") === "1";
  * strength" is on, otherwise undefined (keep all-time peaks). Passed into the
  * leaderboard / personal-record aggregators. */
 const strengthAsOf = (): string | undefined => (decayStrength ? todayIso() : undefined);
-
-/** Elapsed training time from first to last logged date, in the unit that reads
- * cleanest at that scale: days under 2 weeks, weeks under ~2 months, months
- * under 2 years, otherwise years. */
-const trainingDuration = (firstIso: string, lastIso: string): string => {
-  const days = Math.max(0, Math.round((Date.parse(lastIso) - Date.parse(firstIso)) / 86_400_000));
-  const unit = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
-  if (days < 14) return unit(days, "day");
-  if (days < 60) return unit(Math.round(days / 7), "week");
-  if (days < 730) return unit(Math.round(days / 30.44), "month");
-  return `${(days / 365.25).toFixed(1)} years`;
-};
 
 function currentFormula(): OneRepMaxFormula {
   const v = els.formula.value;
@@ -4590,33 +4519,6 @@ function heatGroupColor(dim: HeatColorDim, value: string): string | null {
   if (dim === "cat") return CATEGORY_COLORS[value as TrainingCategory] ?? hashHueHex(value);
   return hashHueHex(value);
 }
-function hashHueHex(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
-  return hslToHex(((h % 360) + 360) % 360, 60, 45);
-}
-function hslToHex(h: number, s: number, l: number): string {
-  const sa = s / 100, la = l / 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = sa * Math.min(la, 1 - la);
-  const f = (n: number) => Math.round(255 * (la - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
-  const to2 = (v: number) => v.toString(16).padStart(2, "0");
-  return `#${to2(f(0))}${to2(f(8))}${to2(f(4))}`;
-}
-
-/** Background color for a heatmap cell given intensity level and optional category hex. */
-function cellBgColor(level: number, catHex: string | null): string {
-  if (level === 0) return "";
-  if (level === 5) return "#f5c800"; // shining — always gold
-  const hex = catHex ?? "#1e4fa3"; // default blue
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  if (level === 4) return `rgb(${Math.round(r * 0.55)},${Math.round(g * 0.55)},${Math.round(b * 0.55)})`;
-  const t = level === 1 ? 0.28 : level === 2 ? 0.58 : 1.0;
-  return `rgb(${Math.round(255+(r-255)*t)},${Math.round(255+(g-255)*t)},${Math.round(255+(b-255)*t)})`;
-}
-
 /** Training dates → { sets, catHex } honouring the active heatFilters. */
 function filteredDayCounts(): Map<string, { sets: number; catHex: string | null; label?: string | null }> {
   const m = new Map<string, { sets: number; catHex: string | null; label?: string | null }>();
@@ -4659,16 +4561,6 @@ function initHeatYear() {
   heatFilters = []; // default to all exercises (coloured by body part)
   heatFiltersSaved = null; // don't carry a parked filter across athletes
   aloneTagMode = false; // start each athlete in normal tap-to-jump mode
-}
-
-/** Intensity bucket for a day's set count: 0 rest, 1/2/4/10/20 sets. */
-function heatLevel(sets: number): number {
-  if (sets <= 0) return 0;
-  if (sets < 2)  return 1; // 1 set — light
-  if (sets < 4)  return 2; // 2–3 — darker
-  if (sets < 10) return 3; // 4–9 — dark + outline
-  if (sets < 20) return 4; // 10–19 — deep + double outline
-  return 5;                // 20+  — shining
 }
 
 /** The years (descending) that have any training, for the ‹ › year nav. */
@@ -5353,13 +5245,6 @@ const SETS_HEAD =
 /** How many characters of a note to show inline before truncating with "…". */
 const NOTE_PREVIEW_LEN = 8;
 
-/**
- * Plain-text explanation of how a set's estimated 1RM was produced, with the
- * actual numbers plugged in. Takes a COMPUTED record (bodyweight already folded
- * into `weight`, logged bar weight in `origWeight`) so the reveal shows the full
- * chain — bodyweight share, effective load, the formula, then peeling the body
- * share back off — and always matches the bodyweight-aware number displayed.
- */
 /**
  * A readable, math-paper-style derivation of a set's estimated 1RM — one step per
  * line, with a real fraction bar for the rep-curve division. Returns HTML (the
@@ -7243,10 +7128,6 @@ function scheduleModelFactorsApply(): void {
     if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
     window.scrollTo(0, y);
   }, 600);
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 /**
