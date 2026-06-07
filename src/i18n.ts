@@ -66,6 +66,7 @@ const LT: Record<string, string> = {
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",
   "Language": "Kalba",
+  "Back to Colosseum": "Atgal į Colosseum",
   // ---- Quick view switcher ----
   "Admin": "Administratorius",
   "User": "Vartotojas",

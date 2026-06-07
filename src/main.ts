@@ -412,8 +412,20 @@ function renderViewSwitch(): void {
   box.innerHTML = modes + detail;
 }
 
+/** The "Colosseum" title acts as a Back-to-home button (jumps to the analysis
+ * page; on home it just re-lands there). Click or Enter/Space. */
+function goHome(): void { switchTopTab(analysisTabName()); }
+function setupBrandTitle(): void {
+  const el = document.getElementById("brandTitle");
+  el?.addEventListener("click", goHome);
+  el?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter" || (e as KeyboardEvent).key === " ") { e.preventDefault(); goHome(); }
+  });
+}
+
 /** Wire the quick switcher (delegated, survives re-renders). */
 function setupViewSwitch(): void {
+  setupBrandTitle();
   document.getElementById("viewSwitch")?.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-btn");
     if (!b) return;
@@ -10762,6 +10774,19 @@ function updateBottomNav() {
   // entry in the "More" sheet (full ANL vs the simplified S-ANL page).
   const lbl = document.getElementById("otherAnalysisLabel");
   if (lbl) lbl.textContent = analysisTabName() === "s-analysis" ? "S-Analysis" : "Analysis";
+  updateBrand();
+}
+
+/** The "Colosseum" title doubles as a Back-to-home button: on any non-analysis
+ * page it shows a ‹ back arrow (and reads "back to Colosseum"); on the analysis
+ * home it's just the plain wordmark. */
+function updateBrand() {
+  const el = document.getElementById("brandTitle");
+  if (!el) return;
+  const onHome = document.getElementById("tab-analysis")?.hidden === false
+    || document.getElementById("tab-s-analysis")?.hidden === false;
+  el.classList.toggle("is-back", !onHome);
+  el.innerHTML = onHome ? "Colosseum" : `<span class="brand-back" aria-hidden="true">‹</span>Colosseum`;
 }
 
 function setOtherSheetOpen(open: boolean) {
