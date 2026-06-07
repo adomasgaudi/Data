@@ -33,6 +33,14 @@ export const S: {
   // Data tab.
   dataView: "processed" | "original";
   dataSearch: string;
+  // Workouts list view.
+  workoutsPage: number;
+  workoutsPageSize: number;
+  workoutViewMode: "day" | "week";
+  workoutShowMode: "exercises" | "groups";
+  showAddSets: boolean;
+  showAloneTags: boolean;
+  showRestDays: boolean;
 } = {
   waCompareView: "trend",
   waChipsFoldOpen: false,
@@ -49,4 +57,12 @@ export const S: {
   bwGroupMode: "discipline",
   dataView: "processed",
   dataSearch: "",
+  workoutsPage: 0,
+  workoutsPageSize: 50,
+  workoutViewMode: "day",
+  workoutShowMode: "exercises",
+  // initialised from localStorage in main.ts after import.
+  showAddSets: false,
+  showAloneTags: false,
+  showRestDays: false,
 };

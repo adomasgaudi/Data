@@ -2729,36 +2729,31 @@ interface WorkoutGroup {
   rest: boolean;
 }
 let workoutGroups: WorkoutGroup[] = [];
-let workoutsPage = 0;
-let workoutsPageSize = 50; // entries per page in the Workouts list (20 or 50)
-let workoutViewMode: "day" | "week" = "day"; // By day / By week toggle (default: day)
-let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs grouped view
-// Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
-// default (cleaner list); toggled + remembered via the "+ set buttons" button.
-let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
-// The "alone" day tags in the workout history are HIDDEN by default; "Tags" shows them.
-let showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
-let showRestDays = false; // "Rest" toggle: include rest days in the day view
+// Workouts-list view state lives on S (appState). The two localStorage-backed
+// flags get their initial values right here so behaviour matches the previous
+// `let x = localStorage.getItem(…)` form.
+S.showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 // Short labels for the compact "Alone filter" DJ button (cycles through these).
 const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
 /** Reflect every workout display toggle on its single button: the label shows the
  * current value, and on/off toggles light up. The grouping select + name button
  * only apply to their relevant mode. */
 function syncWorkoutToggles(): void {
-  els.workoutViewToggle.textContent = workoutViewMode === "day" ? "Day" : "Week";
-  els.workoutShowToggle.textContent = workoutShowMode === "exercises" ? "Exer" : "Group";
-  els.workoutGrouping.hidden = workoutShowMode !== "groups";
-  els.workoutNameToggle.hidden = workoutShowMode !== "exercises"; // names only apply to the exercise view
+  els.workoutViewToggle.textContent = S.workoutViewMode === "day" ? "Day" : "Week";
+  els.workoutShowToggle.textContent = S.workoutShowMode === "exercises" ? "Exer" : "Group";
+  els.workoutGrouping.hidden = S.workoutShowMode !== "groups";
+  els.workoutNameToggle.hidden = S.workoutShowMode !== "exercises"; // names only apply to the exercise view
   // This button is now a shortcut to the GLOBAL name mode (cycles code → short → full).
   els.workoutNameToggle.textContent = nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full";
-  els.workoutsPageBtn.textContent = String(workoutsPageSize);
-  els.restToggle.hidden = workoutViewMode === "week"; // rest days only make sense per day
-  els.restToggle.classList.toggle("is-active", showRestDays);
-  els.restToggle.setAttribute("aria-pressed", showRestDays ? "true" : "false");
-  els.addSetsToggle.classList.toggle("is-active", showAddSets);
-  els.addSetsToggle.setAttribute("aria-pressed", showAddSets ? "true" : "false");
-  els.aloneTagToggle.classList.toggle("is-active", showAloneTags);
-  els.aloneTagToggle.setAttribute("aria-pressed", showAloneTags ? "true" : "false");
+  els.workoutsPageBtn.textContent = String(S.workoutsPageSize);
+  els.restToggle.hidden = S.workoutViewMode === "week"; // rest days only make sense per day
+  els.restToggle.classList.toggle("is-active", S.showRestDays);
+  els.restToggle.setAttribute("aria-pressed", S.showRestDays ? "true" : "false");
+  els.addSetsToggle.classList.toggle("is-active", S.showAddSets);
+  els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
+  els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
+  els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
 }
@@ -2939,7 +2934,7 @@ function renderAthlete() {
   if (sex === "m" || sex === "f") athleteSexFilter = sex;
   syncSexToggle();
   syncAthleteChips();
-  workoutsPage = 0;
+  S.workoutsPage = 0;
   selectedExercise = null;
   athleteWorkouts = workoutsForUser(activeRecords(), els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
@@ -4604,7 +4599,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     const tagged = aloneTags.has(aloneKey(g.date));
     return aloneFilter === "alone" ? tagged : !tagged;
   };
-  if (workoutViewMode === "week") {
+  if (S.workoutViewMode === "week") {
     return scopeWorkoutGroups(
       weeksForUser(activeRecords(), els.athlete.value)
         .map((w) => ({
@@ -4618,7 +4613,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         .filter(keep),
     );
   }
-  const days = showRestDays ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
+  const days = S.showRestDays ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
   return scopeWorkoutGroups(
     days
       .map((d) => ({
@@ -5054,10 +5049,10 @@ function shiftHeatYear(delta: number) {
 
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
 function jumpToWorkoutDate(iso: string) {
-  if (workoutViewMode !== "day") { workoutViewMode = "day"; syncWorkoutToggles(); } // calendar is per-day
+  if (S.workoutViewMode !== "day") { S.workoutViewMode = "day"; syncWorkoutToggles(); } // calendar is per-day
   const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
-  workoutsPage = Math.floor(idx / workoutsPageSize);
+  S.workoutsPage = Math.floor(idx / S.workoutsPageSize);
   renderWorkoutsPage();
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
@@ -5155,7 +5150,7 @@ function setDisplay(raw: SetRecord): string {
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const workoutFormula = currentFormula();
-  const byWeek = workoutViewMode === "week";
+  const byWeek = S.workoutViewMode === "week";
   syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
@@ -5165,9 +5160,9 @@ function renderWorkoutsPage() {
   // No column header row — the "Session / Sets" labels were redundant noise above
   // a list whose rows are self-explanatory (a date + its set count).
   const head = "";
-  const start = workoutsPage * workoutsPageSize;
+  const start = S.workoutsPage * S.workoutsPageSize;
   const rows = workoutGroups
-    .slice(start, start + workoutsPageSize)
+    .slice(start, start + S.workoutsPageSize)
     .map((g, i) => {
       if (g.rest) {
         // A rest day is just a thin sliver with a separating line — count the
@@ -5176,7 +5171,7 @@ function renderWorkoutsPage() {
       }
       const abs = start + i;
       let did: string;
-      if (workoutShowMode === "exercises") {
+      if (S.workoutShowMode === "exercises") {
         // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
         did = g.exercises
           .map((e) => {
@@ -5195,7 +5190,7 @@ function renderWorkoutsPage() {
               best === null
                 ? ""
                 : ` <span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
-            const addBtn = showAddSets
+            const addBtn = S.showAddSets
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
               : "";
@@ -5210,13 +5205,13 @@ function renderWorkoutsPage() {
       }
       const tagged = aloneTags.has(aloneKey(g.date));
       // Day tags ("alone") are hidden unless the "Tags" display option is on.
-      const tagBtn = showAloneTags
+      const tagBtn = S.showAloneTags
         ? `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
           `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`
         : "";
       // "+ exercise" adds a brand-new exercise to this session (shown with the
       // rest of the quick-add UI).
-      const addExBtn = showAddSets
+      const addExBtn = S.showAddSets
         ? `<div class="wo-addex-wrap"><button type="button" class="wo-addex" data-adddate="${escapeHtml(g.date)}" title="Add a new exercise to this session">+ exercise</button></div>`
         : "";
       return (
@@ -5229,7 +5224,7 @@ function renderWorkoutsPage() {
     .join("");
   els.workoutsTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
-  els.workoutsPager.innerHTML = pagerHtml(workoutsPage, workoutGroups.length, workoutsPageSize);
+  els.workoutsPager.innerHTML = pagerHtml(S.workoutsPage, workoutGroups.length, S.workoutsPageSize);
 }
 
 function onWorkoutRowClick(e: MouseEvent) {
@@ -5312,7 +5307,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   const strengthByDay = currentStrengthByUserExercise(formula);
   const body = group.exercises
     .map((e) => {
-      const addBtn = showAddSets
+      const addBtn = S.showAddSets
         ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
         : "";
       const header =
@@ -5327,7 +5322,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
     })
     .join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
-  const addExRow = showAddSets
+  const addExRow = S.showAddSets
     ? `<tr class="set-ex-row wo-addex-host"><td colspan="5"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
     : "";
   return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}</tbody></table>`;
@@ -8178,12 +8173,12 @@ async function init() {
   els.summariseBtn.addEventListener("click", runSummary);
   // Each control is one toggle button now: tap to flip its value (no segments).
   els.workoutViewToggle.addEventListener("click", () => {
-    workoutViewMode = workoutViewMode === "day" ? "week" : "day";
-    workoutsPage = 0;
+    S.workoutViewMode = S.workoutViewMode === "day" ? "week" : "day";
+    S.workoutsPage = 0;
     renderWorkoutsPage();
   });
   els.workoutShowToggle.addEventListener("click", () => {
-    workoutShowMode = workoutShowMode === "exercises" ? "groups" : "exercises";
+    S.workoutShowMode = S.workoutShowMode === "exercises" ? "groups" : "exercises";
     renderWorkoutsPage();
   });
   els.workoutNameToggle.addEventListener("click", () => {
@@ -8200,29 +8195,29 @@ async function init() {
   syncNameModeButtons();
   els.workoutGrouping.addEventListener("change", () => deferRender(renderWorkoutsPage));
   els.workoutsPageBtn.addEventListener("click", () => {
-    workoutsPageSize = workoutsPageSize === 50 ? 20 : 50;
-    workoutsPage = 0;
+    S.workoutsPageSize = S.workoutsPageSize === 50 ? 20 : 50;
+    S.workoutsPage = 0;
     renderWorkoutsPage();
   });
   els.restToggle.addEventListener("click", () => {
-    showRestDays = !showRestDays;
-    workoutsPage = 0;
+    S.showRestDays = !S.showRestDays;
+    S.workoutsPage = 0;
     renderWorkoutsPage();
   });
   els.addSetsToggle.addEventListener("click", () => {
-    showAddSets = !showAddSets;
-    localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
+    S.showAddSets = !S.showAddSets;
+    localStorage.setItem("colosseum.showAddSets", S.showAddSets ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneTagToggle.addEventListener("click", () => {
-    showAloneTags = !showAloneTags;
-    localStorage.setItem("colosseum.showAloneTags", showAloneTags ? "1" : "0");
+    S.showAloneTags = !S.showAloneTags;
+    localStorage.setItem("colosseum.showAloneTags", S.showAloneTags ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
     els.aloneFilter.dataset.state = aloneFilter;
-    workoutsPage = 0;
+    S.workoutsPage = 0;
     renderWorkoutsPage();
   });
 
@@ -8437,7 +8432,7 @@ async function init() {
   els.workoutsPager.addEventListener("click", (e) => {
     const p = pageFromClick(e);
     if (p !== null) {
-      workoutsPage = p;
+      S.workoutsPage = p;
       renderWorkoutsPage();
     }
   });
@@ -10046,7 +10041,7 @@ function renderWorkoutAnalysis(): void {
         stats.setAttribute("hidden", "");
       }
     }
-    workoutsPage = 0; // the scoped list is shorter; start at the top
+    S.workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
     } else {
     // All (nothing selected): the live Workouts panel — its history list.
