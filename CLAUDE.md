@@ -44,6 +44,7 @@ Shortcuts the owner may type in any session. **A new command is added here as ON
   4. **Safety first:** before anything hard to undo (delete / overwrite / deploy), back up or confirm.
 - **`#senior <task>`** — reason as architect not junior: name the single source of truth, keep other views read-only projections (no drifting copies), protect invariants, fix root cause not symptom, hand trivial wiring to "juniors"; answer RECOMMENDATION → TRADEOFFS → CONSTRAINTS.
 - **`#research <topic>`** — research best practices inline and grade each source (GRADE: High/Moderate/Low/Very Low + one-line reason), but re-judge every practice for this AI-maintained no-build single-file app (rule 9), not human teams.
+- **`#prune <mistake-type>`** — pick ONE class of mistake/anti-pattern and hunt it across the WHOLE codebase over MANY turns, fixing instances from outright bugs up to working-but-improvable code that should follow a better principle; go breadth-first, present a severity-tagged find-list (rule 11) each turn, fix one safe batch per turn, and keep going across prompts until that class is gone.
 
 ## Rules to remember
 

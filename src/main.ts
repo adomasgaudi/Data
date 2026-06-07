@@ -88,6 +88,16 @@ import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
+  type GraphPermissions,
+  allowedMetricsFor,
+  isMetricAllowed,
+  metricsAllowedForScope,
+  exercisesBlockingMetric,
+  fullyBlockedExercises,
+  toggleMetric as togglePermMetric,
+  setAllMetrics as setAllPermMetrics,
+} from "./graphPermissions";
+import {
   ATHLETES,
   type AthleteProfile,
   EXERCISE_BW_COEFF,
@@ -1522,6 +1532,46 @@ function setMachineMode(exerciseName: string, mode: MachineMode) {
   else machineModes[exerciseName] = mode;
   saveJson(MACHINE_MODE_KEY, machineModes);
   clearMachineCache();
+}
+
+// ---- Per-exercise GRAPH PERMISSIONS (the "allowed graphs" review system) ----
+// Each exercise carries an allow-list of which graph metrics it may plot. Default
+// is BLOCK EVERYTHING: an exercise absent from this map shows no graphs until it's
+// reviewed (in More info → "Allowed graphs") and individual metrics switched on.
+// Pure logic lives in graphPermissions.ts; this is the on-device store + glue.
+const GRAPH_PERMS_KEY = "colosseum.allowedGraphs.v1";
+let graphPerms: GraphPermissions = (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem(GRAPH_PERMS_KEY) ?? "{}");
+    return o && typeof o === "object" ? (o as GraphPermissions) : {};
+  } catch { return {}; }
+})();
+function saveGraphPerms() {
+  try { localStorage.setItem(GRAPH_PERMS_KEY, JSON.stringify(graphPerms)); } catch { /* storage may be unavailable */ }
+}
+/** Toggle one metric for one exercise, then refresh the review UI + every graph. */
+function toggleGraphPerm(name: string, metricId: string) {
+  graphPerms = togglePermMetric(graphPerms, name, metricId);
+  saveGraphPerms();
+  afterGraphPermChange(name);
+}
+/** Allow every metric for an exercise, or block them all, then refresh. */
+function setGraphPermAll(name: string, allow: boolean) {
+  graphPerms = setAllPermMetrics(graphPerms, name, allow);
+  saveGraphPerms();
+  afterGraphPermChange(name);
+}
+function afterGraphPermChange(name: string) {
+  refreshExerciseInfo(); // the More-info overlay, if it's the open surface
+  // The Index page inspector (an expanded detail row) is a separate surface — if
+  // this exercise's row is expanded there, re-render its content in place too.
+  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  const cell = row?.nextElementSibling?.classList.contains("detail-row")
+    ? row.nextElementSibling.querySelector("td")
+    : null;
+  if (cell) cell.innerHTML = exerciseInfoHtml(name);
+  renderWaGraph();        // universal graph (single + auto overview)
+  renderWaCompareGraph(); // compare overlay
 }
 // Mixed-mode verdicts are memoised per (athlete|exercise); cleared when anything
 // that changes a set's estimated 1RM does (mode, per-set edits, formula, data).
@@ -6460,7 +6510,35 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${graphPermsHtml(name)}${activeHtml}</div>`;
+}
+
+/** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
+ * everything off (blocked) — the owner switches on the graphs that actually work
+ * for this lift. Shown inside More info (both the Index inspector and the ℹ
+ * overlay), and is where the graph's "needs review" button lands. */
+function graphPermsHtml(name: string): string {
+  const allowed = allowedMetricsFor(graphPerms, name);
+  const chips = GRAPH_METRICS.map((m) => {
+    const on = allowed.has(m.id);
+    return (
+      `<button type="button" class="gp-chip${on ? " is-on" : ""}" ` +
+      `data-graphperm-ex="${escapeHtml(name)}" data-graphperm-id="${escapeHtml(m.id)}" ` +
+      `aria-pressed="${on}" title="${on ? "Allowed — tap to block" : "Blocked — tap to allow"}">${escapeHtml(m.label)}</button>`
+    );
+  }).join("");
+  const count = allowed.size;
+  return (
+    `<div class="ex-graphperms" id="graphPerms-${escapeHtml(name)}">` +
+    `<div class="ex-gp-head"><span class="ex-info-lbl">Allowed graphs</span>` +
+    `<span class="muted ex-gp-count">${count} of ${GRAPH_METRICS.length} on</span></div>` +
+    `<p class="ex-gp-hint muted">Only the graphs switched on here show for this exercise. They all start off — switch on the ones you’ve checked actually work for this lift.</p>` +
+    `<div class="ex-gp-chips">${chips}</div>` +
+    `<div class="ex-gp-actions">` +
+    `<button type="button" class="settings-link gp-bulk" data-graphperm-all="${escapeHtml(name)}">Allow all</button>` +
+    `<button type="button" class="settings-link gp-bulk" data-graphperm-none="${escapeHtml(name)}">Block all</button>` +
+    `</div></div>`
+  );
 }
 
 /** The modifier picker for one note: a row of clickable level chips per dimension
@@ -6900,6 +6978,17 @@ function jumpToExerciseInfo(exName: string) {
     row.scrollIntoView({ behavior: "smooth", block: "center" });
     row.classList.add("wo-flash");
     window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
+  });
+}
+
+/** From the graph's "needs review" prompt: open the Index page at this exercise
+ * AND expand its inspector row, so the "Allowed graphs" chips are right there. */
+function reviewGraphsForExercise(exName: string) {
+  jumpToExerciseInfo(exName);            // switch tab, open group, scroll + flash
+  requestAnimationFrame(() => {
+    reopenIndexDetail(exName);           // expand the inspector (where the chips live)
+    const panel = document.getElementById(`graphPerms-${exName}`);
+    panel?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
 
@@ -7490,6 +7579,23 @@ async function init() {
   document.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-moreinfoex]");
     if (btn?.dataset.moreinfoex) jumpToExerciseInfo(btn.dataset.moreinfoex);
+  });
+  // "Allowed graphs" review chips + bulk buttons. Delegated on document so they
+  // work both in the More-info overlay and the Index page's expandable inspector.
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const chip = t.closest<HTMLElement>("[data-graphperm-id]");
+    if (chip?.dataset.graphpermEx && chip.dataset.graphpermId) {
+      toggleGraphPerm(chip.dataset.graphpermEx, chip.dataset.graphpermId);
+      return;
+    }
+    const allBtn = t.closest<HTMLElement>("[data-graphperm-all]");
+    if (allBtn?.dataset.graphpermAll) { setGraphPermAll(allBtn.dataset.graphpermAll, true); return; }
+    const noneBtn = t.closest<HTMLElement>("[data-graphperm-none]");
+    if (noneBtn?.dataset.graphpermNone) { setGraphPermAll(noneBtn.dataset.graphpermNone, false); return; }
+    // The graph's "Review in Index →" button → jump to the Index page at that lift.
+    const review = t.closest<HTMLElement>("[data-graphreview]");
+    if (review?.dataset.graphreview) { reviewGraphsForExercise(review.dataset.graphreview); return; }
   });
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works inside the Index page's expandable info dropdown.
@@ -10073,8 +10179,22 @@ function scheduleWaGraph(): void {
 function renderWaGraph(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
+  // Work out the plotted exercises FIRST, so the metric chips can reflect what's
+  // allowed for them (everything is blocked until reviewed in More info).
+  waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => r.username === els.athlete.value));
+  const autoDefault = waSelected.length === 0;
+  const baseExercises = autoDefault
+    ? exerciseCountsForUser(athleteRecs, els.athlete.value).map((e) => e.exerciseName)
+    : waSelected;
+  const graphExercises = baseExercises.slice(0, WA_GRAPH_MAX);
+  const graphExcluded = baseExercises.slice(WA_GRAPH_MAX);
+  // A metric may draw only when EVERY plotted exercise allows it (intersection).
+  const scopeAllowed = metricsAllowedForScope(graphPerms, graphExercises);
+  const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
   // The 15 metrics were one crowded wall of chips — split into a few collapsible
-  // sub-groups (a group opens when it has an active metric). Less clutter.
+  // sub-groups (a group opens when it has an active metric). A metric still
+  // blocked for the plotted lift(s) shows greyed-out with a needs-review tip.
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Strength", ids: ["e1rm", "weight", "weightRange", "pctWR"] },
     { label: "Trends", ids: ["strength", "strengthDecay", "predicted", "trend", "movingAvg", "pr"] },
@@ -10084,7 +10204,12 @@ function renderWaGraph(): void {
     const chips = g.ids
       .map((id) => GRAPH_METRICS.find((x) => x.id === id))
       .filter((m): m is NonNullable<typeof m> => !!m)
-      .map((m) => `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}" data-wametric="${m.id}">${escapeHtml(m.label)}</button>`)
+      .map((m) => {
+        const blocked = graphExercises.length > 0 && !scopeAllowed.has(m.id);
+        const blockers = blocked ? exercisesBlockingMetric(graphPerms, graphExercises, m.id) : [];
+        const title = blocked ? ` title="Needs review for: ${escapeHtml(blockers.join(", "))}"` : "";
+        return `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}${blocked ? " is-blocked" : ""}" data-wametric="${m.id}"${title}>${escapeHtml(m.label)}</button>`;
+      })
       .join("");
     const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
     return (
@@ -10120,38 +10245,29 @@ function renderWaGraph(): void {
   // The summary names what's currently plotted so you can see it while collapsed.
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
-  // Graph options + the chart's Legend sit SIDE BY SIDE in one bar at the top, both
-  // as floating dropdowns (their menus overlay the chart, so opening either never
-  // pushes the layout or needs a scroll). The legend element is rendered by the SVG
-  // engine inside #waGraphChart; we relocate it up into this bar after the chart
-  // draws (its innerHTML keeps updating in place wherever it lives).
+  // Graph options + the chart's Legend sit SIDE BY SIDE in one bar BELOW the chart,
+  // both as floating dropdowns (their menus overlay the chart, so opening either
+  // never pushes the layout or needs a scroll). The legend element is rendered by
+  // the SVG engine inside #waGraphChart; we relocate it down into this bar after the
+  // chart draws (its innerHTML keeps updating in place wherever it lives).
   box.innerHTML =
+    `<div id="waGraphChart"></div>` +
     `<div class="wa-graph-bar">` +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
     `</details>` +
     `</div>` +
-    `<div id="waGraphChart"></div>` +
     `<div class="muted wa-placeholder" id="waGraphNote"></div>`;
   const chartBox = document.getElementById("waGraphChart");
-  waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
-  const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => r.username === els.athlete.value));
-  // With nothing picked, default to the athlete's most-trained lifts so the graph
-  // opens as the SAME multi-colour per-exercise view (not one aggregate line) —
-  // an automatic initial selection. Either way we cap at 10: past ~10 lines ×
-  // several metrics the SVG redraw lags, so plot the first 10 and note the rest.
-  const autoDefault = waSelected.length === 0;
-  const baseExercises = autoDefault
-    ? exerciseCountsForUser(athleteRecs, els.athlete.value).map((e) => e.exerciseName)
-    : waSelected;
-  const graphExercises = baseExercises.slice(0, WA_GRAPH_MAX);
-  const graphExcluded = baseExercises.slice(WA_GRAPH_MAX);
+  // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
+  // and note the rest (graphExercises / graphExcluded computed above). Only the
+  // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
   const drawn = chartBox
     ? renderAnalyticsGraph(chartBox, {
         exercises: graphExercises,
         records: athleteRecs,
-        metrics: [...waMetrics],
+        metrics: drawMetricIds,
         config: waGraphConfig,
         codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
         perBodyweight: S.waPerBodyweight,
@@ -10159,24 +10275,36 @@ function renderWaGraph(): void {
         worldRecordKg: (ex) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
       })
     : 0;
-  // Relocate the chart's legend up into the top bar so it sits beside Graph options
-  // (the SVG engine keeps updating it in place wherever it lives in the DOM).
+  // Relocate the chart's legend down into the bar below it so it sits beside Graph
+  // options (the SVG engine keeps updating it in place wherever it lives in the DOM).
   const graphBar = box.querySelector(".wa-graph-bar");
   const legendEl = chartBox?.querySelector(".svgc-legend");
   if (graphBar && legendEl && legendEl.parentElement !== graphBar) graphBar.appendChild(legendEl);
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {
-    if (drawn === 0 && graphExercises.length === 0) {
+    // BLOCKED state: metrics are selected but none is allowed for the plotted
+    // lift(s) — show the "needs review" prompt with a button to the Index page.
+    const blockedSelected = [...waMetrics].filter((id) => !scopeAllowed.has(id));
+    const reviewTarget = graphExercises.find(
+      (n) => [...waMetrics].some((id) => !isMetricAllowed(graphPerms, n, id)),
+    ) ?? graphExercises[0] ?? "";
+    if (graphExercises.length === 0) {
       noteEl.textContent = "No data yet.";
+    } else if (waMetrics.size > 0 && drawMetricIds.length === 0) {
+      noteEl.innerHTML = graphReviewPromptHtml(reviewTarget, graphExercises);
     } else {
-      // Compatibility / unavailable-state messages (TASK 42), scoped to whatever
-      // is actually plotted (the auto-default top 10, or the user's selection).
+      // Compatibility / unavailable-state messages (TASK 42), scoped to what's
+      // actually drawn (the allowed metrics for the plotted exercises).
       const e1rmPoints = athleteRecs.filter(
         (r) => graphExercises.includes(r.exerciseName) && addedWeight1RM(r, currentFormula()) != null,
       ).length;
-      const notes = graphCompatibilityNotes([...waMetrics], waGraphConfig, { e1rmPoints });
+      const notes = graphCompatibilityNotes(drawMetricIds, waGraphConfig, { e1rmPoints });
       if (drawn === 0 && notes.length === 0) notes.unshift("Not enough data for the selected metric(s).");
       let html = notes.map(escapeHtml).join("  ·  ");
+      // Some selected metrics are blocked for some lifts → a compact review nudge.
+      if (blockedSelected.length && reviewTarget) {
+        html += `${html ? "  ·  " : ""}<span class="wa-gb-inline">${blockedSelected.length} selected graph${blockedSelected.length === 1 ? "" : "s"} need review · <button type="button" class="wa-gb-link" data-graphreview="${escapeHtml(reviewTarget)}">review</button></span>`;
+      }
       // Over the cap: just the "N of M" count as a dropdown revealing the rest.
       if (graphExcluded.length) {
         const block =
@@ -10187,6 +10315,22 @@ function renderWaGraph(): void {
       noteEl.innerHTML = html;
     }
   }
+}
+
+/** The graph's "needs review" prompt: a warning + a button that jumps to the
+ * Index page at the exercise that needs reviewing. Shown when nothing the owner
+ * selected is allowed to plot for the current lift(s). */
+function graphReviewPromptHtml(targetEx: string, scopeNames: readonly string[]): string {
+  const who = scopeNames.length > 1 ? "these exercises" : `“${escapeHtml(scopeNames[0] ?? targetEx)}”`;
+  return (
+    `<div class="wa-graph-blocked">` +
+    `<span class="wa-gb-icon">⚠</span> ` +
+    `<span>This graph isn’t enabled for ${who} yet — it needs review.</span> ` +
+    (targetEx
+      ? `<button type="button" class="wa-gb-btn" data-graphreview="${escapeHtml(targetEx)}">Review in Index →</button>`
+      : "") +
+    `</div>`
+  );
 }
 
 /** The Analysis compare-graph dropdown: the multi-line overlay of the picked
@@ -10212,16 +10356,28 @@ function renderWaCompareGraph(): void {
   const recs = filterRecords(applyHardSetsFilter(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
   // Cap the overlay at the first 10 lifts too (Select-all can pick dozens) so the
   // chart never lags; note the rest, mirroring the universal graph.
-  const cmpExercises = waSelected.slice(0, WA_GRAPH_MAX);
+  const cmpAll = waSelected.slice(0, WA_GRAPH_MAX);
   const cmpExcluded = waSelected.slice(WA_GRAPH_MAX);
+  // Graph permissions: a lift with NO allowed graphs (unreviewed) is left out of
+  // the comparison until it's been reviewed in More info.
+  const blockedEx = fullyBlockedExercises(graphPerms, cmpAll);
+  const cmpExercises = cmpAll.filter((n) => !blockedEx.includes(n));
+  if (cmpExercises.length < 2) {
+    if (waCompareSvg) waCompareSvg.update({ series: [] });
+    if (note) note.innerHTML = graphReviewPromptHtml(blockedEx[0] ?? cmpAll[0] ?? "", cmpAll);
+    return;
+  }
   const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, S.waCompareView);
   if (note) {
-    if (cmpExcluded.length)
-      note.innerHTML =
-        `<details class="wa-excluded"><summary>${WA_GRAPH_MAX} of ${waSelected.length}</summary>` +
-        `<div class="wa-excluded-list">${cmpExcluded.map(escapeHtml).join(", ")}</div></details>` +
-        (noteTxt ? `  ·  ${escapeHtml(noteTxt)}` : "");
-    else note.textContent = noteTxt;
+    const blockedNote = blockedEx.length
+      ? `<span class="wa-gb-inline">${blockedEx.length} hidden — need review · <button type="button" class="wa-gb-link" data-graphreview="${escapeHtml(blockedEx[0]!)}">review</button></span>`
+      : "";
+    const excludedNote = cmpExcluded.length
+      ? `<details class="wa-excluded"><summary>${WA_GRAPH_MAX} of ${waSelected.length}</summary>` +
+        `<div class="wa-excluded-list">${cmpExcluded.map(escapeHtml).join(", ")}</div></details>`
+      : "";
+    const parts = [excludedNote, noteTxt ? escapeHtml(noteTxt) : "", blockedNote].filter(Boolean);
+    note.innerHTML = parts.join("  ·  ");
   }
   const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
   if (!waCompareSvg) waCompareSvg = mountSvgChart(box, config);
