@@ -277,6 +277,7 @@ const els = {
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
+  woShowAllToggle: $<HTMLButtonElement>("woShowAllToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -1895,13 +1896,28 @@ const GROUP_FILTER_NEXT: Record<"only" | "hide" | "off", string> = { off: "only"
 
 /** Raw logged records, filtered to the active exercise set (or all, if off). The
  * single choke point every view/graph/list reads instead of data.records. */
+/** All records minus on-device "deleted" sets, BEFORE the app-wide active-set
+ * filter. Used where a view wants every lift regardless of the Index filter. */
+function liveRecords(): SetRecord[] {
+  return deletedSets.size ? data.records.filter((r) => !deletedSets.has(setId(r))) : data.records;
+}
 function activeRecords(): SetRecord[] {
   // Hidden (on-device "deleted") sets drop out everywhere; then the active-set
   // exercise filter, if on.
-  const live = deletedSets.size ? data.records.filter((r) => !deletedSets.has(setId(r))) : data.records;
+  const live = liveRecords();
   if (!activeSet) return live;
   const allow = activeSet;
   return live.filter((r) => allow.has(r.exerciseName));
+}
+/** How many of one athlete's logged lifts the app-wide Index filter is hiding
+ * (0 when the filter is off). Lets a view flag that some lifts aren't shown. */
+function hiddenByIndexCount(username: string): number {
+  if (!activeSet) return 0;
+  const allow = activeSet;
+  const hidden = new Set<string>();
+  for (const r of liveRecords())
+    if (r.username === username && r.exerciseName && !allow.has(r.exerciseName)) hidden.add(r.exerciseName);
+  return hidden.size;
 }
 
 /** User-created exercise definitions (TASKS 13–15), saved on this device: a
@@ -2870,6 +2886,10 @@ let workoutGroups: WorkoutGroup[] = [];
 // `let x = localStorage.getItem(…)` form.
 S.showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
 S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
+// When on, the workout history ignores the Index app-wide filter and shows EVERY
+// lift this athlete logged (the lifts the filter hides come back), so you can see
+// a hidden lift's sets without disabling the whole-app filter.
+let woShowAllExercises = localStorage.getItem("colosseum.woShowAll") === "1";
 // Short labels for the compact "Alone filter" DJ button (cycles through these).
 const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
 /** Reflect every workout display toggle on its single button: the label shows the
@@ -2893,6 +2913,10 @@ function syncWorkoutToggles(): void {
   els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
   els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
   els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
+  // "Hidden" only makes sense when the Index filter is actually hiding lifts; show
+  // it always so the control is discoverable, but mark it active when revealing.
+  els.woShowAllToggle.classList.toggle("is-active", woShowAllExercises);
+  els.woShowAllToggle.setAttribute("aria-pressed", woShowAllExercises ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
 }
@@ -4751,9 +4775,12 @@ function buildWorkoutGroups(): WorkoutGroup[] {
     const tagged = aloneTags.has(aloneKey(g.date));
     return aloneFilter === "alone" ? tagged : !tagged;
   };
+  // "Show all" (the history's "Hidden" toggle) bypasses the Index app-wide filter
+  // for this list only, so lifts the filter hides reappear here.
+  const recs = woShowAllExercises ? liveRecords() : activeRecords();
   if (S.workoutViewMode === "week") {
     return scopeWorkoutGroups(
-      weeksForUser(activeRecords(), els.athlete.value)
+      weeksForUser(recs, els.athlete.value)
         .map((w) => ({
           label: `Week of ${shortDate(w.weekStart)}`,
           date: w.weekStart,
@@ -4765,7 +4792,8 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         .filter(keep),
     );
   }
-  const days = S.showRestDays ? workoutsWithRestDays(athleteWorkouts) : athleteWorkouts;
+  const base = woShowAllExercises ? workoutsForUser(recs, els.athlete.value) : athleteWorkouts;
+  const days = S.showRestDays ? workoutsWithRestDays(base) : base;
   return scopeWorkoutGroups(
     days
       .map((d) => ({
@@ -5391,6 +5419,35 @@ function renderWorkoutsPage() {
   els.workoutsTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = pagerHtml(S.workoutsPage, workoutGroups.length, S.workoutsPageSize);
+  renderWoHiddenNote();
+}
+
+/** Toggle the history's "show lifts hidden by the Index filter" mode, persist it,
+ * and re-render the list. Shared by the ⚙ "Hidden" button and the inline banner. */
+function setWoShowAll(on: boolean): void {
+  woShowAllExercises = on;
+  localStorage.setItem("colosseum.woShowAll", on ? "1" : "0");
+  S.workoutsPage = 0;
+  renderWorkoutsPage();
+}
+
+/** Flag, above the history list, that the Index app-wide filter is hiding some of
+ * this athlete's lifts — with a one-tap "Show all" (mirrors the ⚙ "Hidden"
+ * toggle). Lives as a sibling of #workoutsTable so it travels with the relocated
+ * panel into the Analysis view. */
+function renderWoHiddenNote(): void {
+  const n = hiddenByIndexCount(els.athlete.value);
+  const existing = document.getElementById("woHiddenNote");
+  if (!n && !woShowAllExercises) { existing?.remove(); return; }
+  const note = existing ?? document.createElement("div");
+  note.id = "woHiddenNote";
+  note.className = "wo-hidden-note";
+  note.innerHTML = woShowAllExercises
+    ? `<span>Showing all lifts${n ? ` — ${n} normally hidden by the Index filter` : ""}.</span> ` +
+      `<button type="button" class="wo-hidden-btn" data-woshowall="0">Hide them</button>`
+    : `<span>⚑ ${n} lift${n === 1 ? "" : "s"} hidden by the Index filter.</span> ` +
+      `<button type="button" class="wo-hidden-btn" data-woshowall="1">Show all</button>`;
+  if (!existing) els.workoutsTable.parentElement?.insertBefore(note, els.workoutsTable);
 }
 
 function onWorkoutRowClick(e: MouseEvent) {
@@ -8510,6 +8567,12 @@ async function init() {
     S.showAloneTags = !S.showAloneTags;
     localStorage.setItem("colosseum.showAloneTags", S.showAloneTags ? "1" : "0");
     renderWorkoutsPage();
+  });
+  els.woShowAllToggle.addEventListener("click", () => setWoShowAll(!woShowAllExercises));
+  // Inline "Show all" / "Hide them" button in the over-the-history banner.
+  document.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-woshowall]");
+    if (b) setWoShowAll(b.dataset.woshowall === "1");
   });
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];

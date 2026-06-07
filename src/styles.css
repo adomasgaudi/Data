@@ -1701,6 +1701,10 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 .wo-dj-btn[hidden] { display: none; }
+/* Banner above the history list when the Index app-wide filter hides some lifts. */
+.wo-hidden-note { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 0.82rem; color: var(--muted); }
+.wo-hidden-btn { font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 2px 9px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.wo-hidden-btn:hover { background: var(--accent); color: #fff; }
 .wo-dj-sel { font: inherit; font-size: 0.7rem; padding: 4px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); }
 /* Calendar bottom row: the slicer pills + a compact ⚙ settings dropdown (scope +
    tag-alone) side by side. The scope/tag controls reuse the DJ-console buttons. */
