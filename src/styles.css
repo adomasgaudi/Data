@@ -2869,9 +2869,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-gp-count { font-size: 0.78rem; }
 .ex-gp-hint { margin: 0.25rem 0 0.5rem; font-size: 0.78rem; }
 .ex-gp-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
-.gp-chip:hover { border-color: var(--accent); color: var(--accent); }
-.gp-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; gap: 0.3rem; }
+.gp-chip:hover { border-color: var(--accent); }
+/* Cycling 4-level approval: no (grey) → 1 experimental (amber) → 2 confirmed
+   (blue) → 3 certain (green). The little badge shows the level number. */
+.gp-chip.gp-l1 { background: #b8902f; border-color: #b8902f; color: #fff; }
+.gp-chip.gp-l2 { background: #284e86; border-color: #284e86; color: #fff; }
+.gp-chip.gp-l3 { background: #2e7d52; border-color: #2e7d52; color: #fff; }
+.gp-lvl { font-size: 0.65rem; line-height: 1; padding: 1px 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.28); }
 .ex-gp-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .ex-gp-actions .gp-bulk { flex: 0 0 auto; font-size: 0.78rem; padding: 4px 10px; }
 .wa-gcfg { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; margin: 0 0 0.6rem; }

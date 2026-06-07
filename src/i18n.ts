@@ -141,6 +141,13 @@ const LT: Record<string, string> = {
   "Opacity": "Permatomumas",
   "Right axis ↕": "Dešinė ašis ↕",
   "Volume shift": "Tūrio poslinkis",
+  "All graphs": "Visi grafikai",
+  "Approved only": "Tik patvirtinti",
+  // ---- Allowed-graphs review (per exercise) ----
+  "Allowed graphs": "Leidžiami grafikai",
+  "Tap to cycle: no → 1 experimental → 2 confirmed → 3 certain. Any level ≥ 1 shows the graph for this lift.": "Spustelėkite keisti: ne → 1 eksperimentinis → 2 patvirtintas → 3 tikras. Bet koks lygis ≥ 1 rodo šio pratimo grafiką.",
+  "All certain": "Visi tikri",
+  "Block all": "Blokuoti visus",
   // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
   "Tags": "Žymos",

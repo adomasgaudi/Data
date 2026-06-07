@@ -88,11 +88,16 @@ import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerc
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
 import {
   type GraphPermissions,
+  type GraphLevel,
+  GRAPH_LEVEL_LABEL,
+  ALL_GRAPH_METRIC_IDS,
   allowedMetricsFor,
   isMetricAllowed,
+  levelOf,
   metricsAllowedForScope,
   exercisesBlockingMetric,
-  toggleMetric as togglePermMetric,
+  normalizePermissions,
+  cycleMetricLevel as cyclePermLevel,
   setAllMetrics as setAllPermMetrics,
 } from "./graphPermissions";
 import {
@@ -1548,22 +1553,35 @@ function setMachineMode(exerciseName: string, mode: MachineMode) {
 const GRAPH_PERMS_KEY = "colosseum.allowedGraphs.v1";
 let graphPerms: GraphPermissions = (() => {
   try {
-    const o = JSON.parse(localStorage.getItem(GRAPH_PERMS_KEY) ?? "{}");
-    return o && typeof o === "object" ? (o as GraphPermissions) : {};
+    return normalizePermissions(JSON.parse(localStorage.getItem(GRAPH_PERMS_KEY) ?? "{}"));
   } catch { return {}; }
 })();
 function saveGraphPerms() {
   try { localStorage.setItem(GRAPH_PERMS_KEY, JSON.stringify(graphPerms)); } catch { /* storage may be unavailable */ }
 }
-/** Toggle one metric for one exercise, then refresh the review UI + every graph. */
-function toggleGraphPerm(name: string, metricId: string) {
-  graphPerms = togglePermMetric(graphPerms, name, metricId);
+// Global master override: when ON, EVERY graph draws for every exercise,
+// ignoring the per-exercise approval levels (a quick "show me everything"). When
+// OFF, only the approved (level ≥ 1) graphs draw. The per-exercise levels are
+// kept either way — this just bypasses them for drawing.
+const ALL_GRAPHS_KEY = "colosseum.allGraphsAllowed";
+let allGraphsAllowed: boolean = (() => {
+  try { return localStorage.getItem(ALL_GRAPHS_KEY) === "1"; } catch { return false; }
+})();
+function setAllGraphsAllowed(on: boolean) {
+  allGraphsAllowed = on;
+  try { localStorage.setItem(ALL_GRAPHS_KEY, on ? "1" : "0"); } catch { /* storage may be unavailable */ }
+  renderWaGraph();
+}
+/** Cycle one metric's approval level (no → 1 → 2 → 3 → no) for one exercise,
+ * then refresh the review UI + every graph. */
+function cycleGraphPerm(name: string, metricId: string) {
+  graphPerms = cyclePermLevel(graphPerms, name, metricId);
   saveGraphPerms();
   afterGraphPermChange(name);
 }
-/** Allow every metric for an exercise, or block them all, then refresh. */
-function setGraphPermAll(name: string, allow: boolean) {
-  graphPerms = setAllPermMetrics(graphPerms, name, allow);
+/** Set every metric for an exercise to a level (0 clears), then refresh. */
+function setGraphPermAll(name: string, level: GraphLevel) {
+  graphPerms = setAllPermMetrics(graphPerms, name, level);
   saveGraphPerms();
   afterGraphPermChange(name);
 }
@@ -6628,24 +6646,28 @@ function exerciseInfoHtml(name: string): string {
  * for this lift. Shown inside More info (both the Index inspector and the ℹ
  * overlay), and is where the graph's "needs review" button lands. */
 function graphPermsHtml(name: string): string {
-  const allowed = allowedMetricsFor(graphPerms, name);
+  // Each metric is a CYCLING toggle: tap to advance no → 1 → 2 → 3 → no.
+  // 1 = experimental, 2 = confirmed (may change), 3 = certain. Any level ≥ 1
+  // draws the graph; the number records confidence.
+  const SHORT: Record<GraphLevel, string> = { 0: "", 1: "1", 2: "2", 3: "3" };
   const chips = GRAPH_METRICS.map((m) => {
-    const on = allowed.has(m.id);
+    const lvl = levelOf(graphPerms, name, m.id);
+    const badge = lvl > 0 ? `<span class="gp-lvl">${SHORT[lvl]}</span>` : "";
     return (
-      `<button type="button" class="gp-chip${on ? " is-on" : ""}" ` +
+      `<button type="button" class="gp-chip gp-l${lvl}${lvl > 0 ? " is-on" : ""}" ` +
       `data-graphperm-ex="${escapeHtml(name)}" data-graphperm-id="${escapeHtml(m.id)}" ` +
-      `aria-pressed="${on}" title="${on ? "Allowed — tap to block" : "Blocked — tap to allow"}">${escapeHtml(m.label)}</button>`
+      `aria-pressed="${lvl > 0}" title="${escapeHtml(m.label)} — ${GRAPH_LEVEL_LABEL[lvl]} (tap to cycle)">${escapeHtml(m.label)}${badge}</button>`
     );
   }).join("");
-  const count = allowed.size;
+  const count = allowedMetricsFor(graphPerms, name).size;
   return (
     `<div class="ex-graphperms" id="graphPerms-${escapeHtml(name)}">` +
     `<div class="ex-gp-head"><span class="ex-info-lbl">Allowed graphs</span>` +
     `<span class="muted ex-gp-count">${count} of ${GRAPH_METRICS.length} on</span></div>` +
-    `<p class="ex-gp-hint muted">Only the graphs switched on here show for this exercise. They all start off — switch on the ones you’ve checked actually work for this lift.</p>` +
+    `<p class="ex-gp-hint muted">Tap to cycle: no → 1 experimental → 2 confirmed → 3 certain. Any level ≥ 1 shows the graph for this lift.</p>` +
     `<div class="ex-gp-chips">${chips}</div>` +
     `<div class="ex-gp-actions">` +
-    `<button type="button" class="settings-link gp-bulk" data-graphperm-all="${escapeHtml(name)}">Allow all</button>` +
+    `<button type="button" class="settings-link gp-bulk" data-graphperm-all="${escapeHtml(name)}">All certain</button>` +
     `<button type="button" class="settings-link gp-bulk" data-graphperm-none="${escapeHtml(name)}">Block all</button>` +
     `</div></div>`
   );
@@ -7753,13 +7775,16 @@ async function init() {
     const t = e.target as HTMLElement;
     const chip = t.closest<HTMLElement>("[data-graphperm-id]");
     if (chip?.dataset.graphpermEx && chip.dataset.graphpermId) {
-      toggleGraphPerm(chip.dataset.graphpermEx, chip.dataset.graphpermId);
+      cycleGraphPerm(chip.dataset.graphpermEx, chip.dataset.graphpermId);
       return;
     }
     const allBtn = t.closest<HTMLElement>("[data-graphperm-all]");
-    if (allBtn?.dataset.graphpermAll) { setGraphPermAll(allBtn.dataset.graphpermAll, true); return; }
+    if (allBtn?.dataset.graphpermAll) { setGraphPermAll(allBtn.dataset.graphpermAll, 3); return; }
     const noneBtn = t.closest<HTMLElement>("[data-graphperm-none]");
-    if (noneBtn?.dataset.graphpermNone) { setGraphPermAll(noneBtn.dataset.graphpermNone, false); return; }
+    if (noneBtn?.dataset.graphpermNone) { setGraphPermAll(noneBtn.dataset.graphpermNone, 0); return; }
+    // Global "All graphs / Approved only" master toggle (in Graph options).
+    const allGraphsBtn = t.closest<HTMLElement>("[data-allgraphs]");
+    if (allGraphsBtn) { setAllGraphsAllowed(!allGraphsAllowed); return; }
     // The graph's "Review in Index →" button → jump to the Index page at that lift.
     const review = t.closest<HTMLElement>("[data-graphreview]");
     if (review?.dataset.graphreview) { reviewGraphsForExercise(review.dataset.graphreview); return; }
@@ -10394,8 +10419,11 @@ function renderWaGraph(): void {
     : waSelected;
   const graphExercises = baseExercises.slice(0, WA_GRAPH_MAX);
   const graphExcluded = baseExercises.slice(WA_GRAPH_MAX);
-  // A metric may draw only when EVERY plotted exercise allows it (intersection).
-  const scopeAllowed = metricsAllowedForScope(graphPerms, graphExercises);
+  // A metric may draw only when EVERY plotted exercise allows it (intersection)
+  // — UNLESS the global "All graphs" override is on, which lets everything draw.
+  const scopeAllowed = allGraphsAllowed
+    ? new Set(ALL_GRAPH_METRIC_IDS)
+    : metricsAllowedForScope(graphPerms, graphExercises);
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
   // The 15 metrics were one crowded wall of chips — split into a few collapsible
   // sub-groups (a group opens when it has an active metric). A metric still
@@ -10442,6 +10470,7 @@ function renderWaGraph(): void {
     `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${S.waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
     `<label class="wa-inc" title="Drop easy / warm-up sets (high reps-in-reserve) — keep only hard working sets. Also applies to the training calendar."><input type="checkbox" id="waHardOnly"${waHardOnly ? " checked" : ""} /> Hard sets only</label>` +
     `<button type="button" class="wa-name-opt${compact ? " is-on" : ""}" data-watime="1" title="${compact ? "Showing compacted time (gaps squeezed). Tap for real spacing." : "Showing real time spacing. Tap to squeeze gaps so all sets fit."}">${compact ? "⇄ Compacted time" : "⇄ Realistic time"}</button>` +
+    `<button type="button" class="wa-name-opt${allGraphsAllowed ? " is-on" : ""}" data-allgraphs="1" title="${allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all, ignoring approval."}">${allGraphsAllowed ? "All graphs" : "Approved only"}</button>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open;
