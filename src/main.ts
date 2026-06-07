@@ -135,8 +135,6 @@ import {
   type Discipline,
   exerciseDiscipline,
   exerciseDisciplines,
-  JOINT_MOVEMENTS,
-  jointMovements,
 } from "./profile";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
@@ -2924,9 +2922,19 @@ const hiddenExCats = new Set<string>((() => {
 // synthetic-group membership.
 // IndexGroupMode now imported from appState; S.bwGroupMode lives on S.
 const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
+  // Shared core (matches the picker + calendar) …
   { mode: "discipline", label: "Discipline" },
-  { mode: "muscle", label: "Muscle group" },
-  { mode: "function", label: "Joint movement" },
+  { mode: "muscleGroup", label: "Muscle group" },
+  { mode: "function", label: "Function" },
+  { mode: "tier", label: "Tier" },
+  // … then the Index-only extra taxonomy dims …
+  { mode: "bodyPart", label: "Body part" },
+  { mode: "joint", label: "Joint" },
+  { mode: "movement", label: "Movement" },
+  { mode: "plane", label: "Plane" },
+  { mode: "difficulty", label: "Difficulty" },
+  { mode: "equipment", label: "Equipment" },
+  // … and the merge/comparison groupings.
   { mode: "combinable", label: "Combinable" },
   { mode: "comparable", label: "Comparable" },
 ];
@@ -2956,7 +2964,7 @@ const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777
 // The two "main" disciplines shown at the Index top level; the rest nest under "Other".
 const MAJOR_DISCIPLINES: Discipline[] = ["Strength", "Calisthenics"];
 // Inside the big "Strength" discipline, slice its lifts further by muscle or function.
-let strengthSubMode: "muscle" | "function" = "muscle";
+let strengthSubMode: "muscleGroup" | "function" = "muscleGroup";
 
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
@@ -2972,17 +2980,6 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
     for (const r of rows) for (const k of keys(r)) { const list = by.get(k); if (list) list.push(r); else by.set(k, [r]); }
     return by;
   };
-  if (mode === "muscle") {
-    const by = groupByMulti((r) => mgsFor(r.name));
-    return INDEX_MUSCLES.filter((m) => by.has(m)).map((m) => ({ key: m, label: m, color: muscleColor(m), rows: by.get(m)! }));
-  }
-  if (mode === "function") {
-    // Joint movements (shoulder abd/add, flexion/extension at each joint…), not
-    // muscle groups — a lift shows under every joint action it trains.
-    return JOINT_MOVEMENTS
-      .map((c) => ({ key: c, label: c, color: hashHueHex(c), rows: rows.filter((r) => jointMovements(r.name).includes(c)) }))
-      .filter((b) => b.rows.length);
-  }
   if (mode === "combinable" || mode === "comparable") {
     const groups = mode === "combinable" ? effectiveCombinableGroups() : effectiveComparableGroups();
     const buckets: IndexBucket[] = groups
@@ -2994,9 +2991,23 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
       buckets.push({ key: "__ungrouped", label: mode === "combinable" ? "Not in a combinable group" : "Not in a comparable group", color: CATEGORY_COLORS.Other, rows: rest });
     return buckets;
   }
-  // discipline (default): a lift shows under every discipline it's tagged with.
-  const by = groupByMulti((r) => discsFor(r.name));
-  return DISCIPLINES.filter((d) => by.has(d)).map((d) => ({ key: d, label: d, color: disciplineColor(d), rows: by.get(d)! }));
+  // Every other mode is a metadata dimension resolved the SAME way as the picker
+  // and calendar (shared resolver). Discipline & muscle group keep their curated
+  // colours + display order; the rest hash a hue and sort alphabetically.
+  const valuesFor = (name: string): string[] =>
+    mode === "discipline" ? discsFor(name)
+    : mode === "muscleGroup" ? mgsFor(name)
+    : waMeta(name, mode as ExerciseFilterDim);
+  const by = groupByMulti((r) => valuesFor(r.name));
+  const order: string[] =
+    mode === "discipline" ? DISCIPLINES.filter((d) => by.has(d))
+    : mode === "muscleGroup" ? INDEX_MUSCLES.filter((m) => by.has(m))
+    : [...by.keys()].sort((a, b) => a.localeCompare(b));
+  const colorFor = (k: string): string =>
+    mode === "discipline" ? disciplineColor(k as Discipline)
+    : mode === "muscleGroup" ? muscleColor(k as MuscleGroup)
+    : hashHueHex(k);
+  return order.map((k) => ({ key: k, label: k, color: colorFor(k), rows: by.get(k)! }));
 }
 
 /** Build the custom athlete chip row from the (hidden) select's options. */
@@ -4817,18 +4828,18 @@ function filterColor(filter: string): string | null {
 // paint each day by the dominant group in a chosen dimension; the day's set count
 // still drives the intensity (opacity). "none" = the classic single-colour scale.
 // S.heatColorBy (HeatColorDim) lives on S (appState); HeatColorDim imported at top.
-const HEAT_COLOR_DIMS: HeatColorDim[] = ["none", "cat", "mus", "fun", "ex"];
+const HEAT_COLOR_DIMS: HeatColorDim[] = ["none", "discipline", "muscleGroup", "function", "tier", "ex"];
 const HEAT_COLOR_LABELS: Record<HeatColorDim, string> = {
-  none: "One colour", cat: "Body part", mus: "Muscle group", fun: "Function", ex: "Exercise",
+  none: "One colour", discipline: "Discipline", muscleGroup: "Muscle group", function: "Function", tier: "Tier", ex: "Exercise",
 };
 
-/** The group value an exercise falls under for a colour dimension (or null). */
+/** The group value an exercise falls under for a colour dimension (or null). The
+ * core dims reuse the shared metadata resolver so the calendar matches the picker
+ * and Index; "ex" colours each exercise on its own. */
 function exerciseGroupValue(name: string, dim: HeatColorDim): string | null {
-  if (dim === "cat") return catFor(name);
-  if (dim === "mus") return mgFor(name);
-  if (dim === "fun") return tagsForExercise(name).find((t) => t.kind === "functional-pattern")?.label ?? null;
+  if (dim === "none") return null;
   if (dim === "ex") return name;
-  return null;
+  return waMeta(name, dim as ExerciseFilterDim)[0] ?? null;
 }
 /** The current athlete's exercises that fall in one group value (a calendar pill).
  * Used to sync a pill tap with the analysis selection (waSelected). */
@@ -4841,7 +4852,8 @@ function exercisesInGroup(dim: HeatColorDim, val: string): string[] {
  * otherwise a hash-derived hue so every value gets its own distinct colour. */
 function heatGroupColor(dim: HeatColorDim, value: string): string | null {
   if (!value) return null;
-  if (dim === "cat") return CATEGORY_COLORS[value as TrainingCategory] ?? hashHueHex(value);
+  if (dim === "discipline") return disciplineColor(value as Discipline);
+  if (dim === "muscleGroup") return muscleColor(value as MuscleGroup);
   return hashHueHex(value);
 }
 /** Training dates → { sets, catHex } honouring the active S.heatFilters. */
@@ -6215,8 +6227,8 @@ function renderBwParts() {
   // chosen sub-mode and render as nested sub-groups, with a little selector on top.
   const strengthBucketHtml = (b: IndexBucket): string => {
     const subs = indexBuckets(b.rows, strengthSubMode);
-    const opt = (m: "muscle" | "function", lbl: string) => `<option value="${m}"${strengthSubMode === m ? " selected" : ""}>${lbl}</option>`;
-    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscle", "Muscle group")}${opt("function", "Joint movement")}</select></div>`;
+    const opt = (m: "muscleGroup" | "function", lbl: string) => `<option value="${m}"${strengthSubMode === m ? " selected" : ""}>${lbl}</option>`;
+    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscleGroup", "Muscle group")}${opt("function", "Function")}</select></div>`;
     return (
       `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
       `<summary class="bw-cat-summary">` +
@@ -7129,7 +7141,7 @@ function onBwInputChange(e: Event) {
   const input = e.target as HTMLElement;
   // The "Sub-group by" picker inside the Strength discipline (muscle / function).
   if (input.classList.contains("bw-substrat")) {
-    strengthSubMode = (input as HTMLSelectElement).value === "function" ? "function" : "muscle";
+    strengthSubMode = (input as HTMLSelectElement).value === "function" ? "function" : "muscleGroup";
     renderBwParts();
     return;
   }
@@ -10047,7 +10059,10 @@ let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the se
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
 // toggle. Replaces the old separate Filter button.
 const waGroupsOff = new Set<string>();
-const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
+// The picker, calendar and Index all share these CORE group-by dimensions. The
+// extra taxonomy dims (body part, joint, movement, plane, difficulty, equipment)
+// live only in the Index now — see INDEX_GROUP_MODES.
+const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["discipline", "muscleGroup", "function", "tier"];
 // Picker pill mode: individual exercise pills (default) or ONE pill per category
 // (manual toggle), so whole categories can be opened/eliminated at once. Categories
 // mode needs a Group-by dimension (it groups by it).

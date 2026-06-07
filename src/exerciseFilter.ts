@@ -11,6 +11,7 @@
 import { exerciseMetaValues } from "./exerciseMeta";
 
 export const FILTER_DIMS = [
+  "discipline",
   "bodyPart",
   "muscleGroup",
   "joint",
@@ -27,6 +28,7 @@ export type ExerciseFilterDim = (typeof FILTER_DIMS)[number];
 
 /** Human labels for the dimensions (for any UI that renders them). */
 export const FILTER_DIM_LABELS: Record<ExerciseFilterDim, string> = {
+  discipline: "Discipline",
   bodyPart: "Body part",
   muscleGroup: "Muscle group",
   joint: "Joint",

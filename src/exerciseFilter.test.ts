@@ -58,7 +58,7 @@ describe("filterExercises engine (TASK 19)", () => {
 
   it("supports every advertised dimension", () => {
     expect(FILTER_DIMS).toEqual([
-      "bodyPart", "muscleGroup", "joint", "movement", "plane",
+      "discipline", "bodyPart", "muscleGroup", "joint", "movement", "plane",
       "function", "equipment", "difficulty", "loadType", "laterality", "tier",
     ]);
   });

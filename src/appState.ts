@@ -8,10 +8,15 @@
  * moves another cohesive cluster of `let`s onto S (tsc catches any missed ref).
  * Keep this a plain data bag — no logic.
  */
-/** How the workout heatmap colours each day. */
-export type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
-/** Index / bodyweight-parts grouping dimension. */
-export type IndexGroupMode = "discipline" | "muscle" | "function" | "combinable" | "comparable";
+/** How the workout heatmap colours each day. The core dims (discipline / muscle
+ * group / function / tier) match the picker + Index; "ex" colours per exercise. */
+export type HeatColorDim = "none" | "discipline" | "muscleGroup" | "function" | "tier" | "ex";
+/** Index grouping dimension: the shared core (discipline / muscle group / function
+ * / tier) + Index-only extras (the taxonomy dims) + the merge groupings. */
+export type IndexGroupMode =
+  | "discipline" | "muscleGroup" | "function" | "tier"
+  | "bodyPart" | "joint" | "movement" | "plane" | "difficulty" | "equipment"
+  | "combinable" | "comparable";
 
 export const S: {
   // Analysis view (Workout Analysis) — local UI flags.
@@ -52,7 +57,7 @@ export const S: {
   heatFilters: [],
   heatFiltersSaved: null,
   aloneTagMode: false,
-  heatColorBy: "cat",
+  heatColorBy: "muscleGroup",
   bwOpenCats: null,
   bwGroupMode: "discipline",
   dataView: "processed",

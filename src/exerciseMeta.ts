@@ -15,6 +15,7 @@ import {
   muscleGroup,
   exerciseCategories,
   exerciseTier,
+  exerciseDisciplines,
   tagsForExercise,
 } from "./profile";
 
@@ -377,6 +378,8 @@ function userVals(user: UserAssignments | undefined, name: string, dim: string):
  */
 export function exerciseMetaValues(name: string, dim: string, user?: UserAssignments): string[] {
   switch (dim) {
+    case "discipline":
+      return exerciseDisciplines(name);
     case "bodyPart":
       return exerciseCategories(name);
     case "muscleGroup":
