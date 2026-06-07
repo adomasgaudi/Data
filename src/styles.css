@@ -2373,6 +2373,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    Please keep both if you restructure this table. */
 .bw-cat .data-table td, .bw-cat .data-table th { overflow-wrap: anywhere; }
 .bw-cat .data-table tbody tr:last-child td { border-bottom: none; }
+/* Flat Index SEARCH results table — same no-sideways-scroll rule as the grouped
+   tables above (it isn't inside .bw-cat, so it needs its own override). */
+.bw-search-results .data-table { min-width: 0; }
+.bw-search-results .data-table td, .bw-search-results .data-table th { overflow-wrap: anywhere; }
 
 /* Index "Group by" picker. */
 .bw-groupby { margin: 0 0 0.6rem; }
