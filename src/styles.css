@@ -67,7 +67,7 @@ body.locked { overflow: hidden; }
 /* Already signed in (set before paint by the head script): never show the gate. */
 html.signed-in .login-gate { display: none; }
 .login-card {
-  width: 100%; max-width: 340px; text-align: center; background: var(--card);
+  width: 100%; max-width: 340px; text-align: center; background: var(--panel);
   border: 1px solid var(--line); border-radius: 16px; padding: 2.2rem 1.5rem;
   box-shadow: 0 10px 40px rgba(20, 24, 38, 0.18);
 }
@@ -940,7 +940,7 @@ main { padding-bottom: 5rem; }
 .rm-col-input {
   width: 2.4em; text-align: right;
   border: 1px solid var(--line); border-radius: 5px;
-  background: var(--card); color: var(--text);
+  background: var(--panel); color: var(--text);
   font: inherit; font-size: 0.82rem; font-weight: 700;
   padding: 1px 3px; margin-right: 1px;
 }
@@ -1667,7 +1667,7 @@ sup.wr-bw { font-size: 0.85em; }
 /* Fills set via CSS, not SVG presentation attributes: var() in a fill="…"
    attribute isn't resolved by some mobile WebViews (left the map blank on
    Android), but CSS custom properties always apply. */
-.sitemap-svg .sm-node { fill: var(--card); }
+.sitemap-svg .sm-node { fill: var(--panel); }
 .sitemap-svg .sm-text { fill: var(--text); }
 .exercise-compare-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
@@ -1941,7 +1941,7 @@ sup.wr-bw { font-size: 0.85em; }
 .xdd-rpe { display: block; width: 100%; }
 .xdd-rpe .xdd-btn {
   padding: 2px 4px; font-size: 0.74rem; font-weight: 600; gap: 0.15rem;
-  border-radius: 6px; background: var(--card); color: var(--muted);
+  border-radius: 6px; background: var(--panel); color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .xdd-rpe .xdd-caret { font-size: 0.6rem; }
@@ -2202,7 +2202,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
 /* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
 /* App-wide active-set control bar on the Index page. */
-.active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .active-set-bar .as-label { font-size: 0.85rem; font-weight: 600; }
 .active-set-bar .as-status { margin-left: 0.5rem; font-size: 0.82rem; }
 .active-set-bar .as-status.is-on { color: var(--accent); font-weight: 700; }
