@@ -618,7 +618,7 @@ main { padding-bottom: 5rem; }
 .athlete-chips {
   display: flex; flex-wrap: nowrap; gap: 0.5rem;
   flex: 1 1 auto; min-width: 0; /* take the rest of the row and scroll within it */
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-x; -webkit-overflow-scrolling: touch;
+  overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch;
   padding-bottom: 6px; scrollbar-width: thin;
 }
 .athlete-chip {
@@ -1380,7 +1380,7 @@ sup.wr-bw { font-size: 0.85em; }
    broken mid-week), with month labels along the top aligned to each month's
    first week. --hm-col is the per-week column pitch (cell + gap). */
 .hm-cal { --hm-col: 18px; display: inline-block; } /* matches .hm-grid cell width; gap adds the rest */
-.hm-year { overflow-x: auto; touch-action: pan-x; padding-bottom: 6px; margin: 0 0 0.4rem; } /* pan-x: sideways scrolls the calendar, vertical swipe scrolls the PAGE */
+.hm-year { overflow-x: auto; touch-action: pan-x pan-y; padding-bottom: 6px; margin: 0 0 0.4rem; } /* pan-x pan-y: sideways scrolls the calendar; a vertical swipe has no calendar scroll so it CHAINS to the page (pan-x alone disabled vertical entirely → did nothing) */
 .hm-months { display: grid; gap: 3px; margin-bottom: 4px; }
 .hm-mlabel { font-size: 0.72rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
 /* In the continuous Timeline view, January carries the year — make it pop so the
@@ -1762,7 +1762,7 @@ sup.wr-bw { font-size: 0.85em; }
 .cmp-sets-scroll table { margin: 0; }
 .cmp-setdot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
 /* Site map (mind map) — horizontal scroll when wider than the screen. */
-.sitemap-box { overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
+.sitemap-box { overflow-x: auto; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
 .sitemap-svg { display: block; }
 /* Fills set via CSS, not SVG presentation attributes: var() in a fill="…"
    attribute isn't resolved by some mobile WebViews (left the map blank on
@@ -1873,7 +1873,7 @@ sup.wr-bw { font-size: 0.85em; }
 .data-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; margin: 0.9rem 0; }
 .data-filters .inline-label { margin-bottom: 0; }
 .data-filters .ex-search { margin: 0; }
-.data-table-wrap { overflow-x: auto; touch-action: pan-x; border: 1px solid var(--line); border-radius: 8px; }
+.data-table-wrap { overflow-x: auto; touch-action: pan-x pan-y; border: 1px solid var(--line); border-radius: 8px; }
 .data-raw-table { font-size: 0.8rem; white-space: nowrap; }
 .data-raw-table th, .data-raw-table td { padding: 4px 9px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .data-raw-table tbody tr:nth-child(even) { background: var(--accent-soft); }
@@ -2732,7 +2732,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .wa-sel-pills.wa-sel-pills--scroll {
   flex-wrap: nowrap; max-height: none;
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-x; -webkit-overflow-scrolling: touch;
+  overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch;
   padding-bottom: 3px; scrollbar-width: thin;
 }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
