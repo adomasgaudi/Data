@@ -5388,7 +5388,7 @@ function renderWorkoutsPage() {
               ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
                 `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
               : "";
-            return `<div class="wo-ex-line"><span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span>${rmTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</div>`;
+            return `<div class="wo-ex-line">${rmTxt} <span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist">${setsTxt}</span>${addBtn}</div>`;
           })
           .join("");
       } else {
