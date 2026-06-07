@@ -2627,17 +2627,22 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost .detail-table .set-rpe-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
-.wa-sel-header { display: flex; align-items: center; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
+.wa-sel-header { display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
 .wa-sel-header .wa-section-title { margin: 0; }
 /* The Exercises button sits fixed at the left; the selected pills scroll sideways
    in the rest of the row (see .wa-sel-pills). */
 .wa-sel-tools { display: flex; flex-wrap: nowrap; gap: 0.4rem; flex: none; align-items: center; justify-content: flex-start; }
-/* Selected-exercise pills (EXR-SEL-PILLS): ONE horizontally-scrolling row beside
-   the Exercises button (rule 16 — swipe sideways, don't wrap into a tall block
-   that eats vertical space), mirroring the athlete chip strip (.athlete-chips). */
+/* Selected-exercise pills (EXR-SEL-PILLS): wrap onto up to ~2 lines beside the
+   Exercises button (using the empty space below it); but if they'd need MORE than
+   2 lines, JS adds .wa-sel-pills--scroll to collapse them back to ONE horizontally-
+   scrolling row (rule 16 — don't grow into a tall block that eats vertical space). */
 .wa-sel-pills {
-  display: flex; flex-wrap: nowrap; gap: 0.3rem;
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
   flex: 1 1 auto; min-width: 0;
+  max-height: 3.6rem; overflow: hidden; align-content: flex-start;
+}
+.wa-sel-pills.wa-sel-pills--scroll {
+  flex-wrap: nowrap; max-height: none;
   overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
   padding-bottom: 3px; scrollbar-width: thin;
 }

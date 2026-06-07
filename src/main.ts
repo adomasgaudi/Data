@@ -10243,6 +10243,15 @@ function renderWorkoutAnalysis(): void {
       `<div class="wa-sel-tools">${exercisesFold}</div>` +
       selPills +
       `</div>`;
+    // Pills wrap onto up to 2 lines; if the wrapped block would need MORE than 2
+    // rows, collapse it to a single horizontally-scrolling row instead of growing
+    // ever taller. Measured in wrap mode (scrollHeight reports the full content).
+    const pillsEl = sel.querySelector<HTMLElement>(".wa-sel-pills");
+    if (pillsEl) {
+      pillsEl.classList.remove("wa-sel-pills--scroll");
+      const rowH = (pillsEl.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
+      if (rowH && pillsEl.scrollHeight > rowH * 2 + 8) pillsEl.classList.add("wa-sel-pills--scroll");
+    }
     // The machine-type toggle renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
     if (assignBox) assignBox.innerHTML = assignUi;
