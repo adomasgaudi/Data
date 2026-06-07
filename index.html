@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.6.65</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.6.66</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -122,6 +122,9 @@
           </button>
           <button type="button" id="changelogBtn" class="settings-link">
             Version history <span id="changelogVer" class="muted"></span>
+          </button>
+          <button type="button" id="backlogBtn" class="settings-link">
+            Tasks &amp; roadmap
           </button>
         </div>
       </div>
@@ -1196,6 +1199,17 @@
         </div>
         <p class="muted">Every released version, newest first — the same log as the git history.</p>
         <div id="changelog"></div>
+      </div>
+    </div>
+
+    <div id="backlogPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Tasks &amp; roadmap</h2>
+          <button type="button" id="backlogClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="muted">The cleanup backlog and feature roadmap, shown straight from the docs/ files.</p>
+        <div id="backlog" class="md-doc"></div>
       </div>
     </div>
 

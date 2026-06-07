@@ -258,6 +258,20 @@ body.on-s-anl .appfoot { display: none; }
 .overlay-inner { max-width: 760px; margin: 0 auto; }
 .overlay-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; }
 .overlay-head h2 { margin: 0; }
+
+/* Rendered Markdown (Settings → Tasks & roadmap). */
+.md-doc { line-height: 1.5; }
+.md-doc h1 { font-size: 1.4rem; margin: 1rem 0 0.5rem; }
+.md-doc h2 { font-size: 1.15rem; margin: 1.4rem 0 0.4rem; }
+.md-doc h3 { font-size: 1rem; margin: 1rem 0 0.3rem; }
+.md-doc p { margin: 0.5rem 0; }
+.md-doc ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+.md-doc li { margin: 0.2rem 0; }
+.md-doc code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; font-size: 0.85em; }
+.md-doc hr { border: none; border-top: 1px solid var(--line); margin: 1.2rem 0; }
+.md-doc table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; font-size: 0.9rem; }
+.md-doc th, .md-doc td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+.md-doc th { background: var(--panel); }
 .overlay-close {
   background: none; border: 1px solid var(--line); color: var(--muted);
   border-radius: 8px; width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;

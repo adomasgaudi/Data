@@ -10,6 +10,11 @@ import {
 } from "./format";
 import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
+// Tasks & roadmap (Settings overlay) are shown straight from the docs/ markdown,
+// imported as raw text so the panel is always a projection of the files and can
+// never drift from them (single source of truth).
+import cleanupBacklogMd from "../docs/cleanup-backlog.md?raw";
+import roadmapMd from "../docs/roadmap.md?raw";
 import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { S, type HeatColorDim } from "./appState";
@@ -183,6 +188,10 @@ const els = {
   changelogPage: $("changelogPage"),
   changelogClose: $<HTMLButtonElement>("changelogClose"),
   changelog: $("changelog"),
+  backlogBtn: $<HTMLButtonElement>("backlogBtn"),
+  backlogPage: $("backlogPage"),
+  backlogClose: $<HTMLButtonElement>("backlogClose"),
+  backlog: $("backlog"),
   modelBtn: $<HTMLButtonElement>("modelBtn"),
   modelPage: $("modelPage"),
   modelClose: $<HTMLButtonElement>("modelClose"),
@@ -1956,6 +1965,58 @@ function openHealth() {
 function openChangelog() {
   setSettingsOpen(false);
   els.changelogPage.hidden = false;
+}
+
+/** Minimal Markdown → HTML for the docs/ task files. Supports just what those
+ * files use: headings, **bold**, `code`, bullet lists, GitHub tables, `---`
+ * rules and paragraphs. Text is HTML-escaped first, so the docs can't inject. */
+function mdToHtml(md: string): string {
+  const inline = (s: string) =>
+    escapeHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code>$1</code>");
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  let para: string[] = [];
+  let list: string[] = [];
+  const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+  const flushList = () => {
+    if (list.length) { out.push(`<ul>${list.map((l) => `<li>${inline(l)}</li>`).join("")}</ul>`); list = []; }
+  };
+  const cells = (row: string) =>
+    row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  let i = 0;
+  while (i < lines.length) {
+    const t = (lines[i] ?? "").trim();
+    if (t.startsWith("|") && /^\|[\s:|-]+\|$/.test((lines[i + 1] ?? "").trim())) {
+      flushPara(); flushList();
+      const head = cells(t);
+      i += 2;
+      const body: string[][] = [];
+      while (i < lines.length && (lines[i] ?? "").trim().startsWith("|")) { body.push(cells((lines[i] ?? "").trim())); i++; }
+      out.push(
+        `<table><thead><tr>${head.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>` +
+        `<tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+      );
+      continue;
+    }
+    if (t === "") { flushPara(); flushList(); i++; continue; }
+    if (/^---+$/.test(t)) { flushPara(); flushList(); out.push("<hr>"); i++; continue; }
+    const h = /^(#{1,6})\s+(.*)$/.exec(t);
+    if (h) { flushPara(); flushList(); const lvl = h[1]!.length; out.push(`<h${lvl}>${inline(h[2]!)}</h${lvl}>`); i++; continue; }
+    const li = /^[-*]\s+(.*)$/.exec(t);
+    if (li) { flushPara(); list.push(li[1]!); i++; continue; }
+    flushList(); para.push(t); i++;
+  }
+  flushPara(); flushList();
+  return out.join("\n");
+}
+
+/** Open the tasks/roadmap overlay from Settings (rendered from the docs/ md). */
+function openBacklog() {
+  setSettingsOpen(false);
+  els.backlog.innerHTML = mdToHtml(cleanupBacklogMd) + "\n<hr>\n" + mdToHtml(roadmapMd);
+  els.backlogPage.hidden = false;
 }
 
 // ---- Exercise "More info" — now an inline, expandable dropdown on the Index
@@ -7452,6 +7513,10 @@ async function init() {
   els.changelogBtn.addEventListener("click", openChangelog);
   els.changelogClose.addEventListener("click", () => {
     els.changelogPage.hidden = true;
+  });
+  els.backlogBtn.addEventListener("click", openBacklog);
+  els.backlogClose.addEventListener("click", () => {
+    els.backlogPage.hidden = true;
   });
   // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
   els.modelBtn.addEventListener("click", openModelEditor);

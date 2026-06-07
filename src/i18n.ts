@@ -65,6 +65,8 @@ const LT: Record<string, string> = {
   "Backup & restore": "Atsarginė kopija ir atkūrimas",
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",
+  "Tasks & roadmap": "Užduotys ir planas",
+  "The cleanup backlog and feature roadmap, shown straight from the docs/ files.": "Tvarkymo darbų sąrašas ir funkcijų planas, rodomi tiesiai iš docs/ failų.",
   "Language": "Kalba",
   "Back to Colosseum": "Atgal į Colosseum",
   // ---- Quick view switcher (short toggle labels) ----
