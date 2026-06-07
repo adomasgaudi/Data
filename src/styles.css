@@ -642,6 +642,8 @@ main { padding-bottom: 5rem; }
 .se-bf-lead { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
 .se-bf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; }
 .se-bf-grid .se-lbl { font-size: 0.64rem; }
+/* Auto-calculated average: read-only, visibly not an input. */
+.se-bf-avg-out { display: block; width: 100%; box-sizing: border-box; font: inherit; font-weight: 700; padding: 6px 9px; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); }
 .se-live { padding: 0.5rem 0.7rem; background: var(--accent-soft); border-radius: 8px; font-size: 0.86rem; margin-bottom: 0.7rem; }
 .se-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .se-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 7px 16px; }

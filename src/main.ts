@@ -6055,7 +6055,10 @@ function renderStatsEdit(): void {
     `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high)</div><div class="se-bf-grid">` +
     num("se-bf-low95", "95% low", bfPct(dist.low95), "0.5") +
     num("se-bf-low50", "50% low", bfPct(dist.low50), "0.5") +
-    num("se-bf-avg", "average", bfPct(dist.avg), "0.5") +
+    // Average is auto-calculated (middle of the 95% band) — read-only, not editable.
+    `<label class="se-field"><span class="se-lbl">average</span>` +
+    `<output class="se-bf-avg-out" title="Auto-calculated — the middle of the 95% band">${Math.round((dist.low95 + dist.high95) / 2 * 1000) / 10}</output>` +
+    `<span class="se-hint muted">auto</span></label>` +
     num("se-bf-high50", "50% high", bfPct(dist.high50), "0.5") +
     num("se-bf-high95", "95% high", bfPct(dist.high95), "0.5") +
     `</div></div>` +
@@ -6083,12 +6086,15 @@ function saveStatsEdit(): void {
     return v === undefined ? fallback : v / 100; // % → fraction
   };
   const d = bfDistFor(username);
+  const low95 = bf("se-bf-low95", d.low95);
+  const high95 = bf("se-bf-high95", d.high95);
   const ov: AthleteStatsOverride = {
     age: ageVal,
     sex: (root.querySelector<HTMLSelectElement>(".se-sex")?.value as "m" | "f") ?? "m",
     bf: normalizeBodyFatDist({
-      low95: bf("se-bf-low95", d.low95), low50: bf("se-bf-low50", d.low50),
-      avg: bf("se-bf-avg", d.avg), high50: bf("se-bf-high50", d.high50), high95: bf("se-bf-high95", d.high95),
+      low95, low50: bf("se-bf-low50", d.low50),
+      // Average is derived (middle of the 95% band), never typed.
+      avg: (low95 + high95) / 2, high50: bf("se-bf-high50", d.high50), high95,
     }),
   };
   const w = numOf("se-weight"); if (w !== undefined) ov.weight = w;
@@ -6103,6 +6109,16 @@ function setupStatsEdit(): void {
   els.statsEditBody.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
     if (t.id === "seAthlete") { statsEditUser = (t as HTMLSelectElement).value; renderStatsEdit(); }
+  });
+  // Keep the auto-calculated average (middle of the 95% band) live as you type.
+  els.statsEditBody.addEventListener("input", (e) => {
+    const t = e.target as HTMLElement;
+    if (!t.classList.contains("se-bf-low95") && !t.classList.contains("se-bf-high95")) return;
+    const root = els.statsEditBody;
+    const out = root.querySelector<HTMLOutputElement>(".se-bf-avg-out");
+    const lo = parseFloat(root.querySelector<HTMLInputElement>(".se-bf-low95")?.value ?? "");
+    const hi = parseFloat(root.querySelector<HTMLInputElement>(".se-bf-high95")?.value ?? "");
+    if (out && Number.isFinite(lo) && Number.isFinite(hi)) out.textContent = String(Math.round((lo + hi) / 2 * 10) / 10);
   });
   els.statsEditBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
