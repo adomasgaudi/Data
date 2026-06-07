@@ -14,13 +14,12 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 1. **Version:** AIs change ONLY the patch or 4th digit (`b.2.5.x`, `b.2.5.x.x`). **NEVER the minor or major (`b.2.x`, `b.x`) — the owner does those by hand.** Unsure → patch, or ask.
 2. **Canonical branch:** this file on `claude/strength-training-dashboard-SdAlT` is the single source of truth — **start every new AI from this branch** (don't trust rules on stale side-branches).
 3. **Save = commit + push** after every change (the owner only ever sees the live GitHub Pages site).
-4. **Owner is non-technical:** plain language, click-by-click, no jargon.
-5. **Reply format:** end with a short **Summary**, then one ALL-CAPS line; links only at the very bottom.
-6. **Commit subject:** `CODE (SP:n) version kebab` (e.g. `EXR-3 (SP:3) b.2.5.24 tier-list`).
-7. **Two AIs at once:** each gets its own folder + branch — never share a branch.
-8. **Done = merge into the canonical branch, publish (deploy), then DELETE your own working branch** — standing permission, never wait to be asked.
-9. **No number clashes:** pick the task code (`CAT-n`) and version LAST, just before commit, as highest-in-history + 1; after any rebase, RE-derive both — never reuse a number already in the log.
-10. **No-code project — optimise code/docs for AI, NOT humans:** owner never reads code, only AIs touch it; favour what's easiest for an AI to parse/verify/change safely (small files, tests, machine-readable structure) over human conventions/readability. (Owner *chat* stays plain-language — rule 4.)
+4. **Reply format:** end with a short **Summary**, then one ALL-CAPS line; links only at the very bottom.
+5. **Commit subject:** `CODE (SP:n) version kebab` (e.g. `EXR-3 (SP:3) b.2.5.24 tier-list`).
+6. **Two AIs at once:** each gets its own folder + branch — never share a branch.
+7. **Done = merge into the canonical branch, publish (deploy), then DELETE your own working branch** — standing permission, never wait to be asked.
+8. **No number clashes:** pick the task code (`CAT-n`) and version LAST, just before commit, as highest-in-history + 1; after any rebase, RE-derive both — never reuse a number already in the log.
+9. **No-code project — optimise code/docs for AI, NOT humans:** owner never reads code, only AIs touch it; favour what's easiest for an AI to parse/verify/change safely (small files, tests, machine-readable structure) over human conventions/readability. (Owner *chat* stays plain-language.)
 
 ## Commands the owner types (act on these even with no other context)
 
