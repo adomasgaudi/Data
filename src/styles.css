@@ -473,11 +473,13 @@ main { padding-bottom: 5rem; }
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 11rem;
 }
 .ex-prog-settings-menu .ex-best-toggle { text-align: left; }
-.svgc-plot { width: 100%; touch-action: none; user-select: none; cursor: grab; }
+.svgc-plot { width: 100%; touch-action: pan-y; user-select: none; cursor: grab; }
 .svgc-plot:active { cursor: grabbing; }
-/* touch-action MUST be on the SVG too — it's the actual touch target, so a phone
-   would otherwise scroll the page instead of letting the chart pan/zoom. */
-.svgc-svg { display: block; touch-action: none; }
+/* touch-action: pan-y on the plot AND the SVG (the actual touch target): a vertical
+   swipe scrolls the PAGE as normal (so you can scroll past a chart on a phone),
+   while horizontal drags still pan the chart and wheel / double-tap-to-fit still
+   zoom. (Was `none`, which captured every gesture and froze page scroll over a chart.) */
+.svgc-svg { display: block; touch-action: pan-y; }
 /* Themed chart structural elements (so charts follow light/dark). */
 .svgc-grid { stroke: var(--chart-grid); }
 .svgc-band { fill: var(--chart-band); }
