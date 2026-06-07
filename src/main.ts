@@ -3188,43 +3188,55 @@ function renderAthleteStats() {
  * tested linearFit + exerciseProgressByWeek the progress chart uses. Only lifts
  * with enough history (≥3 data weeks) get a chip, so a slope isn't read off noise.
  */
+/** Momentum trend period: per week / month / 3 months (the rate denominator). */
+type MomentumPeriod = "wk" | "mo" | "3mo";
+let momentumPeriod: MomentumPeriod = "wk";
+const MO_PERIOD_WEEKS: Record<MomentumPeriod, number> = { wk: 1, mo: 4.345, "3mo": 13.04 };
+const MO_PERIOD_NEXT: Record<MomentumPeriod, MomentumPeriod> = { wk: "mo", mo: "3mo", "3mo": "wk" };
 function renderMomentum() {
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   // Consider the athlete's most-trained exercises, then keep those with a trend.
   const top = exerciseCountsForUser(activeRecords(), username).slice(0, 12);
-  const chips: { name: string; perWeek: number }[] = [];
+  // Trend as a PERCENT of the current 1RM (not kg), so lifts of any size compare.
+  const chips: { name: string; pct: number }[] = [];
   for (const c of top) {
     const pts = exerciseProgressByWeek(recs, username, c.exerciseName, formula).filter((p) => p.bestE1rm !== null);
     if (pts.length < 3) continue; // need a few weeks before a slope means anything
     const t0 = Date.parse(pts[0]!.date);
     const fit = linearFit(pts.map((p) => ({ x: (Date.parse(p.date) - t0) / 86_400_000, y: p.bestE1rm! })));
     if (!fit) continue;
-    chips.push({ name: c.exerciseName, perWeek: fit.slope * 7 });
+    const base = pts[pts.length - 1]!.bestE1rm!; // current 1RM = % reference
+    if (base <= 0) continue; // % is meaningless off a zero/negative base
+    const perWeekKg = fit.slope * 7;
+    chips.push({ name: c.exerciseName, pct: (perWeekKg * MO_PERIOD_WEEKS[momentumPeriod] / base) * 100 });
   }
   if (chips.length === 0) {
     els.momentum.innerHTML = "";
     return;
   }
   // Most movement first (by absolute rate); show the top 6 so the row stays tidy.
-  chips.sort((a, b) => Math.abs(b.perWeek) - Math.abs(a.perWeek));
+  chips.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+  const per = `/${momentumPeriod}`;
   const body = chips
     .slice(0, 6)
     .map((m) => {
-      const up = m.perWeek > 0.05;
-      const down = m.perWeek < -0.05;
+      const up = m.pct > 0.05;
+      const down = m.pct < -0.05;
       const cls = up ? "mo-up" : down ? "mo-down" : "mo-flat";
       const arrow = up ? "▲" : down ? "▼" : "▪";
-      const rate = `${m.perWeek >= 0 ? "+" : ""}${m.perWeek.toFixed(1)}`;
+      const rate = `${m.pct >= 0 ? "+" : ""}${m.pct.toFixed(1)}%`;
       return (
-        `<span class="mo-chip ${cls}" title="${escapeHtml(m.name)}: ${rate} kg/week estimated-1RM trend">` +
+        `<span class="mo-chip ${cls}" title="${escapeHtml(m.name)}: ${rate}${per} estimated-1RM trend">` +
         `<span class="mo-arrow">${arrow}</span> ${escapeHtml(m.name)} ` +
-        `<span class="mo-rate">${rate} kg/wk</span></span>`
+        `<span class="mo-rate">${rate}<span class="mo-per">${per}</span></span></span>`
       );
     })
     .join("");
-  els.momentum.innerHTML = `<div class="mo-lead muted">Momentum <span class="mo-sub">(est. 1RM trend)</span></div><div class="mo-chips">${body}</div>`;
+  // Period toggle (cycles wk → mo → 3mo) sits in the header — one pill, not a row.
+  const periodBtn = `<button type="button" class="mo-period" data-moperiod="1" title="Trend period — tap to change">${per}</button>`;
+  els.momentum.innerHTML = `<div class="mo-lead muted">Momentum <span class="mo-sub">(est. 1RM trend)</span> ${periodBtn}</div><div class="mo-chips">${body}</div>`;
 }
 
 /** "What they train": a proportional bar of sets per muscle/movement category. */
@@ -7550,6 +7562,10 @@ async function init() {
   renderStatus();
   renderHealth();
   renderAll();
+  // Momentum trend-period toggle (delegated; survives re-renders).
+  els.momentum.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
+  });
   setupTabs();
   setupDataTab();
   renderDataTab();
@@ -10274,6 +10290,15 @@ function exerciseSubgroup(name: string): string | null {
   return null;
 }
 
+// Snappy clicks: a Graph-options tap updates its own control instantly, then the
+// heavy graph redraw is deferred to the next frame and COALESCED — many quick taps
+// = one redraw, and it never blocks the tap (see the #senior rule in CLAUDE.md).
+let waGraphRaf = 0;
+function scheduleWaGraph(): void {
+  if (waGraphRaf) return;
+  waGraphRaf = requestAnimationFrame(() => { waGraphRaf = 0; renderWaGraph(); });
+}
+
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
  * the reusable graph, rendered from the current selection. Light to re-render, so
  * metric/config changes don't disturb the hosted panels or the selection. */
@@ -10293,11 +10318,31 @@ function renderWaGraph(): void {
   // A metric may draw only when EVERY plotted exercise allows it (intersection).
   const scopeAllowed = metricsAllowedForScope(graphPerms, graphExercises);
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
-  const metricChips = GRAPH_METRICS.map((m) => {
-    const blocked = graphExercises.length > 0 && !scopeAllowed.has(m.id);
-    const blockers = blocked ? exercisesBlockingMetric(graphPerms, graphExercises, m.id) : [];
-    const title = blocked ? ` title="Needs review for: ${escapeHtml(blockers.join(", "))}"` : "";
-    return `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}${blocked ? " is-blocked" : ""}" data-wametric="${m.id}"${title}>${escapeHtml(m.label)}</button>`;
+  // The 15 metrics were one crowded wall of chips — split into a few collapsible
+  // sub-groups (a group opens when it has an active metric). A metric still
+  // blocked for the plotted lift(s) shows greyed-out with a needs-review tip.
+  const METRIC_GROUPS: { label: string; ids: string[] }[] = [
+    { label: "Strength", ids: ["e1rm", "weight", "weightRange", "pctWR"] },
+    { label: "Trends", ids: ["strength", "strengthDecay", "predicted", "trend", "movingAvg", "pr"] },
+    { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
+  ];
+  const metricChips = METRIC_GROUPS.map((g) => {
+    const chips = g.ids
+      .map((id) => GRAPH_METRICS.find((x) => x.id === id))
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .map((m) => {
+        const blocked = graphExercises.length > 0 && !scopeAllowed.has(m.id);
+        const blockers = blocked ? exercisesBlockingMetric(graphPerms, graphExercises, m.id) : [];
+        const title = blocked ? ` title="Needs review for: ${escapeHtml(blockers.join(", "))}"` : "";
+        return `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}${blocked ? " is-blocked" : ""}" data-wametric="${m.id}"${title}>${escapeHtml(m.label)}</button>`;
+      })
+      .join("");
+    const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
+    return (
+      `<details class="wa-metric-group"${nOn ? " open" : ""}>` +
+      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
+      `<div class="wa-metric-chips">${chips}</div></details>`
+    );
   }).join("");
   const c = waGraphConfig;
   const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
@@ -10309,7 +10354,7 @@ function renderWaGraph(): void {
     `<div class="wa-gcfg">` +
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
     `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
-    `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
+    `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
     `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
@@ -10684,20 +10729,19 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     const perBw = target.closest<HTMLInputElement>("#waPerBw");
-    if (perBw) { S.waPerBodyweight = perBw.checked; renderWaGraph(); return; }
-    // Graph config controls (TASK 29) — update config, re-render just the graph.
+    if (perBw) { S.waPerBodyweight = perBw.checked; scheduleWaGraph(); return; }
+    // Graph config controls (TASK 29) — update config, redraw the graph (deferred).
     const cfg = target.closest<HTMLElement>(".wa-cfg");
     if (cfg?.dataset.wacfg) {
       const key = cfg.dataset.wacfg;
       const el = cfg as HTMLInputElement | HTMLSelectElement;
       if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
       else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
-      else if (key === "smoothing") waGraphConfig.smoothing = Math.max(0, Math.round(Number((el as HTMLInputElement).value) || 0));
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
-      renderWaGraph();
+      scheduleWaGraph();
     }
   });
   panel.addEventListener("click", (e) => {
@@ -10787,7 +10831,16 @@ function setupWorkoutAnalysis(): void {
       const id = met.dataset.wametric;
       if (waMetrics.has(id)) waMetrics.delete(id);
       else waMetrics.add(id);
-      renderWaGraph();
+      met.classList.toggle("is-on"); // instant visual feedback; chart redraws deferred
+      scheduleWaGraph();
+      return;
+    }
+    // Smoothing as a cycling toggle (0 → 1 → 2 → 5 → 10 → 20 → 50 → 0).
+    if (t.closest<HTMLElement>("[data-wasmooth]")) {
+      const steps = [0, 1, 2, 5, 10, 20, 50];
+      const i = steps.indexOf(waGraphConfig.smoothing);
+      waGraphConfig.smoothing = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
       return;
     }
     // Realistic ⇄ compacted time toggle (moved here from the chart's legend row).

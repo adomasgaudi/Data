@@ -27,6 +27,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 14. **Velocity check:** weigh every estimate against the owner's real pace (~50–100 SP/day, a few SP ≈ 5–10 min) and the SP/version log — answer "worth it?" in days/SP actually spent, prefer plans that fit a day.
 15. **Toggles only — NO checkboxes or button rows:** every option is a compact pressable pill/toggle (cycling for mutually-exclusive, on/off pill for booleans) that shows its state — never a checkbox, radio, or a row of separate buttons.
 16. **Cram hard, tight labels:** UI is maximally compact (short labels, tight spacing, no wrapping, no essay/paragraph text on the site) AND drop obvious/redundant label words ("Include", "Show", "View", "Filter by"…) — the context already says it.
+17. **Snappy clicks:** a tap updates ITS OWN control instantly; defer heavy/app-wide re-renders to the next frame, COALESCED (rAF/debounce) — never block the tap or rebuild the whole UI synchronously on click.
 
 ## Commands the owner types (act on these even with no other context)
 
