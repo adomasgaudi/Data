@@ -2728,6 +2728,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* "Create variant / group" on the Index page (moved from the Analysis bar). */
 .idx-create-sum { cursor: pointer; font-weight: 700; font-size: 0.95rem; color: var(--accent); list-style: none; }
 .idx-create-sum::-webkit-details-marker { display: none; }
+/* Merged-exercises card: collapsible, collapsed by default (heading = summary). */
+.merge-fold-sum { cursor: pointer; list-style: none; display: flex; align-items: center; }
+.merge-fold-sum::-webkit-details-marker { display: none; }
+.merge-fold-sum h2 { margin: 0; }
+.merge-fold-sum::after { content: "▸"; margin-left: auto; opacity: 0.45; }
+.merge-fold[open] .merge-fold-sum::after { content: "▾"; }
 .idx-create { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; max-width: 22rem; }
 
 /* Controls moved inside the Exercises fold: Clear selection + Group by + search. */
