@@ -43,5 +43,8 @@ ones, re-grade as the code changes.
 - **CUT-4** — Commit to or cut the half-built taxonomy (16 joints / 27 movements, ~10 lifts seeded).
 - **CUT-5** — Externalise the changelog data (180 KB, 85% data).
 
+## 🔒 Security
+- **SEC-1** — Commits show as **Unverified** on GitHub (unsigned). The env's SSH signing key `/home/claude/.ssh/commit_signing_key.pub` is **empty (0 bytes)** with no private key, so `commit.gpgsign` silently fails for *every* AI (canonical commits are unsigned too). Committer identity is already correct (`Claude <noreply@anthropic.com>`). Fix = provision a real signing key in the environment (platform/setup change, not fixable from inside the container), or accept as cosmetic. Do NOT rewrite the deployed branch's history to chase the badge.
+
 ## ✅ Done (no need to pick)
 - Extracted + tested pure helpers from `main.ts`: `format`, `colorScale`, `html`, `storage`, `frequencyTier`, `defaultLeanTable`. Duplicate JSDoc removed. (REF rounds, on the cleanup branch.)
