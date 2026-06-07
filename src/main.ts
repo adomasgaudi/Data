@@ -7450,6 +7450,7 @@ async function init() {
   // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
   setupViewSwitch();
   setViewMode(viewMode);
+  updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
@@ -10834,13 +10835,25 @@ function updateBottomNav() {
 /** The "Colosseum" title doubles as a Back-to-home button: on any non-analysis
  * page it shows a ‹ back arrow (and reads "back to Colosseum"); on the analysis
  * home it's just the plain wordmark. */
+/** Page name shown in the top title, by tab id. The title reads the CURRENT page's
+ * name; off the home (analysis) pages it gets a ‹ back arrow to return home. */
+const PAGE_NAMES: Record<string, string> = {
+  analysis: "Analysis", "s-analysis": "S-Analysis", leaderboards: "Colosseum",
+  athlete: "Athlete", bwparts: "Index", groups: "Stats", team: "Group",
+  data: "Data", add: "Add", test: "Formulas", statsedit: "Athletes",
+  sitemap: "Site map", guide: "Guide",
+};
 function updateBrand() {
   const el = document.getElementById("brandTitle");
   if (!el) return;
-  const onHome = document.getElementById("tab-analysis")?.hidden === false
-    || document.getElementById("tab-s-analysis")?.hidden === false;
+  const cur = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+  const onHome = cur === "analysis" || cur === "s-analysis";
+  const name = PAGE_NAMES[cur] ?? "Colosseum";
   el.classList.toggle("is-back", !onHome);
-  el.innerHTML = onHome ? "Colosseum" : `<span class="brand-back" aria-hidden="true">‹</span>Colosseum`;
+  // On a sub-page the title is that page's name with a ‹ back arrow; on home it's
+  // just the page name (no arrow). i18n translates the name via its text node.
+  el.innerHTML = onHome ? name : `<span class="brand-back" aria-hidden="true">‹</span>${name}`;
+  el.title = onHome ? name : "Back to home";
 }
 
 function setOtherSheetOpen(open: boolean) {
