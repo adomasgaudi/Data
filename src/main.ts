@@ -12,6 +12,7 @@ import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
 import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
+import { S } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -9647,7 +9648,6 @@ let waListExerciseFilter: string[] = [];
 // The Analysis compare-graph dropdown (own SVG instance + view toggle), shown
 // only with 2+ exercises picked.
 let waCompareSvg: SvgChart | null = null;
-let waCompareView: "trend" | "perset" = "trend";
 /** Expand selected names to the raw logged exercise names they cover: a combined
  * or comparison group becomes its members; everything else is itself. */
 function expandToRawExercises(names: readonly string[]): string[] {
@@ -9675,14 +9675,11 @@ const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
-let waChipsFoldOpen = false;
-let waCogOpen = false;
-let waGraphFoldOpen = false;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
-let waPerBodyweight = false; // graph y-values shown as multiples of bodyweight
+// S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
 let userTaxonomy: UserAssignments = (() => {
@@ -9930,13 +9927,13 @@ function renderWorkoutAnalysis(): void {
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
     // Snapshot open state of the collapsibles before innerHTML wipes the DOM.
     const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-settings-fold");
-    if (prevCog) waCogOpen = prevCog.open;
+    if (prevCog) S.waCogOpen = prevCog.open;
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
-    if (prevFold) waChipsFoldOpen = prevFold.open;
+    if (prevFold) S.waChipsFoldOpen = prevFold.open;
     // Settings (identity toggles + name mode) is a small square ⚙ button, also
     // with a floating menu — so it doesn't push the layout either.
     const settingsFold =
-      `<details class="wa-sq-fold wa-settings-fold"${waCogOpen ? " open" : ""}>` +
+      `<details class="wa-sq-fold wa-settings-fold"${S.waCogOpen ? " open" : ""}>` +
       `<summary class="wa-sq-sum" title="Settings">⚙<span class="wa-sq-caret">▾</span></summary>` +
       `<div class="wa-sq-menu"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>` +
       `</details>`;
@@ -9944,7 +9941,7 @@ function renderWorkoutAnalysis(): void {
     // the expanded bodies FLOAT (overlay) like Settings/Create, so opening them
     // never pushes the layout down. Body wrapped in .wa-fe-menu for that float.
     const exercisesFold =
-      `<details class="wa-chips-fold"${waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      `<details class="wa-chips-fold"${S.waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
       `<div class="wa-fe-menu">` +
       foldTools +
       `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
@@ -10064,12 +10061,12 @@ function renderWaGraph(): void {
     `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
-    `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
+    `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${S.waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
     `<label class="wa-inc" title="Drop easy / warm-up sets (high reps-in-reserve) — keep only hard working sets. Also applies to the training calendar."><input type="checkbox" id="waHardOnly"${waHardOnly ? " checked" : ""} /> Hard sets only</label>` +
     `<button type="button" class="wa-name-opt${compact ? " is-on" : ""}" data-watime="1" title="${compact ? "Showing compacted time (gaps squeezed). Tap for real spacing." : "Showing real time spacing. Tap to squeeze gaps so all sets fit."}">${compact ? "⇄ Compacted time" : "⇄ Realistic time"}</button>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
-  if (prevGcfg) waGraphFoldOpen = prevGcfg.open;
+  if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open;
   // GRAPH-3: the metric chips + advanced options (formula/aggregation/interval/
   // smoothing/prediction/decay) all live inside the collapsible "Graph options"
   // disclosure, so the section stays compact — just the chart shows by default.
@@ -10083,7 +10080,7 @@ function renderWaGraph(): void {
   // draws (its innerHTML keeps updating in place wherever it lives).
   box.innerHTML =
     `<div class="wa-graph-bar">` +
-    `<details class="wa-graph-fold"${waGraphFoldOpen ? " open" : ""}>` +
+    `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
     `</details>` +
@@ -10110,7 +10107,7 @@ function renderWaGraph(): void {
         metrics: [...waMetrics],
         config: waGraphConfig,
         codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
-        perBodyweight: waPerBodyweight,
+        perBodyweight: S.waPerBodyweight,
         bodyweight: athProfile(els.athlete.value)?.weight ?? null,
         worldRecordKg: (ex) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
       })
@@ -10162,7 +10159,7 @@ function renderWaCompareGraph(): void {
   }
   // Light up the active view button.
   for (const b of fold.querySelectorAll<HTMLElement>("[data-wacompareview]"))
-    b.classList.toggle("is-active", b.dataset.wacompareview === waCompareView);
+    b.classList.toggle("is-active", b.dataset.wacompareview === S.waCompareView);
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(applyHardSetsFilter(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
@@ -10170,7 +10167,7 @@ function renderWaCompareGraph(): void {
   // chart never lags; note the rest, mirroring the universal graph.
   const cmpExercises = waSelected.slice(0, WA_GRAPH_MAX);
   const cmpExcluded = waSelected.slice(WA_GRAPH_MAX);
-  const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, waCompareView);
+  const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, S.waCompareView);
   if (note) {
     if (cmpExcluded.length)
       note.innerHTML =
@@ -10441,7 +10438,7 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     const perBw = target.closest<HTMLInputElement>("#waPerBw");
-    if (perBw) { waPerBodyweight = perBw.checked; renderWaGraph(); return; }
+    if (perBw) { S.waPerBodyweight = perBw.checked; renderWaGraph(); return; }
     // Graph config controls (TASK 29) — update config, re-render just the graph.
     const cfg = target.closest<HTMLElement>(".wa-cfg");
     if (cfg?.dataset.wacfg) {
@@ -10537,7 +10534,7 @@ function setupWorkoutAnalysis(): void {
     // Compare-graph dropdown view toggle (current strength ↔ per-set range).
     const cmpView = t.closest<HTMLElement>("[data-wacompareview]");
     if (cmpView?.dataset.wacompareview) {
-      waCompareView = cmpView.dataset.wacompareview === "perset" ? "perset" : "trend";
+      S.waCompareView = cmpView.dataset.wacompareview === "perset" ? "perset" : "trend";
       renderWaCompareGraph();
       return;
     }
