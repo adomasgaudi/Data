@@ -10184,15 +10184,41 @@ function exerciseSubgroup(name: string): string | null {
   return null;
 }
 
+// Snappy clicks: a Graph-options tap updates its own control instantly, then the
+// heavy graph redraw is deferred to the next frame and COALESCED — many quick taps
+// = one redraw, and it never blocks the tap (see the #senior rule in CLAUDE.md).
+let waGraphRaf = 0;
+function scheduleWaGraph(): void {
+  if (waGraphRaf) return;
+  waGraphRaf = requestAnimationFrame(() => { waGraphRaf = 0; renderWaGraph(); });
+}
+
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
  * the reusable graph, rendered from the current selection. Light to re-render, so
  * metric/config changes don't disturb the hosted panels or the selection. */
 function renderWaGraph(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
-  const metricChips = GRAPH_METRICS.map(
-    (m) => `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}" data-wametric="${m.id}">${escapeHtml(m.label)}</button>`,
-  ).join("");
+  // The 15 metrics were one crowded wall of chips — split into a few collapsible
+  // sub-groups (a group opens when it has an active metric). Less clutter.
+  const METRIC_GROUPS: { label: string; ids: string[] }[] = [
+    { label: "Strength", ids: ["e1rm", "weight", "weightRange", "pctWR"] },
+    { label: "Trends", ids: ["strength", "strengthDecay", "predicted", "trend", "movingAvg", "pr"] },
+    { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
+  ];
+  const metricChips = METRIC_GROUPS.map((g) => {
+    const chips = g.ids
+      .map((id) => GRAPH_METRICS.find((x) => x.id === id))
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .map((m) => `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}" data-wametric="${m.id}">${escapeHtml(m.label)}</button>`)
+      .join("");
+    const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
+    return (
+      `<details class="wa-metric-group"${nOn ? " open" : ""}>` +
+      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
+      `<div class="wa-metric-chips">${chips}</div></details>`
+    );
+  }).join("");
   const c = waGraphConfig;
   const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
   // The app-wide "realistic ⇄ compacted time" toggle now lives HERE in Graph
@@ -10203,7 +10229,7 @@ function renderWaGraph(): void {
     `<div class="wa-gcfg">` +
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
     `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
-    `<label class="wa-gcfg-f">Smoothing<input class="wa-cfg" data-wacfg="smoothing" type="number" min="0" max="20" value="${c.smoothing}" /></label>` +
+    `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
     `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
@@ -10547,20 +10573,19 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     const perBw = target.closest<HTMLInputElement>("#waPerBw");
-    if (perBw) { S.waPerBodyweight = perBw.checked; renderWaGraph(); return; }
-    // Graph config controls (TASK 29) — update config, re-render just the graph.
+    if (perBw) { S.waPerBodyweight = perBw.checked; scheduleWaGraph(); return; }
+    // Graph config controls (TASK 29) — update config, redraw the graph (deferred).
     const cfg = target.closest<HTMLElement>(".wa-cfg");
     if (cfg?.dataset.wacfg) {
       const key = cfg.dataset.wacfg;
       const el = cfg as HTMLInputElement | HTMLSelectElement;
       if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
       else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
-      else if (key === "smoothing") waGraphConfig.smoothing = Math.max(0, Math.round(Number((el as HTMLInputElement).value) || 0));
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
-      renderWaGraph();
+      scheduleWaGraph();
     }
   });
   panel.addEventListener("click", (e) => {
@@ -10650,7 +10675,16 @@ function setupWorkoutAnalysis(): void {
       const id = met.dataset.wametric;
       if (waMetrics.has(id)) waMetrics.delete(id);
       else waMetrics.add(id);
-      renderWaGraph();
+      met.classList.toggle("is-on"); // instant visual feedback; chart redraws deferred
+      scheduleWaGraph();
+      return;
+    }
+    // Smoothing as a cycling toggle (0 → 1 → 2 → 5 → 10 → 20 → 50 → 0).
+    if (t.closest<HTMLElement>("[data-wasmooth]")) {
+      const steps = [0, 1, 2, 5, 10, 20, 50];
+      const i = steps.indexOf(waGraphConfig.smoothing);
+      waGraphConfig.smoothing = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
       return;
     }
     // Realistic ⇄ compacted time toggle (moved here from the chart's legend row).

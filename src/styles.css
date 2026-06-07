@@ -2741,7 +2741,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-alias-hint { width: 100%; font-size: 0.78rem; margin: 0.2rem 0 0; }
 
 /* Universal Analytics Graph: metric toggles + config (TASKS 25–29). */
-.wa-metric-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.5rem; }
+.wa-metric-row { display: flex; flex-direction: column; gap: 0.15rem; margin: 0 0 0.5rem; }
+/* Metric chips grouped into collapsible sub-groups (less crowding). */
+.wa-metric-group-sum { cursor: pointer; list-style: none; font-size: 0.74rem; font-weight: 700; color: var(--muted); padding: 3px 0; }
+.wa-metric-group-sum::-webkit-details-marker { display: none; }
+.wa-metric-group-sum::before { content: "▸ "; }
+.wa-metric-group[open] > .wa-metric-group-sum::before { content: "▾ "; }
+.wa-metric-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 0 0.35rem 0.5rem; }
 .wa-metric { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
 .wa-metric:hover { border-color: var(--accent); color: var(--accent); }
 .wa-metric.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
