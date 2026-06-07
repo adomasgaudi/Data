@@ -6576,7 +6576,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
@@ -7714,6 +7714,10 @@ async function init() {
     // The graph's "Review in Index →" button → jump to the Index page at that lift.
     const review = t.closest<HTMLElement>("[data-graphreview]");
     if (review?.dataset.graphreview) { reviewGraphsForExercise(review.dataset.graphreview); return; }
+    // "Save taxonomy" inside an exercise's Index inspector / ℹ overlay. Delegated
+    // on document so it works wherever the taxonomy editor is shown.
+    const taxSave = t.closest<HTMLElement>(".wa-assign-save");
+    if (taxSave?.dataset.waassign) { saveTaxonomyAssignment(taxSave, taxSave.dataset.waassign); return; }
   });
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works inside the Index page's expandable info dropdown.
@@ -10151,9 +10155,10 @@ function renderWorkoutAnalysis(): void {
       searchActive +
       `</div>`;
     // (Create variant / group moved to the Index page — see createVariantFormHtml.)
-    // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
-    // selected exercise; saved metadata then drives the filters above.
-    const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
+    // Machine-type toggle (cable / gravity / mixed) for the selected lift, when
+    // eligible. The TAXONOMY editor moved to the Index inspector (More info) —
+    // see taxonomyEditorHtml — so it's no longer shown here in Analysis.
+    const assignUi = mode === "single" && waSelected[0] ? machineModeControl(waSelected[0]) : "";
     // Snapshot open state of the (now single) Exercises fold before innerHTML wipes it.
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
     if (prevFold) S.waChipsFoldOpen = prevFold.open;
@@ -10174,7 +10179,7 @@ function renderWorkoutAnalysis(): void {
       `<div id="waChips" class="wa-chips-wrap"></div></div></details>`;
     // Everything — Filter, Exercises, Settings (⚙), Create (+) — sits on ONE
     // compact tools row beside the title (they all open as floating menus, so the
-    // layout never shifts). Taxonomy editor (single mode) drops below.
+    // layout never shifts). The machine-type toggle (single mode) drops below.
     // Selected exercises shown as removable pills right in the sticky bar, so you
     // always see what's plotted and can drop one with a tap (EXR-SEL-PILLS).
     const selPills = waSelected.length
@@ -10187,7 +10192,7 @@ function renderWorkoutAnalysis(): void {
       `<div class="wa-sel-tools">${exercisesFold}</div>` +
       selPills +
       `</div>`;
-    // Taxonomy editor renders into its own section BELOW the sticky bar.
+    // The machine-type toggle renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
     if (assignBox) assignBox.innerHTML = assignUi;
     renderWaChips();
@@ -10523,7 +10528,12 @@ function machineModeControl(name: string): string {
   );
 }
 
-function waAssignEditor(name: string): string {
+/** The per-exercise taxonomy editor (joints / movements / planes + Save). Lives
+ * collapsed inside an exercise's Index inspector / ℹ More-info — NOT in the
+ * Analysis view — and the saved metadata drives the Analysis filters. Save button
+ * + message use classes (not ids) so the editor can appear in two places at once
+ * (the Index row inspector and the overlay) without duplicate ids. */
+function taxonomyEditorHtml(name: string): string {
   const sel = (cur: readonly string[], all: readonly string[], cls: string) => {
     const have = new Set(cur);
     const opts = all
@@ -10542,12 +10552,11 @@ function waAssignEditor(name: string): string {
     ? `<p class="muted wa-alias-hint">Joint labels — ${hints.join(" · ")}</p>`
     : "";
   return (
-    machineModeControl(name) +
     `<details class="wa-assign"><summary>🏷 Taxonomy: ${escapeHtml(name)}</summary><div class="wa-assign-body">` +
     `<label class="wa-create-f">Joints${sel(waMeta(name, "joint"), JOINTS, "wa-assign-joint")}</label>` +
     `<label class="wa-create-f">Movements${sel(waMeta(name, "movement"), MOVEMENTS, "wa-assign-movement")}</label>` +
     `<label class="wa-create-f">Planes${sel(waMeta(name, "plane"), PLANES, "wa-assign-plane")}</label>` +
-    `<div class="wa-create-act"><button type="button" id="waAssignSave" data-waassign="${escapeHtml(name)}" class="wa-clear">Save taxonomy</button> <span id="waAssignMsg" class="muted"></span></div>` +
+    `<div class="wa-create-act"><button type="button" class="wa-assign-save wa-clear" data-waassign="${escapeHtml(name)}">Save taxonomy</button> <span class="wa-assign-msg muted"></span></div>` +
     hintLine +
     `</div></details>`
   );
@@ -10847,12 +10856,8 @@ function setupWorkoutAnalysis(): void {
       renderWorkoutAnalysis();
       return;
     }
-    // Save taxonomy assignments (TASK 24) for the selected exercise.
-    const saveBtn = t.closest<HTMLElement>("#waAssignSave");
-    if (saveBtn?.dataset.waassign) {
-      saveTaxonomyAssignment(saveBtn.dataset.waassign);
-      return;
-    }
+    // (Taxonomy save moved to a document-level handler — the editor now lives in
+    // the Index inspector, not this panel.)
     // Tapping an exercise row in the hosted List view drills in (the row handler
     // set selectedExercise already) — reflect it in the analysis selection so the
     // mode/selector stay in step, landing on the single-exercise drill-in.
@@ -10941,9 +10946,12 @@ function handleAnalysisHash(): void {
 
 /** Save the joint/movement/plane multi-selects for one exercise (TASK 24) into
  * the user taxonomy, so the filters can use the saved metadata. */
-function saveTaxonomyAssignment(name: string): void {
+function saveTaxonomyAssignment(btn: HTMLElement, name: string): void {
+  // Scope the reads to THIS editor (the one whose Save was tapped), so two open
+  // copies (Index inspector + ℹ overlay) don't read each other's selects.
+  const root: ParentNode = btn.closest(".wa-assign") ?? document;
   const read = (cls: string) => {
-    const el = document.querySelector<HTMLSelectElement>(`.${cls}`);
+    const el = root.querySelector<HTMLSelectElement>(`.${cls}`);
     return el ? Array.from(el.selectedOptions).map((o) => o.value) : [];
   };
   userTaxonomy[name] = {
@@ -10952,9 +10960,11 @@ function saveTaxonomyAssignment(name: string): void {
     plane: read("wa-assign-plane"),
   };
   saveUserTaxonomy();
-  const msg = document.getElementById("waAssignMsg");
+  const msg = root.querySelector<HTMLElement>(".wa-assign-msg");
   if (msg) msg.textContent = "Saved.";
-  renderWorkoutAnalysis();
+  // The saved taxonomy drives the Analysis filters — refresh that view only if
+  // it's the one currently open (avoids rebuilding a hidden tab).
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
 }
 
 function switchTopTab(name: string) {
