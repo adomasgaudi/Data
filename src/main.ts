@@ -17,7 +17,7 @@ import cleanupBacklogMd from "../docs/cleanup-backlog.md?raw";
 import roadmapMd from "../docs/roadmap.md?raw";
 import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
-import { S, type HeatColorDim } from "./appState";
+import { S, type HeatColorDim, type IndexGroupMode } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -2799,14 +2799,13 @@ const hiddenExCats = new Set<string>((() => {
 })());
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
-let bwOpenCats: Set<string> | null = null;
+// S.bwOpenCats lives on S (appState).
 
 // How the Index page groups its exercise rows. "discipline" is the training style
 // (multi-membership — a lift can sit under several); the others slice the same lifts
 // by fine muscle, by functional movement pattern, or by combinable / comparable
 // synthetic-group membership.
-type IndexGroupMode = "discipline" | "muscle" | "function" | "combinable" | "comparable";
-let bwGroupMode: IndexGroupMode = "discipline";
+// IndexGroupMode now imported from appState; S.bwGroupMode lives on S.
 const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
   { mode: "discipline", label: "Discipline" },
   { mode: "muscle", label: "Muscle group" },
@@ -6027,18 +6026,18 @@ function renderBwParts() {
 
   // Slice the same rows into the chosen grouping (category / muscle / function /
   // combinable / comparable).
-  const buckets = indexBuckets(rows, bwGroupMode);
+  const buckets = indexBuckets(rows, S.bwGroupMode);
 
   // Remember which groups the user has opened, so editing/re-rendering keeps them
   // as they were. Groups start collapsed by default (empty set on first paint);
   // afterwards we read the live open/closed state back out of the DOM.
-  if (bwOpenCats === null) bwOpenCats = new Set<string>();
+  if (S.bwOpenCats === null) S.bwOpenCats = new Set<string>();
   else {
-    bwOpenCats = new Set<string>();
+    S.bwOpenCats = new Set<string>();
     for (const d of els.bwGroups.querySelectorAll<HTMLDetailsElement>("details.bw-cat"))
-      if (d.open && d.dataset.cat) bwOpenCats.add(d.dataset.cat);
+      if (d.open && d.dataset.cat) S.bwOpenCats.add(d.dataset.cat);
   }
-  const open = (cat: string) => bwOpenCats!.has(cat);
+  const open = (cat: string) => S.bwOpenCats!.has(cat);
 
   const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
@@ -6118,7 +6117,7 @@ function renderBwParts() {
   // In Discipline mode the two MAIN disciplines (Strength, Calisthenics) sit at the
   // top level — Strength gets the muscle/function sub-grouping — and everything else
   // nests as sub-groups under one "Other" header, since it's less central.
-  if (bwGroupMode === "discipline") {
+  if (S.bwGroupMode === "discipline") {
     const major = buckets.filter((b) => MAJOR_DISCIPLINES.includes(b.key as Discipline));
     const minor = buckets.filter((b) => !MAJOR_DISCIPLINES.includes(b.key as Discipline));
     const otherNames = new Set(minor.flatMap((b) => b.rows.map((r) => r.name)));
@@ -6144,7 +6143,7 @@ function renderBwParts() {
 /** The "Group by" picker above the Index exercise groups. */
 function renderBwGroupBar(): void {
   const opts = INDEX_GROUP_MODES
-    .map((m) => `<option value="${m.mode}"${m.mode === bwGroupMode ? " selected" : ""}>${escapeHtml(m.label)}</option>`)
+    .map((m) => `<option value="${m.mode}"${m.mode === S.bwGroupMode ? " selected" : ""}>${escapeHtml(m.label)}</option>`)
     .join("");
   els.bwGroupBar.innerHTML =
     `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>`;
@@ -8460,7 +8459,7 @@ async function init() {
   els.bwGroupBar.addEventListener("change", (e) => {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#bwGroupBy");
     if (!sel) return;
-    bwGroupMode = sel.value as IndexGroupMode;
+    S.bwGroupMode = sel.value as IndexGroupMode;
     renderBwParts();
   });
   // "Create variant / group" form (moved here from the Analysis bar) — its Create
@@ -8540,9 +8539,8 @@ function pageFromClick(e: MouseEvent): number | null {
 
 // ---- Data tab: see the original CSV and the processed table side by side ----
 const DATA_PAGE_SIZE = 100;
-let dataView: "processed" | "original" = "processed";
+// S.dataView, dataSearch live on S (appState).
 let dataPage = 0;
-let dataSearch = "";
 
 /** A number for display: rounded to 2 dp, trailing zeros trimmed; "" for null. */
 function dataNum(n: number | null | undefined): string {
@@ -8579,7 +8577,7 @@ const DATA_GROUP_COLS = new Set(["user", "date", "exercise_name"]);
  * are omitted entirely; user/date/exercise_name are pulled out as the group key,
  * so `header`/`cells` contain only the remaining per-set columns. */
 function dataRows(): { header: string[]; rows: DataRow[] } {
-  if (dataView === "original") {
+  if (S.dataView === "original") {
     const raw = parseCsvRows(data.rawCsv);
     const rawHeader = raw[0] ?? [];
     // Drop username/set_number, and split out the grouped columns.
@@ -8672,7 +8670,7 @@ function renderDataTab() {
   const { header, rows } = dataRows();
   const exPick = els.dataExercise.value;
   const userPick = els.dataUser.value;
-  const q = dataSearch.trim().toLowerCase();
+  const q = S.dataSearch.trim().toLowerCase();
   const filtered = rows.filter((row) => {
     if (userPick && row.user !== userPick) return false;
     if (exPick && row.exercise !== exPick) return false;
@@ -8812,8 +8810,8 @@ function setupDataTab() {
   document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = btn.dataset.dataview === "original" ? "original" : "processed";
-      if (v === dataView) return;
-      dataView = v;
+      if (v === S.dataView) return;
+      S.dataView = v;
       dataPage = 0;
       document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((b) =>
         b.classList.toggle("is-active", b === btn),
@@ -8830,7 +8828,7 @@ function setupDataTab() {
     renderDataTab();
   });
   els.dataSearch.addEventListener("input", () => {
-    dataSearch = els.dataSearch.value;
+    S.dataSearch = els.dataSearch.value;
     dataPage = 0;
     renderDataTab();
   });
