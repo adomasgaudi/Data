@@ -74,6 +74,8 @@ file first, then it will understand requests like "put EXR-CMP into S-ANL" or
 - `IDX-STR-SUB` — the Strength group's "Sub-group by" (Muscle / Joint movement) picker.
 - `IDX-ROW` — one exercise row in a group (tap the name to expand IDX-CARD).
 - `IDX-MERGE` — the "Merged exercises" table (spelling merges).
+- `IDX-CREATE` — the "＋ Create variant / group" panel (dissolved variant / combined /
+  comparison group). Moved here from the Analysis bar.
 - `IDX-CARD` — the **expanded exercise info card** (the dropdown under a row). Its parts:
   - `CARD-CODE` — Code input.
   - `CARD-SHORT` — Short-name input.

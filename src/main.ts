@@ -5871,6 +5871,8 @@ function openAncestorDetails(el: HTMLElement): void {
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
 function renderBwParts() {
   renderMergeList();
+  const createBox = document.getElementById("idxCreate");
+  if (createBox) createBox.innerHTML = createVariantFormHtml();
   const counts = new Map<string, number>();
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
@@ -8200,6 +8202,11 @@ async function init() {
     bwGroupMode = sel.value as IndexGroupMode;
     renderBwParts();
   });
+  // "Create variant / group" form (moved here from the Analysis bar) — its Create
+  // button lives in #idxCreate on the Index page.
+  document.getElementById("idxCreate")?.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("#waNewCreate")) createUserExerciseDef();
+  });
   // Tap an exercise name on the Index to expand its info panel (toggle).
   els.bwGroups.addEventListener("click", (e) => {
     // Group header "only / hide / show" — read the group's lifts from its rows and
@@ -9612,7 +9619,6 @@ let waSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
 let waChipsFoldOpen = false;
 let waCogOpen = false;
-let waCreateOpen = false;
 let waGraphFoldOpen = false;
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
@@ -9860,34 +9866,13 @@ function renderWorkoutAnalysis(): void {
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
       searchActive +
       `</div>`;
-    // Create form (TASKS 13–15): a dissolved variant / combined / comparison group.
-    const exOptions = selectableExercises(data.records)
-      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
-      .join("");
-    // Create variant / group is now a small square "+" button with a FLOATING
-    // menu (absolute, so it never shifts the layout).
-    const createForm =
-      `<details class="wa-sq-fold wa-create"${waCreateOpen ? " open" : ""}>` +
-      `<summary class="wa-sq-sum" title="Create variant / group">+<span class="wa-sq-caret">▾</span></summary>` +
-      `<div class="wa-sq-menu wa-create-body">` +
-      `<div class="wa-sq-title">Create variant / group</div>` +
-      `<label class="wa-create-f">Type<select id="waNewType">` +
-      `<option value="dissolved">Dissolved variant (1 parent)</option>` +
-      `<option value="combined">Combined group (members)</option>` +
-      `<option value="comparison_group">Comparison group (members)</option>` +
-      `</select></label>` +
-      `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
-      `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
-      `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>` +
-      `</div></details>`;
+    // (Create variant / group moved to the Index page — see createVariantFormHtml.)
     // Taxonomy editor (TASK 24): assign joints/movements/planes to the one
     // selected exercise; saved metadata then drives the filters above.
     const assignUi = mode === "single" && waSelected[0] ? waAssignEditor(waSelected[0]) : "";
     // Snapshot open state of the collapsibles before innerHTML wipes the DOM.
     const prevCog = sel.querySelector<HTMLDetailsElement>(".wa-settings-fold");
     if (prevCog) waCogOpen = prevCog.open;
-    const prevCreate = sel.querySelector<HTMLDetailsElement>(".wa-create");
-    if (prevCreate) waCreateOpen = prevCreate.open;
     const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
     if (prevFold) waChipsFoldOpen = prevFold.open;
     // Settings (identity toggles + name mode) is a small square ⚙ button, also
@@ -9917,7 +9902,7 @@ function renderWorkoutAnalysis(): void {
       : "";
     sel.innerHTML =
       `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}${createForm}</div></div>` +
+      `<div class="wa-sel-tools">${filterUi}${exercisesFold}${settingsFold}</div></div>` +
       selPills;
     // Taxonomy editor renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
@@ -10525,6 +10510,25 @@ function setupWorkoutAnalysis(): void {
 
 /** Validate the create form and store a new user exercise def (dissolved /
  * combined / comparison_group), then surface it in the selector. */
+/** The "Create variant / group" form (dissolved variant / combined / comparison
+ * group). Lives on the Index page now; its #waNewCreate button calls
+ * createUserExerciseDef(). */
+function createVariantFormHtml(): string {
+  const exOptions = selectableExercises(data.records)
+    .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
+    .join("");
+  return (
+    `<label class="wa-create-f">Type<select id="waNewType">` +
+    `<option value="dissolved">Dissolved variant (1 parent)</option>` +
+    `<option value="combined">Combined group (members)</option>` +
+    `<option value="comparison_group">Comparison group (members)</option>` +
+    `</select></label>` +
+    `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
+    `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
+    `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>`
+  );
+}
+
 function createUserExerciseDef(): void {
   const typeEl = document.getElementById("waNewType") as HTMLSelectElement | null;
   const nameEl = document.getElementById("waNewName") as HTMLInputElement | null;
@@ -10548,6 +10552,7 @@ function createUserExerciseDef(): void {
   userExerciseDefs.push(def);
   saveUserExerciseDefs();
   waIncludeIdentities.add(identity); // so the new one shows immediately
+  renderAll(); // refresh the Index (where the form lives) + leaderboards/PRs/etc.
   renderWorkoutAnalysis();
 }
 
