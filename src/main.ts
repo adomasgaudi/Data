@@ -11,6 +11,7 @@ import {
 import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
 import { loadJsonObject, saveJson } from "./storage";
+import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -3247,19 +3248,6 @@ function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): (T & { _ca
 /** Frequency tiers by how many times an exercise has been logged (set count),
  * like a tier list: S = a staple, down to D = barely touched. Thresholds are
  * set-count cutoffs; an untrained (count 0) exercise has no tier. */
-const FREQ_TIERS: { tier: string; min: number; label: string }[] = [
-  { tier: "S", min: 25, label: "S · staples (25+ sets)" },
-  { tier: "A", min: 15, label: "A · regulars (15–24)" },
-  { tier: "B", min: 8, label: "B · occasional (8–14)" },
-  { tier: "C", min: 3, label: "C · rare (3–7)" },
-  { tier: "D", min: 1, label: "D · tried once or twice (1–2)" },
-];
-
-function frequencyTier(count: number): { tier: string; label: string } | null {
-  for (const t of FREQ_TIERS) if (count >= t.min) return { tier: t.tier, label: t.label };
-  return null;
-}
-
 function sumCounts(items: readonly ExerciseCount[]): number {
   return items.reduce((s, c) => s + c.count, 0);
 }
