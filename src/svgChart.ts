@@ -82,6 +82,11 @@ export interface SvgChartConfig {
   /** Stretch the right y-axis by this factor so its series sit low/squished
    * (e.g. 3 = bars only fill the bottom third). Default 1. */
   rightHeadroom?: number;
+  /** Bar width multiplier (default 1) — fattens/slims every bar. */
+  barGirth?: number;
+  /** Float each series' name next to its last record (point), in the series colour
+   * — "direct labelling" so you can read which lift is which without the legend. */
+  directLabels?: boolean;
   yUnit?: string;
   rightUnit?: string;
   xKind?: "time" | "linear";
@@ -385,6 +390,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // can read each one's height. Each visible bar series gets its own lane.
     const visBars = geomSeries().filter((s) => s.type === "bars" && visible(s));
     const barN = Math.max(1, visBars.length);
+    // Direct labels: floating series names next to their last record (collected in
+    // the loop where xPix/ymap are in scope, drawn on top after). One per exercise
+    // (deduped by the name's prefix before " · "), only for dot/line "record" series.
+    const directLabels: string[] = [];
+    const labeled = new Set<string>();
     for (const s of geomSeries()) {
       if (!s.noLegend)
         keyHtml.push(
@@ -481,7 +491,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // giant bar that paints a whole shaded band across the chart (the old
         // Infinity-step fallback used the entire plot width).
         const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / 24;
-        const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14)); // ~30% thinner than a step, capped
+        const girth = cfg.barGirth ?? 1; // user width knob (grouped lanes get thin, so allow fattening)
+        const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14) * girth); // ~30% thinner than a step, capped, ×girth
         // Baseline = the (possibly shifted) zero line. Both the baseline and each
         // bar's top are clamped to the plot, so a vertically-shifted series stays
         // rigid and just clips at the floor/ceiling instead of stretching.
@@ -508,7 +519,28 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           body += `<rect x="${(x - rectW / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${rectW.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
         }
       }
+      // Floating exercise name next to this series' last record (dots/lines only —
+      // the "records"; bars are excluded). One label per exercise, with a white halo
+      // for legibility over a busy chart; flips to the left near the right edge.
+      if (cfg.directLabels && (s.type === "scatter" || s.type === "line") && s.points.length) {
+        const label = s.name.split(" · ")[0]!;
+        if (!labeled.has(label)) {
+          const last = s.points[s.points.length - 1]!;
+          const cx = xPix(last.x), cy = ymap(last.y ?? 0);
+          if (cx >= M.l && cx <= W - M.r && cy >= M.t && cy <= h - M.b) {
+            labeled.add(label);
+            const nearRight = cx > W - M.r - 56;
+            const tx = nearRight ? cx - 6 : cx + 6;
+            const anchor = nearRight ? "end" : "start";
+            directLabels.push(
+              `<text x="${tx.toFixed(1)}" y="${(cy - 5).toFixed(1)}" font-size="9" text-anchor="${anchor}" ` +
+                `paint-order="stroke" stroke="#fff" stroke-width="2.4" stroke-opacity="0.85" fill="${s.color}" style="font-weight:700">${esc(label)}</text>`,
+            );
+          }
+        }
+      }
     }
+    body += directLabels.join("");
 
     const frame = inside()
       ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" class="svgc-frame" stroke-width="1"/>`

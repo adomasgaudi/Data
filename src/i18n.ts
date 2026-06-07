@@ -141,6 +141,7 @@ const LT: Record<string, string> = {
   // ---- Graph options ----
   "Opacity": "Permatomumas",
   "Right axis ↕": "Dešinė ašis ↕",
+  "Bar girth": "Stulpelių storis",
   "Volume shift": "Tūrio poslinkis",
   "All graphs": "Visi grafikai",
   "Approved only": "Tik patvirtinti",
