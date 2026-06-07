@@ -694,6 +694,9 @@ main { padding-bottom: 5rem; }
 .momentum:empty { display: none; }
 .mo-lead { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem; }
 .mo-sub { font-weight: 400; }
+/* Trend-period toggle pill in the Momentum header. */
+.mo-period { font: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 999px; padding: 0 7px; margin-left: 0.3rem; }
+.mo-per { color: inherit; opacity: 0.8; }
 .mo-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .mo-chip {
   display: inline-flex; align-items: center; gap: 0.3rem;

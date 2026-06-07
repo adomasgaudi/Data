@@ -132,6 +132,10 @@ const LT: Record<string, string> = {
   "Dissolved": "Išskaidyti",
   "Combined": "Sujungti",
   "Comparison groups": "Palyginimo grupės",
+  // ---- Momentum trend period ----
+  "/wk": "/sav.",
+  "/mo": "/mėn.",
+  "/3mo": "/3mėn.",
   // ---- Graph options ----
   "Opacity": "Permatomumas",
   "Right axis ↕": "Dešinė ašis ↕",

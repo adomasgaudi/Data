@@ -3138,43 +3138,55 @@ function renderAthleteStats() {
  * tested linearFit + exerciseProgressByWeek the progress chart uses. Only lifts
  * with enough history (≥3 data weeks) get a chip, so a slope isn't read off noise.
  */
+/** Momentum trend period: per week / month / 3 months (the rate denominator). */
+type MomentumPeriod = "wk" | "mo" | "3mo";
+let momentumPeriod: MomentumPeriod = "wk";
+const MO_PERIOD_WEEKS: Record<MomentumPeriod, number> = { wk: 1, mo: 4.345, "3mo": 13.04 };
+const MO_PERIOD_NEXT: Record<MomentumPeriod, MomentumPeriod> = { wk: "mo", mo: "3mo", "3mo": "wk" };
 function renderMomentum() {
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   // Consider the athlete's most-trained exercises, then keep those with a trend.
   const top = exerciseCountsForUser(activeRecords(), username).slice(0, 12);
-  const chips: { name: string; perWeek: number }[] = [];
+  // Trend as a PERCENT of the current 1RM (not kg), so lifts of any size compare.
+  const chips: { name: string; pct: number }[] = [];
   for (const c of top) {
     const pts = exerciseProgressByWeek(recs, username, c.exerciseName, formula).filter((p) => p.bestE1rm !== null);
     if (pts.length < 3) continue; // need a few weeks before a slope means anything
     const t0 = Date.parse(pts[0]!.date);
     const fit = linearFit(pts.map((p) => ({ x: (Date.parse(p.date) - t0) / 86_400_000, y: p.bestE1rm! })));
     if (!fit) continue;
-    chips.push({ name: c.exerciseName, perWeek: fit.slope * 7 });
+    const base = pts[pts.length - 1]!.bestE1rm!; // current 1RM = % reference
+    if (base <= 0) continue; // % is meaningless off a zero/negative base
+    const perWeekKg = fit.slope * 7;
+    chips.push({ name: c.exerciseName, pct: (perWeekKg * MO_PERIOD_WEEKS[momentumPeriod] / base) * 100 });
   }
   if (chips.length === 0) {
     els.momentum.innerHTML = "";
     return;
   }
   // Most movement first (by absolute rate); show the top 6 so the row stays tidy.
-  chips.sort((a, b) => Math.abs(b.perWeek) - Math.abs(a.perWeek));
+  chips.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+  const per = `/${momentumPeriod}`;
   const body = chips
     .slice(0, 6)
     .map((m) => {
-      const up = m.perWeek > 0.05;
-      const down = m.perWeek < -0.05;
+      const up = m.pct > 0.05;
+      const down = m.pct < -0.05;
       const cls = up ? "mo-up" : down ? "mo-down" : "mo-flat";
       const arrow = up ? "▲" : down ? "▼" : "▪";
-      const rate = `${m.perWeek >= 0 ? "+" : ""}${m.perWeek.toFixed(1)}`;
+      const rate = `${m.pct >= 0 ? "+" : ""}${m.pct.toFixed(1)}%`;
       return (
-        `<span class="mo-chip ${cls}" title="${escapeHtml(m.name)}: ${rate} kg/week estimated-1RM trend">` +
+        `<span class="mo-chip ${cls}" title="${escapeHtml(m.name)}: ${rate}${per} estimated-1RM trend">` +
         `<span class="mo-arrow">${arrow}</span> ${escapeHtml(m.name)} ` +
-        `<span class="mo-rate">${rate} kg/wk</span></span>`
+        `<span class="mo-rate">${rate}<span class="mo-per">${per}</span></span></span>`
       );
     })
     .join("");
-  els.momentum.innerHTML = `<div class="mo-lead muted">Momentum <span class="mo-sub">(est. 1RM trend)</span></div><div class="mo-chips">${body}</div>`;
+  // Period toggle (cycles wk → mo → 3mo) sits in the header — one pill, not a row.
+  const periodBtn = `<button type="button" class="mo-period" data-moperiod="1" title="Trend period — tap to change">${per}</button>`;
+  els.momentum.innerHTML = `<div class="mo-lead muted">Momentum <span class="mo-sub">(est. 1RM trend)</span> ${periodBtn}</div><div class="mo-chips">${body}</div>`;
 }
 
 /** "What they train": a proportional bar of sets per muscle/movement category. */
@@ -7461,6 +7473,10 @@ async function init() {
   renderStatus();
   renderHealth();
   renderAll();
+  // Momentum trend-period toggle (delegated; survives re-renders).
+  els.momentum.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
+  });
   setupTabs();
   setupDataTab();
   renderDataTab();
