@@ -87,6 +87,9 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
   they live in Settings → Version history.**
 - **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
   the header bar.
+- **Section/card code names live in `CODENAMES.md`** — the shared vocabulary for
+  pointing at any screen or card (e.g. `IDX-CARD`, `EXR-CMP`, `S-ANL`). Read it first;
+  keep it updated when you rename/add a section.
 
 ## Project at a glance
 
