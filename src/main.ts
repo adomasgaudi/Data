@@ -330,7 +330,14 @@ let viewUser: string | null = (() => {
 })();
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
-const USER_VIEW_TABS = new Set(["analysis", "athlete", "guide"]);
+// Non-admin (user / spectator) views get the SIMPLIFIED analysis page (S-ANL), not
+// the full ANL — so the full analysis never shows outside admin.
+const USER_VIEW_TABS = new Set(["s-analysis", "athlete", "guide"]);
+/** Which analysis page the bottom "Analysis" button opens: the simplified S-ANL for
+ * non-admin views or when the Simplified-view toggle is on; else the full ANL. */
+function analysisTabName(): string {
+  return viewMode !== "admin" || simplifiedView ? "s-analysis" : "analysis";
+}
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
@@ -353,7 +360,7 @@ function setViewMode(mode: ViewMode) {
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
     if (!USER_VIEW_TABS.has(current)) {
-      switchTopTab("analysis"); // single home for exercise views
+      switchTopTab("s-analysis"); // non-admin's analysis home is the simplified page
     }
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
@@ -10304,10 +10311,11 @@ function waAssignEditor(name: string): string {
 // commands are easy to add to commandList() below.
 interface CmdSpec { cmd: string; desc: string; run: () => void }
 
-/** Jump to the Analysis tab and (re)render it. */
+/** Jump to the Analysis home (full ANL for admin, simplified S-ANL otherwise). */
 function goToAnalysis(): void {
-  if (document.getElementById("tab-analysis")?.hidden !== false) switchTopTab("analysis");
-  else renderWorkoutAnalysis();
+  const tab = analysisTabName();
+  if (document.getElementById(`tab-${tab}`)?.hidden !== false) switchTopTab(tab);
+  else if (tab === "analysis") renderWorkoutAnalysis();
 }
 /** Open the Exercise-selector fold + its chip list so search results are visible. */
 function openSelectorFolds(): void {
@@ -10785,9 +10793,10 @@ function setupBottomNav() {
         setOtherSheetOpen(els.otherSheet.hidden);
         return;
       }
-      // Analysis — or the simplified S-ANL page when "Simplified view" is on.
+      // Analysis — full ANL for admin, or the simplified S-ANL page for non-admin
+      // views / when "Simplified view" is on.
       setOtherSheetOpen(false);
-      switchTopTab(simplifiedView ? "s-analysis" : "analysis");
+      switchTopTab(analysisTabName());
     });
   }
   // Sheet items each open a top-tab panel and close the sheet.
