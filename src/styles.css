@@ -602,7 +602,7 @@ main { padding-bottom: 5rem; }
 .athlete-chips {
   display: flex; flex-wrap: nowrap; gap: 0.5rem;
   flex: 1 1 auto; min-width: 0; /* take the rest of the row and scroll within it */
-  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  overflow-x: auto; overflow-y: hidden; touch-action: pan-x; -webkit-overflow-scrolling: touch;
   padding-bottom: 6px; scrollbar-width: thin;
 }
 .athlete-chip {
@@ -1363,7 +1363,7 @@ sup.wr-bw { font-size: 0.85em; }
    broken mid-week), with month labels along the top aligned to each month's
    first week. --hm-col is the per-week column pitch (cell + gap). */
 .hm-cal { --hm-col: 18px; display: inline-block; } /* matches .hm-grid cell width; gap adds the rest */
-.hm-year { overflow-x: auto; padding-bottom: 6px; margin: 0 0 0.4rem; }
+.hm-year { overflow-x: auto; touch-action: pan-x; padding-bottom: 6px; margin: 0 0 0.4rem; } /* pan-x: sideways scrolls the calendar, vertical swipe scrolls the PAGE */
 .hm-months { display: grid; gap: 3px; margin-bottom: 4px; }
 .hm-mlabel { font-size: 0.72rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
 /* In the continuous Timeline view, January carries the year — make it pop so the
@@ -1501,6 +1501,13 @@ sup.wr-bw { font-size: 0.85em; }
   box-shadow: 0 1px 2px rgba(20, 24, 38, 0.04);
 }
 .panel h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
+/* Analysis is NOT a card — it drops the white box and uses the FULL content width
+   (rule 16), but keeps the page's normal side margin (no edge-to-edge bleed). The
+   Body-stats block and athlete picker above it keep their cards. */
+.wa-analysis-panel {
+  background: none; border: none; box-shadow: none; border-radius: 0;
+  padding-left: 0; padding-right: 0;
+}
 .muted { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
 .chart-wrap { position: relative; height: 260px; margin-bottom: 1rem; }
 /* Progress graphs get maximum real-estate: full panel width, tall canvas, and
@@ -1654,7 +1661,9 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-controls-sum::after { content: ""; } /* clean cog — no caret */
 .wo-controls-fold[open] .wo-controls-sum { border-color: var(--accent); background: var(--accent-soft); }
 .wo-controls-fold[open] .wo-controls {
-  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+  /* The cog sits in the right corner, so open the menu leftward from its RIGHT
+     edge — anchoring left:0 ran it off the right of the screen (clipped). */
+  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; left: auto;
   max-width: 92vw; margin: 0; padding: 0.8rem;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
@@ -1732,7 +1741,7 @@ sup.wr-bw { font-size: 0.85em; }
 .cmp-sets-scroll table { margin: 0; }
 .cmp-setdot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
 /* Site map (mind map) — horizontal scroll when wider than the screen. */
-.sitemap-box { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
+.sitemap-box { overflow-x: auto; touch-action: pan-x; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem; }
 .sitemap-svg { display: block; }
 /* Fills set via CSS, not SVG presentation attributes: var() in a fill="…"
    attribute isn't resolved by some mobile WebViews (left the map blank on
@@ -1843,7 +1852,7 @@ sup.wr-bw { font-size: 0.85em; }
 .data-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; margin: 0.9rem 0; }
 .data-filters .inline-label { margin-bottom: 0; }
 .data-filters .ex-search { margin: 0; }
-.data-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.data-table-wrap { overflow-x: auto; touch-action: pan-x; border: 1px solid var(--line); border-radius: 8px; }
 .data-raw-table { font-size: 0.8rem; white-space: nowrap; }
 .data-raw-table th, .data-raw-table td { padding: 4px 9px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .data-raw-table tbody tr:nth-child(even) { background: var(--accent-soft); }
@@ -2271,6 +2280,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* "More info" button shown in Analysis single mode. */
 .wa-moreinfo { font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 999px; padding: 5px 14px; }
 .wa-moreinfo:hover { filter: brightness(0.97); }
+/* The ℹ info icon beside the workout-history title — small, round, inline. */
+.wa-title-info {
+  width: 1.45em; height: 1.45em; padding: 0; margin-left: 0.4rem;
+  font-size: 0.8rem; font-weight: 700; line-height: 1; vertical-align: middle;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-color: var(--line);
+}
+.wa-title-info:hover { border-color: var(--accent); filter: none; }
 .ex-active { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0 0; }
 .ex-active-status { font-size: 0.8rem; font-weight: 700; }
 .ex-active-status.is-on { color: var(--accent); }
@@ -2483,6 +2500,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   main { padding: 1rem 1rem 5rem; } /* clearance for the bottom command bar */
   .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the bottom command bar */
   .panel { padding: 1rem; border-radius: 10px; }
+  .wa-analysis-panel { padding-left: 0; padding-right: 0; }
   .chart-wrap { height: 220px; }
   /* Phone: fill the screen. dvh tracks the real viewport (browser chrome in/out);
      subtract the fixed bottom nav + a little breathing room. Edge-to-edge width. */
@@ -2539,7 +2557,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Collapsible major sections of the Analysis view. The <summary> is the section
    title, so the renderer-emitted inner .wa-section-title is hidden to avoid a
    double heading (the selector's ⚙ cog, a sibling of that title, stays). */
-.wa-fold { border-bottom: 1px solid var(--line); }
+.wa-fold { border-bottom: 1px solid var(--line); position: relative; }
 .wa-fold:last-of-type { border-bottom: none; }
 .wa-fold > summary.wa-fold-sum {
   cursor: pointer; list-style: none; user-select: none;
@@ -2551,14 +2569,24 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
 .wa-fold .wa-section-title { display: none; } /* the summary is the title now */
 /* A section's title is only needed when it's COLLAPSED — once open the content
-   speaks for itself, so the summary shrinks to a slim caret-only strip (still
-   tappable to fold it back up) and the title text is hidden. */
-.wa-fold[open] > .wa-fold-sum { padding: 0.35rem 0; font-size: 0; color: transparent; }
-.wa-fold[open] > .wa-fold-sum::before { font-size: 1.3rem; color: var(--accent); font-weight: 700; }
+   speaks for itself. Rather than leave a label-less caret sitting on its OWN full
+   line (wasted space — disclosure best practice keeps the toggle tight and the
+   content adjacent), the collapse caret floats into the section's top-right corner
+   (out of flow) so the content reclaims the line. It stays a clear, tappable
+   state-toggle (aria-expanded), just compact. */
+.wa-fold[open] > .wa-fold-sum {
+  position: absolute; top: 0; right: 0; z-index: 6;
+  width: auto; padding: 2px 4px; margin: 0; font-size: 0; line-height: 1; background: none;
+}
+.wa-fold[open] > .wa-fold-sum::before { width: auto; font-size: 1rem; color: var(--accent); opacity: 0.6; }
+.wa-fold[open] > .wa-fold-sum:hover::before { opacity: 1; }
 /* EXCEPTION: the Workout-history summary carries the selected exercise's name, so
-   keep it visible even when open — it's the page's "what am I looking at" title. */
-.wa-fold[open] > #waTableSummary { font-size: 0.95rem; color: var(--text); padding: 0.45rem 0; }
-.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; }
+   keep it a normal in-flow title row even when open — it's the "what am I looking
+   at" title (and hosts the ℹ info icon). */
+.wa-fold[open] > #waTableSummary {
+  position: static; font-size: 0.95rem; color: var(--text); padding: 0.45rem 0;
+}
+.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; opacity: 1; }
 
 /* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
 .wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }
@@ -2637,18 +2665,23 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost .detail-table .set-rpe-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
-.wa-sel-header { display: flex; align-items: center; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
+.wa-sel-header { display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
 .wa-sel-header .wa-section-title { margin: 0; }
 /* The Exercises button sits fixed at the left; the selected pills scroll sideways
    in the rest of the row (see .wa-sel-pills). */
 .wa-sel-tools { display: flex; flex-wrap: nowrap; gap: 0.4rem; flex: none; align-items: center; justify-content: flex-start; }
-/* Selected-exercise pills (EXR-SEL-PILLS): ONE horizontally-scrolling row beside
-   the Exercises button (rule 16 — swipe sideways, don't wrap into a tall block
-   that eats vertical space), mirroring the athlete chip strip (.athlete-chips). */
+/* Selected-exercise pills (EXR-SEL-PILLS): wrap onto up to ~2 lines beside the
+   Exercises button (using the empty space below it); but if they'd need MORE than
+   2 lines, JS adds .wa-sel-pills--scroll to collapse them back to ONE horizontally-
+   scrolling row (rule 16 — don't grow into a tall block that eats vertical space). */
 .wa-sel-pills {
-  display: flex; flex-wrap: nowrap; gap: 0.3rem;
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
   flex: 1 1 auto; min-width: 0;
-  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  max-height: 3.6rem; overflow: hidden; align-content: flex-start;
+}
+.wa-sel-pills.wa-sel-pills--scroll {
+  flex-wrap: nowrap; max-height: none;
+  overflow-x: auto; overflow-y: hidden; touch-action: pan-x; -webkit-overflow-scrolling: touch;
   padding-bottom: 3px; scrollbar-width: thin;
 }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
@@ -2864,9 +2897,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-gp-count { font-size: 0.78rem; }
 .ex-gp-hint { margin: 0.25rem 0 0.5rem; font-size: 0.78rem; }
 .ex-gp-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
-.gp-chip:hover { border-color: var(--accent); color: var(--accent); }
-.gp-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; gap: 0.3rem; }
+.gp-chip:hover { border-color: var(--accent); }
+/* Cycling 4-level approval: no (grey) → 1 experimental (amber) → 2 confirmed
+   (blue) → 3 certain (green). The little badge shows the level number. */
+.gp-chip.gp-l1 { background: #b8902f; border-color: #b8902f; color: #fff; }
+.gp-chip.gp-l2 { background: #284e86; border-color: #284e86; color: #fff; }
+.gp-chip.gp-l3 { background: #2e7d52; border-color: #2e7d52; color: #fff; }
+.gp-lvl { font-size: 0.65rem; line-height: 1; padding: 1px 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.28); }
 .ex-gp-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .ex-gp-actions .gp-bulk { flex: 0 0 auto; font-size: 0.78rem; padding: 4px 10px; }
 .wa-gcfg { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; margin: 0 0 0.6rem; }
