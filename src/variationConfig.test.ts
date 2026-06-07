@@ -7,6 +7,22 @@ describe("familyOf", () => {
     expect(familyOf("Push Up")).toBe("PUSHUP");
     expect(familyOf("Back Squat")).toBeNull();
   });
+  it("recognises EVERY handstand push-up variant as HSPU, any spelling/origin", () => {
+    for (const name of [
+      "Handstand Push-ups",       // hyphen
+      "Handstand Pushups",        // no space
+      "handstand push up",        // lowercase, singular
+      "Deficit Handstand Push Ups",
+      "Wall Handstand Push Up",
+      "HSPU",                     // the code as a name
+      "HSPU-B",
+    ]) expect(familyOf(name)).toBe("HSPU");
+  });
+  it("does NOT treat non-press handstands (holds/walks/kicks) as HSPU", () => {
+    expect(familyOf("Handstand Hold")).toBeNull();
+    expect(familyOf("Handstand Walk")).toBeNull();
+    expect(familyOf("Handstand Kicks")).toBeNull();
+  });
 });
 
 describe("defaultLeanTable", () => {

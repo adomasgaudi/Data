@@ -161,7 +161,16 @@ export function familyOf(
   exerciseName: string,
   map: Record<string, string> = EXERCISE_FAMILY,
 ): string | null {
-  return map[exerciseName] ?? null;
+  const exact = map[exerciseName];
+  if (exact) return exact;
+  // Pattern fallback so EVERY handstand push-up uses the HSPU model — however it's
+  // spelled or wherever it came from (StrengthLevel CSV, created here, renamed) —
+  // and so gets the full variation-multiplier math AND its "needs review" flags for
+  // unknown notes. Matches "handstand push up(s)" in any spacing/hyphen/plural form,
+  // and the "HSPU" code. (Holds / walks / kicks have no "pushup", so they're excluded.)
+  const n = exerciseName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (n.includes("handstandpushup") || n.startsWith("hspu")) return "HSPU";
+  return null;
 }
 
 /** Centimetres encoded in a lean-level key (e.g. "15" → 15); 0 when unparseable. */
