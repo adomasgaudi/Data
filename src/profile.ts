@@ -313,9 +313,17 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
   { id: "muscle.hams", kind: "muscle-group", label: "Hamstrings",
     why: "Knee-flexion / hip-hinge posterior chain: leg curls, RDLs, good mornings, nordics.",
     keywords: ["leg curl", "romanian", "rdl", "stiff leg", "stiff-leg", "good morning", "nordic", "hamstring", "ham "] },
+  // Hip abductors / adductors before Glutes, so an abduction/adduction lift reads
+  // as its own muscle rather than being lumped into the glutes.
+  { id: "muscle.abductors", kind: "muscle-group", label: "Abductors",
+    why: "Hip abduction — driving the leg out to the side: hip-abduction machine, cable/band abductions, clamshells.",
+    keywords: ["hip abduction", "abduction", "abductor", "clamshell", "clam shell"] },
+  { id: "muscle.adductors", kind: "muscle-group", label: "Adductors",
+    why: "Hip adduction — drawing the leg in toward the midline: adductor machine, cable/band adductions, Copenhagen plank.",
+    keywords: ["hip adduction", "adduction", "adductor", "copenhagen"] },
   { id: "muscle.glutes", kind: "muscle-group", label: "Glutes",
-    why: "Hip-extension dominant: thrusts, bridges, abduction/adduction.",
-    keywords: ["hip thrust", "glute", "hip extension", "bridge", "hip abduction", "abduction", "abductor", "hip adduction", "adduction", "adductor"] },
+    why: "Hip-extension dominant: thrusts, bridges, hip extension.",
+    keywords: ["hip thrust", "glute", "hip extension", "bridge"] },
   { id: "muscle.quads", kind: "muscle-group", label: "Quads",
     why: "Front-thigh dominant: squats, presses, extensions, lunges drive the knee.",
     keywords: ["squat", "leg press", "leg extension", "lunge", "hack", "sissy", "step up", "step-up", "pistol", "wall sit", "split squat", "bulgarian", "cossack", "belt squat", "quad"] },
@@ -430,6 +438,12 @@ export const COMPARABLE_GROUPS: RegistryTag[] = [
     members: [
       { exerciseName: "Bench Press", ratio: 1.0 },
       { exerciseName: "Dumbbell Bench Press", ratio: 0.9 },
+    ] },
+  { id: "compare.pushup-pattern", kind: "comparable-group", label: "Push-up pattern", derivedName: "Push-up pattern",
+    why: "Push-up variants train the same push at different effective loads, scaled onto one curve. A Smith-machine incline close-grip push-up has the hands raised, so less bodyweight rests on them — it sits around 85% of a standard floor push-up for the same effort. A NEW synthetic lift; the underlying push-ups are never altered. (Tweak the ratio in the group's settings if it reads off.)",
+    members: [
+      { exerciseName: "Push Ups", ratio: 1.0 },
+      { exerciseName: "Smith Machine Incline Close Grip Push Up", ratio: 0.85 },
     ] },
 ];
 
@@ -730,7 +744,7 @@ export function jointMovements(exerciseName: string): string[] {
 // and horizontal rows together). "Other" is the internal fallback for a lift with
 // no clear prime mover; it is not offered as a pickable option.
 export type MuscleGroup =
-  | "Quads" | "Hamstrings" | "Glutes" | "Calves"
+  | "Quads" | "Hamstrings" | "Glutes" | "Abductors" | "Adductors" | "Calves"
   | "Lower back" | "Upper back" | "Lats"
   | "Chest" | "Shoulders" | "Biceps" | "Triceps" | "Forearms"
   | "Core" | "Other";

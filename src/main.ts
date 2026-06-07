@@ -765,7 +765,7 @@ function toggleMetaOverride(kind: MetaKind, name: string, value: string) {
 }
 /** All muscle-group choices for the editor dropdown. */
 const MUSCLE_GROUPS: MuscleGroup[] = [
-  "Quads", "Hamstrings", "Glutes", "Calves", "Lower back", "Upper back", "Lats",
+  "Quads", "Hamstrings", "Glutes", "Abductors", "Adductors", "Calves", "Lower back", "Upper back", "Lats",
   "Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Core",
 ];
 const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary" };
@@ -2933,14 +2933,14 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
 // Fine muscle groups in display order, with a colour (legs/arms split off the
 // CATEGORY_COLORS shades; the rest reuse them).
 const INDEX_MUSCLES: MuscleGroup[] = [
-  "Quads", "Hamstrings", "Glutes", "Calves",
+  "Quads", "Hamstrings", "Glutes", "Abductors", "Adductors", "Calves",
   "Lower back", "Upper back", "Lats",
   "Chest", "Shoulders", "Biceps", "Triceps", "Forearms",
   "Core", "Other",
 ];
 const muscleColor = (m: MuscleGroup): string =>
   (({
-    Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Calves: "#6f93cf",
+    Quads: "#284e86", Hamstrings: "#3a5fa0", Glutes: "#4f78bd", Abductors: "#5a83c6", Adductors: "#6a90cd", Calves: "#6f93cf",
     "Lower back": "#3b66a6", "Upper back": "#4f79b8", Lats: "#5f86c2",
     Biceps: "#9c5bb8", Triceps: "#b07fc9", Forearms: "#c79fd8",
   } as Record<string, string>)[m]) ??
