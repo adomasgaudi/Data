@@ -4785,9 +4785,15 @@ function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
   const keepEx = new Set(waListExerciseFilter);
   const out: WorkoutGroup[] = [];
   for (const g of groups) {
-    if (g.rest) continue; // rest days carry no sets to show when scoped
+    if (g.rest) { out.push(g); continue; } // keep the rest-day slivers when scoped
     const sets = g.sets.filter((s) => keepEx.has(s.exerciseName));
-    if (sets.length === 0) continue;
+    if (sets.length === 0) {
+      // Trained that day, but nothing in the current selection → from the
+      // selection's point of view it's a gap. Show it as a rest sliver when rest
+      // days are on (so the gaps between selected sessions read), else drop it.
+      if (S.showRestDays) out.push({ ...g, rest: true, sets: [], exercises: [], totalSets: 0 });
+      continue;
+    }
     const exercises = g.exercises.filter((e) => keepEx.has(e.exerciseName));
     out.push({ ...g, sets, exercises, totalSets: sets.length });
   }
