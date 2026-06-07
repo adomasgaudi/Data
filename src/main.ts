@@ -6857,6 +6857,9 @@ function refreshPoseViz(): void {
 /** The note-variation difficulty editor: every distinct note logged for this lift,
  * each with an editable relative difficulty (×1 = no effect). Notes that look like
  * a difficulty-changing variation but haven't been reviewed get a ⚠ flag. */
+/** Which exercises have their note-variations fold expanded — remembered so an
+ * inspector re-render (e.g. after a rename/scale edit) keeps the fold open. */
+const notesFoldOpen = new Set<string>();
 function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   type Sess = { username: string; user: string; date: string };
   const byNote = new Map<string, { display: string; count: number; sessions: Map<string, Sess> }>();
@@ -6872,10 +6875,11 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
       if (!e.sessions.has(sk)) e.sessions.set(sk, { username: r.username, user: r.user || r.username, date: r.date });
     }
   }
+  const openAttr = notesFoldOpen.has(name) ? " open" : "";
   if (byNote.size === 0)
     return (
-      `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty</div>` +
-      `<p class="muted">No notes logged yet.</p></div>`
+      `<details class="ex-vars ex-vars-fold" data-exvars="${escapeHtml(name)}"${openAttr}><summary class="ex-info-section-hd ex-vars-sum">Note variations &amp; difficulty</summary>` +
+      `<p class="muted">No notes logged yet.</p></details>`
     );
   const fam = familyOf(name);
   const entries = [...byNote.values()].sort((a, b) => b.count - a.count);
@@ -6949,11 +6953,13 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
     })
     .join("");
   const badge = needReview ? ` <span class="ex-var-needbadge">${needReview} to review</span>` : "";
+  // The whole note-variations editor is a collapsible fold (default closed to keep
+  // the inspector tidy); the "N to review" badge stays in the summary as a hint.
   return (
-    `<div class="ex-vars"><div class="ex-info-section-hd">Note variations &amp; difficulty${badge}</div>` +
+    `<details class="ex-vars ex-vars-fold" data-exvars="${escapeHtml(name)}"${openAttr}><summary class="ex-info-section-hd ex-vars-sum">Note variations &amp; difficulty${badge}</summary>` +
     `<p class="muted ex-vars-help">Tap to rename. ×N = relative difficulty. ⊘ = not comparable. ⚠ = needs review.</p>` +
     rowsHtml +
-    `</div>`
+    `</details>`
   );
 }
 
@@ -8386,6 +8392,16 @@ async function init() {
     }
   });
   els.bwGroups.addEventListener("change", onBwInputChange);
+  // Remember the note-variations fold's open/closed state per exercise so an
+  // inspector re-render (after a rename/scale edit) doesn't snap it shut. The
+  // `toggle` event doesn't bubble, so listen in the capture phase.
+  els.bwGroups.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!(d instanceof HTMLDetailsElement) || !d.classList.contains("ex-vars-fold")) return;
+    const ex = d.dataset.exvars;
+    if (!ex) return;
+    if (d.open) notesFoldOpen.add(ex); else notesFoldOpen.delete(ex);
+  }, true);
   // App-wide active-set controls (Index): tier cutoff dropdown + clear-overrides.
   els.activeSetBar.addEventListener("change", (e) => {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeCutoff");

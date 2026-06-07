@@ -2071,6 +2071,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-nc-help { flex: 1 1 12rem; min-width: 0; font-size: 0.74rem; }
 /* Note-variation difficulty editor (inside the More-info overlay / Index row). */
 .ex-info-section-hd { font-size: 0.86rem; font-weight: 700; margin: 0.7rem 0 0.3rem; }
+/* The note-variations editor is a collapsible fold — its section heading doubles
+   as the tappable summary, with a caret that flips when open. */
+.ex-vars-sum { cursor: pointer; list-style: none; user-select: none; display: flex; align-items: center; gap: 0.4rem; }
+.ex-vars-sum::-webkit-details-marker { display: none; }
+.ex-vars-sum::before { content: "▸"; color: var(--accent); font-weight: 700; }
+.ex-vars-fold[open] > .ex-vars-sum::before { content: "▾"; }
 .ex-vars-help { font-size: 0.76rem; margin: 0 0 0.5rem; }
 .ex-var-needbadge { font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--warn, #c0603a); border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
 .ex-var-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); margin: 0 0 0.35rem; }
