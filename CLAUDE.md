@@ -20,6 +20,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 7. **Two AIs at once:** each gets its own folder + branch — never share a branch.
 8. **Done = merge into the canonical branch, publish (deploy), then DELETE your own working branch** — standing permission, never wait to be asked.
 9. **No number clashes:** pick the task code (`CAT-n`) and version LAST, just before commit, as highest-in-history + 1; after any rebase, RE-derive both — never reuse a number already in the log.
+10. **No-code project — optimise code/docs for AI, NOT humans:** owner never reads code, only AIs touch it; favour what's easiest for an AI to parse/verify/change safely (small files, tests, machine-readable structure) over human conventions/readability. (Owner *chat* stays plain-language — rule 4.)
 
 ## Rules to remember
 
