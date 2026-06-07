@@ -2898,13 +2898,29 @@ function renderAthleteProfile() {
   els.athleteProfile.innerHTML = editBtn + badge + " " + specLine + bodyComp + potBlock;
 }
 
-/** Simplified S-ANL body-stats card: explained, fewer numbers, no ranges/±, and
- * no muscle map / momentum. Height·age·weight sit small + unexplained up top. */
+// ===========================================================================
+// Simplified analysis page (S-ANL). Built from scratch (CLAUDE.md rule 12) — it
+// uses the shared PURE data helpers (athProfile, workoutsForUser…) but none of
+// the full-ANL rendering code. Two sections so far: Body stats + Workouts.
+// ===========================================================================
+
+/** Free-text exercise filter for the S-ANL workouts list ("" = all). */
+let sAnlExFilter = "";
+
+/** Render the whole S-ANL page: the explained Body-stats card, then a fresh
+ * Workouts history with an exercise filter. */
 function renderSAnalysis() {
   if (!els.sAnalysis) return;
+  els.sAnalysis.innerHTML = sBodyStatsHtml() + sWorkoutsHtml();
+  renderSWoList();
+}
+
+/** S-ANL Body stats: explained, fewer numbers (50% likely ranges), no muscle
+ * map / momentum. Height·age·weight sit small + unexplained up top. */
+function sBodyStatsHtml(): string {
   const username = els.athlete.value;
   const p = athProfile(username);
-  if (!p) { els.sAnalysis.innerHTML = `<p class="muted">No profile on file.</p>`; return; }
+  if (!p) return `<p class="muted">No profile on file.</p>`;
   const dist = bfDistFor(username);
   const range = nffmiRange(p.weight, p.height, dist);
   const mass = bodyMassRanges(p.weight, dist);
@@ -2922,11 +2938,59 @@ function renderSAnalysis() {
     item("Fat mass", `${f1s(mass.fat.lo50)}–${f1s(mass.fat.hi50)} kg`, "The actual kilograms of fat you carry — your weight times your body-fat %."),
   ];
   if (range) items.push(item("nFFMI", `${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}`, "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling."));
-  els.sAnalysis.innerHTML =
+  return (
     `<details class="s-bodystats" open><summary class="s-bodystats-sum">Body stats</summary>` +
     `<div class="s-bs-body"><div class="s-bs-specs muted">${specs.join("  ·  ")}</div>` +
     items.join("") +
-    `</div></details>`;
+    `</div></details>`
+  );
+}
+
+/** S-ANL Workouts shell: a filter box + an (initially empty) list filled by
+ * renderSWoList — so typing in the filter only re-renders the list, not the box. */
+function sWorkoutsHtml(): string {
+  return (
+    `<details class="s-wo" open><summary class="s-bodystats-sum">Workouts</summary>` +
+    `<div class="s-wo-body">` +
+    `<input type="search" class="s-wo-search" placeholder="Filter by exercise…" aria-label="Filter workouts by exercise" value="${escapeHtml(sAnlExFilter)}" />` +
+    `<div id="sWoList" class="s-wo-list"></div>` +
+    `</div></details>`
+  );
+}
+
+/** Fill the S-ANL workouts list: one row per training day (newest first), each
+ * with its exercises and set counts, narrowed to the exercise filter. */
+function renderSWoList(): void {
+  const box = document.getElementById("sWoList");
+  if (!box) return;
+  const username = els.athlete.value;
+  const q = sAnlExFilter.trim().toLowerCase();
+  const matchEx = (name: string): boolean =>
+    !q || displayName(name).toLowerCase().includes(q) || name.toLowerCase().includes(q);
+  const days = workoutsForUser(activeRecords(), username)
+    .filter((d) => d.totalSets > 0)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const rows: string[] = [];
+  for (const d of days) {
+    const exes = d.exercises.filter((e) => matchEx(e.exerciseName));
+    if (exes.length === 0) continue;
+    const line = exes
+      .map((e) => {
+        const n = d.sets.filter((s) => s.exerciseName === e.exerciseName).length;
+        return `${escapeHtml(displayName(e.exerciseName))} <span class="muted">×${n}</span>`;
+      })
+      .join(" · ");
+    rows.push(`<div class="s-wo-day"><span class="s-wo-date">${escapeHtml(shortDate(d.date))}</span><span class="s-wo-did">${line}</span></div>`);
+  }
+  box.innerHTML = rows.join("") || `<p class="muted">${q ? "No workouts for that filter." : "No workouts."}</p>`;
+}
+
+/** Wire the S-ANL filter input (delegated, so it survives re-renders). */
+function setupSAnalysis(): void {
+  els.sAnalysis?.addEventListener("input", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".s-wo-search");
+    if (inp) { sAnlExFilter = inp.value; renderSWoList(); }
+  });
 }
 
 // Category palette for the training breakdown (warm-to-cool, distinct hues).
@@ -8352,6 +8416,7 @@ async function init() {
   ])
     enhanceSelect(sel);
 
+  setupSAnalysis();
   // Language (EN/LT) toggle in Settings. Switching reloads; LT then applies via
   // the translation pass. Done last so the toggle reflects the saved language.
   setupLanguage();

@@ -103,8 +103,11 @@ const LT: Record<string, string> = {
   "ideal wt": "idealus svoris",
   "50% / 95% come from your body-fat band": "50% / 95% kyla iš tavo kūno riebalų intervalo",
   "your estimate — edit on the Athletes page": "tavo įvertis — keisk Sportininkų puslapyje",
-  // ---- Workouts ----
+  // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
+  "Filter by exercise…": "Filtruoti pagal pratimą…",
+  "No workouts.": "Treniruočių nėra.",
+  "No workouts for that filter.": "Nėra treniruočių pagal šį filtrą.",
   "⚙ Display options": "⚙ Rodymo parinktys",
   "alone": "vienas",
   "+ set": "+ serija",
