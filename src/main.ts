@@ -6189,7 +6189,7 @@ function renderBwParts() {
       (r) => r.name.toLowerCase().includes(q) || codeFor(r.name).toLowerCase().includes(q) || shortFor(r.name).toLowerCase().includes(q),
     );
     els.bwGroups.innerHTML = matches.length
-      ? `<p class="bw-search-note muted">${matches.length} match${matches.length === 1 ? "" : "es"} for “${escapeHtml(bwSearchQuery)}”</p>${table(matches, false)}`
+      ? `<div class="bw-search-results"><p class="bw-search-note muted">${matches.length} match${matches.length === 1 ? "" : "es"} for “${escapeHtml(bwSearchQuery)}”</p>${table(matches, false)}</div>`
       : `<p class="bw-search-note muted">No exercise matches “${escapeHtml(bwSearchQuery)}”.</p>`;
     return;
   }
