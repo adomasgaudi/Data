@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { hslToHex, hashHueHex, cellBgColor, heatLevel } from "./colorScale";
+import { hslToHex, hashHueHex, cellBgColor, heatLevel, cellBgGradient } from "./colorScale";
+
+describe("cellBgGradient — multi-category cells", () => {
+  it("one (or zero) segments → a solid colour, not a gradient", () => {
+    expect(cellBgGradient(3, [{ hex: "#1e4fa3", frac: 1 }])).toBe(cellBgColor(3, "#1e4fa3"));
+    expect(cellBgGradient(3, [])).toBe(cellBgColor(3, null));
+  });
+  it("two equal segments → a 50/50 hard-stop gradient", () => {
+    const g = cellBgGradient(3, [{ hex: "#1e4fa3", frac: 1 }, { hex: "#b8902f", frac: 1 }]);
+    expect(g).toBe(`linear-gradient(90deg, ${cellBgColor(3, "#1e4fa3")} 0% 50%, ${cellBgColor(3, "#b8902f")} 50% 100%)`);
+  });
+  it("fractions are laid out cumulatively and normalised", () => {
+    const g = cellBgGradient(2, [{ hex: "#111111", frac: 3 }, { hex: "#222222", frac: 1 }]);
+    expect(g).toContain(" 0% 75%"); // 3 of 4
+    expect(g).toContain(" 75% 100%");
+  });
+  it("level 0 is empty; level 5 stays a single shining colour (never split)", () => {
+    expect(cellBgGradient(0, [{ hex: "#111", frac: 1 }, { hex: "#222", frac: 1 }])).toBe("");
+    expect(cellBgGradient(5, [{ hex: "#111", frac: 1 }, { hex: "#222", frac: 1 }])).toBe(cellBgColor(5, "#111"));
+  });
+});
 
 describe("hslToHex", () => {
   it("maps the primary hues", () => {

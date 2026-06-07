@@ -8,7 +8,7 @@ import {
   fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, dowLetter,
   isoWeekNumber, todayIso, trainingDuration,
 } from "./format";
-import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
+import { hashHueHex, cellBgColor, cellBgGradient, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
 // Tasks & roadmap (Settings overlay) are shown straight from the docs/ markdown,
 // imported as raw text so the panel is always a projection of the files and can
@@ -4877,23 +4877,30 @@ function heatGroupColor(dim: HeatColorDim, value: string): string | null {
   if (dim === "muscleGroup") return muscleColor(value as MuscleGroup);
   return hashHueHex(value);
 }
+/** One day's heatmap paint: total sets, the dominant category colour/label, and
+ * (in colour-by mode) the proportional category SEGMENTS that split the square. */
+type HeatDayEntry = { sets: number; catHex: string | null; label?: string | null; segments?: { hex: string; frac: number }[] };
 /** Training dates → { sets, catHex } honouring the active S.heatFilters. */
-function filteredDayCounts(): Map<string, { sets: number; catHex: string | null; label?: string | null }> {
-  const m = new Map<string, { sets: number; catHex: string | null; label?: string | null }>();
+function filteredDayCounts(): Map<string, HeatDayEntry> {
+  const m = new Map<string, HeatDayEntry>();
   for (const d of heatWorkoutDays()) {
     if (S.heatFilters.length === 0) {
       if (d.totalSets <= 0) continue;
       if (S.heatColorBy === "none") { m.set(d.date, { sets: d.totalSets, catHex: null }); continue; }
-      // No filter but a colour dimension is chosen: paint by the day's DOMINANT
-      // group in that dimension (intensity still = total sets).
+      // No filter but a colour dimension is chosen: split the square across EVERY
+      // group trained that day, proportional to its sets — e.g. a legs+shoulders
+      // day reads half blue, half gold — with the dominant group as the fallback
+      // solid colour / label (intensity still = total sets).
       const tally = new Map<string, number>();
       for (const e of d.exercises) {
         const v = exerciseGroupValue(e.exerciseName, S.heatColorBy);
         if (v) tally.set(v, (tally.get(v) ?? 0) + e.count);
       }
-      let domV = "", domN = 0;
-      for (const [v, n] of tally) if (n > domN) { domN = n; domV = v; }
-      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(S.heatColorBy, domV) : null, label: domV || null });
+      const ranked = [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const tot = ranked.reduce((n, [, c]) => n + c, 0) || 1;
+      const segments = ranked.map(([v, c]) => ({ hex: heatGroupColor(S.heatColorBy, v) ?? "#1e4fa3", frac: c / tot }));
+      const domV = ranked[0]?.[0] ?? "";
+      m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(S.heatColorBy, domV) : null, label: domV || null, segments });
       continue;
     }
     let totalSets = 0;
@@ -4930,7 +4937,7 @@ function dataYears(trained: Map<string, number>): number[] {
 /** One year drawn as a single continuous heatmap (weeks as columns, Mon→Sun
  * rows) — weeks are never broken mid-column — with month labels along the top
  * aligned to the week each month begins. `counts` is the filtered day→sets map. */
-function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: string | null; label?: string | null }>): { html: string; days: number; totalSets: number } {
+function yearGridHtml(year: number, counts: Map<string, HeatDayEntry>): { html: string; days: number; totalSets: number } {
   const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
   const startDow = (new Date(year, 0, 1).getDay() + 6) % 7; // Mon-first offset of Jan 1
   const numWeeks = Math.ceil((startDow + daysInYear) / 7);
@@ -4962,7 +4969,7 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
     const mOdd = d.getMonth() % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}, ${year}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${lbl ? ` · ${escapeHtml(lbl)}` : ""}${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
     const lvl = heatLevel(sets);
-    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
+    const bgStyle = lvl > 0 ? ` style="background:${entry?.segments && entry.segments.length > 1 ? cellBgGradient(lvl, entry.segments) : cellBgColor(lvl, catHex)}"` : "";
     cells.push(
       `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone && aloneRingsVisible() ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );
@@ -4996,7 +5003,7 @@ function yearGridHtml(year: number, counts: Map<string, { sets: number; catHex: 
  * where each year begins. `counts` is the filtered day→sets map. The strip runs
  * from the Monday on/before the first training day to the Sunday on/after the
  * later of the last training day and today, so it always reaches the present. */
-function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | null; label?: string | null }>): { html: string; days: number; totalSets: number } {
+function ribbonGridHtml(counts: Map<string, HeatDayEntry>): { html: string; days: number; totalSets: number } {
   const dates = [...trainingDays().keys()].sort(); // full range, filter-independent
   if (dates.length === 0) {
     return { html: `<div class="hm-empty muted">No training logged yet.</div>`, days: 0, totalSets: 0 };
@@ -5050,7 +5057,7 @@ function ribbonGridHtml(counts: Map<string, { sets: number; catHex: string | nul
     const mOdd = month % 2 === 1 ? " hm-modd" : "";
     const title = `${MONTH_ABBR[month]} ${d.getDate()}, ${d.getFullYear()}${isToday ? " (today)" : ""}${sets ? ` — ${sets} sets${lbl ? ` · ${escapeHtml(lbl)}` : ""}${isAlone ? " — trained alone" : ""} — tap to jump` : " — rest"}`;
     const lvl = heatLevel(sets);
-    const bgStyle = lvl > 0 ? ` style="background:${cellBgColor(lvl, catHex)}"` : "";
+    const bgStyle = lvl > 0 ? ` style="background:${entry?.segments && entry.segments.length > 1 ? cellBgGradient(lvl, entry.segments) : cellBgColor(lvl, catHex)}"` : "";
     cells.push(
       `<div class="hm-cell lvl-${lvl}${isToday ? " is-today" : ""}${isAlone && aloneRingsVisible() ? " hm-alone" : ""}${mOdd}"${bgStyle}${sets ? ` data-date="${iso}"` : ""} title="${title}"><span class="hm-dom">${d.getDate()}</span></div>`,
     );

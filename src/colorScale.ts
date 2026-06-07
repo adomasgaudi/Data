@@ -44,3 +44,25 @@ export function heatLevel(sets: number): number {
   if (sets < 20) return 4; // 10–19 — darkest
   return 5;                // 20+ — shining gold
 }
+
+/** A heatmap cell painted by SEVERAL categories: each segment's blended colour
+ * (at the day's intensity `level`) across its fraction of the square, as a
+ * hard-stop horizontal gradient — e.g. legs + shoulders → half blue, half gold.
+ * One segment (or none) falls back to the solid {@link cellBgColor}; level 5 is
+ * the special "shining gold" (never split). Fractions need not be exactly 1; they
+ * are laid out cumulatively in order. */
+export function cellBgGradient(level: number, segments: { hex: string; frac: number }[]): string {
+  if (level === 0) return "";
+  if (level === 5 || segments.length <= 1) return cellBgColor(level, segments[0]?.hex ?? null);
+  const total = segments.reduce((n, s) => n + (s.frac > 0 ? s.frac : 0), 0) || 1;
+  let acc = 0;
+  const stops: string[] = [];
+  for (const s of segments) {
+    const c = cellBgColor(level, s.hex);
+    const from = Math.round((acc / total) * 100);
+    acc += Math.max(0, s.frac);
+    const to = Math.round((acc / total) * 100);
+    stops.push(`${c} ${from}% ${to}%`);
+  }
+  return `linear-gradient(90deg, ${stops.join(", ")})`;
+}
