@@ -426,7 +426,14 @@ function setupViewSwitch(): void {
   document.getElementById("viewSwitch")?.addEventListener("click", (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-toggle");
     if (!b) return;
-    if (b.dataset.vcycle === "detail") { setSimplified(!simplifiedView); return; }
+    if (b.dataset.vcycle === "detail") {
+      // Decide from the page ACTUALLY shown (not the saved flag, which can drift),
+      // so one tap always flips simplified ⇄ full — never a wasted first tap.
+      const onSimplified = document.getElementById("tab-s-analysis")?.hidden === false;
+      const onFull = document.getElementById("tab-analysis")?.hidden === false;
+      setSimplified(onSimplified ? false : onFull ? true : !simplifiedView);
+      return;
+    }
     // Mode toggle cycles admin → user → spectator → admin.
     if (viewMode === "admin") setViewAs(els.athlete.value || adomasUsername() || "");
     else if (viewMode === "user") setViewAs("loggedout");
@@ -10678,7 +10685,7 @@ function createUserExerciseDef(): void {
  */
 function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
   if (opts.exercises) waSelected = opts.exercises.filter((n) => n.length > 0);
-  switchTopTab("analysis"); // re-renders the analysis view from the new state
+  switchTopTab(analysisTabName()); // full or simplified per the detail flag (no drift)
 }
 
 /**
