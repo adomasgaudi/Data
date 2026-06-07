@@ -52,7 +52,10 @@ file first, then it will understand requests like "put EXR-CMP into S-ANL" or
 
 - `ANL-ATH` — the relocated athlete picker that sits at the very top while ANL is open.
 - `ANL-STATS` — the relocated "stats & training mix" block under the picker.
-- `EXR-SEL` — the **sticky exercise-selector bar** (Filter · Exercises (N) · ⚙ · +).
+- `EXR-SEL` — the **sticky exercise-selector bar** — now a single "Exercises (N)"
+  dropdown holding the settings (which identities to include, Code/Short/Full) and
+  the grouped exercise chips. Tapping a GROUP HEADER filters that group in/out (the
+  old Filter button and ⚙ button are gone).
 - `EXR-SEL-PILLS` — the selected-exercise pills shown inside EXR-SEL.
 - `EXR-GRAPH` — the main analytics graph (per exercise × metric).
 - `EXR-CMP` — the compare graph + the sets behind it.
