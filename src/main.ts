@@ -10003,7 +10003,7 @@ function renderWorkoutAnalysis(): void {
     const toggles = idLabels
       .map(
         ([id, label]) =>
-          `<label class="wa-inc"><input type="checkbox" class="wa-inc-box" data-waident="${id}"${waIncludeIdentities.has(id) ? " checked" : ""}/> Include ${label}</label>`,
+          `<button type="button" class="wa-name-opt wa-inc-btn${waIncludeIdentities.has(id) ? " is-on" : ""}" data-waident="${id}" aria-pressed="${waIncludeIdentities.has(id)}">${label}</button>`,
       )
       .join("");
     // Chip label mode — drives the GLOBAL name mode (code / short / full), so it
@@ -10519,14 +10519,6 @@ function setupWorkoutAnalysis(): void {
       renderWaChips();
       return;
     }
-    const box = target.closest<HTMLInputElement>(".wa-inc-box");
-    if (box?.dataset.waident) {
-      const id = box.dataset.waident as ExerciseIdentity;
-      if (box.checked) waIncludeIdentities.add(id);
-      else waIncludeIdentities.delete(id);
-      renderWorkoutAnalysis();
-      return;
-    }
     // "Hard sets only" lens — re-render the graph(s) AND the training calendar,
     // since this filter applies to both.
     const hard = target.closest<HTMLInputElement>("#waHardOnly");
@@ -10607,6 +10599,15 @@ function setupWorkoutAnalysis(): void {
       const g = grpOff.dataset.grpoff;
       if (waGroupsOff.has(g)) waGroupsOff.delete(g); else waGroupsOff.add(g);
       renderWaChips();
+      return;
+    }
+    // Identity-include toggle button (Original / Dissolved / Combined / …).
+    const incBtn = t.closest<HTMLElement>(".wa-inc-btn");
+    if (incBtn?.dataset.waident) {
+      const id = incBtn.dataset.waident as ExerciseIdentity;
+      if (waIncludeIdentities.has(id)) waIncludeIdentities.delete(id);
+      else waIncludeIdentities.add(id);
+      renderWorkoutAnalysis();
       return;
     }
     // Chip label mode → set the GLOBAL name mode (code / short / full), site-wide.

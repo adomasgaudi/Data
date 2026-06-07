@@ -25,8 +25,8 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 12. **S-ANL is its own view:** write `S-ANL` code fresh, using full-`ANL` as *inspiration* not copy-paste/relocation — prefer rewriting over sharing, to avoid "creeping in" coupled code.
 13. **Translate everything:** any new/changed user-facing text MUST get its Lithuanian entry in `src/i18n.ts` (`LT` dict) in the SAME change — the site must never show English when LT is selected.
 14. **Velocity check:** weigh every estimate against the owner's real pace (~50–100 SP/day, a few SP ≈ 5–10 min) and the SP/version log — answer "worth it?" in days/SP actually spent, prefer plans that fit a day.
-15. **Toggles, not button rows:** for a mutually-exclusive choice use ONE cycling/segmented toggle that shows the current value — never a row of separate buttons.
-16. **Cram the UI, no essays:** keep on-screen UI compact (short labels, tight spacing, no wrapping); never write paragraph/essay explanations in the website itself.
+15. **Toggles only — NO checkboxes or button rows:** every option is a compact pressable pill/toggle (cycling for mutually-exclusive, on/off pill for booleans) that shows its state — never a checkbox, radio, or a row of separate buttons.
+16. **Cram hard, tight labels:** UI is maximally compact (short labels, tight spacing, no wrapping, no essay/paragraph text on the site) AND drop obvious/redundant label words ("Include", "Show", "View", "Filter by"…) — the context already says it.
 
 ## Commands the owner types (act on these even with no other context)
 

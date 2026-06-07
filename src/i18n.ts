@@ -127,6 +127,11 @@ const LT: Record<string, string> = {
   "ideal wt": "idealus svoris",
   "50% / 95% come from your body-fat band": "50% / 95% kyla iš tavo kūno riebalų intervalo",
   "your estimate — edit on the Athletes page": "tavo įvertis — keisk Sportininkų puslapyje",
+  // ---- Exercise selector (identity includes) ----
+  "Original": "Originalūs",
+  "Dissolved": "Išskaidyti",
+  "Combined": "Sujungti",
+  "Comparison groups": "Palyginimo grupės",
   // ---- Graph options ----
   "Opacity": "Permatomumas",
   "Right axis ↕": "Dešinė ašis ↕",
