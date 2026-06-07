@@ -7846,6 +7846,8 @@ async function init() {
         debounceWaRender();  // graph / history / calendar catch up
         return;
       }
+      const minfo = t.closest<HTMLElement>("[data-waexinfo]");
+      if (minfo?.dataset.waexinfo && catMenu.contains(minfo)) { openExerciseInfo(minfo.dataset.waexinfo); return; }
       const mchip = t.closest<HTMLElement>(".wa-ex-chip");
       if (mchip?.dataset.waex && catMenu.contains(mchip)) {
         const n = mchip.dataset.waex;
@@ -10418,7 +10420,9 @@ function renderWorkoutAnalysis(): void {
 function waChipHtml(name: string, identity: ExerciseIdentity): string {
   const on = waSelected.includes(name);
   const label = displayName(name);
-  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}</button>`;
+  // Tapping the chip selects/deselects; the trailing ⓘ opens its More-info overlay
+  // (so you can check a lift that's buried in history without hunting for it).
+  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(name)} (${identity})">${escapeHtml(label)}<span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
@@ -11105,6 +11109,9 @@ function setupWorkoutAnalysis(): void {
       debounceWaRender();
       return;
     }
+    // The ⓘ on a chip opens that lift's More-info overlay (not select/deselect).
+    const chipInfo = t.closest<HTMLElement>("[data-waexinfo]");
+    if (chipInfo?.dataset.waexinfo) { openExerciseInfo(chipInfo.dataset.waexinfo); return; }
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
     if (chip?.dataset.waex) {
       const n = chip.dataset.waex;
