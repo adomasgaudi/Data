@@ -2275,14 +2275,48 @@ function renderChangelog() {
   const spBox = document.getElementById("spHistoryChart");
   const timeline = buildSpTimeline();
   if (spBox && timeline.length) {
-    const points = timeline.map((p) => ({
-      x: Date.parse(p.date),
-      y: p.cumulative,
-      meta: `${p.version} · ${p.date} · +${fmtSp(p.sp)} → ${fmtSp(p.cumulative)} SP`,
-    }));
+    const PALETTE = ["#c0392b", "#e67e22", "#16a085", "#2980b9", "#8e44ad", "#27ae60", "#d35400", "#c2185b", "#00838f", "#558b2f", "#6d4c41", "#1565c0", "#ad1457", "#b7950b", "#34495e", "#7f8c8d"];
+    const eraName = (v: string): string => {
+      const p = versionParts(v);
+      return p ? p.name : v.startsWith("b.1") ? "Pre-v2 era" : "0.x era";
+    };
+    const eraColor = (v: string): string => {
+      const mm = v.match(/^b\.2\.(\d+)/);
+      if (mm) return PALETTE[Number(mm[1]) % PALETTE.length]!;
+      return v.startsWith("b.1") ? "#95a5a6" : "#bdc3c7";
+    };
+    // Cumulative total, COLOURED per zanpakutō era — contiguous segments join into one line.
+    const eraSeries: SvgSeries[] = [];
+    const seenEra = new Set<string>();
+    let i0 = 0;
+    for (let i = 1; i <= timeline.length; i++) {
+      if (i < timeline.length && eraName(timeline[i]!.version) === eraName(timeline[i0]!.version)) continue;
+      const era = eraName(timeline[i0]!.version);
+      const pts: SvgPoint[] = [];
+      if (i0 > 0) { const pp = timeline[i0 - 1]!; pts.push({ x: Date.parse(pp.date), y: pp.cumulative }); }
+      for (let k = i0; k < i; k++) {
+        const p = timeline[k]!;
+        pts.push({ x: Date.parse(p.date), y: p.cumulative, meta: `${displayVersion(p.version)} · ${p.date} · ${fmtSp(p.cumulative)} SP` });
+      }
+      const repeat = seenEra.has(era); seenEra.add(era);
+      eraSeries.push({ name: era, color: eraColor(timeline[i0]!.version), type: "line", points: pts, noLegend: repeat });
+      i0 = i;
+    }
+    // Per-tag cumulative lines (top 10 task codes) — hidden by default; toggle in the legend.
+    const totalByCat = new Map<string, number>();
+    for (const p of timeline) totalByCat.set(p.cat ?? "?", (totalByCat.get(p.cat ?? "?") ?? 0) + p.sp);
+    const topTags = [...totalByCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map((e) => e[0]);
+    const tagSeries: SvgSeries[] = topTags.map((tag, idx) => {
+      let cc = 0; const pts: SvgPoint[] = [];
+      for (const p of timeline) if ((p.cat ?? "?") === tag) {
+        cc = Math.round((cc + p.sp) * 10) / 10;
+        pts.push({ x: Date.parse(p.date), y: cc, meta: `${tag} · ${p.date} · ${fmtSp(cc)} SP` });
+      }
+      return { name: tag, color: PALETTE[(idx + 2) % PALETTE.length]!, type: "line" as const, points: pts, hidden: true };
+    });
     mountSvgChart(spBox, {
-      series: [{ name: "Cumulative SP", color: "#284e86", type: "line", points }],
-      xKind: "time", compactable: false, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 220,
+      series: [...eraSeries, ...tagSeries],
+      xKind: "time", compactable: false, yBeginAtZero: true, yUnit: "SP", insideLabels: true, height: 240,
     });
   }
 }

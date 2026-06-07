@@ -69,6 +69,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.7.29", title: "Graph: per-tag lines & era colours", sp: 3, note: "The story-points-over-time chart now colours the cumulative line by zanpakutō era (each minor a different colour, named in the legend) and adds a hidden cumulative line per task code (EXR, CHART, WO …) you can switch on from the legend to see how each tag grew over time.", cat: "CHART" },
   { version: "b.2.7.28", title: "Fix: you can scroll past a chart on a phone again", sp: 1, note: "On a phone, a finger-swipe that started on a chart was hijacked to pan/zoom the chart, so the page wouldn't scroll — you could get stuck on the analysis graph. Charts now let a vertical swipe scroll the PAGE as normal, while a sideways drag still pans the chart and wheel / double-tap-to-fit still zoom. (The old graph restore + experimental dual-graph idea is parked for a later careful pass — this is the one-line root fix for the scroll itself.)", cat: "CHART" },
   { version: "b.2.7.27", title: "Internal: more of the big file's state moved to the shared container", sp: 2, note: "Housekeeping only — nothing changed on the site. Continued splitting the giant code file: moved the Workouts-list settings (page + page-size, day/week, exercises/groups, the +set / Tags / Rest toggles) onto the shared state container. Compiler caught and fixed several wrong auto-replaces during the migration. All tests + build green.", cat: "META" },
   { version: "b.2.7.26", title: "Safe “Clear cache” that can never wipe your data", sp: 3, note: "Settings → Backup now has a 🧹 “Clear cache (keep my data)” button. It resets only the throwaway tier — display settings, filters and who you're signed in as — via an explicit allowlist, so your hand-logged sets, body stats, renames, overrides, world records and difficulty tuning are structurally excluded and can never be lost to it (a new, unlisted setting is kept by default too). Also added docs/cache-log.md, a plain-language history of what each backup snapshot holds (split into KEEP vs CACHE), starting with the 2026-06-07 export.", cat: "CACHE" },
@@ -1172,16 +1173,18 @@ export interface SpTimelinePoint {
   cumulative: number;
   /** Commit day (YYYY-MM-DD), carried forward over gaps. */
   date: string;
+  /** Task-code category of this release. */
+  cat?: string | undefined;
 }
 
 /** Walk the CHANGELOG tree oldest-first, collect every shipped leaf release, and
  *  return a cumulative SP timeline. Updates automatically when a release is added
  *  -- no external script needed. */
 export function buildSpTimeline(): SpTimelinePoint[] {
-  const leaves: { version: string; sp: number }[] = [];
+  const leaves: { version: string; sp: number; cat?: string | undefined }[] = [];
   function collect(r: Release) {
     if (r.soon) return;
-    if (!r.children?.length) leaves.push({ version: r.version, sp: r.sp });
+    if (!r.children?.length) leaves.push({ version: r.version, sp: r.sp, cat: r.cat });
     else for (let i = r.children.length - 1; i >= 0; i--) collect(r.children[i]!);
   }
   for (let i = CHANGELOG.length - 1; i >= 0; i--) collect(CHANGELOG[i]!);
@@ -1190,6 +1193,6 @@ export function buildSpTimeline(): SpTimelinePoint[] {
   return leaves.map((l) => {
     cum = Math.round((cum + l.sp) * 10) / 10;
     lastDate = RELEASE_DATES[l.version] ?? lastDate;
-    return { version: l.version, sp: l.sp, cumulative: cum, date: lastDate };
+    return { version: l.version, sp: l.sp, cumulative: cum, date: lastDate, cat: l.cat };
   });
 }
