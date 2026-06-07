@@ -209,7 +209,9 @@ const els = {
   modelResetAll: $<HTMLButtonElement>("modelResetAll"),
   exInfoPage: $("exInfoPage"),
   exInfoTitle: $("exInfoTitle"),
-  exInfoClose: $<HTMLButtonElement>("exInfoClose"),
+  exInfoBack: $<HTMLButtonElement>("exInfoBack"),
+  exInfoGotoIndex: $<HTMLButtonElement>("exInfoGotoIndex"),
+  exInfoGotoAnl: $<HTMLButtonElement>("exInfoGotoAnl"),
   exInfoBody: $("exInfoBody"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
@@ -2166,7 +2168,18 @@ let currentExInfo: string | null = null;
 /** Open one exercise's settings: bring the Index (the all-exercises list) up as
  * the backdrop, reveal + scroll to that lift's row, then float the settings card
  * on top — filled from the single-source `exerciseInfoHtml`. */
+/** The currently-visible top-tab id (the one un-hidden .tab-panel). */
+function currentTopTab(): string {
+  const panel = document.querySelector<HTMLElement>(".tab-panel:not([hidden])");
+  return panel ? panel.id.replace(/^tab-/, "") : "bwparts";
+}
+/** Where the exercise-settings overlay was opened from, so its Back button can
+ * return there (Analysis or Index). Captured only on a fresh open. */
+let exInfoOrigin = "bwparts";
 function openExerciseInfo(name: string): void {
+  // Remember the view we came from (only on a fresh open — opening another lift
+  // while the overlay is up keeps the original origin).
+  if (els.exInfoPage.hidden) exInfoOrigin = currentTopTab();
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
   const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
@@ -2180,17 +2193,48 @@ function openExerciseInfo(name: string): void {
   refreshPoseViz();
   els.exInfoBody.parentElement?.scrollTo(0, 0); // reset the card's own scroll
 }
+/** Back button: return to wherever the overlay was opened from. */
 function closeExerciseInfo(): void {
-  // Flash the row you were on so closing leaves your eye where you are in the list.
   const name = currentExInfo;
   currentExInfo = null;
   els.exInfoPage.hidden = true;
+  // Came from Analysis (or S-Analysis) → go back there, scoped to this lift.
+  if (exInfoOrigin === "analysis" || exInfoOrigin === "s-analysis") {
+    if (name) openWorkoutAnalysis({ exercises: [name] });
+    else switchTopTab(exInfoOrigin);
+    return;
+  }
+  // Index backdrop: flash the row so closing leaves your eye where you are.
   if (!name) return;
   const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
   if (!row) return;
   row.scrollIntoView({ behavior: "auto", block: "center" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1200);
+}
+/** Overlay header "Index" button: close it and land on the Index, on this lift. */
+function gotoIndexFromInfo(): void {
+  const name = currentExInfo;
+  currentExInfo = null;
+  els.exInfoPage.hidden = true;
+  switchTopTab("bwparts");
+  if (!name) return;
+  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  if (!row) return;
+  openAncestorDetails(row);
+  requestAnimationFrame(() => {
+    row.scrollIntoView({ behavior: "auto", block: "center" });
+    row.classList.add("wo-flash");
+    window.setTimeout(() => row.classList.remove("wo-flash"), 1200);
+  });
+}
+/** Overlay header "Analysis" button: close it and open the Analysis view on
+ * this lift (single mode). */
+function gotoAnlFromInfo(): void {
+  const name = currentExInfo;
+  currentExInfo = null;
+  els.exInfoPage.hidden = true;
+  openWorkoutAnalysis(name ? { exercises: [name] } : {});
 }
 /** Re-render the open exercise-settings overlay (after an edit anywhere in it),
  * so it stays in sync without closing. No-op when the overlay is closed. */
@@ -7670,7 +7714,9 @@ async function init() {
   });
   // Exercise-settings overlay: ✕ closes it; Esc closes it; the per-exercise
   // active-set force-in/out buttons live inside it, so handle them here too.
-  els.exInfoClose.addEventListener("click", closeExerciseInfo);
+  els.exInfoBack.addEventListener("click", closeExerciseInfo);
+  els.exInfoGotoIndex.addEventListener("click", gotoIndexFromInfo);
+  els.exInfoGotoAnl.addEventListener("click", gotoAnlFromInfo);
   els.exInfoPage.addEventListener("click", (e) => {
     // Click on the dimmed backdrop (outside the floating card) closes it.
     if (e.target === els.exInfoPage) { closeExerciseInfo(); return; }
