@@ -7742,7 +7742,10 @@ async function init() {
   // exercise's settings in the floating overlay.
   document.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-moreinfoex]");
-    if (btn?.dataset.moreinfoex) jumpToExerciseInfo(btn.dataset.moreinfoex);
+    if (btn?.dataset.moreinfoex) {
+      e.preventDefault(); // the icon lives inside a <summary> — don't toggle the fold
+      jumpToExerciseInfo(btn.dataset.moreinfoex);
+    }
   });
   // "Allowed graphs" review chips + bulk buttons. Delegated on document so they
   // work both in the More-info overlay and the Index page's expandable inspector.
@@ -10112,19 +10115,21 @@ function renderWorkoutAnalysis(): void {
     setAnalysisMainPanel("workouts");
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
-    if (contentTitle)
-      contentTitle.textContent = mode === "single" ? `${athleteLabel()} — ${displayName(waSelected[0]!)}${originBadge(waSelected[0]!, true)}` : `${athleteLabel()} — selected lifts`;
-    // Single mode: a "More info" button for the one selected lift (its details +
-    // the editable difficulty of each note-identified variation).
-    if (stats) {
+    // Single mode: the title carries an ℹ info icon (opens that lift's details +
+    // the editable difficulty of each note-identified variation), right beside the
+    // name — no separate "More info" button below.
+    if (contentTitle) {
       if (mode === "single" && waSelected[0]) {
-        stats.innerHTML = `<button type="button" class="wa-moreinfo" data-moreinfoex="${escapeHtml(waSelected[0])}">ℹ More info &amp; variation difficulty</button>`;
-        stats.removeAttribute("hidden");
+        const ex = waSelected[0];
+        contentTitle.innerHTML =
+          `${escapeHtml(athleteLabel())} — ${escapeHtml(displayName(ex))}${originBadge(ex)}` +
+          ` <button type="button" class="wa-moreinfo wa-title-info" data-moreinfoex="${escapeHtml(ex)}" title="${escapeHtml(displayName(ex))} info" aria-label="${escapeHtml(displayName(ex))} info">ℹ</button>`;
       } else {
-        stats.innerHTML = "";
-        stats.setAttribute("hidden", "");
+        contentTitle.textContent = `${athleteLabel()} — selected lifts`;
       }
     }
+    // The More-info button moved next to the title, so the old stats slot is empty.
+    if (stats) { stats.innerHTML = ""; stats.setAttribute("hidden", ""); }
     S.workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
     } else {
