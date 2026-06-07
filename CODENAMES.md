@@ -75,11 +75,11 @@ file first, then it will understand requests like "put EXR-CMP into S-ANL" or
 - `IDX-GROUP-FILT` — the per-group **only / hide / show** buttons.
 - `IDX-OTHER` — the "Other" parent that nests the minor disciplines.
 - `IDX-STR-SUB` — the Strength group's "Sub-group by" (Muscle / Joint movement) picker.
-- `IDX-ROW` — one exercise row in a group (tap the name to expand IDX-CARD).
+- `IDX-ROW` — one exercise row in a group (tap the name to open IDX-CARD as a floating overlay).
 - `IDX-MERGE` — the "Merged exercises" table (spelling merges).
 - `IDX-CREATE` — the "＋ Create variant / group" panel (dissolved variant / combined /
   comparison group). Moved here from the Analysis bar.
-- `IDX-CARD` — the **expanded exercise info card** (the dropdown under a row). Its parts:
+- `IDX-CARD` — the **exercise settings card** (`#exInfoPage`, a floating overlay opened from a row / ℹ button, not an inline dropdown). Its parts:
   - `CARD-CODE` — Code input.
   - `CARD-SHORT` — Short-name input.
   - `CARD-DISC` — Discipline chips (multi-select).

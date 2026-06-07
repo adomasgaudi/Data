@@ -206,6 +206,10 @@ const els = {
   modelClose: $<HTMLButtonElement>("modelClose"),
   modelEditor: $("modelEditor"),
   modelResetAll: $<HTMLButtonElement>("modelResetAll"),
+  exInfoPage: $("exInfoPage"),
+  exInfoTitle: $("exInfoTitle"),
+  exInfoClose: $<HTMLButtonElement>("exInfoClose"),
+  exInfoBody: $("exInfoBody"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
@@ -1561,14 +1565,8 @@ function setGraphPermAll(name: string, allow: boolean) {
   afterGraphPermChange(name);
 }
 function afterGraphPermChange(name: string) {
-  refreshExerciseInfo(); // the More-info overlay, if it's the open surface
-  // The Index page inspector (an expanded detail row) is a separate surface — if
-  // this exercise's row is expanded there, re-render its content in place too.
-  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
-  const cell = row?.nextElementSibling?.classList.contains("detail-row")
-    ? row.nextElementSibling.querySelector("td")
-    : null;
-  if (cell) cell.innerHTML = exerciseInfoHtml(name);
+  void name;
+  refreshExerciseInfo(); // the exercise-settings overlay, if it's open
   renderWaGraph();        // universal graph (single + auto overview)
 }
 // Mixed-mode verdicts are memoised per (athlete|exercise); cleared when anything
@@ -2149,19 +2147,30 @@ function openBacklog() {
 // ---- Exercise "More info" — now an inline, expandable dropdown on the Index
 // page (no separate overlay). Each Index row expands to the same details +
 // note-variation difficulty editor; the helpers below keep open panels fresh. ----
-/** Re-render every open inline info panel in the Index (after an edit anywhere
- * in it), so the dropdown stays in sync without collapsing. */
+// The exercise inspector is a FLOATING overlay page (not an inline row that
+// pushes the table down) — so it's unmistakably "you're inside this exercise's
+// settings". One overlay at a time; `currentExInfo` is the exercise it shows.
+let currentExInfo: string | null = null;
+/** Open the exercise-settings overlay for `name` (or just refresh it if already
+ * showing this lift), fill it from the single-source `exerciseInfoHtml`. */
+function openExerciseInfo(name: string): void {
+  currentExInfo = name;
+  els.exInfoTitle.textContent = name;
+  els.exInfoBody.innerHTML = exerciseInfoHtml(name);
+  els.exInfoPage.hidden = false;
+  refreshPoseViz();
+  els.exInfoPage.scrollTop = 0;
+}
+function closeExerciseInfo(): void {
+  currentExInfo = null;
+  els.exInfoPage.hidden = true;
+}
+/** Re-render the open exercise-settings overlay (after an edit anywhere in it),
+ * so it stays in sync without closing. No-op when the overlay is closed. */
 function refreshExerciseInfo(): void {
-  let any = false;
-  for (const detail of Array.from(els.bwGroups.querySelectorAll<HTMLTableRowElement>("tr.detail-row"))) {
-    const row = detail.previousElementSibling as HTMLTableRowElement | null;
-    const name = row?.dataset.exrow;
-    if (!name) continue;
-    const cell = detail.querySelector("td");
-    if (cell) cell.innerHTML = exerciseInfoHtml(name);
-    any = true;
-  }
-  if (any) refreshPoseViz();
+  if (currentExInfo === null || els.exInfoPage.hidden) return;
+  els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+  refreshPoseViz();
 }
 /** From a note's "who & when" entry: switch to that athlete, open the Analysis
  * view for this lift (single mode), and scroll to that date in the history. */
@@ -5956,20 +5965,11 @@ function toggleActiveOverride(name: string, which: "include" | "exclude"): void 
   reopenIndexDetail(name);
 }
 
-/** After a re-render, re-open one exercise's Index info row so its inspector
- * stays visible (used by the force-in/out toggles). */
+/** After an app-wide re-render, keep the exercise-settings overlay in sync (it
+ * lives outside the rebuilt table, so it survives — just refresh its content if
+ * it's showing this lift). Used by the in-overlay edit toggles. */
 function reopenIndexDetail(name: string): void {
-  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
-  if (!row) return;
-  openAncestorDetails(row); // the group, and the "Show hidden" sub-dropdown if nested
-  if (!row.nextElementSibling?.classList.contains("detail-row")) insertDetail(row, 3, exerciseInfoHtml(name));
-}
-
-/** Open every <details> ancestor of an element (so a row tucked inside the Index
- * "Show hidden" sub-dropdown becomes visible, not just its group). */
-function openAncestorDetails(el: HTMLElement): void {
-  for (let p = el.parentElement; p; p = p.parentElement)
-    if (p instanceof HTMLDetailsElement) p.open = true;
+  if (currentExInfo === name) refreshExerciseInfo();
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
@@ -6963,34 +6963,19 @@ function variationsEditorHtml(name: string, recs: SetRecord[]): string {
   );
 }
 
-/** Open the Index page, EXPAND one exercise's inline info dropdown, scroll to it
- * and flash it. The single entry point for "more info" from anywhere (the Index
- * ℹ button, the per-athlete drill-in, the Analysis panel) now the standalone
- * overlay is gone. */
+/** Open one exercise's settings — now a floating overlay, so it pops over
+ * whatever you're on (no tab switch needed). The single entry point for "more
+ * info" from anywhere (the Index ℹ button, the per-athlete drill-in, the
+ * Analysis panel). */
 function jumpToExerciseInfo(exName: string) {
-  switchTopTab("bwparts");
-  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(exName)}"]`);
-  if (!row) return;
-  openAncestorDetails(row); // group + "Show hidden" sub-dropdown if the lift is filtered out
-  // Expand the inline info panel if it isn't already open.
-  if (!row.nextElementSibling?.classList.contains("detail-row")) {
-    insertDetail(row, 3, exerciseInfoHtml(exName));
-    refreshPoseViz();
-  }
-  // Let the just-opened rows lay out before scrolling to the row.
-  requestAnimationFrame(() => {
-    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    row.classList.add("wo-flash");
-    window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
-  });
+  openExerciseInfo(exName);
 }
 
-/** From the graph's "needs review" prompt: open the Index page at this exercise
- * AND expand its inspector row, so the "Allowed graphs" chips are right there. */
+/** From the graph's "needs review" prompt: open the exercise-settings overlay
+ * and scroll it to the "Allowed graphs" chips. */
 function reviewGraphsForExercise(exName: string) {
-  jumpToExerciseInfo(exName);            // switch tab, open group, scroll + flash
+  openExerciseInfo(exName);
   requestAnimationFrame(() => {
-    reopenIndexDetail(exName);           // expand the inspector (where the chips live)
     const panel = document.getElementById(`graphPerms-${exName}`);
     panel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
@@ -7603,6 +7588,18 @@ async function init() {
   els.backlogClose.addEventListener("click", () => {
     els.backlogPage.hidden = true;
   });
+  // Exercise-settings overlay: ✕ closes it; Esc closes it; the per-exercise
+  // active-set force-in/out buttons live inside it, so handle them here too.
+  els.exInfoClose.addEventListener("click", closeExerciseInfo);
+  els.exInfoPage.addEventListener("click", (e) => {
+    const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
+    if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
+    const exc = (e.target as HTMLElement).closest<HTMLElement>("[data-asexclude]");
+    if (exc?.dataset.asexclude) { toggleActiveOverride(exc.dataset.asexclude, "exclude"); return; }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !els.exInfoPage.hidden) closeExerciseInfo();
+  });
   // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
   els.modelBtn.addEventListener("click", openModelEditor);
   els.modelClose.addEventListener("click", () => { els.modelPage.hidden = true; });
@@ -7613,8 +7610,8 @@ async function init() {
     renderModelEditor();
     refreshAfterDifficultyEdit();
   });
-  // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all jump to the
-  // Index page and expand that exercise's inline info dropdown.
+  // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
+  // exercise's settings in the floating overlay.
   document.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-moreinfoex]");
     if (btn?.dataset.moreinfoex) jumpToExerciseInfo(btn.dataset.moreinfoex);
@@ -8422,7 +8419,7 @@ async function init() {
   document.getElementById("idxCreate")?.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("#waNewCreate")) createUserExerciseDef();
   });
-  // Tap an exercise name on the Index to expand its info panel (toggle).
+  // Tap an exercise name on the Index to open its settings in the floating overlay.
   els.bwGroups.addEventListener("click", (e) => {
     // Group header "only / hide / show" — read the group's lifts from its rows and
     // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
@@ -8436,17 +8433,9 @@ async function init() {
       applyGroupFilter(GROUP_FILTER_NEXT[groupFilterState(names)], names);
       return;
     }
-    // Per-exercise active-set overrides in the inspector (force in / out).
-    const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
-    if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
-    const exc = (e.target as HTMLElement).closest<HTMLElement>("[data-asexclude]");
-    if (exc?.dataset.asexclude) { toggleActiveOverride(exc.dataset.asexclude, "exclude"); return; }
     const nameEl = (e.target as HTMLElement).closest<HTMLElement>(".bw-ex-name");
     if (!nameEl?.dataset.exname) return;
-    const row = nameEl.closest<HTMLTableRowElement>("tr");
-    if (!row) return;
-    if (toggleCollapse(row)) return; // open → close
-    insertDetail(row, 3, exerciseInfoHtml(nameEl.dataset.exname));
+    openExerciseInfo(nameEl.dataset.exname); // floating settings overlay
   });
   for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
     input.addEventListener("input", () => {
