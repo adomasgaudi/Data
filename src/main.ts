@@ -10925,11 +10925,17 @@ function renderWaGraph(): void {
   // Keep #waGraphChart alive across option/selection re-renders so pan/zoom isn't
   // wiped and pointer listeners stay attached (innerHTML used to recreate it every time).
   let chartBox = box.querySelector<HTMLElement>("#waGraphChart");
+  let preservedLegend: Element | null = null;
   if (!chartBox) {
     box.innerHTML =
       `<div id="waGraphChart"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
+    // The legend node was relocated into the bar; the SVG engine keeps writing into
+    // THAT node and only makes a fresh one on a full chart re-mount (which we avoid
+    // here to preserve pan/zoom). So rescue it before the bar rebuild destroys it,
+    // and re-attach it to the new bar below — otherwise the legend vanishes.
+    preservedLegend = box.querySelector(".wa-graph-bar .svgc-legend");
     const bar = box.querySelector(".wa-graph-bar");
     if (bar) bar.outerHTML = graphBarHtml;
     else chartBox.insertAdjacentHTML("afterend", graphBarHtml);
@@ -10962,7 +10968,9 @@ function renderWaGraph(): void {
   // Relocate the chart's legend down into the bar below it so it sits beside Graph
   // options (the SVG engine keeps updating it in place wherever it lives in the DOM).
   const graphBar = box.querySelector(".wa-graph-bar");
-  const legendEl = chartBox?.querySelector(".svgc-legend");
+  // Fresh mount → the new legend sits inside chartBox; rebuild path → reuse the
+  // node we rescued before the bar was replaced (the engine just updated it).
+  const legendEl = preservedLegend ?? chartBox?.querySelector(".svgc-legend");
   if (graphBar && legendEl && legendEl.parentElement !== graphBar) graphBar.appendChild(legendEl);
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {

@@ -121,6 +121,20 @@ describe("volume / reps / sets / frequency aggregates (TASKS 37–39)", () => {
   it("volume/reps/sets sit on the right axis (TASK 42)", () => {
     for (const id of ["volume", "volumeLoad", "reps", "sets", "frequency"]) expect(graphMetric(id)!.axis).toBe("right");
   });
+  it("buckets count/volume by the configured interval — WEEK by default, DAY on request", () => {
+    // Two sets in the SAME week (Mon + Wed), one the next week.
+    const wk = [
+      rec({ date: "2024-01-01", weight: 100, reps: 5 }), // vol 500
+      rec({ date: "2024-01-03", weight: 100, reps: 5 }), // vol 500, same week
+      rec({ date: "2024-01-10", weight: 100, reps: 5 }), // vol 500, next week
+    ];
+    const byWeek = graphMetric("volume")!.compute!(wk, DEFAULT_GRAPH_CONFIG); // default interval = week
+    expect(byWeek.length).toBe(2); // two weeks
+    expect(byWeek[0]!.y).toBe(1000); // 500 + 500 in week 1
+    const byDay = graphMetric("volume")!.compute!(wk, { ...DEFAULT_GRAPH_CONFIG, interval: "day" });
+    expect(byDay.length).toBe(3); // three distinct days
+    expect(graphMetric("sets")!.compute!(wk, DEFAULT_GRAPH_CONFIG)[0]!.y).toBe(2); // 2 sets in week 1
+  });
 });
 
 describe("PR markers, trend, moving average (TASKS 40–41)", () => {

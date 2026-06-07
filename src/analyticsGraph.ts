@@ -18,6 +18,26 @@ import type { GraphConfig } from "./graphConfig";
 
 const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a8a", "#c0603a", "#7a6f9b"];
 
+/** A shade of a base hex colour, for distinguishing a 2nd+ series of the SAME
+ * render-shape within one exercise. n=0 is the base; odd n lightens, even n
+ * darkens, by a growing amount — so an exercise's series stay clearly "the same
+ * colour family" while still being told apart. */
+function shadeColor(hex: string, n: number): string {
+  if (n <= 0) return hex;
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const target = n % 2 === 1 ? 255 : 0; // odd → toward white, even → toward black
+  const amt = Math.min(0.62, Math.ceil(n / 2) * 0.26);
+  const ch = (h: string) => { const c = parseInt(h, 16); return Math.round(c + (target - c) * amt); };
+  const hh = (v: number) => v.toString(16).padStart(2, "0");
+  return `#${hh(ch(m[1]!))}${hh(ch(m[2]!))}${hh(ch(m[3]!))}`;
+}
+
+/** Group metric types into the render "shapes" the eye reads as one kind, so only
+ * series of the SAME shape (e.g. two bar metrics) need a shade to be told apart;
+ * dots vs bars vs line already differ by form and can share the base colour. */
+const shapeOf = (type: string | undefined): string => (type === "bars" ? "bars" : type === "range" ? "range" : type === "scatter" ? "scatter" : "line");
+
 export interface AnalyticsGraphInput {
   exercises: readonly string[];
   /** Records to draw from (already computed/filtered by the caller). */
@@ -81,8 +101,20 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
 
   const series: SvgSeries[] = [];
-  let ci = 0;
+  let gi = -1;
   for (const g of groups) {
+    gi++;
+    // ONE base colour per exercise: every metric for that lift (1RM dots, volume
+    // bars, …) shares it, so the eye groups them. A 2nd+ series of the SAME shape
+    // (e.g. two bar metrics) gets a shade of that base to stay distinguishable.
+    const base = SERIES_COLORS[gi % SERIES_COLORS.length]!;
+    const shapeSeen: Record<string, number> = {};
+    const colorFor = (type: string | undefined): string => {
+      const shape = shapeOf(type);
+      const n = shapeSeen[shape] ?? 0;
+      shapeSeen[shape] = n + 1;
+      return shadeColor(base, n);
+    };
     for (const m of metrics) {
       // "% of world record": each set's added-weight 1RM ÷ this exercise's
       // (bodyweight+sex-scaled) world record × 100. Needs the e1rm compute + the WR.
@@ -97,7 +129,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           .map((r) => ({ x: Date.parse(r.date), y: Math.round((effectiveE1RM(r, input.config.formula)! / wr) * 1000) / 1000 }))
           .filter((p) => Number.isFinite(p.x))
           .sort((a, b) => a.x - b.x);
-        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: SERIES_COLORS[ci++ % SERIES_COLORS.length]!, type: "scatter", points: pts as SvgPoint[] });
+        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: colorFor("scatter"), type: "scatter", points: pts as SvgPoint[] });
         continue;
       }
       if (!m.compute) continue; // registered-but-not-computed metric
@@ -120,8 +152,6 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           ...(p.bands ? { bands: p.bands.map(d) } : {}),
         }));
       }
-      const color = SERIES_COLORS[ci % SERIES_COLORS.length]!;
-      ci++;
       // One group → label by metric only; several → prefix the exercise.
       const name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
       // Vertical shift (fraction of plot height) for the Volume bars only — lifts
@@ -130,7 +160,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       const isVolume = m.id === "volume" || m.id === "volumeLoad";
       if (pts.length)
         series.push({
-          name, color, type: m.type ?? "line", points: pts as SvgPoint[],
+          name, color: colorFor(m.type), type: m.type ?? "line", points: pts as SvgPoint[],
           ...(m.axis ? { axis: m.axis } : {}),
           ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
           ...(isVolume && input.config.volumeYShift ? { yShiftFrac: input.config.volumeYShift } : {}),

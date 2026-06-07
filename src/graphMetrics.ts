@@ -128,20 +128,33 @@ function predict(pts: { x: number; y: number }[], horizonDays: number): GraphPoi
   return out;
 }
 
-/** Sum a per-set value into one point per calendar day (volume / reps "by date"). */
-function byDaySum(records: readonly SetRecord[], sel: (r: SetRecord) => number | null | undefined): GraphPoint[] {
+const WEEK = 7 * DAY;
+/** Start-of-bucket timestamp for a time, by interval (day / week / month). Weeks
+ * align to fixed 7-day blocks from the epoch (same as Frequency); months to the
+ * 1st (UTC). Default bucket is the WEEK (per the default graph config). */
+function bucketStart(t: number, interval: GraphConfig["interval"]): number {
+  if (interval === "day") return Math.floor(t / DAY) * DAY;
+  if (interval === "month") { const d = new Date(t); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); }
+  return Math.floor(t / WEEK) * WEEK; // week
+}
+/** Sum a per-set value into one point per time bucket (volume / reps "by date").
+ * Buckets by the configured interval — week by default — so the count/volume bars
+ * read as weekly totals unless the user switches Interval to Day. */
+function byBucketSum(records: readonly SetRecord[], sel: (r: SetRecord) => number | null | undefined, interval: GraphConfig["interval"]): GraphPoint[] {
   const m = new Map<number, number>();
   for (const r of records) {
     const v = sel(r);
     if (v == null || !Number.isFinite(v)) continue;
-    const day = Math.floor(ts(r.date) / DAY) * DAY;
-    m.set(day, (m.get(day) ?? 0) + v);
+    const t = ts(r.date);
+    if (!Number.isFinite(t)) continue;
+    const key = bucketStart(t, interval);
+    m.set(key, (m.get(key) ?? 0) + v);
   }
   return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([x, y]) => ({ x, y: r1(y) }));
 }
-/** Count sets per calendar day. */
-function setsPerDay(records: readonly SetRecord[]): GraphPoint[] {
-  return byDaySum(records, () => 1);
+/** Count sets per time bucket. */
+function setsPerBucket(records: readonly SetRecord[], interval: GraphConfig["interval"]): GraphPoint[] {
+  return byBucketSum(records, () => 1, interval);
 }
 /** Distinct training days per week (training frequency). */
 function sessionsPerWeek(records: readonly SetRecord[]): GraphPoint[] {
@@ -253,13 +266,13 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   { id: "strengthDecay", label: "Strength Score With Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
-  // scale when shown alongside weight/1RM (TASK 42). Per-day totals read best as
-  // bars (a column per day, like Volume); only Frequency is a smoothed cadence, so
-  // it stays a line.
-  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps))) },
-  { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps))) },
-  { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs) => byDaySum(rs, (r) => r.reps) },
-  { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs) => setsPerDay(rs) },
+  // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
+  // Interval — WEEK by default — and read as bars (a column per bucket); switch
+  // Interval to Day for daily columns. Only Frequency is a smoothed cadence (line).
+  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps)), cfg.interval) },
+  { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
+  { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => r.reps, cfg.interval) },
+  { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs, cfg) => setsPerBucket(rs, cfg.interval) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },
   { id: "pr", label: "Personal Records", type: "scatter", compute: (rs, cfg) => prMarkers(rs, cfg.formula) },
   { id: "trend", label: "Trend Line", compute: (rs, cfg) => trendLine(rs, cfg.formula) },
