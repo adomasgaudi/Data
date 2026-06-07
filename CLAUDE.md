@@ -24,6 +24,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 11. **Pickable, severity-tagged, UNPADDED task lists:** whenever you present suggestions / options / a backlog, tag every item with a short code (e.g. `CLN-3`) AND a severity (🔴 burning = real bug/blocker · 🟠 worth-it · 🟢 nice-to-have). List the REAL items, however many — **never pad to a round count** (5-per-level = a tell you're appeasing, not thinking). Say when a "task" isn't worth doing, and question the premise rather than generating busywork. (Committed `CAT-n` still derived at commit time, rule 8.)
 12. **S-ANL is its own view:** write `S-ANL` code fresh, using full-`ANL` as *inspiration* not copy-paste/relocation — prefer rewriting over sharing, to avoid "creeping in" coupled code.
 13. **Translate everything:** any new/changed user-facing text MUST get its Lithuanian entry in `src/i18n.ts` (`LT` dict) in the SAME change — the site must never show English when LT is selected.
+14. **Velocity check:** weigh every estimate against the owner's real pace (~50–100 SP/day, a few SP ≈ 5–10 min) and the SP/version log — answer "worth it?" in days/SP actually spent, prefer plans that fit a day.
 
 ## Commands the owner types (act on these even with no other context)
 
@@ -38,6 +39,8 @@ Shortcuts the owner may type in any session. **A new command is added here as ON
   2. **Show the owner the numbered plan FIRST** — don't start executing yet.
   3. **Do ONE part per turn**, verify it, report, then go to the next — **never all at once** (that's what drops parts). Expect this to span several prompts.
   4. **Safety first:** before anything hard to undo (delete / overwrite / deploy), back up or confirm.
+- **`#senior <task>`** — reason as architect not junior: name the single source of truth, keep other views read-only projections (no drifting copies), protect invariants, fix root cause not symptom, hand trivial wiring to "juniors"; answer RECOMMENDATION → TRADEOFFS → CONSTRAINTS.
+- **`#research <topic>`** — research best practices inline and grade each source (GRADE: High/Moderate/Low/Very Low + one-line reason), but re-judge every practice for this AI-maintained no-build single-file app (rule 9), not human teams.
 
 ## Rules to remember
 
