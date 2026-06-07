@@ -93,7 +93,6 @@ import {
   isMetricAllowed,
   metricsAllowedForScope,
   exercisesBlockingMetric,
-  fullyBlockedExercises,
   toggleMetric as togglePermMetric,
   setAllMetrics as setAllPermMetrics,
 } from "./graphPermissions";
@@ -1571,7 +1570,6 @@ function afterGraphPermChange(name: string) {
     : null;
   if (cell) cell.innerHTML = exerciseInfoHtml(name);
   renderWaGraph();        // universal graph (single + auto overview)
-  renderWaCompareGraph(); // compare overlay
 }
 // Mixed-mode verdicts are memoised per (athlete|exercise); cleared when anything
 // that changes a set's estimated 1RM does (mode, per-set edits, formula, data).
@@ -7293,7 +7291,6 @@ function refreshAfterDifficultyEdit(): void {
   refreshExerciseInfo();
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-  renderWaCompareGraph();
   window.scrollTo(0, y);
   requestAnimationFrame(() => window.scrollTo(0, y));
 }
@@ -9757,7 +9754,6 @@ const WA_GRAPH_MAX = 10;
 let waListExerciseFilter: string[] = [];
 // The Analysis compare-graph dropdown (own SVG instance + view toggle), shown
 // only with 2+ exercises picked.
-let waCompareSvg: SvgChart | null = null;
 /** Expand selected names to the raw logged exercise names they cover: a combined
  * or comparison group becomes its members; everything else is itself. */
 function expandToRawExercises(names: readonly string[]): string[] {
@@ -9964,7 +9960,6 @@ function renderWorkoutAnalysis(): void {
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     }
-  renderWaCompareGraph(); // compare overlay dropdown (only shown in compare mode)
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing
   // selected it keeps the user's own calendar filter (saved/restored around a
@@ -10337,52 +10332,7 @@ function graphReviewPromptHtml(targetEx: string, scopeNames: readonly string[]):
  * lifts, in its own collapsible below the workout history. Only meaningful with
  * 2+ exercises selected; the fold is hidden otherwise. Reuses the legacy compare
  * series builder, with its own SVG instance + view toggle. */
-function renderWaCompareGraph(): void {
-  const fold = document.getElementById("waCompareFold");
-  const box = document.getElementById("waCompareChart");
-  const note = document.getElementById("waCompareNote");
-  if (!fold || !box) return;
-  const show = waMode() === "compare" && waSelected.length >= 2;
-  fold.toggleAttribute("hidden", !show);
-  if (!show) {
-    if (waCompareSvg) waCompareSvg.update({ series: [] });
-    return;
-  }
-  // Light up the active view button.
-  for (const b of fold.querySelectorAll<HTMLElement>("[data-wacompareview]"))
-    b.classList.toggle("is-active", b.dataset.wacompareview === S.waCompareView);
-  const username = els.athlete.value;
-  const formula = currentFormula();
-  const recs = filterRecords(applyHardSetsFilter(computedRecords()), { excludeDropsets: els.excludeDropsets.checked });
-  // Cap the overlay at the first 10 lifts too (Select-all can pick dozens) so the
-  // chart never lags; note the rest, mirroring the universal graph.
-  const cmpAll = waSelected.slice(0, WA_GRAPH_MAX);
-  const cmpExcluded = waSelected.slice(WA_GRAPH_MAX);
-  // Graph permissions: a lift with NO allowed graphs (unreviewed) is left out of
-  // the comparison until it's been reviewed in More info.
-  const blockedEx = fullyBlockedExercises(graphPerms, cmpAll);
-  const cmpExercises = cmpAll.filter((n) => !blockedEx.includes(n));
-  if (cmpExercises.length < 2) {
-    if (waCompareSvg) waCompareSvg.update({ series: [] });
-    if (note) note.innerHTML = graphReviewPromptHtml(blockedEx[0] ?? cmpAll[0] ?? "", cmpAll);
-    return;
-  }
-  const { series, note: noteTxt } = compareSeriesFor(cmpExercises, username, recs, formula, S.waCompareView);
-  if (note) {
-    const blockedNote = blockedEx.length
-      ? `<span class="wa-gb-inline">${blockedEx.length} hidden — need review · <button type="button" class="wa-gb-link" data-graphreview="${escapeHtml(blockedEx[0]!)}">review</button></span>`
-      : "";
-    const excludedNote = cmpExcluded.length
-      ? `<details class="wa-excluded"><summary>${WA_GRAPH_MAX} of ${waSelected.length}</summary>` +
-        `<div class="wa-excluded-list">${cmpExcluded.map(escapeHtml).join(", ")}</div></details>`
-      : "";
-    const parts = [excludedNote, noteTxt ? escapeHtml(noteTxt) : "", blockedNote].filter(Boolean);
-    note.innerHTML = parts.join("  ·  ");
-  }
-  const config = { series, xKind: "time" as const, compactable: true, yBeginAtZero: true, yUnit: "kg", insideLabels: true, height: 300 };
-  if (!waCompareSvg) waCompareSvg = mountSvgChart(box, config);
-  else waCompareSvg.update(config);
-}
+// (Compare graph removed — the universal graph already overlays multiple lifts.)
 
 
 /** The TASK 24 assignment editor for one exercise: joint / movement / plane
@@ -10598,7 +10548,6 @@ function setupWorkoutAnalysis(): void {
       waHardOnly = hard.checked;
       saveHardOnly();
       renderWaGraph();
-      renderWaCompareGraph();
       renderWorkoutCalendar();
       return;
     }
@@ -10721,13 +10670,6 @@ function setupWorkoutAnalysis(): void {
     if (t.closest<HTMLElement>("[data-watime]")) {
       setTimeCompact(!getTimeCompact());
       renderWaGraph();
-      return;
-    }
-    // Compare-graph dropdown view toggle (current strength ↔ per-set range).
-    const cmpView = t.closest<HTMLElement>("[data-wacompareview]");
-    if (cmpView?.dataset.wacompareview) {
-      S.waCompareView = cmpView.dataset.wacompareview === "perset" ? "perset" : "trend";
-      renderWaCompareGraph();
       return;
     }
     // Machine type (cable / gravity / mixed) for the selected exercise.

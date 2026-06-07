@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.6.82</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.6.83</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1088,20 +1088,6 @@
                    leave), so all its history / filters / stats / toggles work as-is. -->
               <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
               <div id="waWorkoutsHost"></div>
-            </div>
-          </details>
-          <!-- Compare graph (only shown with 2+ exercises picked): a collapsible
-               below the workout history. The multi-line overlay of the picked
-               lifts, with its own SVG chart instance. -->
-          <details class="wa-fold" id="waCompareFold" hidden>
-            <summary class="wa-fold-sum">Compare graph</summary>
-            <div id="waCompare" class="wa-section">
-              <div id="waCompareView" class="cal-mode" role="group" aria-label="Compare chart view">
-                <button type="button" class="cal-mode-btn is-active" data-wacompareview="trend">Current strength</button>
-                <button type="button" class="cal-mode-btn" data-wacompareview="perset">Per-set range</button>
-              </div>
-              <div id="waCompareChart"></div>
-              <div class="muted" id="waCompareNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></div>
             </div>
           </details>
         </section>
