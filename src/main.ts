@@ -6180,6 +6180,20 @@ function renderBwParts() {
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
+  // Live search (from the bottom bar): show a FLAT list of every lift whose name /
+  // code / short-name matches, so you find it right here in the Index instead of
+  // being thrown to the Analysis view. Skips the grouping + active-set machinery.
+  if (bwSearchQuery) {
+    const q = bwSearchQuery.toLowerCase();
+    const matches = rows.filter(
+      (r) => r.name.toLowerCase().includes(q) || codeFor(r.name).toLowerCase().includes(q) || shortFor(r.name).toLowerCase().includes(q),
+    );
+    els.bwGroups.innerHTML = matches.length
+      ? `<p class="bw-search-note muted">${matches.length} match${matches.length === 1 ? "" : "es"} for “${escapeHtml(bwSearchQuery)}”</p>${table(matches, false)}`
+      : `<p class="bw-search-note muted">No exercise matches “${escapeHtml(bwSearchQuery)}”.</p>`;
+    return;
+  }
+
   // Per-group app-wide filter: ONE cycling toggle (show all → only these →
   // hidden → …) instead of three buttons. Its label shows the current state; the
   // members are read from the group's rows in the DOM when clicked.
@@ -10068,6 +10082,10 @@ const waIncludeIdentities = new Set<ExerciseIdentity>(["original", "dissolved", 
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
+// Index page live search: when set, the Index shows a flat list of matching lifts
+// instead of the grouped view, so the bottom search bar FINDS a lift in the Index
+// (rather than jumping to the Analysis view).
+let bwSearchQuery = "";
 let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
@@ -10987,7 +11005,14 @@ function setupCommandBar(): void {
     const v = input.value;
     if (v.startsWith(".")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
     hideCmdPalette();
-    // Plain text → filter the Analysis exercise selector chips.
+    // On the Index page, plain text FINDS the lift in the Index (flat match list) —
+    // it doesn't throw you to the Analysis view.
+    if (document.getElementById("tab-bwparts")?.hidden === false) {
+      bwSearchQuery = v.trim();
+      renderBwParts();
+      return;
+    }
+    // Anywhere else → filter the Analysis exercise selector chips.
     waSearchQuery = v;
     if (document.getElementById("tab-analysis")?.hidden !== false) {
       switchTopTab("analysis"); // builds the selector with the new query
