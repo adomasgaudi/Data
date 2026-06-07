@@ -829,10 +829,11 @@ function loadShortOverrides(): Record<string, string> {
   }
 }
 
-/** The default short name for an exercise: its FULL name, so "short" mode reads
- * as the readable name (not the tiny code) until the owner shortens a lift. */
+/** The default short name for an exercise: its effective CODE, so "short" mode
+ * actually reads short (the tiny code) until the owner types a friendlier short
+ * name for a lift. */
 function defaultShort(exerciseName: string): string {
-  return exerciseName;
+  return codeFor(exerciseName);
 }
 
 /** The short name shown for an exercise: the owner's override if set, else the
