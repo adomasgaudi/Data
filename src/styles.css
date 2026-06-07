@@ -2576,6 +2576,34 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .wa-ex-chip:hover { border-color: var(--accent); }
 .wa-ex-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Categories-mode picker: one two-line pill per category (label + sel/total, and
+   a smaller sub-group line), tap to open its floating exercise dropdown. */
+.wa-cat-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.wa-cat-pill {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  font: inherit; cursor: pointer; padding: 5px 11px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--bg); color: var(--text); line-height: 1.15;
+}
+.wa-cat-pill:hover { border-color: var(--accent); }
+.wa-cat-pill.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.wa-cat-pill.is-full { background: var(--accent-soft); }
+.wa-cat-pill[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.wa-cat-main { font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+.wa-cat-count { font-weight: 600; color: var(--accent); }
+.wa-cat-pill.is-full .wa-cat-count { color: var(--accent); }
+.wa-cat-sub { font-size: 0.66rem; }
+/* The floating per-category exercise dropdown (anchored under its pill). */
+.wa-cat-menu {
+  position: fixed; z-index: 60; max-height: 60vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.18); padding: 0.6rem; box-sizing: border-box;
+}
+.wa-cat-menu[hidden] { display: none; }
+.wa-cat-menu-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.wa-cat-menu-title { font-size: 0.82rem; font-weight: 700; flex: 1; min-width: 0; }
+.wa-catclose { font: inherit; font-size: 0.9rem; cursor: pointer; background: none; border: none; color: var(--muted); padding: 2px 6px; }
+.wa-catclose:hover { color: var(--accent); }
+.wa-cat-menu-chips { max-height: 46vh; overflow-y: auto; }
 
 /* The Overview/Table/Charts/Stats layout switcher was removed — the Analysis
    content always shows in full (the universal #waGraph on top, then the workout

@@ -7764,6 +7764,50 @@ async function init() {
     // on document so it works wherever the taxonomy editor is shown.
     const taxSave = t.closest<HTMLElement>(".wa-assign-save");
     if (taxSave?.dataset.waassign) { saveTaxonomyAssignment(taxSave, taxSave.dataset.waassign); return; }
+    // Categories-mode picker: a category pill opens its floating exercise dropdown;
+    // the dropdown has per-exercise toggles + a Select/Deselect-all for the group.
+    // Delegated on document because the dropdown lives at the body root (it floats).
+    const catPill = t.closest<HTMLElement>(".wa-cat-pill");
+    if (catPill?.dataset.wacat !== undefined) {
+      if (waCatMenuKey === catPill.dataset.wacat) closeWaCatMenu();
+      else openWaCatMenu(catPill.dataset.wacat, catPill);
+      return;
+    }
+    const catMenu = document.getElementById("waCatMenu");
+    if (catMenu && !catMenu.hidden && waCatMenuKey !== null) {
+      if (t.closest(".wa-catclose")) { closeWaCatMenu(); return; }
+      const allBtn = t.closest<HTMLElement>(".wa-catall");
+      if (allBtn) {
+        const turnOn = allBtn.dataset.catallon === "1";
+        const set = new Set(waSelected);
+        for (const it of waCatItems(waCatMenuKey)) { if (turnOn) set.add(it.name); else set.delete(it.name); }
+        waSelected = [...set];
+        renderWaCatMenu();   // refresh the dropdown + its all-toggle label
+        renderWaChips();     // refresh the category-pill counts behind it
+        debounceWaRender();  // graph / history / calendar catch up
+        return;
+      }
+      const mchip = t.closest<HTMLElement>(".wa-ex-chip");
+      if (mchip?.dataset.waex && catMenu.contains(mchip)) {
+        const n = mchip.dataset.waex;
+        waSelected = waSelected.includes(n) ? waSelected.filter((x) => x !== n) : [...waSelected, n];
+        const on = waSelected.includes(n);
+        mchip.classList.toggle("is-on", on); // instant feedback (don't rebuild the menu)
+        mchip.setAttribute("aria-pressed", String(on));
+        // Update just the head count + all-toggle, so the menu keeps its scroll.
+        const items = waCatItems(waCatMenuKey);
+        const sel = waSelCount(items);
+        const allOn = items.length > 0 && sel >= items.length;
+        const cnt = catMenu.querySelector<HTMLElement>(".wa-cat-menu-title .muted");
+        if (cnt) cnt.textContent = `${sel}/${items.length}`;
+        const allB = catMenu.querySelector<HTMLElement>(".wa-catall");
+        if (allB) { allB.dataset.catallon = allOn ? "0" : "1"; allB.textContent = allOn ? "Deselect all" : "Select all"; }
+        renderWaChips();     // the category-pill count behind catches up
+        debounceWaRender();
+        return;
+      }
+      if (!catMenu.contains(t)) closeWaCatMenu(); // click anywhere else closes it
+    }
   });
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works inside the Index page's expandable info dropdown.
@@ -9961,6 +10005,17 @@ let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the se
 // toggle. Replaces the old separate Filter button.
 const waGroupsOff = new Set<string>();
 const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["bodyPart", "muscleGroup", "joint", "movement", "plane", "function", "equipment", "difficulty", "tier"];
+// Picker pill mode: individual exercise pills (default) or ONE pill per category
+// (manual toggle), so whole categories can be opened/eliminated at once. Categories
+// mode needs a Group-by dimension (it groups by it).
+let waChipsMode: "exercises" | "categories" = "exercises";
+// Which category's floating exercise dropdown is open (a group key, "__all", or null).
+let waCatMenuKey: string | null = null;
+// Short labels for the category-pill sub-line count (e.g. "4/5 func").
+const WA_DIM_SHORT: Partial<Record<ExerciseFilterDim, string>> = {
+  function: "func", bodyPart: "part", muscleGroup: "musc", joint: "joint",
+  movement: "move", plane: "plane", equipment: "equip", difficulty: "diff", tier: "tier",
+};
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm"]);
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
@@ -10193,11 +10248,15 @@ function renderWorkoutAnalysis(): void {
       : "";
     // Group by + Clear selection now live INSIDE the Exercises fold (below) so the
     // selector body stays compact.
+    const modeToggle = waGroupBy !== "none"
+      ? `<button type="button" id="waChipsMode" class="wa-clear" title="Switch the pills between individual exercises and whole categories">Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}</button>`
+      : "";
     const foldTools =
       `<div class="wa-chips-tools">` +
       `<button type="button" id="waSelectAll" class="wa-clear">Select all</button>` +
       `<button type="button" id="waClear" class="wa-clear"${waSelected.length ? "" : " disabled"}>Clear selection</button>` +
       `<label class="wa-gcfg-f">Group by<select id="waGroupBy">${groupOpts}</select></label>` +
+      modeToggle +
       searchActive +
       `</div>`;
     // (Create variant / group moved to the Index page — see createVariantFormHtml.)
@@ -10218,7 +10277,7 @@ function renderWorkoutAnalysis(): void {
     const settingsBlock =
       `<div class="wa-fold-settings"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>`;
     const exercisesFold =
-      `<details class="wa-chips-fold"${S.waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">(${byIdentity.length})</span></summary>` +
+      `<details class="wa-chips-fold"${S.waChipsFoldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">Exercises <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></summary>` +
       `<div class="wa-fe-menu">` +
       foldTools +
       settingsBlock +
@@ -10284,6 +10343,13 @@ function renderWaChips(): void {
     box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search.</p>`;
     return;
   }
+  // Categories mode (manual toggle): one pill per group — counts + sub-groups —
+  // and tapping a pill opens that category's exercises in a floating dropdown.
+  if (waChipsMode === "categories" && waGroupBy !== "none") {
+    box.innerHTML = waCatPillsHtml(list);
+    if (waCatMenuKey !== null) renderWaCatMenu(); // keep an open dropdown's counts fresh
+    return;
+  }
   if (waGroupBy === "none") {
     box.innerHTML = `<div class="wa-ex-chips">${list.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
     return;
@@ -10339,6 +10405,103 @@ function exerciseSubgroup(name: string): string | null {
   if (/back extension|hyperextension|reverse hyper|good ?morning|superman|jefferson/.test(n)) return "Back extension";
   if (/deadlift|rack pull/.test(n)) return "Deadlift";
   return null;
+}
+
+// ---- Categories-mode picker: one pill per group + a floating exercise dropdown ----
+type WaItem = { name: string; identity: ExerciseIdentity };
+/** How many of these picker items are currently selected. */
+function waSelCount(items: readonly WaItem[]): number {
+  const sel = new Set(waSelected);
+  let n = 0;
+  for (const e of items) if (sel.has(e.name)) n++;
+  return n;
+}
+/** Sub-group coverage within a category: how many of its finer families have at
+ * least one exercise selected, out of the total number of families present. */
+function waSubgroupCoverage(items: readonly WaItem[]): { sel: number; total: number } {
+  const sel = new Set(waSelected);
+  const has = new Map<string, boolean>(); // subgroup key → any selected?
+  for (const e of items) {
+    const sg = exerciseSubgroup(e.name) ?? "·"; // ungrouped lifts share one bucket
+    has.set(sg, (has.get(sg) ?? false) || sel.has(e.name));
+  }
+  let s = 0;
+  for (const v of has.values()) if (v) s++;
+  return { sel: s, total: has.size };
+}
+/** One category pill: main "label sel/total", plus a smaller sub-group line. */
+function waCatPill(key: string, label: string, sel: number, tot: number, subSel: number, subTot: number, subLabel: string): string {
+  const cls = sel === 0 ? "" : sel >= tot ? " is-on is-full" : " is-on";
+  const sub = subTot > 1 ? `<span class="wa-cat-sub muted">${subSel}/${subTot} ${escapeHtml(subLabel)}</span>` : "";
+  return (
+    `<button type="button" class="wa-cat-pill${cls}" data-wacat="${escapeHtml(key)}" aria-expanded="${waCatMenuKey === key}" title="Open ${escapeHtml(label)} — pick exercises or toggle the whole group">` +
+    `<span class="wa-cat-main">${escapeHtml(label)} <span class="wa-cat-count">${sel}/${tot}</span></span>${sub}</button>`
+  );
+}
+/** The full category-pill row: an "all" pill + one pill per group. */
+function waCatPillsHtml(list: readonly WaItem[]): string {
+  const groups = new Map<string, WaItem[]>();
+  for (const e of list) {
+    const k = waGroupKey(e.name);
+    (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
+  }
+  const dimShort = WA_DIM_SHORT[waGroupBy as ExerciseFilterDim] ?? "grp";
+  const groupsCovered = [...groups.values()].filter((g) => waSelCount(g) > 0).length;
+  const allPill = waCatPill("__all", "all", waSelCount(list), list.length, groupsCovered, groups.size, dimShort);
+  const pills = [...groups.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, items]) => {
+      const cov = waSubgroupCoverage(items);
+      return waCatPill(k, k, waSelCount(items), items.length, cov.sel, cov.total, "sub");
+    })
+    .join("");
+  return `<div class="wa-cat-pills">${allPill}${pills}</div>`;
+}
+/** The exercises a category pill covers ("__all" = every shown exercise). */
+function waCatItems(key: string): WaItem[] {
+  const list = waChipListBase();
+  return key === "__all" ? list : list.filter((e) => waGroupKey(e.name) === key);
+}
+function openWaCatMenu(key: string, anchor: HTMLElement): void {
+  waCatMenuKey = key;
+  let m = document.getElementById("waCatMenu");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "waCatMenu";
+    m.className = "wa-cat-menu";
+    document.body.appendChild(m);
+  }
+  renderWaCatMenu();
+  m.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth - 16, 340);
+  m.style.width = `${w}px`;
+  m.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
+  m.style.top = `${Math.min(r.bottom + 6, window.innerHeight - 80)}px`;
+  // Reflect open state on the pills.
+  for (const p of document.querySelectorAll<HTMLElement>(".wa-cat-pill"))
+    p.setAttribute("aria-expanded", String(p.dataset.wacat === key));
+}
+function closeWaCatMenu(): void {
+  waCatMenuKey = null;
+  const m = document.getElementById("waCatMenu");
+  if (m) m.hidden = true;
+  for (const p of document.querySelectorAll<HTMLElement>(".wa-cat-pill")) p.setAttribute("aria-expanded", "false");
+}
+function renderWaCatMenu(): void {
+  const m = document.getElementById("waCatMenu");
+  if (!m || waCatMenuKey === null) return;
+  const items = waCatItems(waCatMenuKey);
+  const sel = waSelCount(items);
+  const label = waCatMenuKey === "__all" ? "All exercises" : waCatMenuKey;
+  const allOn = items.length > 0 && sel >= items.length;
+  m.innerHTML =
+    `<div class="wa-cat-menu-head">` +
+    `<span class="wa-cat-menu-title">${escapeHtml(label)} <span class="muted">${sel}/${items.length}</span></span>` +
+    `<button type="button" class="wa-catall wa-clear" data-catallon="${allOn ? "0" : "1"}">${allOn ? "Deselect all" : "Select all"}</button>` +
+    `<button type="button" class="wa-catclose" aria-label="Close">✕</button>` +
+    `</div>` +
+    `<div class="wa-cat-menu-chips wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
 }
 
 // Snappy clicks: a Graph-options tap updates its own control instantly, then the
@@ -10817,6 +10980,16 @@ function setupWorkoutAnalysis(): void {
     if (t.closest("#waClear")) {
       waSelected = [];
       debounceWaRender();
+      return;
+    }
+    // Flip the picker between individual-exercise pills and category pills. Light:
+    // just update this button's label + re-fill the chips (fold/scroll preserved).
+    if (t.closest("#waChipsMode")) {
+      waChipsMode = waChipsMode === "categories" ? "exercises" : "categories";
+      const btn = document.getElementById("waChipsMode");
+      if (btn) btn.textContent = `Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}`;
+      closeWaCatMenu();
+      renderWaChips();
       return;
     }
     // Create a user exercise def (dissolved variant / combined / comparison group).
