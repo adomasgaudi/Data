@@ -74,6 +74,18 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   and anything above ~100 SP is multi-day and should be broken up or reconsidered.
   Frame "is this worth it?" answers in **days/SP the owner will actually spend**, not
   abstract effort, and prefer plans that fit inside a day's budget.
+- **Most coding advice is written for humans — re-judge it for an AI editor.** When
+  researching best practices, remember the codebase is built and maintained mainly by
+  an AI, not a human team. Many classic rules exist to work around *human* limits that
+  don't bind an AI: mechanical refactors (rename, extract strings, restructure) are
+  slow and risky for humans but fast and reliable for an AI; whole-repo search is
+  instant, so "scattered code is hard to find" matters less; bulk transforms/translation
+  can be redone cheaply on demand. So **don't import human best practices wholesale** —
+  for each one, ask "is the cost this avoids a *human* cost?" and say which assumptions
+  still hold. **What still bites an AI:** runtime correctness, subtle/unreviewed output
+  (e.g. machine translations, edge cases), big noisy diffs that the human owner must
+  review, and anything that needs real-world judgement or external truth. Grade advice
+  on whether it survives the human→AI translation, not just on its source quality.
 - **Back answers with graded research.** When answering a question that turns on
   facts, best practices, or a tech/architecture decision (not trivial lookups),
   **go find real research/sources** rather than asserting from memory, and **rate
