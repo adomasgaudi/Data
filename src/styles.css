@@ -129,6 +129,19 @@ body {
   color: var(--accent); background: var(--accent-soft);
   border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px;
 }
+/* Quick view switcher bar: two segmented controls (mode + detail level). */
+.view-switch {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; justify-content: center; align-items: center;
+  padding: 0.4rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.view-switch:empty { display: none; }
+.vs-group { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.vs-btn {
+  font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer;
+  color: var(--muted); background: none; border: none; padding: 4px 11px;
+}
+.vs-btn + .vs-btn { border-left: 1px solid var(--line); }
+.vs-btn.is-active { background: var(--accent); color: #fff; }
 /* Effort badge on the tiny version line. */
 .effort-inline {
   font-size: 0.6rem; color: var(--muted); font-weight: 600;

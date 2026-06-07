@@ -66,6 +66,12 @@ const LT: Record<string, string> = {
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",
   "Language": "Kalba",
+  // ---- Quick view switcher ----
+  "Admin": "Administratorius",
+  "User": "Vartotojas",
+  "Spectator": "Žiūrovas",
+  "Advanced": "Išplėstinis",
+  "Simplified": "Supaprastintas",
   // ---- Athletes (stats editor) ----
   "average": "vidurkis",
   "auto": "automatiškai",

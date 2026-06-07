@@ -374,6 +374,53 @@ function setViewMode(mode: ViewMode) {
     }
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
+  renderViewSwitch(); // reflect the new mode in the quick switcher
+}
+
+/** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
+ * label), keep the Settings checkbox + the quick switcher in sync. */
+function setSimplified(on: boolean): void {
+  simplifiedView = on;
+  try { localStorage.setItem("colosseum.simplifiedView", on ? "1" : "0"); } catch { /* ignore */ }
+  if (els.simplifiedToggle) els.simplifiedToggle.checked = on;
+  const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
+  if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
+  updateBottomNav();
+  renderViewSwitch();
+}
+
+/** Build the quick view switcher: a mode segment (Admin / User / Spectator) and a
+ * detail segment (Advanced / Simplified). It's a soft, owner-facing switch — the
+ * auth gate is already non-enforced, so the modes are all reachable here too. */
+function renderViewSwitch(): void {
+  const box = document.getElementById("viewSwitch");
+  if (!box) return;
+  const seg = (active: boolean, attr: string, label: string) =>
+    `<button type="button" class="vs-btn${active ? " is-active" : ""}" ${attr}>${label}</button>`;
+  const modes =
+    `<div class="vs-group">` +
+    seg(viewMode === "admin", `data-vmode="admin"`, "Admin") +
+    seg(viewMode === "user", `data-vmode="user"`, "User") +
+    seg(viewMode === "loggedout", `data-vmode="spectator"`, "Spectator") +
+    `</div>`;
+  const detail =
+    `<div class="vs-group">` +
+    seg(!simplifiedView, `data-vsimple="0"`, "Advanced") +
+    seg(simplifiedView, `data-vsimple="1"`, "Simplified") +
+    `</div>`;
+  box.innerHTML = modes + detail;
+}
+
+/** Wire the quick switcher (delegated, survives re-renders). */
+function setupViewSwitch(): void {
+  document.getElementById("viewSwitch")?.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-btn");
+    if (!b) return;
+    if (b.dataset.vmode === "admin") setViewAs("admin");
+    else if (b.dataset.vmode === "spectator") setViewAs("loggedout");
+    else if (b.dataset.vmode === "user") setViewAs(els.athlete.value || adomasUsername() || "");
+    else if (b.dataset.vsimple) setSimplified(b.dataset.vsimple === "1");
+  });
 }
 
 /** Settings → "View as": admin (everything), logged out (Adomas), or lock to one athlete. */
@@ -7346,6 +7393,7 @@ async function init() {
   );
 
   // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
+  setupViewSwitch();
   setViewMode(viewMode);
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
@@ -7362,13 +7410,7 @@ async function init() {
   // Simplified view ↔ Advanced. Switches the Analysis home (S-ANL ↔ full ANL) and
   // re-navigates immediately if you're already on an analysis page.
   els.simplifiedToggle.checked = simplifiedView;
-  els.simplifiedToggle.addEventListener("change", () => {
-    simplifiedView = els.simplifiedToggle.checked;
-    try { localStorage.setItem("colosseum.simplifiedView", simplifiedView ? "1" : "0"); } catch { /* ignore */ }
-    const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
-    if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
-    updateBottomNav();
-  });
+  els.simplifiedToggle.addEventListener("change", () => setSimplified(els.simplifiedToggle.checked));
 
   // The red "trained alone" rings on the calendar (off by default).
   els.showAloneRings.checked = showAloneRings;
