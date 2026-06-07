@@ -64,7 +64,7 @@ import {
 } from "./metrics";
 import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
@@ -1066,25 +1066,6 @@ function setExerciseFamily(exerciseName: string, key: string): void {
   if (key === (baseFamilyOf(exerciseName) ?? "")) delete exerciseFamilyOverrides[exerciseName];
   else exerciseFamilyOverrides[exerciseName] = key;
   saveJson(EX_FAMILY_KEY, exerciseFamilyOverrides);
-}
-
-const leanCm = (key: string): number => { const n = parseInt(key, 10); return Number.isFinite(n) ? n : 0; };
-/** Default lean table for a support. Back-to-wall gets a 15cm "grace": forward
- * lean does nothing for the first 15cm (you're against the wall), so the scale is
- * shifted DOWN 15cm — b2w factor(X) = base factor(X−15). Free / front-to-wall /
- * ladder use the base table (immediate, harder from the first cm). */
-function defaultLeanTable(family: string, support: string): Record<string, number> {
-  const base = FAMILIES[family]?.dims.lean ?? {};
-  if (support !== "back_to_wall") return base;
-  const keys = Object.keys(base);
-  const factorAtCm = (cm: number): number => {
-    let bestKey = keys[0] ?? "";
-    for (const k of keys) if (leanCm(k) <= cm && leanCm(k) >= leanCm(bestKey)) bestKey = k; // largest key ≤ cm
-    return base[bestKey] ?? 1;
-  };
-  const out: Record<string, number> = {};
-  for (const k of keys) out[k] = factorAtCm(Math.max(0, leanCm(k) - 15));
-  return out;
 }
 
 function famLevels(family: string, dim: string): Record<string, number> {
