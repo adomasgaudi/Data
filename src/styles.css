@@ -1338,8 +1338,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
-/* Each exercise on its own flex line so the day's record 1RM right-aligns. */
-.wo-ex-line { display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
+/* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
+   column (right-aligned), then the name + sets — so every exercise name lines up
+   at the same x regardless of the 1RM's width (or its absence). */
+.wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr; align-items: baseline; column-gap: 0.45rem; }
+.wo-ex-body { min-width: 0; display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
 .wo-scale { font-weight: 700; color: var(--accent); } /* multiplier in blue (workout history) */
@@ -1365,8 +1368,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
-/* The day's record (best) estimated 1RM for a lift, shown after its sets. */
-.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; }
+/* The day's record (best) estimated 1RM for a lift — its own left column, right-
+   aligned so the digits sit next to the exercise name they belong to. */
+.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; text-align: right; }
 /* COLOUR RULE (other half): editable values you type are blue. */
 .set-edit-input, .set-edit-note, .ex-var-input, .ex-var-rename, .fac-input { color: var(--accent); font-weight: 600; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
