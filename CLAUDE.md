@@ -29,6 +29,11 @@ Shortcuts the owner may type in any session. **A new command is added here as ON
   - a behaviour/preference the AI should follow → **ONE line in ⛔ HARD RULES above** (or under *Rules to remember* if it needs detail);
   - something that must happen **automatically on an event, even with no AI watching** ("always / whenever / before / after …") → a **hook** in `.claude/settings.json` (`SessionStart` / `UserPromptSubmit` / `Stop`), not just prose;
   - a large reference → its **own `.md` file**, linked from here.
+- **`#careful <task>`** — for risky or many-part work; go slow, lose nothing:
+  1. **Split** the task into small parts and **list every connected/affected piece** — a meta-check: *what else does this touch?* (other files, data, other COs, the live site, backups, versions).
+  2. **Show the owner the numbered plan FIRST** — don't start executing yet.
+  3. **Do ONE part per turn**, verify it, report, then go to the next — **never all at once** (that's what drops parts). Expect this to span several prompts.
+  4. **Safety first:** before anything hard to undo (delete / overwrite / deploy), back up or confirm.
 
 ## Rules to remember
 
