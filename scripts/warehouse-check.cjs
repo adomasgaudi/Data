@@ -36,10 +36,16 @@ if (fs.existsSync(whDir)) {
     if (!fs.existsSync(mf)) continue;
     try {
       const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+      // Expiry as an ABSOLUTE shipped-SP target (expiresAtSp) when set, else the
+      // legacy relative budget (movedAtSp + expiresAfterSp, default 100).
       const after = typeof m.expiresAfterSp === "number" ? m.expiresAfterSp : 100;
-      if (cur != null && typeof m.movedAtSp === "number" && cur - m.movedAtSp >= after) {
+      const expiresAt = typeof m.expiresAtSp === "number"
+        ? m.expiresAtSp
+        : (typeof m.movedAtSp === "number" ? m.movedAtSp + after : null);
+      if (cur != null && expiresAt != null && cur >= expiresAt) {
+        const from = m.movedAtVersion ? ` (stored at ${m.movedAtVersion})` : "";
         notes.push(
-          `warehouse/${m.id || name}: ${Math.round(cur - m.movedAtSp)} SP shipped since stored (>= ${after}) — confirm with owner, then trash.`,
+          `warehouse/${m.id || name}${from}: shipped SP ${Math.round(cur)} ≥ expiry ${expiresAt} — confirm with owner, then trash.`,
         );
       }
     } catch {

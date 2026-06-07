@@ -37,8 +37,13 @@ warehouse/
    event handlers). No commented-out leftovers, no inline feature flags — from the
    live app it must be truly gone.
 2. Put the removed code here verbatim + fill in `manifest.json` (copy `_TEMPLATE`).
-   Set `movedAtSp` to the current cumulative shipped SP (sum of `(SP:n)` across
-   `git log` subjects — `scripts/warehouse-check.cjs` uses the same number).
+   Record where it came from and when it expires:
+   - `movedAtVersion` — the on-screen version when it was stored (e.g. `b.2.6.78`).
+   - `movedAtSp` — the current cumulative shipped SP (sum of `(SP:n)` across
+     `git log` subjects — `scripts/warehouse-check.cjs` uses the same number).
+   - `expiresAtSp` — the ABSOLUTE shipped-SP at which it's ripe to trash
+     (normally `movedAtSp + ~100`; bump it later to let an item sit longer).
+     Falls back to the legacy `movedAtSp + expiresAfterSp` when absent.
 3. Verify the app survives **without** it: `npm run typecheck && npm test && npm run build`.
 4. Commit. Expect it to "feel missing" — that friction is the point.
 
@@ -48,7 +53,9 @@ Follow the manifest's `restoreSteps`, re-wire, then `typecheck` + `test` + `buil
 was pointless. You're meant to survive without it; only pull back what genuinely
 proves necessary.
 
-## Trashing (after ~100 SP of further work unused)
-The SessionStart check flags items where `currentSp − movedAtSp ≥ expiresAfterSp`
-(default 100). Deleting is deliberate: confirm, then remove the folder. (A real
+## Trashing (when shipped SP passes the item's expiry)
+The SessionStart check flags items once `currentSp ≥ expiresAtSp` (or, legacy,
+`currentSp − movedAtSp ≥ expiresAfterSp`, default 100). A flag is a PROMPT, not an
+order — the owner decides. To let an item sit longer, raise its `expiresAtSp`.
+Deleting is deliberate: confirm with the owner, then remove the folder. (A real
 delete — git history still has it as the final safety net.)

@@ -10,6 +10,8 @@
  */
 /** How the workout heatmap colours each day. */
 export type HeatColorDim = "none" | "cat" | "mus" | "fun" | "ex";
+/** Index / bodyweight-parts grouping dimension. */
+export type IndexGroupMode = "discipline" | "muscle" | "function" | "combinable" | "comparable";
 
 export const S: {
   // Analysis view (Workout Analysis) — local UI flags.
@@ -25,6 +27,12 @@ export const S: {
   heatFiltersSaved: string[] | null;
   aloneTagMode: boolean;
   heatColorBy: HeatColorDim;
+  // Index / bodyweight-parts view.
+  bwOpenCats: Set<string> | null;
+  bwGroupMode: IndexGroupMode;
+  // Data tab.
+  dataView: "processed" | "original";
+  dataSearch: string;
 } = {
   waCompareView: "trend",
   waChipsFoldOpen: false,
@@ -37,4 +45,8 @@ export const S: {
   heatFiltersSaved: null,
   aloneTagMode: false,
   heatColorBy: "cat",
+  bwOpenCats: null,
+  bwGroupMode: "discipline",
+  dataView: "processed",
+  dataSearch: "",
 };
