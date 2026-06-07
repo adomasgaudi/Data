@@ -15,6 +15,10 @@ describe("cellBgGradient — multi-category cells", () => {
     expect(g).toContain(" 0% 75%"); // 3 of 4
     expect(g).toContain(" 75% 100%");
   });
+  it("a transparent segment leaves that slice empty (part-fill by selected share)", () => {
+    const g = cellBgGradient(3, [{ hex: "#1e4fa3", frac: 0.4 }, { hex: "transparent", frac: 0.6 }]);
+    expect(g).toBe(`linear-gradient(90deg, ${cellBgColor(3, "#1e4fa3")} 0% 40%, transparent 40% 100%)`);
+  });
   it("level 0 is empty; level 5 stays a single shining colour (never split)", () => {
     expect(cellBgGradient(0, [{ hex: "#111", frac: 1 }, { hex: "#222", frac: 1 }])).toBe("");
     expect(cellBgGradient(5, [{ hex: "#111", frac: 1 }, { hex: "#222", frac: 1 }])).toBe(cellBgColor(5, "#111"));

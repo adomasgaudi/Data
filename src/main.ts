@@ -4940,15 +4940,25 @@ function filteredDayCounts(): Map<string, HeatDayEntry> {
       m.set(d.date, { sets: d.totalSets, catHex: domV ? heatGroupColor(S.heatColorBy, domV) : null, label: domV || null, segments });
       continue;
     }
-    let totalSets = 0;
-    let dominantFilter = "";
-    let dominantSets = 0;
+    // Filters (pills) active: split the square across the SELECTED filters by their
+    // share of the day, with the rest of the day's training left as a transparent
+    // (empty) remainder — so the square is PART-FILLED by how much of that day was
+    // the picked category(ies), just like the all-view splits across every group.
+    const matched: { f: string; n: number }[] = [];
+    let totalSets = 0, dominantFilter = "", dominantSets = 0;
     for (const f of S.heatFilters) {
       const n = filterMatchSets(d, f);
-      totalSets += n;
+      if (n > 0) { matched.push({ f, n }); totalSets += n; }
       if (n > dominantSets) { dominantSets = n; dominantFilter = f; }
     }
-    if (totalSets > 0) m.set(d.date, { sets: totalSets, catHex: filterColor(dominantFilter) });
+    if (totalSets > 0) {
+      matched.sort((a, b) => b.n - a.n || a.f.localeCompare(b.f));
+      const denom = Math.max(d.totalSets, totalSets); // the WHOLE day (matched can overlap)
+      const segments = matched.map((c) => ({ hex: filterColor(c.f) ?? "#1e4fa3", frac: c.n / denom }));
+      const rest = Math.max(0, denom - totalSets) / denom;
+      if (rest > 0.005) segments.push({ hex: "transparent", frac: rest });
+      m.set(d.date, { sets: totalSets, catHex: filterColor(dominantFilter), label: dominantFilter || null, segments });
+    }
   }
   return m;
 }

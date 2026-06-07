@@ -48,17 +48,22 @@ export function heatLevel(sets: number): number {
 /** A heatmap cell painted by SEVERAL categories: each segment's blended colour
  * (at the day's intensity `level`) across its fraction of the square, as a
  * hard-stop horizontal gradient — e.g. legs + shoulders → half blue, half gold.
- * One segment (or none) falls back to the solid {@link cellBgColor}; level 5 is
- * the special "shining gold" (never split). Fractions need not be exactly 1; they
- * are laid out cumulatively in order. */
+ * A segment with hex "transparent" leaves that slice EMPTY (shows the cell behind)
+ * — used to part-fill a square by the selected categories' share of the day. One
+ * (coloured) segment, or level 5, falls back to the solid {@link cellBgColor}.
+ * Fractions need not sum to 1; they are laid out cumulatively in order. */
 export function cellBgGradient(level: number, segments: { hex: string; frac: number }[]): string {
   if (level === 0) return "";
-  if (level === 5 || segments.length <= 1) return cellBgColor(level, segments[0]?.hex ?? null);
+  const blend = (hex: string | undefined): string => (!hex || hex === "transparent" ? "transparent" : cellBgColor(level, hex));
+  if (level === 5 || segments.length <= 1) {
+    const only = segments.find((s) => s.hex && s.hex !== "transparent")?.hex;
+    return only ? cellBgColor(level, only) : cellBgColor(level, null);
+  }
   const total = segments.reduce((n, s) => n + (s.frac > 0 ? s.frac : 0), 0) || 1;
   let acc = 0;
   const stops: string[] = [];
   for (const s of segments) {
-    const c = cellBgColor(level, s.hex);
+    const c = blend(s.hex);
     const from = Math.round((acc / total) * 100);
     acc += Math.max(0, s.frac);
     const to = Math.round((acc / total) * 100);
