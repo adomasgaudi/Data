@@ -10,6 +10,7 @@ import {
 } from "./format";
 import { hashHueHex, cellBgColor, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
+import { loadJsonObject, saveJson } from "./storage";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
@@ -629,7 +630,7 @@ const metaOverrides: MetaOverrides = (() => {
   }
 })();
 function saveMetaOverrides() {
-  try { localStorage.setItem(META_OVERRIDE_KEY, JSON.stringify(metaOverrides)); } catch { /* storage may be unavailable */ }
+  saveJson(META_OVERRIDE_KEY, metaOverrides);
 }
 /** The owner's full override LIST for one dimension, or null if none is set. */
 function metaSet(kind: MetaKind, name: string): string[] | null {
@@ -704,8 +705,7 @@ function setNoteNotComparable(exerciseName: string, note: string, on: boolean): 
   const k = `${exerciseName}|${normNote(note)}`;
   if (on) notComparableNotes.add(k);
   else notComparableNotes.delete(k);
-  try { localStorage.setItem(NOT_COMPARABLE_KEY, JSON.stringify([...notComparableNotes])); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(NOT_COMPARABLE_KEY, [...notComparableNotes]);
 }
 
 // ---- Exercise code overrides (the short codes shown in lists/tooltips) ----
@@ -732,8 +732,7 @@ function codeFor(exerciseName: string): string {
 }
 
 function saveCodeOverrides() {
-  try { localStorage.setItem(CODE_STORE_KEY, JSON.stringify(codeOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(CODE_STORE_KEY, codeOverrides);
 }
 
 /** Set or clear (blank → back to default) one exercise's code override. */
@@ -776,8 +775,7 @@ function shortFor(exerciseName: string): string {
 }
 
 function saveShortOverrides() {
-  try { localStorage.setItem(SHORT_STORE_KEY, JSON.stringify(shortOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(SHORT_STORE_KEY, shortOverrides);
 }
 
 /** Set or clear (blank or equal to the default code → back to default) one
@@ -912,8 +910,7 @@ function noteHasVecOverride(exerciseName: string, note: string): boolean {
   return Object.keys(noteVecOverride(exerciseName, note)).length > 0;
 }
 function saveVariationVecs(): void {
-  try { localStorage.setItem(VARIATION_VEC_KEY, JSON.stringify(variationVecOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(VARIATION_VEC_KEY, variationVecOverrides);
 }
 function setNoteVecDim(exerciseName: string, note: string, dim: string, level: string): void {
   const k = variationKey(exerciseName, note);
@@ -942,8 +939,7 @@ const noteRenames: Record<string, string> = (() => {
   }
 })();
 function saveNoteRenames(): void {
-  try { localStorage.setItem(NOTE_RENAME_KEY, JSON.stringify(noteRenames)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(NOTE_RENAME_KEY, noteRenames);
 }
 /** The owner's readable label for a note, or the note itself when unrenamed. */
 function displayNote(exerciseName: string, note: string): string {
@@ -964,10 +960,7 @@ function setNoteRename(exerciseName: string, originalNote: string, text: string)
 // owner can re-tune any of them here; overrides are keyed family→dim→level and
 // layered over the defaults by famLevels(), the single read point. Saved on device.
 const FAM_FACTORS_KEY = "colosseum.famFactors.v1";
-const famFactorOverrides: Record<string, Record<string, Record<string, number>>> = (() => {
-  try { const o = JSON.parse(localStorage.getItem(FAM_FACTORS_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
-  catch { return {}; }
-})();
+const famFactorOverrides = loadJsonObject<Record<string, Record<string, Record<string, number>>>>(FAM_FACTORS_KEY);
 /** A family dimension's levels with any owner factor overrides layered on (base
  * key order preserved, so the pad axis stays consistent). */
 // ---- Band assistance: ONE knob, measured in KILOGRAMS ----.
@@ -995,10 +988,7 @@ function bandAssistKg(family: string, level: string): number {
 // "" = explicitly no model. Saved on device + in the backup.
 const FAMILY_LABELS: Record<string, string> = { HSPU: "Handstand push-up", PUSHUP: "Push-up" };
 const EX_FAMILY_KEY = "colosseum.exerciseFamily.v1";
-const exerciseFamilyOverrides: Record<string, string> = (() => {
-  try { const o = JSON.parse(localStorage.getItem(EX_FAMILY_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
-  catch { return {}; }
-})();
+const exerciseFamilyOverrides = loadJsonObject<Record<string, string>>(EX_FAMILY_KEY);
 /** Which difficulty model a lift uses: the owner's assignment wins, else the
  * built-in name map. (Shadows the imported baseFamilyOf so every call honours it.) */
 function familyOf(exerciseName: string): string | null {
@@ -1010,10 +1000,7 @@ function familyOf(exerciseName: string): string | null {
 // (WORLD_RECORDS_SEED) layered with owner edits; each is a kg at a reference
 // bodyweight, scaled allometrically to the viewed athlete's bodyweight. Saved.
 const WR_KEY = "colosseum.worldRecords.v1";
-const worldRecordOverrides: Record<string, { m?: WrRef; f?: WrRef }> = (() => {
-  try { const o = JSON.parse(localStorage.getItem(WR_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
-  catch { return {}; }
-})();
+const worldRecordOverrides = loadJsonObject<Record<string, { m?: WrRef; f?: WrRef }>>(WR_KEY);
 /** The record reference for an exercise + sex (owner edit wins over the seed). */
 function worldRecordRef(exerciseName: string, sex: "m" | "f"): WrRef | null {
   return worldRecordOverrides[exerciseName]?.[sex] ?? WORLD_RECORDS_SEED[exerciseName]?.[sex] ?? null;
@@ -1071,14 +1058,14 @@ function setWorldRecord(exerciseName: string, sex: "m" | "f", kg: number | null,
   if (kg === null || !Number.isFinite(kg) || kg <= 0 || bw === null || !Number.isFinite(bw) || bw <= 0) delete cur[sex];
   else cur[sex] = { kg: Math.round(kg * 10) / 10, bw: Math.round(bw * 10) / 10 };
   if (!cur.m && !cur.f) delete worldRecordOverrides[exerciseName];
-  try { localStorage.setItem(WR_KEY, JSON.stringify(worldRecordOverrides)); } catch { /* ignore */ }
+  saveJson(WR_KEY, worldRecordOverrides);
 }
 
 function setExerciseFamily(exerciseName: string, key: string): void {
   // Clear the override when it matches the built-in default; else store the choice.
   if (key === (baseFamilyOf(exerciseName) ?? "")) delete exerciseFamilyOverrides[exerciseName];
   else exerciseFamilyOverrides[exerciseName] = key;
-  try { localStorage.setItem(EX_FAMILY_KEY, JSON.stringify(exerciseFamilyOverrides)); } catch { /* ignore */ }
+  saveJson(EX_FAMILY_KEY, exerciseFamilyOverrides);
 }
 
 const leanCm = (key: string): number => { const n = parseInt(key, 10); return Number.isFinite(n) ? n : 0; };
@@ -1118,7 +1105,7 @@ function leanFactorFor(family: string, support: string, level: string): number {
   return famLevels(family, `lean:${support}`)[level] ?? famLevels(family, "lean")[level] ?? 1;
 }
 function saveFamFactors(): void {
-  try { localStorage.setItem(FAM_FACTORS_KEY, JSON.stringify(famFactorOverrides)); } catch { /* ignore */ }
+  saveJson(FAM_FACTORS_KEY, famFactorOverrides);
 }
 /** Set or clear (value === default → clear) one model factor. */
 function setFamFactor(family: string, dim: string, level: string, value: number): void {
@@ -1206,8 +1193,7 @@ function noteAssistKg(r: SetRecord): number {
   return bandAssistKg(fam, vec.band ?? "none");
 }
 function saveVariationScales(): void {
-  try { localStorage.setItem(VARIATION_SCALE_KEY, JSON.stringify(variationScaleOverrides)); }
-  catch { /* storage may be unavailable — edits still apply this session */ }
+  saveJson(VARIATION_SCALE_KEY, variationScaleOverrides);
 }
 function setVariationScale(exerciseName: string, note: string, value: number): void {
   variationScaleOverrides[variationKey(exerciseName, note)] = value;
@@ -1239,7 +1225,7 @@ const athleteOverrides: Record<string, AthleteStatsOverride> = (() => {
   }
 })();
 function saveAthleteOverrides() {
-  try { localStorage.setItem(ATHLETE_STATS_KEY, JSON.stringify(athleteOverrides)); } catch { /* storage may be unavailable */ }
+  saveJson(ATHLETE_STATS_KEY, athleteOverrides);
 }
 
 /** Effective profile for an athlete: the ATHLETES baseline with any on-device
@@ -1429,7 +1415,7 @@ const deletedSets: Set<string> = (() => {
   catch { return new Set(); }
 })();
 function saveDeletedSets(): void {
-  try { localStorage.setItem(DELETED_SETS_KEY, JSON.stringify([...deletedSets])); } catch { /* ignore */ }
+  saveJson(DELETED_SETS_KEY, [...deletedSets]);
 }
 function setDeleted(id: string, on: boolean): void {
   if (on) deletedSets.add(id); else deletedSets.delete(id);
@@ -1447,12 +1433,12 @@ const notComparableSets: Set<string> = (() => {
 })();
 function setSetNotComparable(id: string, on: boolean): void {
   if (on) notComparableSets.add(id); else notComparableSets.delete(id);
-  try { localStorage.setItem(NC_SETS_KEY, JSON.stringify([...notComparableSets])); } catch { /* ignore */ }
+  saveJson(NC_SETS_KEY, [...notComparableSets]);
 }
 function setRpe(id: string, v: string | null) {
   if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
   else rpeGrades[id] = v;
-  try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(rpeGrades)); } catch { /* ignore */ }
+  saveJson(RPE_STORE_KEY, rpeGrades);
 }
 
 // ---- Per-set edits (weight / reps / bodyweight / scaling factor) -------------
@@ -1469,7 +1455,7 @@ let setOverrides: Record<string, SetOverride> = (() => {
   } catch { return {}; }
 })();
 const saveSetOverrides = () => {
-  try { localStorage.setItem(SET_OVR_KEY, JSON.stringify(setOverrides)); } catch { /* ignore */ }
+  saveJson(SET_OVR_KEY, setOverrides);
   clearMachineCache(); // per-set edits change a set's e1RM → mixed verdicts may shift
 };
 
@@ -1492,7 +1478,7 @@ function machineModeFor(exerciseName: string): MachineMode {
 function setMachineMode(exerciseName: string, mode: MachineMode) {
   if (mode === "cable") delete machineModes[exerciseName];
   else machineModes[exerciseName] = mode;
-  try { localStorage.setItem(MACHINE_MODE_KEY, JSON.stringify(machineModes)); } catch { /* ignore */ }
+  saveJson(MACHINE_MODE_KEY, machineModes);
   clearMachineCache();
 }
 // Mixed-mode verdicts are memoised per (athlete|exercise); cleared when anything
@@ -1631,11 +1617,8 @@ function computeRecordBase(r: SetRecord): SetRecord {
 // computation.
 const GROUP_MEMBER_KEY = "colosseum.groupMembers.v1";
 type GroupMemberOverride = { add?: Record<string, number>; remove?: string[] };
-const groupMemberOverrides: Record<string, GroupMemberOverride> = (() => {
-  try { const o = JSON.parse(localStorage.getItem(GROUP_MEMBER_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
-  catch { return {}; }
-})();
-function saveGroupMembers() { try { localStorage.setItem(GROUP_MEMBER_KEY, JSON.stringify(groupMemberOverrides)); } catch { /* ignore */ } }
+const groupMemberOverrides = loadJsonObject<Record<string, GroupMemberOverride>>(GROUP_MEMBER_KEY);
+function saveGroupMembers() { saveJson(GROUP_MEMBER_KEY, groupMemberOverrides); }
 /** A registry group with the owner's member add/remove overrides applied. */
 function withMemberOverrides(g: RegistryTag): RegistryTag {
   const ov = groupMemberOverrides[g.id];
