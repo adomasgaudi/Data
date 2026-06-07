@@ -97,6 +97,22 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   best available evidence. Prefer primary/peer-reviewed or large, independent
   sources over blog hearsay; say so honestly when the best available evidence is
   only `Low`/`Very Low`.
+- **`#senior` — reason as the architect, not a junior.** When the owner tags
+  `#senior` (and by default for any non-trivial change), work on the *system*, not
+  the line. For any bug/feature: name the **single source of truth** for each piece
+  of state and make everything else a read-only **projection/derived view** (never a
+  second copy that can drift — that's the "derived-state" stale-UI bug class);
+  protect **system invariants**; fix the **root cause, not the symptom**; and prefer
+  the smallest change that removes a whole *class* of bugs. Question unnecessary
+  layers rather than defend them, be pragmatic over dogmatic, and answer
+  RECOMMENDATION → TRADEOFFS → CONSTRAINTS. Trivial wiring/connection work may be
+  named and handed off as "junior" tasks — but lead with the architecture decision.
+- **`#research` — research best practices inline, AI-first.** When the owner tags
+  `#research` (or the question turns on best practice), go find real sources *as part
+  of answering* and grade them (see the GRADE rule), but **re-judge every practice for
+  an AI editor in a no-build/no-team, single-file context** (see the human→AI rule):
+  prefer solutions fit for an AI-maintained app over advice written for large human
+  teams and heavy tooling, and say which human assumptions don't apply here.
 - **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
   the header bar.
 
