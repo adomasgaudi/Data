@@ -1,0 +1,23 @@
+{
+  "id": "YYYY-MM-DD-short-name",
+  "title": "Human-readable name (e.g. Legacy compare panel)",
+  "movedOn": "YYYY-MM-DD",
+  "movedAtSp": 0,
+  "expiresAfterSp": 100,
+  "removedInCommit": "<git sha of the removal commit>",
+  "reason": "Why it was retired and why it's worth keeping a while.",
+  "origin": ["src/main.ts renderCompare() ~L3500-3620", "index.html #sub-compare"],
+  "provided": ["renderCompare", "compareChipsHtml"],
+  "dependencies": {
+    "imports": ["aggregate.leaderboard", "format.fmt"],
+    "sharedState": ["compareView", "compareChipQuery"],
+    "domHandles": ["els.compareChart", "els.compareSearch"]
+  },
+  "wiredInto": ["init() handler data-act='compare'", "switchTopTab('compare')"],
+  "restoreSteps": [
+    "Copy the files back into src/.",
+    "Re-add the els.* DOM handles and the index.html markup.",
+    "Re-wire the call sites listed in wiredInto.",
+    "npm run typecheck && npm test && npm run build."
+  ]
+}
