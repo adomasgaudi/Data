@@ -1366,7 +1366,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
 /* The day's record (best) estimated 1RM for a lift, shown after its sets. */
-.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; margin-left: auto; }
+.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; }
 /* COLOUR RULE (other half): editable values you type are blue. */
 .set-edit-input, .set-edit-note, .ex-var-input, .ex-var-rename, .fac-input { color: var(--accent); font-weight: 600; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
