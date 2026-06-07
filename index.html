@@ -1197,11 +1197,12 @@
           <h2>🧪 Testing</h2>
           <button type="button" id="testingClose" class="overlay-close" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Scroll test. The chart below is a <b>brand-new graph built from scratch</b> — pure static SVG, with <b>zero touch/pointer handlers</b> and no <code>touch-action</code> at all, so it cannot grab your finger. Put your finger ON the chart and swipe up/down: the page should scroll from the ⬆ TOP marker to the ⬇ BOTTOM marker straight through the chart. Tell me whether it scrolls.</p>
-        <div class="test-marker">⬆ TOP — scroll DOWN from here, finger on the chart</div>
+        <p class="muted">Scroll test. The chart is a <b>from-scratch SCATTER plot</b> (pure inline SVG — no charting library, no touch/pointer handlers). It's sandwiched between two screen-tall gaps. Put your finger anywhere — including ON the chart — and swipe: you should be able to reach BOTH the ⬆ TOP and ⬇ BOTTOM markers. Tell me which markers you can reach.</p>
+        <div class="test-marker">⬆ TOP marker</div>
+        <div class="test-spacer">↑ this is the top gap — swipe DOWN to reach the chart ↑</div>
         <div id="testGraphChart" class="wa-graph-chart"></div>
-        <div class="test-spacer muted">↕ keep swiping vertically with your finger on the chart above ↕</div>
-        <div class="test-marker">⬇ BOTTOM — if you reached here by swiping over the chart, scroll WORKS</div>
+        <div class="test-spacer">↓ keep swiping (finger on the chart too) to reach the bottom ↓</div>
+        <div class="test-marker">⬇ BOTTOM marker — reached this? then scrolling WORKS</div>
       </div>
     </div>
 

@@ -90,13 +90,10 @@ export function renderTestGraph(container: HTMLElement, series: TestSeries[]): v
     parts.push(`<text x="${x.toFixed(1)}" y="${VB_H - PAD.bottom + 18}" text-anchor="middle" fill="currentColor" fill-opacity="0.7">${fmtDate(xv)}</text>`);
   }
 
-  // Series: a polyline + dots each.
+  // Series: SCATTER plot — one dot per logged set, no connecting lines.
   for (const s of drawable) {
-    const pts = [...s.points].sort((a, b) => a.x - b.x);
-    const d = pts.map((p) => `${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(" ");
-    parts.push(`<polyline points="${d}" fill="none" stroke="${esc(s.color)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`);
-    for (const p of pts) {
-      parts.push(`<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="2.6" fill="${esc(s.color)}"/>`);
+    for (const p of s.points) {
+      parts.push(`<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="4" fill="${esc(s.color)}" fill-opacity="0.7" stroke="${esc(s.color)}" stroke-width="1"/>`);
     }
   }
   parts.push(`</svg>`);
