@@ -129,6 +129,7 @@ const LT: Record<string, string> = {
   "your estimate — edit on the Athletes page": "tavo įvertis — keisk Sportininkų puslapyje",
   // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
+  "Tags": "Žymos",
   "Filter by exercise…": "Filtruoti pagal pratimą…",
   "No workouts.": "Treniruočių nėra.",
   "No workouts for that filter.": "Nėra treniruočių pagal šį filtrą.",

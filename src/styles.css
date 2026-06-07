@@ -1604,7 +1604,7 @@ sup.wr-bw { font-size: 0.85em; }
 /* Workout-history title + Display options on one line, tight against the list. */
 .wo-head-row { display: flex; align-items: center; gap: 0.5rem 0.9rem; flex-wrap: wrap; margin: 0 0 0.4rem; }
 .wo-head-row #workoutsTitle { margin: 0; }
-.wo-head-row .wo-controls-fold { margin: 0; }
+.wo-head-row .wo-controls-fold { margin: 0 0 0 auto; } /* cog sits in the right corner */
 #workoutsPanel .data-table { margin-top: 0; }
 .wo-controls-fold { position: relative; margin-bottom: 0.6rem; }
 .wo-controls-sum {
@@ -1613,7 +1613,7 @@ sup.wr-bw { font-size: 0.85em; }
   border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px;
 }
 .wo-controls-sum::-webkit-details-marker { display: none; }
-.wo-controls-sum::after { content: " ▾"; color: var(--muted); }
+.wo-controls-sum::after { content: ""; } /* clean cog — no caret */
 .wo-controls-fold[open] .wo-controls-sum { border-color: var(--accent); background: var(--accent-soft); }
 .wo-controls-fold[open] .wo-controls {
   position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;

@@ -256,6 +256,7 @@ const els = {
   workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
+  aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
   addAthlete: $<HTMLSelectElement>("addAthlete"),
   addExercise: $<HTMLInputElement>("addExercise"),
@@ -2654,6 +2655,8 @@ let workoutShowMode: "exercises" | "groups" = "exercises"; // exercise view vs g
 // Whether the inline "+ set" quick-add buttons show in the Workouts list. Off by
 // default (cleaner list); toggled + remembered via the "+ set buttons" button.
 let showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+// The "alone" day tags in the workout history are HIDDEN by default; "Tags" shows them.
+let showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 let showRestDays = false; // "Rest" toggle: include rest days in the day view
 // Short labels for the compact "Alone filter" DJ button (cycles through these).
 const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
@@ -2673,6 +2676,8 @@ function syncWorkoutToggles(): void {
   els.restToggle.setAttribute("aria-pressed", showRestDays ? "true" : "false");
   els.addSetsToggle.classList.toggle("is-active", showAddSets);
   els.addSetsToggle.setAttribute("aria-pressed", showAddSets ? "true" : "false");
+  els.aloneTagToggle.classList.toggle("is-active", showAloneTags);
+  els.aloneTagToggle.setAttribute("aria-pressed", showAloneTags ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
 }
@@ -5210,9 +5215,11 @@ function renderWorkoutsPage() {
           .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
       const tagged = aloneTags.has(aloneKey(g.date));
-      const tagBtn =
-        `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
-        `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`;
+      // Day tags ("alone") are hidden unless the "Tags" display option is on.
+      const tagBtn = showAloneTags
+        ? `<button type="button" class="wo-alone${tagged ? " is-on" : ""}" data-alone="${escapeHtml(g.date)}" ` +
+          `title="${tagged ? "Trained alone — tap to untag" : "Tag as trained alone"}">alone</button>`
+        : "";
       // "+ exercise" adds a brand-new exercise to this session (shown with the
       // rest of the quick-add UI).
       const addExBtn = showAddSets
@@ -8124,6 +8131,11 @@ async function init() {
   els.addSetsToggle.addEventListener("click", () => {
     showAddSets = !showAddSets;
     localStorage.setItem("colosseum.showAddSets", showAddSets ? "1" : "0");
+    renderWorkoutsPage();
+  });
+  els.aloneTagToggle.addEventListener("click", () => {
+    showAloneTags = !showAloneTags;
+    localStorage.setItem("colosseum.showAloneTags", showAloneTags ? "1" : "0");
     renderWorkoutsPage();
   });
   els.aloneFilter.addEventListener("click", () => {
