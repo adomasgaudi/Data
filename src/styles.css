@@ -272,6 +272,11 @@ body.on-s-anl .appfoot { display: none; }
 .md-doc table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; font-size: 0.9rem; }
 .md-doc th, .md-doc td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
 .md-doc th { background: var(--panel); }
+
+/* Tasks & roadmap viewer (reuses the changelog cl-* / cv-chip styling). */
+.bk-item.bk-done > summary { opacity: 0.55; }
+.bk-count { font-size: 0.8em; margin-left: auto; }
+.bk-item .cl-bodynote { white-space: pre-wrap; }
 .overlay-close {
   background: none; border: 1px solid var(--line); color: var(--muted);
   border-radius: 8px; width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;

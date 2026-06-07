@@ -2019,10 +2019,89 @@ function mdToHtml(md: string): string {
   return out.join("\n");
 }
 
-/** Open the tasks/roadmap overlay from Settings (rendered from the docs/ md). */
+/** A parsed task item from a docs/ backlog/roadmap file. */
+interface TaskItem { sev: string; code: string; part: string; sp: number; detail: string; done: boolean; }
+interface TaskSection { heading: string; prose: string[]; items: TaskItem[]; }
+interface TaskDoc { title: string; intro: string[]; sections: TaskSection[]; }
+
+// "- 🟠 **CODE** [part] (SP:n) — detail" — severity, part and SP are all optional.
+const TASK_ITEM_RE = /^-\s*(✅|🔴|🟠|🟢)?\s*\*\*(.+?)\*\*\s*(?:\[(.+?)\])?\s*(?:\(SP:([\d.]+)\))?\s*[—-]\s*([\s\S]*)$/;
+
+/** Parse a cleanup-backlog / roadmap markdown file into doc → sections → items. */
+function parseTaskDoc(md: string): TaskDoc {
+  const doc: TaskDoc = { title: "", intro: [], sections: [] };
+  let sec: TaskSection | null = null;
+  let item: TaskItem | null = null;
+  for (const raw of md.replace(/\r\n/g, "\n").split("\n")) {
+    const t = raw.trim();
+    const h1 = /^#\s+(.*)$/.exec(t);
+    if (h1) { doc.title = h1[1]!; item = null; continue; }
+    const h2 = /^##\s+(.*)$/.exec(t);
+    if (h2) { sec = { heading: h2[1]!, prose: [], items: [] }; doc.sections.push(sec); item = null; continue; }
+    const m = sec ? TASK_ITEM_RE.exec(t) : null;
+    if (m && sec) {
+      item = { sev: m[1] ?? "", code: m[2]!, part: m[3] ?? "", sp: m[4] ? parseFloat(m[4]) : 0, detail: m[5]!.trim(), done: m[1] === "✅" };
+      sec.items.push(item);
+      continue;
+    }
+    if (t === "") { item = null; continue; }
+    // A wrapped continuation line of the current item, else section/intro prose.
+    if (item && !t.startsWith("- ") && !t.startsWith("#")) { item.detail += " " + t; continue; }
+    if (sec) sec.prose.push(t); else doc.intro.push(t);
+  }
+  return doc;
+}
+
+/** Render a parsed task doc as a Version-history-style nested <details> tree:
+ * doc (open) → sections → items, each item carrying part + SP chips. Reuses the
+ * changelog (`cl-*`, `cv-chip`) styling so it matches Version history. */
+function renderTaskDoc(doc: TaskDoc): string {
+  const fmt = (n: number) => String(Math.round(n * 10) / 10);
+  const sumSp = (its: TaskItem[]) => its.reduce((a, it) => a + it.sp, 0);
+  const docSp = doc.sections.reduce((a, s) => a + sumSp(s.items), 0);
+  const short = (s: string) => (s.length > 90 ? s.slice(0, 88) + "…" : s);
+  const itemRow = (it: TaskItem) =>
+    `<details class="cl-row cl-d2 bk-item${it.done ? " bk-done" : ""}">` +
+    `<summary class="cl-sum">` +
+    `<span class="cl-ver">${it.sev ? it.sev + " " : ""}${escapeHtml(it.code)}</span>` +
+    `<span class="cl-mid"><span class="cl-title">${escapeHtml(short(it.detail))}</span></span>` +
+    (it.part ? `<span class="cv-chip"><span class="cv-name">${escapeHtml(it.part)}</span></span>` : "") +
+    (it.sp ? `<span class="cl-sp" title="${fmt(it.sp)} story points">SP ${fmt(it.sp)}</span>` : "") +
+    `<span class="cl-caret">▾</span>` +
+    `</summary>` +
+    `<div class="cl-body"><p class="cl-bodynote">${escapeHtml(it.detail)}</p></div>` +
+    `</details>`;
+  const sectionRow = (s: TaskSection) => {
+    const sp = sumSp(s.items);
+    const prose = s.prose.length ? mdToHtml(s.prose.join("\n")) : "";
+    return `<details class="cl-row cl-d1">` +
+      `<summary class="cl-sum">` +
+      `<span class="cl-mid"><span class="cl-title">${escapeHtml(s.heading)}</span></span>` +
+      (s.items.length ? `<span class="bk-count muted">${s.items.length}</span>` : "") +
+      (sp ? `<span class="cl-sp" title="${fmt(sp)} story points">SP ${fmt(sp)}</span>` : "") +
+      `<span class="cl-caret">▾</span>` +
+      `</summary>` +
+      `<div class="cl-body">${prose}${s.items.map(itemRow).join("")}</div>` +
+      `</details>`;
+  };
+  const intro = doc.intro.length ? `<p class="muted">${escapeHtml(doc.intro.join(" "))}</p>` : "";
+  return `<details class="cl-row cl-d0" open>` +
+    `<summary class="cl-sum">` +
+    `<span class="cl-mid"><span class="cl-title">${escapeHtml(doc.title)}</span></span>` +
+    `<span class="cl-sp" title="${fmt(docSp)} story points">SP ${fmt(docSp)}</span>` +
+    `<span class="cl-caret">▾</span>` +
+    `</summary>` +
+    `<div class="cl-body">${intro}${doc.sections.map(sectionRow).join("")}</div>` +
+    `</details>`;
+}
+
+/** Open the tasks/roadmap overlay from Settings (parsed from the docs/ md). */
 function openBacklog() {
   setSettingsOpen(false);
-  els.backlog.innerHTML = mdToHtml(cleanupBacklogMd) + "\n<hr>\n" + mdToHtml(roadmapMd);
+  els.backlog.innerHTML =
+    `<p class="cl-summary muted">Cleanup backlog + roadmap, straight from the docs/ files. SP are AI estimates — open Version history to see what an SP actually buys.</p>` +
+    renderTaskDoc(parseTaskDoc(cleanupBacklogMd)) +
+    renderTaskDoc(parseTaskDoc(roadmapMd));
   els.backlogPage.hidden = false;
 }
 
