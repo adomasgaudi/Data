@@ -82,6 +82,8 @@ export interface SvgChartConfig {
   /** Stretch the right y-axis by this factor so its series sit low/squished
    * (e.g. 3 = bars only fill the bottom third). Default 1. */
   rightHeadroom?: number;
+  /** Bar width multiplier (default 1) — fattens/slims every bar. */
+  barGirth?: number;
   yUnit?: string;
   rightUnit?: string;
   xKind?: "time" | "linear";
@@ -481,7 +483,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // giant bar that paints a whole shaded band across the chart (the old
         // Infinity-step fallback used the entire plot width).
         const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / 24;
-        const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14)); // ~30% thinner than a step, capped
+        const girth = cfg.barGirth ?? 1; // user width knob (grouped lanes get thin, so allow fattening)
+        const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14) * girth); // ~30% thinner than a step, capped, ×girth
         // Baseline = the (possibly shifted) zero line. Both the baseline and each
         // bar's top are clamped to the plot, so a vertically-shifted series stays
         // rigid and just clips at the floor/ceiling instead of stretching.

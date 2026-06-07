@@ -32,6 +32,9 @@ export interface GraphConfig {
    * dates as the 1RM lines, so a horizontal shift is meaningless — this vertical
    * offset lifts the bars off the strength line so the two don't overlap. */
   volumeYShift: number;
+  /** Bar girth multiplier (≈0.5–3, default 1): scales the width of every bar so the
+   * user can fatten thin grouped bars or slim them down. */
+  barGirth: number;
   /** Render-time hook (NOT a persisted setting): a per-set reps-in-reserve
    * resolver the app injects so the scatter can size each dot by effort — higher
    * RIR (easier) draws smaller, the hardest stay biggest. Absent = uniform dots. */
@@ -49,4 +52,5 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   opacity: 0.6,
   rightHeadroom: 1,
   volumeYShift: 0,
+  barGirth: 1,
 };
