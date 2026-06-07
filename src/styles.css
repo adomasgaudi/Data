@@ -122,6 +122,8 @@ body {
 .title-row { display: flex; align-items: center; gap: 0.45rem; min-width: 0; width: 100%; flex-wrap: nowrap; }
 .title-ver { font-size: 0.6rem; line-height: 1.1; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
 .title-ver .version { color: var(--gold); font-weight: 600; }
+.title-ver .version .ver-major { font-size: 1.5em; color: var(--gold); font-weight: 700; }
+.title-ver .version .ver-patch { font-size: 0.85em; color: var(--muted); font-weight: 600; }
 .topbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
 /* The title doubles as a Back-to-home button. */
 .brand-title { cursor: pointer; display: inline-flex; align-items: center; }

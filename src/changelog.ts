@@ -67,6 +67,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.7.1", title: "Version number reads big-gold base + small-grey patch", sp: 0.5, note: "Tiny header polish. The version in the top bar now splits its weight: the b.MAJOR.MINOR base (e.g. “b.2.7”) shows bigger and golden, while the trailing patch part (“.1”) shows smaller and grey — so at a glance you see which release line you're on, with the fine-grained patch as a quiet suffix." },
   { version: "b.2.7.0", title: "Version 2.7 milestone", sp: 1, note: "Rolled the version up to b.2.7 and opened the new chapter, and named the now-complete b.2.6 chapter. The version history, the SP totals and the over-time graph all rebuild themselves from the release list." },
   { version: "b.2.6.84", title: "Deleted a dead, unused data file + its generator", sp: 0.5, note: "Housekeeping only — nothing changed on the site. Removed an old story-points history data file and the script that generated it; nothing in the app used them anymore (the version-history graph is built from the changelog directly). Lighter repo, one less stale thing to confuse future edits." },
   { version: "b.2.6.83", title: "Removed the outdated Compare graph", sp: 1, note: "Removed the separate “Compare graph” section that appeared under the workout history when 2+ lifts were picked — it was outdated and redundant: the main graph at the top already overlays all your selected lifts on one chart. One less thing to scroll past." },

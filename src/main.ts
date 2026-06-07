@@ -7434,7 +7434,12 @@ async function init() {
   // clickable — it opens the Version history page.
   const verEl = document.querySelector<HTMLElement>(".version");
   if (verEl) {
-    verEl.textContent = CURRENT_VERSION;
+    // Split the version so the b.MAJOR.MINOR base reads big & golden and the
+    // trailing patch (+ tweak) segment reads small & grey — a glanceable hierarchy.
+    const vm = CURRENT_VERSION.match(/^(b\.\d+\.\d+)(.*)$/);
+    verEl.innerHTML = vm
+      ? `<span class="ver-major">${escapeHtml(vm[1] ?? "")}</span><span class="ver-patch">${escapeHtml(vm[2] ?? "")}</span>`
+      : escapeHtml(CURRENT_VERSION);
     verEl.title = "Version history";
     verEl.style.cursor = "pointer";
     verEl.addEventListener("click", openChangelog);
