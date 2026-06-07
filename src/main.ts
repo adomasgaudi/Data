@@ -6336,29 +6336,28 @@ function modelFactorsEditorHtml(name: string): string {
 /** Editable world record (per sex) for an exercise — a kg at a reference
  * bodyweight; scaled to each athlete's bodyweight for the "% of world record". */
 function worldRecordEditorHtml(name: string): string {
-  const row = (sex: "m" | "f", lbl: string) => {
-    const explicit = worldRecordRef(name, sex);
-    const ref = explicit ?? guessWorldRecord(name, sex); // guess fills an unset record
+  // The record scaled to the currently-selected athlete (their bodyweight).
+  const prof = athProfile(els.athlete.value);
+  const bw = prof?.weight ?? null;
+  const row = (rowSex: "m" | "f", lbl: string) => {
+    const explicit = worldRecordRef(name, rowSex);
+    const ref = explicit ?? guessWorldRecord(name, rowSex); // guess fills an unset record
     const est = !explicit && !!ref;
     const inp = (field: "kg" | "bw", val: number | undefined, ph: string) =>
-      `<label class="fac-cell"><span class="fac-lvl">${field === "kg" ? "kg" : "@ bw"}</span>` +
-      `<input class="wr-input${est ? " is-guess" : ""}" type="number" step="1" min="0" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${sex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
-    const tag = est ? ` <span class="wr-est" title="Estimated from your logged bests — edit either box to lock in your own value">≈ est.</span>` : "";
-    return `<div class="fac-dim"><div class="fac-dim-h">${lbl}${tag}</div><div class="fac-cells">${inp("kg", ref?.kg, "record kg")}${inp("bw", ref?.bw, "at kg bw")}</div></div>`;
+      `<label class="wr-field"><span class="wr-flbl">${field === "kg" ? "kg" : "@bw"}</span>` +
+      `<input class="wr-input${est ? " is-guess" : ""}" type="number" step="1" min="0" inputmode="numeric" value="${val ?? ""}" data-wr-ex="${escapeHtml(name)}" data-wr-sex="${rowSex}" data-wr-f="${field}" placeholder="${ph}" /></label>`;
+    const tag = est ? `<span class="wr-est" title="Estimated from your logged bests — edit either box to lock in your own value">≈est</span>` : "";
+    // Show the calculation: this record scaled to the current athlete's bodyweight.
+    const scaled = worldRecordKg(name, rowSex, bw);
+    const calc = scaled != null && bw != null
+      ? `<span class="wr-calc" title="This ${lbl.toLowerCase()} record scaled to ${escapeHtml(athleteLabel())}'s ${fmt(bw)} kg bodyweight">→ <b>${fmt(scaled)}</b> kg @ ${fmt(bw)}</span>`
+      : "";
+    return `<div class="wr-row"><span class="wr-sex">${lbl}</span>${inp("kg", ref?.kg, "kg")}${inp("bw", ref?.bw, "bw")}${tag}${calc}</div>`;
   };
-  // The record scaled to the currently-selected athlete (their sex + bodyweight).
-  const prof = athProfile(els.athlete.value);
-  const sex: "m" | "f" = prof?.sex === "f" ? "f" : "m";
-  const bw = prof?.weight ?? null;
-  const scaled = worldRecordKg(name, sex, bw);
-  const isEst = !worldRecordRef(name, sex) && scaled != null;
-  const forLine = scaled
-    ? `<div class="ex-group-why"><strong>For ${escapeHtml(athleteLabel())}</strong> (${sex === "f" ? "♀" : "♂"}${bw ? `, ${fmt(bw)} kg` : ""}): world record ${isEst ? "≈ <i>(est.)</i> " : "≈ "}<b>${fmt(scaled)} kg</b> at this bodyweight.</div>`
-    : "";
   return (
-    `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🏆 World record</summary>` +
-    `<div class="ex-group-why muted">Natty record — total 1RM (bodyweight + plate), per sex. Scaled to each athlete's bodyweight. <b>No value set?</b> We estimate one from your logged bests (shown faint, marked “≈ est.”) so the “% of world record” still works — edit either box to lock in your own.</div>` +
-    forLine + row("m", "men") + row("f", "women") +
+    `<details class="ex-group ex-model-fold wr-editor"><summary class="ex-group-hd">🏆 World record</summary>` +
+    `<div class="ex-group-why muted">Natty record — total 1RM (bodyweight + plate), per sex, with the bodyweight it was set at. Scaled to each athlete's bodyweight (the gold “→” value). <b>No value set?</b> We estimate one from your logged bests (faint, “≈est”) so the “% of world record” still works — edit either box to lock in your own.</div>` +
+    row("m", "Men") + row("f", "Women") +
     `</details>`
   );
 }

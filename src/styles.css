@@ -2034,9 +2034,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-coeff-range > input { width: 4rem; }
 .ex-coeff-dash { color: var(--muted); }
 .ex-coeff-avg { font-size: 0.78rem; font-weight: 700; color: var(--gold, #b8902f); margin-left: 4px; }
-/* World-record guesstimate: faint inputs + an "est." tag until the owner sets it. */
+/* World-record editor: per-sex row of compact bordered fields + the gold
+   scaled-to-this-athlete calculation. Guess values show faint with an "≈est" tag. */
+.wr-editor .wr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; margin: 0.4rem 0; }
+.wr-sex { flex: 0 0 3rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; }
+.wr-field { display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; background: var(--bg); }
+.wr-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.wr-flbl { color: var(--muted); font-size: 0.72rem; }
+.wr-input { width: 3.4rem; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--accent); border: none; background: none; text-align: right; padding: 1px 0; }
+.wr-input::-webkit-outer-spin-button, .wr-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.wr-input:focus { outline: none; }
 .wr-input.is-guess { color: var(--muted); font-style: italic; }
-.wr-est { font-size: 0.7rem; font-weight: 600; color: var(--muted); }
+.wr-est { font-size: 0.68rem; font-weight: 700; color: var(--muted); }
+.wr-calc { font-size: 0.76rem; font-weight: 700; color: var(--gold, #b8902f); margin-left: auto; }
+.wr-calc b { font-weight: 800; }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
   cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
