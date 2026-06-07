@@ -67,6 +67,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.7.0", title: "Version 2.7 milestone", sp: 1, note: "Rolled the version up to b.2.7 and opened the new chapter, and named the now-complete b.2.6 chapter. The version history, the SP totals and the over-time graph all rebuild themselves from the release list." },
   { version: "b.2.6.84", title: "Deleted a dead, unused data file + its generator", sp: 0.5, note: "Housekeeping only — nothing changed on the site. Removed an old story-points history data file and the script that generated it; nothing in the app used them anymore (the version-history graph is built from the changelog directly). Lighter repo, one less stale thing to confuse future edits." },
   { version: "b.2.6.83", title: "Removed the outdated Compare graph", sp: 1, note: "Removed the separate “Compare graph” section that appeared under the workout history when 2+ lifts were picked — it was outdated and redundant: the main graph at the top already overlays all your selected lifts on one chart. One less thing to scroll past." },
   { version: "b.2.6.82", title: "New rule for AIs: #co-work (don't collide, always deploy)", sp: 0.5, note: "Process only — nothing changed on the site. Added a standing instruction for when several AIs edit the project at once: sync often and keep changes small so they don't step on each other, but ALWAYS deploy finished, verified work immediately — never leave it sitting on a side branch where you'd never see it. Keeps concurrent work from either clashing or getting lost." },
@@ -606,7 +607,8 @@ function chapterKey(version: string): string {
 /** Descriptive chapter titles (the version "eras"). Unmapped chapters fall back
  *  to their biggest release's title, so new minors still read well. */
 const CHAPTER_TITLES: Record<string, string> = {
-  "b.2.6": "Version 2.6 milestone",
+  "b.2.7": "Version 2.7 milestone",
+  "b.2.6": "Disciplines, world records & Lithuanian",
   "b.2.5": "Pose models & difficulty multipliers",
   "b.2.4": "Handstand modelling & analysis polish",
   "b.2.3": "Unified Analysis & timeline heatmap",
