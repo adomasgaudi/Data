@@ -468,12 +468,15 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // bars: from baseline (0, clamped into plot) to the value. Each bar is as
         // wide as the data's own x-step (e.g. one week) so bars butt up against
         // each other like a histogram, rather than thin fixed-width sticks.
-        const inView = s.points.filter((p) => xPix(p.x) >= M.l && xPix(p.x) <= W - M.r);
         const xs = s.points.map((p) => p.x).sort((a, b) => a - b);
         let step = Infinity;
         for (let i = 1; i < xs.length; i++) { const d = xs[i]! - xs[i - 1]!; if (d > 0 && d < step) step = d; }
-        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / Math.max(1, inView.length);
-        const bw = Math.max(2, stepPx * 0.63); // ~30% thinner than a full week
+        // Bar width tracks the data's own x-step (histogram look). Cap it so a sparse
+        // series — a single bucket, or a few far-apart ones — can't blow up into one
+        // giant bar that paints a whole shaded band across the chart (the old
+        // Infinity-step fallback used the entire plot width).
+        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / 24;
+        const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14)); // ~30% thinner than a step, capped
         // Baseline = the (possibly shifted) zero line. Both the baseline and each
         // bar's top are clamped to the plot, so a vertically-shifted series stays
         // rigid and just clips at the floor/ceiling instead of stretching.
