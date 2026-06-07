@@ -48,7 +48,7 @@ Shortcuts the owner may type in any session. **A new command is added here as ON
   1. **Don't camp on hot files:** `git fetch` + merge the canonical branch OFTEN, keep changes small and focused, prefer files/areas the others aren't in, and RE-derive the version + task code at commit (rule 8) so numbers never clash.
   2. **Always close the loop — DEPLOY:** the moment a piece is done and verified (typecheck + tests + build), merge it into the canonical branch and push so it goes LIVE — never leave verified work sitting un-merged on a side branch, because the owner only sees the live site and will forget a stranded branch.
   3. **Expect churn:** many small clean merges beat one big risky one; on a conflict, take theirs in their area and yours in yours.
-- **`#prune <mistake-type>`** — pick ONE class of mistake/anti-pattern and hunt it across the WHOLE codebase over MANY turns, fixing instances from outright bugs up to working-but-improvable code that should follow a better principle; go breadth-first, present a severity-tagged find-list (rule 11) each turn, fix one safe batch per turn, and keep going across prompts until that class is gone.
+- **`#prune <mistake-type>`** — pick ONE class of mistake/anti-pattern and hunt it across the WHOLE codebase over MANY turns, fixing instances from outright bugs up to working-but-improvable code that should follow a better principle; go breadth-first, present a severity-tagged find-list (rule 11) each turn, fix one safe batch per turn, and keep going across prompts until that class is gone. **ALWAYS record every prune idea/finding (done + still-open, with codes) in `docs/cleanup-backlog.md`** so the sweep survives across sessions and every AI can see, think about and pick them up.
 
 ## Rules to remember
 

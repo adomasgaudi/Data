@@ -84,3 +84,14 @@ shed via CLN-1; duplicate graphs handled via CUT-2.
 
 ## ✅ Done (no need to pick)
 - Extracted + tested pure helpers from `main.ts`: `format`, `colorScale`, `html`, `storage`, `frequencyTier`, `defaultLeanTable`. Duplicate JSDoc removed. (REF rounds, on the cleanup branch.)
+
+## 🧹 Prune sweeps (single-class hunts — see CLAUDE.md `#prune`)
+Each `#prune` run records its finds here so the sweep survives across sessions.
+
+### SNAP — "synchronous heavy re-render / imperative scroll on tap" (rule 17)
+The root cause of both UI lag and scroll/close jank: interaction handlers rebuild whole view subtrees (`renderAll` / `renderWorkoutAnalysis`, ~31 `renderAll()` sites) synchronously, then patch scroll/open-state back. Tool: `deferRender(fn)` / `scheduleRender(after?)` — rAF-coalesced, scroll-preserving (in `main.ts`).
+- ✅ **SNAP-1** [Perf] — `scheduleRender()` + `deferRender()` helpers; 11 last-statement `renderAll()` handler calls coalesced; `scrollIntoView` center→nearest ×3. (b.2.7.2)
+- ✅ **SNAP-2** [Index] — Index taxonomy/group pills (Disciplina / muscle group / combinable / ratio): were `renderAll(); reopenIndexDetail()` sync with no scroll keep → now `scheduleRender(() => reopenIndexDetail())`; fixes "lag + scrolls down a lot".
+- ✅ **SNAP-3** [Analysis] — Pratimai selector chips (remove ✕ / toggle / select-all / clear): deferred `renderWorkoutAnalysis` + instant pill feedback (remove the pill / toggle `is-on` on tap).
+- 🟠 **SNAP-4** [Perf] — ~20 remaining `renderAll()` sites whose following code reads the just-built DOM stay synchronous; convert case-by-case to `scheduleRender(after)` over future turns.
+- 🟢 **SNAP-5** [Perf] — root fix: targeted/incremental rendering so the DOM isn't destroyed (scroll/focus/open-state survive for free, nothing heavy to defer). Big; overlaps ARCH-1.

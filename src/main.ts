@@ -7286,16 +7286,27 @@ function renderAll() {
 // one frame behind. Use this where renderAll() is the LAST action of a handler;
 // keep the synchronous renderAll() where following code reads the just-built DOM
 // (e.g. reopenIndexDetail / renderExerciseDetail right after).
-let renderScheduled = false;
-function scheduleRender(): void {
-  if (renderScheduled) return;
-  renderScheduled = true;
+let pendingRender: (() => void) | null = null;
+let renderRafQueued = false;
+/** Defer ANY heavy render to the next frame, coalesced + scroll-preserving. The
+ * latest fn queued in a frame is the one that runs (one render per frame), and the
+ * scroll position is captured now and restored after — so a tap repaints its own
+ * control first and a rebuild won't make the page jump. */
+function deferRender(fn: () => void): void {
+  pendingRender = fn;
+  if (renderRafQueued) return;
+  renderRafQueued = true;
   const y = window.scrollY;
   requestAnimationFrame(() => {
-    renderScheduled = false;
-    renderAll();
-    if (window.scrollY !== y) window.scrollTo(0, y);
+    renderRafQueued = false;
+    const f = pendingRender; pendingRender = null;
+    f?.();
+    window.scrollTo(0, y);
+    requestAnimationFrame(() => window.scrollTo(0, y)); // charts can reflow async
   });
+}
+function scheduleRender(after?: () => void): void {
+  deferRender(() => { renderAll(); after?.(); });
 }
 
 /**
@@ -7892,8 +7903,7 @@ async function init() {
       const mn = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-min")?.value);
       const mx = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-max")?.value);
       setCoeffRange(ex, mn, mx);
-      renderAll();
-      reopenIndexDetail(ex);
+      scheduleRender(() => reopenIndexDetail(ex));
       return;
     }
     // Difficulty-model assignment: attach (or clear) a model so the lift gets the
@@ -7908,9 +7918,9 @@ async function init() {
     const ex = chip?.dataset.metaEx, kind = chip?.dataset.metaKind, val = chip?.dataset.metaVal;
     if (!ex || !kind || val === undefined) return;
     toggleMetaOverride(kind as MetaKind, ex, val);
-    renderAll(); // grouping/colours depend on it; rebuilds the Index list
-    reopenIndexDetail(ex); // keep the inline panel open (it may have moved groups)
-    refreshPoseViz();
+    // grouping/colours depend on it (rebuilds the Index list); defer so the pill
+    // feels instant and the page keeps its scroll, then reopen the inline panel.
+    scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
   });
   // Combinable / Comparable membership chips — toggle this lift in/out of a group.
   document.addEventListener("click", (e) => {
@@ -7918,9 +7928,7 @@ async function init() {
     const ex = chip?.dataset.grpEx, gid = chip?.dataset.grpId;
     if (!ex || !gid) return;
     toggleGroupMembership(gid, ex);
-    renderAll();
-    reopenIndexDetail(ex);
-    refreshPoseViz();
+    scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
   });
   // The comparable-ratio input next to a selected comparable group chip.
   document.addEventListener("change", (e) => {
@@ -7929,8 +7937,7 @@ async function init() {
     if (!ex || !gid) return;
     const v = parseFloat(inp.value);
     if (Number.isFinite(v)) setGroupRatio(gid, ex, v);
-    renderAll();
-    reopenIndexDetail(ex);
+    scheduleRender(() => reopenIndexDetail(ex));
   });
   // Per-note "not comparable" toggle in the variation review (click).
   document.addEventListener("click", (e) => {
@@ -10597,15 +10604,19 @@ function setupWorkoutAnalysis(): void {
     // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
     const selPill = t.closest<HTMLElement>(".wa-sel-pill");
     if (selPill?.dataset.waselpill) {
+      selPill.remove(); // instant feedback; the deferred re-render rebuilds the rest
       waSelected = waSelected.filter((x) => x !== selPill.dataset.waselpill);
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     const chip = t.closest<HTMLElement>(".wa-ex-chip");
     if (chip?.dataset.waex) {
       const n = chip.dataset.waex;
       waSelected = waSelected.includes(n) ? waSelected.filter((x) => x !== n) : [...waSelected, n];
-      renderWorkoutAnalysis();
+      const on = waSelected.includes(n);
+      chip.classList.toggle("is-on", on); // instant feedback before the heavy re-render
+      chip.setAttribute("aria-pressed", String(on));
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     if (t.closest("#waSelectAll")) {
@@ -10613,12 +10624,12 @@ function setupWorkoutAnalysis(): void {
       // identity-includes / filters / search). History + calendar then show them
       // all; the graph still caps at the first 10 (see renderWaGraph).
       waSelected = waChipList().map((e) => e.name);
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     if (t.closest("#waClear")) {
       waSelected = [];
-      renderWorkoutAnalysis();
+      deferRender(renderWorkoutAnalysis);
       return;
     }
     // Create a user exercise def (dissolved variant / combined / comparison group).
