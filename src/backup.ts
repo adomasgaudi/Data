@@ -28,6 +28,44 @@ export const BACKUP_SKIP: ReadonlySet<string> = new Set<string>([
   "colosseum.__autobackupOn.v1", // whether live auto-backup is armed
 ]);
 
+/**
+ * Keys safe to wipe on "Clear cache": session / identity, filter & view state, and
+ * display preferences — each either regenerates on use or falls back to a default.
+ *
+ * This is a deliberate ALLOWLIST: ONLY keys listed here are ever cleared. Every
+ * hand-authored data key (sets, body stats, renames, overrides, world records,
+ * difficulty tuning, …) — and any future key not added here — is KEPT, so a cache
+ * clear can structurally never lose your work. Mirrors the KEEP vs CACHE tiers in
+ * docs/cache-log.md.
+ */
+export const CACHE_KEYS: ReadonlySet<string> = new Set<string>([
+  // session / identity (regenerates on login / use)
+  "colosseum.viewUser.v1", "colosseum.lastAthlete.v1", "colosseum.viewMode", "colosseum.signedIn",
+  // filter / view state (regenerates)
+  "colosseum.activeSet.cutoff.v1", "colosseum.activeSet.include.v1",
+  "colosseum.activeSet.exclude.v1", "colosseum.activeSet.solo.v1",
+  // display preferences (reset to defaults — not data)
+  "colosseum.lang", "colosseum.theme", "colosseum.nameMode.v1", "colosseum.simplifiedView",
+  "colosseum.bcShowRange", "colosseum.timeCompact.v1", "colosseum.hardSetsOnly",
+  "colosseum.showAddSets", "colosseum.showAloneRings", "colosseum.showAloneTags",
+  "colosseum.machineMode.v1", "colosseum.decayStrength", "colosseum.legsAll", "colosseum.hiddenCats",
+]);
+
+/**
+ * Remove ONLY the disposable {@link CACHE_KEYS} from `storage`; every authored-data
+ * key (and anything not on the allowlist) is left untouched. Returns how many keys
+ * were cleared. Pure (works against any StorageLike) so it's unit-testable.
+ */
+export function clearCache(storage: StorageLike): number {
+  const toRemove: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const k = storage.key(i);
+    if (k && CACHE_KEYS.has(k)) toRemove.push(k);
+  }
+  for (const k of toRemove) storage.removeItem(k);
+  return toRemove.length;
+}
+
 /** The minimal slice of the Web Storage API this module needs. */
 export interface StorageLike {
   readonly length: number;

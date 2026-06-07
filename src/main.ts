@@ -134,7 +134,7 @@ import {
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
-import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename } from "./backup";
+import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename, clearCache } from "./backup";
 import defaultCache from "./data/defaultCache.json";
 
 // Bundled "global cache" — the owner's baseline setup (overrides, world records,
@@ -185,6 +185,7 @@ const els = {
   health: $("health"),
   backupNowBtn: $<HTMLButtonElement>("backupNowBtn"),
   restoreBtn: $<HTMLButtonElement>("restoreBtn"),
+  clearCacheBtn: $<HTMLButtonElement>("clearCacheBtn"),
   restoreFile: $<HTMLInputElement>("restoreFile"),
   autoBackupToggle: $<HTMLInputElement>("autoBackupToggle"),
   autoBackupHint: $("autoBackupHint"),
@@ -9447,6 +9448,13 @@ async function setupBackup() {
   installBackupHook();
   els.backupNowBtn.addEventListener("click", downloadBackup);
   els.restoreBtn.addEventListener("click", () => els.restoreFile.click());
+  // Clear ONLY the disposable cache tier (settings/filters/session). Authored data
+  // is structurally excluded by the allowlist in backup.ts, so it can't be lost.
+  els.clearCacheBtn.addEventListener("click", () => {
+    if (!window.confirm("Clear the cache? This resets settings, filters and who you're signed in as. Your hand-logged sets, body stats, renames and overrides are kept. The page will reload.")) return;
+    clearCache(localStorage);
+    location.reload();
+  });
   els.restoreFile.addEventListener("change", () => {
     const f = els.restoreFile.files?.[0];
     if (f) void restoreFromFile(f);

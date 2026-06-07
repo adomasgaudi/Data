@@ -6,6 +6,7 @@ import {
   mergeStoredValue,
   backupToText,
   backupFilename,
+  clearCache,
   type StorageLike,
 } from "./backup";
 
@@ -177,5 +178,42 @@ describe("applyBackup deep", () => {
 describe("backupFilename", () => {
   it("uses the date", () => {
     expect(backupFilename(new Date("2026-06-06T12:00:00Z"))).toBe("colosseum-backup-2026-06-06.json");
+  });
+});
+
+describe("clearCache", () => {
+  it("clears ONLY the disposable cache tier and keeps all authored data", () => {
+    const s = new FakeStorage();
+    // authored data — must survive
+    s.setItem("colosseum.manualSets.v1", JSON.stringify([{ id: "a", reps: 5 }]));
+    s.setItem("colosseum.athleteStats.v1", JSON.stringify({ a: 1 }));
+    s.setItem("colosseum.exerciseCodes.v1", JSON.stringify({ x: "X" }));
+    s.setItem("colosseum.worldRecords.v1", JSON.stringify({ x: 1 }));
+    // disposable cache — must go
+    s.setItem("colosseum.viewMode", "admin");
+    s.setItem("colosseum.signedIn", "1");
+    s.setItem("colosseum.activeSet.cutoff.v1", "S");
+    s.setItem("colosseum.nameMode.v1", "full");
+    s.setItem("colosseum.theme", "dark");
+
+    const n = clearCache(s);
+    expect(n).toBe(5);
+    const after = s.snapshot();
+    expect(after["colosseum.manualSets.v1"]).toBeDefined();
+    expect(after["colosseum.athleteStats.v1"]).toBeDefined();
+    expect(after["colosseum.exerciseCodes.v1"]).toBeDefined();
+    expect(after["colosseum.worldRecords.v1"]).toBeDefined();
+    expect(after["colosseum.viewMode"]).toBeUndefined();
+    expect(after["colosseum.signedIn"]).toBeUndefined();
+    expect(after["colosseum.activeSet.cutoff.v1"]).toBeUndefined();
+  });
+
+  it("keeps any UNLISTED key (fail-safe: unknown ≠ cache)", () => {
+    const s = new FakeStorage();
+    s.setItem("colosseum.somethingNew.v1", "keep me");
+    s.setItem("colosseum.theme", "dark");
+    clearCache(s);
+    expect(s.getItem("colosseum.somethingNew.v1")).toBe("keep me");
+    expect(s.getItem("colosseum.theme")).toBeNull();
   });
 });

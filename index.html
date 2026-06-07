@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.25</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.26</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -112,6 +112,10 @@
               </div>
               <label class="check"><input type="checkbox" id="autoBackupToggle" /> Auto-save a live backup file</label>
               <p class="settings-hint" id="autoBackupHint">When on, the site silently re-saves your backup file every time you change something. Pick the file once; it stays current after that.</p>
+              <div class="settings-row">
+                <button type="button" id="clearCacheBtn" class="settings-link">🧹 Clear cache (keep my data)</button>
+              </div>
+              <p class="settings-hint">Resets the throwaway stuff — settings, filters, who you're signed in as. Your hand-logged sets, body stats, renames and overrides are never touched.</p>
             </div>
           </details>
           <button type="button" id="modelBtn" class="settings-link">
