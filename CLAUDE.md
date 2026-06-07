@@ -113,6 +113,15 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   an AI editor in a no-build/no-team, single-file context** (see the human→AI rule):
   prefer solutions fit for an AI-maintained app over advice written for large human
   teams and heavy tooling, and say which human assumptions don't apply here.
+- **Always deploy after finishing a change (no need to ask).** The live site is
+  **GitHub Pages**, published by `.github/workflows/deploy.yml`, which runs on every
+  push to **`claude/strength-training-dashboard-SdAlT`** (the repo's default/deploy
+  branch) and on manual `workflow_dispatch`. So once work is committed on the working
+  branch, also **merge it into `claude/strength-training-dashboard-SdAlT` and push** —
+  that triggers the build (`npm run build`) + publish, and the live URL refreshes a
+  minute or two later. No manual build/upload. **Ignore `netlify.toml` — it's stale;
+  deployment is GitHub Pages, not Netlify.** This standing rule is the explicit
+  permission to push to the deploy branch for deploys.
 - **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
   the header bar.
 
