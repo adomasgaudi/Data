@@ -10243,11 +10243,10 @@ let waSelected: string[] = [];
 // One-time seed: the beginning ANL view is a real PRE-SELECTION of the top-10
 // tier-1 (Primary) lifts (so the pills show), not a special aggregate view.
 let analysisSeeded = false;
-/** The athlete's 10 most-trained Primary-tier lifts (the default analysis selection). */
-function defaultTopTierSelection(): string[] {
-  const counts = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
-  const tier1 = counts.filter((n) => tierFor(n) === "main");
-  return (tier1.length ? tier1 : counts).slice(0, 10);
+/** The default analysis selection: ALL of the athlete's logged lifts (most-trained
+ * first). The graph still caps at WA_GRAPH_MAX, so extras are listed, not drawn. */
+function defaultSelection(): string[] {
+  return exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
 }
 /** Max exercises plotted on the analysis graph at once — past this the SVG
  * redraw lags, so extra selections are listed but not drawn (see renderWaGraph). */
@@ -10481,9 +10480,9 @@ function refreshHistorySearch(): void {
 }
 
 function renderWorkoutAnalysis(): void {
-  // First time in: pre-select the top-10 tier-1 lifts so the view opens as a real
-  // selection (pills shown), not the implicit aggregate. Clearing later is allowed.
-  if (!analysisSeeded) { analysisSeeded = true; if (waSelected.length === 0) waSelected = defaultTopTierSelection(); }
+  // First time in: pre-select ALL of the athlete's lifts so the view opens as a
+  // real selection (pills shown), not the implicit aggregate. Clearing later is allowed.
+  if (!analysisSeeded) { analysisSeeded = true; if (waSelected.length === 0) waSelected = defaultSelection(); }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
   // The Workout-history section's collapsible summary doubles as its title, so it
