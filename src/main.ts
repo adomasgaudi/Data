@@ -10215,6 +10215,15 @@ function scheduleWaGraph(): void {
   if (waGraphRaf) return;
   waGraphRaf = requestAnimationFrame(() => { waGraphRaf = 0; renderWaGraph(); });
 }
+// A chart-ONLY re-plot, set up at the end of each renderWaGraph: re-runs the SVG
+// chart with the current config but does NOT rebuild the options menu — so a live
+// slider drag (Volume shift) updates the bars without yanking the slider mid-drag.
+let waReplotChart: (() => void) | null = null;
+let waChartRaf = 0;
+function scheduleWaChartOnly(): void {
+  if (waChartRaf) return;
+  waChartRaf = requestAnimationFrame(() => { waChartRaf = 0; waReplotChart?.(); });
+}
 
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
  * the reusable graph, rendered from the current selection. Light to re-render, so
@@ -10274,6 +10283,7 @@ function renderWaGraph(): void {
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
     `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
+    `<label class="wa-gcfg-f" title="Slide the Volume bars left/right along the time axis, relative to the 1RM and other lines — line volume up against the strength it produced. 0 = real dates.">Volume shift<span class="wa-shift-val"> ${c.volumeXShift > 0 ? "+" : ""}${c.volumeXShift}d</span><input class="wa-cfg" data-wacfg="volumeXShift" type="range" min="-60" max="60" step="1" value="${c.volumeXShift}" /></label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
     `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${S.waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
@@ -10306,18 +10316,24 @@ function renderWaGraph(): void {
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
-  const drawn = chartBox
-    ? renderAnalyticsGraph(chartBox, {
-        exercises: graphExercises,
-        records: athleteRecs,
-        metrics: drawMetricIds,
-        config: waGraphConfig,
-        codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
-        perBodyweight: S.waPerBodyweight,
-        bodyweight: athProfile(els.athlete.value)?.weight ?? null,
-        worldRecordKg: (ex) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
-      })
-    : 0;
+  const analyticsInput = {
+    exercises: graphExercises,
+    records: athleteRecs,
+    metrics: drawMetricIds,
+    config: waGraphConfig,
+    codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
+    perBodyweight: S.waPerBodyweight,
+    bodyweight: athProfile(els.athlete.value)?.weight ?? null,
+    worldRecordKg: (ex: string) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
+  };
+  const drawn = chartBox ? renderAnalyticsGraph(chartBox, analyticsInput) : 0;
+  // Re-plot just the chart with the live config (no menu rebuild) — used by the
+  // Volume-shift slider's live drag. Reads waGraphConfig at call time, so the
+  // current shift is picked up; finds the current chart element each call.
+  waReplotChart = () => {
+    const cb = document.getElementById("waGraphChart");
+    if (cb) renderAnalyticsGraph(cb, analyticsInput);
+  };
   // Relocate the chart's legend down into the bar below it so it sits beside Graph
   // options (the SVG engine keeps updating it in place wherever it lives in the DOM).
   const graphBar = box.querySelector(".wa-graph-bar");
@@ -10581,6 +10597,18 @@ function setupWorkoutAnalysis(): void {
     updateKbInset();
   }
   // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
+  // Live drag for the Volume-shift slider: update ONLY its own value label and
+  // re-plot just the chart as you drag (rule 17 — the tap/drag updates its own
+  // control instantly; no full menu rebuild that would yank the slider mid-drag).
+  panel.addEventListener("input", (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLInputElement>('.wa-cfg[data-wacfg="volumeXShift"]');
+    if (!el) return;
+    const v = Math.min(60, Math.max(-60, Math.round(Number(el.value) || 0)));
+    waGraphConfig.volumeXShift = v;
+    const lbl = el.parentElement?.querySelector<HTMLElement>(".wa-shift-val");
+    if (lbl) lbl.textContent = ` ${v > 0 ? "+" : ""}${v}d`;
+    scheduleWaChartOnly();
+  });
   panel.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
     const grp = target.closest<HTMLSelectElement>("#waGroupBy");
@@ -10610,6 +10638,7 @@ function setupWorkoutAnalysis(): void {
       else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
+      else if (key === "volumeXShift") waGraphConfig.volumeXShift = Math.min(60, Math.max(-60, Math.round(Number((el as HTMLInputElement).value) || 0)));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
       scheduleWaGraph();

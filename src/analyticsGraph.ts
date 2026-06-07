@@ -104,6 +104,13 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
       }
       if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
+      // Volume x-shift: slide ONLY the volume bars along the time axis relative to
+      // the other series, so you can line training volume up against the strength
+      // it later produced. Shift is in days (config.volumeXShift), bars only.
+      if ((m.id === "volume" || m.id === "volumeLoad") && input.config.volumeXShift) {
+        const dx = input.config.volumeXShift * 86_400_000;
+        pts = pts.map((p) => ({ ...p, x: p.x + dx }));
+      }
       // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
       // read as multiples of BW; the count metrics (right axis) are left alone.
       if (input.perBodyweight && input.bodyweight && input.bodyweight > 0 && m.axis !== "right") {

@@ -139,6 +139,7 @@ const LT: Record<string, string> = {
   // ---- Graph options ----
   "Opacity": "Permatomumas",
   "Right axis ↕": "Dešinė ašis ↕",
+  "Volume shift": "Tūrio poslinkis",
   // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
   "Tags": "Žymos",
