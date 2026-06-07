@@ -2557,7 +2557,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Collapsible major sections of the Analysis view. The <summary> is the section
    title, so the renderer-emitted inner .wa-section-title is hidden to avoid a
    double heading (the selector's ⚙ cog, a sibling of that title, stays). */
-.wa-fold { border-bottom: 1px solid var(--line); }
+.wa-fold { border-bottom: 1px solid var(--line); position: relative; }
 .wa-fold:last-of-type { border-bottom: none; }
 .wa-fold > summary.wa-fold-sum {
   cursor: pointer; list-style: none; user-select: none;
@@ -2569,14 +2569,24 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
 .wa-fold .wa-section-title { display: none; } /* the summary is the title now */
 /* A section's title is only needed when it's COLLAPSED — once open the content
-   speaks for itself, so the summary shrinks to a slim caret-only strip (still
-   tappable to fold it back up) and the title text is hidden. */
-.wa-fold[open] > .wa-fold-sum { padding: 0.35rem 0; font-size: 0; color: transparent; }
-.wa-fold[open] > .wa-fold-sum::before { font-size: 1.3rem; color: var(--accent); font-weight: 700; }
+   speaks for itself. Rather than leave a label-less caret sitting on its OWN full
+   line (wasted space — disclosure best practice keeps the toggle tight and the
+   content adjacent), the collapse caret floats into the section's top-right corner
+   (out of flow) so the content reclaims the line. It stays a clear, tappable
+   state-toggle (aria-expanded), just compact. */
+.wa-fold[open] > .wa-fold-sum {
+  position: absolute; top: 0; right: 0; z-index: 6;
+  width: auto; padding: 2px 4px; margin: 0; font-size: 0; line-height: 1; background: none;
+}
+.wa-fold[open] > .wa-fold-sum::before { width: auto; font-size: 1rem; color: var(--accent); opacity: 0.6; }
+.wa-fold[open] > .wa-fold-sum:hover::before { opacity: 1; }
 /* EXCEPTION: the Workout-history summary carries the selected exercise's name, so
-   keep it visible even when open — it's the page's "what am I looking at" title. */
-.wa-fold[open] > #waTableSummary { font-size: 0.95rem; color: var(--text); padding: 0.45rem 0; }
-.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; }
+   keep it a normal in-flow title row even when open — it's the "what am I looking
+   at" title (and hosts the ℹ info icon). */
+.wa-fold[open] > #waTableSummary {
+  position: static; font-size: 0.95rem; color: var(--text); padding: 0.45rem 0;
+}
+.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; opacity: 1; }
 
 /* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
 .wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }
