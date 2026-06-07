@@ -10179,6 +10179,9 @@ const waIncludeIdentities = new Set<ExerciseIdentity>(["original", "dissolved", 
 const waFilterValues: Partial<Record<ExerciseFilterDim, string[]>> = {};
 // Unified selector: live search text (TASK 43) and Group By dimension (TASK 45).
 let waSearchQuery = "";
+// Does the current Analysis search ALSO scope the workout history (chosen via the
+// search popup's "Find in history")? Off = the search only filters the picker.
+let searchFindHistory = false;
 // Index page live search: when set, the Index shows a flat list of matching lifts
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
@@ -10357,11 +10360,11 @@ function restoreAnalysisPanels(): void {
  * so a lift buried deep in history is findable from the ONE search bar. Expanded to
  * raw member names; a no-match query maps to a sentinel so the list reads empty. */
 function historyFilterWithSearch(base: string[]): string[] {
-  const q = waSearchQuery.trim().toLowerCase();
-  if (!q) return base;
-  const matching = exerciseCountsForUser(activeRecords(), els.athlete.value)
-    .map((e) => e.exerciseName)
-    .filter((n) => n.toLowerCase().includes(q) || codeFor(n).toLowerCase().includes(q));
+  // Only scopes the history when the owner chose "Find in history" in the search
+  // popup (otherwise a search just filters the picker). Matches EXACTLY the lifts
+  // the picker is showing for this query.
+  if (!searchFindHistory || !waSearchQuery.trim()) return base;
+  const matching = waChipListBase().map((e) => e.name);
   return matching.length ? expandToRawExercises(matching) : [" no-history-match"];
 }
 /** Recompute the history filter (mode base + search) — for the light keystroke
@@ -11154,6 +11157,53 @@ function hideCmdPalette(): void {
   if (pal) { pal.hidden = true; pal.innerHTML = ""; }
   cmdActiveIdx = 0;
 }
+/** The plain-text search popup (like the "." command palette): choose whether the
+ * query FILTERS the picker (default) or FINDS matching sets in the workout history,
+ * plus one-shot Select-all / Clear. Reuses #cmdPalette + the .cmd-opt styling. */
+function renderSearchPalette(value: string): void {
+  const pal = document.getElementById("cmdPalette");
+  if (!pal) return;
+  const q = value.trim();
+  if (!q) { hideCmdPalette(); return; }
+  const n = waChipListBase().length;
+  const opts = [
+    { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
+    { act: "find", label: "📜 Find in workout history", desc: "Show every matching set in the history below", on: searchFindHistory },
+    { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
+    { act: "clear", label: "✕ Clear search", desc: "", on: false },
+  ];
+  if (cmdActiveIdx >= opts.length) cmdActiveIdx = 0;
+  pal.hidden = false;
+  pal.innerHTML = opts
+    .map(
+      (o, i) =>
+        `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}${o.on ? " is-on" : ""}" data-searchact="${o.act}" role="option">` +
+        `<span class="cmd-opt-cmd">${escapeHtml(o.label)}</span><span class="cmd-opt-desc">${escapeHtml(o.desc)}</span></button>`,
+    )
+    .join("");
+}
+/** Render the right popup for the current bar text ("." → commands, else search). */
+function renderPaletteFor(value: string): void {
+  if (value.startsWith(".")) renderCmdPalette(value);
+  else renderSearchPalette(value);
+}
+/** Run a chosen search action, then full-refresh the Analysis view. */
+function runSearchAction(act: string): void {
+  const input = document.getElementById("cmdInput") as HTMLInputElement | null;
+  if (act === "filter") searchFindHistory = false;
+  else if (act === "find") searchFindHistory = true;
+  else if (act === "select") {
+    const add = waChipListBase().map((e) => e.name).filter((n) => !waSelected.includes(n));
+    if (add.length) waSelected = [...waSelected, ...add];
+  } else if (act === "clear") {
+    waSearchQuery = "";
+    searchFindHistory = false;
+    if (input) input.value = "";
+  }
+  hideCmdPalette();
+  if (act === "select" || act === "clear") input?.blur();
+  deferRender(renderWorkoutAnalysis); // picker + history + graph all reflect the choice
+}
 /** Run a command by its "/name", then reset the bar. */
 function runCommand(cmd: string): void {
   const spec = commandList().find((c) => c.cmd === cmd);
@@ -11171,43 +11221,54 @@ function setupCommandBar(): void {
   input.addEventListener("input", () => {
     const v = input.value;
     if (v.startsWith(".")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
-    hideCmdPalette();
     // On the Index page, plain text FINDS the lift in the Index (flat match list) —
-    // it doesn't throw you to the Analysis view.
+    // it doesn't throw you to the Analysis view, and shows no action popup.
     if (document.getElementById("tab-bwparts")?.hidden === false) {
+      hideCmdPalette();
       bwSearchQuery = v.trim();
       renderBwParts();
       return;
     }
-    // Anywhere else → filter the Analysis exercise selector chips.
+    // Analysis: the query live-filters the picker; a popup offers Filter / Find in
+    // history / Select / Clear (the history only scopes once you choose "Find").
     waSearchQuery = v;
+    if (!v.trim()) searchFindHistory = false;
+    cmdActiveIdx = 0;
+    renderSearchPalette(v);
     if (document.getElementById("tab-analysis")?.hidden !== false) {
       switchTopTab("analysis"); // builds the selector with the new query
       openSelectorFolds();
     } else {
       openSelectorFolds();
       renderWaChips(); // light update so the input keeps focus
-      // The ONE search bar also filters the workout HISTORY: surface matching lifts
-      // (even unselected, buried ones) without a full re-render that'd drop focus.
-      refreshHistorySearch();
-      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-      const ct = document.getElementById("waTableSummary");
-      if (ct) ct.textContent = waSearchQuery.trim()
-        ? `${athleteLabel()} — “${waSearchQuery.trim()}” in history`
-        : `${athleteLabel()} — ${waSelected.length ? "selected lifts" : "workouts"}`;
+      if (searchFindHistory) {
+        // In "find" mode, also re-scope the history live as you type.
+        refreshHistorySearch();
+        if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+        const ct = document.getElementById("waTableSummary");
+        if (ct) ct.textContent = waSearchQuery.trim()
+          ? `${athleteLabel()} — “${waSearchQuery.trim()}” in history`
+          : `${athleteLabel()} — ${waSelected.length ? "selected lifts" : "workouts"}`;
+      }
     }
   });
   input.addEventListener("keydown", (e) => {
     if (pal.hidden) return;
     const opts = Array.from(pal.querySelectorAll<HTMLElement>(".cmd-opt"));
-    if (e.key === "ArrowDown") { e.preventDefault(); cmdActiveIdx = Math.min(cmdActiveIdx + 1, opts.length - 1); renderCmdPalette(input.value); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); cmdActiveIdx = Math.max(cmdActiveIdx - 1, 0); renderCmdPalette(input.value); }
-    else if (e.key === "Enter") { e.preventDefault(); const active = opts[cmdActiveIdx] ?? opts[0]; if (active?.dataset.cmd) runCommand(active.dataset.cmd); }
+    if (e.key === "ArrowDown") { e.preventDefault(); cmdActiveIdx = Math.min(cmdActiveIdx + 1, opts.length - 1); renderPaletteFor(input.value); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); cmdActiveIdx = Math.max(cmdActiveIdx - 1, 0); renderPaletteFor(input.value); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      const active = opts[cmdActiveIdx] ?? opts[0];
+      if (active?.dataset.cmd) runCommand(active.dataset.cmd);
+      else if (active?.dataset.searchact) runSearchAction(active.dataset.searchact);
+    }
     else if (e.key === "Escape") { hideCmdPalette(); input.blur(); }
   });
   pal.addEventListener("click", (e) => {
     const opt = (e.target as HTMLElement).closest<HTMLElement>(".cmd-opt");
     if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
+    else if (opt?.dataset.searchact) runSearchAction(opt.dataset.searchact);
   });
   // Close the palette on a click anywhere outside the bar.
   document.addEventListener("click", (e) => {
@@ -11370,6 +11431,7 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest("#waSearchClear")) {
       waSearchQuery = "";
+      searchFindHistory = false;
       const cmd = document.getElementById("cmdInput") as HTMLInputElement | null;
       if (cmd) cmd.value = "";
       deferRender(renderWorkoutAnalysis);

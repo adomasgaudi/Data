@@ -384,6 +384,8 @@ main { padding-bottom: 5rem; }
   background: none; border: none; border-radius: 8px; padding: 9px 11px; cursor: pointer; font: inherit; color: var(--text);
 }
 .cmd-opt:hover, .cmd-opt.is-active { background: var(--accent-soft); }
+/* The currently-active search mode (Filter vs Find in history) gets an accent edge. */
+.cmd-opt.is-on { box-shadow: inset 3px 0 0 var(--accent); }
 .cmd-opt-cmd { font-weight: 700; color: var(--accent); font-size: 0.86rem; white-space: nowrap; }
 .cmd-opt-desc { font-size: 0.8rem; color: var(--muted); }
 .cmd-empty { padding: 0.6rem 0.7rem; font-size: 0.82rem; }
