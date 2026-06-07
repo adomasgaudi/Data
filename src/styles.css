@@ -259,6 +259,23 @@ body.on-s-anl .appfoot { display: none; }
 }
 .overlay-page[hidden] { display: none; }
 .overlay-inner { max-width: 760px; margin: 0 auto; }
+/* The exercise-settings overlay is a MODAL that floats on top of the Index page:
+   a dimmed backdrop (the all-exercises list shows through), with the settings in
+   a centred card — so it's clearly "this lift, inside the Index", not a full page. */
+.overlay-page.ex-modal {
+  background: rgba(10, 14, 24, 0.5); padding: 1.5rem 0.75rem 4rem;
+  display: flex; align-items: flex-start; justify-content: center;
+}
+.overlay-page.ex-modal[hidden] { display: none; } /* keep [hidden] winning over the flex above */
+.overlay-page.ex-modal .overlay-inner {
+  width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto; margin: 1.5rem auto 0;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); padding: 0 1.1rem 1.4rem;
+}
+.overlay-page.ex-modal .overlay-head {
+  position: sticky; top: 0; z-index: 1; background: var(--bg);
+  padding: 0.9rem 0 0.5rem; margin-bottom: 0.3rem;
+}
 .overlay-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; }
 .overlay-head h2 { margin: 0; }
 

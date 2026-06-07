@@ -79,7 +79,7 @@ file first, then it will understand requests like "put EXR-CMP into S-ANL" or
 - `IDX-MERGE` — the "Merged exercises" table (spelling merges).
 - `IDX-CREATE` — the "＋ Create variant / group" panel (dissolved variant / combined /
   comparison group). Moved here from the Analysis bar.
-- `IDX-CARD` — the **exercise settings card** (`#exInfoPage`, a floating overlay opened from a row / ℹ button, not an inline dropdown). Its parts:
+- `IDX-CARD` — the **exercise settings card** (`#exInfoPage`, a modal that floats on top of the Index list with a dimmed backdrop; opened from a row / ℹ button / Analysis "More info", which first scrolls the Index to that lift). Its parts:
   - `CARD-CODE` — Code input.
   - `CARD-SHORT` — Short-name input.
   - `CARD-DISC` — Discipline chips (multi-select).

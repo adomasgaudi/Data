@@ -2158,23 +2158,39 @@ function openBacklog() {
 // ---- Exercise "More info" — now an inline, expandable dropdown on the Index
 // page (no separate overlay). Each Index row expands to the same details +
 // note-variation difficulty editor; the helpers below keep open panels fresh. ----
-// The exercise inspector is a FLOATING overlay page (not an inline row that
-// pushes the table down) — so it's unmistakably "you're inside this exercise's
-// settings". One overlay at a time; `currentExInfo` is the exercise it shows.
+// The exercise inspector is a card that FLOATS on top of the Index page (dimmed
+// backdrop, the full list behind it) — not a full-screen page and not an inline
+// row that pushes the table down. So it's unmistakably "this one exercise's
+// settings, in the context of the Index". `currentExInfo` is the lift it shows.
 let currentExInfo: string | null = null;
-/** Open the exercise-settings overlay for `name` (or just refresh it if already
- * showing this lift), fill it from the single-source `exerciseInfoHtml`. */
+/** Open one exercise's settings: bring the Index (the all-exercises list) up as
+ * the backdrop, reveal + scroll to that lift's row, then float the settings card
+ * on top — filled from the single-source `exerciseInfoHtml`. */
 function openExerciseInfo(name: string): void {
   currentExInfo = name;
+  switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
+  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  if (row) {
+    openAncestorDetails(row); // its group + "Show hidden" sub-dropdown if filtered out
+    requestAnimationFrame(() => row.scrollIntoView({ behavior: "auto", block: "center" }));
+  }
   els.exInfoTitle.textContent = name;
   els.exInfoBody.innerHTML = exerciseInfoHtml(name);
   els.exInfoPage.hidden = false;
   refreshPoseViz();
-  els.exInfoPage.scrollTop = 0;
+  els.exInfoBody.parentElement?.scrollTo(0, 0); // reset the card's own scroll
 }
 function closeExerciseInfo(): void {
+  // Flash the row you were on so closing leaves your eye where you are in the list.
+  const name = currentExInfo;
   currentExInfo = null;
   els.exInfoPage.hidden = true;
+  if (!name) return;
+  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: "auto", block: "center" });
+  row.classList.add("wo-flash");
+  window.setTimeout(() => row.classList.remove("wo-flash"), 1200);
 }
 /** Re-render the open exercise-settings overlay (after an edit anywhere in it),
  * so it stays in sync without closing. No-op when the overlay is closed. */
@@ -5983,6 +5999,13 @@ function reopenIndexDetail(name: string): void {
   if (currentExInfo === name) refreshExerciseInfo();
 }
 
+/** Open every <details> ancestor of an element (so a row tucked inside the Index
+ * "Show hidden" sub-dropdown becomes visible, not just its group). */
+function openAncestorDetails(el: HTMLElement): void {
+  for (let p = el.parentElement; p; p = p.parentElement)
+    if (p instanceof HTMLDetailsElement) p.open = true;
+}
+
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
 function renderBwParts() {
   renderMergeList();
@@ -7603,6 +7626,8 @@ async function init() {
   // active-set force-in/out buttons live inside it, so handle them here too.
   els.exInfoClose.addEventListener("click", closeExerciseInfo);
   els.exInfoPage.addEventListener("click", (e) => {
+    // Click on the dimmed backdrop (outside the floating card) closes it.
+    if (e.target === els.exInfoPage) { closeExerciseInfo(); return; }
     const inc = (e.target as HTMLElement).closest<HTMLElement>("[data-asinclude]");
     if (inc?.dataset.asinclude) { toggleActiveOverride(inc.dataset.asinclude, "include"); return; }
     const exc = (e.target as HTMLElement).closest<HTMLElement>("[data-asexclude]");
