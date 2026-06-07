@@ -90,6 +90,7 @@ import {
   type GraphPermissions,
   type GraphLevel,
   GRAPH_LEVEL_LABEL,
+  MAX_GRAPH_LEVEL,
   ALL_GRAPH_METRIC_IDS,
   allowedMetricsFor,
   isMetricAllowed,
@@ -6660,6 +6661,12 @@ function graphPermsHtml(name: string): string {
     );
   }).join("");
   const count = allowedMetricsFor(graphPerms, name).size;
+  // The bulk button is itself a CYCLING toggle: each tap moves EVERY graph up one
+  // level together (no → experimental → confirmed → certain → no), driven off the
+  // lowest current level — so it scrolls all the graphs through the levels at once.
+  const minLvl = Math.min(...GRAPH_METRICS.map((m) => levelOf(graphPerms, name, m.id))) as GraphLevel;
+  const nextLvl = ((minLvl + 1) % (MAX_GRAPH_LEVEL + 1)) as GraphLevel;
+  const nextLabel = nextLvl === 0 ? "off" : GRAPH_LEVEL_LABEL[nextLvl];
   return (
     `<div class="ex-graphperms" id="graphPerms-${escapeHtml(name)}">` +
     `<div class="ex-gp-head"><span class="ex-info-lbl">Allowed graphs</span>` +
@@ -6667,7 +6674,7 @@ function graphPermsHtml(name: string): string {
     `<p class="ex-gp-hint muted">Tap to cycle: no → 1 experimental → 2 confirmed → 3 certain. Any level ≥ 1 shows the graph for this lift.</p>` +
     `<div class="ex-gp-chips">${chips}</div>` +
     `<div class="ex-gp-actions">` +
-    `<button type="button" class="settings-link gp-bulk" data-graphperm-all="${escapeHtml(name)}">All certain</button>` +
+    `<button type="button" class="settings-link gp-bulk" data-graphperm-cycle="${escapeHtml(name)}" title="Move every graph up one level together (no → experimental → confirmed → certain → no)">All → ${escapeHtml(nextLabel)}</button>` +
     `<button type="button" class="settings-link gp-bulk" data-graphperm-none="${escapeHtml(name)}">Block all</button>` +
     `</div></div>`
   );
@@ -7778,8 +7785,14 @@ async function init() {
       cycleGraphPerm(chip.dataset.graphpermEx, chip.dataset.graphpermId);
       return;
     }
-    const allBtn = t.closest<HTMLElement>("[data-graphperm-all]");
-    if (allBtn?.dataset.graphpermAll) { setGraphPermAll(allBtn.dataset.graphpermAll, 3); return; }
+    // Bulk "All →" cycles EVERY metric up one level together (off the lowest one).
+    const cycleAll = t.closest<HTMLElement>("[data-graphperm-cycle]");
+    if (cycleAll?.dataset.graphpermCycle) {
+      const nm = cycleAll.dataset.graphpermCycle;
+      const minLvl = Math.min(...GRAPH_METRICS.map((m) => levelOf(graphPerms, nm, m.id)));
+      setGraphPermAll(nm, ((minLvl + 1) % (MAX_GRAPH_LEVEL + 1)) as GraphLevel);
+      return;
+    }
     const noneBtn = t.closest<HTMLElement>("[data-graphperm-none]");
     if (noneBtn?.dataset.graphpermNone) { setGraphPermAll(noneBtn.dataset.graphpermNone, 0); return; }
     // Global "All graphs / Approved only" master toggle (in Graph options).
