@@ -22,6 +22,15 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 9. **No number clashes:** pick the task code (`CAT-n`) and version LAST, just before commit, as highest-in-history + 1; after any rebase, RE-derive both — never reuse a number already in the log.
 10. **No-code project — optimise code/docs for AI, NOT humans:** owner never reads code, only AIs touch it; favour what's easiest for an AI to parse/verify/change safely (small files, tests, machine-readable structure) over human conventions/readability. (Owner *chat* stays plain-language — rule 4.)
 
+## Commands the owner types (act on these even with no other context)
+
+Shortcuts the owner may type in any session. **A new command is added here as ONE line.**
+
+- **`#remember <rule>`** — persist `<rule>` durably, then commit + push, then confirm what you saved and where. Choose its home:
+  - a behaviour/preference the AI should follow → **ONE line in ⛔ HARD RULES above** (or under *Rules to remember* if it needs detail);
+  - something that must happen **automatically on an event, even with no AI watching** ("always / whenever / before / after …") → a **hook** in `.claude/settings.json` (`SessionStart` / `UserPromptSubmit` / `Stop`), not just prose;
+  - a large reference → its **own `.md` file**, linked from here.
+
 ## Rules to remember
 
 <!-- Add durable instructions here. Newest at the bottom is fine. -->
