@@ -47,6 +47,7 @@ export const CHANGELOG: Release[] = [
       "Onwards from here, b.2.x patches build on this foundation.",
     ],
     children: [
+      { version: "b.2.0.23", sp: 2, note: "Settings → Cleanup backlog: a new panel that shows the senior-level cleanup/refactor backlog (docs/tasks-5-level.md), rendered straight from the Markdown file so it never drifts from the doc." },
       { version: "b.2.0.22", sp: 0.5, note: "Sign-in is remembered: once you press “Sign in as admin” you skip the landing gate on every later visit (hidden before paint, no flash)." },
       { version: "b.2.0.21", sp: 0.5, note: "Decorative landing gate: a simple sign-in screen with one “Sign in as admin” button that reveals the app (no real auth)." },
       { version: "b.2.0.20", sp: 0.5, note: "Year heatmap heat colours re-scaled: 1 set light blue, 2–3 darker blue, 4–5 dark blue, 6–9 light gold, 10+ dark gold." },

@@ -9,6 +9,10 @@ import { mountGraphAdvanced } from "./graphAdvanced";
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { mountSvgChartLab } from "./svgChartLab";
 import { loadData, type LoadedData } from "./dataSource";
+// The cleanup backlog is authored as Markdown (docs/tasks-5-level.md) and shown
+// in Settings → Cleanup backlog. Importing it as raw text keeps that doc the
+// single source of truth — the panel can never drift from the file.
+import backlogMd from "../docs/tasks-5-level.md?raw";
 import { parseCsvRows } from "./csv";
 import {
   distinctExercises,
@@ -102,6 +106,10 @@ const els = {
   changelogPage: $("changelogPage"),
   changelogClose: $<HTMLButtonElement>("changelogClose"),
   changelog: $("changelog"),
+  backlogBtn: $<HTMLButtonElement>("backlogBtn"),
+  backlogPage: $("backlogPage"),
+  backlogClose: $<HTMLButtonElement>("backlogClose"),
+  backlog: $("backlog"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
   athleteProfile: $("athleteProfile"),
@@ -565,6 +573,66 @@ function openHealth() {
 function openChangelog() {
   setSettingsOpen(false);
   els.changelogPage.hidden = false;
+}
+
+/** Minimal Markdown → HTML for the cleanup-backlog doc. Supports just what that
+ * file uses: headings, **bold**, `code`, bullet lists, GitHub tables, `---`
+ * rules and paragraphs. Text is HTML-escaped first, so the doc can't inject. */
+function mdToHtml(md: string): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s: string) =>
+    esc(s)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, "<code>$1</code>");
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  let para: string[] = [];
+  let list: string[] = [];
+  const flushPara = () => {
+    if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; }
+  };
+  const flushList = () => {
+    if (list.length) {
+      out.push(`<ul>${list.map((l) => `<li>${inline(l)}</li>`).join("")}</ul>`);
+      list = [];
+    }
+  };
+  const cells = (row: string) =>
+    row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  let i = 0;
+  while (i < lines.length) {
+    const t = (lines[i] ?? "").trim();
+    // Table: a "| … |" row immediately followed by a "|---|---|" separator.
+    if (t.startsWith("|") && /^\|[\s:|-]+\|$/.test((lines[i + 1] ?? "").trim())) {
+      flushPara(); flushList();
+      const head = cells(t);
+      i += 2;
+      const body: string[][] = [];
+      while (i < lines.length && (lines[i] ?? "").trim().startsWith("|")) { body.push(cells((lines[i] ?? "").trim())); i++; }
+      out.push(
+        `<table><thead><tr>${head.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead>` +
+        `<tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+      );
+      continue;
+    }
+    if (t === "") { flushPara(); flushList(); i++; continue; }
+    if (/^---+$/.test(t)) { flushPara(); flushList(); out.push("<hr>"); i++; continue; }
+    const h = /^(#{1,6})\s+(.*)$/.exec(t);
+    if (h) { flushPara(); flushList(); const lvl = h[1]!.length; out.push(`<h${lvl}>${inline(h[2]!)}</h${lvl}>`); i++; continue; }
+    const li = /^[-*]\s+(.*)$/.exec(t);
+    if (li) { flushPara(); list.push(li[1]!); i++; continue; }
+    flushList(); para.push(t); i++;
+  }
+  flushPara(); flushList();
+  return out.join("\n");
+}
+
+/** Open the cleanup-backlog overlay from Settings (rendered from the Markdown). */
+function openBacklog() {
+  setSettingsOpen(false);
+  els.backlog.innerHTML = mdToHtml(backlogMd);
+  els.backlogPage.hidden = false;
 }
 
 /** Render the version-history list (newest first) into the overlay. Each release
@@ -3633,6 +3701,10 @@ async function init() {
   els.changelogBtn.addEventListener("click", openChangelog);
   els.changelogClose.addEventListener("click", () => {
     els.changelogPage.hidden = true;
+  });
+  els.backlogBtn.addEventListener("click", openBacklog);
+  els.backlogClose.addEventListener("click", () => {
+    els.backlogPage.hidden = true;
   });
 
   els.formula.addEventListener("change", renderAll);
