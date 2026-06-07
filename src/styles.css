@@ -302,6 +302,19 @@ body.on-s-anl .appfoot { display: none; }
   border-radius: 8px; width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
 }
 .overlay-close:hover { border-color: var(--accent); color: var(--accent); }
+/* ex-modal header: ← back at the left, lift title, then Index / Analysis jumps. */
+.overlay-back {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; width: 34px; height: 34px; font-size: 1.2rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
+}
+.overlay-back:hover { border-color: var(--accent); color: var(--accent); }
+.ex-info-nav { display: flex; gap: 0.35rem; flex: 0 0 auto; }
+.ex-info-navbtn {
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; padding: 0 0.6rem; height: 34px; font-size: 0.85rem; cursor: pointer; line-height: 1; white-space: nowrap;
+}
+.ex-info-navbtn:hover { border-color: var(--accent); color: var(--accent); }
+.overlay-head h2 { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The old top tab bar is retired in favour of the app-style bottom nav. The
    buttons stay in the DOM (they're the is-active source of truth switchTopTab
    reads/sets) but are never shown. */

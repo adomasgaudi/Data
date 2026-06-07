@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.30</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.31</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1191,8 +1191,12 @@
     <div id="exInfoPage" class="overlay-page ex-modal" hidden>
       <div class="overlay-inner">
         <div class="overlay-head">
+          <button type="button" id="exInfoBack" class="overlay-back" aria-label="Back" title="Back">←</button>
           <h2 id="exInfoTitle">Exercise settings</h2>
-          <button type="button" id="exInfoClose" class="overlay-close" aria-label="Close">✕</button>
+          <div class="ex-info-nav">
+            <button type="button" id="exInfoGotoIndex" class="ex-info-navbtn">Index</button>
+            <button type="button" id="exInfoGotoAnl" class="ex-info-navbtn">Analysis</button>
+          </div>
         </div>
         <div id="exInfoBody"></div>
       </div>

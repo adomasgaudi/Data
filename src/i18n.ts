@@ -74,6 +74,7 @@ const LT: Record<string, string> = {
   "The cleanup backlog and feature roadmap, shown straight from the docs/ files.": "Tvarkymo darbų sąrašas ir funkcijų planas, rodomi tiesiai iš docs/ failų.",
   "Language": "Kalba",
   "Back to Colosseum": "Atgal į Colosseum",
+  "Back": "Atgal",
   // ---- Quick view switcher (short toggle labels) ----
   "Admin": "Admin",
   "User": "Vart.",
