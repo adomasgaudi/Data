@@ -77,7 +77,7 @@ import { mountPoseDraw, type PoseDraw } from "./poseDraw";
 import { POSE_FRAMES } from "./poseFrames";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
-import { FILTER_DIMS, FILTER_DIM_LABELS, type ExerciseFilterDim } from "./exerciseFilter";
+import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
@@ -1815,24 +1815,44 @@ let activeExclude = new Set<string>(loadJsonArray(ACTIVE_EXCLUDE_KEY));
 // "Solo" = show ONLY these exercises app-wide (a group's "Only these" action). When
 // set it replaces the tier cutoff as the base; include/exclude still apply on top.
 let activeSolo: Set<string> | null = (() => { const a = loadJsonArray(ACTIVE_SOLO_KEY); return a.length ? new Set(a) : null; })();
+// App-wide TAXONOMY filters: a value-set per dimension (discipline, muscle, …).
+// They AND together (and with the tier cutoff) — OR within one dimension — so you
+// can keep e.g. only S-tier AND only calisthenics. Empty/absent dim = inactive.
+const ACTIVE_META_KEY = "colosseum.activeSet.meta.v1";
+let activeMetaFilters: Partial<Record<ExerciseFilterDim, string[]>> = (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem(ACTIVE_META_KEY) ?? "{}");
+    return o && typeof o === "object" ? (o as Partial<Record<ExerciseFilterDim, string[]>>) : {};
+  } catch { return {}; }
+})();
+// Which dimension's value pills are currently shown in the app-wide filter UI
+// (display-only; the active values across ALL dims still apply). Default first dim.
+let activeFilterDim: ExerciseFilterDim = "discipline";
+/** The taxonomy filters that are actually active (have ≥1 chosen value). */
+function activeMetaFilterList(): { dim: ExerciseFilterDim; values: string[] }[] {
+  return FILTER_DIMS.map((d) => ({ dim: d, values: activeMetaFilters[d] ?? [] })).filter((f) => f.values.length > 0);
+}
 /** The allowed-exercise set, or null when the filter is off. Rebuilt by refreshActiveSet(). */
 let activeSet: Set<string> | null = null;
 
 /** Recompute activeSet from the cutoff + overrides against the current data. Call
  * after data loads or any active-set control changes, then re-render. */
 function refreshActiveSet(): void {
-  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo) {
+  const metaFilters = activeMetaFilterList();
+  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo && metaFilters.length === 0) {
     activeSet = null; // filter fully off → no filtering at all
     return;
   }
   // Solo mode shows exactly its set as the base; otherwise the tier cutoff does.
-  const base = activeSolo
+  let base = activeSolo
     ? new Set(activeSolo)
     : buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
-  if (activeSolo) { // include/exclude still layer on top of a solo base
-    for (const n of activeInclude) base.add(n);
-    for (const n of activeExclude) base.delete(n);
-  }
+  // Taxonomy filters narrow the base further (AND across dimensions).
+  if (metaFilters.length) base = new Set(filterExercises([...base], metaFilters, waMeta));
+  // Manual overrides are the final word: force-in beats every filter, force-out
+  // beats everything. (Re-applied here so they also override the taxonomy filters.)
+  for (const n of activeInclude) base.add(n);
+  for (const n of activeExclude) base.delete(n);
   activeSet = base;
 }
 
@@ -1843,6 +1863,7 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_INCLUDE_KEY, JSON.stringify([...activeInclude]));
     localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
     localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
+    localStorage.setItem(ACTIVE_META_KEY, JSON.stringify(activeMetaFilters));
   } catch { /* storage may be unavailable */ }
 }
 
@@ -6071,6 +6092,16 @@ function renderMergeList() {
  * per-exercise include/exclude overrides get inline toggles in a later slice; for
  * now the cutoff is the lever, and any manual overrides are summarised + clearable.
  */
+/** Every distinct value a dimension takes across all logged exercises, sorted. */
+function distinctMetaValues(dim: ExerciseFilterDim): string[] {
+  const seen = new Set<string>();
+  for (const name of new Set(data.records.map((r) => r.exerciseName))) {
+    if (!name) continue;
+    for (const v of waMeta(name, dim)) if (v) seen.add(v);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
 function renderActiveSetBar(totalExercises: number): void {
   const active = activeSet ? activeSet.size : totalExercises;
   const opt = (val: string, label: string) =>
@@ -6083,12 +6114,37 @@ function renderActiveSetBar(totalExercises: number): void {
   const clear = overrides
     ? ` · <button type="button" class="as-clear" data-asclear="1">clear ${overrides} manual override${overrides === 1 ? "" : "s"}</button>`
     : "";
+  // ---- Combinable taxonomy filters (AND with the tier) ----
+  // A dimension picker chooses which value pills to show; the pills (OR within the
+  // dim) toggle that dimension's accepted values. All active dims AND together, so
+  // you can keep e.g. only S-tier AND only calisthenics.
+  const dimOpts = FILTER_DIMS
+    .map((d) => `<option value="${d}"${d === activeFilterDim ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`)
+    .join("");
+  const chosen = new Set(activeMetaFilters[activeFilterDim] ?? []);
+  const valuePills = distinctMetaValues(activeFilterDim)
+    .map((v) => `<button type="button" class="as-fpill${chosen.has(v) ? " is-on" : ""}" data-asfval="${escapeHtml(v)}" aria-pressed="${chosen.has(v)}">${escapeHtml(v)}</button>`)
+    .join("");
+  const pillsRow = valuePills
+    ? `<div class="as-fpills">${valuePills}</div>`
+    : `<div class="as-fpills muted as-fnone">no values</div>`;
+  // Active-filter summary chips (across every dimension), each removable.
+  const activeChips = activeMetaFilterList()
+    .flatMap((f) => f.values.map((v) =>
+      `<button type="button" class="as-fchip" data-asfclear-dim="${f.dim}" data-asfclear-val="${escapeHtml(v)}" title="Remove this filter">${escapeHtml(FILTER_DIM_LABELS[f.dim])}: ${escapeHtml(v)} ✕</button>`))
+    .join("");
+  const activeChipsRow = activeChips
+    ? `<div class="as-fchips">${activeChips}<button type="button" class="as-clear" data-asfclear-all="1">clear filters</button></div>`
+    : "";
   els.activeSetBar.innerHTML =
     `<label class="as-label">Show app-wide ` +
     `<select id="activeCutoff" class="subtle-select">${opt("none", "All exercises")}${tierOpts}</select>` +
     `</label> ${status}${clear}` +
+    `<div class="as-filter-row"><label class="as-label">Filter ` +
+    `<select id="activeFilterDim" class="subtle-select">${dimOpts}</select></label>${pillsRow}</div>` +
+    activeChipsRow +
     `<p class="as-hint muted">Restrict the whole app (every list, graph, leaderboard) to your most-trained lifts. ` +
-    `Pick a tier to hide rarer exercises; e.g. “S” keeps only the staples.</p>`;
+    `Pick a tier and/or any taxonomy filters — they combine (e.g. only “S” AND only calisthenics).</p>`;
 }
 
 /** Cutoff dropdown changed: save + re-render the whole app. */
@@ -6103,6 +6159,32 @@ function clearActiveOverrides(): void {
   activeInclude = new Set();
   activeExclude = new Set();
   activeSolo = null;
+  saveActiveSet();
+  scheduleRender();
+}
+
+/** Re-render just the app-wide active-set bar (used when only the displayed filter
+ * dimension changes — no app-wide data change). */
+function rerenderActiveSetBar(): void {
+  const total = new Set(data.records.map((r) => r.exerciseName).filter(Boolean)).size;
+  renderActiveSetBar(total);
+}
+
+/** Toggle one taxonomy value for a dimension in the app-wide filter (OR within the
+ * dim, AND across dims), then re-apply app-wide. */
+function toggleActiveMetaValue(dim: ExerciseFilterDim, value: string): void {
+  const cur = new Set(activeMetaFilters[dim] ?? []);
+  if (cur.has(value)) cur.delete(value);
+  else cur.add(value);
+  if (cur.size) activeMetaFilters[dim] = [...cur];
+  else delete activeMetaFilters[dim];
+  saveActiveSet();
+  scheduleRender();
+}
+
+/** Clear every app-wide taxonomy filter (keeps the tier cutoff + overrides). */
+function clearActiveMetaFilters(): void {
+  activeMetaFilters = {};
   saveActiveSet();
   scheduleRender();
 }
@@ -8649,10 +8731,25 @@ async function init() {
   // App-wide active-set controls (Index): tier cutoff dropdown + clear-overrides.
   els.activeSetBar.addEventListener("change", (e) => {
     const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeCutoff");
-    if (sel) onActiveCutoffChange(sel.value);
+    if (sel) { onActiveCutoffChange(sel.value); return; }
+    // Taxonomy-filter dimension picker → just swap which value pills show (no
+    // filter change, so re-render the bar in place rather than the whole app).
+    const dimSel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeFilterDim");
+    if (dimSel) { activeFilterDim = dimSel.value as ExerciseFilterDim; rerenderActiveSetBar(); return; }
   });
   els.activeSetBar.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest("[data-asclear]")) clearActiveOverrides();
+    const t = e.target as HTMLElement;
+    if (t.closest("[data-asclear]")) { clearActiveOverrides(); return; }
+    // Toggle one taxonomy value for the current dimension (OR within the dim).
+    const pill = t.closest<HTMLElement>("[data-asfval]");
+    if (pill?.dataset.asfval) { toggleActiveMetaValue(activeFilterDim, pill.dataset.asfval); return; }
+    // Remove one active filter chip.
+    const chip = t.closest<HTMLElement>("[data-asfclear-dim]");
+    if (chip?.dataset.asfclearDim && chip.dataset.asfclearVal !== undefined) {
+      toggleActiveMetaValue(chip.dataset.asfclearDim as ExerciseFilterDim, chip.dataset.asfclearVal);
+      return;
+    }
+    if (t.closest("[data-asfclear-all]")) { clearActiveMetaFilters(); return; }
   });
   // Index "Group by" picker: re-slice the same lifts by category / muscle / etc.
   els.bwGroupBar.addEventListener("change", (e) => {

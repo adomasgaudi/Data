@@ -2329,6 +2329,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .active-set-bar .as-status.is-on { color: var(--accent); font-weight: 700; }
 .active-set-bar .as-clear { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.82rem; text-decoration: underline; padding: 0; }
 .active-set-bar .as-hint { margin: 0.4rem 0 0; font-size: 0.78rem; }
+/* Combinable taxonomy filters: a dimension picker + a horizontally-scrolling row
+   of value pills, then a chip summary of every active filter (across dims). */
+.active-set-bar .as-filter-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.55rem; }
+.active-set-bar .as-fpills { display: flex; gap: 0.3rem; overflow-x: auto; flex: 1; min-width: 0; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.active-set-bar .as-fnone { font-size: 0.8rem; }
+.active-set-bar .as-fpill { flex: 0 0 auto; font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+.active-set-bar .as-fpill:hover { border-color: var(--accent); }
+.active-set-bar .as-fpill.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.active-set-bar .as-fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.45rem; }
+.active-set-bar .as-fchip { font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 2px 8px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.active-set-bar .as-fchip:hover { background: var(--accent); color: #fff; }
 .bw-groups { display: flex; flex-direction: column; gap: 6px; }
 /* overflow stays visible (not hidden) so the group title + an expanded row can
    position:sticky. */
