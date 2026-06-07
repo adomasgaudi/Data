@@ -45,6 +45,8 @@ export interface SvgPoint {
   bands?: number[];
   /** Extra text shown in the tooltip (e.g. "120×5"). */
   meta?: string;
+  /** A failed attempt (note contained "fail") — drawn as a red ✕ on scatters. */
+  fail?: boolean;
 }
 export interface SvgSeries {
   name: string;
@@ -382,7 +384,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // Dots only, no connecting line — for values that jump around (e.g. a
         // day's est-1RM) where a line would imply a trend that isn't there. Slight
         // transparency so overlapping same-day sets read as a denser blob (depth).
-        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
+        for (const p of s.points) {
+          const cx = xPix(p.x), cy = ymap(p.y ?? 0);
+          if (p.fail) {
+            // A failed attempt → a red ✕ instead of the dot.
+            const d = 3.8;
+            body += `<g stroke="#d4322a" stroke-width="1.8" stroke-linecap="round"><line x1="${(cx - d).toFixed(1)}" y1="${(cy - d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy + d).toFixed(1)}"/><line x1="${(cx - d).toFixed(1)}" y1="${(cy + d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy - d).toFixed(1)}"/></g>`;
+          } else {
+            body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
+          }
+        }
       } else if (s.type === "range") {
         const bars: { px: number; yTop: number; yBot: number }[] = [];
         for (const p of s.points) {

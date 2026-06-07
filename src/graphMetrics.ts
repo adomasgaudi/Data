@@ -24,7 +24,10 @@ export interface GraphPoint {
    * section per rep, each ending at that rep's 1RM-equivalent. */
   bands?: number[];
   meta?: string; // tooltip text
+  fail?: boolean; // the set's note contained "fail" — drawn as a red ✕
 }
+/** A set whose note marks it as a failed attempt. */
+const isFail = (r: SetRecord): boolean => /fail/i.test(r.notes ?? "");
 export interface GraphMetricDef {
   id: string;
   label: string;
@@ -75,7 +78,7 @@ function perSet(
     const y = sel(r);
     if (y != null && Number.isFinite(y)) {
       const x = times.get(r) ?? ts(r.date);
-      out.push(metaOf ? { x, y, meta: metaOf(r) } : { x, y });
+      out.push({ x, y, ...(metaOf ? { meta: metaOf(r) } : {}), ...(isFail(r) ? { fail: true } : {}) });
     }
   }
   return out.sort((a, b) => a.x - b.x);
