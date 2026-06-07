@@ -2594,15 +2594,21 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost .detail-table .set-rpe-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
-.wa-sel-header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
+.wa-sel-header { display: flex; align-items: center; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
 .wa-sel-header .wa-section-title { margin: 0; }
-/* All selector controls (Filter, Exercises, ⚙ Settings, + Create) sit on ONE
-   compact row beside the title; each opens as a floating menu so the layout
-   never shifts. */
-.wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; width: 100%; align-items: center; justify-content: flex-start; }
-/* Selected-exercise pills inside the sticky selector bar (EXR-SEL-PILLS). */
-.wa-sel-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; width: 100%; margin-top: 0.35rem; }
-.wa-sel-pill { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+/* The Exercises button sits fixed at the left; the selected pills scroll sideways
+   in the rest of the row (see .wa-sel-pills). */
+.wa-sel-tools { display: flex; flex-wrap: nowrap; gap: 0.4rem; flex: none; align-items: center; justify-content: flex-start; }
+/* Selected-exercise pills (EXR-SEL-PILLS): ONE horizontally-scrolling row beside
+   the Exercises button (rule 16 — swipe sideways, don't wrap into a tall block
+   that eats vertical space), mirroring the athlete chip strip (.athlete-chips). */
+.wa-sel-pills {
+  display: flex; flex-wrap: nowrap; gap: 0.3rem;
+  flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  padding-bottom: 3px; scrollbar-width: thin;
+}
+.wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
 .wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
 /* Sticky selector bar: sits at the top of the Analysis card in normal flow, then

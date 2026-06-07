@@ -10148,8 +10148,9 @@ function renderWorkoutAnalysis(): void {
       : "";
     sel.innerHTML =
       `<div class="wa-sel-header">` +
-      `<div class="wa-sel-tools">${exercisesFold}</div></div>` +
-      selPills;
+      `<div class="wa-sel-tools">${exercisesFold}</div>` +
+      selPills +
+      `</div>`;
     // Taxonomy editor renders into its own section BELOW the sticky bar.
     const assignBox = document.getElementById("waAssign");
     if (assignBox) assignBox.innerHTML = assignUi;
