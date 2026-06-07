@@ -67,6 +67,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.6.47", title: "Simplified page: lean / fat / nFFMI shown as 50% ranges too", sp: 0.5, note: "On the simplified S-Analysis page, the values derived from body fat — lean weight, fat mass and nFFMI — now each show their 50% likely range (e.g. “42–46 kg”) instead of a single number, matching how body fat is shown. So every uncertain figure reads as a range on the same confidence band." },
   { version: "b.2.6.46", title: "Simplified page: body fat as the 50% (likely) range", sp: 0.1, note: "On the simplified S-Analysis page, Body fat now shows the tighter 50% likely range instead of the wide 95% one (e.g. “17–23%” rather than “14–26%”) — a more useful everyday read." },
   { version: "b.2.6.45", title: "Cleanup backlog saved for every AI to see", sp: 0.5, note: "Process only — nothing changed on the site. Saved the coded cleanup/refactor backlog (CLN-, CUT-, ARCH-…) as a file every future AI reads, so the simplify/declutter ideas aren't lost between sessions. You pick items by code; AIs are aware of the list but don't have to act on it." },
   { version: "b.2.6.44", title: "Rule: tag suggestions with pickable task codes", sp: 0.1, note: "Process note only — nothing changed on the site. Added a standing rule: whenever an AI shows you a list of suggestions or options, it tags each one with a short code (like CLN-3) so you can just say the code to pick it, instead of describing what you want." },

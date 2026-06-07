@@ -2914,12 +2914,14 @@ function renderSAnalysis() {
   const item = (name: string, value: string, exp: string) =>
     `<div class="s-bs-item"><div class="s-bs-row"><span class="s-bs-name">${name}</span><span class="s-bs-val">${value}</span></div>` +
     `<p class="s-bs-exp muted">${exp}</p></div>`;
+  // Everything below derives from the body-fat estimate, so each is shown as its
+  // 50% (likely) range — same confidence band as the body-fat figure above.
   const items = [
     item("Body fat", `${Math.round(dist.low50 * 100)}–${Math.round(dist.high50 * 100)}%`, "The share of your bodyweight that's fat — shown as a likely range because it's only an estimate. Lower is leaner, though very low isn't always healthier."),
-    item("Lean weight", `${f1s(mass.lean.avg)} kg`, "Everything that isn't fat — muscle, bone, organs, water. More lean weight generally means more strength."),
-    item("Fat mass", `${f1s(mass.fat.avg)} kg`, "The actual kilograms of fat you carry — your weight times your body-fat %."),
+    item("Lean weight", `${f1s(mass.lean.lo50)}–${f1s(mass.lean.hi50)} kg`, "Everything that isn't fat — muscle, bone, organs, water. More lean weight generally means more strength."),
+    item("Fat mass", `${f1s(mass.fat.lo50)}–${f1s(mass.fat.hi50)} kg`, "The actual kilograms of fat you carry — your weight times your body-fat %."),
   ];
-  if (range) items.push(item("nFFMI", range.avg.toFixed(1), "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling."));
+  if (range) items.push(item("nFFMI", `${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}`, "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling."));
   els.sAnalysis.innerHTML =
     `<details class="s-bodystats" open><summary class="s-bodystats-sum">Body stats</summary>` +
     `<div class="s-bs-body"><div class="s-bs-specs muted">${specs.join("  ·  ")}</div>` +
