@@ -10371,19 +10371,19 @@ function renderWaGraph(): void {
   // The summary names what's currently plotted so you can see it while collapsed.
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
-  // Graph options + the chart's Legend sit SIDE BY SIDE in one bar at the top, both
-  // as floating dropdowns (their menus overlay the chart, so opening either never
-  // pushes the layout or needs a scroll). The legend element is rendered by the SVG
-  // engine inside #waGraphChart; we relocate it up into this bar after the chart
-  // draws (its innerHTML keeps updating in place wherever it lives).
+  // Graph options + the chart's Legend sit SIDE BY SIDE in one bar BELOW the chart,
+  // both as floating dropdowns (their menus overlay the chart, so opening either
+  // never pushes the layout or needs a scroll). The legend element is rendered by
+  // the SVG engine inside #waGraphChart; we relocate it down into this bar after the
+  // chart draws (its innerHTML keeps updating in place wherever it lives).
   box.innerHTML =
+    `<div id="waGraphChart"></div>` +
     `<div class="wa-graph-bar">` +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
     `</details>` +
     `</div>` +
-    `<div id="waGraphChart"></div>` +
     `<div class="muted wa-placeholder" id="waGraphNote"></div>`;
   const chartBox = document.getElementById("waGraphChart");
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
@@ -10401,8 +10401,8 @@ function renderWaGraph(): void {
         worldRecordKg: (ex) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
       })
     : 0;
-  // Relocate the chart's legend up into the top bar so it sits beside Graph options
-  // (the SVG engine keeps updating it in place wherever it lives in the DOM).
+  // Relocate the chart's legend down into the bar below it so it sits beside Graph
+  // options (the SVG engine keeps updating it in place wherever it lives in the DOM).
   const graphBar = box.querySelector(".wa-graph-bar");
   const legendEl = chartBox?.querySelector(".svgc-legend");
   if (graphBar && legendEl && legendEl.parentElement !== graphBar) graphBar.appendChild(legendEl);

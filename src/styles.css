@@ -2490,15 +2490,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   padding: 0.6rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text);
 }
 .wa-fold-sum::-webkit-details-marker { display: none; }
-.wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--muted); font-weight: 400; }
+.wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
 .wa-fold .wa-section-title { display: none; } /* the summary is the title now */
 /* A section's title is only needed when it's COLLAPSED — once open the content
    speaks for itself, so the summary shrinks to a slim caret-only strip (still
    tappable to fold it back up) and the title text is hidden. */
-.wa-fold[open] > .wa-fold-sum { padding: 0.2rem 0; font-size: 0; color: transparent; }
-.wa-fold[open] > .wa-fold-sum::before { font-size: 0.85rem; }
+.wa-fold[open] > .wa-fold-sum { padding: 0.35rem 0; font-size: 0; color: transparent; }
+.wa-fold[open] > .wa-fold-sum::before { font-size: 1.3rem; color: var(--accent); font-weight: 700; }
 /* EXCEPTION: the Workout-history summary carries the selected exercise's name, so
    keep it visible even when open — it's the page's "what am I looking at" title. */
 .wa-fold[open] > #waTableSummary { font-size: 0.95rem; color: var(--text); padding: 0.45rem 0; }
