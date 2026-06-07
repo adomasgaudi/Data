@@ -23,7 +23,9 @@ export interface GraphPoint {
    * section per rep, each ending at that rep's 1RM-equivalent. */
   bands?: number[];
   meta?: string; // tooltip text
-  fail?: boolean; // the set's note contained "fail" — drawn as a red ✕
+  fail?: boolean; // the set's note contained "fail" — drawn as an ✕ in the series colour
+  pr?: boolean; // a new running-max (a record at the time) — drawn as a diamond
+  rir?: number; // the set's reps-in-reserve — scales the dot (higher RIR = smaller)
 }
 /** A set whose note marks it as a failed attempt. */
 const isFail = (r: SetRecord): boolean => /fail/i.test(r.notes ?? "");
@@ -70,6 +72,7 @@ function perSet(
   records: readonly SetRecord[],
   sel: (r: SetRecord) => number | null | undefined,
   metaOf?: (r: SetRecord) => string,
+  cfg?: GraphConfig,
 ): GraphPoint[] {
   const times = setTimes(records);
   const out: GraphPoint[] = [];
@@ -77,10 +80,22 @@ function perSet(
     const y = sel(r);
     if (y != null && Number.isFinite(y)) {
       const x = times.get(r) ?? ts(r.date);
-      out.push({ x, y, ...(metaOf ? { meta: metaOf(r) } : {}), ...(isFail(r) ? { fail: true } : {}) });
+      const p: GraphPoint = { x, y };
+      if (metaOf) p.meta = metaOf(r);
+      if (isFail(r)) p.fail = true;
+      const rir = cfg?.rirOf?.(r); // size the dot by effort, when a resolver is given
+      if (rir != null && Number.isFinite(rir)) p.rir = rir;
+      out.push(p);
     }
   }
-  return out.sort((a, b) => a.x - b.x);
+  out.sort((a, b) => a.x - b.x);
+  // Mark each new running-max (a record at the time) so the chart can diamond it.
+  let best = -Infinity;
+  for (const p of out) {
+    const y = p.y ?? -Infinity;
+    if (y > best + 1e-9) { p.pr = true; best = y; }
+  }
+  return out;
 }
 
 /** est. 1RM points for an exercise under the configured formula. */
@@ -191,7 +206,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     id: "weight",
     label: "Weight",
     type: "scatter",
-    compute: (rs) => perSet(rs, (r) => added(r), (r) => `${added(r)}kg × ${r.reps ?? "?"}`),
+    compute: (rs, cfg) => perSet(rs, (r) => added(r), (r) => `${added(r)}kg × ${r.reps ?? "?"}`, cfg),
   },
   {
     id: "weightRange",
@@ -228,7 +243,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     id: "e1rm",
     label: "1RM",
     type: "scatter",
-    compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`),
+    compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`, cfg),
   },
   // "% of world record" — computed specially in analyticsGraph (needs the athlete's
   // sex + bodyweight + the per-exercise record); carries no compute. Shown as a

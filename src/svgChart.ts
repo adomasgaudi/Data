@@ -45,8 +45,12 @@ export interface SvgPoint {
   bands?: number[];
   /** Extra text shown in the tooltip (e.g. "120×5"). */
   meta?: string;
-  /** A failed attempt (note contained "fail") — drawn as a red ✕ on scatters. */
+  /** A failed attempt (note contained "fail") — drawn as an ✕ in the series colour. */
   fail?: boolean;
+  /** A new record (running-max) set — drawn as a diamond instead of a dot. */
+  pr?: boolean;
+  /** Reps-in-reserve — scales the scatter dot (higher RIR = smaller; null = biggest). */
+  rir?: number;
 }
 export interface SvgSeries {
   name: string;
@@ -402,11 +406,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
           if (p.fail) {
-            // A failed attempt → a red ✕ instead of the dot.
+            // A failed attempt → an ✕ in the SERIES colour (same as the lift).
             const d = 3.8;
-            body += `<g stroke="#d4322a" stroke-width="1.8" stroke-linecap="round"><line x1="${(cx - d).toFixed(1)}" y1="${(cy - d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy + d).toFixed(1)}"/><line x1="${(cx - d).toFixed(1)}" y1="${(cy + d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy - d).toFixed(1)}"/></g>`;
+            body += `<g stroke="${s.color}" stroke-width="1.8" stroke-linecap="round"><line x1="${(cx - d).toFixed(1)}" y1="${(cy - d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy + d).toFixed(1)}"/><line x1="${(cx - d).toFixed(1)}" y1="${(cy + d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy - d).toFixed(1)}"/></g>`;
+          } else if (p.pr) {
+            // A new record → a diamond (≈ the dot's size, so records stand out
+            // without dominating the scatter).
+            const d = 3.6;
+            body += `<path d="M${cx.toFixed(1)} ${(cy - d).toFixed(1)} L${(cx + d).toFixed(1)} ${cy.toFixed(1)} L${cx.toFixed(1)} ${(cy + d).toFixed(1)} L${(cx - d).toFixed(1)} ${cy.toFixed(1)} Z" fill="${s.color}" fill-opacity="0.85"/>`;
           } else {
-            body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="${s.color}" fill-opacity="0.55"/>`;
+            // Plain set → a dot sized by effort: higher RIR (easier) draws smaller;
+            // the hardest (low / no RIR) keep the previous biggest size (3.2).
+            const r = p.rir != null ? Math.min(3.2, Math.max(1.5, 3.2 - 0.22 * p.rir)) : 3.2;
+            body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="0.55"/>`;
           }
         }
       } else if (s.type === "range") {

@@ -10614,6 +10614,13 @@ function renderWaGraph(): void {
   // Work out the plotted exercises FIRST, so the metric chips can reflect what's
   // allowed for them (everything is blocked until reviewed in More info).
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  // Per-set RIR resolver so the scatter sizes each dot by effort (logged grade,
+  // else predicted). Built per render — the strength map is shared across all sets.
+  {
+    const fm = waGraphConfig.formula;
+    const sm = currentStrengthByUserExercise(fm);
+    waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+  }
   const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => r.username === els.athlete.value));
   const autoDefault = waSelected.length === 0;
   const baseExercises = autoDefault

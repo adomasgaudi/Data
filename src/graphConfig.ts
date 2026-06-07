@@ -4,6 +4,7 @@
  * it, and future settings plug in here without touching the renderer.
  */
 import type { OneRepMaxFormula } from "./metrics";
+import type { SetRecord } from "./domain";
 
 export interface GraphConfig {
   /** How same-interval points are combined: none = every set, else per interval. */
@@ -31,6 +32,10 @@ export interface GraphConfig {
    * dates as the 1RM lines, so a horizontal shift is meaningless — this vertical
    * offset lifts the bars off the strength line so the two don't overlap. */
   volumeYShift: number;
+  /** Render-time hook (NOT a persisted setting): a per-set reps-in-reserve
+   * resolver the app injects so the scatter can size each dot by effort — higher
+   * RIR (easier) draws smaller, the hardest stay biggest. Absent = uniform dots. */
+  rirOf?: (r: SetRecord) => number | null;
 }
 
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
