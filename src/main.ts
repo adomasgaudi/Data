@@ -1353,6 +1353,10 @@ function saveTeamPicks(usernames: string[]) {
 // ---- "Done alone" workout tags: per (athlete, day), remembered across reloads.
 const ALONE_STORE_KEY = "colosseum.aloneTags.v1";
 let aloneTags = new Set<string>();
+// Calendar 2× zoom: a ⚙-settings toggle that doubles every heatmap cell (same
+// layout/colours, still horizontally scrollable). Session-only, like the other
+// heat flags — driven purely by a `cal-zoom` class on the calendar container.
+let calZoom = false;
 // The red "trained alone" rings on the calendar are OFF by default — a Settings
 // toggle shows them. While actively tagging (paint mode) they always show so you
 // can see what you're marking.
@@ -5168,6 +5172,7 @@ function heatPillControls(): string {
 function renderWorkoutCalendar() {
   const years = dataYears(trainingDays()); // year list from ALL training (filter-independent)
   if (!years.includes(S.heatYear)) S.heatYear = years[0]!;
+  els.workoutCalendar.classList.toggle("cal-zoom", calZoom); // 2× cell size (class persists across innerHTML rebuilds)
   const counts = filteredDayCounts(); // colouring honours the filter
   // Scope (Timeline / Year / All) + the Tag-alone arm button live in ONE compact
   // ⚙ settings dropdown BELOW the calendar — a tight DJ-console row of tiny toggle
@@ -5181,9 +5186,12 @@ function renderWorkoutCalendar() {
   const tagDjBtn =
     `<button type="button" class="wo-dj-btn cal-tagmode${S.aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
     `title="${S.aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${S.aloneTagMode ? "Done" : "Tag"}</button>`;
+  const zoomDjBtn =
+    `<button type="button" class="wo-dj-btn cal-zoom-btn${calZoom ? " is-active" : ""}" data-calzoom="1" ` +
+    `title="${calZoom ? "Back to normal size" : "Zoom calendar 2×"}">${calZoom ? "1×" : "2×"}</button>`;
   const calSettings =
     `<details class="wo-controls-fold cal-settings"${calSettingsOpen ? " open" : ""}><summary class="wo-controls-sum">⚙</summary>` +
-    `<div class="wo-controls wo-dj">${scopeBtns}${tagDjBtn}</div></details>`;
+    `<div class="wo-controls wo-dj">${scopeBtns}${tagDjBtn}${zoomDjBtn}</div></details>`;
   // Interactive pills (Group by · All · one pill per group) are the calendar's
   // slicer now — colour by body part by default, tap a part to see only it. The
   // ⚙ settings button rides on the same bottom row as the pills.
@@ -8520,6 +8528,11 @@ async function init() {
     // "Tag alone": arm/disarm paint mode so day taps toggle the alone tag.
     if (target.closest<HTMLElement>(".cal-tagmode")) {
       S.aloneTagMode = !S.aloneTagMode;
+      return renderWorkoutCalendar();
+    }
+    // 2× zoom: double every heatmap cell (same colours/layout, still scrollable).
+    if (target.closest<HTMLElement>(".cal-zoom-btn")) {
+      calZoom = !calZoom;
       return renderWorkoutCalendar();
     }
     const cell = target.closest<HTMLElement>(".hm-cell[data-date]");
