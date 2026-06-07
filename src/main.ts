@@ -6177,16 +6177,29 @@ function distinctMetaValues(dim: ExerciseFilterDim): string[] {
 
 function renderActiveSetBar(totalExercises: number): void {
   const active = activeSet ? activeSet.size : totalExercises;
+  const hidden = Math.max(0, totalExercises - active);
   const opt = (val: string, label: string) =>
     `<option value="${val}"${(activeCutoff ?? "none") === val ? " selected" : ""}>${label}</option>`;
   const tierOpts = FREQ_TIERS.map((t) => opt(t.tier, t.label)).join("");
-  const overrides = activeInclude.size + activeExclude.size + (activeSolo ? 1 : 0);
-  const status = activeSet
-    ? `<span class="as-status is-on">Showing ${active} of ${totalExercises} exercises app-wide${activeSolo ? " (only-these)" : ""}</span>`
-    : `<span class="as-status muted">Showing all ${totalExercises} exercises (filter off)</span>`;
-  const clear = overrides
-    ? ` · <button type="button" class="as-clear" data-asclear="1">clear ${overrides} manual override${overrides === 1 ? "" : "s"}</button>`
-    : "";
+  // Spell out WHY lifts are hidden (tier / a picked "only these" set / taxonomy
+  // filters / manual overrides) so the filter is never a mystery, and give ONE
+  // obvious escape hatch that turns the whole thing off.
+  let status: string;
+  let reset = "";
+  if (activeSet) {
+    const why: string[] = [];
+    if (activeSolo) why.push("a picked “only these” set");
+    if (activeCutoff) why.push(`tier ${activeCutoff}+`);
+    for (const f of activeMetaFilterList()) why.push(`${FILTER_DIM_LABELS[f.dim].toLowerCase()}: ${f.values.join("/")}`);
+    if (activeInclude.size) why.push(`${activeInclude.size} forced-in`);
+    if (activeExclude.size) why.push(`${activeExclude.size} forced-out`);
+    status =
+      `<span class="as-status is-on">Showing ${active} of ${totalExercises} — <strong>${hidden} hidden</strong>` +
+      (why.length ? ` <span class="as-why">(${escapeHtml(why.join(" · "))})</span>` : "") + `</span>`;
+    reset = ` <button type="button" class="as-clear as-reset" data-asreset="1">Show all ${totalExercises} (turn filter off)</button>`;
+  } else {
+    status = `<span class="as-status muted">Showing all ${totalExercises} exercises (filter off)</span>`;
+  }
   // ---- Combinable taxonomy filters (AND with the tier) ----
   // A dimension picker chooses which value pills to show; the pills (OR within the
   // dim) toggle that dimension's accepted values. All active dims AND together, so
@@ -6212,12 +6225,11 @@ function renderActiveSetBar(totalExercises: number): void {
   els.activeSetBar.innerHTML =
     `<label class="as-label">Show app-wide ` +
     `<select id="activeCutoff" class="subtle-select">${opt("none", "All exercises")}${tierOpts}</select>` +
-    `</label> ${status}${clear}` +
+    `</label> ${status}${reset}` +
     `<div class="as-filter-row"><label class="as-label">Filter ` +
     `<select id="activeFilterDim" class="subtle-select">${dimOpts}</select></label>${pillsRow}</div>` +
     activeChipsRow +
-    `<p class="as-hint muted">Restrict the whole app (every list, graph, leaderboard) to your most-trained lifts. ` +
-    `Pick a tier and/or any taxonomy filters — they combine (e.g. only “S” AND only calisthenics).</p>`;
+    `<p class="as-hint muted">Restrict the whole app (every list, graph, leaderboard). Three layers stack (AND): a frequency tier, any taxonomy filters below, and a group's “only these” button. “Show all” clears every layer at once.</p>`;
 }
 
 /** Cutoff dropdown changed: save + re-render the whole app. */
@@ -6232,6 +6244,19 @@ function clearActiveOverrides(): void {
   activeInclude = new Set();
   activeExclude = new Set();
   activeSolo = null;
+  saveActiveSet();
+  scheduleRender();
+}
+
+/** Turn the WHOLE app-wide filter OFF in one tap — tier, taxonomy filters, the
+ * "only these" solo set and every manual override — so every lift shows again.
+ * The one escape hatch when "where did my lift go?". */
+function resetActiveSetAll(): void {
+  activeCutoff = null;
+  activeInclude = new Set();
+  activeExclude = new Set();
+  activeSolo = null;
+  activeMetaFilters = {};
   saveActiveSet();
   scheduleRender();
 }
@@ -8818,6 +8843,7 @@ async function init() {
   });
   els.activeSetBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    if (t.closest("[data-asreset]")) { resetActiveSetAll(); return; }
     if (t.closest("[data-asclear]")) { clearActiveOverrides(); return; }
     // Toggle one taxonomy value for the current dimension (OR within the dim).
     const pill = t.closest<HTMLElement>("[data-asfval]");

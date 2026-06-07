@@ -2335,6 +2335,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .active-set-bar .as-status { margin-left: 0.5rem; font-size: 0.82rem; }
 .active-set-bar .as-status.is-on { color: var(--accent); font-weight: 700; }
 .active-set-bar .as-clear { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.82rem; text-decoration: underline; padding: 0; }
+.active-set-bar .as-why { font-size: 0.78rem; opacity: 0.8; font-weight: 400; }
+/* The one-tap "Show all (turn filter off)" escape — a real button, not a link. */
+.active-set-bar .as-reset { display: inline-block; margin-top: 0.3rem; text-decoration: none; font-weight: 600; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); }
+.active-set-bar .as-reset:hover { background: var(--accent); color: #fff; }
 .active-set-bar .as-hint { margin: 0.4rem 0 0; font-size: 0.78rem; }
 /* Combinable taxonomy filters: a dimension picker + a horizontally-scrolling row
    of value pills, then a chip summary of every active filter (across dims). */

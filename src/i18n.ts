@@ -188,7 +188,7 @@ const LT: Record<string, string> = {
   "clear filters": "išvalyti filtrus",
   "no values": "nėra reikšmių",
   "Show app-wide": "Rodyti visoje programoje",
-  "Restrict the whole app (every list, graph, leaderboard) to your most-trained lifts. Pick a tier and/or any taxonomy filters — they combine (e.g. only “S” AND only calisthenics).": "Apriboti visą programą (kiekvieną sąrašą, grafiką, lentelę) iki dažniausiai atliekamų pratimų. Pasirink lygį ir (ar) bet kokius filtrus — jie derinami (pvz., tik „S“ IR tik kalistenika).",
+  "Restrict the whole app (every list, graph, leaderboard). Three layers stack (AND): a frequency tier, any taxonomy filters below, and a group's “only these” button. “Show all” clears every layer at once.": "Apriboti visą programą (kiekvieną sąrašą, grafiką, lentelę). Trys sluoksniai derinami (IR): dažnumo lygis, žemiau esantys filtrai ir grupės mygtukas „tik šiuos“. „Rodyti visus“ iškart išvalo visus sluoksnius.",
   "show all": "rodyti visus",
   "only these": "tik šiuos",
   "hidden": "paslėpti",
