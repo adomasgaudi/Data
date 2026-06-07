@@ -83,6 +83,7 @@ import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } fr
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph } from "./analyticsGraph";
+import { renderTestGraph, type TestPoint } from "./testGraph";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
@@ -2175,22 +2176,23 @@ function openBacklog() {
  * graph (no drag-pan / pinch-zoom gesture capture) so the owner can check whether a
  * static old-style chart lets the page scroll freely on a phone. Same data + engine
  * as the main analysis graph, just `interactive: false`. */
+const TEST_GRAPH_COLORS = ["#5ab0ff", "#ff7a59", "#5fd17a", "#ffc24b", "#c08bff", "#4fd6d6", "#ff6fae", "#9bd14f"];
 function openTesting() {
   setSettingsOpen(false);
   const ath = els.athlete.value;
   const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === ath));
-  const prof = athProfile(ath);
-  renderAnalyticsGraph(els.testGraphChart, {
-    exercises: waSelected.slice(0, WA_GRAPH_MAX),
-    records: recs,
-    metrics: [...waMetrics],
-    config: waGraphConfig,
-    codeOf: displayName,
-    perBodyweight: S.waPerBodyweight,
-    bodyweight: prof?.weight ?? null,
-    worldRecordKg: (ex: string) => worldRecordKg(ex, prof?.sex ?? "m", prof?.weight ?? null),
-    interactive: false,
+  const formula = currentFormula();
+  // Build plain {x,y} series here (DATA only) and hand them to the brand-new,
+  // listener-free renderTestGraph — no svgChart/analyticsGraph involved.
+  const series = waSelected.slice(0, 8).map((ex, i) => {
+    const points = recs
+      .filter((r) => r.exerciseName === ex)
+      .map((r) => ({ x: Date.parse(r.date), y: effectiveE1RM(r, formula) }))
+      .filter((p): p is TestPoint => Number.isFinite(p.x) && p.y != null && Number.isFinite(p.y))
+      .sort((a, b) => a.x - b.x);
+    return { label: displayName(ex), color: TEST_GRAPH_COLORS[i % TEST_GRAPH_COLORS.length]!, points };
   });
+  renderTestGraph(els.testGraphChart, series);
   els.testingPage.hidden = false;
 }
 
