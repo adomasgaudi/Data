@@ -74,6 +74,17 @@ tell me "remember: …" and I'll append it under **Rules to remember** below.
   and anything above ~100 SP is multi-day and should be broken up or reconsidered.
   Frame "is this worth it?" answers in **days/SP the owner will actually spend**, not
   abstract effort, and prefer plans that fit inside a day's budget.
+- **Back answers with graded research.** When answering a question that turns on
+  facts, best practices, or a tech/architecture decision (not trivial lookups),
+  **go find real research/sources** rather than asserting from memory, and **rate
+  the quality of each source using a GRADE-style evaluation** — `High`,
+  `Moderate`, `Low`, or `Very Low` — with a one-line reason for the grade (study
+  type, sample/scale, recency, independence, how directly it answers the
+  question). List the sources with their grades (links at the very bottom per the
+  links rule), and let the overall confidence of the recommendation follow the
+  best available evidence. Prefer primary/peer-reviewed or large, independent
+  sources over blog hearsay; say so honestly when the best available evidence is
+  only `Low`/`Very Low`.
 - **Night/dark mode lives in the Settings panel** (the `#themeBtn` button), not in
   the header bar.
 
