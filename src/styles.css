@@ -1501,13 +1501,12 @@ sup.wr-bw { font-size: 0.85em; }
   box-shadow: 0 1px 2px rgba(20, 24, 38, 0.04);
 }
 .panel h2 { margin: 0 0 1rem; font-size: 1.05rem; font-weight: 600; }
-/* Analysis is NOT a card — it drops the white box and spans the FULL width (rule
-   16), breaking out of main's side padding to the screen edges. The Body-stats
-   block and athlete picker above it keep their cards. */
+/* Analysis is NOT a card — it drops the white box and uses the FULL content width
+   (rule 16), but keeps the page's normal side margin (no edge-to-edge bleed). The
+   Body-stats block and athlete picker above it keep their cards. */
 .wa-analysis-panel {
   background: none; border: none; box-shadow: none; border-radius: 0;
   padding-left: 0; padding-right: 0;
-  margin-left: -1.5rem; margin-right: -1.5rem;
 }
 .muted { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
 .chart-wrap { position: relative; height: 260px; margin-bottom: 1rem; }
@@ -2501,7 +2500,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   main { padding: 1rem 1rem 5rem; } /* clearance for the bottom command bar */
   .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the bottom command bar */
   .panel { padding: 1rem; border-radius: 10px; }
-  .wa-analysis-panel { padding-left: 0; padding-right: 0; margin-left: -1rem; margin-right: -1rem; }
+  .wa-analysis-panel { padding-left: 0; padding-right: 0; }
   .chart-wrap { height: 220px; }
   /* Phone: fill the screen. dvh tracks the real viewport (browser chrome in/out);
      subtract the fixed bottom nav + a little breathing room. Edge-to-edge width. */
