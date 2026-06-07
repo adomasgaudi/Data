@@ -62,7 +62,6 @@ import {
   type EffortClass,
   setVolume,
   effectiveLoad,
-  linearFit,
   MAX_1RM_REPS,
   strengthRetention,
   grownStability,
@@ -3209,13 +3208,12 @@ function renderAthleteStats() {
 }
 
 /**
- * Momentum row: for the athlete's most-trained lifts, a chip showing whether the
- * estimated 1RM is trending up or down (kg/week from a least-squares fit over the
- * weekly 1RM history). An at-a-glance "what's moving" read, built from the same
- * tested linearFit + exerciseProgressByWeek the progress chart uses. Only lifts
- * with enough history (≥3 data weeks) get a chip, so a slope isn't read off noise.
+ * Momentum row: for the athlete's most-trained lifts, a chip showing how much the
+ * estimated 1RM has moved OVER THE CHOSEN WINDOW (last week / month / 3 months),
+ * as a percent of the 1RM at the start of that window. Lifts not trained inside
+ * the window are dropped — so a lift you stopped years ago shows no momentum.
  */
-/** Momentum trend period: per week / month / 3 months (the rate denominator). */
+/** Momentum window: the last week / month / 3 months. */
 type MomentumPeriod = "wk" | "mo" | "3mo";
 let momentumPeriod: MomentumPeriod = "wk";
 const MO_PERIOD_WEEKS: Record<MomentumPeriod, number> = { wk: 1, mo: 4.345, "3mo": 13.04 };
@@ -3224,20 +3222,23 @@ function renderMomentum() {
   const username = els.athlete.value;
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
-  // Consider the athlete's most-trained exercises, then keep those with a trend.
-  const top = exerciseCountsForUser(activeRecords(), username).slice(0, 12);
-  // Trend as a PERCENT of the current 1RM (not kg), so lifts of any size compare.
+  // Consider the athlete's most-trained exercises, then keep those moving lately.
+  const top = exerciseCountsForUser(activeRecords(), username).slice(0, 24);
+  const windowStart = Date.now() - MO_PERIOD_WEEKS[momentumPeriod] * 7 * 86_400_000;
+  // % change of the est. 1RM across the window: latest vs the value entering it.
   const chips: { name: string; pct: number }[] = [];
   for (const c of top) {
     const pts = exerciseProgressByWeek(recs, username, c.exerciseName, formula).filter((p) => p.bestE1rm !== null);
-    if (pts.length < 3) continue; // need a few weeks before a slope means anything
-    const t0 = Date.parse(pts[0]!.date);
-    const fit = linearFit(pts.map((p) => ({ x: (Date.parse(p.date) - t0) / 86_400_000, y: p.bestE1rm! })));
-    if (!fit) continue;
-    const base = pts[pts.length - 1]!.bestE1rm!; // current 1RM = % reference
+    if (pts.length < 2) continue;
+    const recent = pts[pts.length - 1]!; // most recent week with data
+    if (Date.parse(recent.date) < windowStart) continue; // not trained in the window → skip
+    // The 1RM as the window began: the last point before it, else the earliest point.
+    let past = pts[0]!;
+    for (const p of pts) if (Date.parse(p.date) <= windowStart) past = p;
+    if (past === recent) continue; // only one point in range → no change to show
+    const base = past.bestE1rm!;
     if (base <= 0) continue; // % is meaningless off a zero/negative base
-    const perWeekKg = fit.slope * 7;
-    chips.push({ name: c.exerciseName, pct: (perWeekKg * MO_PERIOD_WEEKS[momentumPeriod] / base) * 100 });
+    chips.push({ name: c.exerciseName, pct: ((recent.bestE1rm! - base) / base) * 100 });
   }
   if (chips.length === 0) {
     els.momentum.innerHTML = "";
@@ -3246,6 +3247,7 @@ function renderMomentum() {
   // Most movement first (by absolute rate); show the top 6 so the row stays tidy.
   chips.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   const per = `/${momentumPeriod}`;
+  const windowName = momentumPeriod === "wk" ? "week" : momentumPeriod === "mo" ? "month" : "3 months";
   const body = chips
     .slice(0, 6)
     .map((m) => {
@@ -3255,7 +3257,7 @@ function renderMomentum() {
       const arrow = up ? "▲" : down ? "▼" : "▪";
       const rate = `${m.pct >= 0 ? "+" : ""}${m.pct.toFixed(1)}%`;
       return (
-        `<span class="mo-chip ${cls}" title="${escapeHtml(m.name)}: ${rate}${per} estimated-1RM trend">` +
+        `<span class="mo-chip ${cls}" title="${escapeHtml(m.name)}: ${rate} est-1RM change over the last ${windowName}">` +
         `<span class="mo-arrow">${arrow}</span> ${escapeHtml(m.name)} ` +
         `<span class="mo-rate">${rate}<span class="mo-per">${per}</span></span></span>`
       );
