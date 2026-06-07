@@ -33,9 +33,10 @@
           <h1>Colosseum</h1>
           <span id="viewBadge" class="view-badge" hidden>👤 User view</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.6.41</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.6.42</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
+        <button id="moreBtn" class="icon-btn" aria-label="More views" aria-haspopup="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
           <!-- Calculation & display settings, tucked under a collapsible to keep the menu short. -->
@@ -1114,26 +1115,16 @@
              placeholder="Search exercises…   or type . for commands" aria-label="Search or command" />
     </div>
 
-    <!-- App-style bottom navigation: Analysis is the single home for all
-         exercise views (the old Workouts/List/Compare/Single tab bar is gone);
-         "Other" opens a sheet of secondary views. -->
-    <nav class="subtabs" role="tablist">
-      <button class="subtab is-active" data-nav="analysis" role="tab">
-        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span id="navAnalysisLabel">Analysis</span>
-      </button>
-      <button class="subtab" data-nav="other" role="tab">
-        <svg class="subtab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-        <span>More</span>
-      </button>
-    </nav>
-
+    <!-- Secondary views live behind the top-bar "More" (⋯) button, which opens
+         this bottom-sheet. The old bottom nav bar is gone — Analysis is the home
+         page and is reachable from the first item in the sheet below. -->
     <!-- "Other" bottom-sheet: the umbrella of secondary views. Each item jumps
          to its top-tab panel (data-tab) and closes the sheet. -->
     <div id="otherSheet" class="other-sheet" hidden>
       <div class="other-sheet-backdrop" data-other-close></div>
       <div class="other-sheet-card" role="menu" aria-label="Other views">
         <div class="other-sheet-grip"></div>
+        <button class="other-item" data-nav="analysis" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> <span id="otherAnalysisLabel">Analysis</span></button>
         <button class="other-item" data-tab="leaderboards" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/><path d="M19 21V10"/><path d="M3 10l9-6 9 6"/></svg> Colosseum</button>
         <button class="other-item" data-tab="team" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.5a4 4 0 0 1 0 7"/></svg> Group view</button>
         <button class="other-item" data-tab="groups" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5" rx="0.5"/><rect x="12" y="8" width="3" height="9" rx="0.5"/><rect x="17" y="14" width="3" height="3" rx="0.5"/></svg> Stats view</button>

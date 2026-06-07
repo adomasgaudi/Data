@@ -10806,17 +10806,9 @@ function showSubtab(name: string) {
 /** Light up the right bottom-nav item: Workouts/Exercises when the Athlete tab
  * shows that sub-view, otherwise "Other" (anything reached via the sheet). */
 function updateBottomNav() {
-  // S-ANL counts as the Analysis home too (simplified view).
-  const analysisOpen = document.getElementById("tab-analysis")?.hidden === false
-    || document.getElementById("tab-s-analysis")?.hidden === false;
-  for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
-    const nav = b.dataset.nav;
-    const active = nav === "analysis" ? analysisOpen : nav === "other" ? !analysisOpen : false;
-    b.classList.toggle("is-active", active);
-  }
-  // Label the Analysis button by which page it leads to, so you can tell the
-  // simplified S-ANL page apart from the full analysis.
-  const lbl = document.getElementById("navAnalysisLabel");
+  // The bottom nav bar is gone; the only label to keep current is the Analysis
+  // entry in the "More" sheet (full ANL vs the simplified S-ANL page).
+  const lbl = document.getElementById("otherAnalysisLabel");
   if (lbl) lbl.textContent = analysisTabName() === "s-analysis" ? "S-Analysis" : "Analysis";
 }
 
@@ -10825,28 +10817,19 @@ function setOtherSheetOpen(open: boolean) {
   document.body.classList.toggle("sheet-open", open);
 }
 
-/** Bottom nav (Analysis · Other). Analysis is the single home for every
- * exercise view (Workouts/List/Compare/Single live inside it now); "Other"
- * opens the sheet of secondary views. */
+/** Navigation: the top-bar "More" (⋯) button opens the sheet of all views. The
+ * bottom nav bar is gone (Analysis is the home page); the sheet's first item
+ * leads back to Analysis (full ANL, or simplified S-ANL per the toggle). */
 function setupBottomNav() {
-  for (const b of document.querySelectorAll<HTMLButtonElement>(".subtab")) {
-    b.addEventListener("click", () => {
-      const nav = b.dataset.nav;
-      if (nav === "other") {
-        setOtherSheetOpen(els.otherSheet.hidden);
-        return;
-      }
-      // Analysis — full ANL for admin, or the simplified S-ANL page for non-admin
-      // views / when "Simplified view" is on.
-      setOtherSheetOpen(false);
-      switchTopTab(analysisTabName());
-    });
-  }
-  // Sheet items each open a top-tab panel and close the sheet.
+  document.getElementById("moreBtn")?.addEventListener("click", () => {
+    setOtherSheetOpen(els.otherSheet.hidden);
+  });
+  // Sheet items each open a view and close the sheet. The Analysis item routes to
+  // whichever analysis page is active (full or simplified); the rest use data-tab.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.addEventListener("click", () => {
       setOtherSheetOpen(false);
-      switchTopTab(item.dataset.tab ?? "");
+      switchTopTab(item.dataset.nav === "analysis" ? analysisTabName() : item.dataset.tab ?? "");
     });
   }
   // Tapping the backdrop (or anything marked data-other-close) dismisses it.

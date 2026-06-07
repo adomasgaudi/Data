@@ -281,17 +281,17 @@ html.kb-open .subtabs { display: none; }
 .subtab-ico { width: 22px; height: 22px; flex: none; }
 .subtab:hover { color: var(--text); }
 .subtab.is-active { color: var(--accent); border-top-color: var(--accent); background: var(--accent-soft); }
-/* Clearance so no panel's content hides behind the fixed bottom nav + the
-   always-on command bar that sits just above it. */
-main { padding-bottom: 8.5rem; }
+/* Clearance so no panel's content hides behind the always-on command bar pinned
+   at the bottom (the bottom nav bar was removed). */
+main { padding-bottom: 5rem; }
 
-/* Persistent command / search bar, pinned just above the bottom nav. */
+/* Persistent command / search bar, pinned at the bottom of the screen. */
 .cmd-bar {
   position: fixed; left: 0; right: 0; z-index: 55;
-  /* Sit above the bottom nav normally, but ride just above the on-screen
-   * keyboard when it's open (--wa-kb-inset = keyboard height, from the
-   * VisualViewport API in setupWorkoutAnalysis). Stays put while scrolling. */
-  bottom: max(calc(3.4rem + env(safe-area-inset-bottom, 0px)), var(--wa-kb-inset, 0px));
+  /* Sit at the bottom normally, but ride just above the on-screen keyboard when
+   * it's open (--wa-kb-inset = keyboard height, from the VisualViewport API in
+   * setupWorkoutAnalysis). Stays put while scrolling. */
+  bottom: max(env(safe-area-inset-bottom, 0px), var(--wa-kb-inset, 0px));
   padding: 0.45rem 0.8rem; background: var(--panel);
   border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(20, 24, 38, 0.06);
   transition: bottom 0.08s ease-out;
@@ -2370,8 +2370,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 @media (max-width: 640px) {
   body { font-size: 14px; }
   .topbar { flex-wrap: nowrap; gap: 0.5rem; padding: 0.7rem 1rem; }
-  main { padding: 1rem 1rem 8.5rem; } /* keep bottom clearance for the command bar + nav */
-  .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 7.5rem; } /* clear the command bar + fixed bottom nav */
+  main { padding: 1rem 1rem 5rem; } /* clearance for the bottom command bar */
+  .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the bottom command bar */
   .panel { padding: 1rem; border-radius: 10px; }
   .chart-wrap { height: 220px; }
   /* Phone: fill the screen. dvh tracks the real viewport (browser chrome in/out);
