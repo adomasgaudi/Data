@@ -11,6 +11,29 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-6 — A lift's history is empty / partial when it belongs to a combinable group
+
+- **Recurrences:** 2 (b.2.8.38 "fixed" the empty combined history by expanding the
+  synthetic name; the user then saw Squat's COMPARE view show only Front Squat, not
+  Squat/Smith squat — the same root tangle, different face).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data).
+- **Symptom:** select Squat in the history; with the ⇄ Compare lens on it should show
+  Squat + Front Squat (its comparable "Squat pattern"), but only Front Squat appears.
+  Earlier: with Combine on it showed "546 rest days" (empty).
+- **Root cause:** `remapRegistryCombined` relabels a combinable group's member records
+  to the combined name whenever the group's GLOBAL display (`groupDisplayFor`) is
+  "combined" — which is the DEFAULT (rule 23). So a logged "Squat" set became "SQ mix"
+  in the history regardless of the lens. But "Squat" is in BOTH a combinable group
+  (SQ mix) and a comparable group (Squat pattern); the Compare-lens filter looks for
+  raw "Squat", which no longer exists (it's "SQ mix") → the reference lift vanishes.
+  The OLD global combine-display default fights the NEW per-lift lens model (b.2.8.30).
+- **Root fix:** the per-lift LENS is the single source of truth for combining. Make
+  `remapRegistryCombined` remap a group ONLY when a selected history lift in it has its
+  COMBINE lens on (default off → raw lifts). Then make the history FILTER match the
+  remap: combine → the synthetic name (records are relabelled to it), compare → the raw
+  members, none → the raw lift (expanded if it's itself a synthetic). The calendar
+  keeps RAW member names (its records aren't remapped). Fix site tagged `PB-6`.
+
 ## PB-5 — Tapping a lift name in a fold-title removes it on the graph but NOT the history
 
 - **Recurrences:** 2 (added the history-title removal in b.2.8.31; user reports it

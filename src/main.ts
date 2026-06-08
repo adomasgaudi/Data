@@ -1999,6 +1999,25 @@ function lensExpand(scope: SelScope, names: readonly string[]): string[] {
   }
   return [...new Set(out)];
 }
+/** The exercise names to filter the WORKOUT HISTORY to, MATCHING how its records are
+ * (lens-aware) remapped — so the filter and the records always agree (PB-6):
+ *   • Combine lens on  → the COMBINED name (records are relabelled to it by
+ *     remapRegistryCombined), shown as one merged lift.
+ *   • Compare lens on  → the comparable group's RAW members (records untouched).
+ *   • no lens          → the raw lift, expanded if it's itself a synthetic (a directly
+ *     picked combined/comparison lift — its sets are logged under member names).
+ * (The calendar wants RAW members always — its records aren't remapped — so it keeps
+ * expandToRawExercises(lensExpand) instead.) */
+function histFilterNames(names: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const n of names) {
+    const lens = lensFor("hist", n);
+    if (lens.combine) { const g = combinableGroupsForEx(n)[0]; if (g) { out.push(g.derivedName ?? g.label); continue; } }
+    if (lens.compare) { const g = comparableGroupsForEx(n)[0]; if (g) { out.push(...(g.members ?? []).map((m) => m.exerciseName)); continue; } }
+    out.push(...expandToRawExercises([n]));
+  }
+  return [...new Set(out)];
+}
 /** The lens toggle buttons for a selected lift (only the relations it actually has) —
  * a small ⊕ Combine and/or ⇄ Compare pill; their presence is the "has relations" hint. */
 function lensTogglesHtml(scope: SelScope, n: string): string {
@@ -3253,7 +3272,12 @@ function remapCombined(recs: SetRecord[]): SetRecord[] {
 function remapRegistryCombined(recs: SetRecord[]): SetRecord[] {
   const map = new Map<string, string>();
   for (const g of effectiveCombinableGroups()) {
-    if (groupDisplayFor(g.id) !== "combined") continue;
+    // PB-6: merge a combinable group into ONE lift only when a SELECTED history lift in
+    // it has its COMBINE lens on — the per-lift lens is the source of truth now (the
+    // old global "combined" display default wrongly hijacked a Compare-lensed member,
+    // since a lift can be in BOTH a combinable and a comparable group).
+    const on = (g.members ?? []).some((m) => waSelected.includes(m.exerciseName) && lensFor("hist", m.exerciseName).combine);
+    if (!on) continue;
     const dn = g.derivedName ?? g.label;
     for (const m of g.members ?? []) map.set(m.exerciseName, dn);
   }
@@ -12484,8 +12508,7 @@ function refreshHistorySearch(): void {
     waListExerciseFilter = (searchFindHistory && waSearchQuery.trim()) ? historyFilterWithSearch([]) : [HISTORY_NONE];
     return;
   }
-  const base = expandToRawExercises(lensExpand("hist", waSelected));
-  waListExerciseFilter = historyFilterWithSearch(base);
+  waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected));
 }
 
 /** A big section title from a lift selection: a big total-COUNT badge, then the first
@@ -12565,7 +12588,7 @@ function renderWorkoutAnalysis(): void {
     // list is the relocated Workouts panel, filtered via waListExerciseFilter.
     selectedExercise = null;
     combinedWith = [];
-    waListExerciseFilter = historyFilterWithSearch(expandToRawExercises(lensExpand("hist", waSelected)));
+    waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected));
     setAnalysisMainPanel("workouts");
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
@@ -12738,11 +12761,11 @@ function renderSelector(scope: SelScope): void {
       : `Tap to remove ${n}`;
     return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>${lensTogglesHtml(scope, n)}`;
   };
-  // The GRAPH selector shows its picked lifts in the big title (clickable to remove)
-  // — NOT as a separate ✕-pill row. The HISTORY selector shows them as pills UNLESS
-  // its title is expanded to list them all (then the pills are redundant). The GROUP
-  // / category pills are unaffected either way.
-  const showPickedPills = scope === "hist" && !titleExpanded.hist;
+  // BOTH selectors now show their picked lifts in the big section TITLE (count + names,
+  // each tap-to-remove, with lens toggles, and "… +N" to expand to all) — so the
+  // separate ✕-pill row below was redundant and is gone. The GROUP / category pills
+  // (category mode) are unaffected.
+  const showPickedPills = false;
   let selPills = "";
   if (stickyCats) {
     // Category mode: the always-visible top strip IS the whole-category picker — one
