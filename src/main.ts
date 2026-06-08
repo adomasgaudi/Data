@@ -5828,47 +5828,71 @@ function renderHorizontalHistory(): void {
   const mode = S.workoutViewMode;
   const lookbackDays = mode === "3month" ? 365 : mode === "month" ? 90 : 30;
   const windowLabel = lookbackDays === 365 ? "12 months" : lookbackDays === 90 ? "3 months" : "month";
-  const cutoff = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10);
-  // Grouping control (Day → Week → 2 wks → Month → 3 mo), mirrors the ⚙ toggle.
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  const cutoff = daysAgo(lookbackDays);
+  const cut90 = daysAgo(90);
   const head =
     `<div class="hh-tools"><span class="muted hh-tools-lbl">Group by</span>` +
     `<button type="button" id="hhPeriod" class="wo-dj-btn" title="Day ↔ week ↔ month — same as the history ⚙ (rows sort by sets in the last ${escapeHtml(windowLabel)})">${escapeHtml(WO_VIEW_LABEL[mode])}</button>` +
     `<span class="muted hh-tools-hint">— rows ordered by recent activity, aligned across time</span></div>`;
   if (groups.length === 0) { box.innerHTML = head + `<p class="muted">No workouts to show.</p>`; return; }
-  // Fixed exercise order across ALL columns (row N = same lift in every card):
-  // sort by INSTANCES (sets) in the recent window — most-trained-lately first —
-  // then all-time sets, then name. Rows are the union of lifts across the periods.
+  // Per-lift counts: all-time, the recent (sort) window, last 90 days, and older.
   const totalByEx = new Map<string, number>();
   const recentByEx = new Map<string, number>();
+  const cnt90 = new Map<string, number>();
+  const cntOld = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   for (const g of groups) {
     for (const e of g.exercises) totalByEx.set(e.exerciseName, (totalByEx.get(e.exerciseName) ?? 0) + e.count);
-    for (const s of g.sets) if (s.date >= cutoff) recentByEx.set(s.exerciseName, (recentByEx.get(s.exerciseName) ?? 0) + 1);
+    for (const s of g.sets) {
+      if (s.date >= cutoff) bump(recentByEx, s.exerciseName);
+      if (s.date >= cut90) bump(cnt90, s.exerciseName); else bump(cntOld, s.exerciseName);
+    }
   }
-  const exOrder = [...totalByEx.keys()].sort((a, b) =>
+  // Which lifts get a ROW. In day / week / 2-week modes, don't clutter with every
+  // past lift: keep the ones trained in the window (this month) PLUS two staple
+  // exceptions — a lot in the last 3 months, or even more from further back (a
+  // lift trained non-stop). Month / 3-month modes show every lift (the union).
+  const prune = mode === "day" || mode === "week" || mode === "2week";
+  const HH_LOT_3MO = 12; // "a lot in the past 3 months" → keep as a (grey) row
+  const HH_LOT_OLD = 30; // "even more, non-stop, >3 months ago" → keep as a (grey) row
+  let exList = [...totalByEx.keys()];
+  if (prune) {
+    const kept = exList.filter((ex) =>
+      (recentByEx.get(ex) ?? 0) > 0 || (cnt90.get(ex) ?? 0) >= HH_LOT_3MO || (cntOld.get(ex) ?? 0) >= HH_LOT_OLD);
+    if (kept.length) exList = kept; // fall back to all if nothing qualifies
+  }
+  const exOrder = exList.sort((a, b) =>
     ((recentByEx.get(b) ?? 0) - (recentByEx.get(a) ?? 0)) ||
     ((totalByEx.get(b) ?? 0) - (totalByEx.get(a) ?? 0)) ||
     a.localeCompare(b));
-  const cols = groups
-    .map((g) => {
-      const rows = exOrder
-        .map((exName) => {
-          const sets = g.sets.filter((s) => s.exerciseName === exName);
-          if (sets.length === 0) {
-            // Blank slot keeps this lift's row aligned with the other columns.
-            return `<div class="hh-row hh-row-empty"><span class="hh-rm"></span><span class="wo-ex-body"><span class="wo-exname muted">${escapeHtml(displayName(exName))}</span> <span class="hh-dash">·</span></span></div>`;
-          }
-          const e1rms = sets
-            .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), formula))
-            .filter((v): v is number => v !== null && Number.isFinite(v));
-          const best = e1rms.length ? Math.max(...e1rms) : null;
-          const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated 1RM">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
-          return `<div class="hh-row"><span class="hh-rm">${rmTxt}</span><span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exName)}">${escapeHtml(displayName(exName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
-        })
-        .join("");
-      return `<div class="hh-col"><div class="hh-col-head">${escapeHtml(g.label)} <span class="muted">${g.totalSets}</span></div><div class="hh-col-body">${rows}</div></div>`;
-    })
-    .join("");
-  box.innerHTML = head + `<div class="hh-scroll">${cols}</div>`;
+  // ONE grid (columns = periods, rows = lifts) so each row auto-sizes to the
+  // TALLEST cell across columns: same lift on the same line in every card, and
+  // content is never clipped. A backing card div per column gives the card look.
+  const P = groups.length;
+  const E = exOrder.length;
+  let cells = "";
+  groups.forEach((g, ci) => {
+    const col = ci + 1;
+    cells += `<div class="hh-card" style="grid-column:${col};grid-row:1/-1"></div>`;
+    cells += `<div class="hh-head" style="grid-column:${col};grid-row:1">${escapeHtml(g.label)} <span class="muted">${g.totalSets}</span></div>`;
+    exOrder.forEach((exName, ri) => {
+      const row = ri + 2;
+      const sets = g.sets.filter((s) => s.exerciseName === exName);
+      if (sets.length === 0) {
+        cells += `<div class="hh-cell hh-cell-empty" style="grid-column:${col};grid-row:${row}"><span class="hh-rm"></span><span class="wo-ex-body"><span class="wo-exname muted">${escapeHtml(displayName(exName))}</span></span></div>`;
+        return;
+      }
+      const e1rms = sets
+        .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), formula))
+        .filter((v): v is number => v !== null && Number.isFinite(v));
+      const best = e1rms.length ? Math.max(...e1rms) : null;
+      const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated 1RM">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
+      cells += `<div class="hh-cell" style="grid-column:${col};grid-row:${row}"><span class="hh-rm">${rmTxt}</span><span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exName)}">${escapeHtml(displayName(exName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
+    });
+  });
+  box.innerHTML = head +
+    `<div class="hh-grid" style="grid-template-columns:repeat(${P},var(--hh-card-w));grid-template-rows:auto repeat(${E},auto)">${cells}</div>`;
 }
 
 /** Toggle the history's "show lifts hidden by the Index filter" mode, persist it,
