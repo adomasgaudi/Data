@@ -27,6 +27,28 @@ export function seriesPaletteColor(i: number): string {
   return SERIES_COLORS[((i % SERIES_COLORS.length) + SERIES_COLORS.length) % SERIES_COLORS.length]!;
 }
 
+/** HSL → hex (h in degrees, s & l in %). */
+function hslHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+  const hh = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${hh(r)}${hh(g)}${hh(b)}`;
+}
+// Colour theory for 3+ series: a generated palette of EVENLY-SPACED hues at one
+// shared saturation & lightness (a balanced n-adic harmony) — so the colours are
+// both maximally distinct AND cohesive, rather than a grab-bag of fixed swatches.
+// 1–2 series keep the app's signature blue / gold (already a clean pair).
+const HARMONY_BASE_HUE = 212, HARMONY_S = 58, HARMONY_L = 44;
+export function harmoniousColor(i: number, n: number): string {
+  if (n <= 2) return seriesPaletteColor(i);
+  return hslHex(HARMONY_BASE_HUE + (i * 360) / n, HARMONY_S, HARMONY_L);
+}
+
 /** A shade of a base hex colour, for distinguishing a 2nd+ series of the SAME
  * render-shape within one exercise. n=0 is the base; odd n lightens, even n
  * darkens, by a growing amount — so an exercise's series stay clearly "the same
@@ -152,7 +174,12 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // render-shape. MULTI-ATHLETE overlay: the colour is the ATHLETE's hue (one per
     // user, matching the athlete key above the chart) and EXERCISES are told apart by
     // marker SHAPE — colour = who, shape = what.
-    const base = SERIES_COLORS[(multiUser ? g.userIdx ?? gi : gi) % SERIES_COLORS.length]!;
+    // 3+ colours → a generated, evenly-spaced harmonious palette (colour theory);
+    // 1–2 keep the signature blue/gold. Multi-athlete: hue = the athlete (n = users);
+    // single-athlete: hue = the exercise (n = groups).
+    const base = multiUser
+      ? harmoniousColor(g.userIdx ?? gi, input.users!.length)
+      : harmoniousColor(gi, groups.length);
     const exShape: SvgShape | undefined = multiUser ? EXERCISE_SHAPES[(g.exIdx ?? 0) % EXERCISE_SHAPES.length] : undefined;
     const shapeSeen: Record<string, number> = {};
     const colorFor = (type: string | undefined): string => {

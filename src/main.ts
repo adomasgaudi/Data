@@ -84,7 +84,7 @@ import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVE
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
-import { renderAnalyticsGraph, seriesPaletteColor } from "./analyticsGraph";
+import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import { renderTestGraph, type TestPoint } from "./testGraph";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
@@ -12329,7 +12329,7 @@ function renderWaGraph(): void {
       ? gAthletes
           .map((u, i) => {
             const lbl = rosterUsers().find((r) => r.username === u)?.user ?? u;
-            return `<span class="wa-ath-key-item"><span class="wa-ath-key-dot" style="background:${seriesPaletteColor(i)}"></span>${escapeHtml(lbl)}</span>`;
+            return `<span class="wa-ath-key-item"><span class="wa-ath-key-dot" style="background:${harmoniousColor(i, gAthletes.length)}"></span>${escapeHtml(lbl)}</span>`;
           })
           .join("")
       : "";
