@@ -11637,15 +11637,22 @@ function waSpecialList(): SpecialItem[] {
   const byName = new Map(base.map((e) => [e.name, e]));
   if (waGroupBy === "bestlifts") {
     const user = els.athlete.value;
-    const scored = bestLiftExercises().flatMap(({ lift, exercise }) => {
+    // ALWAYS list all three powerlifts. A lift this athlete hasn't logged (not in the
+    // base picker) still shows — greyed (missing) with a "—" — so the trio is always
+    // available, not collapsed to whichever one happens to be logged.
+    const scored = bestLiftExercises().map(({ lift, exercise }) => {
       const e = byName.get(exercise);
-      if (!e) return [];
-      return [{ e, pct: bestLiftPercent(user, lift, exercise) }];
+      return {
+        name: exercise,
+        identity: e?.identity ?? ("original" as ExerciseIdentity),
+        missing: e ? !!e.missing : true,
+        pct: bestLiftPercent(user, lift, exercise),
+      };
     });
     scored.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
-    return scored.map(({ e, pct }): SpecialItem => ({
-      name: e.name, identity: e.identity, ...(e.missing ? { missing: true } : {}),
-      metric: pct === null ? "—" : `${pct}%`,
+    return scored.map((s): SpecialItem => ({
+      name: s.name, identity: s.identity, ...(s.missing ? { missing: true } : {}),
+      metric: s.pct === null ? "—" : `${s.pct}%`,
     }));
   }
   const counts = freqCounts();
