@@ -926,16 +926,58 @@ const levelScaleOverrides: Record<string, number> = (() => {
   }
 })();
 
+// INCLINE scales are GLOBAL — exercise-independent — because the incline (how high
+// the hands are) is a physical property shared by every push-up variant, not a
+// per-name thing. Keyed by "<dim>|<value>" ("sq|8", "smith|3", "cm|20"). Edited in
+// one place (Settings → Difficulty multipliers → incline, and the set popover), so
+// there's a single source of truth for "SQ8 = ×0.4" across all push-ups.
+const INCLINE_SCALE_STORE_KEY = "colosseum.inclineScales.v1";
+const inclineScaleOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(INCLINE_SCALE_STORE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+// One-time migration: fold any LEGACY per-exercise incline override (set before the
+// scale went global) into the global store, so an existing "Push Up|sq|8 = 0.4" is
+// preserved as "sq|8 = 0.4" and both the popover and the editor agree.
+for (const [k, v] of Object.entries(levelScaleOverrides)) {
+  const parts = k.split("|");
+  const ex = parts[0], dim = parts[1], val = parts[2];
+  if (ex && dim && val !== undefined && isInclineLevelExercise(ex)) {
+    const ik = `${dim}|${val}`;
+    if (!(ik in inclineScaleOverrides)) inclineScaleOverrides[ik] = v;
+  }
+}
+const inclineKey = (dim: LevelDim, value: number): string => `${dim}|${value}`;
+/** The incline scale for a level (override, else the seeded cm-incline formula). */
+function inclineScaleFor(dim: LevelDim, value: number): number {
+  const ik = inclineKey(dim, value);
+  if (Object.prototype.hasOwnProperty.call(inclineScaleOverrides, ik)) return inclineScaleOverrides[ik]!;
+  return inclineScale(levelInclineCm(dim, value));
+}
+function setInclineScale(dim: LevelDim, value: number, v: number): void {
+  inclineScaleOverrides[inclineKey(dim, value)] = v;
+  try {
+    localStorage.setItem(INCLINE_SCALE_STORE_KEY, JSON.stringify(inclineScaleOverrides));
+  } catch {
+    /* storage may be unavailable — edits still apply this session */
+  }
+}
+
 /** Technique scaling factor for one set's level: the owner's override, else the
  * seeded default (×1 at the floor/neutral, easier levels scaled down). For the
  * push-up family the level is an INCLINE: cm / squat-rack hole / Smith notch all
  * convert to one cm height, and a higher incline reads easier (a floor push-up at
  * 0cm is the ×1 reference) — so a Smith-machine incline push-up lines up with a
- * floor one. The owner still tunes any single level via the ⚙ scaling table. */
+ * floor one. Incline scales are GLOBAL (tuned in ⚙ Difficulty multipliers / the set
+ * popover); other levels keep a per-exercise override. */
 function levelScaleFor(exerciseName: string, dim: LevelDim, value: number): number {
+  if (isInclineLevelExercise(exerciseName)) return inclineScaleFor(dim, value);
   const key = levelKey(exerciseName, dim, value);
   if (Object.prototype.hasOwnProperty.call(levelScaleOverrides, key)) return levelScaleOverrides[key]!;
-  if (isInclineLevelExercise(exerciseName)) return inclineScale(levelInclineCm(dim, value));
   return defaultLevelScale(dim, value);
 }
 
@@ -4611,6 +4653,11 @@ function renderExerciseLevels(exName: string, username: string): void {
     .map((v) => {
       const scale = levelScaleFor(exName, v.dim, v.value);
       const dispW = v.best.origWeight === undefined ? v.best.weight : (v.best.origWeight ?? 0);
+      // Incline scale is GLOBAL (data-incdim/-incval); other levels per-exercise.
+      const incline = isInclineLevelExercise(exName);
+      const scaleAttrs = incline
+        ? `data-incdim="${v.dim}" data-incval="${v.value}"`
+        : `data-levelkey="${escapeHtml(levelKey(exName, v.dim, v.value))}"`;
       return (
         `<tr>` +
         `<td><strong>${escapeHtml(v.label)}</strong></td>` +
@@ -4618,7 +4665,7 @@ function renderExerciseLevels(exName: string, username: string): void {
         `<td class="num">${fmt(v.oneRm)}</td>` +
         `<td class="num"><strong>${fmt(v.oneRm * scale)}</strong></td>` +
         `<td class="num"><input class="bw-input exl-scale" type="number" step="0.05" min="0" max="5" value="${scale}" ` +
-        `data-levelkey="${escapeHtml(levelKey(exName, v.dim, v.value))}" aria-label="Scaling factor for ${escapeHtml(v.label)}" /></td>` +
+        `${scaleAttrs} aria-label="Scaling factor for ${escapeHtml(v.label)}" /></td>` +
         `</tr>`
       );
     })
@@ -6380,24 +6427,33 @@ let scaleEditDirty = false; // an edit was made while the popover was open
 function scaleEditLevelBlock(): string {
   const lv = scaleEditState?.level;
   if (!lv) return "";
-  const scale = levelScaleFor(scaleEditState!.ex, lv.dim, lv.value);
-  const key = levelKey(scaleEditState!.ex, lv.dim, lv.value);
+  const ex = scaleEditState!.ex;
+  const scale = levelScaleFor(ex, lv.dim, lv.value);
+  // Incline scales are GLOBAL (data-incdim/-incval → setInclineScale, shared by every
+  // push-up); any other level keeps a per-exercise override (data-levelkey).
+  const incline = isInclineLevelExercise(ex);
+  const attrs = incline
+    ? `data-incdim="${escapeHtml(lv.dim)}" data-incval="${lv.value}"`
+    : `data-levelkey="${escapeHtml(levelKey(ex, lv.dim, lv.value))}"`;
   return (
     `<div class="ex-var-dim scale-edit-lvl-row"><span class="ex-var-dim-lbl">incline</span>` +
     `<div class="ex-var-selrow"><span class="set-lvl">${escapeHtml(lv.label)}</span>` +
     `<label class="ex-var-lbl">× <input class="ex-var-input scale-edit-lvl" type="number" step="0.05" min="0.1" max="5" ` +
-    `value="${scale}" data-levelkey="${escapeHtml(key)}" aria-label="Incline scale for ${escapeHtml(lv.label)}" /></label></div></div>`
+    `value="${scale}" ${attrs} aria-label="Incline scale for ${escapeHtml(lv.label)}" /></label></div></div>`
   );
 }
 function renderScaleEditor(): void {
   const pop = document.getElementById("scaleEditPop");
   if (!pop || !scaleEditState) return;
   const title = scaleEditState.note.startsWith("__set:") ? "This set's variation" : scaleEditState.note;
+  // The incline level (if any) multiplies into the picker's "final multiplier".
+  const lv = scaleEditState.level;
+  const lvlFactor = lv ? levelScaleFor(scaleEditState.ex, lv.dim, lv.value) : 1;
   pop.innerHTML =
     `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(title)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     scaleEditLevelBlock() +
-    notePickerHtml(scaleEditState.ex, scaleEditState.note);
+    notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor);
   refreshPoseViz();
 }
 function positionScaleEditor(anchor: HTMLElement): void {
@@ -7128,11 +7184,47 @@ function familyFactorTableHtml(fam: string): string {
   // Lean is rendered once per wall support, since its effect differs (back- vs
   // front-to-wall); each starts from the shared base lean until tuned.
   const LEAN_SUPPORTS: [string, string][] = [["free", "lean — free"], ["back_to_wall", "lean — back to wall"], ["front_to_wall", "lean — front to wall"]];
-  return Object.keys(FAMILIES[fam]!.dims)
+  const dimTables = Object.keys(FAMILIES[fam]!.dims)
     .flatMap((dim) =>
       dim === "band" ? [bandKnobTable()] : dim === "lean" ? LEAN_SUPPORTS.map(([sup, lbl]) => table(`lean:${sup}`, lbl)) : [table(dim, dim)],
     )
     .join("");
+  // Push-ups also carry an INCLINE (per-set height level) — its own global editor.
+  return fam === "PUSHUP" ? dimTables + inclineLevelsEditorHtml() : dimTables;
+}
+
+/** The global INCLINE multiplier editor (push-ups): one editable cell per height —
+ * squat-rack holes (SQ0–20), Smith notches (Sm0–9) and a few cm anchors. ×1 = floor
+ * (hardest); higher = easier. Shared by every push-up, so SQ8 has ONE value. Each
+ * row scrolls sideways (rule: dense, no wrapped block). Seeded from the cm-incline
+ * formula; an edited cell is highlighted. */
+function inclineLevelsEditorHtml(): string {
+  const range = (a: number, b: number, step = 1): number[] => {
+    const out: number[] = [];
+    for (let i = a; i <= b; i += step) out.push(Math.round(i * 100) / 100);
+    return out;
+  };
+  const row = (dim: LevelDim, label: string, values: number[]): string => {
+    const cells = values
+      .map((val) => {
+        const ov = inclineKey(dim, val) in inclineScaleOverrides;
+        const lbl = levelLabel(dim, val);
+        return (
+          `<label class="fac-cell inc-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${escapeHtml(lbl)}</span>` +
+          `<input class="fac-input inc-input" type="number" step="0.01" min="0.05" max="3" value="${inclineScaleFor(dim, val)}" ` +
+          `data-incdim="${dim}" data-incval="${val}" aria-label="${escapeHtml(lbl)} incline multiplier" /></label>`
+        );
+      })
+      .join("");
+    return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(label)}</div><div class="fac-cells inc-cells">${cells}</div></div>`;
+  };
+  return (
+    `<div class="fac-dim-h inc-hd">incline — × per hand height (×1 = floor, hardest; raised = easier)</div>` +
+    `<div class="ex-group-why muted">Shared by every push-up (Smith / squat-rack / cm all line up on one scale). Edit any level; it applies everywhere.</div>` +
+    row("sq", "squat-rack hole (SQ)", range(0, 20)) +
+    row("smith", "Smith notch (Sm)", range(0, 9)) +
+    row("cm", "raised height (cm)", range(0, 60, 10))
+  );
 }
 
 /** "1=−5kg  2=−7.1kg  …  6=−28.3kg" — the kg the current knob produces per band. */
@@ -7409,7 +7501,7 @@ function familyPosable(fam: string | null): boolean {
   return !!fam && ["rom", "lean", "support"].every((d) => FAMILIES[fam]!.dims[d]);
 }
 
-function notePickerHtml(name: string, note: string): string {
+function notePickerHtml(name: string, note: string, extraFactor = 1): string {
   const fam = familyOf(name);
   if (!fam) {
     const scale = variationScaleFor(name, note);
@@ -7540,7 +7632,10 @@ function notePickerHtml(name: string, note: string): string {
       return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
     })
     .join("");
-  return `${toggle}<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div></div>`;
+  // The "final multiplier" folds in any extra factor (the per-set incline level shown
+  // above the picker in the popover), so it's the TRUE combined ×, not just the family.
+  const finalMult = Math.round(scale * extraFactor * 1e6) / 1e6;
+  return `${toggle}<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${finalMult}</strong> <span class="muted">final multiplier</span></div></div>`;
 }
 
 /** A little side-view scene for the depth × lean pad: the floor and the wall —
@@ -8588,12 +8683,25 @@ async function init() {
     // wins over the seeded incline default) and re-render the popover so the chip
     // updates; the table/graphs sync on close.
     const lvlIn = (e.target as HTMLElement).closest<HTMLInputElement>(".scale-edit-lvl");
-    if (lvlIn?.dataset.levelkey) {
+    if (lvlIn && (lvlIn.dataset.levelkey || lvlIn.dataset.incdim)) {
       let v = Number(lvlIn.value);
       if (!Number.isFinite(v)) v = 1;
       v = Math.min(5, Math.max(0.1, Math.round(v * 100) / 100));
-      setLevelScale(lvlIn.dataset.levelkey, v);
+      if (lvlIn.dataset.incdim) setInclineScale(lvlIn.dataset.incdim as LevelDim, Number(lvlIn.dataset.incval), v);
+      else setLevelScale(lvlIn.dataset.levelkey!, v);
       if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+      return;
+    }
+    // The global INCLINE editor (Settings / exercise info → Difficulty multipliers):
+    // save the level's shared scale + recolour the cell, apply app-wide debounced.
+    const inc = (e.target as HTMLElement).closest<HTMLInputElement>(".inc-input");
+    if (inc?.dataset.incdim && inc.dataset.incval !== undefined) {
+      const v = Number(inc.value);
+      if (Number.isFinite(v) && v > 0) {
+        setInclineScale(inc.dataset.incdim as LevelDim, Number(inc.dataset.incval), Math.round(v * 1000) / 1000);
+        inc.closest(".fac-cell")?.classList.add("is-ov");
+        scheduleModelFactorsApply();
+      }
       return;
     }
     // Edit a difficulty-model factor. Keep it light so you can edit many in a row:
@@ -9197,14 +9305,15 @@ async function init() {
   // Squat-rack holes panel: editing a hole's BW % rescales every set at that
   // hole; re-render the drill-in so the effort 1RMs update live.
   els.exLevels.addEventListener("change", (e) => {
-    const el = e.target as HTMLElement;
+    const el = e.target as HTMLInputElement;
     if (!el.classList.contains("exl-scale")) return;
-    const key = (el as HTMLInputElement).dataset.levelkey;
-    if (key === undefined) return;
-    let v = parseFloat((el as HTMLInputElement).value);
+    let v = parseFloat(el.value);
     if (!Number.isFinite(v)) v = 1;
     v = Math.min(5, Math.max(0, v));
-    setLevelScale(key, v);
+    // Incline level → the GLOBAL incline store; any other level → per-exercise.
+    if (el.dataset.incdim) setInclineScale(el.dataset.incdim as LevelDim, Number(el.dataset.incval), v);
+    else if (el.dataset.levelkey !== undefined) setLevelScale(el.dataset.levelkey, v);
+    else return;
     if (selectedExercise) renderExerciseDetail(selectedExercise);
   });
   // Back link in the exercise drill-in (lives in the title, outside the table).

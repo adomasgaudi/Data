@@ -2382,6 +2382,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-model-fold .fac-cell.is-ov { border-color: var(--accent); }
 .ex-model-fold .fac-lvl { color: var(--muted); }
 .ex-model-fold .fac-input { width: 3.1rem; font: inherit; font-size: 0.72rem; border: none; background: none; color: var(--text); text-align: right; }
+/* Incline rows: many levels (SQ0–20, Sm0–9) → ONE sideways-scrolling row, never a
+   wrapped multi-row block (rule: cram, swipe sideways). */
+.ex-model-fold .inc-cells { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.ex-model-fold .inc-cells .fac-cell { flex: 0 0 auto; }
+.ex-model-fold .inc-hd { margin-top: 0.55rem; color: var(--accent); }
 .ex-pad-dot {
   position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
   background: var(--accent); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); pointer-events: none;
