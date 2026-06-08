@@ -11064,7 +11064,6 @@ function renderSelector(scope: SelScope): void {
   curSelScope = scope;
   sel.dataset.selscope = scope;
   const cur = selArr();
-  const scopeLabel = scope === "graph" ? "Graph lifts" : "History lifts";
   // Identity-inclusion toggles (shared) — they filter the chips below.
   const idLabels: [ExerciseIdentity, string][] = [
     ["original", "Original"], ["dissolved", "Dissolved"], ["combined", "Combined"], ["comparison_group", "Comparison groups"],
@@ -11078,7 +11077,6 @@ function renderSelector(scope: SelScope): void {
   const nextName: NameMode = nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code";
   const nameToggle =
     `<button type="button" class="wa-name-opt name-mode-opt" data-waname="${nextName}" title="Lift labels — tap to cycle: code → short → full">${nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full"}</button>`;
-  const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
   const groupOpts =
     `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
     WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
@@ -11107,10 +11105,11 @@ function renderSelector(scope: SelScope): void {
   const foldTools = `<div class="wa-chips-tools">${matchBtn}${missingToggle}${searchActive}</div>`;
   const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
   const prevChipScroll = sel.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
-  const scopeCount = `<span class="wa-sel-scopelabel">${escapeHtml(scopeLabel)} <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></span>`;
+  // Everything but Group lives in the ⚙ popout now: pick-mode, Select all / Clear,
+  // Match, Show missing, the identity toggles and name mode.
   const settingsCog =
-    `<details class="wa-sel-cog"><summary class="wa-sel-cog-sum" title="Selector settings — identities, name mode, match, show missing">⚙</summary>` +
-    `<div class="wa-sel-cog-menu">${foldTools}${settingsBlock}</div></details>`;
+    `<details class="wa-sel-cog"><summary class="wa-sel-cog-sum" title="Selector settings — pick mode, select all / clear, identities, name mode, match, show missing">⚙</summary>` +
+    `<div class="wa-sel-cog-menu"><div class="wa-chips-tools">${modeToggle}${selAllBtn}${clearBtn}</div>${foldTools}${settingsBlock}</div></details>`;
   // Selected pills. For the GRAPH selector the first WA_GRAPH_MAX are marked 📈 (the
   // graph's point budget) with a "Trim to N" button; the history selector has no cap.
   const onGraph = scope === "graph" ? new Set(cur.slice(0, WA_GRAPH_MAX)) : new Set<string>();
@@ -11119,9 +11118,8 @@ function renderSelector(scope: SelScope): void {
   if (stickyCats) {
     // Category mode: the always-visible top strip IS the whole-category picker — one
     // expandable pill per group (tap opens its exercises), horizontally scrollable.
-    // The per-pill count shows what's selected, so no separate selected-pills row.
-    selPills = `<div class="wa-cat-allrow">${waCatAllPill(waChipListBase())}</div>` +
-      `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
+    // No "all" pill (redundant with Select all / Clear in the ⚙) and no count label.
+    selPills = `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
   } else if (cur.length) {
     selPills = `<div class="wa-sel-pills">` +
       cur.map((n) => {
@@ -11142,7 +11140,7 @@ function renderSelector(scope: SelScope): void {
   const showGrid = !stickyCats;
   sel.innerHTML =
     `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${scopeCount}${groupCtl}${modeToggle}${selAllBtn}${clearBtn}${settingsCog}${trimBtn}</div>` +
+    `<div class="wa-sel-tools">${groupCtl}${settingsCog}${trimBtn}</div>` +
     `</div>` +
     selPills +
     (showGrid ? `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` : "");
