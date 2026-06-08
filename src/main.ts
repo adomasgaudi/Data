@@ -2503,13 +2503,28 @@ function currentTopTab(): string {
 /** Where the exercise-settings overlay was opened from, so its Back button can
  * return there (Analysis or Index). Captured only on a fresh open. */
 let exInfoOrigin = "bwparts";
+/** The Index table row for a lift — or, for a synthetic combined/comparison lift
+ * that has NO row of its own (e.g. "SQ mix" isn't a logged name), the row of its
+ * first listed member, so "go to Index" lands on something relevant instead of
+ * nowhere (the recurring "Index button does nothing for combined lifts"). */
+function indexRowFor(name: string): HTMLTableRowElement | null {
+  const find = (n: string) => els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(n)}"]`);
+  const direct = find(name);
+  if (direct) return direct;
+  for (const m of [...groupMembersForName(name), ...expandToRawExercises([name])]) {
+    if (m === name) continue;
+    const r = find(m);
+    if (r) return r;
+  }
+  return null;
+}
 function openExerciseInfo(name: string): void {
   // Remember the view we came from (only on a fresh open — opening another lift
   // while the overlay is up keeps the original origin).
   if (els.exInfoPage.hidden) exInfoOrigin = currentTopTab();
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
-  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  const row = indexRowFor(name);
   if (row) {
     openAncestorDetails(row); // its group + "Show hidden" sub-dropdown if filtered out
     requestAnimationFrame(() => row.scrollIntoView({ behavior: "auto", block: "center" }));
@@ -2533,7 +2548,7 @@ function closeExerciseInfo(): void {
   }
   // Index backdrop: flash the row so closing leaves your eye where you are.
   if (!name) return;
-  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  const row = indexRowFor(name);
   if (!row) return;
   row.scrollIntoView({ behavior: "auto", block: "center" });
   row.classList.add("wo-flash");
@@ -2546,7 +2561,7 @@ function gotoIndexFromInfo(): void {
   els.exInfoPage.hidden = true;
   switchTopTab("bwparts");
   if (!name) return;
-  const row = els.bwGroups.querySelector<HTMLTableRowElement>(`tr[data-exrow="${CSS.escape(name)}"]`);
+  const row = indexRowFor(name);
   if (!row) return;
   openAncestorDetails(row);
   requestAnimationFrame(() => {
