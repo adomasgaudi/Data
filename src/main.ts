@@ -3518,70 +3518,48 @@ function renderAthleteProfile() {
         );
       })()
     : "";
-  // Proportional lean/fat MASS BAR: a vertical stacked column (fat on top, lean
-  // below) sized by each share of bodyweight, with a kg ⇄ % toggle. The rest of
-  // the body-comp info sits to its right. Two extras:
-  //  • a DASHED continuation above the lean block = the muscle still buildable up to
-  //    the natural nFFMI cap (editable in athlete settings) — "room to grow".
-  //  • an ideal BODY-FAT zone marked on the fat region (10–20% men / 15–25% women).
+  // MECHANICAL stacked body-composition bar (bottom → top):
+  //   1. buildable "possible" lean (dashed blue)   2. lean (solid blue)
+  //   3. fat: dashed-gray EMPTY reference zones (essential ~5%, then up to the ideal
+  //      cap ~20% of bodyweight) with the ACTUAL fat drawn as SOLID GOLD over them.
+  // Every block is positioned absolutely from the BOTTOM as a share of the bar's kg
+  // span, so proportions are exact rather than hand-stacked.
   const leanKg = mass.lean.avg, fatKg = mass.fat.avg;
   const bw = p.weight || leanKg + fatKg || 1;
   const leanCapKg = pot ? pot.leanLimit.avg : leanKg;
   const potLeanKg = Math.max(0, leanCapKg - leanKg); // buildable muscle headroom
-  // Scale the whole column to fat + the lean CEILING, so the dashed headroom shows.
-  const barTotal = fatKg + Math.max(leanKg, leanCapKg) || 1;
-  const fatH = (fatKg / barTotal) * 100;
-  const potH = (potLeanKg / barTotal) * 100;
-  const leanH = (leanKg / barTotal) * 100;
-  const leanPct = (leanKg / bw) * 100, fatPct = (fatKg / bw) * 100; // of bodyweight (labels)
+  const essFrac = p.sex === "f" ? 0.12 : 0.05;        // essential fat (of bodyweight)
+  const idealHiFr = p.sex === "f" ? 0.25 : 0.20;      // top of the ideal-fat range
+  // The fat zone reaches up to whichever is taller — actual fat or the ideal cap — so
+  // the dashed reference is always visible even when actual fat sits below it.
+  const fatZoneKg = Math.max(fatKg, idealHiFr * bw);
+  const barTotalKg = potLeanKg + leanKg + fatZoneKg || 1;
+  const pc = (kg: number) => (kg / barTotalKg) * 100;
+  const fatBaseKg = potLeanKg + leanKg; // kg height of the lean top, where fat starts
+  const leanPct = (leanKg / bw) * 100, fatPct = (fatKg / bw) * 100;
   const leanLbl = bcMassUnit === "kg" ? `${f1s(leanKg)} kg` : `${Math.round(leanPct)}%`;
   const fatLbl = bcMassUnit === "kg" ? `${f1s(fatKg)} kg` : `${Math.round(fatPct)}%`;
   const potLbl = bcMassUnit === "kg" ? `+${f1s(potLeanKg)} kg` : `+${Math.round((potLeanKg / bw) * 100)}%`;
-  const seg = (cls: string, pct: number, name: string, val: string, extra = "") =>
-    `<div class="bc-seg ${cls}" style="height:${pct.toFixed(1)}%"${extra}>` +
-    // Drop the uppercase NAME on a very short segment — only the value fits there;
-    // the colour already says which part it is (gold = fat, blue = lean, dashed = build).
-    (pct >= 12 ? `<span class="bc-seg-name">${name}</span>` : "") +
-    `<span class="bc-seg-val">${val}</span></div>`;
-  // Ideal body-fat zone, as a band measured DOWN from the top (fat sits at the top):
-  // a fat of X kg occupies the top X/barTotal of the column.
-  const idealLoFr = p.sex === "f" ? 0.15 : 0.10;
-  const idealHiFr = p.sex === "f" ? 0.25 : 0.20;
-  const idealTop = ((idealLoFr * bw) / barTotal) * 100;
-  const idealBot = Math.min(100, ((idealHiFr * bw) / barTotal) * 100);
-  const idealRangeLbl = `${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}%`;
-  // The band is drawn on the bar as a dashed, FILL-LESS zone (no text inside — it
-  // overlapped the Fat label); the range is spelled out in a caption under the bar.
-  const idealBand = fatKg > 0
-    ? `<div class="bc-fat-ideal" style="top:${idealTop.toFixed(1)}%;height:${Math.max(0, idealBot - idealTop).toFixed(1)}%" ` +
-      `title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}: ${idealRangeLbl} of bodyweight"></div>`
+  // One absolutely-positioned block, measured from the bottom. The uppercase NAME is
+  // dropped when the block is too thin to hold both lines (the colour already says which).
+  const blk = (cls: string, bottomKg: number, hKg: number, name: string, val: string, extra = "") => {
+    const h = pc(hKg);
+    const inner = h >= 12 ? `<span class="bc-seg-name">${name}</span><span class="bc-seg-val">${val}</span>` : `<span class="bc-seg-val">${val}</span>`;
+    return `<div class="bc-blk ${cls}" style="bottom:${pc(bottomKg).toFixed(2)}%;height:${h.toFixed(2)}%"${extra}>${inner}</div>`;
+  };
+  const buildBlk = potLeanKg > 0
+    ? blk("bc-blk-build", 0, potLeanKg, "Build", potLbl, ` title="Muscle still buildable to your natural cap (nFFMI ${f1s(ffmiCapFor(username))}, editable in ✎ Edit): lean cap ${f1s(leanCapKg)} kg"`)
     : "";
-  // Essential-fat zone (~5% of bodyweight, ~12% women) — the fat you keep, so it sits
-  // at the BOTTOM of the fat slice right against the lean block. Same gold as the fat,
-  // just dashed THROUGH so it reads as its own zone without a different colour.
-  const essFrac = p.sex === "f" ? 0.12 : 0.05;
-  const essH = Math.min(fatH, ((essFrac * bw) / barTotal) * 100);
-  const essentialBand = fatKg > 0
-    ? `<div class="bc-fat-essential" style="top:${Math.max(0, fatH - essH).toFixed(1)}%;height:${essH.toFixed(1)}%" ` +
-      `title="Essential fat — the leanest healthy ~${Math.round(essFrac * 100)}% of bodyweight (the fat you keep)"></div>`
-    : "";
-  const idealCap = fatKg > 0
-    ? `<div class="bc-ideal-cap" title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}"><i class="bc-ideal-sw"></i><span class="bc-ideal-words">ideal fat</span> ${idealRangeLbl}</div>`
-    : "";
-  const potSeg = potH > 0.5
-    ? seg("bc-seg-leanpot", potH, "Build", potLbl, ` title="Muscle still buildable to your natural cap (nFFMI ${f1s(ffmiCapFor(username))}, editable in ✎ Edit): lean cap ${f1s(leanCapKg)} kg"`)
-    : "";
-  // Order top→bottom: Fat, Lean, then the buildable-muscle ("possible muscle")
-  // headroom BELOW the lean block. The dashed ideal-fat zone stays absolutely
-  // positioned on the fat region regardless of segment order.
+  const leanBlk = blk("bc-blk-lean", potLeanKg, leanKg, "Lean", leanLbl, ` title="Lean mass ${f1s(leanKg)} kg"`);
+  const fatBlk = fatKg > 0 ? blk("bc-blk-fat", fatBaseKg, fatKg, "Fat", fatLbl, ` title="Body fat ${f1s(fatKg)} kg"`) : "";
+  // Dashed-gray EMPTY reference zones, drawn ON TOP so their outline shows over the gold.
+  const essRef = `<div class="bc-ref bc-ref-ess" style="bottom:${pc(fatBaseKg).toFixed(2)}%;height:${pc(essFrac * bw).toFixed(2)}%" title="Essential fat ~${Math.round(essFrac * 100)}% of bodyweight"></div>`;
+  const idealRef = `<div class="bc-ref bc-ref-ideal" style="bottom:${pc(fatBaseKg + essFrac * bw).toFixed(2)}%;height:${pc((idealHiFr - essFrac) * bw).toFixed(2)}%" title="Ideal fat up to ${Math.round(idealHiFr * 100)}% of bodyweight"></div>`;
   const bcBar =
-    `<div class="bc-massbar" title="Body composition — lean vs fat mass; dashed = muscle still buildable to your natural cap" aria-label="Lean ${leanLbl}, Fat ${fatLbl}, buildable ${potLbl}">` +
-    seg("bc-seg-fat", fatH, "Fat", fatLbl) +
-    seg("bc-seg-lean", leanH, "Lean", leanLbl) +
-    potSeg +
-    essentialBand +
-    idealBand +
+    `<div class="bc-massbar" aria-label="Lean ${leanLbl}, Fat ${fatLbl}, buildable ${potLbl}">` +
+    buildBlk + leanBlk + fatBlk + essRef + idealRef +
     `</div>`;
+  const idealCap = `<div class="bc-ideal-cap" title="Dashed = ideal-fat reference: essential ~${Math.round(essFrac * 100)}% then up to ${Math.round(idealHiFr * 100)}% of bodyweight"><i class="bc-ideal-sw"></i><span class="bc-ideal-words">ideal fat</span> ≤${Math.round(idealHiFr * 100)}%</div>`;
   const unitToggle = `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;
   // Caption sits right under the bar (close to the lean block), toggle last.
   const massView =
