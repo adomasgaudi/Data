@@ -1104,6 +1104,16 @@ main { padding-bottom: 5rem; }
 .scale-edit-close { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; line-height: 1.6; }
 .scale-edit-close:hover { border-color: var(--accent); color: var(--accent); }
 .scale-edit-pop .ex-var-picker { padding: 0; }
+/* Popover: the original note (read-only) + the editable incline level. */
+.scale-edit-note { font-size: 0.72rem; margin: 0 0 0.35rem; overflow-wrap: anywhere; }
+.scale-edit-note-txt { color: var(--text); font-weight: 600; }
+.scale-edit-lvldim { font-size: 0.7rem; font-weight: 600; padding: 1px 8px; white-space: nowrap; }
+.scale-edit-lvlval { width: 3.4rem; }
+.scale-edit-lvlmult { font-size: 0.78rem; white-space: nowrap; }
+/* Incline editor: cm-per-step conversions + a derived preview line. */
+.inc-unit { font-size: 0.62rem; margin-left: 1px; }
+.inc-prev { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: 0.68rem; margin: 0.25rem 0 0; }
+.inc-prev-item { white-space: nowrap; }
 /* Effort tag from RIR: hard / mid / warm-up. */
 .set-eff { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; }
 .eff-hard { color: #fff; background: #c0392b; }
