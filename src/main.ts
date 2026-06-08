@@ -714,6 +714,11 @@ const metaOverrides: MetaOverrides = (() => {
       const single = m[k]!, set = m[`${k}Set` as const]!;
       for (const [name, v] of Object.entries(single)) if (v && !set[name]?.length) set[name] = [v];
     }
+    // The "Skill" discipline was removed (it's just Calisthenics) — rewrite any saved
+    // Skill discipline overrides so old backups don't show a dangling Skill group.
+    const fixDisc = (v: string) => (v === "Skill" ? "Calisthenics" : v);
+    for (const [name, v] of Object.entries(m.disc!)) m.disc![name] = fixDisc(v);
+    for (const [name, arr] of Object.entries(m.discSet!)) m.discSet![name] = [...new Set(arr.map(fixDisc))];
     return m;
   } catch {
     return empty();
@@ -3160,7 +3165,7 @@ const muscleColor = (m: MuscleGroup): string =>
 // Discipline (training-style) colours for the Index "By discipline" grouping.
 const DISCIPLINE_COLORS: Record<Discipline, string> = {
   "Strength": "#284e86", Calisthenics: "#2e7d52", Statics: "#5e708a", Mobility: "#1f8a8a",
-  Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b", Skill: "#b8902f",
+  Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b",
   Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
 };
 const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";

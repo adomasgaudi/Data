@@ -650,8 +650,9 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
 /**
  * Training DISCIPLINE — the *style* of training a lift belongs to, the dimension
  * the owner edits as "Discipline" (muscle group covers anatomy separately). A lift
- * can fit several (handstand = Skill + Balance + Calisthenics), so the editor is
+ * can fit several (handstand = Balance + Calisthenics), so the editor is
  * multi-select; this returns the single best-guess PRIMARY for a fresh lift.
+ * (There is no "Skill" discipline — bodyweight skills are just Calisthenics.)
  */
 export type Discipline =
   | "Strength"
@@ -661,13 +662,12 @@ export type Discipline =
   | "Dynamic"
   | "Posture"
   | "Cardio"
-  | "Skill"
   | "Balance"
   | "Parkour"
   | "Climbing";
 export const DISCIPLINES: Discipline[] = [
   "Strength", "Calisthenics", "Statics", "Mobility", "Dynamic", "Posture",
-  "Cardio", "Skill", "Balance", "Parkour", "Climbing",
+  "Cardio", "Balance", "Parkour", "Climbing",
 ];
 /** Best-guess primary discipline by keyword; everything loaded falls to
  * Strength (the owner re-tags from there as needed). */
@@ -688,7 +688,9 @@ export function exerciseDiscipline(exerciseName: string): Discipline {
   // a few inherently-static skills (levers / planche / flag / iron cross) that hold
   // a position even when the name omits "hold".
   if (isIsometric(n) || has("wall sit", "front lever", "planche", "human flag", "iron cross", "maltese") ) return "Statics";
-  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "l-sit", "l sit", "lsit", "lever", "flag")) return "Skill";
+  // Bodyweight SKILLS (handstands, muscle-ups, levers, flags, L-sits…) are just
+  // Calisthenics now — there's no separate "Skill" discipline.
+  if (has("front lever", "planche", "human flag", "maltese", "dragon flag", "handstand", "headstand", "forearm stand", "muscle up", "iron cross", "l-sit", "l sit", "lsit", "lever", "flag")) return "Calisthenics";
   if (has("balance", "slackline", "beam", "one-leg", "single-leg balance")) return "Balance";
   if (has("jump", "plyo", "hop", "explosive", "clap", "throw", "slam", "ballistic", "bound")) return "Dynamic";
   // Calisthenics = BODYWEIGHT moves; a "machine" anything is strength, not calisthenics.
@@ -703,9 +705,6 @@ export function exerciseDisciplines(exerciseName: string): Discipline[] {
   const n = exerciseName.toLowerCase();
   if (/wall climb|wall run|run ?up|vault|\bkong\b|cat leap|precision jump|parkour|rag wall/.test(n) && !out.includes("Parkour"))
     out.push("Parkour");
-  // Bodyweight SKILLS (levers, planche, handstands, muscle-ups, L-sit…) are
-  // calisthenics too — they belong in both the Skill and Calisthenics groups.
-  if (out[0] === "Skill" && !out.includes("Calisthenics")) out.push("Calisthenics");
   return out;
 }
 
