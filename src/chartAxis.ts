@@ -110,6 +110,8 @@ export function buildCompactor(times: Iterable<number>): TimeCompactor {
   if (days.length < 2) return { to: (t) => t, from: (c) => c };
   const real = days.map((d) => d * MS_DAY); // real start-of-day timestamps
   const comp = days.map((_, i) => i * MS_DAY); // uniform: every training day is one slot
+  const slotOf = new Map<number, number>();
+  days.forEach((d, i) => slotOf.set(d, i));
   // Piecewise-linear interpolation between two parallel monotonic arrays.
   const interp = (xs: number[], ys: number[], v: number): number => {
     if (v <= xs[0]!) return ys[0]! + (v - xs[0]!); // slope-1 extrapolation
@@ -121,7 +123,24 @@ export function buildCompactor(times: Iterable<number>): TimeCompactor {
     const f = span > 0 ? (v - xs[lo]!) / span : 0;
     return ys[lo]! + f * (ys[hi]! - ys[lo]!);
   };
-  return { to: (t) => interp(real, comp, t), from: (cc) => interp(comp, real, cc) };
+  // A timestamp on a training DAY keeps its intra-day offset at FULL slot width:
+  // comp = slot-start + (t − day-start). That's the fix for same-day sets vanishing
+  // in compacted view — their fan used to be scaled DOWN by the (collapsed) gap to
+  // the next session, so a long layoff squeezed a whole session onto one pixel. Now
+  // a day's own 0–24h spread always occupies its full one-day-wide slot, regardless
+  // of the gaps around it. Off-day query points (between sessions) fall back to the
+  // piecewise-linear day-start interpolation, which agrees at every day boundary so
+  // the whole mapping stays monotonic.
+  const to = (t: number): number => {
+    const d = Math.round(t / MS_DAY);
+    const slot = slotOf.get(d);
+    return slot !== undefined ? slot * MS_DAY + (t - d * MS_DAY) : interp(real, comp, t);
+  };
+  const from = (cc: number): number => {
+    const slot = Math.round(cc / MS_DAY);
+    return slot >= 0 && slot < days.length ? days[slot]! * MS_DAY + (cc - slot * MS_DAY) : interp(comp, real, cc);
+  };
+  return { to, from };
 }
 
 /**

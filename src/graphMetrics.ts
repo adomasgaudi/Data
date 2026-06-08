@@ -59,13 +59,22 @@ export interface GraphMetricDef {
 const ts = (d: string): number => Date.parse(d);
 const added = (r: SetRecord): number | null => (r.origWeight !== undefined ? r.origWeight : r.weight);
 
-const HOUR = 3_600_000;
-const EVENING_START_H = 17; // assume an evening workout (5pm) when no clock time is logged
+// Same-day sets are fanned across this window of the day (fraction of 24h), in
+// logged set order. It stays inside the FIRST HALF of the day on purpose: the
+// compacted-time axis buckets a timestamp to its nearest day (round), so keeping
+// the whole fan within [0, 0.5) of the day guarantees every set of a session lands
+// on that day's slot (correct date) AND never bleeds into the next calendar day —
+// while still using as much width as possible so the sets read as distinct points.
+const FAN_LO = 0.05;
+const FAN_HI = 0.49;
 
 /** Synthetic per-set timestamps. Logged sets carry only a date, so every set in a
- * day parses to midnight and stacks on one x (points hide behind each other).
- * Spread each day's sets one hour apart from an evening 5pm start, in logged set
- * order, so the sets of a session read as distinct times along the graph. */
+ * day parses to midnight and stacks on one x (points hide behind each other). Fan
+ * each day's sets EVENLY across the day (in logged set order) so the sets of a
+ * session read as distinct points — spread to the set count so a big session fills
+ * the day and never overflows it. The compacted axis preserves this intra-day fan
+ * at full slot width (see buildCompactor), so the sets stay separated even when
+ * long gaps squeeze the sessions together. */
 function setTimes(records: readonly SetRecord[]): Map<SetRecord, number> {
   const byDay = new Map<number, SetRecord[]>();
   for (const r of records) {
@@ -77,8 +86,11 @@ function setTimes(records: readonly SetRecord[]): Map<SetRecord, number> {
   const out = new Map<SetRecord, number>();
   for (const [day, rs] of byDay) {
     const ordered = [...rs].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0));
-    const base = day * DAY + EVENING_START_H * HOUR;
-    ordered.forEach((r, i) => out.set(r, base + i * HOUR));
+    const n = ordered.length;
+    ordered.forEach((r, i) => {
+      const frac = n <= 1 ? (FAN_LO + FAN_HI) / 2 : FAN_LO + (FAN_HI - FAN_LO) * (i / (n - 1));
+      out.set(r, day * DAY + frac * DAY);
+    });
   }
   return out;
 }

@@ -162,6 +162,19 @@ describe("buildCompactor", () => {
     const span = c.to(day3 + 0.3 * MS_DAY) - c.to(day3 - 0.3 * MS_DAY);
     expect(span).toBeLessThan(MS_DAY);
   });
+  it("preserves a day's intra-day fan at full slot width regardless of the gap", () => {
+    // Two sessions a long layoff apart, each with two same-day sets 0.4 day apart.
+    const a = 0, b = 200 * MS_DAY;
+    const c = buildCompactor([a + 0.05 * MS_DAY, a + 0.45 * MS_DAY, b + 0.05 * MS_DAY, b + 0.45 * MS_DAY]);
+    const fanA = c.to(a + 0.45 * MS_DAY) - c.to(a + 0.05 * MS_DAY);
+    const fanB = c.to(b + 0.45 * MS_DAY) - c.to(b + 0.05 * MS_DAY);
+    // The 0.4-day fan keeps its full 0.4-SLOT width (NOT compressed by the 200-day
+    // gap collapsing) — this is what keeps same-day sets separated in compacted view.
+    expect(fanA).toBeCloseTo(0.4 * MS_DAY, 6);
+    expect(fanB).toBeCloseTo(0.4 * MS_DAY, 6);
+    // …yet the two sessions still sit one uniform slot apart (the gap is collapsed).
+    expect(c.to(b + 0.05 * MS_DAY) - c.to(a + 0.05 * MS_DAY)).toBeCloseTo(MS_DAY, 6);
+  });
   it("is monotonic for arbitrary query points between sessions", () => {
     const days = [0, 5, 6, 7, 40].map((d) => d * MS_DAY);
     const c = buildCompactor(days);
