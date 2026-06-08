@@ -3156,12 +3156,14 @@ const bcPanel = (id: string, deriveHtml: string): string => `<div class="bc-pane
 function renderAthleteProfile() {
   const username = els.athlete.value;
   const p = athProfile(username);
-  // The collapsed "Body stats" summary shows the headline numbers compactly
-  // (bodyweight · bf · age · height · nFFMI) instead of just a title.
-  const setStatsSummary = (txt: string) => { if (els.bodyStatsSummary) els.bodyStatsSummary.textContent = txt; };
+  // The collapsed "Body stats" summary shows a compact mini-dashboard of the
+  // headline numbers (bodyweight · bf · age · height · nFFMI) on a line under the
+  // title. Each is a small value+unit cell.
+  const setStatsSummary = (cellsHtml: string) => { if (els.bodyStatsSummary) els.bodyStatsSummary.innerHTML = cellsHtml; };
+  const bsCell = (val: string, unit: string) => `<span class="bs-cell"><b>${escapeHtml(val)}</b><span class="bs-u">${escapeHtml(unit)}</span></span>`;
   const editBtn = `<div class="profile-edit-row"><button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button></div>`;
   if (!p) {
-    setStatsSummary("Body stats"); // no profile → keep the title as the collapsed label
+    setStatsSummary(""); // no profile → just the title (the empty dashboard hides itself)
     els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
@@ -3172,18 +3174,18 @@ function renderAthleteProfile() {
   const specs = [`${p.weight} kg`, `${p.height} cm`];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
-  // Compact collapsed-summary parts: bodyweight · bf · age · height (· nFFMI added below).
-  const sumParts = [`${p.weight} kg`, `${Math.round(dist.avg * 100)}% bf`];
-  if (p.age != null) sumParts.push(`${p.age}y`);
-  sumParts.push(`${p.height} cm`);
+  // Compact collapsed-summary cells: bodyweight · bf · age · height (· nFFMI added below).
+  const sumCells = [bsCell(`${p.weight}`, "kg"), bsCell(`${Math.round(dist.avg * 100)}%`, "bf")];
+  if (p.age != null) sumCells.push(bsCell(`${p.age}`, "y"));
+  sumCells.push(bsCell(`${p.height}`, "cm"));
 
   const range = nffmiRange(p.weight, p.height, dist);
   if (!range) {
-    setStatsSummary(sumParts.join(" · "));
+    setStatsSummary(sumCells.join(""));
     els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  setStatsSummary([...sumParts, `${range.avg.toFixed(1)} nFFMI`].join(" · "));
+  setStatsSummary([...sumCells, bsCell(range.avg.toFixed(1), "nFFMI")].join(""));
   const f1 = (n: number) => n.toFixed(1);
   const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
   // nFFMI badge — headline number only; the detail lives in the line + ⓘ math.

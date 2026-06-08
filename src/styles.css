@@ -660,20 +660,28 @@ main { padding-bottom: 5rem; }
 }
 .athlete-details[open] { padding-bottom: 1rem; }
 .athlete-details-summary {
-  display: flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer;
   font-size: 0.85rem; font-weight: 600; color: var(--muted); list-style: none;
 }
-.athlete-details-summary .ad-caret { margin-left: auto; }
+.ad-sum-row { display: flex; align-items: center; gap: 0.4rem; }
+.ad-sum-row .ad-caret { margin-left: auto; }
 .athlete-details-summary::-webkit-details-marker { display: none; }
 .athlete-details-summary:hover,
 .athlete-details[open] > .athlete-details-summary { color: var(--accent); }
 .ad-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; }
 .athlete-details[open] .ad-caret { transform: rotate(180deg); color: var(--accent); }
-/* Collapsed: show the compact stat line INSTEAD of the "Body stats" title.
-   Open: show the title, hide the compact line. */
-.ad-summary-stats { font-size: 0.8rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Collapsed: the "Body stats" title stays, with a tiny stat dashboard on the line
+   below. Open: hide the dashboard (the full breakdown shows in the body). */
 .athlete-details[open] .ad-summary-stats { display: none; }
-.athlete-details:not([open]) .ad-title { display: none; }
+.ad-summary-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+.ad-summary-stats:empty { display: none; }
+.bs-cell {
+  display: inline-flex; align-items: baseline; gap: 3px;
+  padding: 2px 7px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line);
+  font-size: 0.72rem; line-height: 1.2;
+}
+.bs-cell b { color: var(--text); font-weight: 700; }
+.bs-cell .bs-u { color: var(--muted); font-size: 0.66rem; font-weight: 600; }
 .athlete-details-body { margin-top: 0.85rem; }
 .athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
 .athlete-profile:empty { display: none; }
