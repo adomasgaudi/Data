@@ -2607,9 +2607,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   width: 1.45em; height: 1.45em; padding: 0; margin-left: 0.4rem;
   font-size: 0.8rem; font-weight: 700; line-height: 1; vertical-align: middle;
   display: inline-flex; align-items: center; justify-content: center;
-  border-color: var(--line);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); cursor: pointer;
 }
-.wa-title-info:hover { border-color: var(--accent); filter: none; }
+.wa-title-info:hover { border-color: var(--accent); color: var(--accent); filter: none; }
 .ex-active { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0 0; }
 .ex-active-status { font-size: 0.8rem; font-weight: 700; }
 .ex-active-status.is-on { color: var(--accent); }

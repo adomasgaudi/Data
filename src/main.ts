@@ -6181,7 +6181,7 @@ function renderWorkoutsPage() {
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span><button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -6480,9 +6480,12 @@ function onWorkoutRowClick(e: MouseEvent) {
     return;
   }
 
-  // A day/week -> expand straight to every exercise with all its sets.
+  // A day/week -> expand straight to every exercise with all its sets. But ONLY when
+  // the DATE TITLE LINE is tapped — clicking the collapsed exercise lines (or their ⓘ)
+  // never expands the day, so you can open a lift's Index info without unfolding.
   const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
+  if (!target.closest(".wo-date")) return;
   if (toggleCollapse(row)) return;
   const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
@@ -12447,7 +12450,9 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     const nameHtml = remove
       ? `<button type="button" class="wa-title-lift" data-${remove}remove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the ${where}">${escapeHtml(displayName(n))}</button>`
       : escapeHtml(displayName(n));
-    return nameHtml + (remove ? lensTogglesHtml(remove, n) : ""); // per-lift Combine / Compare toggles
+    // A small ⓘ jumps straight to this lift on the Index page (its settings card).
+    const infoHtml = `<button type="button" class="wa-title-info" data-titleinfo="${escapeHtml(n)}" title="Open ${escapeHtml(displayName(n))} in the Index" aria-label="${escapeHtml(displayName(n))} — info">ⓘ</button>`;
+    return nameHtml + infoHtml + (remove ? lensTogglesHtml(remove, n) : ""); // ⓘ + per-lift Combine / Compare toggles
   }).join(sep);
   const more = sel.length > TITLE_NAME_CAP
     ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — pick them off in the selector below">… +${sel.length - TITLE_NAME_CAP}</span>`
@@ -13815,6 +13820,10 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // A lift's ⓘ in a fold title → open it on the Index page. preventDefault stops the
+    // <summary> from also toggling the fold. Runs FIRST (before the name-remove).
+    const tInfo = t.closest<HTMLElement>("[data-titleinfo]");
+    if (tInfo?.dataset.titleinfo) { e.preventDefault(); openExerciseInfo(tInfo.dataset.titleinfo); return; }
     // A lift NAME in the graph's fold title → remove it from the graph. preventDefault
     // stops the <summary> from also toggling the fold (so tapping a name removes it,
     // while the caret / empty title space still collapse the graph). Runs FIRST.
