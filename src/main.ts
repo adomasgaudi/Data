@@ -120,6 +120,7 @@ import {
   exerciseCategory,
   exerciseCategories,
   muscleGroup,
+  autoMuscleGroups,
   COMBINABLE_GROUPS,
   COMPARABLE_GROUPS,
   tagsForExercise,
@@ -743,17 +744,19 @@ function catsFor(name: string): TrainingCategory[] {
 function mgLevelOf(name: string, muscle: MuscleGroup): number {
   const lv = metaOverrides.mgLevel?.[name];
   if (lv && muscle in lv) return lv[muscle]!;
-  const base = (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  const base = (metaSet("mg", name) as MuscleGroup[]) ?? autoMuscleGroups(name);
   return base.includes(muscle) ? (muscle === base[0] ? 4 : 3) : 0;
 }
 /** Muscle groups a lift COUNTS toward (level ≥ 3), top-first — the membership every
  * grouping/category uses. Falls back to the primary so a lift is never group-less. */
 function mgsFor(name: string): MuscleGroup[] {
-  // Fast path: no per-muscle levels set → the legacy override list (or auto default).
-  if (!metaOverrides.mgLevel?.[name]) return (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  // Fast path: no per-muscle levels set → the legacy override list (or auto default,
+  // which now includes a compound lift's secondary muscles so it shows in every
+  // section it trains — e.g. a squat under Quads, Glutes and Lower back).
+  if (!metaOverrides.mgLevel?.[name]) return (metaSet("mg", name) as MuscleGroup[]) ?? autoMuscleGroups(name);
   const mem = MUSCLE_GROUPS.filter((m) => mgLevelOf(name, m) >= 3).sort((a, b) => mgLevelOf(name, b) - mgLevelOf(name, a));
   if (mem.length) return mem;
-  const base = (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  const base = (metaSet("mg", name) as MuscleGroup[]) ?? autoMuscleGroups(name);
   return [base[0] ?? muscleGroup(name)];
 }
 /** Set one muscle's involvement level (0–4); persists + keeps it in the backup. */
