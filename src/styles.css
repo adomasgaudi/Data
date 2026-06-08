@@ -2795,7 +2795,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto);
   grid-auto-columns: max-content; gap: 0.3rem; align-content: start; justify-content: start;
   margin: 0 0 0.4rem; overflow-x: auto; overflow-y: hidden;
-  touch-action: pan-x; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+  /* pan-x pan-y (not pan-x alone): sideways still scrolls the pills, but a vertical
+     swipe — which the strip can't consume — CHAINS to the page. pan-x alone killed
+     vertical entirely, so touching the strip froze the page (same bug as the
+     calendar / sitemap / data-table, fixed in b.2.7.72). */
+  touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
 }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
