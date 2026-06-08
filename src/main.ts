@@ -6652,7 +6652,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const main =
     `<tr class="set-main${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
     `title="Tap to edit this set (weight, reps, bodyweight, scale)">` +
-    `<td class="num wcell"><button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${effTag}${lvlTag}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
+    `<td class="num wcell"><button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${effTag}${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
@@ -6839,11 +6839,20 @@ function renderScaleEditor(): void {
   // The incline level (if any) multiplies into the picker's "final multiplier".
   const lv = scaleEditState.level;
   const lvlFactor = lv ? levelScaleFor(scaleEditState.ex, lv.dim, lv.value) : 1;
+  // A per-set "not comparable" toggle, same as the set-edit row — keep this set's
+  // reps/sets but drop its 1RM & volume (a static hold or odd one-off). Only a real
+  // set (with an id) can be marked; the note-level mark lives in the variations review.
+  const sid = scaleEditState.setId;
+  const nc = sid ? notComparableSets.has(sid) : false;
+  const ncBtn = sid
+    ? `<div class="scale-edit-foot"><button type="button" class="scale-edit-nc${nc ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${nc}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${nc ? "not comparable" : "not comparable?"}</button></div>`
+    : "";
   pop.innerHTML =
     `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(title)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     scaleEditLevelBlock() +
-    notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor);
+    notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor) +
+    ncBtn;
   refreshPoseViz();
 }
 function positionScaleEditor(anchor: HTMLElement): void {
@@ -6853,9 +6862,18 @@ function positionScaleEditor(anchor: HTMLElement): void {
   const w = Math.min(window.innerWidth - 16, 360);
   pop.style.width = `${w}px`;
   pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
-  // Below the chip, but flip above if it would run off the bottom.
-  const top = r.bottom + 6;
-  pop.style.top = `${Math.min(top, window.innerHeight - 40)}px`;
+  // Below the chip by default, but if the popover (now sized) would run off the bottom,
+  // flip it ABOVE the chip; if it won't fit either way, pin it to the viewport and let
+  // it scroll (max-height + overflow) — never let it spill off-screen (the pad was
+  // getting clipped below the fold for sets low on the page).
+  const margin = 8;
+  const ph = pop.offsetHeight; // capped by max-height; content scrolls inside
+  let top = r.bottom + 6;
+  if (top + ph > window.innerHeight - margin) {
+    const above = r.top - 6 - ph;
+    top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - ph);
+  }
+  pop.style.top = `${top}px`;
 }
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
   scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
@@ -9205,6 +9223,16 @@ async function init() {
   // Close button on the floating modifier editor.
   document.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".scale-edit-close")) closeScaleEditor();
+  });
+  // "⊘ not comparable" toggle inside the floating variation popover — flip this set's
+  // flag, keep the popover open (refresh its button state), and sync the views.
+  document.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(".scale-edit-nc");
+    if (!b?.dataset.setid) return;
+    setSetNotComparable(b.dataset.setid, !notComparableSets.has(b.dataset.setid));
+    scaleEditDirty = true;
+    renderScaleEditor();
+    refreshAfterDifficultyEdit();
   });
   // Popover incline UNIT cycle (SQ hole → Smith notch → cm): keep the value, switch the
   // unit, store the per-set level override, re-render (derived × updates).
