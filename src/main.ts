@@ -70,7 +70,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, levelInclineCm, inclineScale, type LevelDim } from "./variants";
+import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
@@ -979,31 +979,58 @@ const inclineScaleOverrides: Record<string, number> = (() => {
     return {};
   }
 })();
-// One-time migration: fold any LEGACY per-exercise incline override (set before the
-// scale went global) into the global store, so an existing "Push Up|sq|8 = 0.4" is
-// preserved as "sq|8 = 0.4" and both the popover and the editor agree.
-for (const [k, v] of Object.entries(levelScaleOverrides)) {
-  const parts = k.split("|");
-  const ex = parts[0], dim = parts[1], val = parts[2];
-  if (ex && dim && val !== undefined && isInclineLevelExercise(ex)) {
-    const ik = `${dim}|${val}`;
-    if (!(ik in inclineScaleOverrides)) inclineScaleOverrides[ik] = v;
-  }
-}
 const inclineKey = (dim: LevelDim, value: number): string => `${dim}|${value}`;
-/** The incline scale for a level (override, else the seeded cm-incline formula). */
-function inclineScaleFor(dim: LevelDim, value: number): number {
-  const ik = inclineKey(dim, value);
-  if (Object.prototype.hasOwnProperty.call(inclineScaleOverrides, ik)) return inclineScaleOverrides[ik]!;
-  return inclineScale(levelInclineCm(dim, value));
+// INCLINE is ONE cm scale. SQ holes and Smith notches don't carry their own
+// multipliers — each CONVERTS to a hand-height in cm (a tunable cm-per-step), and the
+// multiplier comes from the single cm→× curve below. So you tune two conversions + a
+// few cm points, never a number per notch. Stored in the same map: "cmPerSq" /
+// "cmPerSmith" (conversions) and "cm|<N>" anchors (the curve).
+const DEFAULT_CM_PER_SQ = 6, DEFAULT_CM_PER_SMITH = 8;
+function inclineCmPerStep(dim: LevelDim): number {
+  if (dim === "sq") return inclineScaleOverrides["cmPerSq"] ?? DEFAULT_CM_PER_SQ;
+  if (dim === "smith") return inclineScaleOverrides["cmPerSmith"] ?? DEFAULT_CM_PER_SMITH;
+  return 1; // cm is already cm
 }
-function setInclineScale(dim: LevelDim, value: number, v: number): void {
-  inclineScaleOverrides[inclineKey(dim, value)] = v;
-  try {
-    localStorage.setItem(INCLINE_SCALE_STORE_KEY, JSON.stringify(inclineScaleOverrides));
-  } catch {
-    /* storage may be unavailable — edits still apply this session */
+function setInclineCmPerStep(dim: "sq" | "smith", v: number): void {
+  inclineScaleOverrides[dim === "sq" ? "cmPerSq" : "cmPerSmith"] = v;
+  saveInclineScales();
+}
+/** A level's hand-height in CM: cm as-is; a SQ hole / Smith notch × its cm-per-step. */
+function levelCm(dim: LevelDim, value: number): number {
+  return dim === "cm" ? value : Math.round(value * inclineCmPerStep(dim) * 10) / 10;
+}
+// The cm→× curve is a handful of editable anchor heights; in between we interpolate,
+// so SQ/Smith (any cm) read off the same curve. An anchor defaults to the formula.
+const CM_ANCHORS = [0, 15, 30, 45, 60, 75, 90];
+function cmAnchorMult(cm: number): number {
+  const k = inclineKey("cm", cm);
+  return Object.prototype.hasOwnProperty.call(inclineScaleOverrides, k) ? inclineScaleOverrides[k]! : inclineScale(cm);
+}
+function inclineMultForCm(cm: number): number {
+  const first = CM_ANCHORS[0]!, last = CM_ANCHORS[CM_ANCHORS.length - 1]!;
+  if (cm < 0) return inclineScale(cm); // below the floor (harder) — formula
+  if (cm <= first) return cmAnchorMult(first);
+  if (cm >= last) return cmAnchorMult(last);
+  for (let i = 1; i < CM_ANCHORS.length; i++) {
+    const a = CM_ANCHORS[i - 1]!, b = CM_ANCHORS[i]!;
+    if (cm <= b) {
+      const t = (cm - a) / (b - a);
+      return Math.round((cmAnchorMult(a) + (cmAnchorMult(b) - cmAnchorMult(a)) * t) * 1000) / 1000;
+    }
   }
+  return cmAnchorMult(last);
+}
+/** The incline scale for a level — its cm height read off the single cm→× curve. */
+function inclineScaleFor(dim: LevelDim, value: number): number {
+  return inclineMultForCm(levelCm(dim, value));
+}
+function saveInclineScales(): void {
+  try { localStorage.setItem(INCLINE_SCALE_STORE_KEY, JSON.stringify(inclineScaleOverrides)); } catch { /* storage may be unavailable */ }
+}
+/** Set a cm-anchor multiplier on the curve (the only per-level multiplier now). */
+function setInclineScale(_dim: LevelDim, cm: number, v: number): void {
+  inclineScaleOverrides[inclineKey("cm", cm)] = v;
+  saveInclineScales();
 }
 
 /** Technique scaling factor for one set's level: the owner's override, else the
@@ -1626,7 +1653,7 @@ function setRpe(id: string, v: string | null) {
 // Level data: an override keyed by setId is layered on at load. Bodyweight here
 // is JUST for that set (overrides the profile default); scale is the per-set
 // technique factor (beats the per-hole one). RIR keeps its own store above.
-interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; }
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; }
 const SET_OVR_KEY = "colosseum.setOverrides.v1";
 let setOverrides: Record<string, SetOverride> = (() => {
   try {
@@ -1755,13 +1782,29 @@ function applyMachineMode(out: SetRecord): SetRecord {
 function applySetOverride(r: SetRecord): SetRecord {
   const o = setOverrides[setId(r)];
   if (!o) return r;
+  // A per-set INCLINE level correction (chosen in the variation popup) overrides the
+  // level parsed from the note for THIS set only — so a misread SQ/Smith/cm can be fixed.
+  const lvl = o.levelDim !== undefined && o.levelValue !== undefined
+    ? { levelDim: o.levelDim, levelValue: o.levelValue, levelLabel: levelLabel(o.levelDim, o.levelValue) }
+    : {};
   return {
     ...r,
     weight: o.weight !== undefined ? o.weight : r.weight,
     reps: o.reps !== undefined ? o.reps : r.reps,
     bodyweight: o.bodyweight !== undefined ? o.bodyweight : r.bodyweight,
     notes: o.notes !== undefined ? o.notes : r.notes,
+    ...lvl,
   };
+}
+/** Set or clear a per-set incline LEVEL override (the variation popup's editable
+ * SQ/Smith/cm). Pass value=null to clear back to the note-parsed level. */
+function setSetOverrideLevel(id: string, dim: LevelDim, value: number | null): void {
+  const o = setOverrides[id] ?? {};
+  if (value === null || !Number.isFinite(value)) { delete o.levelDim; delete o.levelValue; }
+  else { o.levelDim = dim; o.levelValue = value; }
+  if (Object.keys(o).length === 0) delete setOverrides[id];
+  else setOverrides[id] = o;
+  saveSetOverrides();
 }
 /** Set or clear the note-text override for a set (empty string clears it back to
  * the original CSV note). Kept separate from the numeric fields above. */
@@ -6502,9 +6545,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     s.levelDim !== undefined && s.levelValue !== undefined
       ? ` data-scaleedit-leveldim="${escapeHtml(s.levelDim)}" data-scaleedit-levelvalue="${s.levelValue}" data-scaleedit-levellabel="${escapeHtml(s.levelLabel ?? levelLabel(s.levelDim, s.levelValue))}"`
       : "";
+  // The setId + the readable note ride along so the popover can show the ORIGINAL note
+  // and edit THIS set's incline level (per-set override).
+  const rawNote = (s.notes ?? "").trim();
   const scaleTag = editNote
     ? // Editable chip that opens the floating modifier editor (note OR per-set form).
-      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}"${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
+      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
     : Math.abs(scaleVal - 1) > 1e-6
       ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
       : "";
@@ -6647,28 +6693,55 @@ function toggleSetNote(target: HTMLElement): boolean {
 }
 
 // ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
-let scaleEditState: { ex: string; note: string; level?: { dim: LevelDim; value: number; label: string } } | null = null;
+let scaleEditState: { ex: string; note: string; setId?: string; rawNote?: string; level?: { dim: LevelDim; value: number; label: string } } | null = null;
 let scaleEditDirty = false; // an edit was made while the popover was open
 /** The INCLINE block for the popover: the set's smith-notch / squat-rack / cm level
  * (the real "incline" the owner logged) shown with its scale editable right here, so
  * it appears alongside the family variation (e.g. on-the-knees) it combines with —
  * instead of the popover showing only the family picker and hiding the logged SQ8. */
 function scaleEditLevelBlock(): string {
-  const lv = scaleEditState?.level;
-  if (!lv) return "";
-  const ex = scaleEditState!.ex;
-  const scale = levelScaleFor(ex, lv.dim, lv.value);
-  // Incline scales are GLOBAL (data-incdim/-incval → setInclineScale, shared by every
-  // push-up); any other level keeps a per-exercise override (data-levelkey).
+  const st = scaleEditState;
+  if (!st) return "";
+  const ex = st.ex;
+  const lv = st.level;
+  // The ORIGINAL note, shown as text (a note is a note): the readable note plus the
+  // parsed level tag it implied.
+  const noteBits = [st.rawNote, lv?.label].filter(Boolean) as string[];
+  const noteLine = noteBits.length
+    ? `<div class="scale-edit-note muted">note: <span class="scale-edit-note-txt">${escapeHtml(noteBits.join(" · "))}</span></div>`
+    : "";
   const incline = isInclineLevelExercise(ex);
-  const attrs = incline
-    ? `data-incdim="${escapeHtml(lv.dim)}" data-incval="${lv.value}"`
-    : `data-levelkey="${escapeHtml(levelKey(ex, lv.dim, lv.value))}"`;
+  if (!incline) {
+    // Non-incline level (e.g. Dips at a squat-rack hole): keep the per-exercise
+    // multiplier input — there's no shared cm scale to derive from.
+    if (!lv) return noteLine;
+    const scale = levelScaleFor(ex, lv.dim, lv.value);
+    return (
+      noteLine +
+      `<div class="ex-var-dim scale-edit-lvl-row"><span class="ex-var-dim-lbl">level <span class="set-lvl">${escapeHtml(lv.label)}</span></span>` +
+      `<div class="ex-var-selrow"><label class="ex-var-lbl">× <input class="ex-var-input scale-edit-lvl" type="number" step="0.05" min="0.1" max="5" ` +
+      `value="${scale}" data-levelkey="${escapeHtml(levelKey(ex, lv.dim, lv.value))}" /></label></div></div>`
+    );
+  }
+  // Incline exercise: the implied variant is EDITABLE (not fixed) — a unit pill
+  // (SQ hole → Smith notch → cm) + a value, with the resulting multiplier DERIVED
+  // from the shared cm curve (read-only). Defaults to the parsed level, else SQ 0.
+  const dim: LevelDim = lv?.dim ?? "sq";
+  const value = lv?.value ?? 0;
+  const nextDim: LevelDim = dim === "sq" ? "smith" : dim === "smith" ? "cm" : "sq";
+  const dimLbl = dim === "sq" ? "SQ hole" : dim === "smith" ? "Smith notch" : "cm";
+  const mult = inclineScaleFor(dim, value);
+  const editable = !!st.setId; // only a real set can carry a per-set level override
   return (
+    noteLine +
     `<div class="ex-var-dim scale-edit-lvl-row"><span class="ex-var-dim-lbl">incline</span>` +
-    `<div class="ex-var-selrow"><span class="set-lvl">${escapeHtml(lv.label)}</span>` +
-    `<label class="ex-var-lbl">× <input class="ex-var-input scale-edit-lvl" type="number" step="0.05" min="0.1" max="5" ` +
-    `value="${scale}" ${attrs} aria-label="Incline scale for ${escapeHtml(lv.label)}" /></label></div></div>`
+    `<div class="ex-var-selrow">` +
+    (editable
+      ? `<button type="button" class="wa-name-opt scale-edit-lvldim" data-lvlnextdim="${nextDim}" title="Tap to change the unit: squat-rack hole → Smith notch → cm">${escapeHtml(dimLbl)}</button>` +
+        `<input class="ex-var-input scale-edit-lvlval" type="number" step="${dim === "cm" ? "1" : "0.5"}" value="${value}" data-lvldim="${dim}" aria-label="Incline ${escapeHtml(dimLbl)} value" />`
+      : `<span class="set-lvl">${escapeHtml(lv?.label ?? `${dimLbl} ${value}`)}</span>`) +
+    `<span class="scale-edit-lvlmult muted">→ ×${mult}</span>` +
+    `</div></div>`
   );
 }
 function renderScaleEditor(): void {
@@ -6696,8 +6769,8 @@ function positionScaleEditor(anchor: HTMLElement): void {
   const top = r.bottom + 6;
   pop.style.top = `${Math.min(top, window.innerHeight - 40)}px`;
 }
-function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }): void {
-  scaleEditState = level ? { ex, note, level } : { ex, note };
+function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
+  scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
   let pop = document.getElementById("scaleEditPop");
   if (!pop) {
     pop = document.createElement("div");
@@ -6733,7 +6806,7 @@ function toggleScaleEditor(target: HTMLElement): boolean {
     // and tuned in the popover next to the family variation it combines with.
     const ld = btn.dataset.scaleeditLeveldim, lv = btn.dataset.scaleeditLevelvalue, ll = btn.dataset.scaleeditLevellabel;
     const level = ld && lv !== undefined && ll !== undefined ? { dim: ld as LevelDim, value: Number(lv), label: ll } : undefined;
-    openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn, level);
+    openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn, level, { setId: btn.dataset.scaleeditSetid, rawNote: btn.dataset.scaleeditRawnote });
   }
   return true;
 }
@@ -7424,37 +7497,38 @@ function familyFactorTableHtml(fam: string): string {
   return fam === "PUSHUP" ? dimTables + inclineLevelsEditorHtml() : dimTables;
 }
 
-/** The global INCLINE multiplier editor (push-ups): one editable cell per height —
- * squat-rack holes (SQ0–20), Smith notches (Sm0–9) and a few cm anchors. ×1 = floor
- * (hardest); higher = easier. Shared by every push-up, so SQ8 has ONE value. Each
- * row scrolls sideways (rule: dense, no wrapped block). Seeded from the cm-incline
- * formula; an edited cell is highlighted. */
+/** The global INCLINE editor (push-ups). Incline is ONE cm scale: SQ holes and Smith
+ * notches CONVERT to a hand-height in cm (a tunable cm-per-step each), and the
+ * multiplier comes from a single cm→× curve (a few editable anchor heights). So you
+ * tune two conversions + a few cm points — never a number per notch. ×1 = floor
+ * (hardest); higher = easier. Shared by every push-up. */
 function inclineLevelsEditorHtml(): string {
-  const range = (a: number, b: number, step = 1): number[] => {
-    const out: number[] = [];
-    for (let i = a; i <= b; i += step) out.push(Math.round(i * 100) / 100);
-    return out;
+  const stepCell = (dim: "sq" | "smith", label: string) =>
+    `<label class="fac-cell inc-cell"><span class="fac-lvl">${escapeHtml(label)}</span>` +
+    `<input class="fac-input inc-step" type="number" step="0.5" min="0.5" max="40" value="${inclineCmPerStep(dim)}" ` +
+    `data-incstep="${dim}" aria-label="cm of incline per ${escapeHtml(label)}" /><span class="inc-unit muted">cm</span></label>`;
+  const cmCells = CM_ANCHORS
+    .map((cm) => {
+      const ov = inclineKey("cm", cm) in inclineScaleOverrides;
+      return (
+        `<label class="fac-cell inc-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${cm}cm</span>` +
+        `<input class="fac-input inc-input" type="number" step="0.01" min="0.05" max="3" value="${cmAnchorMult(cm)}" ` +
+        `data-incdim="cm" data-incval="${cm}" aria-label="${cm}cm incline multiplier" /></label>`
+      );
+    })
+    .join("");
+  // A read-only preview so the conversions are legible: a few notches → their cm → ×.
+  const prev = (dim: LevelDim, value: number) => {
+    const cm = levelCm(dim, value);
+    return `<span class="inc-prev-item">${escapeHtml(levelLabel(dim, value))}<span class="muted"> → ${cm}cm → ×${inclineScaleFor(dim, value)}</span></span>`;
   };
-  const row = (dim: LevelDim, label: string, values: number[]): string => {
-    const cells = values
-      .map((val) => {
-        const ov = inclineKey(dim, val) in inclineScaleOverrides;
-        const lbl = levelLabel(dim, val);
-        return (
-          `<label class="fac-cell inc-cell${ov ? " is-ov" : ""}"><span class="fac-lvl">${escapeHtml(lbl)}</span>` +
-          `<input class="fac-input inc-input" type="number" step="0.01" min="0.05" max="3" value="${inclineScaleFor(dim, val)}" ` +
-          `data-incdim="${dim}" data-incval="${val}" aria-label="${escapeHtml(lbl)} incline multiplier" /></label>`
-        );
-      })
-      .join("");
-    return `<div class="fac-dim"><div class="fac-dim-h">${escapeHtml(label)}</div><div class="fac-cells inc-cells">${cells}</div></div>`;
-  };
+  const preview = [prev("sq", 4), prev("sq", 8), prev("smith", 3), prev("smith", 6)].join("");
   return (
-    `<div class="fac-dim-h inc-hd">incline — × per hand height (×1 = floor, hardest; raised = easier)</div>` +
-    `<div class="ex-group-why muted">Shared by every push-up (Smith / squat-rack / cm all line up on one scale). Edit any level; it applies everywhere.</div>` +
-    row("sq", "squat-rack hole (SQ)", range(0, 20)) +
-    row("smith", "Smith notch (Sm)", range(0, 9)) +
-    row("cm", "raised height (cm)", range(0, 60, 10))
+    `<div class="fac-dim-h inc-hd">incline — one cm scale (×1 = floor, hardest; raised = easier)</div>` +
+    `<div class="ex-group-why muted">SQ holes & Smith notches each convert to a hand-height in cm; the multiplier comes from the cm curve below — so you set the conversion + the curve, not a number per notch. Shared by every push-up.</div>` +
+    `<div class="fac-dim"><div class="fac-dim-h">cm raised per step</div><div class="fac-cells">${stepCell("sq", "SQ hole")}${stepCell("smith", "Smith notch")}</div></div>` +
+    `<div class="fac-dim"><div class="fac-dim-h">cm → × curve (interpolated)</div><div class="fac-cells inc-cells">${cmCells}</div></div>` +
+    `<div class="inc-prev muted">${preview}</div>`
   );
 }
 
@@ -8938,13 +9012,26 @@ async function init() {
     // wins over the seeded incline default) and re-render the popover so the chip
     // updates; the table/graphs sync on close.
     const lvlIn = (e.target as HTMLElement).closest<HTMLInputElement>(".scale-edit-lvl");
-    if (lvlIn && (lvlIn.dataset.levelkey || lvlIn.dataset.incdim)) {
+    if (lvlIn?.dataset.levelkey) {
       let v = Number(lvlIn.value);
       if (!Number.isFinite(v)) v = 1;
       v = Math.min(5, Math.max(0.1, Math.round(v * 100) / 100));
-      if (lvlIn.dataset.incdim) setInclineScale(lvlIn.dataset.incdim as LevelDim, Number(lvlIn.dataset.incval), v);
-      else setLevelScale(lvlIn.dataset.levelkey!, v);
+      setLevelScale(lvlIn.dataset.levelkey, v);
       if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+      return;
+    }
+    // The popover's editable incline LEVEL value (per-set SQ/Smith/cm). Store a per-set
+    // level override, refresh the popover (derived × updates); the row/graph sync on close.
+    const lvlVal = (e.target as HTMLElement).closest<HTMLInputElement>(".scale-edit-lvlval");
+    if (lvlVal?.dataset.lvldim && scaleEditState?.setId) {
+      const dim = lvlVal.dataset.lvldim as LevelDim;
+      const v = dim === "cm" ? Math.round(Number(lvlVal.value)) : Math.round(Number(lvlVal.value) * 2) / 2;
+      if (Number.isFinite(v)) {
+        setSetOverrideLevel(scaleEditState.setId, dim, v);
+        scaleEditState.level = { dim, value: v, label: levelLabel(dim, v) };
+        scaleEditDirty = true;
+        renderScaleEditor();
+      }
       return;
     }
     // The global INCLINE editor (Settings / exercise info → Difficulty multipliers):
@@ -8955,6 +9042,18 @@ async function init() {
       if (Number.isFinite(v) && v > 0) {
         setInclineScale(inc.dataset.incdim as LevelDim, Number(inc.dataset.incval), Math.round(v * 1000) / 1000);
         inc.closest(".fac-cell")?.classList.add("is-ov");
+        scheduleModelFactorsApply();
+      }
+      return;
+    }
+    // The SQ-hole / Smith-notch → cm conversion (one knob each). Re-render the editor
+    // so the preview + derived levels update, and apply app-wide.
+    const step = (e.target as HTMLElement).closest<HTMLInputElement>(".inc-step");
+    if (step?.dataset.incstep === "sq" || step?.dataset.incstep === "smith") {
+      const v = Number(step.value);
+      if (Number.isFinite(v) && v > 0) {
+        setInclineCmPerStep(step.dataset.incstep, Math.round(v * 10) / 10);
+        if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
         scheduleModelFactorsApply();
       }
       return;
@@ -9008,6 +9107,18 @@ async function init() {
   // Close button on the floating modifier editor.
   document.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".scale-edit-close")) closeScaleEditor();
+  });
+  // Popover incline UNIT cycle (SQ hole → Smith notch → cm): keep the value, switch the
+  // unit, store the per-set level override, re-render (derived × updates).
+  document.addEventListener("click", (e) => {
+    const pill = (e.target as HTMLElement).closest<HTMLElement>(".scale-edit-lvldim");
+    if (!pill?.dataset.lvlnextdim || !scaleEditState?.setId) return;
+    const dim = pill.dataset.lvlnextdim as LevelDim;
+    const value = scaleEditState.level?.value ?? 0;
+    setSetOverrideLevel(scaleEditState.setId, dim, value);
+    scaleEditState.level = { dim, value, label: levelLabel(dim, value) };
+    scaleEditDirty = true;
+    renderScaleEditor();
   });
   // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
   document.addEventListener("click", (e) => {
