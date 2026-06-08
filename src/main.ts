@@ -11347,7 +11347,7 @@ function commandList(): CmdSpec[] {
     { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
-    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); document.querySelector<HTMLDetailsElement>("#waCalendarHost")?.closest("details")?.setAttribute("open", ""); } },
+    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true; } },
     { cmd: ".add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
     { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
     { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },

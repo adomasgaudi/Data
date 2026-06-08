@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.87</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.88</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1069,41 +1069,43 @@
              just under the athlete picker and above the Analysis card. -->
         <div id="waStatsHost" class="wa-stats-top"></div>
         <section class="panel wa-analysis-panel">
-          <!-- The exercise selector tools row (Filter / Exercises / ⚙ / +) is a
-               sticky bar: it sits at the top of the card normally and sticks to
-               the top of the screen as you scroll the content below it. The other
-               sections stay collapsible disclosures. -->
-          <!-- GRAPH exercise selector (one of two copies, EXR-SEL): drives only the
-               graph below it. -->
-          <div id="waExerciseSelector" class="wa-section"></div>
-          <details class="wa-fold" open>
+          <!-- GRAPH section: its lift selector now lives UNDER the "Graph" header
+               (inside the fold), so the picker travels with the chart it drives.
+               wa-fold-titled keeps the header in-flow when open (the floating
+               top-right caret would otherwise sit over the selector's buttons). -->
+          <details class="wa-fold wa-fold-titled" open>
             <summary class="wa-fold-sum">Graph</summary>
+            <div id="waExerciseSelector" class="wa-section"></div>
             <div id="waGraph" class="wa-section"></div>
           </details>
-          <!-- CALENDAR + WORKOUTS exercise selector (the second copy): sticky, so it
-               stays on screen while you scroll the calendar and history below it. -->
-          <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
-          <!-- Taxonomy / machine-type editor (single mode) follows the history
-               selector, BELOW the sticky bar. -->
-          <div id="waAssign" class="wa-section"></div>
-          <!-- The training-year heatmap (#workoutCalendar) is relocated here in
-               EVERY mode so it never disappears; with exercises selected it
-               highlights only those lifts' squares. Returned to #workoutsPanel
-               on leave. -->
-          <details class="wa-fold" open>
-            <summary class="wa-fold-sum">Training calendar</summary>
-            <div id="waCalendarHost" class="wa-section"></div>
-          </details>
-          <div id="waStats" class="wa-section" hidden></div>
-          <details class="wa-fold" open>
-            <summary class="wa-fold-sum" id="waTableSummary">Workout history</summary>
-            <div id="waTable" class="wa-section">
-              <!-- The live Workouts / drill-in / list / compare panel is relocated
-                   here while the view is open (and returned to its home tab on
-                   leave), so all its history / filters / stats / toggles work as-is. -->
-              <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
-              <div id="waWorkoutsHost"></div>
-            </div>
+          <!-- CALENDAR + HISTORY: one JOINT collapsible. The history/calendar lift
+               selector (drives both) sits under its header — sticky so it stays on
+               screen — and the calendar and the history are each their OWN nested
+               fold so they collapse independently inside the joint one. -->
+          <details class="wa-fold wa-fold-titled" open>
+            <summary class="wa-fold-sum">Calendar &amp; history</summary>
+            <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
+            <!-- Taxonomy / machine-type editor (single mode) follows the selector. -->
+            <div id="waAssign" class="wa-section"></div>
+            <!-- The training-year heatmap (#workoutCalendar) is relocated here in
+                 EVERY mode so it never disappears; with exercises selected it
+                 highlights only those lifts' squares. Returned to #workoutsPanel
+                 on leave. -->
+            <details class="wa-fold wa-subfold" open>
+              <summary class="wa-fold-sum">Training calendar</summary>
+              <div id="waCalendarHost" class="wa-section"></div>
+            </details>
+            <div id="waStats" class="wa-section" hidden></div>
+            <details class="wa-fold wa-subfold" open>
+              <summary class="wa-fold-sum" id="waTableSummary">Workout history</summary>
+              <div id="waTable" class="wa-section">
+                <!-- The live Workouts / drill-in / list / compare panel is relocated
+                     here while the view is open (and returned to its home tab on
+                     leave), so all its history / filters / stats / toggles work as-is. -->
+                <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
+                <div id="waWorkoutsHost"></div>
+              </div>
+            </details>
           </details>
         </section>
       </div>
