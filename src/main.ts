@@ -6033,8 +6033,12 @@ function renderHorizontalHistory(): void {
   // dot under the current scroll position highlighted. Subtle, no text.
   const dotsHtml = groups
     .map((g, i) => {
+      // A collapsed-run "gap" shows the discontinuity in the CARDS (the dashed ⋯
+      // column), but NOT as a bubble — it's an empty slot so the dot row just
+      // "jumps" a bit across the break.
+      if (g.gap) return `<span class="hh-dot-spacer"></span>`;
       let cls = "hh-dot";
-      if (g.rest) cls += g.gap ? " hh-dot-gap" : " hh-dot-rest";
+      if (g.rest) cls += " hh-dot-rest";
       const prev = i > 0 ? groups[i - 1] : null;
       if (prev) {
         if (g.date.slice(0, 4) !== prev.date.slice(0, 4)) cls += " hh-dot-yr";

@@ -1486,7 +1486,8 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hh-dot.hh-dot-yr { width: 4px; height: 11px; border-radius: 2px; opacity: 1; background: var(--muted); }
 .hh-dot.is-active { background: var(--accent); opacity: 1; transform: scale(1.7); }
 .hh-dot.hh-dot-rest { width: 3px; height: 3px; opacity: 0.28; }
-.hh-dot.hh-dot-gap { width: 5px; height: 5px; background: none; border: 1px dashed var(--muted); opacity: 0.6; }
+/* A collapsed-run gap is an EMPTY dot slot (no bubble) so the row just jumps. */
+.hh-dot-spacer { display: block; }
 /* ONE grid: columns = periods (near-full-screen cards, peek the next), rows =
    lifts. Each grid row auto-sizes to its tallest cell across columns, so the same
    lift lines up on the same row in every card AND nothing is clipped. */
