@@ -12041,6 +12041,18 @@ function renderWorkoutAnalysis(): void {
   // reflects the current mode (Exercise analysis / Compare / Exercise list / …).
   const contentTitle = document.getElementById("waTableSummary");
   const stats = document.getElementById("waStats");
+  // With just ONE or TWO lifts in the whole view, show their NAME(S) as a big title
+  // at the top of both the graph and the history (instead of a generic "Graph" /
+  // "selected lifts"). 3+ stays generic — too many names to headline.
+  const selTitle =
+    waSelected.length === 1 ? displayName(waSelected[0]!)
+    : waSelected.length === 2 ? `${displayName(waSelected[0]!)} & ${displayName(waSelected[1]!)}`
+    : null;
+  const graphSummary = document.getElementById("waGraphSummary");
+  if (graphSummary) {
+    graphSummary.innerHTML = selTitle ? `<span class="wa-seltitle">${escapeHtml(selTitle)}</span>` : "Graph";
+    graphSummary.classList.toggle("is-bigtitle", !!selTitle);
+  }
   if (mode === "single" || mode === "compare") {
     // Selecting one OR more lifts is just a FILTER on the same all-exercises view —
     // not a different page. Both show the workout HISTORY scoped to the picked
@@ -12057,11 +12069,13 @@ function renderWorkoutAnalysis(): void {
     // the editable difficulty of each note-identified variation), right beside the
     // name — no separate "More info" button below.
     if (contentTitle) {
-      if (mode === "single" && waSelected[0]) {
-        const ex = waSelected[0];
-        contentTitle.innerHTML =
-          `${escapeHtml(athleteLabel())} — ${escapeHtml(displayName(ex))}${originBadge(ex)}` +
-          ` <button type="button" class="wa-moreinfo wa-title-info" data-moreinfoex="${escapeHtml(ex)}" title="${escapeHtml(displayName(ex))} info" aria-label="${escapeHtml(displayName(ex))} info">ℹ</button>`;
+      if (selTitle) {
+        // 1–2 lifts → the name(s) as a big title; single keeps its ℹ + origin badge.
+        const ex = waSelected[0]!;
+        const extra = mode === "single"
+          ? `${originBadge(ex)} <button type="button" class="wa-moreinfo wa-title-info" data-moreinfoex="${escapeHtml(ex)}" title="${escapeHtml(displayName(ex))} info" aria-label="${escapeHtml(displayName(ex))} info">ℹ</button>`
+          : "";
+        contentTitle.innerHTML = `<span class="wa-seltitle">${escapeHtml(selTitle)}</span>${extra}`;
       } else {
         contentTitle.textContent = `${athleteLabel()} — selected lifts`;
       }
@@ -12085,6 +12099,9 @@ function renderWorkoutAnalysis(): void {
   // the selection (the history list is filtered to them by historyFilterWithSearch).
   if (waSearchQuery.trim() && contentTitle)
     contentTitle.textContent = `${athleteLabel()} — “${waSearchQuery.trim()}” in history`;
+  // Big-title the history header only when it's actually showing the 1–2 lift names
+  // (not while a search has overridden it).
+  contentTitle?.classList.toggle("is-bigtitle", !!selTitle && !waSearchQuery.trim());
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing
   // selected it keeps the user's own calendar filter (saved/restored around a

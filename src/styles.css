@@ -2901,6 +2901,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   padding: 0.6rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text);
 }
 .wa-fold-sum::-webkit-details-marker { display: none; }
+/* Big lift-name title: when 1–2 lifts are picked, the graph & history headers show
+   the name(s) large at the top of the section. The open-state rules below are more
+   specific, so match their contexts to win. */
+.wa-fold-sum.is-bigtitle,
+.wa-fold-titled[open] > .wa-fold-sum.is-bigtitle,
+.wa-fold[open] > #waTableSummary.is-bigtitle { font-size: 1.4rem; }
+.wa-fold-sum.is-bigtitle .wa-seltitle { color: var(--accent); }
 .wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; margin-right: 0.35em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
