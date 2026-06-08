@@ -19,7 +19,7 @@ import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { S, type HeatColorDim, type IndexGroupMode } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
-import { loadData, type LoadedData } from "./dataSource";
+import { loadData, buildLoaded, fetchLatestCsv, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
   distinctExercises,
@@ -10103,6 +10103,43 @@ async function init() {
   // the translation pass. Done last so the toggle reflects the saved language.
   setupLanguage();
   initI18n();
+
+  // Once the dashboard is up with the bundled data, quietly pull the LATEST ud.csv
+  // from GitHub and hot-swap it in if it changed — with a spinner next to the title.
+  void syncFromGitHub();
+}
+
+/** Fetch the latest data from GitHub and, if it differs from what's bundled, swap it
+ * in and re-render. A small badge by the title shows the live state (⟳ while fetching,
+ * ✓ when synced). All failures are silent — the bundled data just stays. */
+async function syncFromGitHub(): Promise<void> {
+  const ind = document.getElementById("ghSync");
+  if (ind) {
+    ind.hidden = false;
+    ind.className = "gh-sync gh-sync--busy";
+    ind.title = "Fetching the latest data from GitHub…";
+  }
+  const fresh = await fetchLatestCsv();
+  if (fresh == null) { if (ind) ind.hidden = true; return; } // offline / unavailable: keep bundled
+  if (fresh !== data.rawCsv) {
+    // Newer data than the build carries — rebuild the records and re-render the views.
+    data = buildLoaded(fresh);
+    clearMachineCache();
+    csvRecordCount = data.records.length;
+    mergeManualSets();
+    populateExercisePicker();
+    renderAll();
+    renderLeaderboard();
+    renderPersonalRecords();
+    renderWorkoutAnalysis();
+    renderStatus();
+    renderDataTab();
+    if (ind) { ind.className = "gh-sync gh-sync--ok"; ind.title = "Loaded the latest data from GitHub."; ind.textContent = "GitHub"; }
+  } else if (ind) {
+    ind.className = "gh-sync gh-sync--ok";
+    ind.title = "Already on the latest data from GitHub.";
+  }
+  if (ind) window.setTimeout(() => { ind.hidden = true; }, 5000);
 }
 
 /** Wire the Settings language toggle: highlight the current language; a tap on the

@@ -22,7 +22,13 @@ export interface LoadedData extends ParseResult {
 }
 
 export async function loadData(): Promise<LoadedData> {
-  const rawRows = parseCsv(csvText);
+  return buildLoaded(csvText);
+}
+
+/** Parse + canonicalise a CSV string through the same pipeline loadData uses, so a
+ * freshly-fetched CSV becomes a LoadedData identical in shape to the bundled one. */
+export function buildLoaded(csv: string): LoadedData {
+  const rawRows = parseCsv(csv);
   const parsed = parseRows(rawRows);
   // Fold variant spellings of the same exercise into one name. This is done in
   // the app (not the source sheet) because re-exports would otherwise bring the
@@ -33,5 +39,29 @@ export async function loadData(): Promise<LoadedData> {
   // one exercise. Done after canonicalisation so it's consistent in every view.
   const records = canon.map(attachNoteLevel);
   // Sanity-check the canonicalised records so warnings reference displayed names.
-  return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records), rawCsv: csvText };
+  return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records), rawCsv: csv };
+}
+
+/** Raw URL of the live ud.csv on the deploy branch. The site is rebuilt from this
+ * same file, but the Refresh-data Action can commit a newer CSV a minute before the
+ * rebuild finishes — so fetching it lets the dashboard show fresh numbers sooner. */
+const GITHUB_CSV_URL =
+  "https://raw.githubusercontent.com/adomasgaudi/Data/claude/strength-training-dashboard-SdAlT/src/data/ud.csv";
+
+/** Fetch the latest ud.csv from GitHub. Returns the text, or null on any failure
+ * (offline, private repo, timeout, non-CSV) so the caller silently keeps the bundled
+ * data. Never throws. */
+export async function fetchLatestCsv(): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(GITHUB_CSV_URL, { cache: "no-store", signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const text = await res.text();
+    // Guard against an error page / empty body — must look like the real CSV.
+    return text.length > 100 && text.includes(",") ? text : null;
+  } catch {
+    return null;
+  }
 }
