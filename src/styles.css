@@ -1773,6 +1773,10 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-hidden-line { display: block; margin-top: 2px; }
 .wo-hidden-daybtn { font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; padding: 1px 9px; border-radius: var(--r-pill); border: 1px dashed var(--line); background: none; color: var(--muted); }
 .wo-hidden-daybtn:hover { border-color: var(--accent); color: var(--accent); }
+.wo-hidden-daybtn.is-active { border-style: solid; border-color: var(--accent); color: var(--accent); }
+/* The revealed (just-this-day) hidden lifts: greyed so they read as filtered-out. */
+.wo-hidden-day-lines { margin-top: 2px; opacity: 0.55; }
+.wo-hidden-day-lines[hidden] { display: none; }
 .wo-dj-sel { font: inherit; font-size: 0.7rem; padding: 4px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); }
 /* Calendar bottom row: the slicer pills + a compact ⚙ settings dropdown (scope +
    tag-alone) side by side. The scope/tag controls reuse the DJ-console buttons. */

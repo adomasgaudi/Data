@@ -35,3 +35,31 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **If it recurs:** a new floating menu was added with z-index < 36, OR a new
   stacking-context ancestor traps a menu below the sticky — check the menu's
   positioned ancestors, don't just bump its number.
+
+---
+
+## PB-2 — per-day "hidden N/M" unhides ALL days + scrolls the page
+
+- **Recurrences:** 2+ (owner has reported the "reveal hidden" scope/scroll more than once).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data),
+  Analysis → workout history.
+- **Symptom:** tapping a single day's grey **"hidden 1/3"** line (meant to reveal
+  just THAT day's filter-hidden lifts) instead unhid **every** day's hidden lifts
+  app-wide, and **jumped the page** (scrolled to the top of the history).
+- **Prior shallow wiring:** the per-day button carried `data-woshowall="1"` → the
+  SAME handler as the global head-row "⚑ hidden" toggle → `setWoShowAll(true)`,
+  which flips the global `woShowAllExercises` flag, resets `S.workoutsPage = 0`,
+  and full-re-renders `renderWorkoutsPage()`. So a per-DAY control ran a GLOBAL
+  action + a page-reset re-render (the scroll jump).
+- **Root cause:** wrong scope + wrong mechanism. A per-item reveal must be LOCAL
+  (this day only) and must NOT re-render the list (re-render = lost scroll). It was
+  reusing a global toggle because both just said "show hidden".
+- **Root fix (b.2.7.x, PB-2):** the per-day button now carries `data-woshowday=<date>`;
+  its day's hidden lifts are pre-rendered greyed + `hidden` inline, and the button
+  is a **pure DOM toggle** (show/hide that one `.wo-hidden-day-lines`) — no global
+  flag, no `renderWorkoutsPage()`, no page reset, no scroll. The head-row toggle
+  stays the only GLOBAL "show all hidden". **Invariant: a per-item "reveal" toggles
+  only its own pre-rendered DOM; never call a list re-render or a global flag from
+  a per-row control.**
+- **If it recurs:** someone re-wired the per-day button to a global toggle again, or
+  added a `renderWorkoutsPage()`/`workoutsPage = 0` into its path. Keep it DOM-only.

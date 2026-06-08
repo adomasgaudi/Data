@@ -5470,16 +5470,19 @@ function renderWorkoutsPage() {
   // "hidden h/t" line. Only computed when the filter is actually hiding lifts and
   // we're NOT already revealing them. Independent of the current selection scope.
   const hiddenByKey = new Map<string, { total: number; hidden: number }>();
+  // Each day/week's LIVE (unfiltered) exercises+sets, so a per-day "hidden N/M"
+  // reveal can render JUST that day's hidden lifts inline — never a global unhide.
+  const liveByKey = new Map<string, { exercises: ExerciseCount[]; sets: SetRecord[] }>();
   if (!woShowAllExercises && activeSet && hiddenByIndexCount(els.athlete.value) > 0) {
     const allow = activeSet;
     const liveBase = byWeek
-      ? weeksForUser(liveRecords(), els.athlete.value).map((w) => ({ key: w.weekStart, exercises: w.exercises }))
-      : workoutsForUser(liveRecords(), els.athlete.value).map((d) => ({ key: d.date, exercises: d.exercises }));
+      ? weeksForUser(liveRecords(), els.athlete.value).map((w) => ({ key: w.weekStart, exercises: w.exercises, sets: w.sets }))
+      : workoutsForUser(liveRecords(), els.athlete.value).map((d) => ({ key: d.date, exercises: d.exercises, sets: d.sets }));
     for (const d of liveBase) {
       const names = new Set(d.exercises.map((e) => e.exerciseName));
       let hidden = 0;
       for (const nm of names) if (!allow.has(nm)) hidden++;
-      if (hidden > 0) hiddenByKey.set(d.key, { total: names.size, hidden });
+      if (hidden > 0) { hiddenByKey.set(d.key, { total: names.size, hidden }); liveByKey.set(d.key, { exercises: d.exercises, sets: d.sets }); }
     }
   }
   const rows = workoutGroups
@@ -5491,44 +5494,47 @@ function renderWorkoutsPage() {
         return `<tr class="rest-row" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
       }
       const abs = start + i;
+      // One exercise's compact line (1RM · name · sets), reused for the day's active
+      // lifts AND for its hidden-lift reveal.
+      const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
+        const setsTxt = sets.map((s) => setDisplay(s)).join(" ");
+        const name = displayName(exerciseName);
+        const e1rms = sets
+          .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))
+          .filter((v): v is number => v !== null && Number.isFinite(v));
+        const best = e1rms.length ? Math.max(...e1rms) : null;
+        const rmTxt = best === null
+          ? ""
+          : ` <span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
+        const addBtn = S.showAddSets
+          ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
+          : "";
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+      };
       let did: string;
       if (S.workoutShowMode === "exercises") {
         // Write out every set as weight^reps (e.g. 40¹⁵), not just the set count.
-        did = g.exercises
-          .map((e) => {
-            const exSets = g.sets.filter((s) => s.exerciseName === e.exerciseName);
-            const setsTxt = exSets.map((s) => setDisplay(s)).join(" ");
-            const name = displayName(e.exerciseName);
-            // The day's record 1RM for this lift: the best estimated 1RM across
-            // its sets that day (same calc as everywhere — bodyweight folded in,
-            // variation difficulty applied). Shown next to the sets, not just the
-            // set count.
-            const e1rms = exSets
-              .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))
-              .filter((v): v is number => v !== null && Number.isFinite(v));
-            const best = e1rms.length ? Math.max(...e1rms) : null;
-            const rmTxt =
-              best === null
-                ? ""
-                : ` <span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
-            const addBtn = S.showAddSets
-              ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(g.date)}" ` +
-                `title="Add more sets of ${escapeHtml(e.exerciseName)}">+ set</button>`
-              : "";
-            return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(name)}</span> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
-          })
-          .join("");
+        did = g.exercises.map((e) => exLineHtml(e.exerciseName, g.sets.filter((s) => s.exerciseName === e.exerciseName))).join("");
       } else {
         // Group view: sum each exercise's sets into the chosen grouping dimension.
         did = groupSessionCounts(g.exercises, els.workoutGrouping.value)
           .map(([label, c]) => `${escapeHtml(label)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
           .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
-      // A grayed "another exercise line" for the lifts the Index filter hides this
-      // day/week — a button that reveals them (the same toggle as the head-row one).
+      // The lifts the Index filter hides this day/week: a button that reveals THIS
+      // DAY's hidden lifts inline (pre-rendered greyed, toggled by DOM — never a
+      // global unhide, and no re-render so the page doesn't jump). PB-2.
       const hc = hiddenByKey.get(g.date);
       if (hc) {
-        did += `<div class="wo-ex-line wo-hidden-line"><button type="button" class="wo-hidden-daybtn" data-woshowall="1" title="Show the ${hc.hidden} lift${hc.hidden === 1 ? "" : "s"} the Index filter hides ${byWeek ? "this week" : "this day"}">hidden ${hc.hidden}/${hc.total}</button></div>`;
+        const live = liveByKey.get(g.date);
+        const hiddenLines = live && activeSet
+          ? live.exercises.filter((e) => !activeSet!.has(e.exerciseName))
+              .map((e) => exLineHtml(e.exerciseName, live.sets.filter((s) => s.exerciseName === e.exerciseName))).join("")
+          : "";
+        const lbl = `${hc.hidden}/${hc.total}`;
+        did +=
+          `<div class="wo-hidden-line"><button type="button" class="wo-hidden-daybtn" data-woshowday="${escapeHtml(g.date)}" data-hlabel="${lbl}" aria-expanded="false" title="Show the ${hc.hidden} lift${hc.hidden === 1 ? "" : "s"} the Index filter hides ${byWeek ? "this week" : "this day"} (just this one)">hidden ${lbl}</button>` +
+          `<div class="wo-hidden-day-lines" hidden>${hiddenLines}</div></div>`;
       }
       const tagged = aloneTags.has(aloneKey(g.date));
       // Day tags ("alone") are hidden unless the "Tags" display option is on.
@@ -8719,10 +8725,18 @@ async function init() {
     renderWorkoutsPage();
   });
   els.woShowAllToggle.addEventListener("click", () => setWoShowAll(!woShowAllExercises));
-  // Inline "Show all" / "Hide them" button in the over-the-history banner.
+  // Per-day "hidden N/M": reveal/hide JUST that day's hidden lifts, in place — a
+  // pure DOM toggle (no global flag, no re-render, no scroll jump). PB-2.
   document.addEventListener("click", (e) => {
-    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-woshowall]");
-    if (b) setWoShowAll(b.dataset.woshowall === "1");
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-woshowday]");
+    if (!b) return;
+    const lines = b.parentElement?.querySelector<HTMLElement>(".wo-hidden-day-lines");
+    if (!lines) return;
+    const show = lines.hasAttribute("hidden");
+    lines.toggleAttribute("hidden", !show);
+    b.setAttribute("aria-expanded", show ? "true" : "false");
+    b.classList.toggle("is-active", show);
+    b.textContent = `${show ? "hide" : "hidden"} ${b.dataset.hlabel ?? ""}`;
   });
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
