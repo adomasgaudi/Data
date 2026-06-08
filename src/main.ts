@@ -230,6 +230,7 @@ const els = {
   athleteStats: $("athleteStats"),
   momentum: $("momentum"),
   trainBreakdown: $("trainBreakdown"),
+  maintenance: $("maintenance"),
   muscleMapBody: $("muscleMapBody"),
   athleteTitle: $("athleteTitle"),
   athleteTable: $<HTMLTableElement>("athleteTable"),
@@ -3738,6 +3739,50 @@ function renderTrainBreakdown() {
   els.trainBreakdown.innerHTML =
     `<div class="tb-title muted">What ${escapeHtml(athleteLabel())} trains <span class="tb-sub">(${total.toLocaleString()} sets)</span></div>` +
     `<div class="tb-bar">${bar}</div>`;
+  renderMaintenance();
+}
+
+/** "Maintenance" — lifts whose CURRENT (decayed-to-today) strength has slipped more
+ * than 2% below their all-time peak: the ones detraining, that a session would
+ * restore. Uses the same fade model as the strength line (decayingStrengthPoints).
+ * Empty → the section hides itself. */
+function renderMaintenance() {
+  if (!els.maintenance) return;
+  const username = els.athlete.value;
+  const formula = currentFormula();
+  // Per-exercise day → best effective (bodyweight-inclusive) 1RM, same guard as the
+  // displayed strength (drop not-comparable / isometric lifts — no rep-based 1RM).
+  const byEx = new Map<string, Map<number, number>>();
+  for (const r of computedRecords()) {
+    if (r.username !== username || !r.date) continue;
+    if (addedWeight1RM(r, formula) === null) continue;
+    const eff = estimate1RM(r.weight, r.reps, formula);
+    if (eff === null) continue;
+    const m = byEx.get(r.exerciseName) ?? byEx.set(r.exerciseName, new Map()).get(r.exerciseName)!;
+    const d = dayNumber(r.date);
+    m.set(d, Math.max(m.get(d) ?? -Infinity, eff));
+  }
+  const items: { name: string; drop: number; peak: number; cur: number }[] = [];
+  for (const [name, dm] of byEx) {
+    const pts = [...dm.entries()].map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
+    const peak = Math.max(...pts.map((p) => p.y));
+    if (!(peak > 0)) continue;
+    const series = decayingStrengthPoints(pts);
+    const cur = series.length ? series[series.length - 1]!.y : peak;
+    const drop = ((peak - cur) / peak) * 100;
+    if (drop > 2) items.push({ name, drop, peak, cur });
+  }
+  items.sort((a, b) => b.drop - a.drop);
+  if (items.length === 0) { els.maintenance.innerHTML = ""; return; }
+  els.maintenance.innerHTML =
+    `<div class="tb-title muted">Maintenance <span class="tb-sub">(${items.length} slipping &gt;2% below peak — train to restore)</span></div>` +
+    `<div class="mnt-list">` +
+    items.map((it) =>
+      `<button type="button" class="mnt-item" data-waexinfo="${escapeHtml(it.name)}" title="${escapeHtml(it.name)}: now ${fmt(it.cur)} vs peak ${fmt(it.peak)} — tap for info">` +
+      `<span class="mnt-name">${escapeHtml(displayName(it.name))}</span>` +
+      `<span class="mnt-drop">−${it.drop.toFixed(1)}%</span></button>`,
+    ).join("") +
+    `</div>`;
 }
 
 /**

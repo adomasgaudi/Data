@@ -111,6 +111,7 @@ const LT: Record<string, string> = {
   "No profile on file.": "Profilio nėra.",
   "No profile on file": "Profilio nėra",
   "Muscle map": "Raumenų žemėlapis",
+  "Maintenance": "Priežiūra",
   // Simplified-card explanations (exact sentences rendered by the app).
   "The share of your bodyweight that's fat — shown as a likely range because it's only an estimate. Lower is leaner, though very low isn't always healthier.":
     "Kūno svorio dalis, kuri yra riebalai — rodoma kaip tikėtinas intervalas, nes tai tik įvertis. Mažiau reiškia liesesnį kūną, tačiau labai mažai ne visada sveikiau.",

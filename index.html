@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.139</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.140</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -217,6 +217,9 @@
             <p id="athleteProfile" class="athlete-profile"></p>
             <div id="momentum" class="momentum"></div>
             <div id="trainBreakdown" class="train-breakdown"></div>
+            <!-- Lifts whose current (decayed) strength has slipped >2% below their
+                 peak — a "train these to maintain" list. Empty → hidden. -->
+            <div id="maintenance" class="maintenance"></div>
             <!-- Front/back muscle map shaded by how much each region is trained. -->
             <details id="muscleMap" class="muscle-map">
               <summary class="muscle-map-summary">Muscle map <span class="mm-caret">▾</span></summary>
