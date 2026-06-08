@@ -105,6 +105,7 @@ const LT: Record<string, string> = {
   "Power wt": "Jėgos svoris",
   "✎ Edit": "✎ Redaguoti",
   "Edit": "Redaguoti",
+  "＋ Add athlete": "＋ Pridėti sportininką",
   "No profile on file.": "Profilio nėra.",
   "No profile on file": "Profilio nėra",
   "Muscle map": "Raumenų žemėlapis",

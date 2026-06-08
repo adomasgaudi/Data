@@ -1288,6 +1288,24 @@ function saveAthleteOverrides() {
   saveJson(ATHLETE_STATS_KEY, athleteOverrides);
 }
 
+// Manually-added athletes (admin "＋ Add athlete"): users who aren't in the scraped
+// StrengthLevel data — so you can set their stats / hand-log sets. Saved on device
+// (and in the backup, under the colosseum.* prefix).
+const MANUAL_ATHLETES_KEY = "colosseum.manualAthletes.v1";
+let manualAthletes: { username: string; user: string }[] = (() => {
+  try { const a = JSON.parse(localStorage.getItem(MANUAL_ATHLETES_KEY) ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
+})();
+function saveManualAthletes(): void { saveJson(MANUAL_ATHLETES_KEY, manualAthletes); }
+/** The full athlete roster: everyone in the scraped data PLUS any manually-added
+ * users, deduped by username and sorted by display name. The single source of the
+ * athlete list for every picker (replaces bare distinctUsers(data.records)). */
+function rosterUsers(): { username: string; user: string }[] {
+  const map = new Map<string, string>();
+  for (const u of distinctUsers(data.records)) map.set(u.username, u.user);
+  for (const u of manualAthletes) if (!map.has(u.username)) map.set(u.username, u.user);
+  return [...map].map(([username, user]) => ({ username, user })).sort((a, b) => a.user.localeCompare(b.user));
+}
+
 /** Effective profile for an athlete: the ATHLETES baseline with any on-device
  * edits layered on top. bodyFat is the band's average when a band is set. */
 function athProfile(username: string): AthleteProfile | undefined {
@@ -6717,7 +6735,7 @@ function openStatsEditor(username: string): void {
  * athlete). Body-fat is five % inputs (95/50 band + average); a live nFFMI range
  * shows how the band propagates. */
 function renderStatsEdit(): void {
-  const users = distinctUsers(data.records);
+  const users = rosterUsers();
   if (!statsEditUser || !users.some((u) => u.username === statsEditUser))
     statsEditUser = els.athlete.value || users[0]?.username || "";
   const username = statsEditUser;
@@ -6736,8 +6754,10 @@ function renderStatsEdit(): void {
     ? `nFFMI <strong>${range.avg.toFixed(1)}</strong> <span class="muted">· 95% ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} · 50% ${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}</span>`
     : `<span class="muted">Enter weight & height for nFFMI</span>`;
 
+  // Admin-only "＋ Add athlete": create a user not in the scraped data.
+  const addBtn = viewMode === "admin" ? `<button type="button" class="se-add settings-link">＋ Add athlete</button>` : "";
   els.statsEditBody.innerHTML =
-    `<label class="se-field se-pick"><span class="se-lbl">Athlete</span><select id="seAthlete">${users.map(opt).join("")}</select></label>` +
+    `<div class="se-pick-row"><label class="se-field se-pick"><span class="se-lbl">Athlete</span><select id="seAthlete">${users.map(opt).join("")}</select></label>${addBtn}</div>` +
     `<div class="se-grid">` +
     num("se-weight", "Weight (kg)", p?.weight ?? null, "0.5") +
     num("se-height", "Height (cm)", p?.height ?? null, "1") +
@@ -6799,6 +6819,37 @@ function saveStatsEdit(): void {
   scheduleRender();
 }
 
+/** Rebuild every athlete-roster picker (#athlete + its chips, View-as, login) from
+ * the current roster — used after a manual athlete is added. */
+function rebuildAthleteRosters(select?: string): void {
+  const users = rosterUsers();
+  const keep = select ?? els.athlete.value;
+  const opt = (u: { username: string; user: string }) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`;
+  els.athlete.innerHTML = users.map(opt).join("");
+  if (keep && users.some((u) => u.username === keep)) els.athlete.value = keep;
+  buildAthleteChips();
+  els.viewAsSelect.innerHTML =
+    `<option value="admin">Admin — everything</option>${users.map(opt).join("")}<option value="loggedout">Logged out — Adomas only</option>`;
+  populateLoginAthletes();
+}
+
+/** Admin "＋ Add athlete": add a user who isn't in the scraped StrengthLevel data,
+ * so you can set their stats and hand-log sets. Saved on device + in the backup. */
+function addManualAthlete(): void {
+  const name = (window.prompt("New athlete's name:") ?? "").trim();
+  if (!name) return;
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "user";
+  const taken = new Set(rosterUsers().map((u) => u.username));
+  let username = base, i = 2;
+  while (taken.has(username)) username = `${base}_${i++}`;
+  manualAthletes.push({ username, user: name });
+  saveManualAthletes();
+  rebuildAthleteRosters(username); // also sets els.athlete.value = username
+  statsEditUser = username;
+  renderAthlete();   // refresh the app for the (empty) new athlete
+  renderStatsEdit(); // show their stats editor
+}
+
 function setupStatsEdit(): void {
   els.statsEditBody.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
@@ -6816,6 +6867,7 @@ function setupStatsEdit(): void {
   });
   els.statsEditBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    if (t.closest(".se-add")) { addManualAthlete(); return; }
     if (t.closest(".se-save")) saveStatsEdit();
     else if (t.closest(".se-reset")) {
       delete athleteOverrides[statsEditUser];
@@ -7992,8 +8044,9 @@ async function init() {
 
   els.formula.value = DEFAULT_FORMULA;
 
-  // Populate athlete dropdown (alphabetical by display name).
-  const users = distinctUsers(data.records);
+  // Populate athlete dropdown (alphabetical by display name) — data users + any
+  // manually-added ones.
+  const users = rosterUsers();
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
@@ -9615,7 +9668,7 @@ function mergeManualSets() {
 
 /** Populate the Add form's athlete dropdown + exercise suggestions and the table. */
 function renderAddTab() {
-  const users = distinctUsers(data.records);
+  const users = rosterUsers();
   const prev = els.addAthlete.value;
   els.addAthlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)

@@ -794,6 +794,10 @@ main { padding-bottom: 5rem; }
 .s-wo-did { font-size: 0.88rem; }
 /* Edit-athlete-stats page. */
 .statsedit-body { margin-top: 0.85rem; max-width: 560px; }
+/* Athlete picker + "＋ Add athlete" on one row (the button only shows for admin). */
+.se-pick-row { display: flex; align-items: flex-end; gap: 0.5rem; }
+.se-pick-row .se-pick { flex: 1 1 auto; }
+.se-pick-row .se-add { flex: 0 0 auto; margin-bottom: 0.6rem; white-space: nowrap; }
 .se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; min-width: 0; }
 .se-lbl { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
 .se-field input, .se-field select { width: 100%; min-width: 0; font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
