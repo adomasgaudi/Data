@@ -1531,7 +1531,9 @@ select.subtle-select:hover, select.subtle-select:focus {
    dated band where the day changes, a touch stronger where the week changes. */
 .set-daydiv > td { padding: 0.12rem 0.45rem; font-size: 0.72rem; font-weight: 600; color: var(--muted); background: var(--rest-fill); border-top: 1px solid var(--line); }
 .set-weekdiv > td { color: var(--text); border-top: 2px solid var(--accent); }
-.wo-note { font-style: italic; }
+/* Compact-line note preview: stays on ONE chip (truncated in JS) so a long note can
+   never wrap the day row into a tall block. */
+.wo-note { font-style: italic; white-space: nowrap; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
 /* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
    column (right-aligned), then the name + sets — so every exercise name lines up

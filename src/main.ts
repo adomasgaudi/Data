@@ -5946,8 +5946,14 @@ function setDisplay(raw: SetRecord): string {
       ? `${chips}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
       : `${chips}${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
   }
-  if (bw && note)
-    return `${chips}<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+  if (bw && note) {
+    // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
+    // SHORT preview where a weight chip would sit (full note on hover + in the
+    // expanded rows) — a long note used to dump inline and wrap into a huge block,
+    // breaking the compact day line. Keep it the width of a normal weight^reps.
+    const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
+    return `${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+  }
   return `${chips}${wr(s.weight, s.reps)}`;
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
