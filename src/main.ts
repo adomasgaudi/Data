@@ -11035,21 +11035,16 @@ function renderSelector(scope: SelScope): void {
   const groupCtl = `<label class="wa-gcfg-f wa-sel-group">Group<select class="wa-groupby">${groupOpts}</select></label>`;
   const selAllBtn = `<button type="button" class="wa-selectall wa-clear">Select all</button>`;
   const clearBtn = `<button type="button" class="wa-clearsel wa-clear"${cur.length ? "" : " disabled"}>Clear</button>`;
-  // The fold menu keeps the heavier / rarer tools alongside the chip grid.
-  const foldTools =
-    `<div class="wa-chips-tools">` +
-    matchBtn +
-    missingToggle +
-    searchActive +
-    `</div>`;
-  const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
-  const foldOpen = prevFold ? prevFold.open : !!S.waChipsFoldOpen;
-  const prevChipScroll = prevFold?.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
+  // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
+  // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
+  // keeps the "what / how many" context the old dropdown summary showed.
+  const foldTools = `<div class="wa-chips-tools">${matchBtn}${missingToggle}${searchActive}</div>`;
   const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
-  const exercisesFold =
-    `<details class="wa-chips-fold"${foldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">${escapeHtml(scopeLabel)} <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></summary>` +
-    `<div class="wa-fe-menu">` + foldTools + settingsBlock +
-    `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap"></div></div></details>`;
+  const prevChipScroll = sel.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
+  const scopeCount = `<span class="wa-sel-scopelabel">${escapeHtml(scopeLabel)} <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></span>`;
+  const settingsCog =
+    `<details class="wa-sel-cog"><summary class="wa-sel-cog-sum" title="Selector settings — identities, name mode, match, show missing">⚙</summary>` +
+    `<div class="wa-sel-cog-menu">${foldTools}${settingsBlock}</div></details>`;
   // Selected pills. For the GRAPH selector the first WA_GRAPH_MAX are marked 📈 (the
   // graph's point budget) with a "Trim to N" button; the history selector has no cap.
   const onGraph = scope === "graph" ? new Set(cur.slice(0, WA_GRAPH_MAX)) : new Set<string>();
@@ -11075,14 +11070,17 @@ function renderSelector(scope: SelScope): void {
   const trimBtn = (scope === "graph" && cur.length > WA_GRAPH_MAX)
     ? `<button type="button" class="wa-clear wa-trimgraph wa-match-graph" title="Trim this graph selection to just the ${WA_GRAPH_MAX} lifts the graph plots">Trim to ${WA_GRAPH_MAX}</button>`
     : "";
-  // Pills sit on their OWN row UNDER the buttons: a 2-row strip that scrolls
-  // sideways once it's full (CSS handles the 2-row cap + horizontal scroll).
+  // Picker chips live INLINE now (no dropdown). In category-strip mode the outside
+  // strip (selPills) IS the picker, so the grid is hidden to avoid duplication;
+  // otherwise the chip grid shows below the controls.
+  const showGrid = !stickyCats;
   sel.innerHTML =
     `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${exercisesFold}${groupCtl}${modeToggle}${selAllBtn}${clearBtn}${trimBtn}</div>` +
+    `<div class="wa-sel-tools">${scopeCount}${groupCtl}${modeToggle}${selAllBtn}${clearBtn}${settingsCog}${trimBtn}</div>` +
     `</div>` +
-    selPills;
-  renderWaChipsScope(scope);
+    selPills +
+    (showGrid ? `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` : "");
+  if (showGrid) renderWaChipsScope(scope);
   const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
   if (newWrap) newWrap.scrollTop = prevChipScroll;
 }
@@ -11649,12 +11647,12 @@ function goToAnalysis(): void {
   if (document.getElementById(`tab-${tab}`)?.hidden !== false) switchTopTab(tab);
   else if (tab === "analysis") renderWorkoutAnalysis();
 }
-/** Open BOTH exercise-selector folds + their chip lists so search results show. */
+/** Open BOTH exercise-selector section folds so the (now inline) chip lists show
+ * search results. (The chips no longer live in a dropdown — they're always inline.) */
 function openSelectorFolds(): void {
   for (const id of ["waExerciseSelector", "waExerciseSelectorHist"]) {
     document.getElementById(id)?.closest("details")?.setAttribute("open", "");
   }
-  for (const f of document.querySelectorAll<HTMLDetailsElement>(".wa-chips-fold")) f.setAttribute("open", "");
 }
 
 function commandList(): CmdSpec[] {

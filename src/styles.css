@@ -2866,6 +2866,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Header controls next to the button: the lifts dropdown + Group / Pills / Select
    all / Clear. They wrap to a second line on a narrow screen rather than overflow. */
 .wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; flex: 1 1 auto; min-width: 0; align-items: center; justify-content: flex-start; }
+/* Plain "Graph/History lifts N/M" label (replaces the old dropdown summary). */
+.wa-sel-scopelabel { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.82rem; font-weight: 700; color: var(--accent); align-self: center; }
+/* The picker chip grid, now inline (no dropdown) under the controls. */
+.wa-chips-inline { margin-top: 0.4rem; }
 .wa-sel-group { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
 /* Selected-exercise pills (EXR-SEL-PILLS): their OWN row UNDER the buttons. Lay
    out as TWO rows that fill column-by-column, then scroll SIDEWAYS once full —
