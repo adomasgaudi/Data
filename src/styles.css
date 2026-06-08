@@ -554,8 +554,8 @@ main { padding-bottom: 5rem; }
   position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; left: auto;
   display: flex; flex-direction: column; gap: 0.45rem; padding: 0.6rem 0.7rem;
   min-width: 12rem; max-width: 92vw; max-height: 60vh; overflow-y: auto;
-  /* See-through so the graph behind stays visible; a blur keeps the keys legible. */
-  background: color-mix(in srgb, var(--panel) 72%, transparent); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  /* Quite see-through so the graph behind stays visible; a stronger blur keeps the keys legible. */
+  background: color-mix(in srgb, var(--panel) 45%, transparent); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
   border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
 }
