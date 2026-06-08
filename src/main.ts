@@ -11968,9 +11968,13 @@ function renderSelector(scope: SelScope): void {
   // is disabled once everything is picked; "Deselect all" is disabled when nothing is.
   const selectable = waChipList().filter((ex) => !ex.missing).map((ex) => ex.name);
   const allOn = selectable.length > 0 && selectable.every((n) => cur.includes(n));
-  const selAllToggle =
-    `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift">Select all</button>` +
-    `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the selection">Deselect all</button>`;
+  // The GRAPH selector offers ONLY "Deselect all" — plotting every lift at once is
+  // never wanted, so there's no "Select all" for it. The history selector keeps both
+  // (Select all disabled once all picked; Deselect all disabled when none are).
+  const selAllToggle = scope === "graph"
+    ? `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the graph selection">Deselect all</button>`
+    : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift">Select all</button>` +
+      `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the selection">Deselect all</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
   // keeps the "what / how many" context the old dropdown summary showed.
@@ -12024,7 +12028,16 @@ function renderSelector(scope: SelScope): void {
   // strip (selPills) IS the picker, so the grid is hidden to avoid duplication;
   // otherwise the chip grid shows below the controls.
   const showGrid = !stickyCats;
+  // GRAPH selector: a big headline above the controls — the COUNT (title-size number)
+  // and the picked lift names (near-title), so what's plotted reads at a glance.
+  const bigSel = scope === "graph"
+    ? `<div class="wa-sel-big">` +
+      `<span class="wa-sel-bigcount">${cur.length}</span><span class="wa-sel-biglabel muted">on graph</span>` +
+      (cur.length ? `<span class="wa-sel-bignames">${cur.map((n) => escapeHtml(displayName(n))).join(", ")}</span>` : "") +
+      `</div>`
+    : "";
   sel.innerHTML =
+    bigSel +
     `<div class="wa-sel-header">` +
     `<div class="wa-sel-tools">${groupCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
     `</div>` +

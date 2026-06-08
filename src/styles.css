@@ -3057,6 +3057,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 #waWorkoutsHost .detail-table .set-rpe-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
+/* Graph selector headline: a title-size COUNT + near-title list of picked lifts,
+   above the selector controls, so what's plotted reads at a glance. */
+.wa-sel-big { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.1rem 0.5rem; margin: 0 0 0.45rem; }
+.wa-sel-bigcount { font-size: 1.7rem; font-weight: 800; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.wa-sel-biglabel { font-size: 0.8rem; }
+.wa-sel-bignames { flex: 1 1 100%; font-size: 1.15rem; font-weight: 600; color: var(--text); line-height: 1.2; }
 .wa-sel-header { display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
 .wa-sel-header .wa-section-title { margin: 0; }
 /* Header controls next to the button: the lifts dropdown + Group / Pills / Select
