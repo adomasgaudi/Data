@@ -12466,10 +12466,11 @@ function renderWorkoutAnalysis(): void {
   if (!analysisSeeded) {
     analysisSeeded = true;
     const all = defaultSelection(); // most-trained first (sorted by set count)
+    // History opens with ALL lifts (most-trained first); the GRAPH opens with just the
+    // TOP 5 most-trained (plotting all ~200 is unreadable). The two selections are
+    // INDEPENDENT — change either in its own picker.
     if (waSelected.length === 0) waSelected = all;
-    // The GRAPH opens with just the TOP 3 most-trained lifts (plotting all ~200 at
-    // once is unreadable) — add more from the picker as needed.
-    if (waGraphSel.length === 0) waGraphSel = all.slice(0, 3);
+    if (waGraphSel.length === 0) waGraphSel = all.slice(0, 5);
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
