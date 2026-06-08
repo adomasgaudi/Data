@@ -57,7 +57,7 @@ export const S: {
   heatFilters: [],
   heatFiltersSaved: null,
   aloneTagMode: false,
-  heatColorBy: "muscleGroup",
+  heatColorBy: "discipline",
   bwOpenCats: null,
   bwGroupMode: "discipline",
   dataView: "processed",

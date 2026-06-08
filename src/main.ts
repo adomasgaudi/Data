@@ -3773,36 +3773,9 @@ function renderMomentum() {
 
 /** "What they train": a proportional bar of sets per muscle/movement category. */
 function renderTrainBreakdown() {
-  const counts = exerciseCountsForUser(activeRecords(), els.athlete.value);
-  const byCat = new Map<TrainingCategory, number>();
-  let total = 0;
-  for (const c of counts) {
-    const cat = catFor(c.exerciseName);
-    byCat.set(cat, (byCat.get(cat) ?? 0) + c.count);
-    total += c.count;
-  }
-  if (total === 0) {
-    els.trainBreakdown.innerHTML = "";
-    return;
-  }
-  const cats = TRAINING_CATEGORIES.filter((c) => byCat.get(c));
-  const pct = (c: TrainingCategory) => (byCat.get(c)! / total) * 100;
-  // Labels live on the bar itself (no separate legend). Only segments wide
-  // enough to fit text are labelled; the rest still show their share on hover.
-  const bar = cats
-    .map((c) => {
-      const p = pct(c);
-      const label = p >= 11 ? `${c} ${p.toFixed(0)}%` : p >= 6 ? `${p.toFixed(0)}%` : "";
-      return (
-        `<span class="tb-seg" style="flex:${p.toFixed(2)};background:${CATEGORY_COLORS[c]}" ` +
-        `title="${c}: ${byCat.get(c)} sets (${p.toFixed(0)}%)">` +
-        `${label ? `<span class="tb-seg-lbl">${escapeHtml(label)}</span>` : ""}</span>`
-      );
-    })
-    .join("");
-  els.trainBreakdown.innerHTML =
-    `<div class="tb-title muted">What ${escapeHtml(athleteLabel())} trains <span class="tb-sub">(${total.toLocaleString()} sets)</span></div>` +
-    `<div class="tb-bar">${bar}</div>`;
+  // The "What <athlete> trains" distribution bar was removed (owner request); the
+  // Maintenance section that followed it stays.
+  els.trainBreakdown.innerHTML = "";
   renderMaintenance();
 }
 
@@ -11489,7 +11462,7 @@ let searchFindHistory = false;
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
-let waGroupBy: "none" | ExerciseFilterDim = "function"; // default: group the selector by Function
+let waGroupBy: "none" | ExerciseFilterDim = "discipline"; // default: group the selector by Discipline
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
 // toggle. Replaces the old separate Filter button.
