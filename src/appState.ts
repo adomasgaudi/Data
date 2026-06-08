@@ -69,5 +69,5 @@ export const S: {
   // initialised from localStorage in main.ts after import.
   showAddSets: false,
   showAloneTags: false,
-  showRestDays: false,
+  showRestDays: true, // rest-day slivers shown by default (the gaps between sessions read as the timeline)
 };
