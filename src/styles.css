@@ -1449,6 +1449,12 @@ select.subtle-select:hover, select.subtle-select:focus {
    column (right-aligned), then the name + sets — so every exercise name lines up
    at the same x regardless of the 1RM's width (or its absence). */
 .wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr; align-items: baseline; column-gap: 0.45rem; }
+/* EXPERIMENTAL horizontal history: period buckets as side-scrolling columns. */
+.hh-exp { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line); border-radius: 999px; padding: 0 0.4rem; margin-left: 0.3rem; }
+.hh-scroll { display: flex; gap: 0.6rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: flex-start; }
+.hh-col { flex: 0 0 16rem; max-width: 80vw; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.6rem; background: var(--panel); }
+.hh-col-head { font-weight: 700; font-size: 0.9rem; margin: 0 0 0.4rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); position: sticky; left: 0; }
+.hh-col-body .wo-ex-line { margin: 0.15rem 0; }
 .wo-ex-body { min-width: 0; display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */

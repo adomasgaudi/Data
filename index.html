@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.126</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.127</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1104,6 +1104,14 @@
                 <div id="waWorkoutsHost"></div>
               </div>
             </details>
+          </details>
+          <!-- EXPERIMENTAL: a horizontal version of the workout history — the same
+               period buckets (days / weeks / months) but laid out as columns you
+               scroll SIDEWAYS through time, instead of stacked vertically. New, may
+               break; restore point recorded in docs/restore-points.md. -->
+          <details class="wa-fold wa-fold-titled" id="waHistHorizFold">
+            <summary class="wa-fold-sum">Horizontal history <span class="muted hh-exp">experimental</span></summary>
+            <div id="waHistHoriz" class="wa-section"></div>
           </details>
         </section>
       </div>
