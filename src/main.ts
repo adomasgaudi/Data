@@ -5626,9 +5626,9 @@ function onWorkoutRowClick(e: MouseEvent) {
     toggleInlineAddForm(addBtn);
     return;
   }
-  // Per-day "hidden N/M" reveal toggles itself (its own document handler, PB-2) —
-  // swallow it here so it never falls through to EXPAND the day's detail.
-  if (target.closest("[data-woshowday]")) return;
+  // Per-day / expanded "hidden N/M" reveal toggles itself (own document handlers,
+  // PB-2) — swallow it here so it never falls through to expand/collapse the day.
+  if (target.closest("[data-woshowday]") || target.closest("[data-woshowexp]")) return;
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -5655,30 +5655,61 @@ function onWorkoutRowClick(e: MouseEvent) {
 /** Inner table for one expanded day/week: every exercise as a sub-header row
  * followed immediately by all its sets (W / 1RM / Vol) — fully expanded, no
  * second tap needed. A set with a note still toggles its own note row. */
+/** The lifts the Index filter hides for one day/week (live data minus the allow
+ * set), with the day's total — for the per-day / expanded "hidden N/M" reveal.
+ * null when nothing's hidden, the filter is off, or we're already revealing all
+ * (woShowAllExercises). `key` is the ISO day, or the week-start when byWeek. */
+function hiddenLiftsForKey(key: string, byWeek: boolean): { exercises: ExerciseCount[]; sets: SetRecord[]; total: number } | null {
+  if (woShowAllExercises || !activeSet) return null;
+  const allow = activeSet;
+  const base = byWeek
+    ? weeksForUser(liveRecords(), els.athlete.value).find((w) => w.weekStart === key)
+    : workoutsForUser(liveRecords(), els.athlete.value).find((d) => d.date === key);
+  if (!base) return null;
+  const hiddenEx = base.exercises.filter((e) => !allow.has(e.exerciseName));
+  if (hiddenEx.length === 0) return null;
+  const names = new Set(hiddenEx.map((e) => e.exerciseName));
+  return { exercises: hiddenEx, sets: base.sets.filter((s) => names.has(s.exerciseName)), total: new Set(base.exercises.map((e) => e.exerciseName)).size };
+}
+
 function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
   const strengthByDay = currentStrengthByUserExercise(formula);
-  const body = group.exercises
-    .map((e) => {
-      const addBtn = S.showAddSets
-        ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
-        : "";
-      const header =
-        `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-        `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
-        `${addBtn}</td></tr>`;
-      const sets = group.sets
-        .filter((s) => s.exerciseName === e.exerciseName)
-        .map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s)))
-        .join("");
-      return header + sets;
-    })
-    .join("");
+  // One exercise's header + set-rows; reused for the day's active lifts AND for its
+  // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest.
+  const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string => {
+    const addBtn = S.showAddSets
+      ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
+      : "";
+    const header =
+      `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
+      `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
+      `${addBtn}</td></tr>`;
+    const setRows = sets
+      .filter((s) => s.exerciseName === e.exerciseName)
+      .map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s)))
+      .join("");
+    return header + setRows;
+  };
+  const body = group.exercises.map((e) => exRows(e, group.sets)).join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
   const addExRow = S.showAddSets
     ? `<tr class="set-ex-row wo-addex-host"><td colspan="5"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
     : "";
-  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}</tbody></table>`;
+  // Lifts the Index filter hides this day/week — shown under a "hidden N/M" toggle
+  // so the EXPANDED view matches the collapsed one (reveal = full set rows). PB-2.
+  let hiddenRow = "";
+  const hl = hiddenLiftsForKey(group.date, S.workoutViewMode === "week");
+  if (hl) {
+    const hiddenBody = hl.exercises.map((e) => exRows(e, hl.sets)).join("");
+    const lbl = `${hl.exercises.length}/${hl.total}`;
+    hiddenRow =
+      `<tr class="set-ex-row wo-hidden-exp-host"><td colspan="5">` +
+      `<button type="button" class="wo-hidden-daybtn" data-woshowexp data-hlabel="${lbl}" aria-expanded="false" title="Show the ${hl.exercises.length} lift${hl.exercises.length === 1 ? "" : "s"} the Index filter hides here (just this session)">hidden ${lbl}</button>` +
+      `<div class="wo-hidden-exp" hidden><table class="data-table detail-table">${SETS_HEAD}<tbody>${hiddenBody}</tbody></table></div>` +
+      `</td></tr>`;
+  }
+  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}${hiddenRow}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -8737,6 +8768,19 @@ async function init() {
     if (!lines) return;
     const show = lines.hasAttribute("hidden");
     lines.toggleAttribute("hidden", !show);
+    b.setAttribute("aria-expanded", show ? "true" : "false");
+    b.classList.toggle("is-active", show);
+    b.textContent = `${show ? "hide" : "hidden"} ${b.dataset.hlabel ?? ""}`;
+  });
+  // Same reveal in the EXPANDED (tapped-open) day: toggle that session's hidden
+  // lifts' full set-rows in place. Pure DOM, like the per-day collapsed one.
+  document.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>("[data-woshowexp]");
+    if (!b) return;
+    const box = b.parentElement?.querySelector<HTMLElement>(".wo-hidden-exp");
+    if (!box) return;
+    const show = box.hasAttribute("hidden");
+    box.toggleAttribute("hidden", !show);
     b.setAttribute("aria-expanded", show ? "true" : "false");
     b.classList.toggle("is-active", show);
     b.textContent = `${show ? "hide" : "hidden"} ${b.dataset.hlabel ?? ""}`;
