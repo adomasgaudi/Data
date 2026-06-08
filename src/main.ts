@@ -3939,12 +3939,14 @@ function compareSeriesFor(
           const e1rm = addedWeight1RM(s, formula);
           if (e1rm === null) return null;
           const added = s.origWeight !== undefined ? (s.origWeight ?? 0) : (s.weight ?? 0);
-          return { x: ts(s.date), lo: added, hi: e1rm, meta: `×${s.reps ?? 0}` };
+          const dLines = [s.date, `${added}kg × ${s.reps ?? 0}`, `1RM ${Math.round(e1rm * 10) / 10} kg`];
+          if (s.notes?.trim()) dLines.push(s.notes.trim());
+          return { x: ts(s.date), lo: added, hi: e1rm, meta: `×${s.reps ?? 0}`, detail: dLines.join("\n") };
         })
-        .filter((p): p is { x: number; lo: number; hi: number; meta: string } => p !== null);
+        .filter((p): p is { x: number; lo: number; hi: number; meta: string; detail: string } => p !== null);
       return { name, color, type: "range" as const, points };
     });
-    return { series, note: `Every set's weight → its own estimated 1RM (${formula}), one bar per set. Drag to pan · wheel to zoom · tap a bar.` };
+    return { series, note: `Every set's weight → its own estimated 1RM (${formula}), one bar per set. Drag to pan · wheel to zoom · tap a bar for its details.` };
   }
   const series = picks.map((name, i) => {
     const color = COMPARE_COLORS[i % COMPARE_COLORS.length]!;
@@ -3955,7 +3957,7 @@ function compareSeriesFor(
     // the lift (sags through layoffs, pops back up when you train).
     return { name, color, type: "line" as const, points: decayingStrengthPoints(raw) };
   });
-  return { series, note: `Current strength — best estimated 1RM (${formula}) reached up to each date, faded for time off the lift (sags during breaks, recovers when you train). Drag to pan · wheel to zoom · tap a point.` };
+  return { series, note: `Current strength — best estimated 1RM (${formula}) reached up to each date, faded for time off the lift (sags during breaks, recovers when you train). Drag to pan · wheel to zoom · tap a point for its details.` };
 }
 
 /** Draw the overlay on the SVG engine: one estimated-1RM line per ticked exercise

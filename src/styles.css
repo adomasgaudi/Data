@@ -559,8 +559,22 @@ main { padding-bottom: 5rem; }
   max-width: 70%;
 }
 .svgc-tip[hidden] { display: none; }
-.svgc-tip-hd { font-weight: 700; margin-bottom: 2px; }
+.svgc-tip-hd { font-weight: 700; margin-bottom: 2px; display: flex; align-items: center; gap: 0.35rem; }
 .svgc-tip-row { display: flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+/* Click-to-pin detail popup: a sticky version of the tip that takes pointer events
+   (so its ✕ is clickable) and pins beside the tapped datapoint until dismissed. */
+.svgc-tip-pinned { pointer-events: auto; padding-right: 1.4rem; }
+.svgc-tip-x {
+  position: absolute; top: 2px; right: 4px; border: 0; background: none; cursor: pointer;
+  font-size: 0.85rem; line-height: 1; color: var(--muted); padding: 2px;
+}
+.svgc-tip-x:hover { color: var(--text); }
+.svgc-tip-line { white-space: nowrap; }
+.svgc-tip-line.is-first { font-weight: 700; margin-bottom: 1px; }
+.svgc-tip-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 3px; }
+.svgc-tip-badge { font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 0 6px; }
+.svgc-tip-badge.pr { color: #b8902f; background: rgba(184, 144, 47, 0.14); }
+.svgc-tip-badge.fail { color: #a23b3b; background: rgba(162, 59, 59, 0.14); }
 
 /* Combined comparison table: all exercises, everyone's est 1RM side by side. */
 .team-summaries { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin: 0 0 0.9rem; }

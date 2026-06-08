@@ -23,12 +23,28 @@ export interface GraphPoint {
    * section per rep, each ending at that rep's 1RM-equivalent. */
   bands?: number[];
   meta?: string; // tooltip text
+  detail?: string; // full per-set facts for the click-to-pin popup (one per line)
   fail?: boolean; // the set's note contained "fail" — drawn as an ✕ in the series colour
   pr?: boolean; // a new running-max (a record at the time) — drawn as a diamond
   rir?: number; // the set's reps-in-reserve — scales the dot (higher RIR = smaller)
 }
 /** A set whose note marks it as a failed attempt. */
 const isFail = (r: SetRecord): boolean => /fail/i.test(r.notes ?? "");
+
+/** Full facts for ONE logged set, one per line, for the chart's click-to-pin
+ * detail popup: date, weight×reps, est. 1RM, RIR (when resolvable) and the note. */
+function setDetail(r: SetRecord, cfg?: GraphConfig): string {
+  const w = added(r);
+  const lines: string[] = [r.date, `${w ?? "?"}kg × ${r.reps ?? "?"}`];
+  if (cfg) {
+    const e = addedWeight1RM(r, cfg.formula);
+    if (e != null) lines.push(`1RM ${r1(e)} kg`);
+    const rir = cfg.rirOf?.(r);
+    if (rir != null && Number.isFinite(rir)) lines.push(`RIR ${r1(rir)}`);
+  }
+  if (r.notes?.trim()) lines.push(r.notes.trim());
+  return lines.join("\n");
+}
 export interface GraphMetricDef {
   id: string;
   label: string;
@@ -82,6 +98,7 @@ function perSet(
       const x = times.get(r) ?? ts(r.date);
       const p: GraphPoint = { x, y };
       if (metaOf) p.meta = metaOf(r);
+      p.detail = setDetail(r, cfg);
       if (isFail(r)) p.fail = true;
       const rir = cfg?.rirOf?.(r); // size the dot by effort, when a resolver is given
       if (rir != null && Number.isFinite(rir)) p.rir = rir;
@@ -254,7 +271,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
           const v = addedWeight1RM({ ...r, reps: k }, cfg.formula);
           if (v != null) bands.push(r1(v));
         }
-        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM` });
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM`, detail: setDetail(r, cfg) });
       }
       return out.sort((a, b) => a.x - b.x);
     },

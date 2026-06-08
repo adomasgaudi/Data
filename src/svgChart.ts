@@ -45,6 +45,9 @@ export interface SvgPoint {
   bands?: number[];
   /** Extra text shown in the tooltip (e.g. "120×5"). */
   meta?: string;
+  /** Full per-point detail for the click-to-pin popup, one fact per line (e.g.
+   * date, weight×reps, 1RM, RIR, notes). Falls back to value+meta when absent. */
+  detail?: string;
   /** A failed attempt (note contained "fail") — drawn as an ✕ in the series colour. */
   fail?: boolean;
   /** A new record (running-max) set — drawn as a diamond instead of a dot. */
@@ -251,6 +254,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
   let ry = { yMin: 0, yMax: 1 };
   let lastTap: { t: number; x: number } | null = null; // for double-tap-to-reset
+  // Click-to-pin: every drawn datapoint's pixel box (in SVG user units), rebuilt
+  // each draw, so a tap can hit-test the nearest one and pin a sticky detail popup.
+  type HitPoint = { px: number; py: number; yTop: number; yBot: number; s: SvgSeries; p: SvgPoint };
+  let hitPoints: HitPoint[] = [];
+  let pinned = false; // the detail popup is pinned to a point (stays until dismissed)
   /** Re-fit the view to the data (undo any pan/zoom). */
   const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
   const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
@@ -380,6 +388,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
     // series
     let body = "";
+    hitPoints = []; // rebuilt below as each datapoint is drawn (for click-to-pin)
     const keyHtml: string[] = [];
     // Legend keys become toggles only when there are 2+ of them (a single series
     // shouldn't be hide-able into a blank chart).
@@ -413,7 +422,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       if (s.type === "line") {
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
         body += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-opacity="0.9"/>`;
-        for (const p of s.points) body += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${ymap(p.y ?? 0).toFixed(1)}" r="2.4" fill="${s.color}" fill-opacity="0.6"/>`;
+        for (const p of s.points) {
+          const cx = xPix(p.x), cy = ymap(p.y ?? 0);
+          body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.4" fill="${s.color}" fill-opacity="0.6"/>`;
+          hitPoints.push({ px: cx, py: cy, yTop: cy, yBot: cy, s, p });
+        }
       } else if (s.type === "scatter") {
         // Dots only, no connecting line — for values that jump around (e.g. a
         // day's est-1RM) where a line would imply a trend that isn't there. Slight
@@ -435,6 +448,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             const r = p.rir != null ? Math.min(3.2, Math.max(1.5, 3.2 - 0.22 * p.rir)) : 3.2;
             body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="0.55"/>`;
           }
+          hitPoints.push({ px: cx, py: cy, yTop: cy, yBot: cy, s, p });
         }
       } else if (s.type === "range") {
         const bars: { px: number; yTop: number; yBot: number }[] = [];
@@ -471,6 +485,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             body += `<line x1="${x.toFixed(1)}" y1="${yHi.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="4" stroke-linecap="${cap}" stroke-opacity="0.55"${dash}/>`;
           }
           bars.push({ px: Math.round(x), yTop: Math.min(yHi, yLo), yBot: Math.max(yHi, yLo) });
+          hitPoints.push({ px: x, py: (yHi + yLo) / 2, yTop: Math.min(yHi, yLo), yBot: Math.max(yHi, yLo), s, p });
         }
         // Where 3+ bars pile up, stacked transparency just turns muddy/dark — so
         // instead those stretches "shine": a bright, glowing core drawn on top.
@@ -517,6 +532,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           const yBot = clampY(Math.max(top, base));
           if (yBot - yTop < 0.2) continue; // fully clipped out of the plot
           body += `<rect x="${(x - rectW / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${rectW.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
+          hitPoints.push({ px: x, py: yTop, yTop, yBot, s, p });
         }
       }
       // Floating exercise name next to this series' last record (dots/lines only —
@@ -619,7 +635,80 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     tipEl.style.left = `${Math.min(Math.max(px, 8), (plotEl.clientWidth || W) - tipEl.offsetWidth - 8)}px`;
     tipEl.style.top = `4px`;
   }
-  const hideTip = () => { tipEl.hidden = true; };
+  const hideTip = () => { tipEl.hidden = true; tipEl.classList.remove("svgc-tip-pinned"); pinned = false; };
+
+  // ---- click-to-pin detail popup ----
+  /** Nearest drawn datapoint to a screen pixel (within a small radius), or null.
+   * Distance is to the dot, or to the nearest edge of a bar's vertical span. */
+  function hitTest(clientX: number, clientY: number): HitPoint | null {
+    const svg = plotEl.querySelector("svg");
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const W = widthOf();
+    const h = H();
+    const lx = ((clientX - rect.left) / rect.width) * W; // → SVG user units
+    const ly = ((clientY - rect.top) / rect.height) * h;
+    let best: HitPoint | null = null;
+    let bestD = Infinity;
+    for (const hp of hitPoints) {
+      const dx = lx - hp.px;
+      const cy = ly < hp.yTop ? hp.yTop : ly > hp.yBot ? hp.yBot : ly; // clamp into the bar span
+      const dy = ly - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < bestD) { bestD = d; best = hp; }
+    }
+    return best && bestD <= 26 ? best : null; // ~26 SVG units ≈ a fingertip
+  }
+  /** Detail-popup HTML for one point: a close ✕, the series name, then the point's
+   * `detail` lines (or a value fallback) and any record/fail badges. */
+  function pointDetailHtml(s: SvgSeries, p: SvgPoint): string {
+    const lines: string[] = [];
+    if (p.detail) {
+      for (const ln of p.detail.split("\n")) if (ln.trim()) lines.push(esc(ln.trim()));
+    } else {
+      const unit = s.axis === "right" ? cfg.rightUnit : cfg.yUnit;
+      lines.push(esc(fmtTipX(p.x)));
+      lines.push(
+        s.type === "range"
+          ? `${num(p.lo ?? 0)}→${num(p.hi ?? 0)}${p.meta ? " " + esc(p.meta) : ""}`
+          : `${num(p.y ?? 0)}${unit ? " " + unit : ""}${p.meta ? " · " + esc(p.meta) : ""}`,
+      );
+    }
+    const badges: string[] = [];
+    if (p.pr) badges.push(`<span class="svgc-tip-badge pr">◆ record</span>`);
+    if (p.fail) badges.push(`<span class="svgc-tip-badge fail">✕ fail</span>`);
+    const head = `<div class="svgc-tip-hd"><span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</div>`;
+    const body = lines.map((l, i) => `<div class="svgc-tip-line${i === 0 ? " is-first" : ""}">${l}</div>`).join("");
+    return `<button type="button" class="svgc-tip-x" aria-label="Close">✕</button>${head}${body}` +
+      (badges.length ? `<div class="svgc-tip-badges">${badges.join("")}</div>` : "");
+  }
+  /** Pin the sticky detail popup beside a datapoint; it stays until dismissed. */
+  function pinDetail(hp: HitPoint) {
+    const W = widthOf();
+    const h = H();
+    const cx = plotEl.offsetLeft + (hp.px / W) * plotEl.clientWidth;
+    const cy = plotEl.offsetTop + (hp.py / h) * plotEl.clientHeight;
+    tipEl.innerHTML = pointDetailHtml(hp.s, hp.p);
+    tipEl.classList.add("svgc-tip-pinned");
+    tipEl.hidden = false;
+    pinned = true;
+    // Prefer to the right of the point; flip left if it would overflow. Clamp into
+    // the chart box both ways so it's never cut off.
+    const cw = container.clientWidth;
+    const tw = tipEl.offsetWidth;
+    const th = tipEl.offsetHeight;
+    let left = cx + 12;
+    if (left + tw > cw - 4) left = cx - tw - 12;
+    left = Math.max(4, Math.min(left, cw - tw - 4));
+    let top = cy - th / 2;
+    top = Math.max(4, Math.min(top, container.clientHeight - th - 4));
+    tipEl.style.left = `${left}px`;
+    tipEl.style.top = `${top}px`;
+  }
+  // The ✕ on a pinned popup closes it (the popup gets pointer-events when pinned).
+  tipEl.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest(".svgc-tip-x")) { e.stopPropagation(); hideTip(); }
+  });
 
   // ---- interactions: 1 finger / mouse = pan, 2 fingers = pinch-zoom, wheel = zoom ----
   /** Vertical screen fraction (0=top..1=bottom) + the x data value under a pixel. */
@@ -725,13 +814,22 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           fitView(); // double-tap → re-fit to the data (undo accidental pan/zoom)
         } else {
           lastTap = { t: now, x: e.clientX };
-          showTip(e.clientX);
+          // Tap ON a datapoint → pin its sticky detail popup; tap on empty space →
+          // dismiss any pinned popup (and fall back to the quick x-tooltip).
+          const hp = hitTest(e.clientX, e.clientY);
+          if (hp) pinDetail(hp);
+          else { hideTip(); showTip(e.clientX); }
         }
       }
     }
   };
   plotEl.addEventListener("pointerdown", (e) => {
-    if (!interactive()) { showTip(e.clientX); return; }
+    if (!interactive()) {
+      const hp = hitTest(e.clientX, e.clientY);
+      if (hp) pinDetail(hp);
+      else { hideTip(); showTip(e.clientX); }
+      return;
+    }
     if (pts.size === 0) {
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
@@ -751,10 +849,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // iOS Safari: pointer capture alone sometimes still scrolls the page mid-drag.
   plotEl.addEventListener("touchmove", (e) => { if (pts.size > 0) e.preventDefault(); }, { passive: false });
   plotEl.addEventListener("pointermove", (e) => {
-    if (pts.size > 0 || e.buttons !== 0) return;
+    if (pts.size > 0 || e.buttons !== 0 || pinned) return; // a pinned popup wins over hover
     if (e.pointerType === "mouse") showTip(e.clientX);
   });
-  plotEl.addEventListener("pointerleave", hideTip);
+  plotEl.addEventListener("pointerleave", () => { if (!pinned) hideTip(); });
   // Double-click (desktop) / double-tap (mobile, handled in onUp) re-fits the view.
   plotEl.addEventListener("dblclick", () => { if (interactive()) fitView(); });
   plotEl.addEventListener(
