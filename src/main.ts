@@ -11987,9 +11987,15 @@ function renderWorkoutAnalysis(): void {
   // "what's on the graph" readout (the old separate count block is gone).
   const graphSummary = document.getElementById("waGraphSummary");
   if (graphSummary) {
-    const graphTitle = waGraphSel.length ? waGraphSel.map((n) => displayName(n)).join(" · ") : null;
-    graphSummary.innerHTML = graphTitle ? `<span class="wa-seltitle">${escapeHtml(graphTitle)}</span>` : "Graph";
-    graphSummary.classList.toggle("is-bigtitle", !!graphTitle);
+    // Each plotted lift's name is a button that REMOVES it from the graph (it stops
+    // the summary's collapse — see the data-graphremove handler). The caret + any
+    // empty title space still toggle the fold, so both actions live in one title.
+    graphSummary.innerHTML = waGraphSel.length
+      ? `<span class="wa-seltitle">` +
+        waGraphSel.map((n) => `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join(`<span class="wa-title-sep"> · </span>`) +
+        `</span>`
+      : "Graph";
+    graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
     // Selecting one OR more lifts is just a FILTER on the same all-exercises view —
@@ -13261,6 +13267,17 @@ function setupWorkoutAnalysis(): void {
   });
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // A lift NAME in the graph's fold title → remove it from the graph. preventDefault
+    // stops the <summary> from also toggling the fold (so tapping a name removes it,
+    // while the caret / empty title space still collapse the graph). Runs FIRST.
+    const gRem = t.closest<HTMLElement>("[data-graphremove]");
+    if (gRem?.dataset.graphremove) {
+      e.preventDefault();
+      const name = gRem.dataset.graphremove;
+      waGraphSel = waGraphSel.filter((x) => x !== name);
+      debounceWaRender();
+      return;
+    }
     // Which selector (graph vs calendar/history) was clicked — its root carries
     // data-selscope. Selector actions below operate on that scope's selection.
     const scopeRoot = t.closest<HTMLElement>("[data-selscope]");

@@ -2910,6 +2910,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-fold-titled[open] > .wa-fold-sum.is-bigtitle,
 .wa-fold[open] > #waTableSummary.is-bigtitle { font-size: 1.4rem; }
 .wa-fold-sum.is-bigtitle .wa-seltitle { color: var(--accent); }
+/* A bigger caret with clear margin from the title, so there's an obvious "empty"
+   spot (the caret) to COLLAPSE — distinct from the lift names, which REMOVE. */
+.wa-fold-titled[open] > .wa-fold-sum.is-bigtitle::before { font-size: 1.4rem; margin-right: 0.5em; opacity: 0.55; }
+/* Each plotted lift in the graph title is its own remove button (tap = drop it from
+   the graph). Looks like the title text; hover hints removal (red, struck through).
+   The summary's caret / empty space still toggles the fold. */
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; }
+.wa-title-lift:hover { color: #a23b3b; text-decoration: line-through; }
+.wa-title-sep { color: var(--muted); font-weight: 400; }
 .wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; margin-right: 0.35em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
