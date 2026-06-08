@@ -803,6 +803,16 @@ describe("history periods", () => {
     expect(got[0]!.totalSets).toBe(2); // two June sets
   });
 
+  it("periodsForUser orders a bucket's sets by DATE then set number", () => {
+    const mk = (date: string, setNumber: number): SetRecord =>
+      ({ username: "u", user: "U", exerciseName: "Squat", date, weight: 100, reps: 5, setNumber } as SetRecord);
+    // One June bucket: a Jun 20 set (#1) plus two Jun 2 sets (#1, #2). The earlier
+    // day must come first regardless of set number (the old sort used set # only).
+    const g = periodsForUser([mk("2025-06-20", 1), mk("2025-06-02", 1), mk("2025-06-02", 2)], "u", "month");
+    expect(g[0]!.sets.map((s) => s.date)).toEqual(["2025-06-02", "2025-06-02", "2025-06-20"]);
+    expect(g[0]!.sets.map((s) => s.setNumber)).toEqual([1, 2, 1]);
+  });
+
   it("periodsWithRest fills the empty month between two active ones", () => {
     const active = periodsForUser([rec("2025-04-10"), rec("2025-06-20")], "u", "month");
     const filled = periodsWithRest(active, "month");

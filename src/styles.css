@@ -1423,6 +1423,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Workouts session line: each set written as weight^reps. */
 .wo-exname { font-weight: 600; }
 .wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
+/* Subtle session separators inside a period bucket's set list: a faint hairline
+   between different days (week modes), a slightly taller/clearer one between weeks
+   (month / 3-month modes). Just enough to read distinct sessions, not loud. */
+.wo-set-dsep { display: inline-block; width: 0; height: 0.8em; border-left: 1px solid var(--line); opacity: 0.5; margin: 0 0.18rem; vertical-align: -0.05em; }
+.wo-set-wsep { display: inline-block; width: 0; height: 1.05em; border-left: 2px solid var(--line); opacity: 0.8; margin: 0 0.32rem; vertical-align: 0; }
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
 /* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
