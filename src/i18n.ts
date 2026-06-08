@@ -65,6 +65,7 @@ const LT: Record<string, string> = {
   "⚠ provisional": "⚠ negalutiniai",
   "source": "šaltinis",
   "Class": "Kategorija",
+  "See an example in this lift's workout history": "Žiūrėti pavyzdį šio pratimo treniruočių istorijoje",
   "Show the Stats section": "Rodyti statistikos skiltį",
   "Hide the Stats section": "Slėpti statistikos skiltį",
   "No athletes with a height & sex on file to place in a weight class.":

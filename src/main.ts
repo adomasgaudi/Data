@@ -7306,7 +7306,8 @@ function renderBwParts() {
   const rowHtml = (r: IndexRow, hidden: boolean) =>
     `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
     `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}` +
-    ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button></td>` +
+    ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
+    (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") + `</td>` +
     `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
     `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
     `<td class="num">${r.count.toLocaleString()}</td></tr>`;
@@ -9195,6 +9196,15 @@ async function init() {
     if (btn?.dataset.moreinfoex) {
       e.preventDefault(); // the icon lives inside a <summary> — don't toggle the fold
       jumpToExerciseInfo(btn.dataset.moreinfoex);
+    }
+  });
+  // Index "↗" button: jump straight to this lift's workout history (Analysis, single
+  // mode — its real logged sets are the example), with it selected on the graph too.
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-histex]");
+    if (btn?.dataset.histex) {
+      e.preventDefault();
+      openWorkoutAnalysis({ exercises: [btn.dataset.histex] });
     }
   });
   // "Allowed graphs" review chips + bulk buttons. Delegated on document so they
