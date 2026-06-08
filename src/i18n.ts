@@ -149,6 +149,10 @@ const LT: Record<string, string> = {
   "Match history": "Atitikti istoriją",
   "Graph lifts": "Grafiko pratimai",
   "History lifts": "Istorijos pratimai",
+  // ---- Create variant / group form (Index) ----
+  "Search exercises…": "Ieškoti pratimų…",
+  "None picked yet — tap an exercise below.": "Dar nieko nepasirinkta — bakstelėk pratimą žemiau.",
+  "Your variants & groups": "Tavo variantai ir grupės",
   "Hide missing": "Slėpti trūkstamus",
   "Show missing": "Rodyti trūkstamus",
   // ---- Allowed-graphs review (per exercise) ----

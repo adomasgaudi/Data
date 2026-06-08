@@ -2924,6 +2924,20 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
 .wa-create-f input, .wa-create-f select { font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-create-act { display: flex; align-items: center; gap: 0.5rem; }
+/* Member picker (graph-selector design): chosen pills on top, a search box, then a
+   scrollable wrap of tappable exercise chips — replaces the old native multi-select. */
+.wa-create-picker { display: flex; flex-direction: column; gap: 0.4rem; }
+.wa-create-picker .wa-sel-pills { max-height: 5.4rem; }
+.wa-create-search { font: inherit; font-size: 0.85rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); }
+.wa-create-picker .wa-ex-chips { max-height: 13rem; overflow-y: auto; align-content: flex-start; padding: 2px; touch-action: pan-y; }
+.wa-create-empty { font-size: 0.8rem; }
+/* The list of already-created defs, so they're visibly there with a ✕ to delete. */
+.wa-vdef-list { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.wa-vdef-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.wa-vdef-name { font-weight: 700; color: var(--text); }
+.wa-vdef-meta { font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-vdef-del { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 999px; width: 22px; height: 22px; cursor: pointer; font-size: 0.8rem; line-height: 1; }
+.wa-vdef-del:hover { border-color: #a23b3b; color: #a23b3b; }
 /* "Create variant / group" on the Index page (moved from the Analysis bar). */
 .idx-create-sum { cursor: pointer; font-weight: 700; font-size: 0.95rem; color: var(--accent); list-style: none; }
 .idx-create-sum::-webkit-details-marker { display: none; }

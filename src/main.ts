@@ -1942,6 +1942,13 @@ let userExerciseDefs: UserExerciseDef[] = (() => {
 function saveUserExerciseDefs(): void {
   try { localStorage.setItem("colosseum.userExercises", JSON.stringify(userExerciseDefs)); } catch { /* ignore */ }
 }
+// "Create variant / group" form (Index page) — members are now picked with a
+// pill/chip selector (same design as the graph selector), so the state lives here
+// and survives the form's re-renders. createVariantMsg is a confirmation that
+// outlasts the renderAll() rebuild so the user sees their new def was made.
+let createVariantMembers: string[] = [];
+let createVariantSearch = "";
+let createVariantMsg = "";
 /** Tag a logged record belonging to a user-defined exercise with its identity +
  * relationship fields (so its sets carry the parent/members and read as that
  * type). Plain records pass through untouched. */
@@ -8947,9 +8954,29 @@ async function init() {
     renderBwParts();
   });
   // "Create variant / group" form (moved here from the Analysis bar) — its Create
-  // button lives in #idxCreate on the Index page.
-  document.getElementById("idxCreate")?.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest("#waNewCreate")) createUserExerciseDef();
+  // button + the pill/chip member picker live in #idxCreate on the Index page.
+  const idxCreate = document.getElementById("idxCreate");
+  idxCreate?.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest("#waNewCreate")) { createUserExerciseDef(); return; }
+    const tog = t.closest<HTMLElement>("[data-vmtoggle]"); // tap an exercise chip → toggle membership
+    if (tog?.dataset.vmtoggle) { toggleVariantMember(tog.dataset.vmtoggle); return; }
+    const rm = t.closest<HTMLElement>("[data-vmremove]"); // ✕ on a chosen pill → remove it
+    if (rm?.dataset.vmremove) { removeVariantMember(rm.dataset.vmremove); return; }
+    const del = t.closest<HTMLElement>("[data-vmdeldef]"); // ✕ on a created def → delete it
+    if (del?.dataset.vmdeldef) { deleteVariantDef(del.dataset.vmdeldef); return; }
+  });
+  // Live-filter the member chips as you type (only the chip list re-renders, so the
+  // search box keeps focus). A type change re-renders so dissolved trims to 1 parent.
+  idxCreate?.addEventListener("input", (e) => {
+    const s = (e.target as HTMLElement).closest<HTMLInputElement>("#waNewSearch");
+    if (s) { createVariantSearch = s.value; renderVariantPicker(); }
+  });
+  idxCreate?.addEventListener("change", (e) => {
+    if (!(e.target as HTMLElement).closest("#waNewType")) return;
+    if (createVariantType() === "dissolved" && createVariantMembers.length > 1)
+      createVariantMembers = createVariantMembers.slice(0, 1); // dissolved = one parent
+    renderVariantPicker();
   });
   // Tap an exercise name on the Index to open its settings in the floating overlay.
   els.bwGroups.addEventListener("click", (e) => {
@@ -11738,10 +11765,56 @@ function setupWorkoutAnalysis(): void {
 /** The "Create variant / group" form (dissolved variant / combined / comparison
  * group). Lives on the Index page now; its #waNewCreate button calls
  * createUserExerciseDef(). */
-function createVariantFormHtml(): string {
-  const exOptions = selectableExercises(data.records)
-    .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
+/** Type currently chosen in the create form (drives single-parent vs multi-member). */
+function createVariantType(): ExerciseIdentity {
+  const el = document.getElementById("waNewType") as HTMLSelectElement | null;
+  return (el?.value as ExerciseIdentity) ?? "dissolved";
+}
+/** The chosen-members pills (graph-selector `.wa-sel-pill` style), each removable. */
+function variantSelPillsHtml(): string {
+  if (createVariantMembers.length === 0)
+    return `<span class="muted wa-create-empty">None picked yet — tap an exercise below.</span>`;
+  return createVariantMembers
+    .map((n) => `<button type="button" class="wa-sel-pill" data-vmremove="${escapeHtml(n)}" title="Remove">${escapeHtml(n)}<span class="wa-sel-pill-x">✕</span></button>`)
     .join("");
+}
+/** The tappable exercise chips (graph-selector `.wa-ex-chip` style), search-filtered. */
+function variantChipsHtml(): string {
+  const q = createVariantSearch.trim().toLowerCase();
+  const list = selectableExercises(data.records).filter((n) => !q || n.toLowerCase().includes(q));
+  if (list.length === 0) return `<p class="muted wa-placeholder">No exercises match “${escapeHtml(createVariantSearch.trim())}”.</p>`;
+  return list
+    .map((n) => {
+      const on = createVariantMembers.includes(n);
+      return `<button type="button" class="wa-ex-chip${on ? " is-on" : ""}" data-vmtoggle="${escapeHtml(n)}" aria-pressed="${on}">${escapeHtml(n)}</button>`;
+    })
+    .join("");
+}
+/** The whole member picker (selected pills + search + chip list). */
+function variantPickerHtml(): string {
+  return (
+    `<div class="wa-sel-pills" id="waNewSelPills">${variantSelPillsHtml()}</div>` +
+    `<input id="waNewSearch" class="wa-create-search" type="text" placeholder="Search exercises…" autocomplete="off" value="${escapeHtml(createVariantSearch)}" />` +
+    `<div id="waNewChips" class="wa-ex-chips wa-chips-wrap">${variantChipsHtml()}</div>`
+  );
+}
+/** A list of the defs already created, so they're visibly there (with a ✕ delete). */
+function variantDefsListHtml(): string {
+  if (userExerciseDefs.length === 0) return "";
+  const kindOf = (id: ExerciseIdentity) => (id === "dissolved" ? "variant" : id === "combined" ? "combined" : "comparison");
+  const rows = userExerciseDefs
+    .map((d) => {
+      const mem = d.identity === "dissolved" ? (d.parent ?? "") : (d.members ?? []).join(", ");
+      return (
+        `<div class="wa-vdef-row"><button type="button" class="wa-vdef-del" data-vmdeldef="${escapeHtml(d.name)}" title="Delete this def">✕</button>` +
+        `<span class="wa-vdef-name">${escapeHtml(d.name)}</span>` +
+        `<span class="muted wa-vdef-meta">${kindOf(d.identity)} · ${escapeHtml(mem)}</span></div>`
+      );
+    })
+    .join("");
+  return `<div class="wa-vdef-list"><div class="wa-sq-title">Your variants &amp; groups <span class="muted">(${userExerciseDefs.length})</span></div>${rows}</div>`;
+}
+function createVariantFormHtml(): string {
   return (
     `<label class="wa-create-f">Type<select id="waNewType">` +
     `<option value="dissolved">Dissolved variant (1 parent)</option>` +
@@ -11749,21 +11822,52 @@ function createVariantFormHtml(): string {
     `<option value="comparison_group">Comparison group (members)</option>` +
     `</select></label>` +
     `<label class="wa-create-f">Name<input id="waNewName" type="text" placeholder="e.g. Assisted Pull Up" autocomplete="off" /></label>` +
-    `<label class="wa-create-f">Parent / members<select id="waNewMembers" multiple size="6">${exOptions}</select></label>` +
-    `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted"></span></div>`
+    `<div class="wa-create-f">Parent / members<div id="waNewMembers" class="wa-create-picker">${variantPickerHtml()}</div></div>` +
+    `<div class="wa-create-act"><button type="button" id="waNewCreate" class="wa-clear">Create</button> <span id="waNewMsg" class="muted">${escapeHtml(createVariantMsg)}</span></div>` +
+    variantDefsListHtml()
   );
+}
+/** Refresh just the chips' on/off state + the chosen-members pills, WITHOUT
+ * rebuilding the search or name inputs (so typing keeps focus). */
+function renderVariantPicker(): void {
+  const chips = document.getElementById("waNewChips");
+  if (chips) chips.innerHTML = variantChipsHtml();
+  const pills = document.getElementById("waNewSelPills");
+  if (pills) pills.innerHTML = variantSelPillsHtml();
+}
+/** Toggle one exercise in/out of the member selection. For a dissolved variant
+ * (one parent) selecting an exercise REPLACES the pick (radio-like). */
+function toggleVariantMember(name: string): void {
+  createVariantMsg = "";
+  const has = createVariantMembers.includes(name);
+  if (createVariantType() === "dissolved") {
+    createVariantMembers = has ? [] : [name];
+  } else {
+    createVariantMembers = has ? createVariantMembers.filter((n) => n !== name) : [...createVariantMembers, name];
+  }
+  renderVariantPicker();
+}
+function removeVariantMember(name: string): void {
+  createVariantMembers = createVariantMembers.filter((n) => n !== name);
+  renderVariantPicker();
+}
+/** Delete a previously-created def (from the "Your variants & groups" list). */
+function deleteVariantDef(name: string): void {
+  userExerciseDefs = userExerciseDefs.filter((d) => d.name !== name);
+  saveUserExerciseDefs();
+  renderAll();
+  renderWorkoutAnalysis();
 }
 
 function createUserExerciseDef(): void {
   const typeEl = document.getElementById("waNewType") as HTMLSelectElement | null;
   const nameEl = document.getElementById("waNewName") as HTMLInputElement | null;
-  const memEl = document.getElementById("waNewMembers") as HTMLSelectElement | null;
-  const msg = document.getElementById("waNewMsg");
-  if (!typeEl || !nameEl || !memEl) return;
-  const setMsg = (s: string) => { if (msg) msg.textContent = s; };
+  if (!typeEl || !nameEl) return;
+  // Show the message immediately (errors) AND remember it so it survives a rebuild.
+  const setMsg = (s: string) => { createVariantMsg = s; const m = document.getElementById("waNewMsg"); if (m) m.textContent = s; };
   const identity = typeEl.value as ExerciseIdentity;
   const name = nameEl.value.trim();
-  const members = Array.from(memEl.selectedOptions).map((o) => o.value);
+  const members = [...createVariantMembers];
   if (!name) return setMsg("Enter a name.");
   // No duplicates — never shadow an existing exercise or another def.
   if (new Set(selectableExercises(data.records)).has(name) || userExerciseDefs.some((d) => d.name === name))
@@ -11777,6 +11881,12 @@ function createUserExerciseDef(): void {
   userExerciseDefs.push(def);
   saveUserExerciseDefs();
   waIncludeIdentities.add(identity); // so the new one shows immediately
+  // Reset the form for the next one and leave a confirmation that survives the
+  // renderAll() rebuild (so it's obvious the def was created, and it now appears
+  // in the "Your variants & groups" list just below).
+  createVariantMembers = [];
+  createVariantSearch = "";
+  createVariantMsg = `Created “${name}” ✓ — see it below and in the selector.`;
   renderAll(); // refresh the Index (where the form lives) + leaderboards/PRs/etc.
   renderWorkoutAnalysis();
 }
