@@ -11993,13 +11993,6 @@ function renderWorkoutAnalysis(): void {
   // reflects the current mode (Exercise analysis / Compare / Exercise list / …).
   const contentTitle = document.getElementById("waTableSummary");
   const stats = document.getElementById("waStats");
-  // With just ONE or TWO lifts in the whole view, show their NAME(S) as a big title
-  // at the top of both the graph and the history (instead of a generic "Graph" /
-  // "selected lifts"). 3+ stays generic — too many names to headline.
-  const selTitle =
-    waSelected.length === 1 ? displayName(waSelected[0]!)
-    : waSelected.length === 2 ? `${displayName(waSelected[0]!)} & ${displayName(waSelected[1]!)}`
-    : null;
   // The GRAPH title names what's actually ON THE GRAPH (waGraphSel) — not the
   // history selection — and lists every plotted lift, so it doubles as the
   // "what's on the graph" readout (the old separate count block is gone).
@@ -12033,16 +12026,12 @@ function renderWorkoutAnalysis(): void {
     if (contentTitle) contentTitle.textContent = "Workout history"; // the lift now names the SECTION title
     const calHistTitle = document.getElementById("waCalHistSummary");
     if (calHistTitle) {
-      if (selTitle) {
-        // 1–2 lifts → name them in the section title; single keeps its ℹ + origin badge.
-        const ex = waSelected[0]!;
-        const extra = mode === "single"
-          ? `${originBadge(ex)} <button type="button" class="wa-moreinfo wa-title-info" data-moreinfoex="${escapeHtml(ex)}" title="${escapeHtml(displayName(ex))} info" aria-label="${escapeHtml(displayName(ex))} info">ℹ</button>`
-          : "";
-        calHistTitle.innerHTML = `Calendar &amp; history · <span class="wa-seltitle">${escapeHtml(selTitle)}</span>${extra}`;
-      } else {
-        calHistTitle.textContent = `Calendar & history · selected lifts`;
-      }
+      // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
+      // "Calendar & history" prefix, no member breakdown, no ℹ.
+      calHistTitle.innerHTML = waSelected.length
+        ? `<span class="wa-seltitle">${waSelected.map((n) => escapeHtml(displayName(n))).join(`<span class="wa-title-sep"> · </span>`)}</span>`
+        : "Calendar & history";
+      calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
     if (stats) { stats.innerHTML = ""; stats.setAttribute("hidden", ""); }
@@ -12057,7 +12046,7 @@ function renderWorkoutAnalysis(): void {
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
     const calHistTitle = document.getElementById("waCalHistSummary");
-    if (calHistTitle) calHistTitle.textContent = "Calendar & history"; // nothing selected → plain section title
+    if (calHistTitle) { calHistTitle.textContent = "Calendar & history"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     }
