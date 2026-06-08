@@ -780,6 +780,44 @@ export function muscleGroup(exerciseName: string): MuscleGroup {
   return "Other";
 }
 
+/** Secondary muscles a COMPOUND lift also trains, on top of its primary
+ * {@link muscleGroup}. Keyword-matched and ACCUMULATED (every matching rule adds),
+ * so e.g. a back squat picks up both Glutes and Lower back. Anatomy is approximate
+ * — it just decides which sections a lift shows up in; the owner can fine-tune any
+ * lift's per-muscle involvement via the muscle editor (mgLevel). */
+const SECONDARY_MUSCLE_RULES: { keywords: string[]; add: MuscleGroup[] }[] = [
+  // Knee-dominant. Spinally-loaded squats also brace the lower back.
+  { keywords: ["back squat", "barbell squat", "front squat", "zercher", "overhead squat", "goblet"], add: ["Glutes", "Lower back"] },
+  { keywords: ["squat", "lunge", "split squat", "bulgarian", "step up", "step-up", "pistol", "cossack", "leg press", "hack", "belt squat"], add: ["Glutes"] },
+  // Hip-hinge posterior chain.
+  { keywords: ["deadlift", "romanian", "rdl", "stiff leg", "stiff-leg", "good morning", "clean", "snatch"], add: ["Glutes", "Hamstrings", "Lower back"] },
+  { keywords: ["hip thrust", "glute bridge", "bridge", "hip extension"], add: ["Hamstrings"] },
+  // Horizontal push: triceps + front delts assist.
+  { keywords: ["bench", "push up", "pushup", "push-up", "pushups", "chest press", "dip"], add: ["Triceps", "Shoulders"] },
+  // Vertical / standing press: triceps assist.
+  { keywords: ["shoulder press", "overhead press", "military", "arnold", "handstand push", "hspu"], add: ["Triceps"] },
+  // Vertical pulls: biceps + upper back assist.
+  { keywords: ["pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "lat pulldown", "pulldown"], add: ["Biceps", "Upper back"] },
+  // Rows: biceps + upper back assist.
+  { keywords: ["row", "pendlay"], add: ["Biceps", "Upper back"] },
+];
+
+/** All muscle groups a lift trains by DEFAULT — its primary first, then any
+ * secondary muscles for compound lifts. This is the automatic membership the
+ * sections fall back to when the owner hasn't set explicit per-muscle levels, so
+ * a squat shows up under Quads AND Glutes (AND Lower back) without manual tagging. */
+export function autoMuscleGroups(exerciseName: string): MuscleGroup[] {
+  const prime = muscleGroup(exerciseName);
+  const n = exerciseName.toLowerCase();
+  const out: MuscleGroup[] = [prime];
+  for (const rule of SECONDARY_MUSCLE_RULES) {
+    if (rule.keywords.some((k) => n.includes(k))) {
+      for (const m of rule.add) if (!out.includes(m)) out.push(m);
+    }
+  }
+  return out;
+}
+
 /**
  * The category headers used by the Exercises "By category" sort and the Group
  * view's Categories mode. Unlike {@link exerciseCategory} (one PRIMARY bucket

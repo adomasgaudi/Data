@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, naturalPotential, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
+import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, naturalPotential, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, autoMuscleGroups, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -326,6 +326,20 @@ describe("muscleGroup (fine split)", () => {
     expect(muscleGroup("Lying Leg Curl")).toBe("Hamstrings");
     expect(muscleGroup("Hip Thrust")).toBe("Glutes");
     expect(muscleGroup("Standing Calf Raise")).toBe("Calves");
+  });
+  it("compound lifts also train secondary muscles (so they show in every section)", () => {
+    // Primary always comes first (so mgFor / the muscle map stay unchanged).
+    expect(autoMuscleGroups("Squat")[0]).toBe("Quads");
+    expect(autoMuscleGroups("Squat")).toEqual(expect.arrayContaining(["Quads", "Glutes"]));
+    // Explicitly spinal-loaded squats also pick up the lower back.
+    expect(autoMuscleGroups("Front Squat")).toEqual(expect.arrayContaining(["Quads", "Glutes", "Lower back"]));
+    expect(autoMuscleGroups("Bulgarian Split Squat")).toEqual(expect.arrayContaining(["Quads", "Glutes"]));
+    expect(autoMuscleGroups("Deadlift")).toEqual(expect.arrayContaining(["Glutes", "Hamstrings", "Lower back"]));
+    expect(autoMuscleGroups("Bench Press")).toEqual(expect.arrayContaining(["Chest", "Triceps", "Shoulders"]));
+    expect(autoMuscleGroups("Pull Ups")).toEqual(expect.arrayContaining(["Lats", "Biceps"]));
+    // An isolation lift stays single-muscle.
+    expect(autoMuscleGroups("Leg Extension")).toEqual(["Quads"]);
+    expect(autoMuscleGroups("Lying Leg Curl")).toEqual(["Hamstrings"]);
   });
   it("splits the upper body, specific before broad", () => {
     expect(muscleGroup("Close Grip Bench Press")).toBe("Triceps");
