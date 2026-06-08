@@ -2710,7 +2710,7 @@ const SITE_MAP: MapNode = {
   ],
 };
 
-const SITE_MAP_COLORS = ["#284e86", "#2e7d52", "#b8902f", "#6c4ab0", "#1f6f8b", "#c0563b", "#3a4a86", "#7a8b2e", "#a8447a"];
+const SITE_MAP_COLORS = ["#284e86", "#b8902f", "#9c463a", "#34786f", "#5b4f96", "#7a6526", "#6b8fc4", "#c2762f", "#4e8059"];
 
 /** Draw the site map as a tidy horizontal mind-map tree (root → tabs → features),
  * laying leaves on their own rows and centring each parent on its children. */
@@ -4280,8 +4280,10 @@ function sumCounts(items: readonly ExerciseCount[]): number {
 }
 
 // Distinct colours for the overlay lines (cycled if more exercises are picked).
+// Blue/gold-themed series palette (matches analyticsGraph SERIES_COLORS): lapis +
+// ochre anchors, then a harmonious muted earth/jewel spread.
 const COMPARE_COLORS = [
-  "#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a99", "#c46a1f", "#8a8d2f",
+  "#284e86", "#b8902f", "#9c463a", "#34786f", "#5b4f96", "#7a6526", "#6b8fc4", "#c2762f",
 ];
 
 /**

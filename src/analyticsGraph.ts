@@ -16,7 +16,13 @@ import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import type { GraphConfig } from "./graphConfig";
 
-const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a8a", "#c0603a", "#7a6f9b", "#3a7d3a", "#9b59b6", "#d4843a", "#406a9e"];
+// Series palette built around the app's "Girl with a Pearl Earring" theme: the two
+// anchors are lapis BLUE and ochre GOLD (the accent + gold tokens), then a harmonious
+// muted earth/jewel spread (terracotta, pine teal, amethyst, bronze, cornflower,
+// amber, sage, mauve) — Vermeer-restrained, near-complementary, all medium-toned so
+// they read on both the light and dark backgrounds. Colour = who, so the first few
+// (one per athlete) matter most. shadeColor() lightens/darkens for sub-series.
+const SERIES_COLORS = ["#284e86", "#b8902f", "#9c463a", "#34786f", "#5b4f96", "#7a6526", "#6b8fc4", "#c2762f", "#4e8059", "#9c5a86", "#3d5e8c", "#cdab57"];
 /** Scatter marker shapes, used in the multi-athlete overlay to tell EXERCISES apart
  * by FORM while each ATHLETE keeps one colour (hue) — so colour = who, shape = what. */
 const EXERCISE_SHAPES: SvgShape[] = ["circle", "diamond", "square", "triangle", "ring", "plus"];
@@ -27,26 +33,13 @@ export function seriesPaletteColor(i: number): string {
   return SERIES_COLORS[((i % SERIES_COLORS.length) + SERIES_COLORS.length) % SERIES_COLORS.length]!;
 }
 
-/** HSL → hex (h in degrees, s & l in %). */
-function hslHex(h: number, s: number, l: number): string {
-  h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - c / 2;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
-  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
-  const hh = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
-  return `#${hh(r)}${hh(g)}${hh(b)}`;
-}
-// Colour theory for 3+ series: a generated palette of EVENLY-SPACED hues at one
-// shared saturation & lightness (a balanced n-adic harmony) — so the colours are
-// both maximally distinct AND cohesive, rather than a grab-bag of fixed swatches.
-// 1–2 series keep the app's signature blue / gold (already a clean pair).
-const HARMONY_BASE_HUE = 212, HARMONY_S = 58, HARMONY_L = 44;
-export function harmoniousColor(i: number, n: number): string {
-  if (n <= 2) return seriesPaletteColor(i);
-  return hslHex(HARMONY_BASE_HUE + (i * 360) / n, HARMONY_S, HARMONY_L);
+// Colour for the i-th of n series. The CURATED blue/gold palette above IS the
+// n-colour answer — it leads with the theme's lapis + ochre and extends into a
+// harmonious muted earth/jewel spread, so every n stays ON-THEME (not a full-wheel
+// rainbow) while staying distinct across the realistic ≤10-series range. `n` is kept
+// for API symmetry (1–2 series are still just blue / gold, the palette's first two).
+export function harmoniousColor(i: number, _n: number): string {
+  return seriesPaletteColor(i);
 }
 
 /** A shade of a base hex colour, for distinguishing a 2nd+ series of the SAME
