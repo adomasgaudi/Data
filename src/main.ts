@@ -985,10 +985,10 @@ const inclineKey = (dim: LevelDim, value: number): string => `${dim}|${value}`;
 // multiplier comes from the single cm→× curve below. So you tune two conversions + a
 // few cm points, never a number per notch. Stored in the same map: "cmPerSq" /
 // "cmPerSmith" (conversions) and "cm|<N>" anchors (the curve).
-// Owner-calibrated: a squat-rack hole ≈ 5cm of hand-height, a Smith notch ≈ 15cm —
-// and the two coincide at level 3 (sm3 = sq3, the same height), so SQ is offset to
-// match Smith there (see levelCm). The difficulty then steps ~0.05 per Smith notch
-// (15cm) off the curve below.
+// Owner-MEASURED (tape on the rig): a squat-rack hole = 5cm of hand-height, a Smith
+// notch = 15cm. Each unit is anchored to its measured ground-height — SQ hole 5 = 60cm,
+// Smith notch 4 = 66cm (see levelCm) — which still lands sm3 ≈ sq3 (50 vs 51cm). The
+// difficulty then steps ~0.05 per Smith notch (15cm) off the curve below.
 const DEFAULT_CM_PER_SQ = 5, DEFAULT_CM_PER_SMITH = 15;
 function inclineCmPerStep(dim: LevelDim): number {
   if (dim === "sq") return inclineScaleOverrides["cmPerSq"] ?? DEFAULT_CM_PER_SQ;
@@ -999,17 +999,21 @@ function setInclineCmPerStep(dim: "sq" | "smith", v: number): void {
   inclineScaleOverrides[dim === "sq" ? "cmPerSq" : "cmPerSmith"] = v;
   saveInclineScales();
 }
-// SQ holes and Smith notches are calibrated to the SAME hand-height at level 3
-// (the owner's reference: sm3 = sq3). The shared cm at 3 is the Smith-natural height
-// (3 × cm-per-Smith-notch, floor at notch 0); each unit then steps by its own cm-per-
-// step around that anchor, so the two scales cross at 3 even with different steps.
-const INCLINE_MATCH_LEVEL = 3;
+// Each unit is anchored to its OWN measured ground-height, then steps by its cm-per-
+// step: a squat-rack hole 5 sits at 60cm (owner taped it), a Smith notch 4 at 66cm.
+// Different step sizes (5 vs 15cm) only coincide via these offsets — and they do, near
+// level 3 (SQ3 = 50cm, Smith3 = 51cm), matching the owner's sm3 ≈ sq3 reference.
+const INCLINE_SQ_ANCHOR_LEVEL = 5, INCLINE_SQ_ANCHOR_CM = 60; // squat-rack hole 5 = 60cm
+const INCLINE_SMITH_ANCHOR_LEVEL = 4, INCLINE_SMITH_ANCHOR_CM = 66; // Smith notch 4 = 66cm
 /** A level's hand-height in CM: cm as-is; a SQ hole / Smith notch via its cm-per-step,
- * anchored so sm3 = sq3 (the owner's calibration). */
+ * anchored to the owner's tape-measured ground heights (SQ5 = 60cm, Smith4 = 66cm). */
 function levelCm(dim: LevelDim, value: number): number {
   if (dim === "cm") return value;
-  const anchorCm = INCLINE_MATCH_LEVEL * inclineCmPerStep("smith"); // shared height at level 3
-  return Math.round((anchorCm + (value - INCLINE_MATCH_LEVEL) * inclineCmPerStep(dim)) * 10) / 10;
+  const [anchorLevel, anchorCm] =
+    dim === "smith"
+      ? [INCLINE_SMITH_ANCHOR_LEVEL, INCLINE_SMITH_ANCHOR_CM]
+      : [INCLINE_SQ_ANCHOR_LEVEL, INCLINE_SQ_ANCHOR_CM];
+  return Math.round((anchorCm + (value - anchorLevel) * inclineCmPerStep(dim)) * 10) / 10;
 }
 // The cm→× curve is a handful of editable anchor heights; in between we interpolate,
 // so SQ/Smith (any cm) read off the same curve. An anchor defaults to the formula.
