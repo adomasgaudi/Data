@@ -41,7 +41,7 @@ export const S: {
   // Workouts list view.
   workoutsPage: number;
   workoutsPageSize: number;
-  workoutViewMode: "day" | "week";
+  workoutViewMode: "day" | "week" | "2week" | "month" | "3month";
   workoutShowMode: "exercises" | "groups";
   showAddSets: boolean;
   showAloneTags: boolean;

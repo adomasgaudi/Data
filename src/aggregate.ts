@@ -400,6 +400,77 @@ export function weeksForUser(records: readonly SetRecord[], username: string): W
   return weeks.sort((a, b) => (a.weekStart > b.weekStart ? -1 : a.weekStart < b.weekStart ? 1 : 0));
 }
 
+// ---- Generalised history periods (week / 2-week / month / 3-month) ------------
+export type HistoryPeriod = "week" | "2week" | "month" | "3month";
+export interface PeriodGroup {
+  periodStart: string; // ISO date the bucket starts on (Monday, or the 1st of a month/quarter)
+  totalSets: number;
+  exercises: ExerciseCount[];
+  sets: SetRecord[];
+}
+const EPOCH_MONDAY = utcOf("1970-01-05"); // a Monday, anchor for 2-week buckets
+
+/** The ISO start date of the bucket a date falls in, for a given period. Week /
+ * 2-week align to Monday (2-week to an even week count from the epoch Monday);
+ * month / 3-month align to the 1st of the calendar month / quarter. */
+export function periodStartOf(dateIso: string, period: HistoryPeriod): string {
+  if (period === "month") return `${dateIso.slice(0, 7)}-01`;
+  if (period === "3month") {
+    const y = dateIso.slice(0, 4);
+    const m = Number(dateIso.slice(5, 7));
+    const q = Math.floor((m - 1) / 3) * 3 + 1; // 1, 4, 7, 10
+    return `${y}-${String(q).padStart(2, "0")}-01`;
+  }
+  const mon = mondayOf(dateIso);
+  if (period === "week") return mon;
+  const weeks = Math.round((utcOf(mon) - EPOCH_MONDAY) / (7 * MS_PER_DAY));
+  const startWeeks = weeks - (((weeks % 2) + 2) % 2); // floor to an even week boundary
+  return isoOf(EPOCH_MONDAY + startWeeks * 7 * MS_PER_DAY);
+}
+
+/** The start of the period immediately BEFORE the one starting at `startIso`. */
+export function prevPeriodStart(startIso: string, period: HistoryPeriod): string {
+  if (period === "month" || period === "3month") {
+    let y = Number(startIso.slice(0, 4));
+    let m = Number(startIso.slice(5, 7)) - (period === "month" ? 1 : 3);
+    while (m < 1) { m += 12; y--; }
+    return `${y}-${String(m).padStart(2, "0")}-01`;
+  }
+  return isoOf(utcOf(startIso) - (period === "2week" ? 2 : 1) * 7 * MS_PER_DAY);
+}
+
+/** One athlete's training grouped by the chosen period, newest first. */
+export function periodsForUser(records: readonly SetRecord[], username: string, period: HistoryPeriod): PeriodGroup[] {
+  const by = new Map<string, SetRecord[]>();
+  for (const r of records) {
+    if (r.username !== username) continue;
+    const k = periodStartOf(r.date, period);
+    const list = by.get(k);
+    if (list) list.push(r);
+    else by.set(k, [r]);
+  }
+  const out: PeriodGroup[] = [];
+  for (const [periodStart, sets] of by) {
+    const s = summariseSets(sets);
+    out.push({ periodStart, totalSets: sets.length, exercises: s.exercises, sets: s.sets });
+  }
+  return out.sort((a, b) => (a.periodStart > b.periodStart ? -1 : a.periodStart < b.periodStart ? 1 : 0));
+}
+
+/** Fill the inactive periods between the first and last active one with empty
+ * (rest) buckets, newest first — the period-mode analogue of workoutsWithRestDays. */
+export function periodsWithRest(periods: readonly PeriodGroup[], period: HistoryPeriod): PeriodGroup[] {
+  if (periods.length === 0) return [];
+  const byStart = new Map(periods.map((p) => [p.periodStart, p]));
+  const oldest = periods[periods.length - 1]!.periodStart;
+  const out: PeriodGroup[] = [];
+  for (let s = periods[0]!.periodStart; s >= oldest; s = prevPeriodStart(s, period)) {
+    out.push(byStart.get(s) ?? { periodStart: s, totalSets: 0, exercises: [], sets: [] });
+    if (s === oldest) break;
+  }
+  return out;
+}
+
 export interface ExerciseDayPoint {
   date: string;
   sets: number;

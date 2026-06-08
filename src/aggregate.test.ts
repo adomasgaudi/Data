@@ -16,6 +16,9 @@ import {
   workoutsForUser,
   workoutsWithRestDays,
   weeksForUser,
+  periodStartOf,
+  periodsForUser,
+  periodsWithRest,
   setsByWeek,
   weeklySetStats,
   exerciseProgressForUser,
@@ -773,5 +776,37 @@ describe("originals stay selectable when variants/groups exist (TASK 11)", () =>
     expect(names).toContain("Pull Ups");
     expect(names).toContain("Assisted Pull Up");
     expect(names).toContain("Gravity Machine Pull Up");
+  });
+});
+
+describe("history periods", () => {
+  const rec = (date: string): SetRecord => ({ username: "u", user: "U", exerciseName: "Squat", date, weight: 100, reps: 5, setNumber: 1 } as SetRecord);
+
+  it("periodStartOf buckets by week/2-week (Monday) and month/quarter", () => {
+    // 2025-06-04 is a Wednesday → its Monday is 2025-06-02.
+    expect(periodStartOf("2025-06-04", "week")).toBe("2025-06-02");
+    expect(periodStartOf("2025-06-04", "month")).toBe("2025-06-01");
+    expect(periodStartOf("2025-06-04", "3month")).toBe("2025-04-01"); // Apr–Jun quarter
+    expect(periodStartOf("2025-01-15", "3month")).toBe("2025-01-01");
+    expect(periodStartOf("2025-11-15", "3month")).toBe("2025-10-01");
+    // 2-week buckets: a block's start is idempotent, both its weeks share it, and
+    // the following Monday starts the next block.
+    const block = periodStartOf("2025-06-02", "2week"); // the 2-wk block containing this Monday
+    expect(periodStartOf(block, "2week")).toBe(block); // idempotent (it IS a block start)
+    expect(periodStartOf("2025-06-08", "2week")).toBe(block); // Sunday of the same week → same block
+    expect(periodStartOf("2025-06-09", "2week")).not.toBe(block); // next Monday → next block
+  });
+
+  it("periodsForUser groups sets newest-first by month", () => {
+    const got = periodsForUser([rec("2025-04-10"), rec("2025-06-02"), rec("2025-06-20")], "u", "month");
+    expect(got.map((g) => g.periodStart)).toEqual(["2025-06-01", "2025-04-01"]);
+    expect(got[0]!.totalSets).toBe(2); // two June sets
+  });
+
+  it("periodsWithRest fills the empty month between two active ones", () => {
+    const active = periodsForUser([rec("2025-04-10"), rec("2025-06-20")], "u", "month");
+    const filled = periodsWithRest(active, "month");
+    expect(filled.map((g) => g.periodStart)).toEqual(["2025-06-01", "2025-05-01", "2025-04-01"]);
+    expect(filled[1]!.totalSets).toBe(0); // May is an empty (rest) month
   });
 });

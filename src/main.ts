@@ -31,7 +31,9 @@ import {
   weeklySetStats,
   workoutsForUser,
   workoutsWithRestDays,
-  weeksForUser,
+  periodsForUser,
+  periodsWithRest,
+  type HistoryPeriod,
   exerciseProgressByWeek,
   addedWeight1RM,
   effectiveE1RM,
@@ -2935,7 +2937,7 @@ const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "A
  * current value, and on/off toggles light up. The grouping select + name button
  * only apply to their relevant mode. */
 function syncWorkoutToggles(): void {
-  els.workoutViewToggle.textContent = S.workoutViewMode === "day" ? "Day" : "Week";
+  els.workoutViewToggle.textContent = WO_VIEW_LABEL[S.workoutViewMode];
   els.workoutShowToggle.textContent = S.workoutShowMode === "exercises" ? "Exer" : "Group";
   // The group-dimension dropdown only applies to GROUP mode. It's been enhanced into
   // a .xdd twin, so hide BOTH the <select> and its twin (hiding the select alone left
@@ -2945,7 +2947,7 @@ function syncWorkoutToggles(): void {
   // This button is now a shortcut to the GLOBAL name mode (cycles code → short → full).
   els.workoutNameToggle.textContent = nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full";
   els.workoutsPageBtn.textContent = String(S.workoutsPageSize);
-  els.restToggle.hidden = S.workoutViewMode === "week"; // rest days only make sense per day
+  els.restToggle.hidden = false; // rest periods now apply to day AND the period modes
   els.restToggle.classList.toggle("is-active", S.showRestDays);
   els.restToggle.setAttribute("aria-pressed", S.showRestDays ? "true" : "false");
   els.addSetsToggle.classList.toggle("is-active", S.showAddSets);
@@ -3776,12 +3778,12 @@ function workoutPageOf(idx: number, starts: number[]): number {
 }
 /** Prev / range / Next for the workout list, numbered by REAL sessions/weeks (rest
  * slivers aren't counted), with weighted page boundaries from {@link workoutPageStarts}. */
-function workoutsPagerHtml(page: number, starts: number[], groups: WorkoutGroup[], byWeek: boolean): string {
+function workoutsPagerHtml(page: number, starts: number[], groups: WorkoutGroup[], byPeriod: boolean): string {
   const pages = starts.length;
   if (pages <= 1) return "";
   const startIdx = starts[page] ?? 0;
   const endIdx = starts[page + 1] ?? groups.length;
-  const isReal = (g: WorkoutGroup) => byWeek || !g.rest;
+  const isReal = (g: WorkoutGroup) => !g.rest;
   const total = groups.filter(isReal).length;
   const before = groups.slice(0, startIdx).filter(isReal).length;
   const inPage = groups.slice(startIdx, endIdx).filter(isReal).length;
@@ -3789,7 +3791,7 @@ function workoutsPagerHtml(page: number, starts: number[], groups: WorkoutGroup[
   const to = before + inPage;
   return (
     `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
-    `<span class="muted">${from}–${to} of ${total} ${byWeek ? "weeks" : "sessions"}</span>` +
+    `<span class="muted">${from}–${to} of ${total} ${byPeriod ? "periods" : "sessions"}</span>` +
     `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
   );
 }
@@ -4926,19 +4928,24 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   // "Show all" (the history's "Hidden" toggle) bypasses the Index app-wide filter
   // for this list only, so lifts the filter hides reappear here.
   const recs = woShowAllExercises ? liveRecords() : activeRecords();
-  if (S.workoutViewMode === "week") {
-    return scopeWorkoutGroups(
-      weeksForUser(recs, els.athlete.value)
+  const period = historyPeriod(S.workoutViewMode);
+  if (period) {
+    // Period grouping (week / 2-week / month / 3-month). Inactive periods show as
+    // rest slivers (like rest days) when "Rest" is on.
+    const groups = periodsForUser(recs, els.athlete.value, period);
+    const withRest = S.showRestDays ? periodsWithRest(groups, period) : groups;
+    return collapseRestRuns(scopeWorkoutGroups(
+      withRest
         .map((w) => ({
-          label: `Week of ${shortDate(w.weekStart)}`,
-          date: w.weekStart,
+          label: w.totalSets === 0 ? "" : periodGroupLabel(w.periodStart, period),
+          date: w.periodStart,
           totalSets: w.totalSets,
           exercises: w.exercises,
           sets: w.sets,
-          rest: false,
+          rest: w.totalSets === 0,
         }))
         .filter(keep),
-    );
+    ), WO_REST_UNIT[S.workoutViewMode]);
   }
   const base = woShowAllExercises ? workoutsForUser(recs, els.athlete.value) : athleteWorkouts;
   const days = S.showRestDays ? workoutsWithRestDays(base) : base;
@@ -4953,7 +4960,29 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         rest: d.totalSets === 0,
       }))
       .filter(keep),
-  ));
+  ), WO_REST_UNIT.day);
+}
+
+// History view modes (the ⚙ "Day/Week/…" toggle cycles these). A non-"day" mode
+// groups sessions into a period; the toggle label + rest-run unit come from here.
+const WO_VIEW_MODES = ["day", "week", "2week", "month", "3month"] as const;
+const WO_VIEW_LABEL: Record<(typeof WO_VIEW_MODES)[number], string> = {
+  day: "Day", week: "Week", "2week": "2 wks", month: "Month", "3month": "3 mo",
+};
+const WO_REST_UNIT: Record<(typeof WO_VIEW_MODES)[number], string> = {
+  day: "rest days", week: "rest weeks", "2week": "rest 2-wks", month: "rest months", "3month": "rest 3-mos",
+};
+/** The grouping period for a view mode (null = per-day). */
+function historyPeriod(mode: typeof S.workoutViewMode): HistoryPeriod | null {
+  return mode === "day" ? null : mode;
+}
+/** Header label for one period group (e.g. "Week of May 25", "May 2025", "Apr–Jun 2025"). */
+function periodGroupLabel(start: string, period: HistoryPeriod): string {
+  const mon = MONTH_ABBR[Number(start.slice(5, 7)) - 1] ?? "";
+  if (period === "month") return `${mon} ${start.slice(0, 4)}`;
+  if (period === "3month") { const m0 = Number(start.slice(5, 7)); return `${MONTH_ABBR[m0 - 1]}–${MONTH_ABBR[m0 + 1]} ${start.slice(0, 4)}`; }
+  if (period === "2week") return `2 wks of ${shortDate(start)}`;
+  return `Week of ${shortDate(start)}`;
 }
 
 /** A long stretch of empty/rest days is a giant gray void (especially when the
@@ -4961,7 +4990,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
  * consecutive rest slivers into the first 10 · a "N rest days" break labelled with
  * the run's TOTAL · the last 10 — a discontinuous, broken-axis look so the whole
  * gap reads at a glance without scrolling past hundreds of empty rows. */
-function collapseRestRuns(groups: WorkoutGroup[]): WorkoutGroup[] {
+function collapseRestRuns(groups: WorkoutGroup[], unit = "rest days"): WorkoutGroup[] {
   const CAP = 20, HEAD = 10, TAIL = 10;
   const out: WorkoutGroup[] = [];
   for (let i = 0; i < groups.length; ) {
@@ -4971,7 +5000,7 @@ function collapseRestRuns(groups: WorkoutGroup[]): WorkoutGroup[] {
     const run = groups.slice(i, j);
     if (run.length > CAP) {
       out.push(...run.slice(0, HEAD));
-      out.push({ label: `${run.length} rest days`, date: run[HEAD]!.date, totalSets: 0, exercises: [], sets: [], rest: true, gap: run.length });
+      out.push({ label: `${run.length} ${unit}`, date: run[HEAD]!.date, totalSets: 0, exercises: [], sets: [], rest: true, gap: run.length });
       out.push(...run.slice(run.length - TAIL));
     } else {
       out.push(...run);
@@ -5532,12 +5561,13 @@ function setDisplay(raw: SetRecord): string {
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const workoutFormula = currentFormula();
-  const byWeek = S.workoutViewMode === "week";
+  const period = historyPeriod(S.workoutViewMode);
+  const byWeek = period !== null;
   syncWorkoutToggles(); // keep the toggle labels / hidden states current
-  const active = byWeek ? workoutGroups.length : workoutGroups.filter((g) => !g.rest).length;
+  const active = workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — workouts ` +
-    `<span class="muted">(${active} ${byWeek ? "weeks" : "sessions"} · tap to expand)</span>`;
+    `<span class="muted">(${active} ${byWeek ? "periods" : "sessions"} · tap to expand)</span>`;
 
   // No column header row — the "Session / Sets" labels were redundant noise above
   // a list whose rows are self-explanatory (a date + its set count).
@@ -5559,8 +5589,8 @@ function renderWorkoutsPage() {
   const liveByKey = new Map<string, { exercises: ExerciseCount[]; sets: SetRecord[] }>();
   if (!woShowAllExercises && activeSet && hiddenByIndexCount(els.athlete.value) > 0) {
     const allow = activeSet;
-    const liveBase = byWeek
-      ? weeksForUser(liveRecords(), els.athlete.value).map((w) => ({ key: w.weekStart, exercises: w.exercises, sets: w.sets }))
+    const liveBase = period
+      ? periodsForUser(liveRecords(), els.athlete.value, period).map((w) => ({ key: w.periodStart, exercises: w.exercises, sets: w.sets }))
       : workoutsForUser(liveRecords(), els.athlete.value).map((d) => ({ key: d.date, exercises: d.exercises, sets: d.sets }));
     for (const d of liveBase) {
       const names = new Set(d.exercises.map((e) => e.exerciseName));
@@ -5622,7 +5652,7 @@ function renderWorkoutsPage() {
           : "";
         const lbl = `${hc.hidden}/${hc.total}`;
         did +=
-          `<div class="wo-hidden-line"><button type="button" class="wo-hidden-daybtn" data-woshowday="${escapeHtml(g.date)}" data-hlabel="${lbl}" aria-expanded="false" title="Show the ${hc.hidden} lift${hc.hidden === 1 ? "" : "s"} the Index filter hides ${byWeek ? "this week" : "this day"} (just this one)">hidden ${lbl}</button>` +
+          `<div class="wo-hidden-line"><button type="button" class="wo-hidden-daybtn" data-woshowday="${escapeHtml(g.date)}" data-hlabel="${lbl}" aria-expanded="false" title="Show the ${hc.hidden} lift${hc.hidden === 1 ? "" : "s"} the Index filter hides ${byWeek ? "this period" : "this day"} (just this one)">hidden ${lbl}</button>` +
           `<div class="wo-hidden-day-lines" hidden>${hiddenLines}</div></div>`;
       }
       const tagged = aloneTags.has(aloneKey(g.date));
@@ -5747,12 +5777,12 @@ function onWorkoutRowClick(e: MouseEvent) {
 /** The lifts the Index filter hides for one day/week (live data minus the allow
  * set), with the day's total — for the per-day / expanded "hidden N/M" reveal.
  * null when nothing's hidden, the filter is off, or we're already revealing all
- * (woShowAllExercises). `key` is the ISO day, or the week-start when byWeek. */
-function hiddenLiftsForKey(key: string, byWeek: boolean): { exercises: ExerciseCount[]; sets: SetRecord[]; total: number } | null {
+ * (woShowAllExercises). `key` is the ISO day, or the period-start in a period mode. */
+function hiddenLiftsForKey(key: string, period: HistoryPeriod | null): { exercises: ExerciseCount[]; sets: SetRecord[]; total: number } | null {
   if (woShowAllExercises || !activeSet) return null;
   const allow = activeSet;
-  const base = byWeek
-    ? weeksForUser(liveRecords(), els.athlete.value).find((w) => w.weekStart === key)
+  const base = period
+    ? periodsForUser(liveRecords(), els.athlete.value, period).find((w) => w.periodStart === key)
     : workoutsForUser(liveRecords(), els.athlete.value).find((d) => d.date === key);
   if (!base) return null;
   const hiddenEx = base.exercises.filter((e) => !allow.has(e.exerciseName));
@@ -5788,7 +5818,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   // Lifts the Index filter hides this day/week — shown under a "hidden N/M" toggle
   // so the EXPANDED view matches the collapsed one (reveal = full set rows). PB-2.
   let hiddenRow = "";
-  const hl = hiddenLiftsForKey(group.date, S.workoutViewMode === "week");
+  const hl = hiddenLiftsForKey(group.date, historyPeriod(S.workoutViewMode));
   if (hl) {
     const hiddenBody = hl.exercises.map((e) => exRows(e, hl.sets)).join("");
     const lbl = `${hl.exercises.length}/${hl.total}`;
@@ -8848,7 +8878,9 @@ async function init() {
   els.summariseBtn.addEventListener("click", runSummary);
   // Each control is one toggle button now: tap to flip its value (no segments).
   els.workoutViewToggle.addEventListener("click", () => {
-    S.workoutViewMode = S.workoutViewMode === "day" ? "week" : "day";
+    // Cycle Day → Week → 2 wks → Month → 3 mo → Day.
+    const i = WO_VIEW_MODES.indexOf(S.workoutViewMode);
+    S.workoutViewMode = WO_VIEW_MODES[(i + 1) % WO_VIEW_MODES.length]!;
     S.workoutsPage = 0;
     renderWorkoutsPage();
   });
