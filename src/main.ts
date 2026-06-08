@@ -1523,7 +1523,8 @@ let aloneTags = new Set<string>();
 // Calendar 2× zoom: a ⚙-settings toggle that doubles every heatmap cell (same
 // layout/colours, still horizontally scrollable). Session-only, like the other
 // heat flags — driven purely by a `cal-zoom` class on the calendar container.
-let calZoom = false;
+// Defaults to 2× (the bigger, more legible cells) — tap the 1×/2× button to shrink.
+let calZoom = true;
 // The red "trained alone" rings on the calendar are OFF by default — a Settings
 // toggle shows them. While actively tagging (paint mode) they always show so you
 // can see what you're marking.

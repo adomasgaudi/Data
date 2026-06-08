@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.6</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.8</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1041,23 +1041,23 @@
             <div id="waExerciseSelector" class="wa-section"></div>
             <div id="waGraph" class="wa-section"></div>
           </details>
-          <!-- CALENDAR + HISTORY: one JOINT collapsible. The history/calendar lift
-               selector (drives both) sits under its header — sticky so it stays on
-               screen — and the calendar and the history are each their OWN nested
-               fold so they collapse independently inside the joint one. -->
+          <!-- CALENDAR + HISTORY: one JOINT collapsible. The calendar leads (collapsed
+               by default); the history/calendar lift selector (drives both) sits BELOW
+               it; the calendar and the history are each their OWN nested fold so they
+               collapse independently inside the joint one. -->
           <details class="wa-fold wa-fold-titled" open>
             <summary class="wa-fold-sum">Calendar &amp; history</summary>
-            <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
-            <!-- Taxonomy / machine-type editor (single mode) follows the selector. -->
-            <div id="waAssign" class="wa-section"></div>
             <!-- The training-year heatmap (#workoutCalendar) is relocated here in
                  EVERY mode so it never disappears; with exercises selected it
                  highlights only those lifts' squares. Returned to #workoutsPanel
-                 on leave. -->
-            <details class="wa-fold wa-subfold" open>
+                 on leave. Collapsed by default. -->
+            <details class="wa-fold wa-subfold">
               <summary class="wa-fold-sum">Training calendar</summary>
               <div id="waCalendarHost" class="wa-section"></div>
             </details>
+            <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
+            <!-- Taxonomy / machine-type editor (single mode) follows the selector. -->
+            <div id="waAssign" class="wa-section"></div>
             <div id="waStats" class="wa-section" hidden></div>
             <details class="wa-fold wa-subfold" open>
               <summary class="wa-fold-sum" id="waTableSummary">Workout history</summary>
