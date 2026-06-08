@@ -5764,35 +5764,51 @@ function renderWorkoutsPage() {
 
 /**
  * EXPERIMENTAL "Horizontal history": the same period buckets (built by
- * buildWorkoutGroups, so it honours grouping mode / filters / hidden / alone) laid
- * out as COLUMNS you scroll sideways through time, newest at the left. Read-only
- * for now (the compact 1RM · name · sets lines, with the session tint); the full
- * vertical history keeps the editing / expand / +set. Restore point: docs/restore-points.md.
+ * buildWorkoutGroups, so it honours grouping mode / filters / hidden / alone AND
+ * the exercise selector) laid out as COLUMNS you scroll sideways through time,
+ * newest at the left. Every column shows the SAME exercises in the SAME row order
+ * (a fixed-height row each, blank where that period skipped the lift) so a lift's
+ * volume lines up horizontally across time for at-a-glance comparison. A small
+ * grouping control mirrors the vertical history's ⚙. Restore point: docs/restore-points.md.
  */
 function renderHorizontalHistory(): void {
   const box = document.getElementById("waHistHoriz");
   if (!box) return;
   const formula = currentFormula();
-  const cols = workoutGroups
-    .filter((g) => !g.rest) // skip rest slivers in the sideways view
+  const groups = workoutGroups.filter((g) => !g.rest); // skip rest slivers sideways
+  // Grouping control (Day → Week → 2 wks → Month → 3 mo), mirrors the ⚙ toggle.
+  const head =
+    `<div class="hh-tools"><span class="muted hh-tools-lbl">Group by</span>` +
+    `<button type="button" id="hhPeriod" class="wo-dj-btn" title="Day ↔ week ↔ month — same as the history ⚙">${escapeHtml(WO_VIEW_LABEL[S.workoutViewMode])}</button>` +
+    `<span class="muted hh-tools-hint">— same lifts as your selection; rows line up across time to compare</span></div>`;
+  if (groups.length === 0) { box.innerHTML = head + `<p class="muted">No workouts to show.</p>`; return; }
+  // Fixed exercise order across ALL columns: the union of lifts in the shown
+  // periods, most-trained (by total sets) first — so row N is the same lift in
+  // every card and you can scan one lift left-to-right through time.
+  const totalByEx = new Map<string, number>();
+  for (const g of groups) for (const e of g.exercises) totalByEx.set(e.exerciseName, (totalByEx.get(e.exerciseName) ?? 0) + e.count);
+  const exOrder = [...totalByEx.keys()].sort((a, b) => (totalByEx.get(b)! - totalByEx.get(a)!) || a.localeCompare(b));
+  const cols = groups
     .map((g) => {
-      const lines = g.exercises
-        .map((e) => {
-          const sets = g.sets.filter((s) => s.exerciseName === e.exerciseName);
+      const rows = exOrder
+        .map((exName) => {
+          const sets = g.sets.filter((s) => s.exerciseName === exName);
+          if (sets.length === 0) {
+            // Blank slot keeps this lift's row aligned with the other columns.
+            return `<div class="hh-row hh-row-empty"><span class="hh-rm"></span><span class="wo-ex-body"><span class="wo-exname muted">${escapeHtml(displayName(exName))}</span> <span class="hh-dash">·</span></span></div>`;
+          }
           const e1rms = sets
             .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), formula))
             .filter((v): v is number => v !== null && Number.isFinite(v));
           const best = e1rms.length ? Math.max(...e1rms) : null;
           const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated 1RM">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
-          return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
+          return `<div class="hh-row"><span class="hh-rm">${rmTxt}</span><span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exName)}">${escapeHtml(displayName(exName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
         })
         .join("");
-      return `<div class="hh-col"><div class="hh-col-head">${escapeHtml(g.label)} <span class="muted">${g.totalSets}</span></div><div class="hh-col-body">${lines}</div></div>`;
+      return `<div class="hh-col"><div class="hh-col-head">${escapeHtml(g.label)} <span class="muted">${g.totalSets}</span></div><div class="hh-col-body">${rows}</div></div>`;
     })
     .join("");
-  box.innerHTML = cols
-    ? `<div class="hh-scroll">${cols}</div>`
-    : `<p class="muted">No workouts to show.</p>`;
+  box.innerHTML = head + `<div class="hh-scroll">${cols}</div>`;
 }
 
 /** Toggle the history's "show lifts hidden by the Index filter" mode, persist it,
@@ -9081,6 +9097,16 @@ async function init() {
     const i = WO_VIEW_MODES.indexOf(S.workoutViewMode);
     S.workoutViewMode = WO_VIEW_MODES[(i + 1) % WO_VIEW_MODES.length]!;
     S.workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  // EXPERIMENTAL horizontal history: its grouping cycle mirrors the ⚙ toggle
+  // (same shared S.workoutViewMode). Delegated since the button is re-rendered.
+  document.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest("#hhPeriod")) return;
+    const i = WO_VIEW_MODES.indexOf(S.workoutViewMode);
+    S.workoutViewMode = WO_VIEW_MODES[(i + 1) % WO_VIEW_MODES.length]!;
+    S.workoutsPage = 0;
+    syncWorkoutToggles();
     renderWorkoutsPage();
   });
   els.workoutShowToggle.addEventListener("click", () => {

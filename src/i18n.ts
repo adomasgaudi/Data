@@ -172,6 +172,7 @@ const LT: Record<string, string> = {
   "Workouts": "Treniruotės",
   "Horizontal history": "Horizontali istorija",
   "experimental": "eksperimentinis",
+  "— same lifts as your selection; rows line up across time to compare": "— tie patys pratimai kaip tavo pasirinkime; eilutės sulygiuotos laike palyginimui",
   "No workouts to show.": "Nėra treniruočių.",
   "Tags": "Žymos",
   "Filter by exercise…": "Filtruoti pagal pratimą…",

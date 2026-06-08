@@ -1451,10 +1451,19 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr; align-items: baseline; column-gap: 0.45rem; }
 /* EXPERIMENTAL horizontal history: period buckets as side-scrolling columns. */
 .hh-exp { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line); border-radius: 999px; padding: 0 0.4rem; margin-left: 0.3rem; }
+.hh-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.5rem; margin: 0 0 0.5rem; font-size: 0.82rem; }
+.hh-tools-hint { font-size: 0.72rem; }
 .hh-scroll { display: flex; gap: 0.6rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: flex-start; }
 .hh-col { flex: 0 0 16rem; max-width: 80vw; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.6rem; background: var(--panel); }
-.hh-col-head { font-weight: 700; font-size: 0.9rem; margin: 0 0 0.4rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); position: sticky; left: 0; }
-.hh-col-body .wo-ex-line { margin: 0.15rem 0; }
+.hh-col-head { font-weight: 700; font-size: 0.9rem; margin: 0 0 0.4rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line); }
+/* Fixed-height rows so the SAME lift sits at the SAME vertical position in every
+   column (compare a lift's volume left-to-right across time). Content clips past
+   two lines; the full sets stay in the vertical history. */
+.hh-row { display: grid; grid-template-columns: 3.2rem 1fr; align-items: baseline; column-gap: 0.4rem; height: 2.7rem; overflow: hidden; padding: 0.1rem 0; border-bottom: 1px solid var(--line); }
+.hh-row:last-child { border-bottom: none; }
+.hh-row-empty { opacity: 0.4; }
+.hh-rm { text-align: right; font-weight: 700; color: var(--gold); font-size: 0.85rem; }
+.hh-dash { color: var(--muted); }
 .wo-ex-body { min-width: 0; display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
