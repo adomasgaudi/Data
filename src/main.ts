@@ -10700,10 +10700,44 @@ function variationNotesFor(exerciseName: string): string[] {
 }
 let afNoteSeq = 0; // unique <datalist> id per open form
 
-/** A variation-note field (with the exercise's logged variations as a datalist),
- * or "" when the lift has no notes — so picking a handstand's depth/lean variant
- * is one tap when hand-logging. Placed first in the form: choose, then reps. */
+// Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
+// order. Ladder sub-dims (grip/height) are left to the full per-set editor.
+const AF_DIM_ORDER = ["support", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { support: "support", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
+  support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder" },
+  continuity: { paused: "paused", uninterrupted: "uninterrupted" },
+  band: { none: "no band", "1": "band 1", "2": "band 2", "3": "band 3", "4": "band 4", "5": "band 5", "6": "band 6" },
+  position: { floor: "floor (on feet)", knees: "on knees" },
+};
+/** Readable label for a dimension level (cm levels like "+23cm" are left as-is). */
+function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level] ?? level; }
+/** A short readable phrase for a chosen non-default level, used to build the note. */
+function afNotePart(dim: string, level: string): string {
+  if (dim === "rom") return level;            // "+23cm"
+  if (dim === "lean") return `lean ${level}`; // "lean 15cm"
+  return afLevelText(dim, level);             // "back-to-wall", "uninterrupted", "band 5"…
+}
+
+/** The variation field for the inline add form. For a lift with a VARIATION MODEL
+ * (a family), it's a row of structured pickers — the real variables (support, ROM,
+ * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
+ * so you choose the variation, not type a note. Lifts with no model fall back to the
+ * free-text note (datalist of past notes). */
 function afVariationField(exerciseName: string): string {
+  const fam = familyOf(exerciseName);
+  const famDef = fam ? FAMILIES[fam] : null;
+  if (famDef) {
+    const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
+      const levels = famDef.dims[dim]!;
+      const cur = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
+      const opts = Object.keys(levels)
+        .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, l))}</option>`)
+        .join("");
+      return `<label class="wo-af-dimf"><span class="wo-af-dimlbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim" data-dim="${escapeHtml(dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></label>`;
+    }).join("");
+    if (selects) return `<span class="wo-af-dims">${selects}</span>`;
+  }
   const notes = variationNotesFor(exerciseName);
   if (!notes.length) return "";
   const listId = `afNotes-${++afNoteSeq}`;
@@ -10839,8 +10873,20 @@ function onInlineAddGo(form: HTMLElement) {
   const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
   const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
   const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
-  // Chosen variation (note) — carries the difficulty for lifts like handstands.
-  const note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
+  // Chosen variation. Structured pickers (a modelled lift) → build a readable note
+  // from the non-default levels AND pin those exact levels as the set's vec, so the
+  // chosen variables are authoritative. Otherwise fall back to the free-text note.
+  const dimEls = [...form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")];
+  let note: string;
+  let chosenDims: [string, string][] = [];
+  if (dimEls.length) {
+    const fam = familyOf(exerciseName);
+    const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
+    for (const s of dimEls) { const dim = s.dataset.dim!; const lvl = s.value; if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]); }
+    note = chosenDims.map(([d, l]) => afNotePart(d, l)).join(", ");
+  } else {
+    note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
+  }
   const username = els.athlete.value;
   const user = athleteLabel();
   if (!username || !exerciseName) return;
@@ -10861,6 +10907,9 @@ function onInlineAddGo(form: HTMLElement) {
       ...(note ? { notes: note } : {}),
     });
   }
+  // Pin the chosen variables to this note so they're authoritative (the note text
+  // doesn't have to round-trip through the parser).
+  if (note && chosenDims.length) for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, note, dim, lvl);
   saveManual();
   mergeManualSets();
   // Which weeks/days are expanded right now — reopen them after the rebuild.

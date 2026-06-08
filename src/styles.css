@@ -1856,6 +1856,12 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-addform .wo-af-ex { width: 8.5rem; }
 .wo-addform .wo-af-note { width: 8.5rem; }
+/* Structured variation pickers: a tight, horizontally-scrolling row of small labelled
+   dropdowns (the lift's variables — support, ROM, lean…), one tap each. */
+.wo-addform .wo-af-dims { display: inline-flex; flex-wrap: nowrap; gap: 0.3rem; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; vertical-align: middle; }
+.wo-af-dimf { display: inline-flex; flex-direction: column; gap: 1px; flex: 0 0 auto; }
+.wo-af-dimlbl { font-size: 0.56rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.wo-addform .wo-af-dims select { font: inherit; font-size: 0.76rem; padding: 2px 4px; }
 .wo-addform input {
   width: 3.4rem; font: inherit; font-size: 0.8rem; padding: 2px 6px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
