@@ -3652,6 +3652,44 @@ function pagerHtml(page: number, total: number, size: number = PAGE_SIZE): strin
   );
 }
 
+/** Page boundaries for the workout list where REST-DAY slivers count only 1/10 of
+ * a real session toward the page size — so a page fills with ~`size` actual
+ * sessions, not slivers. Returns each page's START index into `groups`. */
+function workoutPageStarts(groups: WorkoutGroup[], size: number): number[] {
+  const starts = [0];
+  let w = 0;
+  for (let i = 0; i < groups.length; i++) {
+    w += groups[i]!.rest ? 0.1 : 1;
+    if (w >= size && i + 1 < groups.length) { starts.push(i + 1); w = 0; }
+  }
+  return starts;
+}
+/** Which weighted page contains group index `idx`. */
+function workoutPageOf(idx: number, starts: number[]): number {
+  let p = 0;
+  for (let i = 0; i < starts.length; i++) if (idx >= starts[i]!) p = i; else break;
+  return p;
+}
+/** Prev / range / Next for the workout list, numbered by REAL sessions/weeks (rest
+ * slivers aren't counted), with weighted page boundaries from {@link workoutPageStarts}. */
+function workoutsPagerHtml(page: number, starts: number[], groups: WorkoutGroup[], byWeek: boolean): string {
+  const pages = starts.length;
+  if (pages <= 1) return "";
+  const startIdx = starts[page] ?? 0;
+  const endIdx = starts[page + 1] ?? groups.length;
+  const isReal = (g: WorkoutGroup) => byWeek || !g.rest;
+  const total = groups.filter(isReal).length;
+  const before = groups.slice(0, startIdx).filter(isReal).length;
+  const inPage = groups.slice(startIdx, endIdx).filter(isReal).length;
+  const from = inPage ? before + 1 : before;
+  const to = before + inPage;
+  return (
+    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
+    `<span class="muted">${from}–${to} of ${total} ${byWeek ? "weeks" : "sessions"}</span>` +
+    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
+  );
+}
+
 /** Period options for the exercises list. `days` of 0 means "all time"; every
  * other entry is a rolling window counted back from today. Single source of
  * truth for both the dropdown menu and the cutoff/label helpers below. */
@@ -5264,9 +5302,10 @@ function shiftHeatYear(delta: number) {
 /** Tapping a training day in the calendar: jump to that day in the list and open it. */
 function jumpToWorkoutDate(iso: string) {
   if (S.workoutViewMode !== "day") { S.workoutViewMode = "day"; syncWorkoutToggles(); } // calendar is per-day
-  const idx = buildWorkoutGroups().findIndex((g) => g.date === iso && !g.rest);
+  const groups = buildWorkoutGroups();
+  const idx = groups.findIndex((g) => g.date === iso && !g.rest);
   if (idx < 0) return;
-  S.workoutsPage = Math.floor(idx / S.workoutsPageSize);
+  S.workoutsPage = workoutPageOf(idx, workoutPageStarts(groups, S.workoutsPageSize));
   renderWorkoutsPage();
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
@@ -5374,9 +5413,15 @@ function renderWorkoutsPage() {
   // No column header row — the "Session / Sets" labels were redundant noise above
   // a list whose rows are self-explanatory (a date + its set count).
   const head = "";
-  const start = S.workoutsPage * S.workoutsPageSize;
+  // Weighted paging: rest-day slivers count 1/10 of a session, so a page holds ~50
+  // real sessions instead of being eaten by empty rest rows.
+  const pageStarts = workoutPageStarts(workoutGroups, S.workoutsPageSize);
+  if (S.workoutsPage >= pageStarts.length) S.workoutsPage = pageStarts.length - 1;
+  if (S.workoutsPage < 0) S.workoutsPage = 0;
+  const start = pageStarts[S.workoutsPage] ?? 0;
+  const end = pageStarts[S.workoutsPage + 1] ?? workoutGroups.length;
   const rows = workoutGroups
-    .slice(start, start + S.workoutsPageSize)
+    .slice(start, end)
     .map((g, i) => {
       if (g.rest) {
         // A rest day is just a thin sliver with a separating line — count the
@@ -5438,7 +5483,7 @@ function renderWorkoutsPage() {
     .join("");
   els.workoutsTable.innerHTML =
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
-  els.workoutsPager.innerHTML = pagerHtml(S.workoutsPage, workoutGroups.length, S.workoutsPageSize);
+  els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
 }
 
