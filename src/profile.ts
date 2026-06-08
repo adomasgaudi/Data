@@ -770,6 +770,11 @@ export type MuscleGroup =
 
 export function muscleGroup(exerciseName: string): MuscleGroup {
   const n = exerciseName.toLowerCase();
+  // A SCAPULAR handstand push-up (the owner's low-ROM / one-hand variant) is a
+  // mix of HSPU and "handstand muscle" — its prime mover is the scapula (traps /
+  // upper back), not the delts, so it leads with Upper back (shoulders/triceps
+  // come in as secondaries). Guarded so only the scapular variant is affected.
+  if (n.includes("scapular") && (n.includes("handstand") || n.includes("hspu"))) return "Upper back";
   // First matching MUSCLE_GROUP_TAGS entry wins (the table is in priority order,
   // the same ordering this function used to hold inline — see the registry).
   const prime = MUSCLE_GROUP_TAGS.find((t) => tagMatches(n, t));
@@ -796,6 +801,8 @@ const SECONDARY_MUSCLE_RULES: { keywords: string[]; add: MuscleGroup[] }[] = [
   { keywords: ["bench", "push up", "pushup", "push-up", "pushups", "chest press", "dip"], add: ["Triceps", "Shoulders"] },
   // Vertical / standing press: triceps assist.
   { keywords: ["shoulder press", "overhead press", "military", "arnold", "handstand push", "hspu"], add: ["Triceps"] },
+  // Scapular HSPU (Upper-back prime): the delts + triceps still assist the press.
+  { keywords: ["scapular handstand", "scapular hspu"], add: ["Shoulders", "Triceps"] },
   // Vertical pulls: biceps + upper back assist.
   { keywords: ["pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "lat pulldown", "pulldown"], add: ["Biceps", "Upper back"] },
   // Rows: biceps + upper back assist.
