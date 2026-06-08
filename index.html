@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.38</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.39</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1064,16 +1064,17 @@
             <!-- Taxonomy / machine-type editor (single mode) follows the selector. -->
             <div id="waAssign" class="wa-section"></div>
             <div id="waStats" class="wa-section" hidden></div>
-            <details class="wa-fold wa-subfold" open>
-              <summary class="wa-fold-sum" id="waTableSummary">Workout history</summary>
-              <div id="waTable" class="wa-section">
-                <!-- The live Workouts / drill-in / list / compare panel is relocated
-                     here while the view is open (and returned to its home tab on
-                     leave), so all its history / filters / stats / toggles work as-is. -->
-                <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
-                <div id="waWorkoutsHost"></div>
-              </div>
-            </details>
+            <!-- The redundant inner "Workout history" fold was removed — the
+                 "Calendar & history" header above already names + collapses the whole
+                 thing (the history collapses with its selector). The history list shows
+                 directly here. -->
+            <div id="waTable" class="wa-section">
+              <!-- The live Workouts / drill-in / list / compare panel is relocated
+                   here while the view is open (and returned to its home tab on
+                   leave), so all its history / filters / stats / toggles work as-is. -->
+              <p class="muted wa-placeholder" id="waWorkoutsEmpty" hidden>No workouts to show.</p>
+              <div id="waWorkoutsHost"></div>
+            </div>
           </details>
           <!-- EXPERIMENTAL: a horizontal version of the workout history — the same
                period buckets (days / weeks / months) but laid out as columns you
