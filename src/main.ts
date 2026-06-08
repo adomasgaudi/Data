@@ -794,6 +794,18 @@ const MUSCLE_GROUPS: MuscleGroup[] = [
   "Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Core",
 ];
 const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary" };
+const MUSCLE_KEY_SET = new Set<string>(MUSCLE_GROUPS as readonly string[]);
+/** The highest muscle-involvement level (0–4) a lift reaches across all muscles. */
+function maxMgLevel(name: string): number {
+  let mx = 0;
+  for (const m of MUSCLE_GROUPS) { const l = mgLevelOf(name, m); if (l > mx) mx = l; }
+  return mx;
+}
+/** A lift's "effectiveness" level (0–4) for a category: the level it trains THAT
+ * muscle if the category is a muscle group (Glutes…), else its highest level. */
+function effLevelForCategory(name: string, categoryKey: string): number {
+  return MUSCLE_KEY_SET.has(categoryKey) ? mgLevelOf(name, categoryKey as MuscleGroup) : maxMgLevel(name);
+}
 
 // ---- "Not comparable" NOTES (owner-marked, per note — not whole exercises) ----
 // A specific variation can be unmeasurable by 1RM/volume — e.g. a static
@@ -9307,6 +9319,7 @@ async function init() {
     if (catMenu && !catMenu.hidden && waCatMenuKey !== null) {
       curSelScope = waCatMenuScope; // the menu edits whichever selector opened it
       if (t.closest(".wa-catclose")) { closeWaCatMenu(); return; }
+      if (t.closest(".wa-catmenu-sort")) { waCatMenuSort = CAT_SORT_NEXT[waCatMenuSort]; renderWaCatMenu(); return; }
       const allBtn = t.closest<HTMLElement>(".wa-catall");
       if (allBtn) {
         const turnOn = allBtn.dataset.catallon === "1";
@@ -11755,7 +11768,7 @@ let searchFindHistory = false;
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
-let waGroupBy: "none" | ExerciseFilterDim | "frequency" | "bestlifts" = "bestlifts"; // default: rank the powerlifting trio by world-record %
+let waGroupBy: "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness" = "bestlifts"; // default: rank the powerlifting trio by world-record %
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
 // toggle. Replaces the old separate Filter button.
@@ -11771,6 +11784,11 @@ let waChipsMode: "exercises" | "categories" = "categories"; // default: whole-ca
 // Which category's floating exercise dropdown is open (a group key, "__all", or null).
 let waCatMenuKey: string | null = null;
 let waCatMenuScope: SelScope = "hist";
+// Internal sort order of the exercises listed in a category's dropdown menu.
+type CatMenuSort = "eff" | "sets" | "tier" | "name";
+let waCatMenuSort: CatMenuSort = "eff";
+const CAT_SORT_NEXT: Record<CatMenuSort, CatMenuSort> = { eff: "sets", sets: "tier", tier: "name", name: "eff" };
+const CAT_SORT_LABEL: Record<CatMenuSort, string> = { eff: "Effectiveness", sets: "Sets", tier: "Tier", name: "Name" };
 // Short labels for the category-pill sub-line count (e.g. "4/5 func").
 const WA_DIM_SHORT: Partial<Record<ExerciseFilterDim, string>> = {
   function: "func", bodyPart: "part", muscleGroup: "musc", joint: "joint",
@@ -12105,6 +12123,7 @@ function renderSelector(scope: SelScope): void {
     `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
     `<option value="bestlifts"${waGroupBy === "bestlifts" ? " selected" : ""}>Best lifts</option>` +
     `<option value="frequency"${waGroupBy === "frequency" ? " selected" : ""}>Frequency</option>` +
+    `<option value="effectiveness"${waGroupBy === "effectiveness" ? " selected" : ""}>Effectiveness</option>` +
     WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
   // Frequency sub-controls: a period pill (cycles) + a sets/hard-sets pill.
   const freqCtl = waGroupBy === "frequency"
@@ -12266,6 +12285,8 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
 function waGroupKeys(name: string): string[] {
   // Special modes are flat ranked lists, not taxonomy buckets — no group keys.
   if (waGroupBy === "none" || isSpecialGroupBy(waGroupBy)) return [""];
+  // Effectiveness: ONE bucket per lift = its highest muscle-training level (0–4).
+  if (waGroupBy === "effectiveness") return [`Level ${maxMgLevel(name)}`];
   // "Strength" is too broad: when grouping by Discipline, split strength lifts by
   // their MUSCLE GROUPS instead (Chest, Back, Quads…) — each as its own pill.
   if (waGroupBy === "discipline") {
@@ -12294,6 +12315,8 @@ function waGroupIsStrength(key: string): boolean {
  * curated order (so Strength leads the disciplines, not alphabetical); other
  * dimensions fall through to an alphabetical tiebreak. Unknown keys sort last. */
 function waGroupRank(key: string): number {
+  // Effectiveness: highest level first (Level 4 → Level 0).
+  if (waGroupBy === "effectiveness") return 4 - (Number(key.slice(6)) || 0);
   // Discipline grouping splits Strength into muscle-group pills — rank those inside
   // Strength's slot (by muscle order) so they lead and stay together.
   if (waGroupBy === "discipline" && waGroupIsStrength(key))
@@ -12468,6 +12491,9 @@ function waCatPillsInner(list: readonly WaItem[]): string {
   const groupSets = (items: readonly WaItem[]) => items.reduce((n, e) => n + (setCount.get(e.name) ?? 0), 0);
   return [...groups.entries()]
     .sort((a, b) =>
+      // Effectiveness buckets keep their level order (Level 4 → 0); others lead with
+      // a selection, then most-trained, then alpha.
+      (waGroupBy === "effectiveness" ? waGroupRank(a[0]) - waGroupRank(b[0]) : 0) ||
       ((waSelCount(b[1]) > 0 ? 1 : 0) - (waSelCount(a[1]) > 0 ? 1 : 0)) ||
       (groupSets(b[1]) - groupSets(a[1])) ||
       a[0].localeCompare(b[0]))
@@ -12526,21 +12552,43 @@ function closeWaCatMenu(): void {
   if (m) m.hidden = true;
   for (const p of document.querySelectorAll<HTMLElement>(".wa-cat-pill")) p.setAttribute("aria-expanded", "false");
 }
+/** A lift's tier as a sort rank (Primary 0 · Secondary 1 · Tertiary 2 · unknown last). */
+function tierRank(name: string): number {
+  const t = (waMeta(name, "tier")[0] ?? "").toLowerCase();
+  return t.startsWith("prim") || t === "main" ? 0 : t.startsWith("sec") ? 1 : t.startsWith("tert") || t === "third" ? 2 : 99;
+}
+/** Sort a category menu's exercises by the chosen internal order. "eff" uses the
+ * level the lift trains THAT category's muscle (or its top level for non-muscle
+ * categories); the others by set count / tier / name. Set count breaks ties. */
+function sortCatMenuItems(items: readonly WaItem[], key: string): WaItem[] {
+  const arr = [...items];
+  if (waCatMenuSort === "name") return arr.sort((a, b) => displayName(a.name).localeCompare(displayName(b.name)));
+  const setCount = new Map<string, number>();
+  for (const c of exerciseCountsForUser(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
+  const sets = (n: string) => setCount.get(n) ?? 0;
+  if (waCatMenuSort === "sets") return arr.sort((a, b) => sets(b.name) - sets(a.name) || a.name.localeCompare(b.name));
+  if (waCatMenuSort === "tier") return arr.sort((a, b) => tierRank(a.name) - tierRank(b.name) || sets(b.name) - sets(a.name));
+  return arr.sort((a, b) => effLevelForCategory(b.name, key) - effLevelForCategory(a.name, key) || sets(b.name) - sets(a.name));
+}
 function renderWaCatMenu(): void {
   const m = document.getElementById("waCatMenu");
   if (!m || waCatMenuKey === null) return;
   curSelScope = waCatMenuScope;
-  const items = waCatItems(waCatMenuKey);
+  const key = waCatMenuKey;
+  const items = sortCatMenuItems(waCatItems(key), key);
   const sel = waSelCount(items);
-  const label = waCatMenuKey === "__all" ? "All exercises" : waCatMenuKey;
+  const label = key === "__all" ? "All exercises" : key;
   const allOn = items.length > 0 && sel >= items.length;
+  const showLvl = waCatMenuSort === "eff"; // show the 0–4 level on each chip
   m.innerHTML =
     `<div class="wa-cat-menu-head">` +
     `<span class="wa-cat-menu-title">${escapeHtml(label)} <span class="muted">${sel}/${items.length}</span></span>` +
+    `<button type="button" class="wa-catmenu-sort wa-clear" title="Sort the exercises — tap to cycle: Effectiveness · Sets · Tier · Name">Sort: ${CAT_SORT_LABEL[waCatMenuSort]}</button>` +
     `<button type="button" class="wa-catall wa-clear" data-catallon="${allOn ? "0" : "1"}">${allOn ? "Deselect all" : "Select all"}</button>` +
     `<button type="button" class="wa-catclose" aria-label="Close">✕</button>` +
     `</div>` +
-    `<div class="wa-cat-menu-chips wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity)).join("")}</div>`;
+    `<div class="wa-cat-menu-chips wa-ex-chips">${items.map((e) =>
+      showLvl ? waSpecialChipHtml(e.name, e.identity, `L${effLevelForCategory(e.name, key)}`) : waChipHtml(e.name, e.identity)).join("")}</div>`;
 }
 
 // Snappy clicks: a Graph-options tap updates its own control instantly, then the

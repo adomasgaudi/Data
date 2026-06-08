@@ -90,6 +90,11 @@ const LT: Record<string, string> = {
   // ---- Graph selector: group-by special modes ----
   "Best lifts": "Geriausi kėlimai",
   "Frequency": "Dažnis",
+  "Effectiveness": "Efektyvumas",
+  "Sort: Effectiveness": "Rūšiuoti: efektyvumas",
+  "Sort: Sets": "Rūšiuoti: serijos",
+  "Sort: Tier": "Rūšiuoti: lygmuo",
+  "Sort: Name": "Rūšiuoti: pavadinimas",
   "Sets": "Serijos",
   "Hard sets": "Sunkios serijos",
   "1 week": "1 savaitė",
