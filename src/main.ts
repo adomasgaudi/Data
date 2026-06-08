@@ -12847,7 +12847,7 @@ function parseCreateQuery(raw: string): { hit: boolean; name: string } {
   const s = raw.trim();
   const ql = s.toLowerCase();
   if (/^create\b/i.test(s)) return { hit: true, name: s.replace(/^create\b[\s:.-]*/i, "").trim() };
-  if (ql.length >= 4 && "create".startsWith(ql)) return { hit: true, name: "" }; // still typing "crea…"
+  if (ql.length >= 1 && "create".startsWith(ql)) return { hit: true, name: "" }; // typing toward "create" (c, cr, cre…)
   return { hit: false, name: "" };
 }
 /** The plain-text search popup (like the "." command palette): choose whether the
