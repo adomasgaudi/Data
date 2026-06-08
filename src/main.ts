@@ -1965,6 +1965,53 @@ const effectiveCombinableGroups = (): RegistryTag[] => COMBINABLE_GROUPS.map(wit
 const effectiveComparableGroups = (): RegistryTag[] => COMPARABLE_GROUPS.map(withMemberOverrides);
 const combinableGroupsForEx = (name: string): RegistryTag[] => effectiveCombinableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
 const comparableGroupsForEx = (name: string): RegistryTag[] => effectiveComparableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
+
+// ---- Per-lift display LENS (combine / compare), remembered per scope (graph vs
+// history, INDEPENDENT). You always pick the ORIGINAL lift; these two toggles fold it
+// into its combinable group's merged lift (combine) and/or expand it to its comparable
+// group's members shown separately (compare). A lift with BOTH relations shows both. ----
+type ExLens = { combine?: boolean; compare?: boolean };
+const EX_LENS_KEY = "colosseum.exerciseLens.v1";
+const exLens: Record<string, Record<string, ExLens>> = (() => {
+  try { return JSON.parse(localStorage.getItem(EX_LENS_KEY) ?? "{}") as Record<string, Record<string, ExLens>>; } catch { return {}; }
+})();
+const hasCombinable = (name: string): boolean => combinableGroupsForEx(name).length > 0;
+const hasComparable = (name: string): boolean => comparableGroupsForEx(name).length > 0;
+function lensFor(scope: SelScope, name: string): ExLens { return exLens[scope]?.[name] ?? {}; }
+function setLens(scope: SelScope, name: string, key: "combine" | "compare", on: boolean): void {
+  const s = exLens[scope] ?? (exLens[scope] = {});
+  const cur: ExLens = { ...(s[name] ?? {}) };
+  if (on) cur[key] = true; else delete cur[key];
+  if (cur.combine || cur.compare) s[name] = cur; else delete s[name];
+  try { localStorage.setItem(EX_LENS_KEY, JSON.stringify(exLens)); } catch { /* ignore */ }
+}
+/** Map selected lift names → the names actually plotted/scoped in this scope, per each
+ * lift's remembered lens. combine → its combinable group's merged lift; compare → its
+ * comparable group's members (separate); both → both; neither → the lift itself. */
+function lensExpand(scope: SelScope, names: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const n of names) {
+    const lens = lensFor(scope, n);
+    let added = false;
+    if (lens.combine) { const g = combinableGroupsForEx(n)[0]; if (g) { out.push(g.derivedName ?? g.label); added = true; } }
+    if (lens.compare) { const g = comparableGroupsForEx(n)[0]; if (g) { for (const m of g.members ?? []) out.push(m.exerciseName); added = true; } }
+    if (!added) out.push(n);
+  }
+  return [...new Set(out)];
+}
+/** The lens toggle buttons for a selected lift (only the relations it actually has) —
+ * a small ⊕ Combine and/or ⇄ Compare pill; their presence is the "has relations" hint. */
+function lensTogglesHtml(scope: SelScope, n: string): string {
+  const hc = hasCombinable(n), hp = hasComparable(n);
+  if (!hc && !hp) return "";
+  const lens = lensFor(scope, n);
+  const btn = (key: "combine" | "compare", on: boolean, sym: string, verb: string) =>
+    `<button type="button" class="wa-lens-btn${on ? " is-on" : ""}" data-lens="${key}" data-lensex="${escapeHtml(n)}" data-lensscope="${scope}" title="${verb} ${escapeHtml(displayName(n))} with its group${on ? " (on)" : ""}">${sym}</button>`;
+  return `<span class="wa-lens" title="${escapeHtml(displayName(n))} has related exercises">` +
+    (hc ? btn("combine", !!lens.combine, "⊕", "Combine") : "") +
+    (hp ? btn("compare", !!lens.compare, "⇄", "Compare") : "") +
+    `</span>`;
+}
 /** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
 function toggleGroupMembership(groupId: string, exName: string): void {
   const g = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].find((x) => x.id === groupId);
@@ -2021,12 +2068,12 @@ function setGroupDisplay(id: string, mode: GroupDisplay): void {
  * "combined" group hides its member lifts (only the merged one shows); a "members"
  * group hides the synthetic merged lift. */
 function groupDisplayHiddenNames(): Set<string> {
+  // New lens model: the picker shows the ORIGINAL lifts; a built-in group's merged
+  // "synthetic" (Squat pattern, etc.) is reached via each lift's per-lift Combine /
+  // Compare toggle, not as its own picker entry — so hide those synthetics. (User-
+  // created mixes are NOT registry groups, so they stay pickable.)
   const hidden = new Set<string>();
-  for (const g of [...effectiveCombinableGroups(), ...effectiveComparableGroups()]) {
-    const mode = groupDisplayFor(g.id);
-    if (mode === "combined") for (const m of g.members ?? []) hidden.add(m.exerciseName);
-    else if (mode === "members") hidden.add(g.derivedName ?? g.label);
-  }
+  for (const g of [...effectiveCombinableGroups(), ...effectiveComparableGroups()]) hidden.add(g.derivedName ?? g.label);
   return hidden;
 }
 
@@ -9631,6 +9678,21 @@ async function init() {
       jumpToExerciseInfo(btn.dataset.moreinfoex);
     }
   });
+  // Per-lift Combine / Compare LENS toggle (⊕ / ⇄ on a selected lift, in the title or
+  // a picked-pill). Flips that lift's lens for its scope (graph/history, independent),
+  // remembers it, and re-renders. preventDefault/stopPropagation so it doesn't toggle
+  // the surrounding <summary> fold or remove the pill.
+  document.addEventListener("click", (e) => {
+    const lensBtn = (e.target as HTMLElement).closest<HTMLElement>("[data-lens]");
+    if (!lensBtn?.dataset.lens || !lensBtn.dataset.lensex || !lensBtn.dataset.lensscope) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const scope = lensBtn.dataset.lensscope as SelScope;
+    const name = lensBtn.dataset.lensex;
+    const key = lensBtn.dataset.lens as "combine" | "compare";
+    setLens(scope, name, key, !lensFor(scope, name)[key]); // remembered per lift
+    deferRender(renderWorkoutAnalysis);
+  });
   // Index "↗" button: jump straight to this lift's workout history (Analysis, single
   // mode — its real logged sets are the example), with it selected on the graph too.
   document.addEventListener("click", (e) => {
@@ -12362,7 +12424,7 @@ function refreshHistorySearch(): void {
     waListExerciseFilter = (searchFindHistory && waSearchQuery.trim()) ? historyFilterWithSearch([]) : [HISTORY_NONE];
     return;
   }
-  const base = expandToRawExercises(waSelected);
+  const base = expandToRawExercises(lensExpand("hist", waSelected));
   waListExerciseFilter = historyFilterWithSearch(base);
 }
 
@@ -12373,12 +12435,15 @@ function refreshHistorySearch(): void {
  * so the graph and Calendar/history titles look IDENTICAL (the recurring "one has the
  * count / cap, the other doesn't" bug). */
 const TITLE_NAME_CAP = 5;
-function liftSelectionTitle(sel: readonly string[], removable = false): string {
+function liftSelectionTitle(sel: readonly string[], removable = false, scope?: SelScope): string {
   if (sel.length === 0) return "";
   const sep = `<span class="wa-title-sep"> · </span>`;
-  const names = sel.slice(0, TITLE_NAME_CAP).map((n) => removable
-    ? `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`
-    : escapeHtml(displayName(n))).join(sep);
+  const names = sel.slice(0, TITLE_NAME_CAP).map((n) => {
+    const nameHtml = removable
+      ? `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`
+      : escapeHtml(displayName(n));
+    return nameHtml + (scope ? lensTogglesHtml(scope, n) : ""); // per-lift Combine / Compare toggles
+  }).join(sep);
   const more = sel.length > TITLE_NAME_CAP
     ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — pick them off in the selector below">… +${sel.length - TITLE_NAME_CAP}</span>`
     : "";
@@ -12409,7 +12474,7 @@ function renderWorkoutAnalysis(): void {
   if (graphSummary) {
     // Title = a count badge + the first 5 lift names (each a button that REMOVES it
     // from the graph — see the data-graphremove handler) + "… +N" when there are more.
-    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : liftSelectionTitle(waGraphSel, true);
+    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : liftSelectionTitle(waGraphSel, true, "graph");
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
@@ -12420,7 +12485,7 @@ function renderWorkoutAnalysis(): void {
     // list is the relocated Workouts panel, filtered via waListExerciseFilter.
     selectedExercise = null;
     combinedWith = [];
-    waListExerciseFilter = historyFilterWithSearch(expandToRawExercises(waSelected));
+    waListExerciseFilter = historyFilterWithSearch(expandToRawExercises(lensExpand("hist", waSelected)));
     setAnalysisMainPanel("workouts");
     // The fold summary IS the title now (the inner panel title is hidden in
     // Analysis), so it carries the athlete + scope — no redundant second line.
@@ -12432,7 +12497,7 @@ function renderWorkoutAnalysis(): void {
     if (calHistTitle) {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
       // "Calendar & history" prefix, no member breakdown, no ℹ.
-      calHistTitle.innerHTML = waSelected.length ? liftSelectionTitle(waSelected) : "Calendar & history";
+      calHistTitle.innerHTML = waSelected.length ? liftSelectionTitle(waSelected, false, "hist") : "Calendar & history";
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -12472,7 +12537,7 @@ function renderWorkoutAnalysis(): void {
       // counts EVERY set of the selection, not just those logged under the parent
       // name. Without this a merged lift shows all sets in the list but only a few
       // on the calendar.
-      S.heatFilters = expandToRawExercises(waSelected).map((n) => `ex:${n}`);
+      S.heatFilters = expandToRawExercises(lensExpand("hist", waSelected)).map((n) => `ex:${n}`);
     } else if (S.heatFiltersSaved !== null) {
       S.heatFilters = S.heatFiltersSaved;
       S.heatFiltersSaved = null;
@@ -12586,7 +12651,7 @@ function renderSelector(scope: SelScope): void {
     const title = scope === "graph"
       ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${graphCap}-lift limit · tap to remove ${n}`)
       : `Tap to remove ${n}`;
-    return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
+    return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>${lensTogglesHtml(scope, n)}`;
   };
   // The GRAPH selector shows its picked lifts in the big title (clickable to remove,
   // below) — NOT as a separate ✕-pill row. So the picked-pill rows are history-only.
@@ -13059,7 +13124,7 @@ function renderWaGraph(): void {
   // The plot shows EXACTLY the picked lifts — clearing the selection leaves it
   // empty, never an implicit "show everything" (the owner wants an empty graph to
   // be possible). Use Select-all to plot the whole catalogue.
-  const baseExercises = waGraphSel;
+  const baseExercises = lensExpand("graph", waGraphSel); // apply each lift's graph-scope Combine/Compare lens
   // The exercise cap shrinks with each overlaid athlete so users × exercises ≤ 10.
   const exCap = graphExerciseCap();
   const graphExercises = baseExercises.slice(0, exCap);
