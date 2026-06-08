@@ -3719,6 +3719,34 @@ const listCatColor = (c: string): string =>
   LIST_CATEGORY_COLORS[c] ?? CATEGORY_COLORS[c as TrainingCategory] ?? CATEGORY_COLORS.Other;
 
 /** Compact "what they've been doing" stat chips for the selected athlete. */
+// ---- Stats section show/hide toggle (small button by the athlete picker) ----
+// The whole Stats disclosure (#athleteDetails) is OFF by default — it disappears
+// entirely. The button reveals it in its normal collapsible form; when just turned
+// on it starts COLLAPSED, and clicking its header expands it as usual.
+const STATS_SHOWN_KEY = "colosseum.statsSectionShown";
+let statsSectionShown = (() => { try { return localStorage.getItem(STATS_SHOWN_KEY) === "1"; } catch { return false; } })();
+function applyStatsSection(): void {
+  const details = document.getElementById("athleteDetails");
+  if (details) details.hidden = !statsSectionShown;
+  const btn = document.getElementById("statsToggleBtn");
+  if (btn) {
+    btn.classList.toggle("is-on", statsSectionShown);
+    btn.setAttribute("aria-pressed", String(statsSectionShown));
+    btn.setAttribute("title", statsSectionShown ? "Hide the Stats section" : "Show the Stats section");
+  }
+}
+function setupStatsToggle(): void {
+  document.getElementById("statsToggleBtn")?.addEventListener("click", () => {
+    statsSectionShown = !statsSectionShown;
+    try { localStorage.setItem(STATS_SHOWN_KEY, statsSectionShown ? "1" : "0"); } catch { /* storage may be unavailable */ }
+    // Reveal it COLLAPSED — its own summary then expands it normally.
+    const details = document.getElementById("athleteDetails") as HTMLDetailsElement | null;
+    if (details && statsSectionShown) details.open = false;
+    applyStatsSection();
+  });
+  applyStatsSection();
+}
+
 function renderAthleteStats() {
   const s = athleteSummary(activeRecords(), els.athlete.value);
   if (s.sets === 0) {
@@ -9017,6 +9045,7 @@ async function init() {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
   });
   setupTabs();
+  setupStatsToggle(); // small Stats show/hide button by the athlete picker
   // World-records page: the trio-lift selector pills (mutually-exclusive).
   document.getElementById("recordsBody")?.addEventListener("click", (e) => {
     const pill = (e.target as HTMLElement).closest<HTMLElement>(".rec-lift-pill");

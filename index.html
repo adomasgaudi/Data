@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.192</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.7.193</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -209,6 +209,9 @@
                reads via els.athlete.value. AI-NOTE: keep chips + select in sync via
                syncAthleteChips(); a chip click sets the select and fires change. -->
           <div id="athleteChips" class="athlete-chips" role="radiogroup" aria-label="Athlete"></div>
+          <!-- Small toggle: show/hide the Stats section (off by default — the whole
+               Stats disclosure disappears; on reveals it collapsed, click to expand). -->
+          <button type="button" id="statsToggleBtn" class="ath-statsbtn" aria-pressed="false" title="Show the Stats section">Stats</button>
         </div>
         <select id="athlete" class="athlete-select-hidden" aria-hidden="true" tabindex="-1"></select>
 

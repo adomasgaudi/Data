@@ -65,6 +65,8 @@ const LT: Record<string, string> = {
   "⚠ provisional": "⚠ negalutiniai",
   "source": "šaltinis",
   "Class": "Kategorija",
+  "Show the Stats section": "Rodyti statistikos skiltį",
+  "Hide the Stats section": "Slėpti statistikos skiltį",
   "No athletes with a height & sex on file to place in a weight class.":
     "Nėra sportininkų su įrašytu ūgiu ir lytimi, kad būtų galima priskirti svorio kategoriją.",
   "Every released version, newest first — the same log as the git history.": "Kiekviena išleista versija, naujausia viršuje — tas pats sąrašas kaip git istorijoje.",
