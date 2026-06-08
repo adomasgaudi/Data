@@ -6406,6 +6406,45 @@ function setWoShowAll(on: boolean): void {
   renderWorkoutsPage();
 }
 
+/** The athlete's lifts hidden by the Index/active-set filter (logged but not active). */
+function hiddenLiftsFor(username: string): string[] {
+  if (!activeSet) return [];
+  const allow = activeSet;
+  const out = new Set<string>();
+  for (const r of liveRecords()) if (r.username === username && r.exerciseName && !allow.has(r.exerciseName)) out.add(r.exerciseName);
+  return [...out].sort((a, b) => displayName(a).localeCompare(displayName(b)));
+}
+/** Permanently un-hide lifts: drop them from the exclude list and force them into the
+ * active set, so they reappear everywhere. */
+function unhideLifts(names: readonly string[]): void {
+  for (const n of names) { activeExclude.delete(n); activeInclude.add(n); }
+  refreshActiveSet();
+  saveActiveSet();
+  scheduleRender();
+}
+function closeWoHiddenMenu(): void { document.getElementById("woHiddenMenu")?.remove(); }
+/** Floating menu off the "⚑ hidden H/T" button: lists every hidden lift (tap one to
+ * un-hide it), an "Unhide all" button, and a toggle to just reveal them in the list. */
+function openWoHiddenMenu(anchor: HTMLElement): void {
+  closeWoHiddenMenu();
+  const hidden = hiddenLiftsFor(els.athlete.value);
+  const items = hidden.length
+    ? hidden.map((n) => `<button type="button" class="wo-hidden-item" data-unhideex="${escapeHtml(n)}" title="Un-hide ${escapeHtml(displayName(n))}">${escapeHtml(displayName(n))}<span class="wo-hidden-x">＋</span></button>`).join("")
+    : `<div class="wo-hidden-empty muted">No hidden lifts.</div>`;
+  const menu = document.createElement("div");
+  menu.id = "woHiddenMenu";
+  menu.className = "wo-hidden-menu";
+  menu.innerHTML =
+    `<div class="wo-hidden-head"><b>Hidden lifts</b> <span class="muted">(${hidden.length})</span>` +
+    (hidden.length ? `<button type="button" class="wo-hidden-all" data-unhideall="1">Unhide all</button>` : "") +
+    `</div><div class="wo-hidden-list">${items}</div>` +
+    `<button type="button" class="wo-hidden-show${woShowAllExercises ? " is-on" : ""}" data-woshowall="1">Show hidden in the list (don't unhide)</button>`;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 4)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
+}
+
 /** The "lifts hidden by the Index filter" flag now lives as a compact button in the
  * history head row (next to the ⚙), rendered by {@link syncWorkoutToggles}. This
  * just clears any leftover old full-width banner. */
@@ -10440,7 +10479,22 @@ async function init() {
     localStorage.setItem("colosseum.showAloneTags", S.showAloneTags ? "1" : "0");
     renderWorkoutsPage();
   });
-  els.woShowAllToggle.addEventListener("click", () => setWoShowAll(!woShowAllExercises));
+  els.woShowAllToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (document.getElementById("woHiddenMenu")) closeWoHiddenMenu();
+    else openWoHiddenMenu(els.woShowAllToggle);
+  });
+  // Hidden-lifts menu actions + close-on-outside-click.
+  document.addEventListener("click", (e) => {
+    const menu = document.getElementById("woHiddenMenu");
+    if (!menu) return;
+    const t = e.target as HTMLElement;
+    const one = t.closest<HTMLElement>("[data-unhideex]");
+    if (one?.dataset.unhideex) { unhideLifts([one.dataset.unhideex]); closeWoHiddenMenu(); return; }
+    if (t.closest("[data-unhideall]")) { unhideLifts(hiddenLiftsFor(els.athlete.value)); closeWoHiddenMenu(); return; }
+    if (t.closest("[data-woshowall]")) { setWoShowAll(!woShowAllExercises); closeWoHiddenMenu(); return; }
+    if (!menu.contains(t) && t !== els.woShowAllToggle) closeWoHiddenMenu();
+  });
   // Per-day "hidden N/M": reveal/hide JUST that day's hidden lifts, in place — a
   // pure DOM toggle (no global flag, no re-render, no scroll jump). PB-2.
   document.addEventListener("click", (e) => {

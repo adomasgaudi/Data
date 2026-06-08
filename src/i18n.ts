@@ -115,6 +115,10 @@ const LT: Record<string, string> = {
   "No sets logged in this period.": "Šiuo laikotarpiu serijų neįrašyta.",
   "Select all": "Pažymėti visus",
   "Deselect all": "Atžymėti visus",
+  "Hidden lifts": "Paslėpti pratimai",
+  "Unhide all": "Atslėpti visus",
+  "No hidden lifts.": "Paslėptų pratimų nėra.",
+  "Show hidden in the list (don't unhide)": "Rodyti paslėptus sąraše (neatslepiant)",
   "Did you mean…?": "Ar turėjote omenyje…?",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
