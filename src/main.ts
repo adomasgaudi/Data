@@ -6070,9 +6070,13 @@ function renderWorkoutsPage() {
           .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))
           .filter((v): v is number => v !== null && Number.isFinite(v));
         const best = e1rms.length ? Math.max(...e1rms) : null;
+        // ALWAYS emit the 1RM cell — empty when a lift has no comparable 1RM (a
+        // bodyweight hold / not-comparable note). Without the placeholder element the
+        // grid's first column is unfilled and the NAME spills into the narrow 1RM
+        // column, so a note-only lift looked broken vs the others (PB).
         const rmTxt = best === null
-          ? ""
-          : ` <span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
+          ? `<span class="wo-1rm"></span>`
+          : `<span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
@@ -12004,14 +12008,17 @@ function renderWorkoutAnalysis(): void {
   // "what's on the graph" readout (the old separate count block is gone).
   const graphSummary = document.getElementById("waGraphSummary");
   if (graphSummary) {
-    // Each plotted lift's name is a button that REMOVES it from the graph (it stops
-    // the summary's collapse — see the data-graphremove handler). The caret + any
-    // empty title space still toggle the fold, so both actions live in one title.
-    graphSummary.innerHTML = waGraphSel.length
-      ? `<span class="wa-seltitle">` +
-        waGraphSel.map((n) => `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join(`<span class="wa-title-sep"> · </span>`) +
-        `</span>`
-      : "Graph";
+    // Up to 5 plotted lifts: name each as a button that REMOVES it from the graph
+    // (it stops the summary's collapse — see the data-graphremove handler). MORE than
+    // 5 would be a wall of text, so just show the COUNT ("N exercises") instead — pick
+    // them off in the picker below. The caret / empty title space still toggle the fold.
+    graphSummary.innerHTML = waGraphSel.length === 0
+      ? "Graph"
+      : waGraphSel.length > 5
+        ? `<span class="wa-seltitle">${waGraphSel.length} exercises</span>`
+        : `<span class="wa-seltitle">` +
+          waGraphSel.map((n) => `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join(`<span class="wa-title-sep"> · </span>`) +
+          `</span>`;
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
