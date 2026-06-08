@@ -75,6 +75,7 @@ const LT: Record<string, string> = {
   "Tasks & roadmap": "Užduotys ir planas",
   "Select all": "Pažymėti visus",
   "Deselect all": "Atžymėti visus",
+  "Did you mean…?": "Ar turėjote omenyje…?",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
   "ROM": "amplitudė",

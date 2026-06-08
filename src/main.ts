@@ -12784,22 +12784,51 @@ function commandList(): CmdSpec[] {
 }
 
 let cmdActiveIdx = 0;
-/** Render the command palette filtered by the text after the "." trigger. */
+/** Is `q` a subsequence of `s` (fuzzy: letters in order, gaps allowed)? */
+function isSubseq(q: string, s: string): boolean {
+  let i = 0;
+  for (let j = 0; j < s.length && i < q.length; j++) if (s[j] === q[i]) i++;
+  return i >= q.length;
+}
+/** Best-match score of a command against the (lowercased) query. 0 = no match;
+ * higher = better. Name matches beat description matches; a loose fuzzy subsequence
+ * is the weakest "maybe". */
+function cmdScore(c: CmdSpec, q: string): number {
+  if (!q) return 1;
+  const name = c.cmd.slice(1).toLowerCase();
+  if (name === q) return 100;
+  if (name.startsWith(q)) return 80;
+  if (name.includes(q)) return 60;
+  if (c.desc.toLowerCase().includes(q)) return 40;
+  if (isSubseq(q, name)) return 20; // weak (not a "good" match)
+  return 0;
+}
+const CMD_GOOD = 40; // ≥ this counts as a real match; below → "did you mean…?"
+/** Render the command palette ranked by best match. With no good match, a small grey
+ * "did you mean…?" row appears that, when pressed, lists every command. */
 function renderCmdPalette(value: string): void {
   const pal = document.getElementById("cmdPalette");
   if (!pal) return;
   const q = value.slice(1).trim().toLowerCase();
-  const matches = commandList().filter((c) => !q || c.cmd.slice(1).startsWith(q) || c.desc.toLowerCase().includes(q));
-  if (matches.length === 0) {
-    pal.hidden = false;
-    pal.innerHTML = `<div class="cmd-empty muted">No command matches “.${escapeHtml(q)}”</div>`;
+  const scored = commandList()
+    .map((c) => ({ c, s: cmdScore(c, q) }))
+    .filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s);
+  const good = q ? scored.filter((x) => x.s >= CMD_GOOD) : scored; // empty query = browse all
+  pal.hidden = false;
+  if (!good.length) {
+    // No good match — offer the full list behind a quiet "did you mean…?" row.
+    cmdActiveIdx = 0;
+    pal.innerHTML =
+      `<button type="button" class="cmd-opt cmd-dym is-active" data-cmdmore="1" role="option">` +
+      `<span class="cmd-opt-cmd muted">Did you mean…?</span>` +
+      `<span class="cmd-opt-desc muted">No “.${escapeHtml(q)}” command — tap to see all commands</span></button>`;
     return;
   }
-  if (cmdActiveIdx >= matches.length) cmdActiveIdx = 0;
-  pal.hidden = false;
-  pal.innerHTML = matches
+  if (cmdActiveIdx >= good.length) cmdActiveIdx = 0;
+  pal.innerHTML = good
     .map(
-      (c, i) =>
+      ({ c }, i) =>
         `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}" data-cmd="${escapeHtml(c.cmd)}" role="option">` +
         `<span class="cmd-opt-cmd">${escapeHtml(c.cmd)}</span><span class="cmd-opt-desc">${escapeHtml(c.desc)}</span></button>`,
     )
@@ -12955,14 +12984,16 @@ function setupCommandBar(): void {
     else if (e.key === "Enter") {
       e.preventDefault();
       const active = opts[cmdActiveIdx] ?? opts[0];
-      if (active?.dataset.cmd) runCommand(active.dataset.cmd);
+      if (active?.dataset.cmdmore) { input.value = "."; cmdActiveIdx = 0; renderCmdPalette("."); }
+      else if (active?.dataset.cmd) runCommand(active.dataset.cmd);
       else if (active?.dataset.searchact) runSearchAction(active.dataset.searchact);
     }
     else if (e.key === "Escape") { hideCmdPalette(); input.blur(); }
   });
   pal.addEventListener("click", (e) => {
     const opt = (e.target as HTMLElement).closest<HTMLElement>(".cmd-opt");
-    if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
+    if (opt?.dataset.cmdmore) { input.value = "."; cmdActiveIdx = 0; renderCmdPalette("."); input.focus(); } // "did you mean…?" → all commands
+    else if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
     else if (opt?.dataset.searchact) runSearchAction(opt.dataset.searchact);
   });
   // Close the palette on a click anywhere outside the bar.
