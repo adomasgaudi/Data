@@ -1548,7 +1548,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* The grid is its OWN 2-D scroll box (cards scroll horizontally AND vertically
    inside it), so the tools / hint / dot-minimap above it stay put, and the date
    header row can stick to the top while you scroll a tall card's rows. */
-.hh-grid { --hh-card-w: clamp(15rem, 86vw, 32rem); display: grid; gap: 0 0.6rem; overflow: auto; max-height: 72vh; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: stretch; }
+.hh-grid { --hh-card-w: clamp(15rem, 86vw, 32rem); display: grid; gap: 0 0.6rem; overflow: auto; overscroll-behavior: contain; max-height: 72vh; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: stretch; }
 /* Backing card per column (spans all rows) gives the bordered card look behind
    the transparent header + cells. */
 .hh-card { grid-row: 1 / -1; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); z-index: 0; }
