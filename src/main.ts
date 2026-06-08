@@ -11907,18 +11907,29 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
     || codeFor(e.name).toLowerCase().includes(q)
     || shortFor(e.name).toLowerCase().includes(q));
 }
-/** The group key (of the current Group-by dimension) an exercise falls under. */
-function waGroupKey(name: string): string {
-  if (waGroupBy === "none") return "";
+/** EVERY group key (of the current Group-by dimension) an exercise belongs to — an
+ * exercise in several muscle groups (e.g. a squat trains Quads AND Glutes) shows
+ * under each, not just its first. */
+function waGroupKeys(name: string): string[] {
+  if (waGroupBy === "none") return [""];
   // "Strength" is too broad: when grouping by Discipline, split strength lifts by
-  // their MUSCLE GROUP instead (Chest, Back, Quads…), so each shows as its own pill.
-  // The pills are still tagged as falling under Strength (see waGroupIsStrength).
+  // their MUSCLE GROUPS instead (Chest, Back, Quads…) — each as its own pill.
   if (waGroupBy === "discipline") {
-    const disc = waMeta(name, "discipline")[0] ?? "";
-    if (disc === "Strength") return waMeta(name, "muscleGroup")[0] ?? "Other";
-    if (disc === "Statics") return "Other"; // fold the tiny Statics discipline into the Other catch-all
+    const discs = waMeta(name, "discipline");
+    const out: string[] = [];
+    for (const disc of discs.length ? discs : ["Unassigned"]) {
+      if (disc === "Strength") { const mgs = waMeta(name, "muscleGroup"); out.push(...(mgs.length ? mgs : ["Other"])); }
+      else if (disc === "Statics") out.push("Other"); // fold the tiny Statics discipline into Other
+      else out.push(disc);
+    }
+    return [...new Set(out)];
   }
-  return waMeta(name, waGroupBy)[0] ?? "Unassigned";
+  const vals = waMeta(name, waGroupBy);
+  return vals.length ? [...new Set(vals)] : ["Unassigned"];
+}
+/** The PRIMARY group key (first) — for code that needs a single bucket. */
+function waGroupKey(name: string): string {
+  return waGroupKeys(name)[0]!;
 }
 /** True when a Discipline-grouping key is one of Strength's muscle-group sub-pills
  * (so the UI can show the subtle "Strength" umbrella tag). */
@@ -11943,7 +11954,9 @@ function waGroupRank(key: string): number {
 /** waChipListBase minus the exercises in turned-off groups (used by Select-all). */
 function waChipList(): { name: string; identity: ExerciseIdentity; missing?: boolean }[] {
   if (waGroupBy === "none" || waGroupsOff.size === 0) return waChipListBase();
-  return waChipListBase().filter((e) => !waGroupsOff.has(waGroupKey(e.name)));
+  // Multi-group: keep an exercise if ANY of its groups is still on (only drop it when
+  // every group it belongs to is turned off).
+  return waChipListBase().filter((e) => waGroupKeys(e.name).some((k) => !waGroupsOff.has(k)));
 }
 
 /** Re-fill BOTH selectors' chip lists (each from its own selection). */
@@ -11975,8 +11988,8 @@ function renderWaChipsScope(scope: SelScope): void {
   }
   const groups = new Map<string, typeof list>();
   for (const e of list) {
-    const key = waGroupKey(e.name);
-    (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
+    for (const key of waGroupKeys(e.name)) // an exercise shows under EVERY group it's in
+      (groups.get(key) ?? groups.set(key, []).get(key)!).push(e);
   }
   const chips = (items: typeof list) => `<div class="wa-ex-chips">${items.map((e) => waChipHtml(e.name, e.identity, e.missing)).join("")}</div>`;
   box.innerHTML = [...groups.entries()]
@@ -12080,8 +12093,8 @@ function waCatAllPill(list: readonly WaItem[]): string {
 function waCatPillsInner(list: readonly WaItem[]): string {
   const groups = new Map<string, WaItem[]>();
   for (const e of list) {
-    const k = waGroupKey(e.name);
-    (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
+    for (const k of waGroupKeys(e.name)) // an exercise shows under EVERY group it's in
+      (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
   }
   // Sort the pills by total SET COUNT (most-trained category first), then alpha —
   // so the categories you actually train lead, not a fixed taxonomy order.
@@ -12102,7 +12115,7 @@ function waCatPillsHtml(list: readonly WaItem[]): string {
 /** The exercises a category pill covers ("__all" = every shown exercise). */
 function waCatItems(key: string): WaItem[] {
   const list = waChipListBase();
-  return key === "__all" ? list : list.filter((e) => waGroupKey(e.name) === key);
+  return key === "__all" ? list : list.filter((e) => waGroupKeys(e.name).includes(key));
 }
 function openWaCatMenu(key: string, anchor: HTMLElement, scope: SelScope): void {
   waCatMenuKey = key;
