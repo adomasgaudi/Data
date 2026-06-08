@@ -226,6 +226,7 @@ const els = {
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
   athleteProfile: $("athleteProfile"),
+  bodyStatsSummary: $("bodyStatsSummary"),
   athleteStats: $("athleteStats"),
   momentum: $("momentum"),
   trainBreakdown: $("trainBreakdown"),
@@ -3148,8 +3149,12 @@ const bcPanel = (id: string, deriveHtml: string): string => `<div class="bc-pane
 function renderAthleteProfile() {
   const username = els.athlete.value;
   const p = athProfile(username);
+  // The collapsed "Body stats" summary shows the headline numbers compactly
+  // (bodyweight · bf · age · height · nFFMI) instead of just a title.
+  const setStatsSummary = (txt: string) => { if (els.bodyStatsSummary) els.bodyStatsSummary.textContent = txt; };
   const editBtn = `<div class="profile-edit-row"><button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button></div>`;
   if (!p) {
+    setStatsSummary("Body stats"); // no profile → keep the title as the collapsed label
     els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
@@ -3160,12 +3165,18 @@ function renderAthleteProfile() {
   const specs = [`${p.weight} kg`, `${p.height} cm`];
   if (p.age != null) specs.push(`age ${p.age}`);
   const specLine = `<span class="profile-specs">${specs.join("  ·  ")}</span>`;
+  // Compact collapsed-summary parts: bodyweight · bf · age · height (· nFFMI added below).
+  const sumParts = [`${p.weight} kg`, `${Math.round(dist.avg * 100)}% bf`];
+  if (p.age != null) sumParts.push(`${p.age}y`);
+  sumParts.push(`${p.height} cm`);
 
   const range = nffmiRange(p.weight, p.height, dist);
   if (!range) {
+    setStatsSummary(sumParts.join(" · "));
     els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
+  setStatsSummary([...sumParts, `${range.avg.toFixed(1)} nFFMI`].join(" · "));
   const f1 = (n: number) => n.toFixed(1);
   const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
   // nFFMI badge — headline number only; the detail lives in the line + ⓘ math.
