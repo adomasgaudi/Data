@@ -1793,6 +1793,41 @@ function setGroupRatio(groupId: string, exName: string, ratio: number): void {
   saveGroupMembers();
 }
 
+// ---- Per-group DISPLAY mode (Combined / Members / Both), editable ----------
+// A merge/compare group makes a synthetic combined lift AND keeps its members. The
+// display mode chooses what's shown in the picker: "combined" hides the members
+// (the default for 1:1 combine groups — they're one lift), "members" hides the
+// synthetic, "both" shows all. Saved on device; the registry's defaultDisplay seeds it.
+type GroupDisplay = "combined" | "members" | "both";
+const GROUP_DISPLAY_KEY = "colosseum.groupDisplay.v1";
+const groupDisplayOverrides: Record<string, GroupDisplay> = (() => {
+  try { return JSON.parse(localStorage.getItem(GROUP_DISPLAY_KEY) ?? "{}") as Record<string, GroupDisplay>; } catch { return {}; }
+})();
+function groupDisplayDefault(id: string): GroupDisplay {
+  const g = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].find((x) => x.id === id);
+  return g?.defaultDisplay ?? "both";
+}
+function groupDisplayFor(id: string): GroupDisplay {
+  return groupDisplayOverrides[id] ?? groupDisplayDefault(id);
+}
+function setGroupDisplay(id: string, mode: GroupDisplay): void {
+  if (mode === groupDisplayDefault(id)) delete groupDisplayOverrides[id];
+  else groupDisplayOverrides[id] = mode;
+  try { localStorage.setItem(GROUP_DISPLAY_KEY, JSON.stringify(groupDisplayOverrides)); } catch { /* ignore */ }
+}
+/** Exercise NAMES hidden from the picker by the per-group display mode: a
+ * "combined" group hides its member lifts (only the merged one shows); a "members"
+ * group hides the synthetic merged lift. */
+function groupDisplayHiddenNames(): Set<string> {
+  const hidden = new Set<string>();
+  for (const g of [...effectiveCombinableGroups(), ...effectiveComparableGroups()]) {
+    const mode = groupDisplayFor(g.id);
+    if (mode === "combined") for (const m of g.members ?? []) hidden.add(m.exerciseName);
+    else if (mode === "members") hidden.add(g.derivedName ?? g.label);
+  }
+  return hidden;
+}
+
 /** The combinable + comparable registry groups (with owner member edits applied),
  * in the shape withSyntheticGroups wants (id, derivedName, member→quotient map). */
 function syntheticGroupDefs(): SyntheticGroupDef[] {
@@ -7105,6 +7140,17 @@ function exerciseInfoHtml(name: string): string {
   };
   const combineChips = groupChips(COMBINABLE_GROUPS, "combine");
   const compareChips = groupChips(COMPARABLE_GROUPS, "compare");
+  // Per-group DISPLAY mode for any merge/compare group this lift is part of (as a
+  // member OR as the synthetic itself): a cycling pill Combined → Members → Both.
+  const groupsOfName = [...effectiveCombinableGroups(), ...effectiveComparableGroups()]
+    .filter((g) => (g.derivedName ?? g.label) === name || (g.members ?? []).some((m) => m.exerciseName === name));
+  const DISPLAY_LABEL: Record<GroupDisplay, string> = { combined: "Combined only", members: "Members only", both: "Show both" };
+  const displayChips = groupsOfName.length
+    ? `<span class="ex-meta-chips">` + groupsOfName.map((g) => {
+        const lbl = `${escapeHtml(g.derivedName ?? g.label)}: ${DISPLAY_LABEL[groupDisplayFor(g.id)]}`;
+        return `<button type="button" class="ex-meta-chip is-on wa-grpdisp" data-grpdisp-id="${escapeHtml(g.id)}" data-grpdisp-ex="${escapeHtml(name)}" title="What shows in the picker for this group — tap to cycle Combined only → Members only → Show both">${lbl}</button>`;
+      }).join("") + `</span>`
+    : "";
   // Bodyweight part is a RANGE (min–max); the 1RM uses the average (shown in gold).
   const cr = coeffRangeFor(name);
   const coeffInput =
@@ -7123,6 +7169,7 @@ function exerciseInfoHtml(name: string): string {
     item("Tier", tierChips),
     item("Combinable", combineChips),
     item("Comparable", compareChips),
+    displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
@@ -8715,6 +8762,16 @@ async function init() {
     if (!ex || !gid) return;
     toggleGroupMembership(gid, ex);
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
+  });
+  // Per-group display mode: cycle Combined only → Members only → Show both.
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".wa-grpdisp[data-grpdisp-id]");
+    const gid = chip?.dataset.grpdispId;
+    if (!gid) return;
+    const cur = groupDisplayFor(gid);
+    setGroupDisplay(gid, cur === "combined" ? "members" : cur === "members" ? "both" : "combined");
+    const ex = chip!.dataset.grpdispEx ?? null;
+    scheduleRender(() => { if (ex) reopenIndexDetail(ex); renderWorkoutAnalysis(); });
   });
   // The comparable-ratio input next to a selected comparable group chip.
   document.addEventListener("change", (e) => {
@@ -10771,7 +10828,11 @@ function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
   // before any sets are logged to them, and their declared identity always wins
   // (a defined name's name was rejected if it shadowed an existing lift).
   for (const d of userExerciseDefs) out.set(d.name, d.identity);
-  return [...out].map(([name, identity]) => ({ name, identity }));
+  // Per-group display mode: hide a combine group's members (or its synthetic) so
+  // merged lifts read as ONE entry by default. The records stay (the synthetic is
+  // still built from them); only the picker entry is hidden.
+  const hidden = groupDisplayHiddenNames();
+  return [...out].filter(([name]) => !hidden.has(name)).map(([name, identity]) => ({ name, identity }));
 }
 /** Exercises that EXIST in the data but aren't in this athlete's picker — either
  * filtered out (active-set / hidden sets) or never trained by them. Drawn from the
@@ -10779,10 +10840,11 @@ function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
  * the selector already shows. Greyed-out "missing" chips, for awareness. */
 function waMissingExercises(): { name: string; identity: ExerciseIdentity }[] {
   const shown = new Set(waSelectorExercises().map((e) => e.name));
+  const hidden = groupDisplayHiddenNames(); // intentionally hidden by display mode, not "missing"
   const out = new Map<string, ExerciseIdentity>();
   for (const r of data.records) {
     const n = r.exerciseName;
-    if (n === "" || shown.has(n) || out.has(n)) continue;
+    if (n === "" || shown.has(n) || hidden.has(n) || out.has(n)) continue;
     out.set(n, "original"); // raw logged lifts read as "original" in the picker
   }
   return [...out].map(([name, identity]) => ({ name, identity }));

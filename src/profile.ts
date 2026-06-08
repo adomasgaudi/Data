@@ -293,6 +293,11 @@ export interface RegistryTag {
   derivedName?: string;
   /** Dissolvable scaffold: the exercise members would fold into (unused for now). */
   dissolveInto?: string;
+  /** Default display for a combine/comparison group: "combined" shows ONLY the
+   * merged lift (members hidden), "members" shows only the members, "both" shows
+   * all. Combine (1:1 merge) groups default "combined" — they ARE one lift; the
+   * owner overrides per group. Omitted = "both". */
+  defaultDisplay?: "combined" | "members" | "both";
 }
 
 /**
@@ -396,19 +401,27 @@ export const FUNCTIONAL_PATTERN_TAGS: RegistryTag[] = [
     exclude: ["Ring Curl", "Cable Tricep Pushdown", "Seated Dip Machine"] },
 ];
 
-/** Combinable groups: members are the SAME lift, merged 1:1 into one staple. */
+/** Combinable groups: members are the SAME lift, merged 1:1 into one staple. They
+ * default to showing ONLY the combined lift (the members are hidden) — they ARE one
+ * lift; flip to Members/Both per group in the combine settings. */
 export const COMBINABLE_GROUPS: RegistryTag[] = [
-  { id: "combine.sq-mix", kind: "combinable-group", label: "SQ mix", derivedName: "SQ mix",
+  { id: "combine.sq-mix", kind: "combinable-group", label: "SQ mix", derivedName: "SQ mix", defaultDisplay: "combined",
     why: "Back squat and Smith-machine squat are the same pattern at the same loading — combined into one staple for volume / frequency / progress. The pure lifts stay untouched; in the active-set filter each member still passes or fails on its own count.",
     members: [
       { exerciseName: "Squat", ratio: 1 },
       { exerciseName: "Smith Machine Squat", ratio: 1 },
     ] },
-  { id: "combine.pull-mix", kind: "combinable-group", label: "Pull/Chin", derivedName: "Pull/Chin",
+  { id: "combine.pull-mix", kind: "combinable-group", label: "Pull/Chin", derivedName: "Pull/Chin", defaultDisplay: "combined",
     why: "Pull-ups and chin-ups are the same vertical pull at the same loading — combined into one staple for volume / frequency / progress. The pure lifts stay untouched; in the active-set filter each member still passes or fails on its own count.",
     members: [
       { exerciseName: "Pull Ups", ratio: 1 },
       { exerciseName: "Chin Ups", ratio: 1 },
+    ] },
+  { id: "combine.pushup-mix", kind: "combinable-group", label: "Push Up", derivedName: "Push Up", defaultDisplay: "combined",
+    why: "Floor push-ups and Smith-machine incline close-grip push-ups are merged into one Push Up staple, shown together by default. The Smith-incline sets stay as logged — each is auto-scaled to a floor-equivalent EFFORT by its incline note (a height in cm, a squat-rack hole, or a Smith notch; higher = easier), or flagged for review if the note isn't recognised. Volume / frequency / progress read as one lift.",
+    members: [
+      { exerciseName: "Push Ups", ratio: 1 },
+      { exerciseName: "Smith Machine Incline Close Grip Push Up", ratio: 1 },
     ] },
 ];
 
@@ -439,12 +452,8 @@ export const COMPARABLE_GROUPS: RegistryTag[] = [
       { exerciseName: "Bench Press", ratio: 1.0 },
       { exerciseName: "Dumbbell Bench Press", ratio: 0.9 },
     ] },
-  { id: "compare.pushup-pattern", kind: "comparable-group", label: "Push-up pattern", derivedName: "Push-up pattern",
-    why: "Push-up variants train the same push at different effective loads, scaled onto one curve. A Smith-machine incline close-grip push-up has the hands raised, so less bodyweight rests on them — it sits around 85% of a standard floor push-up for the same effort. A NEW synthetic lift; the underlying push-ups are never altered. (Tweak the ratio in the group's settings if it reads off.)",
-    members: [
-      { exerciseName: "Push Ups", ratio: 1.0 },
-      { exerciseName: "Smith Machine Incline Close Grip Push Up", ratio: 0.85 },
-    ] },
+  // (The push-ups are now a COMBINABLE group — "Push Up" above — not a scaled
+  // comparison: the Smith-incline sets fold in scaled per-set by their incline note.)
 ];
 
 /**

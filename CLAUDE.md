@@ -33,6 +33,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 20. **Dropdowns are the custom `.xdd` CSS/HTML dropdown, NEVER the native OS `<select>` picker** (native looks different on every device + ignores our styling). Every native single-`<select>` is auto-enhanced (`enhanceSelectTree` + a `MutationObserver` in init), so just emit a normal `<select>` and it's converted; never hand-roll a native picker. Exempt only: `<select multiple>`, the hidden mirrors (`#athlete`, `#viewAsSelect`), and anything under `[data-no-xdd]`.
 21. **User/Spectator (locked, non-admin) views show ONLY the logged-in athlete — never other athletes' chips, never the M/W sex menu, never admin-only tabs.** Anything that lets you pick or peek at another user is admin-only; locked views hide it entirely (not just disable it).
 22. **`#design` — corners use SMALL rounding, NEVER full/pill rounding:** no `border-radius: 999px`/`99px`/`50%` on buttons, chips, pills or inputs — use the `--r-pill` token (small radius) in `src/styles.css`. (Genuine circular dots/avatars may stay `50%`.)
+23. **Merge/combine groups show ONLY the combined lift by DEFAULT (members hidden); a per-group Combined·Members·Both setting overrides it — and a merged member keeps its OWN per-set scaling (Smith-incline push-ups auto-scale by their incline note, unrecognised → flagged for review), never a flat ratio.**
 
 ## Commands the owner types (act on these even with no other context)
 

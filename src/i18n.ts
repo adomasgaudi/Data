@@ -137,6 +137,11 @@ const LT: Record<string, string> = {
   "Dissolved": "Išskaidyti",
   "Combined": "Sujungti",
   "Comparison groups": "Palyginimo grupės",
+  // ---- Combine-group display mode (More info) ----
+  "Show in picker": "Rodyti rinkiklyje",
+  "Combined only": "Tik sujungtą",
+  "Members only": "Tik narius",
+  "Show both": "Rodyti abu",
   // ---- Momentum trend period ----
   "/wk": "/sav.",
   "/mo": "/mėn.",
