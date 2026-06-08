@@ -116,7 +116,7 @@ describe("graph config layer (TASK 29)", () => {
   it("has a default config with all settings", () => {
     expect(DEFAULT_GRAPH_CONFIG).toEqual({
       aggregation: "none", interval: "week", smoothing: 0, prediction: false, decay: false,
-      formula: "epley", predictionDays: 90, opacity: 0.6, rightHeadroom: 1, volumeYShift: 0, barGirth: 1,
+      formula: "epley", predictionDays: 90, opacity: 0.6, rightHeadroom: 1, volumeYShift: 0, barGirth: 1, spread: 0.9,
     });
   });
 });

@@ -35,6 +35,11 @@ export interface GraphConfig {
   /** Bar girth multiplier (≈0.5–3, default 1): scales the width of every bar so the
    * user can fatten thin grouped bars or slim them down. */
   barGirth: number;
+  /** Intra-day SPREAD (0..1) of a session's sets on the per-set / Weight-Range views:
+   * the fraction of a day's width the fan occupies (0 = stacked on one line, ~0.9 =
+   * spread across almost the whole day). Lets the user pick how separated same-day
+   * sets look. Default 0.9. */
+  spread: number;
   /** Render-time hook (NOT a persisted setting): a per-set reps-in-reserve
    * resolver the app injects so the scatter can size each dot by effort — higher
    * RIR (easier) draws smaller, the hardest stay biggest. Absent = uniform dots. */
@@ -53,4 +58,5 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   rightHeadroom: 1,
   volumeYShift: 0,
   barGirth: 1,
+  spread: 0.9,
 };

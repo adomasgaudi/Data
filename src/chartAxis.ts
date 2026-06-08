@@ -102,10 +102,11 @@ export interface TimeCompactor {
   from(c: number): number;
 }
 export function buildCompactor(times: Iterable<number>): TimeCompactor {
-  // Bucket to whole days (round, so a chart's intra-day fan offsets stay on their
-  // own day), then space the distinct days uniformly — one MS_DAY slot each.
+  // Bucket to whole days (FLOOR, so a chart's intra-day fan offsets — which span the
+  // WHOLE day, [0,1) — all stay on their own day), then space the distinct days
+  // uniformly — one MS_DAY slot each.
   const days = [
-    ...new Set([...times].filter((t) => Number.isFinite(t)).map((t) => Math.round(t / MS_DAY))),
+    ...new Set([...times].filter((t) => Number.isFinite(t)).map((t) => Math.floor(t / MS_DAY))),
   ].sort((a, b) => a - b);
   if (days.length < 2) return { to: (t) => t, from: (c) => c };
   const real = days.map((d) => d * MS_DAY); // real start-of-day timestamps
@@ -132,12 +133,12 @@ export function buildCompactor(times: Iterable<number>): TimeCompactor {
   // piecewise-linear day-start interpolation, which agrees at every day boundary so
   // the whole mapping stays monotonic.
   const to = (t: number): number => {
-    const d = Math.round(t / MS_DAY);
+    const d = Math.floor(t / MS_DAY);
     const slot = slotOf.get(d);
     return slot !== undefined ? slot * MS_DAY + (t - d * MS_DAY) : interp(real, comp, t);
   };
   const from = (cc: number): number => {
-    const slot = Math.round(cc / MS_DAY);
+    const slot = Math.floor(cc / MS_DAY);
     return slot >= 0 && slot < days.length ? days[slot]! * MS_DAY + (cc - slot * MS_DAY) : interp(comp, real, cc);
   };
   return { to, from };

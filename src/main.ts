@@ -12682,6 +12682,12 @@ function renderWaGraph(): void {
     const m = GRAPH_METRICS.find((x) => x.id === id);
     return !!m && (m.type === "bars" || m.axis === "right");
   });
+  // The Spread knob only matters for the PER-SET views (scatter dots / Weight Range
+  // bars), where same-day sets fan across the day — so it's shown only then.
+  const hasSetMetric = drawMetricIds.some((id) => {
+    const m = GRAPH_METRICS.find((x) => x.id === id);
+    return !!m && (m.type === "range" || m.type === "scatter");
+  });
   // The 15 metrics were one crowded wall of chips — split into a few collapsible
   // sub-groups (a group opens when it has an active metric). A metric still
   // blocked for the plotted lift(s) shows greyed-out with a needs-review tip.
@@ -12725,6 +12731,10 @@ function renderWaGraph(): void {
         `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
         `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
         `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates — the two only differ by axis, so the shift is vertical, not in time. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`
+      : "") +
+    // Set-spread knob only when a per-set / range metric is plotted.
+    (hasSetMetric
+      ? `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out across its day on the per-set / Weight Range views (left = stacked on one line, right = spread across the whole day).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="0.98" step="0.02" value="${c.spread}" /></label>`
       : "") +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
     `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
@@ -13317,6 +13327,7 @@ function setupWorkoutAnalysis(): void {
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
       else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
+      else if (key === "spread") waGraphConfig.spread = Math.min(0.98, Math.max(0, Number((el as HTMLInputElement).value)));
       else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;

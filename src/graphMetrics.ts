@@ -79,13 +79,11 @@ const ts = (d: string): number => Date.parse(d);
 const added = (r: SetRecord): number | null => (r.origWeight !== undefined ? r.origWeight : r.weight);
 
 // Same-day sets are fanned across this window of the day (fraction of 24h), in
-// logged set order. It stays inside the FIRST HALF of the day on purpose: the
-// compacted-time axis buckets a timestamp to its nearest day (round), so keeping
-// the whole fan within [0, 0.5) of the day guarantees every set of a session lands
-// on that day's slot (correct date) AND never bleeds into the next calendar day —
-// while still using as much width as possible so the sets read as distinct points.
-const FAN_LO = 0.05;
-const FAN_HI = 0.49;
+// logged set order, CENTRED on the day and as wide as the `spread` knob asks (0 =
+// stacked on one line, ~0.9 = almost the whole day). The compacted-time axis FLOORs
+// a timestamp to its day (see buildCompactor), so any fan offset in [0, 1) lands on
+// that day's slot (correct date) and never bleeds into the next calendar day.
+const DEFAULT_SPREAD = 0.9;
 
 /** Synthetic per-set timestamps. Logged sets carry only a date, so every set in a
  * day parses to midnight and stacks on one x (points hide behind each other). Fan
@@ -94,7 +92,11 @@ const FAN_HI = 0.49;
  * the day and never overflows it. The compacted axis preserves this intra-day fan
  * at full slot width (see buildCompactor), so the sets stay separated even when
  * long gaps squeeze the sessions together. */
-function setTimes(records: readonly SetRecord[]): Map<SetRecord, number> {
+function setTimes(records: readonly SetRecord[], spread: number = DEFAULT_SPREAD): Map<SetRecord, number> {
+  // The fan occupies `spread` of the day, centred on noon — clamped so it always
+  // stays strictly inside [0, 1) of the day (floor-bucketing needs that).
+  const half = Math.max(0.02, Math.min(0.49, (Number.isFinite(spread) ? spread : DEFAULT_SPREAD) / 2));
+  const lo = 0.5 - half, hi = 0.5 + half;
   const byDay = new Map<number, SetRecord[]>();
   for (const r of records) {
     const t = ts(r.date);
@@ -107,7 +109,7 @@ function setTimes(records: readonly SetRecord[]): Map<SetRecord, number> {
     const ordered = [...rs].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0));
     const n = ordered.length;
     ordered.forEach((r, i) => {
-      const frac = n <= 1 ? (FAN_LO + FAN_HI) / 2 : FAN_LO + (FAN_HI - FAN_LO) * (i / (n - 1));
+      const frac = n <= 1 ? 0.5 : lo + (hi - lo) * (i / (n - 1));
       out.set(r, day * DAY + frac * DAY);
     });
   }
@@ -121,7 +123,7 @@ function perSet(
   metaOf?: (r: SetRecord) => string,
   cfg?: GraphConfig,
 ): GraphPoint[] {
-  const times = setTimes(records);
+  const times = setTimes(records, cfg?.spread);
   const origins = distinctOrigins(records); // >1 → a combined/comparison lift
   const out: GraphPoint[] = [];
   for (const r of records) {
@@ -286,7 +288,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     label: "Weight Range",
     type: "range",
     compute: (rs, cfg) => {
-      const times = setTimes(rs);
+      const times = setTimes(rs, cfg.spread);
       const out: GraphPoint[] = [];
       for (const r of rs) {
         const reps = r.reps ?? 0;
