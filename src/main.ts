@@ -12080,17 +12080,18 @@ function renderWorkoutAnalysis(): void {
   // "what's on the graph" readout (the old separate count block is gone).
   const graphSummary = document.getElementById("waGraphSummary");
   if (graphSummary) {
-    // Up to 5 plotted lifts: name each as a button that REMOVES it from the graph
-    // (it stops the summary's collapse — see the data-graphremove handler). MORE than
-    // 5 would be a wall of text, so just show the COUNT ("N exercises") instead — pick
-    // them off in the picker below. The caret / empty title space still toggle the fold.
+    // Title = the total COUNT (always) + the first 5 lift names, each a button that
+    // REMOVES it from the graph (it stops the summary's collapse — see the
+    // data-graphremove handler), then a "…" when there are more than 5 (kept short so
+    // it never becomes a wall of text). The caret / empty space still toggle the fold.
+    const SHOWN = 5;
     graphSummary.innerHTML = waGraphSel.length === 0
       ? "Graph"
-      : waGraphSel.length > 5
-        ? `<span class="wa-seltitle">${waGraphSel.length} exercises</span>`
-        : `<span class="wa-seltitle">` +
-          waGraphSel.map((n) => `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join(`<span class="wa-title-sep"> · </span>`) +
-          `</span>`;
+      : `<span class="wa-title-count" title="${waGraphSel.length} lifts on the graph">${waGraphSel.length}</span>` +
+        `<span class="wa-seltitle">` +
+        waGraphSel.slice(0, SHOWN).map((n) => `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join(`<span class="wa-title-sep"> · </span>`) +
+        (waGraphSel.length > SHOWN ? `<span class="wa-title-more" title="${waGraphSel.length - SHOWN} more — trim in the picker below">… +${waGraphSel.length - SHOWN}</span>` : "") +
+        `</span>`;
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
