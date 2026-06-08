@@ -3187,10 +3187,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-sel-cog-sum::-webkit-details-marker { display: none; }
 .wa-sel-cog[open] .wa-sel-cog-sum { color: var(--text); border-color: var(--accent); }
 .wa-sel-cog-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; /* floating menu — above the sticky selector (z-index 35) */
+  /* RIGHT-aligned: the ⚙ sits at the right of the tools row, so opening leftward
+     keeps the menu on-screen (left:0 ran it off the right edge). z-index above the
+     sticky selector (z-index 35). */
+  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; left: auto;
   display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 13rem; white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 13rem; max-width: 92vw; white-space: nowrap;
 }
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
 .wa-inc input { cursor: pointer; }
