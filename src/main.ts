@@ -11781,7 +11781,7 @@ const WA_DIM_SHORT: Partial<Record<ExerciseFilterDim, string>> = {
 // many are hidden, and still tap one to select it.
 let waShowMissing = false;
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
-const waMetrics = new Set<string>(["e1rm"]);
+const waMetrics = new Set<string>(["e1rm", "strength"]); // default graph view: 1RM + Strength score (no decay)
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
