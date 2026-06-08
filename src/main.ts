@@ -2290,18 +2290,10 @@ function originBadge(name: string, plain = false): string {
 }
 
 function renderStatus() {
-  const users = distinctUsers(data.records).length;
-  let latest: string | null = null;
-  for (const r of data.records) if (r.date && (latest === null || r.date > latest)) latest = r.date;
-
-  let html = `${data.records.length.toLocaleString()} sets · ${users} athletes`;
-  if (latest) html += ` · latest ${latest}`;
-  // The badges open the Data-health page (which lists each issue/warning).
-  if (data.issues.length)
-    html += ` <button type="button" class="badge warn badge-link">${data.issues.length} parse issues</button>`;
-  if (data.warnings.length)
-    html += ` <button type="button" class="badge warn badge-link">${data.warnings.length} sanity warnings</button>`;
-  els.status.innerHTML = html;
+  // The dataset summary ("N sets · M athletes · latest …") and the parse-issues /
+  // sanity-warnings badges were removed from the footer (clutter). The footer stays
+  // hidden; data health is still reachable from Settings → Data health.
+  els.status.innerHTML = "";
 }
 
 /** Open the data-health overlay (from Settings or the status-bar badges). */
@@ -8922,6 +8914,7 @@ async function init() {
     data = await loadData();
     clearMachineCache(); // fresh records → rebuild any mixed-mode verdicts
   } catch (err) {
+    els.status.closest(".appfoot")?.removeAttribute("hidden"); // surface the fatal error
     els.status.innerHTML = `<span class="badge warn">Failed to load data</span> ${escapeHtml(String(err))}`;
     return;
   }
