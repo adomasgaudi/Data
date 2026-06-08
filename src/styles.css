@@ -142,9 +142,9 @@ body {
 /* Quick view switcher: two compact cycling toggles in the header (no wrap). */
 .view-switch { display: inline-flex; gap: 0.3rem; flex: none; white-space: nowrap; }
 .vs-toggle {
-  font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  font: inherit; font-size: 0.99rem; font-weight: 700; cursor: pointer; white-space: nowrap;
   color: var(--accent); background: var(--accent-soft);
-  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 1px 7px;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 11px;
 }
 .vs-toggle:hover { filter: brightness(0.97); }
 /* Effort badge on the tiny version line. */
