@@ -3544,17 +3544,21 @@ function renderAthleteProfile() {
   const potSeg = potH > 0.5
     ? seg("bc-seg-leanpot", potH, "Build", potLbl, ` title="Muscle still buildable to your natural cap (nFFMI ${f1s(ffmiCapFor(username))}, editable in ✎ Edit): lean cap ${f1s(leanCapKg)} kg"`)
     : "";
-  const massBar =
+  // Order top→bottom: Fat, Lean, then the buildable-muscle ("possible muscle")
+  // headroom BELOW the lean block. The dashed ideal-fat zone stays absolutely
+  // positioned on the fat region regardless of segment order.
+  const bcBar =
     `<div class="bc-massbar" title="Body composition — lean vs fat mass; dashed = muscle still buildable to your natural cap" aria-label="Lean ${leanLbl}, Fat ${fatLbl}, buildable ${potLbl}">` +
     seg("bc-seg-fat", fatH, "Fat", fatLbl) +
-    potSeg +
     seg("bc-seg-lean", leanH, "Lean", leanLbl) +
+    potSeg +
     idealBand +
-    `</div>` +
-    `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;
+    `</div>`;
+  const unitToggle = `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;
+  // Caption sits right under the bar (close to the lean block), toggle last.
   const massView =
     `<div class="bc-massview">` +
-    `<div class="bc-masscol">${massBar}${idealCap}</div>` +
+    `<div class="bc-masscol">${bcBar}${idealCap}${unitToggle}</div>` +
     `<div class="bc-massside">${badge} ${specLine}${bodyComp}${potBlock}</div>` +
     `</div>`;
   els.athleteProfile.innerHTML = editBtn + massView;
