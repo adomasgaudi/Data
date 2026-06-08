@@ -10793,7 +10793,7 @@ function renderSelector(scope: SelScope): void {
     selPills = `<div class="wa-sel-pills">` +
       cur.map((n) => {
         const g = onGraph.has(n);
-        const dot = g ? `<span class="wa-sel-graphdot" aria-hidden="true">📈</span>` : "";
+        const dot = g ? `<span class="wa-sel-graphdot" aria-hidden="true"></span>` : "";
         const title = scope === "graph"
           ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${WA_GRAPH_MAX}-lift limit · tap to remove ${n}`)
           : `Tap to remove ${n}`;
