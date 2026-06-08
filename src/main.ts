@@ -11540,13 +11540,106 @@ type SelScope = "graph" | "hist";
 let curSelScope: SelScope = "hist";
 function selArr(): string[] { return curSelScope === "graph" ? waGraphSel : waSelected; }
 function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel = v; else waSelected = v; }
+// ---- "Best lifts" + "Frequency" special group-by modes -------------------
+// Two extra Group-by options that aren't taxonomy buckets but RANKED flat lists:
+//   • frequency — the athlete's lifts sorted by set (or hard-set) count over a
+//     chosen period (top-trained first).
+//   • bestlifts — only the powerlifting trio (squat / bench / deadlift), sorted by
+//     how close the athlete is to the world record for their optimal weight class.
+type FreqPeriod = "1w" | "1mo" | "3mo" | "1y" | "all";
+let waFreqPeriod: FreqPeriod = "1mo";
+let waFreqMetric: "sets" | "hard" = "sets";
+const FREQ_PERIOD_NEXT: Record<FreqPeriod, FreqPeriod> = { "1w": "1mo", "1mo": "3mo", "3mo": "1y", "1y": "all", all: "1w" };
+const FREQ_PERIOD_LABEL: Record<FreqPeriod, string> = { "1w": "1 week", "1mo": "1 month", "3mo": "3 months", "1y": "1 year", all: "all time" };
+function isSpecialGroupBy(g: typeof waGroupBy): g is "frequency" | "bestlifts" {
+  return g === "frequency" || g === "bestlifts";
+}
+/** ISO start date for the frequency period (null = all time). */
+function freqPeriodStart(): string | null {
+  if (waFreqPeriod === "all") return null;
+  const d = new Date(`${todayIso()}T00:00:00Z`);
+  if (waFreqPeriod === "1w") d.setUTCDate(d.getUTCDate() - 7);
+  else if (waFreqPeriod === "1mo") d.setUTCMonth(d.getUTCMonth() - 1);
+  else if (waFreqPeriod === "3mo") d.setUTCMonth(d.getUTCMonth() - 3);
+  else if (waFreqPeriod === "1y") d.setUTCFullYear(d.getUTCFullYear() - 1);
+  return d.toISOString().slice(0, 10);
+}
+/** Set (or hard-set) counts per exercise for the current athlete over the chosen
+ * frequency period. */
+function freqCounts(): Map<string, number> {
+  const since = freqPeriodStart();
+  const user = els.athlete.value;
+  let recs = activeRecords().filter((r) => r.username === user && r.exerciseName !== "" && (!since || r.date >= since));
+  if (waFreqMetric === "hard") recs = applyHardSetsFilter(recs);
+  const m = new Map<string, number>();
+  for (const r of recs) m.set(r.exerciseName, (m.get(r.exerciseName) ?? 0) + 1);
+  return m;
+}
+/** The three "best lifts" (powerlifting trio) mapped to the exercise name to plot
+ * for the CURRENT athlete — the squat prefers the combined "SQ mix" if present. */
+function bestLiftExercises(): { lift: PowerLift; exercise: string }[] {
+  const names = new Set(waSelectorExercises().map((e) => e.name));
+  const squat = names.has("SQ mix") ? "SQ mix" : "Squat";
+  return [
+    { lift: "squat", exercise: squat },
+    { lift: "bench", exercise: "Bench Press" },
+    { lift: "deadlift", exercise: "Deadlift" },
+  ];
+}
+/** An athlete's % of the world record for one best-lift: best estimated 1RM ÷ the
+ * world record for their optimal weight class. null with no profile / no logged lift. */
+function bestLiftPercent(username: string, lift: PowerLift, exercise: string): number | null {
+  const p = athProfile(username);
+  if (!p) return null;
+  const pot = naturalPotential(p.height, p.sex, ffmiCapFor(username));
+  if (!pot) return null;
+  const cls = weightClassFor(p.sex, pot.idealPower.avg);
+  const wr = recordFor(p.sex, cls.label, lift);
+  const best = bestE1rmByUser(exercise).get(username) ?? null;
+  return percentOfRecord(best, wr);
+}
+interface SpecialItem { name: string; identity: ExerciseIdentity; missing?: boolean; metric: string; }
+/** The ranked flat list for a special group-by mode (frequency / bestlifts), built
+ * from the base picker list so identity + search filters still apply. */
+function waSpecialList(): SpecialItem[] {
+  const base = waChipListBase();
+  const byName = new Map(base.map((e) => [e.name, e]));
+  if (waGroupBy === "bestlifts") {
+    const user = els.athlete.value;
+    const scored = bestLiftExercises().flatMap(({ lift, exercise }) => {
+      const e = byName.get(exercise);
+      if (!e) return [];
+      return [{ e, pct: bestLiftPercent(user, lift, exercise) }];
+    });
+    scored.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
+    return scored.map(({ e, pct }): SpecialItem => ({
+      name: e.name, identity: e.identity, ...(e.missing ? { missing: true } : {}),
+      metric: pct === null ? "—" : `${pct}%`,
+    }));
+  }
+  const counts = freqCounts();
+  return base
+    .map((e) => ({ e, count: counts.get(e.name) ?? 0 }))
+    .filter((x) => x.count > 0)
+    .sort((a, b) => b.count - a.count || a.e.name.localeCompare(b.e.name))
+    .map(({ e, count }): SpecialItem => ({
+      name: e.name, identity: e.identity, ...(e.missing ? { missing: true } : {}),
+      metric: String(count),
+    }));
+}
+
 // One-time seed: the beginning ANL view is a real PRE-SELECTION of ALL the
 // athlete's lifts (so the pills show), not a special aggregate view.
 let analysisSeeded = false;
-/** The default analysis selection: ALL of the athlete's logged lifts (most-trained
- * first). The graph still caps at WA_GRAPH_MAX, so extras are listed, not drawn. */
+/** The default analysis selection: the powerlifting trio ("best lifts") the athlete
+ * actually has logged, so the graph opens showing just those three. Falls back to
+ * all logged lifts (most-trained first) if none of the trio are present. */
 function defaultSelection(): string[] {
-  return exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+  const user = els.athlete.value;
+  const has = new Set(waSelectorExercises().map((e) => e.name));
+  const best = bestLiftExercises().map((b) => b.exercise).filter((n) => has.has(n));
+  if (best.length) return best;
+  return exerciseCountsForUser(activeRecords(), user).map((c) => c.exerciseName);
 }
 /** Max SERIES plotted on the analysis graph at once (users × exercises) — past this
  * the SVG redraw lags, so extra selections are listed but not drawn (see
@@ -11610,7 +11703,7 @@ let searchFindHistory = false;
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
-let waGroupBy: "none" | ExerciseFilterDim = "discipline"; // default: group the selector by Discipline
+let waGroupBy: "none" | ExerciseFilterDim | "frequency" | "bestlifts" = "bestlifts"; // default: rank the powerlifting trio by world-record %
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
 // toggle. Replaces the old separate Filter button.
@@ -11948,11 +12041,18 @@ function renderSelector(scope: SelScope): void {
     `<button type="button" class="wa-name-opt name-mode-opt" data-waname="${nextName}" title="Lift labels — tap to cycle: code → short → full">${nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full"}</button>`;
   const groupOpts =
     `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
+    `<option value="bestlifts"${waGroupBy === "bestlifts" ? " selected" : ""}>Best lifts</option>` +
+    `<option value="frequency"${waGroupBy === "frequency" ? " selected" : ""}>Frequency</option>` +
     WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
+  // Frequency sub-controls: a period pill (cycles) + a sets/hard-sets pill.
+  const freqCtl = waGroupBy === "frequency"
+    ? `<button type="button" class="wa-clear wa-freq-period" title="Period for the set counts — tap to cycle">${FREQ_PERIOD_LABEL[waFreqPeriod]}</button>` +
+      `<button type="button" class="wa-clear wa-freq-metric${waFreqMetric === "hard" ? " is-on" : ""}" title="Count all sets, or only hard sets — tap to toggle">${waFreqMetric === "hard" ? "Hard sets" : "Sets"}</button>`
+    : "";
   const searchActive = waSearchQuery.trim()
     ? `<button type="button" class="wa-searchclear wa-search-active" title="Clear search">🔎 “${escapeHtml(waSearchQuery.trim())}” ✕</button>`
     : "";
-  const modeToggle = waGroupBy !== "none"
+  const modeToggle = waGroupBy !== "none" && !isSpecialGroupBy(waGroupBy)
     ? `<button type="button" class="wa-chipsmode wa-clear" title="Switch the pills between individual exercises and whole categories">Pills: ${waChipsMode === "categories" ? "Categories" : "Exercises"}</button>`
     : "";
   const missingCount = waMissingExercises().length;
@@ -11996,7 +12096,7 @@ function renderSelector(scope: SelScope): void {
   // a "Trim to N" button; the history selector has no cap.
   const graphCap = graphExerciseCap();
   const onGraph = scope === "graph" ? new Set(cur.slice(0, graphCap)) : new Set<string>();
-  const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
+  const stickyCats = waChipsMode === "categories" && waGroupBy !== "none" && !isSpecialGroupBy(waGroupBy);
   // One removable selected-lift pill (shared by the category strip's "picked" row and
   // the Exercises-mode selected row). On the GRAPH selector the first N are marked 📈.
   const selPill = (n: string): string => {
@@ -12041,7 +12141,7 @@ function renderSelector(scope: SelScope): void {
   sel.innerHTML =
     bigSel +
     `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${groupCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
+    `<div class="wa-sel-tools">${groupCtl}${freqCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
     `</div>` +
     selPills +
     (showGrid ? `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` : "");
@@ -12059,6 +12159,15 @@ function waChipHtml(name: string, identity: ExerciseIdentity, missing = false): 
   // (so you can check a lift that's buried in history without hunting for it).
   const title = missing ? `${name} — hidden (filtered out or never trained)` : `${name} (${identity})`;
   return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)}<span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
+}
+
+/** An exercise chip for a special (ranked) group-by mode — like {@link waChipHtml}
+ * but with the ranking metric (set count, or % of world record) shown on the pill. */
+function waSpecialChipHtml(name: string, identity: ExerciseIdentity, metric: string, missing = false): string {
+  const on = selArr().includes(name);
+  const label = displayName(name);
+  const title = missing ? `${name} — hidden (filtered out or never trained)` : `${name} (${identity})`;
+  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)} <span class="wa-ex-metric">${escapeHtml(metric)}</span><span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
@@ -12087,7 +12196,8 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
  * exercise in several muscle groups (e.g. a squat trains Quads AND Glutes) shows
  * under each, not just its first. */
 function waGroupKeys(name: string): string[] {
-  if (waGroupBy === "none") return [""];
+  // Special modes are flat ranked lists, not taxonomy buckets — no group keys.
+  if (waGroupBy === "none" || isSpecialGroupBy(waGroupBy)) return [""];
   // "Strength" is too broad: when grouping by Discipline, split strength lifts by
   // their MUSCLE GROUPS instead (Chest, Back, Quads…) — each as its own pill.
   if (waGroupBy === "discipline") {
@@ -12129,6 +12239,8 @@ function waGroupRank(key: string): number {
 }
 /** waChipListBase minus the exercises in turned-off groups (used by Select-all). */
 function waChipList(): { name: string; identity: ExerciseIdentity; missing?: boolean }[] {
+  // Special modes are their own ranked list (so Select-all / counts reflect it).
+  if (isSpecialGroupBy(waGroupBy)) return waSpecialList().map(({ metric: _m, ...e }) => e);
   if (waGroupBy === "none" || waGroupsOff.size === 0) return waChipListBase();
   // Multi-group: keep an exercise if ANY of its groups is still on (only drop it when
   // every group it belongs to is turned off).
@@ -12149,6 +12261,15 @@ function renderWaChipsScope(scope: SelScope): void {
   const list = waChipListBase(); // ALL groups (so an off group still shows its header)
   if (list.length === 0) {
     box.innerHTML = `<p class="muted wa-placeholder">No exercises match the search.</p>`;
+    return;
+  }
+  // Special modes (frequency / best lifts): a flat list of exercise pills ranked by
+  // their metric (set count, or % of world record), the metric shown on each pill.
+  if (isSpecialGroupBy(waGroupBy)) {
+    const items = waSpecialList();
+    box.innerHTML = items.length
+      ? `<div class="wa-ex-chips">${items.map((e) => waSpecialChipHtml(e.name, e.identity, e.metric, e.missing)).join("")}</div>`
+      : `<p class="muted wa-placeholder">${waGroupBy === "bestlifts" ? "None of the three powerlifting lifts are logged for this athlete." : "No sets logged in this period."}</p>`;
     return;
   }
   // Categories mode (manual toggle): one pill per group — counts + sub-groups —
@@ -13141,6 +13262,17 @@ function setupWorkoutAnalysis(): void {
     if (t.closest(".wa-chipsmode")) {
       waChipsMode = waChipsMode === "categories" ? "exercises" : "categories";
       closeWaCatMenu();
+      deferRender(renderWorkoutAnalysis);
+      return;
+    }
+    // Frequency mode: cycle the period, or toggle sets ⇄ hard sets.
+    if (t.closest(".wa-freq-period")) {
+      waFreqPeriod = FREQ_PERIOD_NEXT[waFreqPeriod];
+      deferRender(renderWorkoutAnalysis);
+      return;
+    }
+    if (t.closest(".wa-freq-metric")) {
+      waFreqMetric = waFreqMetric === "sets" ? "hard" : "sets";
       deferRender(renderWorkoutAnalysis);
       return;
     }
