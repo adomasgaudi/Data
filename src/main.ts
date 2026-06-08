@@ -3095,10 +3095,13 @@ function buildAthleteChips() {
 // Athlete-picker sex filter: always "m" OR "f" (no "both"/all). It auto-switches
 // to the selected athlete's sex, and tapping M/W narrows the chips to that sex.
 let athleteSexFilter: "m" | "f" = "m";
-/** Light up the M / W toggle button matching the current filter. */
+/** The single M/W toggle shows the current sex and cycles on tap. */
 function syncSexToggle() {
-  for (const b of els.athleteSexFilter.querySelectorAll<HTMLButtonElement>(".seg-btn"))
-    b.classList.toggle("is-active", b.dataset.athsex === athleteSexFilter);
+  const btn = els.athleteSexFilter;
+  btn.textContent = athleteSexFilter === "m" ? "M" : "W";
+  btn.dataset.athsex = athleteSexFilter;
+  btn.classList.toggle("is-women", athleteSexFilter === "f");
+  btn.title = athleteSexFilter === "m" ? "Showing men — tap for women" : "Showing women — tap for men";
 }
 
 /** Mark the chip matching the selected athlete active (chips mirror the select).
@@ -3107,20 +3110,29 @@ function syncSexToggle() {
 function syncAthleteChips() {
   const active = els.athlete.value;
   const locked = lockedUsername(); // null in admin; the locked athlete otherwise
+  // In a locked (user/spectator) view you only ever see yourself: hide the M/W sex
+  // menu and every other athlete's chip entirely (not just disable them).
+  els.athleteSexFilter.hidden = locked !== null;
   for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
-    // Hide chips that don't match the chosen sex (the active one stays visible
-    // so you can always see who's currently selected).
+    if (locked !== null) {
+      // Locked view: show ONLY the locked user's chip; no sex filtering, no lock-out
+      // styling on others (they're gone), nothing else selectable.
+      btn.hidden = btn.dataset.username !== locked;
+      btn.disabled = false;
+      btn.classList.remove("is-sexhidden", "is-locked");
+      if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
+      continue;
+    }
+    // Admin: every chip is selectable; the M/W filter hides the other sex (the
+    // active one stays visible so you can always see who's currently selected).
+    btn.hidden = false;
+    btn.disabled = false;
+    btn.classList.remove("is-locked");
     const sex = athProfile(btn.dataset.username ?? "")?.sex;
-    const sexHidden = sex !== athleteSexFilter && !on;
-    btn.classList.toggle("is-sexhidden", sexHidden);
-    const disabled = locked !== null && btn.dataset.username !== locked;
-    btn.disabled = disabled;
-    btn.classList.toggle("is-locked", disabled);
-    // Bring the selected chip into view in the horizontally-scrolling row so it's
-    // visible in the sticky bar even if it was scrolled off to the side.
+    btn.classList.toggle("is-sexhidden", sex !== athleteSexFilter && !on);
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 }
@@ -8526,12 +8538,9 @@ async function init() {
   els.excludeDropsets.addEventListener("change", () => scheduleRender());
   els.athlete.addEventListener("change", () => deferRender(renderAthlete));
   // Clicking a custom chip drives the hidden <select> (single source of truth).
-  els.athleteSexFilter.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".seg-btn");
-    const v = btn?.dataset.athsex;
-    if (v !== "m" && v !== "f") return;
-    // Always Men OR Women (no "both") — tapping a side just narrows to that sex.
-    athleteSexFilter = v;
+  els.athleteSexFilter.addEventListener("click", () => {
+    // Single cycling toggle: Men ⇄ Women (always one or the other, never "both").
+    athleteSexFilter = athleteSexFilter === "m" ? "f" : "m";
     syncSexToggle();
     syncAthleteChips(); // re-apply the visible/hidden chip set
   });

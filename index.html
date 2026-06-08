@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.90</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.91</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -196,13 +196,12 @@
            No longer user-reachable — the "Legacy exercises" menu entry was removed
            (Analysis supersedes it); this stays only as the panels' home in the DOM. -->
       <div id="tab-athlete" class="tab-panel" hidden>
-        <!-- Athlete picker: a compact M/W sex toggle (off = all) sits inline at the
-             start of the same row as the horizontally-scrolling name chips. -->
+        <!-- Athlete picker: a single M/W sex toggle (cycles Men ⇄ Women) sits inline
+             at the start of the same row as the horizontally-scrolling name chips.
+             Both the toggle and the other-athlete chips are HIDDEN in user/spectator
+             (locked) views — there you only ever see yourself. -->
         <div class="ath-row">
-          <div id="athleteSexFilter" class="seg-toggle ath-sex" role="group" aria-label="Filter athletes by sex (off = all)">
-            <button type="button" class="seg-btn" data-athsex="m" aria-label="Men only" title="Men only (tap again for all)">M</button>
-            <button type="button" class="seg-btn" data-athsex="f" aria-label="Women only" title="Women only (tap again for all)">W</button>
-          </div>
+          <button type="button" id="athleteSexFilter" class="ath-sex-toggle ath-sex" data-athsex="m" aria-label="Filter athletes by sex" title="Showing men — tap for women">M</button>
           <!-- Custom athlete picker (HTML/CSS chips). The hidden <select> keeps the
                selected username as the single source of truth the rest of the app
                reads via els.athlete.value. AI-NOTE: keep chips + select in sync via

@@ -648,9 +648,18 @@ main { padding-bottom: 5rem; }
 .athlete-chip.is-locked:hover { color: var(--muted); border-color: var(--line); }
 /* Hidden by the Men/Women athlete-picker filter. */
 .athlete-chip.is-sexhidden { display: none; }
-/* Compact M/W toggle, pinned (opaque, on top) at the start of the athlete row so
-   the scrolling name chips clip beside it and never show behind it. */
-.ath-sex { flex: 0 0 auto; margin: 0; align-self: center; position: relative; z-index: 2; background: var(--bg); }
+/* Single cycling M/W toggle, pinned (opaque, on top) at the start of the athlete
+   row so the scrolling name chips clip beside it and never show behind it. One tap
+   flips Men ⇄ Women; it shows the current sex (M blue / W pink). Hidden entirely in
+   user/spectator views (you only see yourself there). */
+.ath-sex { flex: 0 0 auto; margin: 0; align-self: center; position: relative; z-index: 2; }
+.ath-sex-toggle {
+  width: 2.2rem; height: 2.2rem; display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: #fff;
+}
+.ath-sex-toggle.is-women { background: #c2548a; border-color: #c2548a; }
+.ath-sex-toggle[hidden] { display: none; }
 /* Collapsible "stats & training mix" so the page stays short by default. */
 /* Its own card so it clearly reads as a collapsible section. */
 .athlete-details {
