@@ -1060,14 +1060,6 @@
                collapse independently inside the joint one. -->
           <details class="wa-fold wa-fold-titled" open>
             <summary class="wa-fold-sum" id="waCalHistSummary">Calendar &amp; history</summary>
-            <!-- The training-year heatmap (#workoutCalendar) is relocated here in
-                 EVERY mode so it never disappears; with exercises selected it
-                 highlights only those lifts' squares. Returned to #workoutsPanel
-                 on leave. Collapsed by default. -->
-            <details class="wa-fold wa-subfold">
-              <summary class="wa-fold-sum">Training calendar</summary>
-              <div id="waCalendarHost" class="wa-section"></div>
-            </details>
             <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
             <!-- Taxonomy / machine-type editor (single mode) follows the selector. -->
             <div id="waAssign" class="wa-section"></div>
@@ -1090,6 +1082,14 @@
           <details class="wa-fold wa-fold-titled" id="waHistHorizFold">
             <summary class="wa-fold-sum">Horizontal history <span class="muted hh-exp">experimental</span></summary>
             <div id="waHistHoriz" class="wa-section"></div>
+          </details>
+          <!-- The training-year heatmap (#workoutCalendar) is relocated here in EVERY
+               mode so it never disappears; with exercises selected it highlights only
+               those lifts' squares. Returned to #workoutsPanel on leave. Sits below the
+               history (it's still being built — tagged "developing"). Collapsed by default. -->
+          <details class="wa-fold wa-fold-titled" id="waCalendarFold">
+            <summary class="wa-fold-sum">Training calendar <span class="muted hh-exp">developing</span></summary>
+            <div id="waCalendarHost" class="wa-section"></div>
           </details>
         </section>
       </div>

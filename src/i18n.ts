@@ -248,6 +248,8 @@ const LT: Record<string, string> = {
   "Workouts": "Treniruotės",
   "Horizontal history": "Horizontali istorija",
   "experimental": "eksperimentinis",
+  "developing": "kuriama",
+  "Training calendar": "Treniruočių kalendorius",
   "— rows ordered by recent activity, aligned across time": "— eilutės surikiuotos pagal naujausią aktyvumą, sulygiuotos laike",
   "No workouts to show.": "Nėra treniruočių.",
   "Tags": "Žymos",
