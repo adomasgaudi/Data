@@ -2826,7 +2826,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    not be an overflow scroll container or sticky can't pin to the viewport. */
 #tab-analysis > .panel { overflow: visible; }
 .wa-selector-sticky {
-  position: sticky; top: 0; z-index: 50;
+  /* z-index 35: ABOVE scrolling content (auto/0) and the athlete row (30) so it
+     stays visible while pinned, but BELOW every floating dropdown menu (graph
+     options 41, legend / ⚙ / Group menus 40, Exercises chip menu 40) so an OPEN
+     menu is never covered by this sticky bar. Persistent bug PB-1 — see
+     docs/persistent-bugs.md: do NOT raise this above the menus (that just forces
+     each menu's z-index up in an escalation war and the next new menu regresses). */
+  position: sticky; top: 0; z-index: 35;
   margin: 0 0 0.4rem; padding: 0.45rem 0;
   background: var(--panel); border-bottom: 1px solid var(--line);
 }
@@ -2848,7 +2854,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    small pill button), so the menu is exactly the panel's width and can never spill
    off the left or right edge of the screen. The chip grid inside just wraps. */
 .wa-sel-tools .wa-fe-menu {
-  position: absolute; z-index: 55; top: calc(100% + 4px); /* above the sticky hist selector (z-index 50) */
+  position: absolute; z-index: 40; top: calc(100% + 4px); /* floating menu — above the sticky selector (z-index 35) */
   left: 0; right: 0; width: auto; min-width: 0; max-width: none; padding: 0.7rem;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
@@ -2863,7 +2869,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-sel-cog-sum::-webkit-details-marker { display: none; }
 .wa-sel-cog[open] .wa-sel-cog-sum { color: var(--text); border-color: var(--accent); }
 .wa-sel-cog-menu {
-  position: absolute; z-index: 55; top: calc(100% + 4px); left: 0; /* above the sticky hist selector (z-index 50) */
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; /* floating menu — above the sticky selector (z-index 35) */
   display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 13rem; white-space: nowrap;
