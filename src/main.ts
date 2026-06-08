@@ -11818,9 +11818,11 @@ function renderWorkoutAnalysis(): void {
   // view opens as a real selection (pills shown), not the implicit aggregate.
   if (!analysisSeeded) {
     analysisSeeded = true;
-    const all = defaultSelection();
+    const all = defaultSelection(); // most-trained first (sorted by set count)
     if (waSelected.length === 0) waSelected = all;
-    if (waGraphSel.length === 0) waGraphSel = [...all];
+    // The GRAPH opens with just the TOP 3 most-trained lifts (plotting all ~200 at
+    // once is unreadable) — add more from the picker as needed.
+    if (waGraphSel.length === 0) waGraphSel = all.slice(0, 3);
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
