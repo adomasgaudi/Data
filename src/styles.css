@@ -2815,6 +2815,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-cat-count { font-weight: 600; color: var(--accent); }
 .wa-cat-pill.is-full .wa-cat-count { color: var(--accent); }
 .wa-cat-sub { font-size: 0.66rem; }
+/* Subtle "Strength" umbrella tag on a muscle-group pill/header (Discipline grouping
+   splits Strength by muscle but flags they're all Strength). */
+.wa-cat-umbrella { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.65; }
+.wa-group-h .wa-cat-umbrella { text-transform: none; letter-spacing: 0; }
 /* The floating per-category exercise dropdown (anchored under its pill). */
 .wa-cat-menu {
   position: fixed; z-index: 60; max-height: 60vh; overflow-y: auto;

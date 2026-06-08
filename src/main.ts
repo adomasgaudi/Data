@@ -11124,12 +11124,27 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
 }
 /** The group key (of the current Group-by dimension) an exercise falls under. */
 function waGroupKey(name: string): string {
-  return waGroupBy === "none" ? "" : (waMeta(name, waGroupBy)[0] ?? "Unassigned");
+  if (waGroupBy === "none") return "";
+  // "Strength" is too broad: when grouping by Discipline, split strength lifts by
+  // their MUSCLE GROUP instead (Chest, Back, Quads…), so each shows as its own pill.
+  // The pills are still tagged as falling under Strength (see waGroupIsStrength).
+  if (waGroupBy === "discipline" && (waMeta(name, "discipline")[0] ?? "") === "Strength")
+    return waMeta(name, "muscleGroup")[0] ?? "Strength";
+  return waMeta(name, waGroupBy)[0] ?? "Unassigned";
+}
+/** True when a Discipline-grouping key is one of Strength's muscle-group sub-pills
+ * (so the UI can show the subtle "Strength" umbrella tag). */
+function waGroupIsStrength(key: string): boolean {
+  return waGroupBy === "discipline" && (INDEX_MUSCLES as readonly string[]).includes(key);
 }
 /** Sort rank for a selector group header: Discipline & Muscle group follow their
  * curated order (so Strength leads the disciplines, not alphabetical); other
  * dimensions fall through to an alphabetical tiebreak. Unknown keys sort last. */
 function waGroupRank(key: string): number {
+  // Discipline grouping splits Strength into muscle-group pills — rank those inside
+  // Strength's slot (by muscle order) so they lead and stay together.
+  if (waGroupBy === "discipline" && waGroupIsStrength(key))
+    return DISCIPLINES.indexOf("Strength") + (INDEX_MUSCLES as readonly string[]).indexOf(key) / 100;
   const order: readonly string[] =
     waGroupBy === "discipline" ? DISCIPLINES
     : waGroupBy === "muscleGroup" ? INDEX_MUSCLES
@@ -11182,9 +11197,10 @@ function renderWaChipsScope(scope: SelScope): void {
       // The group HEADER is a toggle: tap to filter that whole group in / out of the
       // picker (replaces the old Filter button). An off group shows just its header.
       const off = waGroupsOff.has(g);
+      const umbrella = waGroupIsStrength(g) ? ` <span class="wa-cat-umbrella muted">Strength</span>` : "";
       const header =
         `<button type="button" class="wa-group-h${off ? " is-off" : ""}" data-grpoff="${escapeHtml(g)}" ` +
-        `title="${off ? "Show this group" : "Hide this group"}">${escapeHtml(g)} <span class="muted">(${items.length})</span>${off ? " · hidden" : ""}</button>`;
+        `title="${off ? "Show this group" : "Hide this group"}">${escapeHtml(g)} <span class="muted">(${items.length})</span>${umbrella}${off ? " · hidden" : ""}</button>`;
       if (off) return `<div class="wa-group">${header}</div>`;
       // Within a group, cluster related families (e.g. all handstand variants) under
       // a nested sub-header; everything else stays directly under the group.
@@ -11248,9 +11264,12 @@ function waSubgroupCoverage(items: readonly WaItem[]): { sel: number; total: num
 /** One category pill: main "label sel/total", plus a smaller sub-group line. */
 function waCatPill(key: string, label: string, sel: number, tot: number, subSel: number, subTot: number, subLabel: string): string {
   const cls = sel === 0 ? "" : sel >= tot ? " is-on is-full" : " is-on";
-  const sub = subTot > 1 ? `<span class="wa-cat-sub muted">${subSel}/${subTot} ${escapeHtml(subLabel)}</span>` : "";
+  // Subtle umbrella tag: a muscle-group pill under Discipline grouping is a slice of
+  // "Strength" — show it small so you know the broader category it belongs to.
+  const umbrella = waGroupIsStrength(key) ? `<span class="wa-cat-umbrella muted">Strength</span>` : "";
+  const sub = umbrella || (subTot > 1 ? `<span class="wa-cat-sub muted">${subSel}/${subTot} ${escapeHtml(subLabel)}</span>` : "");
   return (
-    `<button type="button" class="wa-cat-pill${cls}" data-wacat="${escapeHtml(key)}" aria-expanded="${waCatMenuKey === key}" title="Open ${escapeHtml(label)} — pick exercises or toggle the whole group">` +
+    `<button type="button" class="wa-cat-pill${cls}${umbrella ? " wa-cat-strength" : ""}" data-wacat="${escapeHtml(key)}" aria-expanded="${waCatMenuKey === key}" title="Open ${escapeHtml(label)}${umbrella ? " (Strength)" : ""} — pick exercises or toggle the whole group">` +
     `<span class="wa-cat-main">${escapeHtml(label)} <span class="wa-cat-count">${sel}/${tot}</span></span>${sub}</button>`
   );
 }
