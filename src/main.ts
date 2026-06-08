@@ -11784,8 +11784,14 @@ function renderSelector(scope: SelScope): void {
   // These controls live at the TOP level (in the header, next to the button), not
   // buried in the menu: Group-by, Pills mode, Select all, Clear.
   const groupCtl = `<label class="wa-gcfg-f wa-sel-group" title="Group the picker by"><select class="wa-groupby">${groupOpts}</select></label>`;
-  const selAllBtn = `<button type="button" class="wa-selectall wa-clear">Select all</button>`;
-  const clearBtn = `<button type="button" class="wa-clearsel wa-clear"${cur.length ? "" : " disabled"}>Clear</button>`;
+  // Select all / Clear are ONE toggle now, lifted OUT of the ⚙ popout to the top row:
+  // when every shown lift is picked it reads "Clear" (and clears); otherwise "Select
+  // all" (and selects them all). One pressable pill that shows its state (rule 15).
+  const selectable = waChipList().filter((ex) => !ex.missing).map((ex) => ex.name);
+  const allOn = selectable.length > 0 && selectable.every((n) => cur.includes(n));
+  const selAllToggle =
+    `<button type="button" class="wa-clear wa-selall-toggle${allOn ? " is-on" : ""}"${selectable.length ? "" : " disabled"} ` +
+    `title="${allOn ? "Clear the selection" : "Select every shown lift"}">${allOn ? "Clear" : "Select all"}</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
   // keeps the "what / how many" context the old dropdown summary showed.
@@ -11799,7 +11805,7 @@ function renderSelector(scope: SelScope): void {
   const cogOpen = sel.querySelector<HTMLDetailsElement>(".wa-sel-cog")?.open ?? false;
   const settingsCog =
     `<details class="wa-sel-cog"${cogOpen ? " open" : ""}><summary class="wa-sel-cog-sum" title="Selector settings — pick mode, select all / clear, identities, name mode, match, show missing">⚙</summary>` +
-    `<div class="wa-sel-cog-menu"><div class="wa-chips-tools">${modeToggle}${selAllBtn}${clearBtn}</div>${foldTools}${settingsBlock}</div></details>`;
+    `<div class="wa-sel-cog-menu">${modeToggle ? `<div class="wa-chips-tools">${modeToggle}</div>` : ""}${foldTools}${settingsBlock}</div></details>`;
   // Selected pills. For the GRAPH selector the first N are marked 📈 (the graph's
   // point budget, which SHRINKS as athletes are overlaid: 10 series ÷ athletes) with
   // a "Trim to N" button; the history selector has no cap.
@@ -11832,7 +11838,7 @@ function renderSelector(scope: SelScope): void {
   const showGrid = !stickyCats;
   sel.innerHTML =
     `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${groupCtl}${settingsCog}${trimBtn}</div>` +
+    `<div class="wa-sel-tools">${groupCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
     `</div>` +
     selPills +
     (showGrid ? `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` : "");
@@ -12781,15 +12787,12 @@ function setupWorkoutAnalysis(): void {
       debounceWaRender();
       return;
     }
-    if (t.closest(".wa-selectall")) {
-      // Select every exercise currently shown in the picker (respects the active
-      // identity-includes / filters / search), into THIS scope.
-      setSelArr(waChipList().filter((ex) => !ex.missing).map((ex) => ex.name));
-      debounceWaRender();
-      return;
-    }
-    if (t.closest(".wa-clearsel")) {
-      setSelArr([]);
+    if (t.closest(".wa-selall-toggle")) {
+      // One toggle: if every shown (non-missing) lift is already picked, clear; else
+      // select them all (respects the active identity-includes / filters / search).
+      const selectable = waChipList().filter((ex) => !ex.missing).map((ex) => ex.name);
+      const allOn = selectable.length > 0 && selectable.every((n) => selArr().includes(n));
+      setSelArr(allOn ? [] : selectable);
       debounceWaRender();
       return;
     }

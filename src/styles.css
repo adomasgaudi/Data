@@ -2909,6 +2909,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-clear { font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-clear:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
 .wa-clear[disabled] { opacity: 0.5; cursor: default; }
+/* Select-all/Clear toggle in its "all picked → Clear" state reads as active. */
+.wa-selall-toggle.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .wa-ex-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .wa-ex-chip {
   font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer;
