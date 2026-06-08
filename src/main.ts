@@ -12373,11 +12373,15 @@ function refreshHistorySearch(): void {
  * so the graph and Calendar/history titles look IDENTICAL (the recurring "one has the
  * count / cap, the other doesn't" bug). */
 const TITLE_NAME_CAP = 5;
-function liftSelectionTitle(sel: readonly string[], removable = false): string {
+function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | null = null): string {
   if (sel.length === 0) return "";
   const sep = `<span class="wa-title-sep"> · </span>`;
-  const names = sel.slice(0, TITLE_NAME_CAP).map((n) => removable
-    ? `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`
+  // Each name is a tap-to-REMOVE button (from the graph OR the history selection); its
+  // handler preventDefaults so a name-tap removes the lift instead of collapsing the
+  // section. Tapping EMPTY space / the caret still toggles the fold.
+  const where = remove === "graph" ? "graph" : "history";
+  const names = sel.slice(0, TITLE_NAME_CAP).map((n) => remove
+    ? `<button type="button" class="wa-title-lift" data-${remove}remove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the ${where}">${escapeHtml(displayName(n))}</button>`
     : escapeHtml(displayName(n))).join(sep);
   const more = sel.length > TITLE_NAME_CAP
     ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — pick them off in the selector below">… +${sel.length - TITLE_NAME_CAP}</span>`
@@ -12409,7 +12413,7 @@ function renderWorkoutAnalysis(): void {
   if (graphSummary) {
     // Title = a count badge + the first 5 lift names (each a button that REMOVES it
     // from the graph — see the data-graphremove handler) + "… +N" when there are more.
-    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : liftSelectionTitle(waGraphSel, true);
+    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : liftSelectionTitle(waGraphSel, "graph");
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
@@ -12432,7 +12436,7 @@ function renderWorkoutAnalysis(): void {
     if (calHistTitle) {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
       // "Calendar & history" prefix, no member breakdown, no ℹ.
-      calHistTitle.innerHTML = waSelected.length ? liftSelectionTitle(waSelected) : "Calendar & history";
+      calHistTitle.innerHTML = waSelected.length ? liftSelectionTitle(waSelected, "hist") : "Calendar & history";
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -13753,6 +13757,16 @@ function setupWorkoutAnalysis(): void {
       e.preventDefault();
       const name = gRem.dataset.graphremove;
       waGraphSel = waGraphSel.filter((x) => x !== name);
+      debounceWaRender();
+      return;
+    }
+    // A lift NAME in the Calendar/history fold title → remove it from the HISTORY
+    // selection (not the graph), same preventDefault-so-it-doesn't-collapse trick.
+    const hRem = t.closest<HTMLElement>("[data-histremove]");
+    if (hRem?.dataset.histremove) {
+      e.preventDefault();
+      const name = hRem.dataset.histremove;
+      waSelected = waSelected.filter((x) => x !== name);
       debounceWaRender();
       return;
     }
