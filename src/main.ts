@@ -5600,30 +5600,38 @@ function mondayKey(iso: string): string {
   dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
   return dt.toISOString().slice(0, 10);
 }
-/** One exercise's sets as compact chips, grouping each SESSION into a faint
- * tinted block so a period bucket reads as distinct sessions: one block per day
- * (week / 2-week modes) or per week (month / 3-month modes). Day mode = one
- * session, no tint. Subtle on purpose — a quiet band, not a loud divider. */
+/** Split a date-sorted run into consecutive groups sharing a key. */
+function groupByKey<T>(items: readonly T[], keyOf: (t: T) => string): T[][] {
+  const out: T[][] = [];
+  let cur: string | null = null;
+  for (const it of items) {
+    const k = keyOf(it);
+    if (k !== cur) { out.push([]); cur = k; }
+    out[out.length - 1]!.push(it);
+  }
+  return out;
+}
+/** One exercise's sets as compact chips. A period bucket reads as distinct
+ * sessions: week / 2-week modes tint one band per DAY; month / 3-month modes tint
+ * one band per WEEK *and* split the days inside it with a faint divider — so both
+ * the week and the separate days are indicated. Day mode = one session, no tint. */
 function setListHtml(sets: readonly SetRecord[]): string {
   const mode = S.workoutViewMode;
-  const sepKind: "day" | "week" | null =
-    mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
-  if (!sepKind || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
-  const key = (d: string) => (sepKind === "week" ? mondayKey(d) : d);
-  // Group consecutive sets sharing the session key (sets are already date-sorted).
-  const groups: SetRecord[][] = [];
-  let curKey: string | null = null;
-  for (const s of sets) {
-    const k = key(s.date);
-    if (k !== curKey) { groups.push([]); curKey = k; }
-    groups[groups.length - 1]!.push(s);
+  if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
+  const byWeekBand = mode === "month" || mode === "3month";
+  if (!byWeekBand) {
+    // Week / 2-week: one tinted band per day.
+    return groupByKey(sets, (s) => s.date)
+      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s)).join(" ")}</span>`)
+      .join(" ");
   }
-  return groups
-    .map((g) => {
-      const title = sepKind === "week"
-        ? periodGroupLabel(mondayKey(g[0]!.date), "week")
-        : shortDate(g[0]!.date);
-      return `<span class="wo-sess" title="${escapeHtml(title)}">${g.map((s) => setDisplay(s)).join(" ")}</span>`;
+  // Month / 3-month: a tinted band per WEEK, the days inside split by a thin divider.
+  return groupByKey(sets, (s) => mondayKey(s.date))
+    .map((wk) => {
+      const inner = groupByKey(wk, (s) => s.date)
+        .map((dg) => `<span class="wo-day" title="${escapeHtml(shortDate(dg[0]!.date))}">${dg.map((s) => setDisplay(s)).join(" ")}</span>`)
+        .join(`<span class="wo-day-sep" aria-hidden="true"></span>`);
+      return `<span class="wo-sess" title="${escapeHtml(periodGroupLabel(mondayKey(wk[0]!.date), "week"))}">${inner}</span>`;
     })
     .join(" ");
 }
@@ -5864,6 +5872,13 @@ function hiddenLiftsForKey(key: string, period: HistoryPeriod | null): { exercis
 function workoutGroupHtml(group: WorkoutGroup): string {
   const formula = currentFormula();
   const strengthByDay = currentStrengthByUserExercise(formula);
+  // A period bucket (week / month) spans many days; show a subtle divider row where
+  // the DAY changes (and a stronger one where the WEEK changes in month/3-month) so
+  // the expanded sets read by week and day, not one undated run. Day mode = a single
+  // day → no dividers.
+  const mode = S.workoutViewMode;
+  const divMode: "day" | "week" | null =
+    mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
   // One exercise's header + set-rows; reused for the day's active lifts AND for its
   // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest.
   const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string => {
@@ -5874,9 +5889,22 @@ function workoutGroupHtml(group: WorkoutGroup): string {
       `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
       `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
       `${addBtn}</td></tr>`;
-    const setRows = sets
-      .filter((s) => s.exerciseName === e.exerciseName)
-      .map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s)))
+    const exSets = sets.filter((s) => s.exerciseName === e.exerciseName); // already date-sorted
+    let lastDay: string | null = null;
+    let lastWeek: string | null = null;
+    const setRows = exSets
+      .map((s) => {
+        let div = "";
+        if (divMode && s.date !== lastDay) {
+          const wk = mondayKey(s.date);
+          const newWeek = divMode === "week" && wk !== lastWeek;
+          const label = newWeek ? `${shortDate(s.date)} · ${periodGroupLabel(wk, "week")}` : shortDate(s.date);
+          div = `<tr class="set-daydiv${newWeek ? " set-weekdiv" : ""}"><td colspan="5">${escapeHtml(label)}</td></tr>`;
+          lastDay = s.date;
+          lastWeek = wk;
+        }
+        return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
+      })
       .join("");
     return header + setRows;
   };

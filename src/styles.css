@@ -1433,6 +1433,16 @@ select.subtle-select:hover, select.subtle-select:focus {
   padding: 0.04rem 0.32rem; margin-right: 0.28rem;
   box-decoration-break: clone; -webkit-box-decoration-break: clone;
 }
+/* Within a month/3-month WEEK band, separate the individual DAYS with a faint
+   vertical divider so each day still reads inside the week. */
+.wo-day-sep {
+  display: inline-block; width: 0; height: 0.85em; vertical-align: middle;
+  border-left: 1px solid var(--line); margin: 0 0.1rem 0 0.04rem; opacity: 0.7;
+}
+/* Day / week divider rows in the EXPANDED set table (period buckets): a subtle
+   dated band where the day changes, a touch stronger where the week changes. */
+.set-daydiv > td { padding: 0.12rem 0.45rem; font-size: 0.72rem; font-weight: 600; color: var(--muted); background: var(--rest-fill); border-top: 1px solid var(--line); }
+.set-weekdiv > td { color: var(--text); border-top: 2px solid var(--accent); }
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
 /* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
