@@ -88,3 +88,35 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **If it recurs:** someone hard-coded a font-size/padding on `.ath-sex-toggle` or
   `.athlete-chip` again, or re-introduced an asymmetric `padding-bottom` on
   `.athlete-chips`. Route sizing through the tokens.
+
+---
+
+## PB-4 — floating menus don't close on outside click
+
+- **Recurrences:** 2+ (reported on the ⚙ display-options menu; earlier the same
+  was patched per-element, e.g. the exercises period dropdown `els.exerciseRange`).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data),
+  Analysis — the ⚙ workout display-options popup stayed open over the table.
+- **Symptom:** opening a floating popup menu (a native `<details>` whose body is an
+  absolutely-positioned overlay) and then tapping elsewhere left it OPEN — it only
+  closed by tapping its own ⚙/summary again. Native `<details>` has no
+  outside-click close.
+- **Prior shallow wiring:** outside-close was added PER MENU (a dedicated
+  `document` click handler for `els.exerciseRange`, the svgChart legend's own
+  handler, the RIR dropdowns…). Every NEW floating `<details>` (graph options,
+  Exercises, ⚙ display options, identity cog, Group, progress settings…) shipped
+  WITHOUT one and stayed stuck-open — the class kept reappearing.
+- **Root cause:** no shared behaviour — each popup had to remember to wire its own
+  outside-close, so new ones regressed by default.
+- **Root fix (b.2.7.x, PB-4):** ONE global capture-phase `document` click handler
+  closes any open `details[open]` whose first non-summary child is
+  `position:absolute` (a floating overlay) when the click is outside it. Detected by
+  COMPUTED POSITION, so it auto-covers every such menu now and any added later — no
+  per-menu wiring. Inline disclosures (graph/calendar sections, changelog rows)
+  push content (static position) and are left alone. Capture phase so a bubble
+  `stopPropagation` elsewhere can't suppress it. The old per-element handlers are
+  now redundant (harmless).
+- **If it recurs:** a new popup is NOT a `<details>` (e.g. a div with an `.open`
+  class — those need the same treatment, see the `.xdd`/RIR dropdowns), or its
+  menu body isn't a direct `:scope > :not(summary)` child, or it's not
+  `position:absolute`. Check those three before adding a one-off handler.

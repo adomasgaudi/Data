@@ -8942,6 +8942,21 @@ async function init() {
     b.classList.toggle("is-active", show);
     b.textContent = `${show ? "hide" : "hidden"} ${b.dataset.hlabel ?? ""}`;
   });
+  // Outside-click closes any open FLOATING popout <details> (a menu whose body is
+  // position:absolute — the ⚙ display options, Graph options, Exercises, Legend,
+  // ⚙ identity, Group, period & progress menus). Detected by computed position so
+  // it covers EVERY such menu now and any added later — never per-menu wiring (the
+  // recurring bug). Inline disclosures (graph/calendar sections, changelog rows)
+  // push content (static position) so they're left alone. Capture phase so a
+  // bubble-phase stopPropagation elsewhere can't suppress it. PB-4.
+  document.addEventListener("click", (e) => {
+    const t = e.target as Node;
+    for (const d of document.querySelectorAll<HTMLDetailsElement>("details[open]")) {
+      if (d.contains(t)) continue; // click inside the menu → leave it open
+      const body = d.querySelector<HTMLElement>(":scope > :not(summary)");
+      if (body && getComputedStyle(body).position === "absolute") d.open = false;
+    }
+  }, true);
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
     els.aloneFilter.dataset.state = aloneFilter;
