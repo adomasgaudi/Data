@@ -51,6 +51,28 @@ describe("graph metric registry (TASK 26)", () => {
     expect(graphMetric("weightRange")!.type).toBe("range");
   });
 
+  it("a combined lift shapes each member-origin differently (same series), plain lifts don't", () => {
+    // A combined lift relabels member sets to one name, keeping the source in
+    // originalExerciseName — scatter points then get a per-origin shape.
+    const combined = graphMetric("weight")!.compute!(
+      [
+        rec({ exerciseName: "SQ mix", originalExerciseName: "Squat", weight: 100 }),
+        rec({ exerciseName: "SQ mix", originalExerciseName: "Front Squat", weight: 80, setNumber: 2 }),
+        rec({ exerciseName: "SQ mix", originalExerciseName: "Squat", weight: 110, date: "2024-01-02" }),
+      ],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    const byShape = new Set(combined.map((p) => p.shape));
+    expect(byShape.size).toBe(2); // two distinct member shapes
+    expect([...byShape].every((s) => s !== undefined)).toBe(true);
+    // A plain single-origin lift gets NO per-point shapes (stays plain dots).
+    const plain = graphMetric("weight")!.compute!(
+      [rec({ weight: 100 }), rec({ weight: 105, date: "2024-01-02" })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    expect(plain.every((p) => p.shape === undefined)).toBe(true);
+  });
+
   it("weight range uses the ADDED-weight 1RM (matches the set list), not the bodyweight load", () => {
     // A pure bodyweight set (origWeight null) adds no plate → lo = 0, and the top
     // is the added-weight 1RM (above bodyweight for a hard lift like pull-ups) —

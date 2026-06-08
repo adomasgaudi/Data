@@ -81,6 +81,10 @@ export interface SvgPoint {
   pr?: boolean;
   /** Reps-in-reserve — scales the scatter dot (higher RIR = smaller; null = biggest). */
   rir?: number;
+  /** Per-POINT marker shape (overrides the series shape only when the series has
+   * none): a combined/comparison lift shapes each member-origin differently, same
+   * colour, so the mixed sources are tellable apart. */
+  shape?: SvgShape;
 }
 export interface SvgSeries {
   name: string;
@@ -539,12 +543,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             // A failed attempt → an ✕ in the SERIES colour (same as the lift).
             const d = 3.8;
             body += `<g stroke="${s.color}" stroke-width="1.8" stroke-linecap="round"><line x1="${(cx - d).toFixed(1)}" y1="${(cy - d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy + d).toFixed(1)}"/><line x1="${(cx - d).toFixed(1)}" y1="${(cy + d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy - d).toFixed(1)}"/></g>`;
-          } else if (s.shape) {
-            // Multi-series mode: this series' EXERCISE shape (colour = the athlete).
-            // A record (pr) is the same shape, just bigger + more solid so it still
-            // pops within the exercise's form.
+          } else if (s.shape ?? p.shape) {
+            // A SHAPE marker. Series shape wins (multi-athlete: shape = the exercise,
+            // colour = the athlete); otherwise the per-POINT shape — a combined lift's
+            // member-origin (same colour, different form). A record (pr) keeps the
+            // shape, just bigger + more solid so it still pops.
+            const shp = s.shape ?? p.shape!;
             const r = p.rir != null ? Math.min(3.2, Math.max(1.6, 3.2 - 0.22 * p.rir)) : 3.0;
-            body += shapeMarker(s.shape, cx, cy, r, s.color, 0.62, !!p.pr);
+            body += shapeMarker(shp, cx, cy, r, s.color, 0.62, !!p.pr);
           } else if (p.pr) {
             // A new record → a diamond (≈ the dot's size, so records stand out
             // without dominating the scatter).

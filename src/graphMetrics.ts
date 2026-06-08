@@ -27,6 +27,25 @@ export interface GraphPoint {
   fail?: boolean; // the set's note contained "fail" — drawn as an ✕ in the series colour
   pr?: boolean; // a new running-max (a record at the time) — drawn as a diamond
   rir?: number; // the set's reps-in-reserve — scales the dot (higher RIR = smaller)
+  /** Per-POINT marker shape: for a combined / comparison lift, each member-origin
+   * gets its OWN shape (same colour) so you can tell the mixed sources apart. */
+  shape?: "circle" | "diamond" | "square" | "triangle" | "ring" | "plus";
+}
+/** Marker shapes cycled across a combined/comparison lift's member origins (same
+ * colour, different form). Order chosen so the first few read most distinctly. */
+const ORIGIN_SHAPES = ["circle", "diamond", "triangle", "square", "ring", "plus"] as const;
+/** Map a record's source lift (combined member) to a shape, given the sorted list
+ * of distinct origins in the series — or undefined when it's a single-origin lift. */
+function originShapeOf(r: SetRecord, origins: string[]): GraphPoint["shape"] {
+  if (origins.length < 2) return undefined; // a plain lift → no per-point shapes
+  const o = r.originalExerciseName ?? r.exerciseName;
+  const i = origins.indexOf(o);
+  return i < 0 ? undefined : ORIGIN_SHAPES[i % ORIGIN_SHAPES.length];
+}
+/** The distinct member origins behind a set list (a combined/comparison lift relabels
+ * each member set, keeping its source in originalExerciseName), sorted for stable shapes. */
+function distinctOrigins(records: readonly SetRecord[]): string[] {
+  return [...new Set(records.map((r) => r.originalExerciseName ?? r.exerciseName))].sort();
 }
 /** A set whose note marks it as a failed attempt. */
 const isFail = (r: SetRecord): boolean => /fail/i.test(r.notes ?? "");
@@ -103,6 +122,7 @@ function perSet(
   cfg?: GraphConfig,
 ): GraphPoint[] {
   const times = setTimes(records);
+  const origins = distinctOrigins(records); // >1 → a combined/comparison lift
   const out: GraphPoint[] = [];
   for (const r of records) {
     const y = sel(r);
@@ -114,6 +134,10 @@ function perSet(
       if (isFail(r)) p.fail = true;
       const rir = cfg?.rirOf?.(r); // size the dot by effort, when a resolver is given
       if (rir != null && Number.isFinite(rir)) p.rir = rir;
+      // Combined/comparison lift → shape this dot by its source member (same colour),
+      // and name the member in the tooltip so the shapes are decodable.
+      const shape = originShapeOf(r, origins);
+      if (shape) { p.shape = shape; const o = r.originalExerciseName; if (o) p.meta = p.meta ? `${o} · ${p.meta}` : o; }
       out.push(p);
     }
   }
