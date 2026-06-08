@@ -221,6 +221,7 @@ const LT: Record<string, string> = {
   "Personal records": "Asmeniniai rekordai",
   "Best set": "Geriausia serija",
   "Exercise": "Pratimas",
+  "Type": "Tipas",
   "Everyone": "Visi",
   "Men only": "Tik vyrai",
   "Women only": "Tik moterys",

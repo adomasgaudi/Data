@@ -562,6 +562,16 @@ main { padding-bottom: 5rem; }
 /* Open ABOVE the button when there's more room above (it then floats over the chart
    rather than pushing the page) — toggled by JS measuring the space. */
 .svgc-legend-fold--up .svgc-legend-menu { top: auto; bottom: calc(100% + 4px); }
+/* Grouped show/hide chips (Athlete / Exercise / Type) at the top of the legend menu:
+   one row per segment, each value a small toggle that bulk-hides its whole group. */
+.svgc-legend-groups { display: flex; flex-direction: column; gap: 0.3rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem; border-bottom: 1px solid var(--line); }
+.svgc-grp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+.svgc-grp-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin-right: 0.15rem; }
+.svgc-grp-chip { font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 1px 7px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.svgc-grp-chip.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.svgc-grp-chip.is-off { opacity: 0.5; text-decoration: line-through; }
+.svgc-grp-chip.is-mixed { border-style: dashed; border-color: var(--accent); }
+.svgc-legend-keys { display: flex; flex-direction: column; gap: 0.45rem; }
 /* When there are 2+ series, legend keys are clickable show/hide toggles. */
 .svgc-key.is-toggle { cursor: pointer; padding: 1px 6px; border-radius: var(--r-pill); border: 1px solid transparent; user-select: none; }
 .svgc-key.is-toggle:hover { border-color: var(--line); }

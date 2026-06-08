@@ -217,6 +217,13 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   // "% of world record" view: shade the background grayer as you climb toward the
   // record — a touch above 0.4, more above 0.6 (very light).
   const showsWr = metrics.some((m) => m.id === "pctWR");
+  // Legend group chips match how the series NAMES are segmented (athlete · exercise ·
+  // metric), so you can bulk show/hide a whole athlete / exercise / graph-type.
+  const legendGroupLabels = isAll ? undefined
+    : multiUser ? ["Athlete", "Exercise", "Type"]
+    : groups.length > 1 ? ["Exercise", "Type"]
+    : metrics.length > 1 ? ["Type"]
+    : undefined;
   const config = {
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
     interactive: input.interactive ?? true,
@@ -224,6 +231,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     rightHeadroom: input.config.rightHeadroom,
     barGirth: input.config.barGirth,
     directLabels: true, // float each lift's name next to its records
+    ...(legendGroupLabels ? { legendGroupLabels } : {}),
     // Free 2-D pan/zoom: both y-axes shift together, so volume and 1RM stay aligned;
     // use Right-axis / Volume-shift knobs to separate overlapping series.
     panMode: "xy" as const,

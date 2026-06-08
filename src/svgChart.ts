@@ -118,6 +118,11 @@ export interface SvgChartConfig {
   panMode?: "x" | "xy";
   /** Note shown under the legend. */
   note?: string;
+  /** Labels for the " · "-separated SEGMENTS of the series names (e.g. ["Athlete",
+   * "Exercise", "Type"]). When set, the legend menu adds a row of show/hide CHIPS per
+   * segment — tapping a value toggles every series sharing it on/off at once, so you
+   * can hide a whole athlete / exercise / graph-type in one tap. */
+  legendGroupLabels?: string[];
   /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
    * region as you approach a target. Drawn behind everything. */
   yBands?: { from: number; to?: number; fill: string }[];
@@ -630,11 +635,38 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // a floating "Legend" dropdown (overlay — doesn't grow the chart). The compact
     // toggle stays inline. Toggling series still works: the keys keep their
     // data-series handlers inside the menu.
+    // Grouped show/hide chips: for each labelled name-segment (Athlete / Exercise /
+    // Type) with 2+ distinct values, one chip per value that toggles EVERY series
+    // sharing it (on = all shown, off = all hidden, mixed = some). One-tap bulk hide.
+    let groupTogglesHtml = "";
+    if (cfg.legendGroupLabels && keyHtml.length > 1) {
+      const legendSeries = cfg.series.filter((s) => !s.noLegend);
+      const rows: string[] = [];
+      cfg.legendGroupLabels.forEach((label, pos) => {
+        if (!label) return;
+        const order: string[] = [];
+        const byVal = new Map<string, SvgSeries[]>();
+        for (const s of legendSeries) {
+          const v = s.name.split(" · ")[pos];
+          if (v === undefined) continue;
+          if (!byVal.has(v)) { byVal.set(v, []); order.push(v); }
+          byVal.get(v)!.push(s);
+        }
+        if (order.length < 2) return; // nothing to group on at this position
+        const chips = order.map((v) => {
+          const grp = byVal.get(v)!;
+          const state = grp.every((s) => hidden.has(s.name)) ? "off" : grp.some((s) => hidden.has(s.name)) ? "mixed" : "on";
+          return `<button type="button" class="svgc-grp-chip is-${state}" data-grouppos="${pos}" data-groupval="${esc(v)}" title="Show/hide every ${esc(label)} · ${esc(v)} series">${esc(v)}</button>`;
+        }).join("");
+        rows.push(`<div class="svgc-grp-row"><span class="svgc-grp-lbl">${esc(label)}</span>${chips}</div>`);
+      });
+      if (rows.length) groupTogglesHtml = `<div class="svgc-legend-groups">${rows.join("")}</div>`;
+    }
     const keys = keyHtml.join("");
     legendEl.innerHTML =
-      keyHtml.length > 6
+      keyHtml.length > 6 || groupTogglesHtml
         ? `<details class="svgc-legend-fold"${legendOpen ? " open" : ""}><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
-          `<div class="svgc-legend-menu">${keys}</div></details>${compactBtn}`
+          `<div class="svgc-legend-menu">${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${compactBtn}`
         : keys + compactBtn;
     // Sync the remembered open state when the user opens/closes it directly, and on
     // open decide whether to flip the menu ABOVE the button (when there's more room
@@ -950,6 +982,17 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (useCompact()) { rebuildCompactor(); resetView(); }
     draw();
   };
+  /** Bulk toggle: every series whose name's segment `pos` equals `value`. If they're
+   * all visible → hide them all; otherwise → show them all. */
+  const toggleGroup = (pos: number, value: string) => {
+    const grp = cfg.series.filter((s) => !s.noLegend && s.name.split(" · ")[pos] === value);
+    if (grp.length === 0) return;
+    const allVisible = grp.every((s) => !hidden.has(s.name));
+    for (const s of grp) { if (allVisible) hidden.add(s.name); else hidden.delete(s.name); }
+    hideTip();
+    if (useCompact()) { rebuildCompactor(); resetView(); }
+    draw();
+  };
   legendEl.addEventListener("click", (e) => {
     // toggleSeries() redraws and rebuilds this legend's DOM, detaching the node
     // that was just clicked. If the click then bubbled to the document
@@ -957,6 +1000,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // is now orphaned) and it would wrongly close the legend. Stop propagation on
     // any in-legend action so the legend stays open until you click truly outside.
     if ((e.target as HTMLElement).closest(".svgc-compact")) { e.stopPropagation(); setCompactPref(!compactPref); return; }
+    const grp = (e.target as HTMLElement).closest<HTMLElement>(".svgc-grp-chip");
+    if (grp?.dataset.grouppos !== undefined && grp.dataset.groupval !== undefined) {
+      e.stopPropagation(); toggleGroup(Number(grp.dataset.grouppos), grp.dataset.groupval); return;
+    }
     const key = (e.target as HTMLElement).closest<HTMLElement>(".svgc-key.is-toggle");
     if (key?.dataset.series) { e.stopPropagation(); toggleSeries(key.dataset.series); }
   });
