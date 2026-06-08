@@ -1621,6 +1621,10 @@ sup.wr-bw { font-size: 0.85em; }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .data-table sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
 .wo-date { white-space: nowrap; }
+/* The 2-char year (e.g. '25) is only shown once the day is EXPANDED — keeps the
+   collapsed list clean but disambiguates the year when you open a session. */
+.wo-year { display: none; color: var(--muted); font-weight: 600; }
+.wo-row.open .wo-year { display: inline; }
 /* In the workouts list the date sits as a small header above that entry's exercises. */
 .wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
 .wo-did { line-height: 1.5; }

@@ -5543,7 +5543,7 @@ function renderWorkoutsPage() {
         : "";
       return (
         `<tr class="wo-row" data-index="${abs}"><td>` +
-        `<div class="wo-date"><span class="caret">▸</span>${g.label}${tagBtn}</div>` +
+        `<div class="wo-date"><span class="caret">▸</span>${g.label}<span class="wo-year"> '${escapeHtml(g.date.slice(2, 4))}</span>${tagBtn}</div>` +
         `<div class="wo-did">${did}${addExBtn}</div></td>` +
         `<td class="num">${g.totalSets}</td></tr>`
       );
