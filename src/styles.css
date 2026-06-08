@@ -2753,20 +2753,18 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* The Exercises button sits fixed at the left; the selected pills scroll sideways
    in the rest of the row (see .wa-sel-pills). */
 .wa-sel-tools { display: flex; flex-wrap: nowrap; gap: 0.4rem; flex: none; align-items: center; justify-content: flex-start; }
-/* Selected-exercise pills (EXR-SEL-PILLS): wrap onto up to ~2 lines beside the
-   Exercises button (using the empty space below it); but if they'd need MORE than
-   2 lines, JS adds .wa-sel-pills--scroll to collapse them back to ONE horizontally-
-   scrolling row (rule 16 — don't grow into a tall block that eats vertical space). */
+/* Selected-exercise pills (EXR-SEL-PILLS): wrap onto up to 3 lines beside the
+   Exercises button (using the empty space below it); only once they'd need MORE
+   than 3 lines does the block stay 3-rows tall and scroll VERTICALLY (owner ask —
+   the 3-row cap keeps it from growing endlessly while still showing more at once).
+   JS sets the exact 3-row max-height and flags overflow with .wa-sel-pills--scroll. */
 .wa-sel-pills {
   display: flex; flex-wrap: wrap; gap: 0.3rem;
   flex: 1 1 auto; min-width: 0;
-  max-height: 3.6rem; overflow: hidden; align-content: flex-start;
+  max-height: 5.4rem; overflow-x: hidden; overflow-y: auto; align-content: flex-start;
+  touch-action: pan-y; -webkit-overflow-scrolling: touch;
 }
-.wa-sel-pills.wa-sel-pills--scroll {
-  flex-wrap: nowrap; max-height: none;
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch;
-  padding-bottom: 3px; scrollbar-width: thin;
-}
+.wa-sel-pills.wa-sel-pills--scroll { scrollbar-width: thin; padding-bottom: 2px; }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
 .wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }

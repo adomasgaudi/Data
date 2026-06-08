@@ -148,7 +148,7 @@ const LT: Record<string, string> = {
   "Match graph": "Atitikti grafiką",
   "Match history": "Atitikti istoriją",
   "Graph lifts": "Grafiko pratimai",
-  "Calendar & history lifts": "Kalendoriaus ir istorijos pratimai",
+  "History lifts": "Istorijos pratimai",
   "Hide missing": "Slėpti trūkstamus",
   "Show missing": "Rodyti trūkstamus",
   // ---- Allowed-graphs review (per exercise) ----

@@ -10673,7 +10673,7 @@ function renderSelector(scope: SelScope): void {
   curSelScope = scope;
   sel.dataset.selscope = scope;
   const cur = selArr();
-  const scopeLabel = scope === "graph" ? "Graph lifts" : "Calendar & history lifts";
+  const scopeLabel = scope === "graph" ? "Graph lifts" : "History lifts";
   // Identity-inclusion toggles (shared) — they filter the chips below.
   const idLabels: [ExerciseIdentity, string][] = [
     ["original", "Original"], ["dissolved", "Dissolved"], ["combined", "Combined"], ["comparison_group", "Comparison groups"],
@@ -10758,8 +10758,16 @@ function renderSelector(scope: SelScope): void {
   const pillsEl = sel.querySelector<HTMLElement>(".wa-sel-pills");
   if (pillsEl) {
     pillsEl.classList.remove("wa-sel-pills--scroll");
+    pillsEl.style.maxHeight = "";
     const rowH = (pillsEl.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
-    if (rowH && pillsEl.scrollHeight > rowH * 2 + 8) pillsEl.classList.add("wa-sel-pills--scroll");
+    if (rowH) {
+      // Cap the block at exactly 3 rows (rows + the 2 gaps between them); beyond
+      // that it scrolls vertically instead of growing.
+      const gap = 0.3 * 16; // matches the .wa-sel-pills gap (0.3rem)
+      const cap = rowH * 3 + gap * 2;
+      pillsEl.style.maxHeight = `${cap}px`;
+      if (pillsEl.scrollHeight > cap + 4) pillsEl.classList.add("wa-sel-pills--scroll");
+    }
   }
   renderWaChipsScope(scope);
   const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
