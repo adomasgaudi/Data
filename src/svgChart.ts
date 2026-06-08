@@ -499,6 +499,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // still tell faint/grey lines apart). Capped + deduped so the chart isn't buried.
     const tagAnnotations: string[] = [];
     const tagged = new Set<string>();
+    const tagSpots: { x: number; y: number }[] = []; // placed cluster centres (avoid stacking)
     const wantTags = !!cfg.styleToggles && dataTags;
     for (const s of geomSeries()) {
       if (!s.noLegend)
@@ -645,27 +646,35 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // Floating exercise name next to this series' last record (dots/lines only —
       // the "records"; bars are excluded). One label per exercise, with a white halo
       // for legibility over a busy chart; flips to the left near the right edge.
-      // Tag annotation: a small leader line + brace + name at a LINE's last point.
-      if (wantTags && s.type === "line" && s.points.length && tagAnnotations.length < 14) {
-        const parts = s.name.split(" · ");
-        const lbl = parts.length >= 3 ? parts[1]! : parts[0]!; // the exercise segment
-        if (!tagged.has(s.name)) {
-          tagged.add(s.name);
-          const last = s.points[s.points.length - 1]!;
-          const cx = xPix(last.x), cy = ymap(last.y ?? 0);
-          if (cx >= M.l && cx <= W - M.r && cy >= M.t + 3 && cy <= h - M.b - 3) {
-            const col = grayify(s.color, 0.35);
-            const nearRight = cx > W - M.r - 64;
-            const dir = nearRight ? -1 : 1;
-            const x1 = (cx + dir * 11).toFixed(1); // leader end / brace
-            const tx = (cx + dir * 14).toFixed(1); // label
-            const yt = (cy + 2.5).toFixed(1);
-            const brace = dir > 0 ? "}" : "{";
-            const anchor = nearRight ? "end" : "start";
+      // Tag annotation: find this SCATTER series' DENSEST cluster of points (where
+      // it's most concentrated, not a random end) and mark it with a brace + name.
+      if (wantTags && s.type === "scatter" && s.points.length >= 3 && tagAnnotations.length < 12 && !tagged.has(s.name)) {
+        tagged.add(s.name);
+        const px = s.points
+          .map((p) => ({ x: xPix(p.x), y: ymap(p.y ?? 0) }))
+          .filter((q) => q.x >= M.l && q.x <= W - M.r && q.y >= M.t && q.y <= h - M.b);
+        if (px.length >= 3) {
+          // Densest point = the one with the most neighbours within R px.
+          const R2 = 22 * 22;
+          let best = px[0]!, bestC = -1;
+          for (const a of px) {
+            let c = 0;
+            for (const b of px) { const dx = a.x - b.x, dy = a.y - b.y; if (dx * dx + dy * dy <= R2) c++; }
+            if (c > bestC) { bestC = c; best = a; }
+          }
+          // Skip if a cluster was already tagged right here (don't stack labels).
+          if (bestC >= 3 && !tagSpots.some((t) => Math.hypot(t.x - best.x, t.y - best.y) < 22)) {
+            tagSpots.push(best);
+            const parts = s.name.split(" · ");
+            const lbl = parts.length >= 3 ? parts[1]! : parts[0]!; // the exercise segment
+            const col = grayify(s.color, 0.12); // keep most of the athlete hue
+            const right = best.x < W - M.r - 56;
+            const lx = best.x + (right ? 16 : -16);
+            const ly = Math.max(M.t + 8, best.y - 13);
             tagAnnotations.push(
-              `<line x1="${(cx + dir * 2).toFixed(1)}" y1="${cy.toFixed(1)}" x2="${x1}" y2="${cy.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.7"/>` +
-                `<text x="${x1}" y="${yt}" font-size="10" text-anchor="middle" fill="${col}" fill-opacity="0.85">${brace}</text>` +
-                `<text x="${tx}" y="${yt}" font-size="8.5" text-anchor="${anchor}" paint-order="stroke" stroke="#fff" stroke-width="2" stroke-opacity="0.85" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
+              `<text x="${best.x.toFixed(1)}" y="${(best.y + 4).toFixed(1)}" font-size="13" text-anchor="middle" fill="${col}" fill-opacity="0.9">${right ? "{" : "}"}</text>` +
+                `<line x1="${(best.x + (right ? 5 : -5)).toFixed(1)}" y1="${best.y.toFixed(1)}" x2="${(lx - (right ? 3 : -3)).toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.6"/>` +
+                `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" font-size="9" text-anchor="${right ? "start" : "end"}" paint-order="stroke" stroke="#fff" stroke-width="2.2" stroke-opacity="0.9" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
             );
           }
         }
