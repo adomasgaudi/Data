@@ -10976,12 +10976,12 @@ function renderSelector(scope: SelScope): void {
   const toggles = idLabels
     .map(([id, label]) => `<button type="button" class="wa-name-opt wa-inc-btn${waIncludeIdentities.has(id) ? " is-on" : ""}" data-waident="${id}" aria-pressed="${waIncludeIdentities.has(id)}">${label}</button>`)
     .join("");
-  // Chip label mode (shared global name mode: code / short / full).
-  const nameOpt = (m: NameMode, lbl: string) =>
-    `<button type="button" class="wa-name-opt name-mode-opt${nameMode === m ? " is-on" : ""}" data-waname="${m}">${lbl}</button>`;
+  // Chip label mode (shared global name mode) — ONE compact cycling pill (code →
+  // short → full), like the history list's. data-waname carries the NEXT mode so a
+  // tap advances it (the existing .wa-name-opt handler sets it). No "Show as" label.
+  const nextName: NameMode = nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code";
   const nameToggle =
-    `<div class="wa-name-mode"><span class="wa-name-mode-lbl">Show as</span>` +
-    nameOpt("code", "Code") + nameOpt("short", "Short") + nameOpt("full", "Full name") + `</div>`;
+    `<button type="button" class="wa-name-opt name-mode-opt" data-waname="${nextName}" title="Lift labels — tap to cycle: code → short → full">${nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full"}</button>`;
   const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
   const groupOpts =
     `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
@@ -11015,7 +11015,7 @@ function renderSelector(scope: SelScope): void {
   const prevFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
   const foldOpen = prevFold ? prevFold.open : !!S.waChipsFoldOpen;
   const prevChipScroll = prevFold?.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
-  const settingsBlock = `<div class="wa-fold-settings"><div class="wa-sq-title">Settings</div>${toggles}${nameToggle}</div>`;
+  const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
   const exercisesFold =
     `<details class="wa-chips-fold"${foldOpen ? " open" : ""}><summary class="wa-chips-fold-sum">${escapeHtml(scopeLabel)} <span class="muted">${waSelCount(byIdentity)}/${byIdentity.length}</span></summary>` +
     `<div class="wa-fe-menu">` + foldTools + settingsBlock +

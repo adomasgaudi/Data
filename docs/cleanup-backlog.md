@@ -91,6 +91,12 @@ shed via CLN-1; duplicate graphs handled via CUT-2.
 ## 🧹 Prune sweeps (single-class hunts — see CLAUDE.md `#prune`)
 Each `#prune` run records its finds here so the sweep survives across sessions.
 
+### CRAMP — "roomy menu / labelled segmented control instead of a compact cycling pill" (rules 15 & 16)
+The class: an options menu that isn't as dense as the tightest shipped UI (the history-list ⚙ pill grid) — a mutually-exclusive choice rendered as a labelled segmented row ("Show as: Code | Short | Full") instead of ONE cycling pill, or a section header ("Settings") + roomy padding that eats vertical space.
+- ✅ **CRAMP-1** [Selector] — the exercise-selector menu (BOTH Graph & History via `renderSelector`): "Show as: Code|Short|Full name" segmented row → ONE cycling `Code/Short/Full` pill; dropped the "Settings" header; settings now a tight wrapping pill row; menu padding 0.7→0.45rem, pills 0.76→0.72rem. (b.2.7.x)
+- 🟠 **CRAMP-2** [Workouts] — machine-type `seg-toggle` (cable/gravity) and the add-form Day/Today `seg-toggle` are segmented button rows; per rule 15 a 2-state one could be a single cycling pill. Borderline (small, contextual) — judge before changing.
+- 🟢 **CRAMP-3** — sweep other `.seg-toggle` / `*-mode` button rows in `main.ts` for the same; most value-`-lbl` chips are NOT this class (they're data, leave them).
+
 ### SNAP — "synchronous heavy re-render / imperative scroll on tap" (rule 17)
 The root cause of both UI lag and scroll/close jank: interaction handlers rebuild whole view subtrees (`renderAll` / `renderWorkoutAnalysis`, ~31 `renderAll()` sites) synchronously, then patch scroll/open-state back. Tool: `deferRender(fn)` / `scheduleRender(after?)` — rAF-coalesced, scroll-preserving (in `main.ts`).
 - ✅ **SNAP-1** [Perf] — `scheduleRender()` + `deferRender()` helpers; 11 last-statement `renderAll()` handler calls coalesced; `scrollIntoView` center→nearest ×3. (b.2.7.2)

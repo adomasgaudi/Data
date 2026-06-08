@@ -2920,7 +2920,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    off the left or right edge of the screen. The chip grid inside just wraps. */
 .wa-sel-tools .wa-fe-menu {
   position: absolute; z-index: 40; top: calc(100% + 4px); /* floating menu — above the sticky selector (z-index 35) */
-  left: 0; right: 0; width: auto; min-width: 0; max-width: none; padding: 0.7rem;
+  left: 0; right: 0; width: auto; min-width: 0; max-width: none; padding: 0.45rem;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
 }
@@ -2942,9 +2942,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
 .wa-inc input { cursor: pointer; }
 /* Chip-label mode (Code / Full name) — a small segmented toggle in the ⚙ menu. */
-.wa-name-mode { display: flex; align-items: center; gap: 0.3rem; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
-.wa-name-mode-lbl { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-right: 0.15rem; }
-.wa-name-opt { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
+.wa-name-opt { font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 1px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); white-space: nowrap; }
 .wa-name-opt:hover { border-color: var(--accent); color: var(--accent); }
 .wa-name-opt.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Full-name chips can be long — let them wrap to their natural width. */
@@ -3068,7 +3066,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .idx-create { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; max-width: 22rem; }
 
 /* Controls moved inside the Exercises fold: Clear selection + Group by + search. */
-.wa-chips-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem 0.5rem 0.3rem; }
+.wa-chips-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0.2rem 0 0.35rem; }
 
 /* WorkoutAnalysis metadata filters + taxonomy editor (TASKS 19, 24). */
 .wa-filters, .wa-assign { margin: 0 0 0.6rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; }
@@ -3140,7 +3138,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-group-h { display: block; width: 100%; text-align: left; cursor: pointer; background: none; border: none; padding: 0.3rem 0 0.25rem; font: inherit; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
 .wa-group-h:hover { color: var(--accent); }
 .wa-group-h.is-off { opacity: 0.55; text-decoration: line-through; }
-.wa-fold-settings { margin: 0.2rem 0 0.3rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--line); }
+/* Selector settings: a tight wrapping row of small toggle pills (no "Settings"/"Show
+   as" labels) — as compact as the history-list ⚙ pills (#cramp). */
+.wa-fold-settings { display: flex; flex-wrap: wrap; gap: 4px; margin: 0.2rem 0 0.35rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--line); }
 /* A nested family subgroup (e.g. Handstand) inside a group: indented, with a
    lighter sub-header and a guide line on the left. */
 .wa-subgroup { margin: 0.15rem 0 0.3rem 0.5rem; padding-left: 0.5rem; border-left: 2px solid var(--line); }
