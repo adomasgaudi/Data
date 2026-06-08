@@ -32,6 +32,8 @@ function setCompactPref(on: boolean): void {
 export const getTimeCompact = (): boolean => compactPref;
 export const setTimeCompact = (on: boolean): void => setCompactPref(on);
 
+/** Scatter marker shapes — used to tell series apart by FORM (not just colour). */
+export type SvgShape = "circle" | "diamond" | "square" | "triangle" | "ring" | "plus";
 export interface SvgPoint {
   x: number;
   y?: number; // line / bars
@@ -59,6 +61,10 @@ export interface SvgSeries {
   name: string;
   color: string;
   type: "line" | "range" | "bars" | "scatter";
+  /** Scatter only: marker shape. Lets a multi-series chart use ONE colour (hue) per
+   * group (e.g. per athlete) and a different SHAPE per series (e.g. per exercise),
+   * so colour reads as "who" and shape as "what". Default = circle. */
+  shape?: SvgShape;
   /** Which y-scale this series uses (default "left"). */
   axis?: "left" | "right";
   points: SvgPoint[];
@@ -127,6 +133,44 @@ const dateLabel = (t: number) => {
 };
 const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] ?? c));
 const num = (v: number) => (Math.round(v * 10) / 10).toString();
+
+/** SVG markup for a scatter marker of `shape` centred at (cx,cy), radius r, in the
+ * series colour. `emphasize` (a record/PR) draws it a touch bigger and more solid.
+ * circle/diamond/square/triangle are filled; ring + plus are stroked (a second tier
+ * of "outline" forms) so up to six exercises stay distinct within one athlete hue. */
+function shapeMarker(shape: SvgShape, cx: number, cy: number, r: number, color: string, op: number, emphasize = false): string {
+  const o = emphasize ? Math.min(0.95, op + 0.3) : op;
+  const rr = emphasize ? r * 1.18 : r;
+  const X = cx.toFixed(1), Y = cy.toFixed(1);
+  const fill = `fill="${color}" fill-opacity="${o}"`;
+  switch (shape) {
+    case "square":
+      return `<rect x="${(cx - rr).toFixed(1)}" y="${(cy - rr).toFixed(1)}" width="${(2 * rr).toFixed(1)}" height="${(2 * rr).toFixed(1)}" rx="0.6" ${fill}/>`;
+    case "triangle": {
+      const h = rr * 1.25;
+      return `<path d="M${X} ${(cy - h).toFixed(1)} L${(cx + rr).toFixed(1)} ${(cy + rr * 0.75).toFixed(1)} L${(cx - rr).toFixed(1)} ${(cy + rr * 0.75).toFixed(1)} Z" ${fill}/>`;
+    }
+    case "diamond": {
+      const d = rr * 1.3;
+      return `<path d="M${X} ${(cy - d).toFixed(1)} L${(cx + d).toFixed(1)} ${Y} L${X} ${(cy + d).toFixed(1)} L${(cx - d).toFixed(1)} ${Y} Z" ${fill}/>`;
+    }
+    case "ring":
+      return `<circle cx="${X}" cy="${Y}" r="${rr.toFixed(1)}" fill="none" stroke="${color}" stroke-width="1.6" stroke-opacity="${Math.min(1, o + 0.25)}"/>`;
+    case "plus": {
+      const a = rr * 1.25;
+      return `<g stroke="${color}" stroke-width="1.9" stroke-linecap="round" stroke-opacity="${Math.min(1, o + 0.25)}"><line x1="${(cx - a).toFixed(1)}" y1="${Y}" x2="${(cx + a).toFixed(1)}" y2="${Y}"/><line x1="${X}" y1="${(cy - a).toFixed(1)}" x2="${X}" y2="${(cy + a).toFixed(1)}"/></g>`;
+    }
+    default:
+      return `<circle cx="${X}" cy="${Y}" r="${rr.toFixed(1)}" ${fill}/>`;
+  }
+}
+/** A tiny legend glyph (12×12 SVG) of a series' shape, or a colour square when the
+ * series has no shape — so the legend maps cleanly to the marker on the plot. */
+function legendDot(s: SvgSeries): string {
+  if (s.type === "scatter" && s.shape)
+    return `<svg class="svgc-dot svgc-dot-glyph" width="12" height="12" viewBox="-6 -6 12 12" aria-hidden="true">${shapeMarker(s.shape, 0, 0, 4, s.color, 0.9)}</svg>`;
+  return `<span class="svgc-dot" style="background:${s.color}"></span>`;
+}
 
 /** Blend a #rrggbb colour toward white by `amt` (0..1) → an rgb() string. */
 function lighten(hex: string, amt: number): string {
@@ -414,7 +458,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         keyHtml.push(
           `<span class="svgc-key${toggleable ? " is-toggle" : ""}${visible(s) ? "" : " is-off"}"` +
             `${toggleable ? ` role="button" tabindex="0" data-series="${esc(s.name)}" title="Show/hide ${esc(s.name)}"` : ""}>` +
-            `<span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</span>`,
+            `${legendDot(s)}${esc(s.name)}</span>`,
         );
       if (!visible(s)) continue; // hidden: in the legend, but not drawn
       // Optional per-series vertical shift (a fraction of the plot height, + = up):
@@ -442,6 +486,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             // A failed attempt → an ✕ in the SERIES colour (same as the lift).
             const d = 3.8;
             body += `<g stroke="${s.color}" stroke-width="1.8" stroke-linecap="round"><line x1="${(cx - d).toFixed(1)}" y1="${(cy - d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy + d).toFixed(1)}"/><line x1="${(cx - d).toFixed(1)}" y1="${(cy + d).toFixed(1)}" x2="${(cx + d).toFixed(1)}" y2="${(cy - d).toFixed(1)}"/></g>`;
+          } else if (s.shape) {
+            // Multi-series mode: this series' EXERCISE shape (colour = the athlete).
+            // A record (pr) is the same shape, just bigger + more solid so it still
+            // pops within the exercise's form.
+            const r = p.rir != null ? Math.min(3.2, Math.max(1.6, 3.2 - 0.22 * p.rir)) : 3.0;
+            body += shapeMarker(s.shape, cx, cy, r, s.color, 0.62, !!p.pr);
           } else if (p.pr) {
             // A new record → a diamond (≈ the dot's size, so records stand out
             // without dominating the scatter).
@@ -631,7 +681,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         const val = s.type === "range"
           ? `${num(p.lo ?? 0)}→${num(p.hi ?? 0)}${p.meta ? " " + esc(p.meta) : ""}`
           : `${num(p.y ?? 0)}${unit ? " " + unit : ""}`;
-        return `<div class="svgc-tip-row"><span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}: <b>${val}</b></div>`;
+        return `<div class="svgc-tip-row">${legendDot(s)}${esc(s.name)}: <b>${val}</b></div>`;
       })
       .join("");
     tipEl.innerHTML = `<div class="svgc-tip-hd">${esc(fmtTipX(xv))}</div>${rows}`;
@@ -682,7 +732,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const badges: string[] = [];
     if (p.pr) badges.push(`<span class="svgc-tip-badge pr">◆ record</span>`);
     if (p.fail) badges.push(`<span class="svgc-tip-badge fail">✕ fail</span>`);
-    const head = `<div class="svgc-tip-hd"><span class="svgc-dot" style="background:${s.color}"></span>${esc(s.name)}</div>`;
+    const head = `<div class="svgc-tip-hd">${legendDot(s)}${esc(s.name)}</div>`;
     const body = lines.map((l, i) => `<div class="svgc-tip-line${i === 0 ? " is-first" : ""}">${l}</div>`).join("");
     return `<button type="button" class="svgc-tip-x" aria-label="Close">✕</button>${head}${body}` +
       (badges.length ? `<div class="svgc-tip-badges">${badges.join("")}</div>` : "");

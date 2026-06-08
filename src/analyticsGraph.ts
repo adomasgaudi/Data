@@ -10,13 +10,16 @@
  * demonstrably alive. Multi-exercise, combined and comparison names all flow
  * through identically (it's name-based).
  */
-import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint } from "./svgChart";
+import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint, type SvgShape } from "./svgChart";
 import { decayedStrengthSeries, effectiveE1RM } from "./aggregate";
 import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import type { GraphConfig } from "./graphConfig";
 
 const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a8a", "#c0603a", "#7a6f9b", "#3a7d3a", "#9b59b6", "#d4843a", "#406a9e"];
+/** Scatter marker shapes, used in the multi-athlete overlay to tell EXERCISES apart
+ * by FORM while each ATHLETE keeps one colour (hue) — so colour = who, shape = what. */
+const EXERCISE_SHAPES: SvgShape[] = ["circle", "diamond", "square", "triangle", "ring", "plus"];
 
 /** A shade of a base hex colour, for distinguishing a 2nd+ series of the SAME
  * render-shape within one exercise. n=0 is the base; odd n lightens, even n
@@ -108,14 +111,16 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   // Same compute path either way — no mock data in the shipped view.
   const multiUser = !!(input.users && input.users.length > 1);
   const userLabel = (u: string) => input.userLabelOf?.(u) ?? u;
-  const groups: { label: string; records: SetRecord[]; user?: string }[] = isAll
+  const groups: { label: string; records: SetRecord[]; user?: string; userIdx?: number; exIdx?: number }[] = isAll
     ? [{ label: "All exercises", records: [...records] }]
     : multiUser
-      ? input.exercises.flatMap((ex) =>
-          input.users!.map((u) => ({
+      ? input.exercises.flatMap((ex, ei) =>
+          input.users!.map((u, ui) => ({
             label: `${userLabel(u)} · ${code(ex)}`,
             records: records.filter((r) => r.exerciseName === ex && r.username === u),
             user: u,
+            userIdx: ui, // colour (hue) = the athlete
+            exIdx: ei,   // shape = the exercise
           })),
         )
       : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
@@ -124,12 +129,16 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   let gi = -1;
   for (const g of groups) {
     gi++;
-    // ONE base colour per exercise: every metric for that lift (1RM dots, volume
-    // bars, …) shares it, so the eye groups them. A 2nd+ series of the SAME shape
-    // (e.g. two bar metrics) gets a shade of that base to stay distinguishable.
-    const base = SERIES_COLORS[gi % SERIES_COLORS.length]!;
+    // Single-exercise / single-athlete: ONE base colour per group, shaded per repeated
+    // render-shape. MULTI-ATHLETE overlay: the colour is the ATHLETE's hue (one per
+    // user) and EXERCISES are told apart by marker SHAPE — colour = who, shape = what.
+    const base = SERIES_COLORS[(multiUser ? g.userIdx ?? gi : gi) % SERIES_COLORS.length]!;
+    const exShape: SvgShape | undefined = multiUser ? EXERCISE_SHAPES[(g.exIdx ?? 0) % EXERCISE_SHAPES.length] : undefined;
     const shapeSeen: Record<string, number> = {};
     const colorFor = (type: string | undefined): string => {
+      // Multi-athlete: scatter keeps the pure athlete hue (shape carries the lift);
+      // a line/bar of that lift gets a per-exercise shade so same-hue lines still split.
+      if (multiUser) return shapeOf(type) === "scatter" ? base : shadeColor(base, g.exIdx ?? 0);
       const shape = shapeOf(type);
       const n = shapeSeen[shape] ?? 0;
       shapeSeen[shape] = n + 1;
@@ -149,7 +158,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           .map((r) => ({ x: Date.parse(r.date), y: Math.round((effectiveE1RM(r, input.config.formula)! / wr) * 1000) / 1000 }))
           .filter((p) => Number.isFinite(p.x))
           .sort((a, b) => a.x - b.x);
-        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: colorFor("scatter"), type: "scatter", points: pts as SvgPoint[] });
+        if (pts.length) series.push({ name: groups.length > 1 ? `${g.label} · vs WR` : "vs world record", color: colorFor("scatter"), type: "scatter", points: pts as SvgPoint[], ...(exShape ? { shape: exShape } : {}) });
         continue;
       }
       if (!m.compute) continue; // registered-but-not-computed metric
@@ -183,6 +192,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       if (pts.length)
         series.push({
           name, color: colorFor(m.type), type: m.type ?? "line", points: pts as SvgPoint[],
+          ...((m.type ?? "line") === "scatter" && exShape ? { shape: exShape } : {}),
           ...(m.axis ? { axis: m.axis } : {}),
           ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
           ...(isVolume && input.config.volumeYShift ? { yShiftFrac: input.config.volumeYShift } : {}),
