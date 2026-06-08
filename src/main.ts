@@ -12243,12 +12243,15 @@ let waListExerciseFilter: string[] = [];
 /** Expand selected names to the raw logged exercise names they cover: a combined
  * or comparison group becomes its members; everything else is itself. */
 function expandToRawExercises(names: readonly string[]): string[] {
-  const byName = new Map(userExerciseDefs.map((d) => [d.name, d]));
   const out = new Set<string>();
   for (const n of names) {
-    const def = byName.get(n);
-    if (def && (def.identity === "combined" || def.identity === "comparison_group") && def.members?.length)
-      for (const m of def.members) out.add(m);
+    // A synthetic combined/comparison lift — built-in (SQ mix, Squat pattern…) OR
+    // user-defined — expands to its member lifts; a plain lift is itself. Built-in
+    // groups MUST be covered: a lens-combined lift filtered the history on the
+    // synthetic name, which matches NO logged set, so the history came up empty
+    // (e.g. "no squats for Kristina" though she logged 37). syntheticMembers covers both.
+    const members = syntheticMembers(n);
+    if (members.length) for (const m of members) out.add(m);
     else out.add(n);
   }
   return [...out];

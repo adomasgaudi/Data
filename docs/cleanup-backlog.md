@@ -24,6 +24,11 @@ ones, re-grade as the code changes.
   single-source helpers `syntheticMembers` / `referenceMemberFor` / `inheritUnion`.
   `renderBwParts` now lists synthetics as rows (set count = members summed). Synthetic
   lifts no longer offer Combinable/Comparable editors (can't nest a group).
+  FOLLOW-UP (DONE, b.2.8.38): `expandToRawExercises` ignored BUILT-IN groups (only
+  user-defined), so a lens-combined lift filtered the history on a synthetic name that
+  matches no logged set → empty history ("no squats for Kristina"). Now uses
+  `syntheticMembers` (built-in + user). Audit any other synthetic→raw expansion for the
+  same built-in gap.
   STILL-OPEN: (a) the PURE `profile.ts` functions (`muscleGroup`, `exerciseCategory`…)
   still keyword-fail for synthetic names if called DIRECTLY rather than via the main.ts
   wrappers — fine today (app paths use the wrappers) but a trap; (b) `waMissingExercises`
