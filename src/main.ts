@@ -3082,6 +3082,24 @@ function remapCombined(recs: SetRecord[]): SetRecord[] {
   const primary = selectedExercise;
   return recs.map((r) => (extra.has(r.exerciseName) ? { ...r, exerciseName: primary } : r));
 }
+/** Relabel REGISTRY combinable-group members to their combined name (when the group
+ * is in "combined" display) so the workout history reads them as ONE lift — e.g. a
+ * person who only logs "Smith Machine Incline Close Grip Push Up" sees those sets
+ * under the combined "Push Up". Combinable groups are 1:1 (no weight scaling), so the
+ * logged weight/reps are untouched; only the name changes. */
+function remapRegistryCombined(recs: SetRecord[]): SetRecord[] {
+  const map = new Map<string, string>();
+  for (const g of effectiveCombinableGroups()) {
+    if (groupDisplayFor(g.id) !== "combined") continue;
+    const dn = g.derivedName ?? g.label;
+    for (const m of g.members ?? []) map.set(m.exerciseName, dn);
+  }
+  if (map.size === 0) return recs;
+  return recs.map((r) => {
+    const dn = map.get(r.exerciseName);
+    return dn ? { ...r, exerciseName: dn, originalExerciseName: r.originalExerciseName ?? r.exerciseName } : r;
+  });
+}
 let athleteWorkouts: WorkoutDay[] = [];
 
 // A row in the Workouts list: a day or a week (or an empty rest day).
@@ -3346,7 +3364,7 @@ function renderAthlete() {
   syncAthleteChips();
   S.workoutsPage = 0;
   selectedExercise = null;
-  athleteWorkouts = workoutsForUser(activeRecords(), els.athlete.value);
+  athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   initHeatYear();
   renderAthleteProfile();
@@ -5252,7 +5270,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   };
   // "Show all" (the history's "Hidden" toggle) bypasses the Index app-wide filter
   // for this list only, so lifts the filter hides reappear here.
-  const recs = woShowAllExercises ? liveRecords() : activeRecords();
+  const recs = remapRegistryCombined(woShowAllExercises ? liveRecords() : activeRecords());
   const period = historyPeriod(S.workoutViewMode);
   if (period) {
     // Period grouping (week / 2-week / month / 3-month). Inactive periods show as
@@ -10743,7 +10761,7 @@ function onInlineAddGo(form: HTMLElement) {
   );
   // The set just landed in data.records; rebuild this athlete's day cache so the
   // day view (week view reads activeRecords directly) reflects it too.
-  athleteWorkouts = workoutsForUser(activeRecords(), els.athlete.value);
+  athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value);
   renderWorkoutsPage();
   reopenWorkoutGroups(openDates);
   renderWorkoutCalendar();
