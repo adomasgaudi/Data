@@ -1924,6 +1924,12 @@ function hiddenByIndexCount(username: string): number {
     if (r.username === username && r.exerciseName && !allow.has(r.exerciseName)) hidden.add(r.exerciseName);
   return hidden.size;
 }
+/** Total distinct lifts this athlete has logged (the denominator for "H/T"). */
+function totalLiftsCount(username: string): number {
+  const all = new Set<string>();
+  for (const r of liveRecords()) if (r.username === username && r.exerciseName) all.add(r.exerciseName);
+  return all.size;
+}
 
 /** User-created exercise definitions (TASKS 13–15), saved on this device: a
  * "dissolved" variant (one parent), a "combined" group or a "comparison_group"
@@ -2925,8 +2931,13 @@ function syncWorkoutToggles(): void {
   els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
   els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
   els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
-  // "Hidden" only makes sense when the Index filter is actually hiding lifts; show
-  // it always so the control is discoverable, but mark it active when revealing.
+  // The "Hidden" control sits in the head row next to the ⚙. Label shows the
+  // counts: OFF → "⚑ hidden H/T" (some lifts hidden by the Index filter); ON →
+  // "hide H/T". Hidden entirely when nothing is hidden and we're not revealing.
+  const hid = hiddenByIndexCount(els.athlete.value);
+  const tot = totalLiftsCount(els.athlete.value);
+  els.woShowAllToggle.hidden = hid === 0 && !woShowAllExercises;
+  els.woShowAllToggle.textContent = woShowAllExercises ? `hide ${hid}/${tot}` : `⚑ hidden ${hid}/${tot}`;
   els.woShowAllToggle.classList.toggle("is-active", woShowAllExercises);
   els.woShowAllToggle.setAttribute("aria-pressed", woShowAllExercises ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
@@ -5440,6 +5451,23 @@ function renderWorkoutsPage() {
   if (S.workoutsPage < 0) S.workoutsPage = 0;
   const start = pageStarts[S.workoutsPage] ?? 0;
   const end = pageStarts[S.workoutsPage + 1] ?? workoutGroups.length;
+  // Per-day/week "hidden h/t" counts: how many of that day's lifts the Index filter
+  // hides (and the day's total), so each day with hidden lifts can show a grayed
+  // "hidden h/t" line. Only computed when the filter is actually hiding lifts and
+  // we're NOT already revealing them. Independent of the current selection scope.
+  const hiddenByKey = new Map<string, { total: number; hidden: number }>();
+  if (!woShowAllExercises && activeSet && hiddenByIndexCount(els.athlete.value) > 0) {
+    const allow = activeSet;
+    const liveBase = byWeek
+      ? weeksForUser(liveRecords(), els.athlete.value).map((w) => ({ key: w.weekStart, exercises: w.exercises }))
+      : workoutsForUser(liveRecords(), els.athlete.value).map((d) => ({ key: d.date, exercises: d.exercises }));
+    for (const d of liveBase) {
+      const names = new Set(d.exercises.map((e) => e.exerciseName));
+      let hidden = 0;
+      for (const nm of names) if (!allow.has(nm)) hidden++;
+      if (hidden > 0) hiddenByKey.set(d.key, { total: names.size, hidden });
+    }
+  }
   const rows = workoutGroups
     .slice(start, end)
     .map((g, i) => {
@@ -5482,6 +5510,12 @@ function renderWorkoutsPage() {
           .map(([label, c]) => `${escapeHtml(label)} <span class="muted">— ${c} set${c === 1 ? "" : "s"}</span>`)
           .join("<br>") || `<span class="muted">— none in this group</span>`;
       }
+      // A grayed "another exercise line" for the lifts the Index filter hides this
+      // day/week — a button that reveals them (the same toggle as the head-row one).
+      const hc = hiddenByKey.get(g.date);
+      if (hc) {
+        did += `<div class="wo-ex-line wo-hidden-line"><button type="button" class="wo-hidden-daybtn" data-woshowall="1" title="Show the ${hc.hidden} lift${hc.hidden === 1 ? "" : "s"} the Index filter hides ${byWeek ? "this week" : "this day"}">hidden ${hc.hidden}/${hc.total}</button></div>`;
+      }
       const tagged = aloneTags.has(aloneKey(g.date));
       // Day tags ("alone") are hidden unless the "Tags" display option is on.
       const tagBtn = S.showAloneTags
@@ -5516,23 +5550,11 @@ function setWoShowAll(on: boolean): void {
   renderWorkoutsPage();
 }
 
-/** Flag, above the history list, that the Index app-wide filter is hiding some of
- * this athlete's lifts — with a one-tap "Show all" (mirrors the ⚙ "Hidden"
- * toggle). Lives as a sibling of #workoutsTable so it travels with the relocated
- * panel into the Analysis view. */
+/** The "lifts hidden by the Index filter" flag now lives as a compact button in the
+ * history head row (next to the ⚙), rendered by {@link syncWorkoutToggles}. This
+ * just clears any leftover old full-width banner. */
 function renderWoHiddenNote(): void {
-  const n = hiddenByIndexCount(els.athlete.value);
-  const existing = document.getElementById("woHiddenNote");
-  if (!n && !woShowAllExercises) { existing?.remove(); return; }
-  const note = existing ?? document.createElement("div");
-  note.id = "woHiddenNote";
-  note.className = "wo-hidden-note";
-  note.innerHTML = woShowAllExercises
-    ? `<span>Showing all lifts${n ? ` — ${n} normally hidden by the Index filter` : ""}.</span> ` +
-      `<button type="button" class="wo-hidden-btn" data-woshowall="0">Hide them</button>`
-    : `<span>⚑ ${n} lift${n === 1 ? "" : "s"} hidden by the Index filter.</span> ` +
-      `<button type="button" class="wo-hidden-btn" data-woshowall="1">Show all</button>`;
-  if (!existing) els.workoutsTable.parentElement?.insertBefore(note, els.workoutsTable);
+  document.getElementById("woHiddenNote")?.remove();
 }
 
 function onWorkoutRowClick(e: MouseEvent) {
