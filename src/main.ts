@@ -11981,10 +11981,14 @@ function renderWorkoutAnalysis(): void {
     waSelected.length === 1 ? displayName(waSelected[0]!)
     : waSelected.length === 2 ? `${displayName(waSelected[0]!)} & ${displayName(waSelected[1]!)}`
     : null;
+  // The GRAPH title names what's actually ON THE GRAPH (waGraphSel) — not the
+  // history selection — and lists every plotted lift, so it doubles as the
+  // "what's on the graph" readout (the old separate count block is gone).
   const graphSummary = document.getElementById("waGraphSummary");
   if (graphSummary) {
-    graphSummary.innerHTML = selTitle ? `<span class="wa-seltitle">${escapeHtml(selTitle)}</span>` : "Graph";
-    graphSummary.classList.toggle("is-bigtitle", !!selTitle);
+    const graphTitle = waGraphSel.length ? waGraphSel.map((n) => displayName(n)).join(" · ") : null;
+    graphSummary.innerHTML = graphTitle ? `<span class="wa-seltitle">${escapeHtml(graphTitle)}</span>` : "Graph";
+    graphSummary.classList.toggle("is-bigtitle", !!graphTitle);
   }
   if (mode === "single" || mode === "compare") {
     // Selecting one OR more lifts is just a FILTER on the same all-exercises view —
@@ -12184,21 +12188,9 @@ function renderSelector(scope: SelScope): void {
   // strip (selPills) IS the picker, so the grid is hidden to avoid duplication;
   // otherwise the chip grid shows below the controls.
   const showGrid = !stickyCats;
-  // GRAPH selector: a big headline above the controls — the COUNT (title-size number)
-  // and the picked lift NAMES (near-title). Each name is itself the remove control:
-  // tap it to drop that lift from the graph (no ✕ icon, no separate pill row).
-  const bigSel = scope === "graph"
-    ? `<div class="wa-sel-big">` +
-      `<span class="wa-sel-bigcount">${cur.length}</span><span class="wa-sel-biglabel muted">on graph</span>` +
-      (cur.length
-        ? `<div class="wa-sel-bignames">` +
-          cur.map((n) => `<button type="button" class="wa-sel-bigname" data-waselpill="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join("") +
-          `</div>`
-        : "") +
-      `</div>`
-    : "";
+  // (The old "N on graph" big count + names block was removed — the graph TITLE now
+  // names every plotted lift, so it was redundant.)
   sel.innerHTML =
-    bigSel +
     `<div class="wa-sel-header">` +
     `<div class="wa-sel-tools">${groupCtl}${freqCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
     `</div>` +
