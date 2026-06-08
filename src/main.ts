@@ -12839,6 +12839,17 @@ function hideCmdPalette(): void {
   if (pal) { pal.hidden = true; pal.innerHTML = ""; }
   cmdActiveIdx = 0;
 }
+/** Recognise a "create [name]" query (case-insensitive). `hit` is true while the
+ * user is still typing the word "create" too (so we can prompt for a name early);
+ * `name` is whatever follows once the word is complete. "created"/"creative" are
+ * NOT treated as create commands. */
+function parseCreateQuery(raw: string): { hit: boolean; name: string } {
+  const s = raw.trim();
+  const ql = s.toLowerCase();
+  if (/^create\b/i.test(s)) return { hit: true, name: s.replace(/^create\b[\s:.-]*/i, "").trim() };
+  if (ql.length >= 4 && "create".startsWith(ql)) return { hit: true, name: "" }; // still typing "crea…"
+  return { hit: false, name: "" };
+}
 /** The plain-text search popup (like the "." command palette): choose whether the
  * query FILTERS the picker (default) or FINDS matching sets in the workout history,
  * plus one-shot Select-all / Clear. Reuses #cmdPalette + the .cmd-opt styling. */
@@ -12847,16 +12858,20 @@ function renderSearchPalette(value: string): void {
   if (!pal) return;
   const q = value.trim();
   if (!q) { hideCmdPalette(); return; }
-  // "create <Name>" → a single action to make a brand-new exercise.
-  const createM = /^create\s+(.+)$/i.exec(q);
-  if (createM) {
-    const name = createM[1]!.trim();
-    const exists = new Set(selectableExercises(data.records)).has(name) || userExerciseDefs.some((d) => d.name === name);
+  // "create [name]" → make a brand-new exercise. While the word is still being typed
+  // (or has no name yet) show a prompt; once a name is there, the ➕ action.
+  const cre = parseCreateQuery(q);
+  if (cre.hit) {
     cmdActiveIdx = 0;
     pal.hidden = false;
+    if (!cre.name) {
+      pal.innerHTML = `<div class="cmd-empty muted">➕ Create a new exercise — type its name: <b>create &lt;name&gt;</b></div>`;
+      return;
+    }
+    const exists = new Set(selectableExercises(data.records)).has(cre.name) || userExerciseDefs.some((d) => d.name === cre.name);
     pal.innerHTML =
       `<button type="button" class="cmd-opt is-active" data-searchact="createex" role="option">` +
-      `<span class="cmd-opt-cmd">➕ Create exercise “${escapeHtml(name)}”</span>` +
+      `<span class="cmd-opt-cmd">➕ Create exercise “${escapeHtml(cre.name)}”</span>` +
       `<span class="cmd-opt-desc">${exists ? "Already exists — opens it on the Add page" : "Opens the Add page to log its first set"}</span></button>`;
     return;
   }
@@ -12898,8 +12913,7 @@ function runSearchAction(act: string): void {
   if (act === "createex") {
     // Parse the name from "create <Name>" and open the Add page prefilled — the
     // exercise comes into being when its first set is logged.
-    const m = /^create\s+(.+)$/i.exec(input?.value.trim() ?? "");
-    const name = m ? m[1]!.trim() : "";
+    const name = parseCreateQuery(input?.value ?? "").name;
     hideCmdPalette();
     if (input) input.value = "";
     input?.blur();
@@ -12943,8 +12957,8 @@ function setupCommandBar(): void {
   input.addEventListener("input", () => {
     const v = input.value;
     if (v.startsWith(".")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
-    // "create <Name>" → offer to create a brand-new exercise (don't filter the picker).
-    if (/^create\s+\S/i.test(v)) { cmdActiveIdx = 0; renderSearchPalette(v); return; }
+    // "create [name]" → offer to create a brand-new exercise (don't filter the picker).
+    if (parseCreateQuery(v).hit) { cmdActiveIdx = 0; renderSearchPalette(v); return; }
     // On the Index page, plain text FINDS the lift in the Index (flat match list) —
     // it doesn't throw you to the Analysis view, and shows no action popup.
     if (document.getElementById("tab-bwparts")?.hidden === false) {
