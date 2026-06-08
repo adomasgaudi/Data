@@ -5926,8 +5926,39 @@ function renderHorizontalHistory(): void {
       cells += `<div class="hh-cell" style="grid-column:${col};grid-row:${row}"><span class="hh-rm">${rmTxt}</span><span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exName)}">${escapeHtml(displayName(exName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
     });
   });
+  // Scroll-position minimap: one small dot per period, taller ticks at month and
+  // year boundaries (so you can SEE you've scrolled a month vs 2 years), and the
+  // dot under the current scroll position highlighted. Subtle, no text.
+  const dotsHtml = groups
+    .map((g, i) => {
+      let cls = "hh-dot";
+      const prev = i > 0 ? groups[i - 1] : null;
+      if (prev) {
+        if (g.date.slice(0, 4) !== prev.date.slice(0, 4)) cls += " hh-dot-yr";
+        else if (g.date.slice(0, 7) !== prev.date.slice(0, 7)) cls += " hh-dot-mo";
+      }
+      return `<span class="${cls}"></span>`;
+    })
+    .join("");
   box.innerHTML = head +
+    `<div class="hh-dots" style="grid-template-columns:repeat(${P},1fr)">${dotsHtml}</div>` +
     `<div class="hh-grid" style="grid-template-columns:repeat(${P},var(--hh-card-w));grid-template-rows:auto repeat(${E},auto)">${cells}</div>`;
+  // Light the dot under the current horizontal scroll position (rAF-throttled).
+  const grid = box.querySelector<HTMLElement>(".hh-grid");
+  const dotsRow = box.querySelector<HTMLElement>(".hh-dots");
+  if (grid && dotsRow) {
+    const dotEls = Array.from(dotsRow.children) as HTMLElement[];
+    let raf = 0;
+    const sync = () => {
+      raf = 0;
+      const max = grid.scrollWidth - grid.clientWidth;
+      const frac = max > 0 ? grid.scrollLeft / max : 0;
+      const active = Math.round(frac * (dotEls.length - 1));
+      dotEls.forEach((d, i) => d.classList.toggle("is-active", i === active));
+    };
+    grid.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(sync); }, { passive: true });
+    sync();
+  }
 }
 
 /** Toggle the history's "show lifts hidden by the Index filter" mode, persist it,

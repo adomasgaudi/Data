@@ -1453,6 +1453,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hh-exp { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line); border-radius: 999px; padding: 0 0.4rem; margin-left: 0.3rem; }
 .hh-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.5rem; margin: 0 0 0.5rem; font-size: 0.82rem; }
 .hh-tools-hint { font-size: 0.72rem; }
+/* Scroll-position minimap above the carousel: a dot per period, taller ticks at
+   month / year boundaries (so the timeline scale reads at a glance), the current
+   scroll position highlighted. Fills the width so density = how many periods. */
+.hh-dots { display: grid; align-items: center; height: 11px; margin: 0 0 0.3rem; }
+.hh-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--line); opacity: 0.55; justify-self: center; transition: transform 0.1s; }
+.hh-dot.hh-dot-mo { width: 4px; height: 7px; border-radius: 2px; opacity: 0.75; }
+.hh-dot.hh-dot-yr { width: 4px; height: 11px; border-radius: 2px; opacity: 1; background: var(--muted); }
+.hh-dot.is-active { background: var(--accent); opacity: 1; transform: scale(1.7); }
 /* ONE grid: columns = periods (near-full-screen cards, peek the next), rows =
    lifts. Each grid row auto-sizes to its tallest cell across columns, so the same
    lift lines up on the same row in every card AND nothing is clipped. */
