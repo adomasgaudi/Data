@@ -5615,8 +5615,11 @@ function groupByKey<T>(items: readonly T[], keyOf: (t: T) => string): T[][] {
  * sessions: week / 2-week modes tint one band per DAY; month / 3-month modes tint
  * one band per WEEK *and* split the days inside it with a faint divider — so both
  * the week and the separate days are indicated. Day mode = one session, no tint. */
-function setListHtml(sets: readonly SetRecord[]): string {
+function setListHtml(setsAsc: readonly SetRecord[]): string {
   const mode = S.workoutViewMode;
+  // Newest-first everywhere (matches the history order): reverse the date-sorted
+  // sets so the latest day/week/set leads and a session's warmup reads at the end.
+  const sets = setsAsc.slice().reverse();
   if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
   const byWeekBand = mode === "month" || mode === "3month";
   if (!byWeekBand) {
@@ -5923,7 +5926,11 @@ function workoutGroupHtml(group: WorkoutGroup): string {
       `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
       `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
       `${addBtn}</td></tr>`;
-    const exSets = sets.filter((s) => s.exerciseName === e.exerciseName); // already date-sorted
+    // Newest-first: reverse the date-sorted sets so the latest DAY (and within a day
+    // the latest SET) leads, matching the history's newest→oldest order — so a
+    // session's warmup (done first) reads at the END, not the top. The day/week
+    // dividers below still fire on each date change in this reversed order.
+    const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
     let lastDay: string | null = null;
     let lastWeek: string | null = null;
     const setRows = exSets
