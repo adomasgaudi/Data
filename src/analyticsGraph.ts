@@ -21,6 +21,12 @@ const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#
  * by FORM while each ATHLETE keeps one colour (hue) — so colour = who, shape = what. */
 const EXERCISE_SHAPES: SvgShape[] = ["circle", "diamond", "square", "triangle", "ring", "plus"];
 
+/** The palette colour at index `i` (wraps). Exposed so a multi-athlete view can
+ * render an athlete colour key that matches the lines (each athlete = one colour). */
+export function seriesPaletteColor(i: number): string {
+  return SERIES_COLORS[((i % SERIES_COLORS.length) + SERIES_COLORS.length) % SERIES_COLORS.length]!;
+}
+
 /** A shade of a base hex colour, for distinguishing a 2nd+ series of the SAME
  * render-shape within one exercise. n=0 is the base; odd n lightens, even n
  * darkens, by a growing amount — so an exercise's series stay clearly "the same
@@ -131,7 +137,8 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     gi++;
     // Single-exercise / single-athlete: ONE base colour per group, shaded per repeated
     // render-shape. MULTI-ATHLETE overlay: the colour is the ATHLETE's hue (one per
-    // user) and EXERCISES are told apart by marker SHAPE — colour = who, shape = what.
+    // user, matching the athlete key above the chart) and EXERCISES are told apart by
+    // marker SHAPE — colour = who, shape = what.
     const base = SERIES_COLORS[(multiUser ? g.userIdx ?? gi : gi) % SERIES_COLORS.length]!;
     const exShape: SvgShape | undefined = multiUser ? EXERCISE_SHAPES[(g.exIdx ?? 0) % EXERCISE_SHAPES.length] : undefined;
     const shapeSeen: Record<string, number> = {};

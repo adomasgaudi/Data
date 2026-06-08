@@ -84,7 +84,7 @@ import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVE
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
-import { renderAnalyticsGraph } from "./analyticsGraph";
+import { renderAnalyticsGraph, seriesPaletteColor } from "./analyticsGraph";
 import { renderTestGraph, type TestPoint } from "./testGraph";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
@@ -12104,7 +12104,7 @@ function renderWaGraph(): void {
   let preservedLegend: Element | null = null;
   if (!chartBox) {
     box.innerHTML =
-      `<div id="waGraphChart"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
+      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphChart"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
     // The legend node was relocated into the bar; the SVG engine keeps writing into
@@ -12146,6 +12146,24 @@ function renderWaGraph(): void {
       : {}),
   };
   const drawn = chartBox ? renderAnalyticsGraph(chartBox, analyticsInput) : 0;
+  // Athlete colour KEY above the chart (only with several athletes overlaid): each
+  // athlete's name + the colour their lines use, so the overlay reads at a glance.
+  let keyEl = document.getElementById("waGraphAthKey");
+  if (!keyEl && chartBox) {
+    chartBox.insertAdjacentHTML("beforebegin", `<div id="waGraphAthKey" class="wa-ath-key" hidden></div>`);
+    keyEl = document.getElementById("waGraphAthKey");
+  }
+  if (keyEl) {
+    keyEl.hidden = !multiAthlete;
+    keyEl.innerHTML = multiAthlete
+      ? gAthletes
+          .map((u, i) => {
+            const lbl = rosterUsers().find((r) => r.username === u)?.user ?? u;
+            return `<span class="wa-ath-key-item"><span class="wa-ath-key-dot" style="background:${seriesPaletteColor(i)}"></span>${escapeHtml(lbl)}</span>`;
+          })
+          .join("")
+      : "";
+  }
   // Re-plot just the chart with the live config (no menu rebuild) — used by the
   // Volume-shift slider's live drag. Reads waGraphConfig at call time, so the
   // current shift is picked up; finds the current chart element each call.

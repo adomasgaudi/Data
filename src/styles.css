@@ -551,12 +551,17 @@ main { padding-bottom: 5rem; }
 .svgc-legend-sum::after { content: " ▾"; color: var(--muted); }
 .svgc-legend-fold[open] .svgc-legend-sum { border-color: var(--accent); background: var(--accent-soft); }
 .svgc-legend-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; left: auto;
   display: flex; flex-direction: column; gap: 0.45rem; padding: 0.6rem 0.7rem;
   min-width: 12rem; max-width: 92vw; max-height: 60vh; overflow-y: auto;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  /* See-through so the graph behind stays visible; a blur keeps the keys legible. */
+  background: color-mix(in srgb, var(--panel) 72%, transparent); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
 }
+/* Open ABOVE the button when there's more room above (it then floats over the chart
+   rather than pushing the page) — toggled by JS measuring the space. */
+.svgc-legend-fold--up .svgc-legend-menu { top: auto; bottom: calc(100% + 4px); }
 /* When there are 2+ series, legend keys are clickable show/hide toggles. */
 .svgc-key.is-toggle { cursor: pointer; padding: 1px 6px; border-radius: var(--r-pill); border: 1px solid transparent; user-select: none; }
 .svgc-key.is-toggle:hover { border-color: var(--line); }
@@ -3058,7 +3063,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Graph options + Legend sit side by side in one bar, each a floating dropdown
    (their menus overlay the chart, so opening either never pushes the layout). */
 .wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; position: relative; }
-.wa-graph-bar .svgc-legend { margin: 0; }
+.wa-graph-bar .svgc-legend { margin: 0 0 0 auto; }
+/* Per-athlete colour key above the chart (multi-athlete overlay): name + line colour,
+   one sideways-scrolling row so it never pushes the chart down. */
+.wa-ath-key { display: flex; flex-wrap: nowrap; gap: 0.3rem 0.9rem; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 0.3rem; font-size: 0.74rem; font-weight: 600; color: var(--text); }
+.wa-ath-key-item { display: inline-flex; align-items: center; gap: 0.3rem; flex: 0 0 auto; white-space: nowrap; }
+.wa-ath-key-dot { width: 11px; height: 11px; border-radius: 3px; flex: none; }
 /* Multi-athlete overlay row: a label + ONE sideways-scrolling row of athlete pills
    (rule: cram — swipe, never wrap into a tall block) + the series-budget hint. */
 .wa-ath-overlay { display: flex; align-items: center; gap: 0.35rem; width: 100%; min-width: 0; }

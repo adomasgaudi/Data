@@ -636,9 +636,21 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         ? `<details class="svgc-legend-fold"${legendOpen ? " open" : ""}><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
           `<div class="svgc-legend-menu">${keys}</div></details>${compactBtn}`
         : keys + compactBtn;
-    // Sync the remembered open state when the user opens/closes it directly.
+    // Sync the remembered open state when the user opens/closes it directly, and on
+    // open decide whether to flip the menu ABOVE the button (when there's more room
+    // above than below — it then overlays the chart instead of pushing the page).
     const fold = legendEl.querySelector<HTMLDetailsElement>(".svgc-legend-fold");
-    if (fold) fold.addEventListener("toggle", () => { legendOpen = fold.open; });
+    if (fold) fold.addEventListener("toggle", () => {
+      legendOpen = fold.open;
+      if (!fold.open) { fold.classList.remove("svgc-legend-fold--up"); return; }
+      const sum = fold.querySelector<HTMLElement>(".svgc-legend-sum");
+      const menu = fold.querySelector<HTMLElement>(".svgc-legend-menu");
+      if (!sum || !menu) return;
+      const r = sum.getBoundingClientRect();
+      const need = Math.min(menu.scrollHeight + 12, window.innerHeight * 0.6);
+      const below = window.innerHeight - r.bottom, above = r.top;
+      fold.classList.toggle("svgc-legend-fold--up", below < need && above > below);
+    });
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
     plotEl.innerHTML =
