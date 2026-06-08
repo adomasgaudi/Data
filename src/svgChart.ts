@@ -769,6 +769,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const need = Math.min(menu.scrollHeight + 12, window.innerHeight * 0.6);
       const below = window.innerHeight - r.bottom, above = r.top;
       fold.classList.toggle("svgc-legend-fold--up", below < need && above > below);
+      // Horizontal: clamp the menu into the viewport. It is right-aligned to the
+      // button by default, which runs off the LEFT edge when the button sits near
+      // the left. Measure and pin its left so it always stays fully on-screen.
+      const foldRect = fold.getBoundingClientRect();
+      const menuW = menu.offsetWidth;
+      const vpLeft = Math.max(8, Math.min(r.right - menuW, window.innerWidth - 8 - menuW));
+      menu.style.right = "auto";
+      menu.style.left = `${(vpLeft - foldRect.left).toFixed(1)}px`;
     });
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
