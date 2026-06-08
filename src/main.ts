@@ -5565,28 +5565,32 @@ function mondayKey(iso: string): string {
   dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
   return dt.toISOString().slice(0, 10);
 }
-/** One exercise's sets as compact chips, with a SUBTLE separator where the day
- * changes (week / 2-week modes) or the week changes (month / 3-month modes), so a
- * period bucket still reads as distinct sessions. Day mode = one day, no separators. */
+/** One exercise's sets as compact chips, grouping each SESSION into a faint
+ * tinted block so a period bucket reads as distinct sessions: one block per day
+ * (week / 2-week modes) or per week (month / 3-month modes). Day mode = one
+ * session, no tint. Subtle on purpose — a quiet band, not a loud divider. */
 function setListHtml(sets: readonly SetRecord[]): string {
   const mode = S.workoutViewMode;
   const sepKind: "day" | "week" | null =
     mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
-  if (!sepKind) return sets.map((s) => setDisplay(s)).join(" ");
+  if (!sepKind || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
   const key = (d: string) => (sepKind === "week" ? mondayKey(d) : d);
-  let prev: string | null = null;
-  const out: string[] = [];
+  // Group consecutive sets sharing the session key (sets are already date-sorted).
+  const groups: SetRecord[][] = [];
+  let curKey: string | null = null;
   for (const s of sets) {
     const k = key(s.date);
-    if (prev !== null && k !== prev) {
-      out.push(sepKind === "week"
-        ? `<span class="wo-set-wsep" title="${escapeHtml(periodGroupLabel(mondayKey(s.date), "week"))}"></span>`
-        : `<span class="wo-set-dsep" title="${escapeHtml(shortDate(s.date))}"></span>`);
-    }
-    out.push(setDisplay(s));
-    prev = k;
+    if (k !== curKey) { groups.push([]); curKey = k; }
+    groups[groups.length - 1]!.push(s);
   }
-  return out.join(" ");
+  return groups
+    .map((g) => {
+      const title = sepKind === "week"
+        ? periodGroupLabel(mondayKey(g[0]!.date), "week")
+        : shortDate(g[0]!.date);
+      return `<span class="wo-sess" title="${escapeHtml(title)}">${g.map((s) => setDisplay(s)).join(" ")}</span>`;
+    })
+    .join(" ");
 }
 
 function renderWorkoutsPage() {

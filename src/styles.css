@@ -38,6 +38,7 @@
   /* Workout-history rest-day sliver fill: a clear shade darker than the day rows,
      so the empty-day lines read on the light page (not a near-invisible tint). */
   --rest-fill: #ddd9cd;
+  --sess-bg: rgba(40, 78, 134, 0.07); /* faint session band in the period history */
 }
 /* Dark theme — set on <html data-theme="dark">. A deep slate that keeps the
    lapis + ochre accents readable. */
@@ -63,6 +64,7 @@
   --hm-bd-even: #2b3340;
   --hm-bd-odd: #3c4757;
   --rest-fill: #2b3340; /* a shade lighter than the dark page, same visible-line intent */
+  --sess-bg: rgba(255, 255, 255, 0.07); /* faint session band in the period history */
 }
 * { box-sizing: border-box; }
 /* The [hidden] attribute must always win — class rules like `.ex-period-bar
@@ -1423,11 +1425,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Workouts session line: each set written as weight^reps. */
 .wo-exname { font-weight: 600; }
 .wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
-/* Subtle session separators inside a period bucket's set list: a faint hairline
-   between different days (week modes), a slightly taller/clearer one between weeks
-   (month / 3-month modes). Just enough to read distinct sessions, not loud. */
-.wo-set-dsep { display: inline-block; width: 0; height: 0.8em; border-left: 1px solid var(--line); opacity: 0.5; margin: 0 0.18rem; vertical-align: -0.05em; }
-.wo-set-wsep { display: inline-block; width: 0; height: 1.05em; border-left: 2px solid var(--line); opacity: 0.8; margin: 0 0.32rem; vertical-align: 0; }
+/* Period buckets (week / month modes) tint each SESSION's run of sets with a
+   faint rounded band, so distinct sessions read at a glance without loud dividers.
+   box-decoration-break keeps the band tidy when the set list wraps to more lines. */
+.wo-sess {
+  background: var(--sess-bg, rgba(0,0,0,0.05)); border-radius: 6px;
+  padding: 0.04rem 0.32rem; margin-right: 0.28rem;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
 .wo-note { font-style: italic; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
 /* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
