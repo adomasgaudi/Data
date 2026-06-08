@@ -5188,6 +5188,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+  if (openSetInfo(target)) return; // a set's ⓘ → open the exercise in the Index
   if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
   // Category mode: tapping a category header collapses/expands its exercises.
@@ -6285,6 +6286,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
+  if (openSetInfo(target)) return; // a set's ⓘ → open the exercise in the Index
   if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
   // An exercise name in an expanded day -> filter the Analysis view to just that
@@ -6474,8 +6476,6 @@ const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): 
 const SETS_HEAD =
   `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. High = the set was easy (many left); ~0 = near failure. Tap a number to see the maths.">pRIR</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
 
-/** How many characters of a note to show inline before truncating with "…". */
-const NOTE_PREVIEW_LEN = 8;
 
 /**
  * A readable, math-paper-style derivation of a set's estimated 1RM — one step per
@@ -6569,9 +6569,8 @@ function predictedRirText(c: SetRecord, anchorE1RM: number | null, formula: OneR
 /**
  * One set as table rows: the W/1RM/Vol line. The 1RM cell is a button — tapping
  * it expands a sub-row showing the exact formula and numbers used. When the set
- * has a note (or is a dropset) a short truncated preview sits on the left of the
- * weight cell with a caret; tapping the row expands the full note. Both reveals
- * are independent sub-rows, so a set can show either or both.
+ * has a note (or is a dropset) the WHOLE note shows on its own muted sub-row right
+ * under the set (no truncation). Both reveals are independent sub-rows.
  */
 function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
@@ -6594,13 +6593,6 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       ? "—"
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
   const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, s.notes ?? "")].filter(Boolean).join(" · ");
-  let preview = "";
-  if (note) {
-    const short = note.length > NOTE_PREVIEW_LEN ? `${note.slice(0, NOTE_PREVIEW_LEN)}…` : note;
-    preview =
-      `<button type="button" class="set-note" title="${escapeHtml(note)}">` +
-      `${escapeHtml(short)}<span class="set-note-cue">›</span></button>`;
-  }
   // The 1RM is, by definition, a weight done for ONE rep — so show it as
   // value¹ (matching the weight column's weight^reps), making that explicit.
   const e1rmCell =
@@ -6660,13 +6652,15 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const main =
     `<tr class="set-main${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
     `title="Tap to edit this set (weight, reps, bodyweight, scale)">` +
-    `<td class="num wcell">${effTag}${preview}${lvlTag}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
+    `<td class="num wcell"><button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${effTag}${lvlTag}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
     `<td class="num rpe-cell">${rpeCell}</td></tr>`;
+  // Show the WHOLE note on its own line under the set (no truncation) — in the
+  // expanded set views readability beats compactness.
   const noteRow = note
-    ? `<tr class="set-note-row" hidden><td colspan="5" class="muted">${escapeHtml(note)}</td></tr>`
+    ? `<tr class="set-note-row"><td colspan="5" class="muted">${escapeHtml(note)}</td></tr>`
     : "";
   const formulaRow =
     e1rm === null
@@ -6773,6 +6767,16 @@ function toggleSetNote(target: HTMLElement): boolean {
     const hidden = noteRow.toggleAttribute("hidden");
     row.classList.toggle("is-open", !hidden);
   }
+  return true;
+}
+
+/** A set row's ⓘ button → open that exercise in the Index (its settings card over
+ * the all-exercises list). Returns true when the button was hit, so the row click
+ * doesn't also open the set's edit panel. Shared by both sets tables. */
+function openSetInfo(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-info[data-waexinfo]");
+  if (!btn?.dataset.waexinfo) return false;
+  openExerciseInfo(btn.dataset.waexinfo);
   return true;
 }
 
