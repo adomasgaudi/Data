@@ -12281,6 +12281,25 @@ function refreshHistorySearch(): void {
   waListExerciseFilter = historyFilterWithSearch(base);
 }
 
+/** A big section title from a lift selection: the first 5 lift NAMES + "… +N" when
+ * there are more (never a wall of text, but always shows up to 5 names — not a bare
+ * count). `removable` makes each name a tap-to-remove-from-graph button AND prepends a
+ * total-count badge (graph title); plain text otherwise (history title). Shared so the
+ * graph and Calendar/history titles cap IDENTICALLY (the recurring "one capped, one
+ * not" bug). */
+const TITLE_NAME_CAP = 5;
+function liftSelectionTitle(sel: readonly string[], removable = false): string {
+  if (sel.length === 0) return "";
+  const sep = `<span class="wa-title-sep"> · </span>`;
+  const names = sel.slice(0, TITLE_NAME_CAP).map((n) => removable
+    ? `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`
+    : escapeHtml(displayName(n))).join(sep);
+  const more = sel.length > TITLE_NAME_CAP
+    ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — trim in the picker below">… +${sel.length - TITLE_NAME_CAP}</span>`
+    : "";
+  const count = removable ? `<span class="wa-title-count" title="${sel.length} lifts on the graph">${sel.length}</span>` : "";
+  return `${count}<span class="wa-seltitle">${names}${more}</span>`;
+}
 function renderWorkoutAnalysis(): void {
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
   // view opens as a real selection (pills shown), not the implicit aggregate.
@@ -12303,18 +12322,9 @@ function renderWorkoutAnalysis(): void {
   // "what's on the graph" readout (the old separate count block is gone).
   const graphSummary = document.getElementById("waGraphSummary");
   if (graphSummary) {
-    // Title = the total COUNT (always) + the first 5 lift names, each a button that
-    // REMOVES it from the graph (it stops the summary's collapse — see the
-    // data-graphremove handler), then a "…" when there are more than 5 (kept short so
-    // it never becomes a wall of text). The caret / empty space still toggle the fold.
-    const SHOWN = 5;
-    graphSummary.innerHTML = waGraphSel.length === 0
-      ? "Graph"
-      : `<span class="wa-title-count" title="${waGraphSel.length} lifts on the graph">${waGraphSel.length}</span>` +
-        `<span class="wa-seltitle">` +
-        waGraphSel.slice(0, SHOWN).map((n) => `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join(`<span class="wa-title-sep"> · </span>`) +
-        (waGraphSel.length > SHOWN ? `<span class="wa-title-more" title="${waGraphSel.length - SHOWN} more — trim in the picker below">… +${waGraphSel.length - SHOWN}</span>` : "") +
-        `</span>`;
+    // Title = a count badge + the first 5 lift names (each a button that REMOVES it
+    // from the graph — see the data-graphremove handler) + "… +N" when there are more.
+    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : liftSelectionTitle(waGraphSel, true);
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
@@ -12337,9 +12347,7 @@ function renderWorkoutAnalysis(): void {
     if (calHistTitle) {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
       // "Calendar & history" prefix, no member breakdown, no ℹ.
-      calHistTitle.innerHTML = waSelected.length
-        ? `<span class="wa-seltitle">${waSelected.map((n) => escapeHtml(displayName(n))).join(`<span class="wa-title-sep"> · </span>`)}</span>`
-        : "Calendar & history";
+      calHistTitle.innerHTML = waSelected.length ? liftSelectionTitle(waSelected) : "Calendar & history";
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
