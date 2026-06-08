@@ -35,6 +35,9 @@
   --hm-rest-odd: #eceef1;
   --hm-bd-even: #d4d9e2;
   --hm-bd-odd: #b3bbc8;
+  /* Workout-history rest-day sliver fill: a clear shade darker than the day rows,
+     so the empty-day lines read on the light page (not a near-invisible tint). */
+  --rest-fill: #ddd9cd;
 }
 /* Dark theme — set on <html data-theme="dark">. A deep slate that keeps the
    lapis + ochre accents readable. */
@@ -59,6 +62,7 @@
   --hm-rest-odd: #20272f;
   --hm-bd-even: #2b3340;
   --hm-bd-odd: #3c4757;
+  --rest-fill: #2b3340; /* a shade lighter than the dark page, same visible-line intent */
 }
 * { box-sizing: border-box; }
 /* The [hidden] attribute must always win — class rules like `.ex-period-bar
@@ -1718,11 +1722,11 @@ sup.wr-bw { font-size: 0.85em; }
 /* A rest day in the Show-rest-days view: a thin sliver, no text — each line is
    one empty day, so you can see at a glance how many days passed between
    sessions. Hover/tap shows the date via the row's title. */
-.rest-row td { height: 3px; padding: 0; border-bottom: 1px solid var(--line); background: var(--accent-soft); }
+.rest-row td { height: 3px; padding: 0; border-bottom: 1px solid var(--line); background: var(--rest-fill); }
 .rest-row:hover td { background: var(--accent); }
 /* Broken-axis break for a long run of empty days (collapseRestRuns): a centred,
    dashed "N more rest days" marker standing in for the skipped slivers. */
-.rest-gap-row td { padding: 0.15rem 0; text-align: center; background: var(--accent-soft); border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.rest-gap-row td { padding: 0.15rem 0; text-align: center; background: var(--rest-fill); border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
 .rest-gap { font-size: 0.7rem; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
 /* 3-letter exercise code (used where space is tight, e.g. the Records table). */
 .ex-code { font-weight: 700; letter-spacing: 0.05em; }

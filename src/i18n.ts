@@ -166,7 +166,7 @@ const LT: Record<string, string> = {
   "Filter by exercise…": "Filtruoti pagal pratimą…",
   "No workouts.": "Treniruočių nėra.",
   "No workouts for that filter.": "Nėra treniruočių pagal šį filtrą.",
-  "more rest days": "daugiau poilsio dienų",
+  "rest days": "poilsio dienų",
   "Show all": "Rodyti visus",
   "Hide them": "Slėpti juos",
   "Hidden": "Paslėpti",

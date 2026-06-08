@@ -4940,9 +4940,9 @@ function buildWorkoutGroups(): WorkoutGroup[] {
 
 /** A long stretch of empty/rest days is a giant gray void (especially when the
  * history is scoped to a rarely-trained lift). Collapse any run of MORE than 20
- * consecutive rest slivers into the first 10 · a "N more rest days" break · the
- * last 10 — a discontinuous, broken-axis look so the gap reads at a glance without
- * scrolling past hundreds of empty rows. */
+ * consecutive rest slivers into the first 10 · a "N rest days" break labelled with
+ * the run's TOTAL · the last 10 — a discontinuous, broken-axis look so the whole
+ * gap reads at a glance without scrolling past hundreds of empty rows. */
 function collapseRestRuns(groups: WorkoutGroup[]): WorkoutGroup[] {
   const CAP = 20, HEAD = 10, TAIL = 10;
   const out: WorkoutGroup[] = [];
@@ -4952,9 +4952,8 @@ function collapseRestRuns(groups: WorkoutGroup[]): WorkoutGroup[] {
     while (j < groups.length && groups[j]!.rest) j++; // the whole consecutive rest run
     const run = groups.slice(i, j);
     if (run.length > CAP) {
-      const hidden = run.length - HEAD - TAIL;
       out.push(...run.slice(0, HEAD));
-      out.push({ label: `${hidden} rest days`, date: run[HEAD]!.date, totalSets: 0, exercises: [], sets: [], rest: true, gap: hidden });
+      out.push({ label: `${run.length} rest days`, date: run[HEAD]!.date, totalSets: 0, exercises: [], sets: [], rest: true, gap: run.length });
       out.push(...run.slice(run.length - TAIL));
     } else {
       out.push(...run);
@@ -5559,7 +5558,7 @@ function renderWorkoutsPage() {
         if (g.gap) {
           // A collapsed run of empty days: a broken-axis break showing how many
           // rest days were skipped between the slivers above and below.
-          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td colspan="2"><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">more rest days</span> ⋯</span></td></tr>`;
+          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td colspan="2"><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">rest days</span> ⋯</span></td></tr>`;
         }
         // A rest day is just a thin sliver with a separating line — count the
         // lines between sessions to see how many days passed, no text needed.
