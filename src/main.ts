@@ -10732,13 +10732,15 @@ function renderSelector(scope: SelScope): void {
   const matchSrc = scope === "graph" ? "hist" : "graph";
   const matchLabel = scope === "graph" ? "Match history" : "Match graph";
   const matchBtn = `<button type="button" class="wa-clear wa-match" data-matchfrom="${matchSrc}" title="Copy the other selector's picks here">${matchLabel}</button>`;
+  // These controls live at the TOP level (in the header, next to the button), not
+  // buried in the menu: Group-by, Pills mode, Select all, Clear.
+  const groupCtl = `<label class="wa-gcfg-f wa-sel-group">Group<select class="wa-groupby">${groupOpts}</select></label>`;
+  const selAllBtn = `<button type="button" class="wa-selectall wa-clear">Select all</button>`;
+  const clearBtn = `<button type="button" class="wa-clearsel wa-clear"${cur.length ? "" : " disabled"}>Clear</button>`;
+  // The fold menu keeps the heavier / rarer tools alongside the chip grid.
   const foldTools =
     `<div class="wa-chips-tools">` +
-    `<button type="button" class="wa-selectall wa-clear">Select all</button>` +
-    `<button type="button" class="wa-clearsel wa-clear"${cur.length ? "" : " disabled"}>Clear selection</button>` +
     matchBtn +
-    `<label class="wa-gcfg-f">Group by<select class="wa-groupby">${groupOpts}</select></label>` +
-    modeToggle +
     missingToggle +
     searchActive +
     `</div>`;
@@ -10777,25 +10779,13 @@ function renderSelector(scope: SelScope): void {
   const trimBtn = (scope === "graph" && cur.length > WA_GRAPH_MAX)
     ? `<button type="button" class="wa-clear wa-trimgraph wa-match-graph" title="Trim this graph selection to just the ${WA_GRAPH_MAX} lifts the graph plots">Trim to ${WA_GRAPH_MAX}</button>`
     : "";
+  // Pills sit on their OWN row UNDER the buttons: a 2-row strip that scrolls
+  // sideways once it's full (CSS handles the 2-row cap + horizontal scroll).
   sel.innerHTML =
     `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${exercisesFold}${trimBtn}</div>` +
-    selPills +
-    `</div>`;
-  const pillsEl = sel.querySelector<HTMLElement>(".wa-sel-pills");
-  if (pillsEl) {
-    pillsEl.classList.remove("wa-sel-pills--scroll");
-    pillsEl.style.maxHeight = "";
-    const rowH = (pillsEl.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0;
-    if (rowH) {
-      // Cap the block at exactly 3 rows (rows + the 2 gaps between them); beyond
-      // that it scrolls vertically instead of growing.
-      const gap = 0.3 * 16; // matches the .wa-sel-pills gap (0.3rem)
-      const cap = rowH * 3 + gap * 2;
-      pillsEl.style.maxHeight = `${cap}px`;
-      if (pillsEl.scrollHeight > cap + 4) pillsEl.classList.add("wa-sel-pills--scroll");
-    }
-  }
+    `<div class="wa-sel-tools">${exercisesFold}${groupCtl}${modeToggle}${selAllBtn}${clearBtn}${trimBtn}</div>` +
+    `</div>` +
+    selPills;
   renderWaChipsScope(scope);
   const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
   if (newWrap) newWrap.scrollTop = prevChipScroll;

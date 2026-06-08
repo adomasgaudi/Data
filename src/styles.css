@@ -2750,21 +2750,19 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* WorkoutAnalysis: header row with title + ⚙ cog for identity toggles. */
 .wa-sel-header { display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 0.4rem; margin: 0 0 0.4rem; position: relative; }
 .wa-sel-header .wa-section-title { margin: 0; }
-/* The Exercises button sits fixed at the left; the selected pills scroll sideways
-   in the rest of the row (see .wa-sel-pills). */
-.wa-sel-tools { display: flex; flex-wrap: nowrap; gap: 0.4rem; flex: none; align-items: center; justify-content: flex-start; }
-/* Selected-exercise pills (EXR-SEL-PILLS): wrap onto up to 3 lines beside the
-   Exercises button (using the empty space below it); only once they'd need MORE
-   than 3 lines does the block stay 3-rows tall and scroll VERTICALLY (owner ask —
-   the 3-row cap keeps it from growing endlessly while still showing more at once).
-   JS sets the exact 3-row max-height and flags overflow with .wa-sel-pills--scroll. */
+/* Header controls next to the button: the lifts dropdown + Group / Pills / Select
+   all / Clear. They wrap to a second line on a narrow screen rather than overflow. */
+.wa-sel-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; flex: 1 1 auto; min-width: 0; align-items: center; justify-content: flex-start; }
+.wa-sel-group { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+/* Selected-exercise pills (EXR-SEL-PILLS): their OWN row UNDER the buttons. Lay
+   out as TWO rows that fill column-by-column, then scroll SIDEWAYS once full —
+   so the block is at most 2 rows tall and you swipe to see the rest (rule 16). */
 .wa-sel-pills {
-  display: flex; flex-wrap: wrap; gap: 0.3rem;
-  flex: 1 1 auto; min-width: 0;
-  max-height: 5.4rem; overflow-x: hidden; overflow-y: auto; align-content: flex-start;
-  touch-action: pan-y; -webkit-overflow-scrolling: touch;
+  display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto);
+  grid-auto-columns: max-content; gap: 0.3rem; align-content: start; justify-content: start;
+  margin: 0 0 0.4rem; overflow-x: auto; overflow-y: hidden;
+  touch-action: pan-x; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
 }
-.wa-sel-pills.wa-sel-pills--scroll { scrollbar-width: thin; padding-bottom: 2px; }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
 .wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
@@ -2927,7 +2925,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Member picker (graph-selector design): chosen pills on top, a search box, then a
    scrollable wrap of tappable exercise chips — replaces the old native multi-select. */
 .wa-create-picker { display: flex; flex-direction: column; gap: 0.4rem; }
-.wa-create-picker .wa-sel-pills { max-height: 5.4rem; }
+.wa-create-picker .wa-sel-pills { margin: 0; } /* same 2-row strip as the graph selector */
 .wa-create-search { font: inherit; font-size: 0.85rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); }
 .wa-create-picker .wa-ex-chips { max-height: 13rem; overflow-y: auto; align-content: flex-start; padding: 2px; touch-action: pan-y; }
 .wa-create-empty { font-size: 0.8rem; }
