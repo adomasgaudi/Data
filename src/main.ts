@@ -3532,11 +3532,19 @@ function renderAthleteProfile() {
   const idealTop = ((idealLoFr * bw) / barTotal) * 100;
   const idealBot = Math.min(100, ((idealHiFr * bw) / barTotal) * 100);
   const idealRangeLbl = `${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}%`;
-  // The band is drawn on the bar as a dashed zone (no text inside — it overlapped the
-  // Fat label); the range is spelled out in a caption under the bar instead.
+  // The band is drawn on the bar as a dashed, FILL-LESS zone (no text inside — it
+  // overlapped the Fat label); the range is spelled out in a caption under the bar.
   const idealBand = fatKg > 0
     ? `<div class="bc-fat-ideal" style="top:${idealTop.toFixed(1)}%;height:${Math.max(0, idealBot - idealTop).toFixed(1)}%" ` +
       `title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}: ${idealRangeLbl} of bodyweight"></div>`
+    : "";
+  // Essential-fat zone (the very lean top ~0–5% of bodyweight) marked in DARK gold,
+  // clamped to the fat region. Measured DOWN from the top like the ideal band.
+  const essTop = p.sex === "f" ? 0.12 : 0.05; // essential-fat fraction (men ~5%, women ~12%)
+  const essH = Math.min(fatH, ((essTop * bw) / barTotal) * 100);
+  const essentialBand = fatKg > 0
+    ? `<div class="bc-fat-essential" style="top:0;height:${essH.toFixed(1)}%" ` +
+      `title="Essential fat — the leanest healthy ~${Math.round(essTop * 100)}% of bodyweight"></div>`
     : "";
   const idealCap = fatKg > 0
     ? `<div class="bc-ideal-cap" title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}"><i class="bc-ideal-sw"></i><span class="bc-ideal-words">ideal fat</span> ${idealRangeLbl}</div>`
@@ -3552,6 +3560,7 @@ function renderAthleteProfile() {
     seg("bc-seg-fat", fatH, "Fat", fatLbl) +
     seg("bc-seg-lean", leanH, "Lean", leanLbl) +
     potSeg +
+    essentialBand +
     idealBand +
     `</div>`;
   const unitToggle = `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;

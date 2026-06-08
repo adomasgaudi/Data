@@ -771,16 +771,22 @@ main { padding-bottom: 5rem; }
   color: var(--accent);
 }
 .bc-seg-leanpot .bc-seg-name, .bc-seg-leanpot .bc-seg-val { opacity: 0.85; }
-/* Ideal body-fat zone marked on the fat region (dashed band, faint fill) — no text
-   inside (it overlapped the Fat label); the range shows in the .bc-ideal-cap below. */
+/* Ideal body-fat zone marked on the fat region: dashed outline, NO fill — the gold
+   shows through. No text inside; the range shows in the .bc-ideal-cap below. */
 .bc-fat-ideal {
   position: absolute; left: 0; right: 0; pointer-events: none;
-  border-top: 1px dashed rgba(255,255,255,0.9); border-bottom: 1px dashed rgba(255,255,255,0.9);
-  background: rgba(255,255,255,0.12);
+  border-top: 1px dashed rgba(255,255,255,0.95); border-bottom: 1px dashed rgba(255,255,255,0.95);
+  background: transparent;
+}
+/* Essential-fat zone (the leanest ~5% of bodyweight) at the very top of the fat
+   region, in a DARKER gold than the normal fat fill. */
+.bc-fat-essential {
+  position: absolute; left: 0; right: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--gold, #b8902f) 60%, #000);
 }
 /* Caption under the bar that names the dashed ideal-fat zone. */
 .bc-ideal-cap { display: flex; align-items: center; gap: 5px; max-width: 96px; font-size: 0.6rem; line-height: 1.15; color: var(--muted); text-align: left; }
-.bc-ideal-sw { flex: 0 0 auto; width: 12px; height: 9px; border: 1px dashed var(--gold, #b8902f); background: color-mix(in srgb, var(--gold, #b8902f) 18%, transparent); border-radius: 2px; }
+.bc-ideal-sw { flex: 0 0 auto; width: 12px; height: 9px; border: 1px dashed var(--muted); background: transparent; border-radius: 2px; }
 .bc-seg-name { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; }
 .bc-seg-val { font-size: 0.82rem; font-weight: 800; }
 .bc-unit-toggle {
