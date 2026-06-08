@@ -778,11 +778,13 @@ main { padding-bottom: 5rem; }
   border-top: 1px dashed rgba(255,255,255,0.95); border-bottom: 1px dashed rgba(255,255,255,0.95);
   background: transparent;
 }
-/* Essential-fat zone (the leanest ~5% of bodyweight) at the very top of the fat
-   region, in a DARKER gold than the normal fat fill. */
+/* Essential-fat zone (~5% of bodyweight) sitting against the lean block at the bottom
+   of the fat slice. SAME gold as the fat, just dashed THROUGH (diagonal gold hatch +
+   a dashed top edge) so it reads as its own zone without a different colour. */
 .bc-fat-essential {
   position: absolute; left: 0; right: 0; pointer-events: none;
-  background: color-mix(in srgb, var(--gold, #b8902f) 60%, #000);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--gold, #b8902f) 55%, #000) 0 4px, transparent 4px 10px);
+  border-top: 1px dashed color-mix(in srgb, var(--gold, #b8902f) 45%, #000);
 }
 /* Caption under the bar that names the dashed ideal-fat zone. */
 .bc-ideal-cap { display: flex; align-items: center; gap: 5px; max-width: 96px; font-size: 0.6rem; line-height: 1.15; color: var(--muted); text-align: left; }

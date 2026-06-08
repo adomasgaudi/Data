@@ -3538,13 +3538,14 @@ function renderAthleteProfile() {
     ? `<div class="bc-fat-ideal" style="top:${idealTop.toFixed(1)}%;height:${Math.max(0, idealBot - idealTop).toFixed(1)}%" ` +
       `title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}: ${idealRangeLbl} of bodyweight"></div>`
     : "";
-  // Essential-fat zone (the very lean top ~0–5% of bodyweight) marked in DARK gold,
-  // clamped to the fat region. Measured DOWN from the top like the ideal band.
-  const essTop = p.sex === "f" ? 0.12 : 0.05; // essential-fat fraction (men ~5%, women ~12%)
-  const essH = Math.min(fatH, ((essTop * bw) / barTotal) * 100);
+  // Essential-fat zone (~5% of bodyweight, ~12% women) — the fat you keep, so it sits
+  // at the BOTTOM of the fat slice right against the lean block. Same gold as the fat,
+  // just dashed THROUGH so it reads as its own zone without a different colour.
+  const essFrac = p.sex === "f" ? 0.12 : 0.05;
+  const essH = Math.min(fatH, ((essFrac * bw) / barTotal) * 100);
   const essentialBand = fatKg > 0
-    ? `<div class="bc-fat-essential" style="top:0;height:${essH.toFixed(1)}%" ` +
-      `title="Essential fat — the leanest healthy ~${Math.round(essTop * 100)}% of bodyweight"></div>`
+    ? `<div class="bc-fat-essential" style="top:${Math.max(0, fatH - essH).toFixed(1)}%;height:${essH.toFixed(1)}%" ` +
+      `title="Essential fat — the leanest healthy ~${Math.round(essFrac * 100)}% of bodyweight (the fat you keep)"></div>`
     : "";
   const idealCap = fatKg > 0
     ? `<div class="bc-ideal-cap" title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}"><i class="bc-ideal-sw"></i><span class="bc-ideal-words">ideal fat</span> ${idealRangeLbl}</div>`
