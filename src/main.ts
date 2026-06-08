@@ -7571,13 +7571,13 @@ interface CoachingProfile {
   goals?: string[];
   notes?: string[]; // style / preferences / constraints
   cautions?: string[]; // injuries / dangers
-  maintain?: string[]; // areas to keep training to protect the cautions
-  /** Muscle groups (from MUSCLE_GROUPS) whose lifts should be surfaced for injury care. */
-  maintainMuscles?: MuscleGroup[];
+  maintain?: string[]; // areas to keep training to protect the cautions (muscle names auto-detected)
   /** Lean on antagonist supersets (e.g. tends to rush / cut rests short). */
   pushSupersets?: boolean;
 }
-const COACHING: Record<string, CoachingProfile> = {
+// Code-seeded defaults, matched by a name fragment. The owner's in-app edits (saved
+// on device, keyed by exact username) take precedence over these.
+const COACHING_SEED: Record<string, CoachingProfile> = {
   marija: {
     goals: [
       "Traps & grip — via the handstand progression",
@@ -7589,15 +7589,38 @@ const COACHING: Record<string, CoachingProfile> = {
     ],
     cautions: ["Adductor pain", "Low back pain"],
     maintain: ["Adductors", "Hip flexors"],
-    maintainMuscles: ["Adductors"],
     pushSupersets: true,
   },
 };
-/** The coaching profile for an athlete (matched on username / display name), or null. */
-function coachingFor(username: string): CoachingProfile | null {
+const COACHING_KEY = "colosseum.coaching.v1";
+const coachingOverrides: Record<string, CoachingProfile> = loadJsonObject<Record<string, CoachingProfile>>(COACHING_KEY) ?? {};
+function saveCoaching(): void { saveJson(COACHING_KEY, coachingOverrides); }
+/** The code-seeded default for an athlete (matched on username / display name), or null. */
+function coachingSeed(username: string): CoachingProfile | null {
   const keys = [username.toLowerCase(), nameForUsername(username).toLowerCase()];
-  for (const [k, v] of Object.entries(COACHING)) if (keys.some((s) => s.includes(k))) return v;
+  for (const [k, v] of Object.entries(COACHING_SEED)) if (keys.some((s) => s.includes(k))) return v;
   return null;
+}
+/** The effective coaching profile: the owner's on-device edit if any, else the seed. */
+function coachingFor(username: string): CoachingProfile | null {
+  return coachingOverrides[username] ?? coachingSeed(username);
+}
+/** Muscle groups named within an athlete's "maintain" lines (e.g. "Adductors"), so
+ * their lifts can be surfaced for injury care. */
+function maintainMusclesFor(coach: CoachingProfile | null): MuscleGroup[] {
+  if (!coach?.maintain?.length) return [];
+  const hay = coach.maintain.join(" ").toLowerCase();
+  return MUSCLE_GROUPS.filter((m) => hay.includes(m.toLowerCase()));
+}
+/** Lowercased goal/maintain keywords (≥3 chars), for goal-weighting the plan. */
+function goalKeywords(coach: CoachingProfile | null): string[] {
+  if (!coach) return [];
+  const STOP = new Set(["the", "and", "via", "for", "with", "build", "carefully", "issues", "persistent", "related", "exercises", "good", "very"]);
+  return [...new Set(
+    [...(coach.goals ?? []), ...(coach.maintain ?? [])]
+      .join(" ").toLowerCase().split(/[^a-z]+/)
+      .filter((w) => w.length >= 3 && !STOP.has(w)),
+  )];
 }
 
 /** Antagonist muscle-group pairs — opposing movers good to superset together. */
@@ -7619,6 +7642,7 @@ interface LiveEx {
   lastDay: number; // day-number of the most recent set (−Infinity = never)
   drop: number; // % below all-time peak (decayed-to-today)
   priority: number; // higher = needs work sooner
+  goal?: boolean; // matches one of the athlete's goals (gets a ★ + priority boost)
 }
 
 /** Build each of the selected athlete's lifts with its tier, recency and decay. */
@@ -7637,6 +7661,14 @@ function liveExercises(username: string, todayD: number): LiveEx[] {
       if (eff !== null) e.days.set(d, Math.max(e.days.get(d) ?? -Infinity, eff));
     }
   }
+  // Goal-weighting: a lift whose NAME or MUSCLE matches a goal/maintain keyword gets
+  // a big priority boost, so the athlete's goals surface first (their answer).
+  const kw = goalKeywords(coachingFor(username));
+  const matchesGoal = (name: string, muscles: MuscleGroup[]): boolean => {
+    if (!kw.length) return false;
+    const hay = (name + " " + muscles.join(" ")).toLowerCase();
+    return kw.some((k) => hay.includes(k));
+  };
   const out: LiveEx[] = [];
   for (const [name, e] of byEx) {
     let drop = 0;
@@ -7648,9 +7680,12 @@ function liveExercises(username: string, todayD: number): LiveEx[] {
       drop = peak > 0 ? Math.max(0, ((peak - cur) / peak) * 100) : 0;
     }
     const daysAgo = Number.isFinite(e.lastDay) ? todayD - e.lastDay : 999;
-    // Needs-work score: how far it's slipped + how long since you trained it (capped).
-    const priority = drop + Math.min(60, daysAgo) * 0.5;
-    out.push({ name, tier: tiersFor(name)[0] ?? "main", muscles: mgsFor(name), sets: e.sets, lastDay: e.lastDay, drop, priority });
+    const muscles = mgsFor(name);
+    const goal = matchesGoal(name, muscles);
+    // Needs-work score: slipped-from-peak + time since trained (capped) + a big GOAL
+    // boost so goal-relevant lifts lead the plan.
+    const priority = drop + Math.min(60, daysAgo) * 0.5 + (goal ? 100 : 0);
+    out.push({ name, tier: tiersFor(name)[0] ?? "main", muscles, sets: e.sets, lastDay: e.lastDay, drop, priority, goal });
   }
   return out;
 }
@@ -7671,7 +7706,8 @@ function renderLive(): void {
   const agoTxt = (x: LiveEx) => { const n = daysAgo(x); return n >= 999 ? "never" : n === 0 ? "today" : `${n}d ago`; };
   const dropTxt = (x: LiveEx) => (x.drop >= 0.5 ? `<span class="live-drop">−${x.drop.toFixed(0)}%</span>` : "");
   const exPill = (x: LiveEx) =>
-    `<button type="button" class="live-ex" data-waexinfo="${escapeHtml(x.name)}" title="${escapeHtml(x.name)} — tap for info">` +
+    `<button type="button" class="live-ex${x.goal ? " is-goal" : ""}" data-waexinfo="${escapeHtml(x.name)}" title="${escapeHtml(x.name)}${x.goal ? " — a goal lift" : ""} — tap for info">` +
+    `${x.goal ? `<span class="live-goal-star" title="Matches a goal" aria-hidden="true">★</span>` : ""}` +
     `<span class="live-ex-name">${escapeHtml(displayName(x.name))}</span>` +
     `<span class="live-ex-meta muted">${agoTxt(x)}</span>${dropTxt(x)}</button>`;
 
@@ -7748,29 +7784,44 @@ function renderLive(): void {
     ? `<section class="live-card live-warn"><h3 class="live-h">Watch-outs</h3><ul class="live-list">${watchItems.join("")}</ul></section>`
     : "";
 
-  // 0) GOALS & CAUTIONS — the athlete's curated coaching profile (goals, injury
-  //    cautions + maintenance areas, style notes), plus the lifts they already do
-  //    that cover a caution muscle (e.g. adductor work for adductor pain).
-  let coachSection = "";
-  if (coach) {
-    const li = (s: string) => `<li>${escapeHtml(s)}</li>`;
-    const careLifts = (coach.maintainMuscles ?? []).length
-      ? list.filter((x) => x.muscles.some((m) => coach.maintainMuscles!.includes(m))).sort((a, b) => b.priority - a.priority).slice(0, 6)
-      : [];
-    coachSection =
-      `<section class="live-card live-goals"><h3 class="live-h">Goals &amp; cautions</h3>` +
-      (coach.goals?.length ? `<div class="live-block"><div class="live-block-hd">Goals</div><ul class="live-list">${coach.goals.map(li).join("")}</ul></div>` : "") +
-      (coach.notes?.length ? `<div class="live-block"><div class="live-block-hd">Style</div><ul class="live-list">${coach.notes.map(li).join("")}</ul></div>` : "") +
-      (coach.cautions?.length || coach.maintain?.length
-        ? `<div class="live-block live-block-warn"><div class="live-block-hd">⚠ Cautions — keep maintaining</div><ul class="live-list">` +
-          (coach.cautions ?? []).map((c) => `<li>${escapeHtml(c)}</li>`).join("") +
-          (coach.maintain?.length ? `<li>Keep training: <b>${coach.maintain.map((m) => escapeHtml(m)).join(" · ")}</b></li>` : "") +
-          `</ul>` +
-          (careLifts.length ? `<div class="live-ex-row">${careLifts.map(exPill).join("")}</div>` : "") +
-          `</div>`
-        : "") +
-      `</section>`;
-  }
+  // 0) GOALS & CAUTIONS — the athlete's coaching profile (goals, injury cautions +
+  //    maintenance areas, style notes), the lifts they do that cover a caution muscle
+  //    (e.g. adductor work for adductor pain), and an editor to change any of it.
+  const careMuscles = maintainMusclesFor(coach);
+  const careLifts = careMuscles.length
+    ? list.filter((x) => x.muscles.some((m) => careMuscles.includes(m))).sort((a, b) => b.priority - a.priority).slice(0, 6)
+    : [];
+  const ta = (key: string, label: string, vals: string[] | undefined) =>
+    `<label class="live-edit-f"><span class="live-edit-lbl">${label}</span>` +
+    `<textarea class="live-edit" data-livefield="${key}" rows="3" placeholder="one per line…">${escapeHtml((vals ?? []).join("\n"))}</textarea></label>`;
+  const editor =
+    `<details class="live-editor"><summary class="live-editor-sum">✎ Edit plan</summary>` +
+    `<div class="live-editor-body">` +
+    ta("goals", "Goals", coach?.goals) +
+    ta("notes", "Style / preferences", coach?.notes) +
+    ta("cautions", "Cautions (injuries)", coach?.cautions) +
+    ta("maintain", "Keep maintaining (muscle names auto-detected)", coach?.maintain) +
+    `<button type="button" class="live-ss-toggle wa-name-opt${coach?.pushSupersets ? " is-on" : ""}" data-livesupersets="1" title="Lean on antagonist supersets (e.g. rushes rests)">Lean on supersets</button>` +
+    `<div class="live-editor-actions"><button type="button" class="live-save">Save</button><span class="live-edit-msg muted"></span></div>` +
+    `</div></details>`;
+  const li = (s: string) => `<li>${escapeHtml(s)}</li>`;
+  const hasProfile = !!(coach && (coach.goals?.length || coach.notes?.length || coach.cautions?.length || coach.maintain?.length));
+  const coachSection =
+    `<section class="live-card live-goals"><h3 class="live-h">Goals &amp; cautions</h3>` +
+    (hasProfile
+      ? (coach!.goals?.length ? `<div class="live-block"><div class="live-block-hd">Goals</div><ul class="live-list">${coach!.goals.map(li).join("")}</ul></div>` : "") +
+        (coach!.notes?.length ? `<div class="live-block"><div class="live-block-hd">Style</div><ul class="live-list">${coach!.notes.map(li).join("")}</ul></div>` : "") +
+        (coach!.cautions?.length || coach!.maintain?.length
+          ? `<div class="live-block live-block-warn"><div class="live-block-hd">⚠ Cautions — keep maintaining</div><ul class="live-list">` +
+            (coach!.cautions ?? []).map((c) => `<li>${escapeHtml(c)}</li>`).join("") +
+            (coach!.maintain?.length ? `<li>Keep training: <b>${coach!.maintain.map((m) => escapeHtml(m)).join(" · ")}</b></li>` : "") +
+            `</ul>` +
+            (careLifts.length ? `<div class="live-ex-row">${careLifts.map(exPill).join("")}</div>` : "") +
+            `</div>`
+          : "")
+      : `<p class="live-sub muted">No plan for ${escapeHtml(athleteLabel())} yet — add goals, cautions and preferences below.</p>`) +
+    editor +
+    `</section>`;
   // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
   // section right after the plan; otherwise it sits lower.
   const ordered = coach?.pushSupersets
@@ -8066,6 +8117,38 @@ function setupStatsEdit(): void {
       saveAthleteOverrides();
       renderStatsEdit();
       scheduleRender();
+    }
+  });
+}
+
+/** Wire the Live page's coaching-profile editor + exercise-info taps (delegated, once). */
+function setupLive(): void {
+  const box = document.getElementById("liveBody");
+  if (!box) return;
+  box.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    // Tap a lift pill → its More-info overlay.
+    const info = t.closest<HTMLElement>("[data-waexinfo]");
+    if (info?.dataset.waexinfo) { openExerciseInfo(info.dataset.waexinfo); return; }
+    // The "Lean on supersets" toggle — flip its own state now (read on Save).
+    const ss = t.closest<HTMLElement>("[data-livesupersets]");
+    if (ss) { ss.classList.toggle("is-on"); return; }
+    // Save the edited profile for the selected athlete (on device).
+    if (t.closest(".live-save")) {
+      const username = els.athlete.value;
+      const lines = (key: string): string[] =>
+        (box.querySelector<HTMLTextAreaElement>(`.live-edit[data-livefield="${key}"]`)?.value ?? "")
+          .split("\n").map((s) => s.trim()).filter(Boolean);
+      const prof: CoachingProfile = {
+        goals: lines("goals"),
+        notes: lines("notes"),
+        cautions: lines("cautions"),
+        maintain: lines("maintain"),
+        pushSupersets: !!box.querySelector(".live-ss-toggle.is-on"),
+      };
+      coachingOverrides[username] = prof;
+      saveCoaching();
+      renderLive();
     }
   });
 }
@@ -9400,6 +9483,7 @@ async function init() {
   populateAddExerciseList();
   void setupBackup();
   setupStatsEdit();
+  setupLive();
   els.athleteProfile.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     // ⓘ on a value chip → toggle that value's math panel (matched by id).

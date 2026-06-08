@@ -3458,3 +3458,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .live-ss-pair { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .live-ss-plus { font-weight: 800; color: var(--muted); }
 .live-ss-why { font-size: 0.72rem; }
+
+/* Live page: goal lifts + the coaching-profile editor. */
+.live-ex.is-goal { border-color: var(--gold); }
+.live-goal-star { color: var(--gold); font-size: 0.8em; }
+.live-editor { margin-top: 0.6rem; border-top: 1px solid var(--line); }
+.live-editor-sum { cursor: pointer; list-style: none; font-size: 0.78rem; font-weight: 700; color: var(--accent); padding: 0.45rem 0; }
+.live-editor-sum::-webkit-details-marker { display: none; }
+.live-editor-body { display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.3rem; }
+.live-edit-f { display: flex; flex-direction: column; gap: 0.2rem; }
+.live-edit-lbl { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+.live-edit { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.82rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
+.live-editor-actions { display: flex; align-items: center; gap: 0.6rem; }
+.live-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 6px 16px; }
+.live-ss-toggle { align-self: flex-start; }
