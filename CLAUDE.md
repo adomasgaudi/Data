@@ -32,6 +32,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 19. **Never claim a UI/visual/scroll fix "works" — you can't see the live site.** Verified = build + tests pass (say that). UNVERIFIED = whether it actually looks/scrolls/behaves right on the owner's phone — for those, say "I changed X, please check," never "it's fixed." Repeating "fixed" on something you can't observe is hallucination; when a fix fails twice, stop guessing and give the owner something testable instead.
 20. **Dropdowns are the custom `.xdd` CSS/HTML dropdown, NEVER the native OS `<select>` picker** (native looks different on every device + ignores our styling). Every native single-`<select>` is auto-enhanced (`enhanceSelectTree` + a `MutationObserver` in init), so just emit a normal `<select>` and it's converted; never hand-roll a native picker. Exempt only: `<select multiple>`, the hidden mirrors (`#athlete`, `#viewAsSelect`), and anything under `[data-no-xdd]`.
 21. **User/Spectator (locked, non-admin) views show ONLY the logged-in athlete — never other athletes' chips, never the M/W sex menu, never admin-only tabs.** Anything that lets you pick or peek at another user is admin-only; locked views hide it entirely (not just disable it).
+22. **`#design` — corners use SMALL rounding, NEVER full/pill rounding:** no `border-radius: 999px`/`99px`/`50%` on buttons, chips, pills or inputs — use the `--r-pill` token (small radius) in `src/styles.css`. (Genuine circular dots/avatars may stay `50%`.)
 
 ## Commands the owner types (act on these even with no other context)
 
@@ -41,6 +42,7 @@ Shortcuts the owner may type in any session. **A new command is added here as ON
   - a behaviour/preference the AI should follow → **ONE line in ⛔ HARD RULES above** (or under *Rules to remember* if it needs detail);
   - something that must happen **automatically on an event, even with no AI watching** ("always / whenever / before / after …") → a **hook** in `.claude/settings.json` (`SessionStart` / `UserPromptSubmit` / `Stop`), not just prose;
   - a large reference → its **own `.md` file**, linked from here.
+- **`#design <choice>`** — marks a **design choice to remember forever** (look/feel: spacing, rounding, colour, sizing, motion…). Persist it like `#remember`: add it as **ONE line in ⛔ HARD RULES** prefixed `#design`, apply it everywhere now (a `#design` is also a `#prune` — sweep the whole codebase for violations), and prefer a **token in `:root`** over magic numbers so the choice has one home. Existing `#design` rules: corners use small rounding (rule 22).
 - **`#careful <task>`** — for risky or many-part work; go slow, lose nothing:
   1. **Split** the task into small parts and **list every connected/affected piece** — a meta-check: *what else does this touch?* (other files, data, other COs, the live site, backups, versions).
   2. **Show the owner the numbered plan FIRST** — don't start executing yet.

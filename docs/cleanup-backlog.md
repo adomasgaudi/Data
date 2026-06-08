@@ -12,6 +12,13 @@ committed `CAT-n` is derived at commit time (rule 8). Risky deletions go via the
 attic/warehouse tiers (rule 10). Keep this file updated — mark items done, add new
 ones, re-grade as the code changes.
 
+## ✅ Done sweeps (recent)
+
+- **`#design` rounding prune (DONE)** — replaced every full/pill rounding
+  (`border-radius: 999px` ×69, `99px` ×1) in `src/styles.css` with the new small
+  `--r-pill` token (8px). Genuine circular dots/avatars (`50%`) left as-is. Rule 21
+  + the `#design` command added to CLAUDE.md. Re-grep `999px|99px` before declaring clean.
+
 ## ▶ Recommended order (chronology for the CUT-/ARCH- work)
 
 Principles: **subtract before you restructure** (every cut = less to split later);

@@ -1,6 +1,9 @@
 :root {
   /* Light, minimal base */
   --bg: #ffffff;
+  /* DESIGN: corners use a SMALL radius — never full/pill rounding (no 999px / 50%
+     on buttons & chips). This token replaces every former 999px pill. */
+  --r-pill: 8px;
   --panel: #ffffff;
   /* Page (body) sits a touch off-white so the white .panel cards read as cards. */
   --page: #f1efe9;
@@ -134,14 +137,14 @@ body {
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--accent); background: var(--accent-soft);
-  border: 1px solid var(--accent); border-radius: 999px; padding: 2px 9px;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 9px;
 }
 /* Quick view switcher: two compact cycling toggles in the header (no wrap). */
 .view-switch { display: inline-flex; gap: 0.3rem; flex: none; white-space: nowrap; }
 .vs-toggle {
   font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; white-space: nowrap;
   color: var(--accent); background: var(--accent-soft);
-  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 7px;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 1px 7px;
 }
 .vs-toggle:hover { filter: brightness(0.97); }
 /* Effort badge on the tiny version line. */
@@ -158,7 +161,7 @@ body.on-s-anl .appfoot { display: none; }
 .cv-fib { color: var(--gold); font-weight: 700; margin-left: 0.25rem; font-size: 0.92em; }
 .cv-chip {
   display: inline-flex; align-items: baseline; gap: 0.3rem;
-  font-size: 0.68rem; padding: 2px 7px; border-radius: 999px;
+  font-size: 0.68rem; padding: 2px 7px; border-radius: var(--r-pill);
   background: var(--accent-soft); border: 1px solid var(--line);
 }
 .cv-name { color: var(--muted); font-weight: 600; }
@@ -230,7 +233,7 @@ body.on-s-anl .appfoot { display: none; }
 /* Language EN/LT segmented toggle in Settings. */
 .lang-row { align-items: center; justify-content: space-between; margin: 0.2rem 0; }
 .lang-lbl { font-size: 0.85rem; font-weight: 600; }
-.lang-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
 .lang-opt { font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; color: var(--muted); background: none; border: none; padding: 4px 12px; }
 .lang-opt.is-active { background: var(--accent); color: #fff; }
 /* "Refresh data" call-to-action in the Data tab. */
@@ -369,7 +372,7 @@ main { padding-bottom: 5rem; }
 }
 .cmd-input {
   width: 100%; font: inherit; font-size: 0.92rem; padding: 8px 14px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text);
 }
 .cmd-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .cmd-palette {
@@ -393,7 +396,7 @@ main { padding-bottom: 5rem; }
 .wa-search-hint { font-size: 0.8rem; }
 .wa-search-active {
   font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--accent);
-  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 10px;
 }
 
 /* "Other" bottom-sheet: a dimmed backdrop + a card of secondary views that
@@ -453,7 +456,7 @@ main { padding-bottom: 5rem; }
 /* Group view (train people together): selectable people, then a column each. */
 .team-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .team-chip {
-  border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel);
   color: var(--text); font: inherit; font-size: 0.85rem; padding: 0.35rem 0.8rem; cursor: pointer;
 }
 .team-chip:hover { border-color: var(--accent); }
@@ -525,7 +528,7 @@ main { padding-bottom: 5rem; }
 .svgc-legend-fold { position: relative; }
 .svgc-legend-sum {
   cursor: pointer; list-style: none; user-select: none; font-weight: 600; color: var(--accent);
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 10px;
 }
 .svgc-legend-sum::-webkit-details-marker { display: none; }
 .svgc-legend-sum::after { content: " ▾"; color: var(--muted); }
@@ -538,14 +541,14 @@ main { padding-bottom: 5rem; }
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
 }
 /* When there are 2+ series, legend keys are clickable show/hide toggles. */
-.svgc-key.is-toggle { cursor: pointer; padding: 1px 6px; border-radius: 999px; border: 1px solid transparent; user-select: none; }
+.svgc-key.is-toggle { cursor: pointer; padding: 1px 6px; border-radius: var(--r-pill); border: 1px solid transparent; user-select: none; }
 .svgc-key.is-toggle:hover { border-color: var(--line); }
 .svgc-key.is-off { opacity: 0.45; text-decoration: line-through; }
 .svgc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
 /* "Realistic ⇄ compacted time" toggle, pushed to the right of the legend row. */
 .svgc-compact {
   margin-left: auto; cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 600;
-  color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill);
   padding: 1px 9px; white-space: nowrap; user-select: none; align-self: flex-start;
 }
 .svgc-compact:hover { border-color: var(--accent); color: var(--accent); }
@@ -572,7 +575,7 @@ main { padding-bottom: 5rem; }
 .svgc-tip-line { white-space: nowrap; }
 .svgc-tip-line.is-first { font-weight: 700; margin-bottom: 1px; }
 .svgc-tip-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 3px; }
-.svgc-tip-badge { font-size: 0.7rem; font-weight: 700; border-radius: 999px; padding: 0 6px; }
+.svgc-tip-badge { font-size: 0.7rem; font-weight: 700; border-radius: var(--r-pill); padding: 0 6px; }
 .svgc-tip-badge.pr { color: #b8902f; background: rgba(184, 144, 47, 0.14); }
 .svgc-tip-badge.fail { color: #a23b3b; background: rgba(162, 59, 59, 0.14); }
 
@@ -638,8 +641,8 @@ main { padding-bottom: 5rem; }
 .athlete-chip {
   flex: 0 0 auto; white-space: nowrap;
   background: none; border: 1px solid var(--line); color: var(--muted);
-  font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
-  padding: 0.4rem 1rem; border-radius: 99px;
+  font: inherit; font-size: 1.05rem; font-weight: 600; cursor: pointer;
+  padding: 0.62rem 1.4rem; border-radius: var(--r-pill);
 }
 .athlete-chip:hover { color: var(--text); border-color: var(--accent); }
 .athlete-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
@@ -651,14 +654,14 @@ main { padding-bottom: 5rem; }
 /* Single cycling M/W toggle, pinned (opaque, on top) at the start of the athlete
    row so the scrolling name chips clip beside it and never show behind it. One tap
    flips Men ⇄ Women; it shows the current sex (M blue / W gold). Shaped to match the
-   name chips exactly (same pill height/round) so the row aligns. Hidden entirely in
+   (now bigger) name chips — same height/round — so the row aligns. Hidden entirely in
    user/spectator views (you only see yourself there). */
 .ath-sex { flex: 0 0 auto; margin: 0; align-self: center; position: relative; z-index: 2; }
 .ath-sex-toggle {
-  flex: 0 0 auto; min-width: 2.4rem; box-sizing: border-box;
+  flex: 0 0 auto; min-width: 2.8rem; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 0.85rem; font-weight: 700; line-height: 1.2; cursor: pointer;
-  padding: 0.4rem 0.8rem; border-radius: 99px;
+  font: inherit; font-size: 1.05rem; font-weight: 700; line-height: 1.2; cursor: pointer;
+  padding: 0.62rem 0.9rem; border-radius: var(--r-pill);
   border: 1px solid var(--accent); background: var(--accent); color: #fff;
 }
 .ath-sex-toggle.is-women { background: var(--gold); border-color: var(--gold); color: #1b212b; }
@@ -729,7 +732,7 @@ main { padding-bottom: 5rem; }
 .profile-edit-row { flex-basis: 100%; width: 100%; order: -1; margin-bottom: 0.1rem; }
 .profile-edit {
   font: inherit; font-size: 0.72rem; cursor: pointer; color: var(--muted);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px;
 }
 .profile-edit:hover { color: var(--accent); border-color: var(--accent); }
 /* Simplified S-ANL body-stats card: explained, fewer numbers. */
@@ -750,7 +753,7 @@ main { padding-bottom: 5rem; }
 .s-wo-body { margin-top: 0.6rem; }
 .s-wo-search {
   width: 100%; font: inherit; font-size: 0.9rem; padding: 7px 12px; margin-bottom: 0.5rem;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text);
 }
 .s-wo-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .s-wo-day { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.4rem 0; border-top: 1px solid var(--line); }
@@ -788,12 +791,12 @@ main { padding-bottom: 5rem; }
 .mo-lead { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem; }
 .mo-sub { font-weight: 400; }
 /* Trend-period toggle pill in the Momentum header. */
-.mo-period { font: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 999px; padding: 0 7px; margin-left: 0.3rem; }
+.mo-period { font: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 0 7px; margin-left: 0.3rem; }
 .mo-per { color: inherit; opacity: 0.8; }
 .mo-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .mo-chip {
   display: inline-flex; align-items: center; gap: 0.3rem;
-  font-size: 0.8rem; padding: 4px 10px; border-radius: 999px;
+  font-size: 0.8rem; padding: 4px 10px; border-radius: var(--r-pill);
   border: 1px solid var(--line); background: var(--panel);
 }
 .mo-arrow { font-size: 0.85em; }
@@ -899,7 +902,7 @@ main { padding-bottom: 5rem; }
 .manual-edit:hover { color: var(--accent); }
 .manual-cancel { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 6px; }
 .manual-cancel:hover { color: var(--danger); }
-.manual-save { font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px; background: var(--accent); color: #fff; }
+.manual-save { font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 10px; background: var(--accent); color: #fff; }
 .me-ex { width: 100%; }
 .me-weight, .me-reps { width: 3.2rem; }
 .me-ex, .me-weight, .me-reps, .me-date { font: inherit; font-size: 0.82rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }
@@ -976,28 +979,28 @@ main { padding-bottom: 5rem; }
 .set-edit-f-note input { width: 100%; text-align: left; }
 .set-edit-reset {
   align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
 }
 .set-edit-reset:hover { border-color: var(--accent); color: var(--accent); }
 .set-edit-delete {
   align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--bad, #c0392b);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
 }
 .set-edit-delete:hover { border-color: var(--bad, #c0392b); background: rgba(192, 57, 43, 0.08); }
 .set-edit-nc {
   align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
 }
 .set-edit-nc:hover { border-color: var(--muted); }
 .set-edit-nc.is-on { color: #fff; background: var(--muted); border-color: var(--muted); }
-.health-restore, .health-restore-all { font: inherit; font-size: 0.74rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.health-restore, .health-restore-all { font: inherit; font-size: 0.74rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; }
 .health-restore:hover, .health-restore-all:hover { border-color: var(--accent); }
 /* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight).
    It's a label, not a link, so it reads in muted grey — blue is reserved for
    things you can actually tap through to. */
 .set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--muted); margin-right: 3px; }
 /* Variation difficulty multiplier on a set row (e.g. ×0.85). */
-.set-scale { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 0 5px; margin-right: 3px; }
+.set-scale { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 0 5px; margin-right: 3px; }
 .set-scale.is-editable { cursor: pointer; border: 1px solid var(--accent); line-height: 1.4; }
 .set-scale.is-editable:hover { background: var(--accent); color: #fff; }
 .set-scale.is-uncmp { color: var(--muted); border-color: var(--line); background: none; }
@@ -1029,7 +1032,7 @@ main { padding-bottom: 5rem; }
 .wa-machine-review { color: var(--gold); }
 .ex-combine-lbl { font-size: 0.75rem; }
 .ex-combine-chip {
-  border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
   color: var(--text); font: inherit; font-size: 0.76rem; font-weight: 600;
   padding: 0.2rem 0.6rem; cursor: pointer;
 }
@@ -1037,22 +1040,22 @@ main { padding-bottom: 5rem; }
 .ex-combine-chip[data-remove]:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
 /* "Save as one lift" — persist the current combine as a permanent merged lift. */
 .ex-combine-save {
-  border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: #fff;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent); color: #fff;
   font: inherit; font-size: 0.76rem; font-weight: 700; padding: 0.2rem 0.7rem; cursor: pointer;
 }
 .ex-combine-save:hover { filter: brightness(1.07); }
 /* Merged-lift separate/dissolve panel on the exercise info page. */
 .ex-merge-members { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
-.ex-merge-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft); font-size: 0.78rem; padding: 0.15rem 0.55rem; }
+.ex-merge-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft); font-size: 0.78rem; padding: 0.15rem 0.55rem; }
 .ex-merge-sep { border: none; background: none; color: var(--bad, #c0392b); font: inherit; font-weight: 700; cursor: pointer; padding: 0 0.1rem; }
 .ex-merge-dissolve { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0.25rem 0.6rem; cursor: pointer; }
 .ex-merge-dissolve:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
 /* The "+ combine with…" custom dropdown, sized to sit inline with the chips. */
-.ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: 999px; }
+.ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: var(--r-pill); }
 .ex-combine-dd .xdd-menu { min-width: max(100%, 12rem); }
 .ex-cat-chip {
   appearance: none; cursor: pointer;
-  border: 1px solid var(--line); border-radius: 999px;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--accent-soft); color: var(--text);
   padding: 0.22rem 0.66rem; font-size: 0.74rem; font-weight: 600;
   line-height: 1; transition: opacity 0.12s ease, background 0.12s ease;
@@ -1251,7 +1254,7 @@ main { padding-bottom: 5rem; }
 .ai-soon[open] > summary::before { content: "▾"; }
 .soon-badge {
   font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px;
+  color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 8px;
 }
 .summary-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .primary-btn {
@@ -1277,7 +1280,7 @@ main { padding-bottom: 5rem; }
 .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .page-btn:disabled { opacity: 0.45; cursor: default; }
 .status .badge {
-  background: var(--accent); color: #fff; border-radius: 99px;
+  background: var(--accent); color: #fff; border-radius: var(--r-pill);
   padding: 1px 8px; font-weight: 600; margin-left: 6px;
 }
 .status .warn { background: var(--gold); color: #fff; }
@@ -1501,7 +1504,7 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-pill {
   display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer;
   font: inherit; font-size: 0.76rem; font-weight: 600; color: var(--text);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px;
 }
 .hm-pill-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pc, #888); flex: none; }
 .hm-pill.is-on { border-color: var(--pc, var(--accent)); background: var(--pc, var(--accent-soft)); color: #fff; }
@@ -1602,7 +1605,7 @@ sup.wr-bw { font-size: 0.85em; }
   color: var(--accent, #284e86);
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--line, #e3e3e3);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(20, 24, 38, 0.12);
 }
@@ -1625,7 +1628,7 @@ sup.wr-bw { font-size: 0.85em; }
    alone. Faint when off (Both = no filter), accent when filtering. */
 .alone-filter {
   font: inherit; font-size: 0.82rem; font-weight: 600;
-  border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 12px;
   background: var(--panel); color: var(--muted); cursor: pointer;
 }
 .alone-filter:hover { border-color: var(--accent); color: var(--accent); }
@@ -1636,21 +1639,21 @@ sup.wr-bw { font-size: 0.85em; }
 /* "alone" tag toggle on each session — faint until tagged, accent when on. */
 .wo-alone {
   margin-left: 0.5rem; font: inherit; font-size: 0.68rem; font-weight: 700;
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 7px;
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
 .wo-alone:hover { border-color: var(--accent); color: var(--accent); }
 .wo-alone.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .wo-addset {
   margin-left: 0.35rem; font: inherit; font-size: 0.68rem; font-weight: 700;
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 7px;
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
 .wo-addset:hover { border-color: var(--accent); color: var(--accent); }
 .wo-addex-wrap { margin-top: 0.35rem; }
 .wo-addex {
   font: inherit; font-size: 0.7rem; font-weight: 700;
-  border: 1px dashed var(--line); border-radius: 999px; padding: 2px 10px;
+  border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 2px 10px;
   background: var(--panel); color: var(--muted); cursor: pointer;
 }
 .wo-addex:hover { border-color: var(--accent); color: var(--accent); }
@@ -1665,12 +1668,12 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-addform .wo-af-go {
   font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-  border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 10px;
   background: var(--accent); color: #fff;
 }
 .wo-addform .wo-af-cancel {
   font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer;
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 7px;
   background: var(--panel); color: var(--muted);
 }
 .wo-addform .wo-af-msg { font-size: 0.72rem; }
@@ -1727,7 +1730,7 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-controls-sum {
   cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center;
   font-size: 0.82rem; font-weight: 600; color: var(--accent);
-  border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 11px;
 }
 .wo-controls-sum::-webkit-details-marker { display: none; }
 .wo-controls-sum::after { content: ""; } /* clean cog — no caret */
@@ -1759,12 +1762,12 @@ sup.wr-bw { font-size: 0.85em; }
 /* Banner above the history list when the Index app-wide filter hides some lifts. */
 /* "Hidden lifts" warning toggle in the history head row (next to the ⚙): amber
    warning when the Index filter is hiding lifts, accent when revealing them. */
-.wo-hidden-toggle { font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--gold); background: rgba(184,144,47,0.14); color: #8a6d1f; }
+.wo-hidden-toggle { font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--gold); background: rgba(184,144,47,0.14); color: #8a6d1f; }
 .wo-hidden-toggle:hover { filter: brightness(0.97); }
 .wo-hidden-toggle.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 /* A grayed "another exercise line" under a day/week that has filter-hidden lifts. */
 .wo-hidden-line { display: block; margin-top: 2px; }
-.wo-hidden-daybtn { font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; padding: 1px 9px; border-radius: 999px; border: 1px dashed var(--line); background: none; color: var(--muted); }
+.wo-hidden-daybtn { font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; padding: 1px 9px; border-radius: var(--r-pill); border: 1px dashed var(--line); background: none; color: var(--muted); }
 .wo-hidden-daybtn:hover { border-color: var(--accent); color: var(--accent); }
 .wo-dj-sel { font: inherit; font-size: 0.7rem; padding: 4px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); }
 /* Calendar bottom row: the slicer pills + a compact ⚙ settings dropdown (scope +
@@ -1795,7 +1798,7 @@ sup.wr-bw { font-size: 0.85em; }
 .ex-bwpart {
   display: inline-block; margin-left: 0.5rem; vertical-align: middle;
   font-size: 0.72rem; font-weight: 600; color: var(--accent);
-  background: var(--accent-soft); border-radius: 999px; padding: 2px 9px;
+  background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 9px;
 }
 .ex-bwpart--none { color: var(--muted); background: var(--gold-soft); }
 /* "(also: …)" note shown next to a merged exercise name or a scaling-group name,
@@ -1876,7 +1879,7 @@ sup.wr-bw { font-size: 0.85em; }
 .compare-chip {
   background: none; border: 1px solid var(--line); color: var(--muted);
   font: inherit; font-size: 0.8rem; cursor: pointer;
-  padding: 0.3rem 0.7rem; border-radius: 99px;
+  padding: 0.3rem 0.7rem; border-radius: var(--r-pill);
 }
 .compare-chip:hover { color: var(--text); }
 .compare-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
@@ -1927,7 +1930,7 @@ sup.wr-bw { font-size: 0.85em; }
 .data-viewbtn {
   background: none; border: 1px solid var(--line); color: var(--muted);
   font: inherit; font-size: 0.82rem; cursor: pointer;
-  padding: 0.35rem 0.85rem; border-radius: 99px;
+  padding: 0.35rem 0.85rem; border-radius: var(--r-pill);
 }
 .data-viewbtn:hover { color: var(--text); }
 .data-viewbtn.is-active { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
@@ -2130,10 +2133,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info-val > input:focus, .ex-info-val > select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* Multi-select chips for Category / Muscle group / Tier (tap to toggle membership). */
 .ex-meta-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px; }
 .ex-meta-chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-meta-chip.is-on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
-.ex-meta-reset { font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 7px; }
+.ex-meta-reset { font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 7px; }
 .ex-meta-reset:hover { border-color: var(--accent); color: var(--accent); }
 /* Bodyweight-part range: min – max inputs plus the gold (calculated) average. */
 .ex-coeff-range { display: inline-flex; align-items: center; gap: 5px; }
@@ -2157,7 +2160,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
   cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
-  padding: 2px 9px; border-radius: 999px; margin-left: 0.35rem; white-space: nowrap;
+  padding: 2px 9px; border-radius: var(--r-pill); margin-left: 0.35rem; white-space: nowrap;
 }
 .ex-info-btn:hover { border-color: var(--accent); }
 /* Index inspector: registry tag chips, group membership, active-set overrides. */
@@ -2165,7 +2168,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-tag {
   display: inline-block; font: inherit; font-size: 0.72rem; font-weight: 600;
   background: var(--accent-soft); color: var(--accent);
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; cursor: pointer;
 }
 .ex-tag:hover { border-color: var(--accent); }
 /* Browse-groups panel on the Index page (two levels of <details>). */
@@ -2200,7 +2203,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-edit-help { font-size: 0.74rem; margin: 0.35rem 0 0; }
 /* "Not comparable" toggle. */
 .ex-nc { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.5rem 0 0; }
-.ex-nc-toggle { font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.ex-nc-toggle { font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 12px; }
 .ex-nc-toggle:hover { border-color: var(--accent); }
 .ex-nc-toggle.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ex-nc-help { flex: 1 1 12rem; min-width: 0; font-size: 0.74rem; }
@@ -2213,7 +2216,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-vars-sum::before { content: "▸"; color: var(--accent); font-weight: 700; }
 .ex-vars-fold[open] > .ex-vars-sum::before { content: "▾"; }
 .ex-vars-help { font-size: 0.76rem; margin: 0 0 0.5rem; }
-.ex-var-needbadge { font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--warn, #c0603a); border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
+.ex-var-needbadge { font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--warn, #c0603a); border-radius: var(--r-pill); padding: 1px 8px; vertical-align: middle; }
 .ex-var-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); margin: 0 0 0.35rem; }
 .ex-var-row.needs-review { border-color: var(--warn, #c0603a); background: rgba(192, 96, 58, 0.07); }
 .ex-var-row.is-scaled { border-color: var(--accent); }
@@ -2236,7 +2239,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-sessions-sum::before { content: "▸ "; }
 .ex-var-sessions[open] .ex-var-sessions-sum::before { content: "▾ "; }
 .ex-var-session-list { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.2rem; }
-.ex-var-jump { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; }
+.ex-var-jump { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px; }
 .ex-var-jump:hover { border-color: var(--accent); }
 /* Model suggestion line under a note (LIFT-DM2): where the ×number came from. */
 .ex-var-model { padding: 0.1rem 0.55rem 0.3rem; font-size: 0.72rem; }
@@ -2295,7 +2298,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-pad-yt { top: 3px; left: 5px; }
 .ex-pad-yb { bottom: 3px; left: 5px; }
 .ex-pad-xlbl { bottom: 3px; right: 5px; }
-.ex-var-lvl { font: inherit; font-size: 0.72rem; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); white-space: nowrap; }
+.ex-var-lvl { font: inherit; font-size: 0.72rem; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); white-space: nowrap; }
 .ex-var-lvl:hover { border-color: var(--accent); }
 .ex-var-lvl.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ex-var-lvl-f { opacity: 0.7; font-size: 0.92em; }
@@ -2305,7 +2308,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-x { font-size: 0.86rem; font-weight: 700; color: var(--accent); }
 /* Chips ⇄ Pose toggle. */
 .ex-var-mode { display: flex; gap: 0.3rem; margin: 0 0 0.4rem; }
-.ex-var-mode-btn { font: inherit; font-size: 0.78rem; cursor: pointer; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.ex-var-mode-btn { font: inherit; font-size: 0.78rem; cursor: pointer; padding: 2px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .ex-var-mode-btn.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Visual pose editor (orbitable 3-D handstand figure + tap-to-pose chips). */
 .ex-var-pose { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -2331,13 +2334,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pose-hint { font-size: 0.74rem; text-align: center; }
 /* Tap-to-pose control chips below the figure (one row per dimension). */
 .pose-ctl { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 3px 9px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); }
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); }
 .pose-ctl:hover { border-color: var(--accent); }
 .pose-ctl.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .pose-ctl .ex-var-lvl-f { opacity: 0.7; font-size: 0.92em; }
 .pose-ctl.is-on .ex-var-lvl-f { opacity: 0.85; }
 /* Per-note "not comparable" toggle + state. */
-.ex-var-nc-btn { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 3px 6px; white-space: nowrap; }
+.ex-var-nc-btn { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 3px 6px; white-space: nowrap; }
 .ex-var-nc-btn:hover { border-color: var(--accent); color: var(--accent); }
 .ex-var-nc-btn.is-on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .ex-var-block.is-nc { border-color: var(--accent); }
@@ -2360,7 +2363,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-reset { font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; }
 .ex-var-reset:hover { border-color: var(--accent); color: var(--accent); }
 /* "More info" button shown in Analysis single mode. */
-.wa-moreinfo { font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 999px; padding: 5px 14px; }
+.wa-moreinfo { font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 5px 14px; }
 .wa-moreinfo:hover { filter: brightness(0.97); }
 /* The ℹ info icon beside the workout-history title — small, round, inline. */
 .wa-title-info {
@@ -2377,7 +2380,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-force {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--text);
   cursor: pointer; font: inherit; font-size: 0.76rem; font-weight: 600;
-  padding: 2px 10px; border-radius: 999px;
+  padding: 2px 10px; border-radius: var(--r-pill);
 }
 .ex-force:hover { border-color: var(--accent); }
 .ex-force.is-on { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -2398,7 +2401,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .active-set-bar .as-clear { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.82rem; text-decoration: underline; padding: 0; }
 .active-set-bar .as-why { font-size: 0.78rem; opacity: 0.8; font-weight: 400; }
 /* The one-tap "Show all (turn filter off)" escape — a real button, not a link. */
-.active-set-bar .as-reset { display: inline-block; margin-top: 0.3rem; text-decoration: none; font-weight: 600; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); }
+.active-set-bar .as-reset { display: inline-block; margin-top: 0.3rem; text-decoration: none; font-weight: 600; padding: 3px 10px; border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent-soft); }
 .active-set-bar .as-reset:hover { background: var(--accent); color: #fff; }
 .active-set-bar .as-hint { margin: 0.4rem 0 0; font-size: 0.78rem; }
 /* Combinable taxonomy filters: a dimension picker + a horizontally-scrolling row
@@ -2406,11 +2409,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .active-set-bar .as-filter-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.55rem; }
 .active-set-bar .as-fpills { display: flex; gap: 0.3rem; overflow-x: auto; flex: 1; min-width: 0; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
 .active-set-bar .as-fnone { font-size: 0.8rem; }
-.active-set-bar .as-fpill { flex: 0 0 auto; font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+.active-set-bar .as-fpill { flex: 0 0 auto; font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); white-space: nowrap; }
 .active-set-bar .as-fpill:hover { border-color: var(--accent); }
 .active-set-bar .as-fpill.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .active-set-bar .as-fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.45rem; }
-.active-set-bar .as-fchip { font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 2px 8px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.active-set-bar .as-fchip { font: inherit; font-size: 0.76rem; font-weight: 600; cursor: pointer; padding: 2px 8px; border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
 .active-set-bar .as-fchip:hover { background: var(--accent); color: #fff; }
 .bw-groups { display: flex; flex-direction: column; gap: 6px; }
 /* overflow stays visible (not hidden) so the group title + an expanded row can
@@ -2496,11 +2499,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* "static" hold tag in the codes list (a tag, not a category). */
 .codes-static {
   font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
-  color: #5b6b86; background: rgba(91, 107, 134, 0.12); border-radius: 999px; padding: 1px 6px; vertical-align: middle;
+  color: #5b6b86; background: rgba(91, 107, 134, 0.12); border-radius: var(--r-pill); padding: 1px 6px; vertical-align: middle;
 }
 .codes-reset {
   font: inherit; font-size: 0.75rem; cursor: pointer; color: var(--muted);
-  background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px;
 }
 .codes-reset:hover { border-color: var(--accent); color: var(--accent); }
 .codes-def { font-size: 0.75rem; }
@@ -2558,13 +2561,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-note { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .cl-sp {
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--gold);
-  background: var(--gold-soft); border-radius: 999px; padding: 2px 8px;
+  background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 8px;
 }
 /* Planned (not-yet-built) entry: a "soon" pill in the accent colour, and a
    slightly dimmed row so it reads as upcoming rather than shipped. */
 .cl-soon {
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--accent);
-  background: var(--accent-soft); border-radius: 999px; padding: 2px 8px;
+  background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 8px;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 .cl-row.is-soon .cl-ver { color: var(--muted); }
@@ -2705,13 +2708,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-mode[data-wa-mode="single"] strong { color: var(--accent); }
 .wa-mode[data-wa-mode="compare"] strong { color: var(--gold); }
 .wa-ex-actions { margin: 0 0 0.5rem; }
-.wa-clear { font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-clear { font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-clear:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
 .wa-clear[disabled] { opacity: 0.5; cursor: default; }
 .wa-ex-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .wa-ex-chip {
   font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer;
-  padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--bg); color: var(--text);
 }
 .wa-ex-chip:hover { border-color: var(--accent); }
@@ -2807,7 +2810,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
      calendar / sitemap / data-table, fixed in b.2.7.72). */
   touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
 }
-.wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
 .wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
 /* A selected lift that's actually ON the graph gets the accent border + 📈 mark;
@@ -2870,7 +2873,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Chip-label mode (Code / Full name) — a small segmented toggle in the ⚙ menu. */
 .wa-name-mode { display: flex; align-items: center; gap: 0.3rem; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
 .wa-name-mode-lbl { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-right: 0.15rem; }
-.wa-name-opt { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-name-opt { font: inherit; font-size: 0.76rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-name-opt:hover { border-color: var(--accent); color: var(--accent); }
 .wa-name-opt.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Full-name chips can be long — let them wrap to their natural width. */
@@ -2972,7 +2975,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    scrollable wrap of tappable exercise chips — replaces the old native multi-select. */
 .wa-create-picker { display: flex; flex-direction: column; gap: 0.4rem; }
 .wa-create-picker .wa-sel-pills { margin: 0; } /* same 2-row strip as the graph selector */
-.wa-create-search { font: inherit; font-size: 0.85rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); }
+.wa-create-search { font: inherit; font-size: 0.85rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); }
 .wa-create-picker .wa-ex-chips { max-height: 13rem; overflow-y: auto; align-content: flex-start; padding: 2px; touch-action: pan-y; }
 .wa-create-empty { font-size: 0.8rem; }
 /* The list of already-created defs, so they're visibly there with a ✕ to delete. */
@@ -2980,7 +2983,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-vdef-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
 .wa-vdef-name { font-weight: 700; color: var(--text); }
 .wa-vdef-meta { font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wa-vdef-del { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 999px; width: 22px; height: 22px; cursor: pointer; font-size: 0.8rem; line-height: 1; }
+.wa-vdef-del { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: var(--r-pill); width: 22px; height: 22px; cursor: pointer; font-size: 0.8rem; line-height: 1; }
 .wa-vdef-del:hover { border-color: #a23b3b; color: #a23b3b; }
 /* "Create variant / group" on the Index page (moved from the Analysis bar). */
 .idx-create-sum { cursor: pointer; font-weight: 700; font-size: 0.95rem; color: var(--accent); list-style: none; }
@@ -3008,7 +3011,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-filter-dim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.5rem; margin: 0 0 0.5rem; }
 .wa-filter-lbl { flex: 0 0 5.5rem; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .wa-filter-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; flex: 1 1 auto; min-width: 0; }
-.wa-fchip { font: inherit; font-size: 0.74rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-fchip { font: inherit; font-size: 0.74rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-fchip:hover { border-color: var(--accent); color: var(--accent); }
 .wa-fchip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .wa-filters .wa-clear { margin-top: 0.2rem; }
@@ -3022,7 +3025,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-metric-group-sum::before { content: "▸ "; }
 .wa-metric-group[open] > .wa-metric-group-sum::before { content: "▾ "; }
 .wa-metric-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 0 0.35rem 0.5rem; }
-.wa-metric { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); }
+.wa-metric { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-metric:hover { border-color: var(--accent); color: var(--accent); }
 .wa-metric.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Blocked (not yet reviewed) metric: greyed + dashed, so it reads as "off-limits
@@ -3032,7 +3035,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* The graph's "this isn't enabled — needs review" banner + its button. */
 .wa-graph-blocked { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.6rem 0.7rem; margin: 0.3rem 0; border: 1px dashed var(--line); border-radius: 10px; background: var(--accent-soft); color: var(--text); font-size: 0.82rem; }
 .wa-gb-icon { font-size: 1rem; }
-.wa-gb-btn { font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; padding: 4px 11px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent); color: #fff; }
+.wa-gb-btn { font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; padding: 4px 11px; border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent); color: #fff; }
 .wa-gb-btn:hover { filter: brightness(1.08); }
 .wa-gb-inline { white-space: nowrap; }
 .wa-gb-link { font: inherit; font-size: inherit; font-weight: 700; cursor: pointer; padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; }
@@ -3042,14 +3045,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-gp-count { font-size: 0.78rem; }
 .ex-gp-hint { margin: 0.25rem 0 0.5rem; font-size: 0.78rem; }
 .ex-gp-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; gap: 0.3rem; }
+.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; gap: 0.3rem; }
 .gp-chip:hover { border-color: var(--accent); }
 /* Cycling 4-level approval: no (grey) → 1 experimental (amber) → 2 confirmed
    (blue) → 3 certain (green). The little badge shows the level number. */
 .gp-chip.gp-l1 { background: #b8902f; border-color: #b8902f; color: #fff; }
 .gp-chip.gp-l2 { background: #284e86; border-color: #284e86; color: #fff; }
 .gp-chip.gp-l3 { background: #2e7d52; border-color: #2e7d52; color: #fff; }
-.gp-lvl { font-size: 0.65rem; line-height: 1; padding: 1px 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.28); }
+.gp-lvl { font-size: 0.65rem; line-height: 1; padding: 1px 4px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.28); }
 .ex-gp-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .ex-gp-actions .gp-bulk { flex: 0 0 auto; font-size: 0.78rem; padding: 4px 10px; }
 .wa-gcfg { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; margin: 0 0 0.6rem; }
