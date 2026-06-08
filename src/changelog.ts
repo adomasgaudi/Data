@@ -69,6 +69,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.0", title: "Los Lobos era begins", sp: 1, note: "Opened the Los Lobos era (b.2.8) and closed Arrogante (b.2.7). The now-complete Arrogante chapter was reviewed across all its releases and given a proper title (\"Graphs, selector & workout history\") and a written era summary instead of the placeholder. The SP-over-time graph, the points and the per-task-code pills all recompute themselves from the log.", cat: "META" },
   { version: "b.2.7.201", title: "Graph selector: picked lifts are the clickable title — tap a name to remove it", sp: 1, note: "Tidied the graph selector. The picked lifts now show as their NAMES in the big “N on graph” title, and each name is itself the remove control — tap it to drop that lift from the graph (it goes red/struck-through on hover). Removed the duplicate read-only names line and the separate ✕-pill row that used to sit below — one place, no ✕ icons. The history selector's removable ✕ pills are unchanged.", cat: "SEL" },
   { version: "b.2.7.200", title: "“Short” name mode is now genuinely shorter than full (auto-abbreviated)", sp: 1, note: "The “Short” label mode used to fall back to the FULL name unless you'd typed a custom short per lift — so Short looked identical to Full. Now it auto-abbreviates common long words to a readable middle tier: Dumbbell→DB, Barbell→BB, Kettlebell→KB, Machine→Mach, Romanian→Rom, Bulgarian→Bulg, Smith Machine→Smith, Overhead→OH, Single/One Arm→1-Arm, etc. So “Dumbbell Romanian Deadlift” reads “DB Rom Deadlift” in Short, the full name in Full, and the code (DB-RDL) in Code — three distinct tiers. Already-short names (Squat) are unchanged, and a custom short you type still wins.", cat: "EXR" },
   { version: "b.2.7.199", title: "Index list shows each lift's short code beside its full name", sp: 0.5, note: "In the Index exercise list (the BW-part / Sets table, grouped by discipline/muscle), every row now shows the lift's short CODE as a small pill next to its full name — e.g. “Squat SQ”, “Smith Machine Squat smSQ” — so you can read the full name and learn/scan the code at the same time, regardless of the global name-mode. Also applies to the in-Index search results.", cat: "EXR" },
@@ -822,7 +823,8 @@ function chapterKey(version: string): string {
 /** Descriptive chapter titles (the version "eras"). Unmapped chapters fall back
  *  to their biggest release's title, so new minors still read well. */
 const CHAPTER_TITLES: Record<string, string> = {
-  "b.2.7": "Version 2.7 milestone",
+  "b.2.8": "Version 2.8 milestone",
+  "b.2.7": "Graphs, selector & workout history",
   "b.2.6": "Disciplines, world records & Lithuanian",
   "b.2.5": "Pose models & difficulty multipliers",
   "b.2.4": "Handstand modelling & analysis polish",
@@ -833,6 +835,12 @@ const CHAPTER_TITLES: Record<string, string> = {
   "b.1.hi": "Charts engine & live data",
   "b.1.lo": "Bottom nav, Add & compare",
   "0.x": "Before the reset",
+};
+
+/** Hand-written era summaries for chapters that deserve more than the auto
+ *  "N releases." note. Unmapped chapters keep the auto count. */
+const CHAPTER_NOTES: Record<string, string> = {
+  "b.2.7": "The Arrogante era - the biggest run yet (200+ releases): a deep polish of the unified Analysis experience. Reworked the exercise selector (filters, group-by discipline, search by code/short name, removable pills), the graphs (volume/reps/sets bars, weight-range, per-lift labels, vertical volume shift), the workout-history list (sessions, dividers, period sorting), athlete stats and momentum, exercise name modes and push-up incline levels - and made taps snappier throughout.",
 };
 
 /** Build the history tree from the flat, newest-first RELEASES list: one named
@@ -859,7 +867,7 @@ export function buildChangelogTree(releases: Release[]): Release[] {
     // and the version-history UI both assume). rels is already newest-first.
     const children = subgroups.length > 1 ? subgroups.reverse() : rels;
     return { version: k, title: CHAPTER_TITLES[k] ?? headlineTitle(rels), sp: 0,
-      note: `${rels.length} releases.`, children };
+      note: CHAPTER_NOTES[k] ?? `${rels.length} releases.`, children };
   });
 }
 
