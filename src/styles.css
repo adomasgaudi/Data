@@ -2974,6 +2974,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Category mode: the always-visible top strip is a SINGLE horizontally-scrolling
    row of expandable category pills (overrides the 2-row selected-pills grid). */
 .wa-sel-pills.wa-catstrip { display: flex; flex-wrap: nowrap; align-items: stretch; }
+/* The "picked lifts" row sits just above the category strip — a touch tighter so the
+   two read as one selector block (which lift is picked, then the category pills). */
+.wa-sel-pills.wa-sel-picked { margin-bottom: 0.25rem; }
 .wa-catstrip .wa-cat-pill { flex: 0 0 auto; }
 .wa-cat-pill {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;

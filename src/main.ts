@@ -12032,22 +12032,31 @@ function renderSelector(scope: SelScope): void {
   const graphCap = graphExerciseCap();
   const onGraph = scope === "graph" ? new Set(cur.slice(0, graphCap)) : new Set<string>();
   const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
+  // One removable selected-lift pill (shared by the category strip's "picked" row and
+  // the Exercises-mode selected row). On the GRAPH selector the first N are marked 📈.
+  const selPill = (n: string): string => {
+    const g = onGraph.has(n);
+    const dot = g ? `<span class="wa-sel-graphdot" aria-hidden="true"></span>` : "";
+    const title = scope === "graph"
+      ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${graphCap}-lift limit · tap to remove ${n}`)
+      : `Tap to remove ${n}`;
+    return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
+  };
   let selPills = "";
   if (stickyCats) {
     // Category mode: the always-visible top strip IS the whole-category picker — one
     // expandable pill per group (tap opens its exercises), horizontally scrollable.
     // No "all" pill (redundant with Select all / Clear in the ⚙) and no count label.
-    selPills = `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
+    // ABOVE it, show the ACTUALLY-picked lifts as removable pills so you can SEE which
+    // exercises are selected — a category "1/13" count alone never says WHICH one. One
+    // horizontally-scrolling row (rule 16); shown up to a sane count, beyond which the
+    // per-category counts carry it without swamping the strip.
+    const pickedRow = cur.length && cur.length <= 12
+      ? `<div class="wa-sel-pills wa-catstrip wa-sel-picked">${cur.map(selPill).join("")}</div>`
+      : "";
+    selPills = pickedRow + `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
   } else if (cur.length) {
-    selPills = `<div class="wa-sel-pills">` +
-      cur.map((n) => {
-        const g = onGraph.has(n);
-        const dot = g ? `<span class="wa-sel-graphdot" aria-hidden="true"></span>` : "";
-        const title = scope === "graph"
-          ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${graphCap}-lift limit · tap to remove ${n}`)
-          : `Tap to remove ${n}`;
-        return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
-      }).join("") + `</div>`;
+    selPills = `<div class="wa-sel-pills">${cur.map(selPill).join("")}</div>`;
   }
   const trimBtn = (scope === "graph" && cur.length > graphCap)
     ? `<button type="button" class="wa-clear wa-trimgraph wa-match-graph" title="Trim this graph selection to just the ${graphCap} lifts the graph plots">Trim to ${graphCap}</button>`
