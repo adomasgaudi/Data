@@ -3430,3 +3430,31 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    lighter sub-header and a guide line on the left. */
 .wa-subgroup { margin: 0.15rem 0 0.3rem 0.5rem; padding-left: 0.5rem; border-left: 2px solid var(--line); }
 .wa-subgroup-h { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; margin: 0.15rem 0 0.2rem; }
+
+/* ---- "Live" coaching page ---- */
+.live-body { display: flex; flex-direction: column; gap: 0.7rem; }
+.live-for { font-size: 0.82rem; margin: 0 0 0.2rem; }
+.live-card { border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.8rem; background: var(--panel); }
+.live-card.live-goals { border-color: var(--accent); }
+.live-card.live-warn { border-color: var(--danger); }
+.live-h { font-size: 1rem; font-weight: 700; margin: 0 0 0.2rem; color: var(--text); }
+.live-sub { font-size: 0.78rem; margin: 0 0 0.5rem; }
+.live-tier { margin: 0.45rem 0; }
+.live-tier-hd { font-size: 0.74rem; margin-bottom: 0.3rem; }
+.live-tier-lbl { font-weight: 700; color: var(--accent); }
+.live-ex-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.live-ex { display: inline-flex; align-items: baseline; gap: 0.35rem; font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 9px; }
+.live-ex:hover { border-color: var(--accent); }
+.live-ex-name { font-weight: 600; }
+.live-ex-meta { font-size: 0.72rem; }
+.live-drop { font-size: 0.72rem; font-weight: 700; color: var(--danger); font-variant-numeric: tabular-nums; }
+.live-list { margin: 0.1rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; line-height: 1.45; }
+.live-list li { margin: 0.15rem 0; }
+.live-block { margin: 0.4rem 0; }
+.live-block-hd { font-size: 0.74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.1rem; }
+.live-block-warn .live-block-hd { color: var(--danger); }
+.live-ss { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.35rem 0; border-top: 1px solid var(--line); }
+.live-ss:first-of-type { border-top: none; }
+.live-ss-pair { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.live-ss-plus { font-weight: 800; color: var(--muted); }
+.live-ss-why { font-size: 0.72rem; }

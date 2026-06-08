@@ -45,6 +45,15 @@ const LT: Record<string, string> = {
   "Stats view": "Statistikos rodinys",
   "Add a set": "Pridėti seriją",
   "Index": "Rodyklė",
+  // ---- Live coaching page ----
+  "Live": "Gyvai",
+  "Train today": "Šiandien treniruok",
+  "Antagonist supersets": "Antagonistų supersetai",
+  "Warm-ups": "Apšilimas",
+  "Watch-outs": "Atsargiai",
+  "Goals & cautions": "Tikslai ir atsargumas",
+  "Goals": "Tikslai",
+  "Style": "Stilius",
   // ---- Page titles (top bar shows the current page name) ----
   "Athlete": "Sportininkas",
   "Stats": "Statistika",

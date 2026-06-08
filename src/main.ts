@@ -7559,6 +7559,229 @@ function openStatsEditor(username: string): void {
 /** Render the editable stats form for `statsEditUser` (defaults to the selected
  * athlete). Body-fat is five % inputs (95/50 band + average); a live nFFMI range
  * shows how the band propagates. */
+// ---- "Live" coaching page -------------------------------------------------
+// A training plan for the selected athlete: what to train today (by tier, most-
+// stale first), antagonist superset pairings, warm-up guidance and watch-outs.
+// Reuses the same decay model as the Maintenance section.
+
+/** Per-athlete COACHING profile (owner-curated): training goals, injury cautions +
+ * the areas to keep maintaining for them, and style notes/preferences. Keyed by a
+ * lowercased name fragment matched against the username OR display name. */
+interface CoachingProfile {
+  goals?: string[];
+  notes?: string[]; // style / preferences / constraints
+  cautions?: string[]; // injuries / dangers
+  maintain?: string[]; // areas to keep training to protect the cautions
+  /** Muscle groups (from MUSCLE_GROUPS) whose lifts should be surfaced for injury care. */
+  maintainMuscles?: MuscleGroup[];
+  /** Lean on antagonist supersets (e.g. tends to rush / cut rests short). */
+  pushSupersets?: boolean;
+}
+const COACHING: Record<string, CoachingProfile> = {
+  marija: {
+    goals: [
+      "Traps & grip — via the handstand progression",
+      "Hip hinge — build it carefully (persistent hip-hinge issues)",
+    ],
+    notes: [
+      "Very athletic — strong cardio & flexibility",
+      "Tends to rush (rests too short) → use antagonist supersets so the pause is productive, not just short",
+    ],
+    cautions: ["Adductor pain", "Low back pain"],
+    maintain: ["Adductors", "Hip flexors"],
+    maintainMuscles: ["Adductors"],
+    pushSupersets: true,
+  },
+};
+/** The coaching profile for an athlete (matched on username / display name), or null. */
+function coachingFor(username: string): CoachingProfile | null {
+  const keys = [username.toLowerCase(), nameForUsername(username).toLowerCase()];
+  for (const [k, v] of Object.entries(COACHING)) if (keys.some((s) => s.includes(k))) return v;
+  return null;
+}
+
+/** Antagonist muscle-group pairs — opposing movers good to superset together. */
+const ANTAGONIST_PAIRS: [MuscleGroup, MuscleGroup][] = [
+  ["Chest", "Upper back"],
+  ["Chest", "Lats"],
+  ["Shoulders", "Lats"],
+  ["Biceps", "Triceps"],
+  ["Quads", "Hamstrings"],
+  ["Abductors", "Adductors"],
+  ["Lower back", "Core"],
+];
+
+interface LiveEx {
+  name: string;
+  tier: ExerciseTier;
+  muscles: MuscleGroup[];
+  sets: number;
+  lastDay: number; // day-number of the most recent set (−Infinity = never)
+  drop: number; // % below all-time peak (decayed-to-today)
+  priority: number; // higher = needs work sooner
+}
+
+/** Build each of the selected athlete's lifts with its tier, recency and decay. */
+function liveExercises(username: string, todayD: number): LiveEx[] {
+  const formula = currentFormula();
+  const byEx = new Map<string, { days: Map<number, number>; sets: number; lastDay: number }>();
+  for (const r of computedRecords()) {
+    if (r.username !== username || !r.date) continue;
+    const d = dayNumber(r.date);
+    let e = byEx.get(r.exerciseName);
+    if (!e) { e = { days: new Map(), sets: 0, lastDay: -Infinity }; byEx.set(r.exerciseName, e); }
+    e.sets++;
+    e.lastDay = Math.max(e.lastDay, d);
+    if (addedWeight1RM(r, formula) !== null) {
+      const eff = estimate1RM(r.weight, r.reps, formula);
+      if (eff !== null) e.days.set(d, Math.max(e.days.get(d) ?? -Infinity, eff));
+    }
+  }
+  const out: LiveEx[] = [];
+  for (const [name, e] of byEx) {
+    let drop = 0;
+    if (e.days.size) {
+      const pts = [...e.days.entries()].map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
+      const peak = Math.max(...pts.map((p) => p.y));
+      const series = decayingStrengthPoints(pts);
+      const cur = series.length ? series[series.length - 1]!.y : peak;
+      drop = peak > 0 ? Math.max(0, ((peak - cur) / peak) * 100) : 0;
+    }
+    const daysAgo = Number.isFinite(e.lastDay) ? todayD - e.lastDay : 999;
+    // Needs-work score: how far it's slipped + how long since you trained it (capped).
+    const priority = drop + Math.min(60, daysAgo) * 0.5;
+    out.push({ name, tier: tiersFor(name)[0] ?? "main", muscles: mgsFor(name), sets: e.sets, lastDay: e.lastDay, drop, priority });
+  }
+  return out;
+}
+
+/** The "Live" training-plan page for the currently-selected athlete. */
+function renderLive(): void {
+  const box = document.getElementById("liveBody");
+  if (!box) return;
+  const username = els.athlete.value;
+  const todayD = dayNumber(todayIso());
+  const list = liveExercises(username, todayD);
+  if (!list.length) {
+    box.innerHTML = `<p class="muted">No training logged for ${escapeHtml(athleteLabel())} yet — log some sets and your plan appears here.</p>`;
+    return;
+  }
+  const coach = coachingFor(username);
+  const daysAgo = (x: LiveEx) => (Number.isFinite(x.lastDay) ? todayD - x.lastDay : 999);
+  const agoTxt = (x: LiveEx) => { const n = daysAgo(x); return n >= 999 ? "never" : n === 0 ? "today" : `${n}d ago`; };
+  const dropTxt = (x: LiveEx) => (x.drop >= 0.5 ? `<span class="live-drop">−${x.drop.toFixed(0)}%</span>` : "");
+  const exPill = (x: LiveEx) =>
+    `<button type="button" class="live-ex" data-waexinfo="${escapeHtml(x.name)}" title="${escapeHtml(x.name)} — tap for info">` +
+    `<span class="live-ex-name">${escapeHtml(displayName(x.name))}</span>` +
+    `<span class="live-ex-meta muted">${agoTxt(x)}</span>${dropTxt(x)}</button>`;
+
+  // 1) WHAT TO TRAIN — by tier, most-stale/slipped first. Primary & Secondary capped
+  //    at 6 (your focus lifts); Tertiary is the longer maintenance tail.
+  const byTier = (t: ExerciseTier) => list.filter((x) => x.tier === t).sort((a, b) => b.priority - a.priority);
+  const tierBlock = (t: ExerciseTier, cap: number, blurb: string) => {
+    const items = byTier(t);
+    if (!items.length) return "";
+    const shown = cap > 0 ? items.slice(0, cap) : items;
+    return (
+      `<div class="live-tier"><div class="live-tier-hd"><span class="live-tier-lbl">${TIER_LABELS[t]}</span> ` +
+      `<span class="muted">${blurb}${items.length > shown.length ? ` · top ${shown.length} of ${items.length}` : ""}</span></div>` +
+      `<div class="live-ex-row">${shown.map(exPill).join("")}</div></div>`
+    );
+  };
+  const trainSection =
+    `<section class="live-card"><h3 class="live-h">Train today</h3>` +
+    `<p class="live-sub muted">Your lifts by tier, the ones that have slipped most or that you've not trained in a while first.</p>` +
+    tierBlock("main", 6, "top priorities") +
+    tierBlock("second", 6, "secondary") +
+    tierBlock("third", 12, "maintenance") +
+    `</section>`;
+
+  // 2) ANTAGONIST SUPERSETS — pair an opposing-muscle lift either side. Pick the
+  //    highest-priority lift on each side; don't reuse a lift across pairs.
+  const topByMuscle = (m: MuscleGroup, used: Set<string>): LiveEx | null =>
+    list.filter((x) => x.muscles[0] === m && !used.has(x.name)).sort((a, b) => b.priority - a.priority)[0] ?? null;
+  const usedSS = new Set<string>();
+  const pairs: string[] = [];
+  for (const [a, b] of ANTAGONIST_PAIRS) {
+    const ea = topByMuscle(a, usedSS);
+    const eb = topByMuscle(b, usedSS);
+    if (ea && eb) {
+      usedSS.add(ea.name); usedSS.add(eb.name);
+      pairs.push(
+        `<div class="live-ss"><span class="live-ss-pair">${exPill(ea)}<span class="live-ss-plus">+</span>${exPill(eb)}</span>` +
+        `<span class="live-ss-why muted">${a} ⇄ ${b}</span></div>`,
+      );
+    }
+    if (pairs.length >= 5) break;
+  }
+  const ssSection = pairs.length
+    ? `<section class="live-card"><h3 class="live-h">Antagonist supersets</h3>` +
+      `<p class="live-sub muted">Alternate opposing muscles to save time and keep both sides balanced — rest one while the other works.</p>` +
+      pairs.join("") + `</section>`
+    : "";
+
+  // 3) WARM-UPS — the muscle groups today's top lifts hit, + a simple ramp recipe.
+  const topToday = [...byTier("main"), ...byTier("second")].sort((a, b) => b.priority - a.priority).slice(0, 4);
+  const warmMuscles = [...new Set(topToday.flatMap((x) => x.muscles.slice(0, 2)))].slice(0, 6);
+  const warmSection = topToday.length
+    ? `<section class="live-card"><h3 class="live-h">Warm-ups</h3>` +
+      `<p class="live-sub muted">Before today's top lifts:</p>` +
+      `<ul class="live-list">` +
+      `<li>Raise + mobilise: ${warmMuscles.length ? warmMuscles.map((m) => escapeHtml(m)).join(" · ") : "the muscles you're training"} (5–8 min).</li>` +
+      `<li>Per lift, ramp up: 2–3 sets rising ~50% → 70% → 85% of your working weight before the first hard set.</li>` +
+      `<li>First heavy lift today: <b>${escapeHtml(displayName(topToday[0]!.name))}</b> — give it the fullest warm-up.</li>` +
+      `</ul></section>`
+    : "";
+
+  // 4) WATCH-OUTS — neglected muscle groups (no set in 21+ days) and stale primaries.
+  const lastByMuscle = new Map<MuscleGroup, number>();
+  for (const x of list) for (const m of x.muscles) lastByMuscle.set(m, Math.max(lastByMuscle.get(m) ?? -Infinity, x.lastDay));
+  const neglected = [...lastByMuscle.entries()]
+    .filter(([, d]) => todayD - d >= 21)
+    .sort((a, b) => a[1] - b[1])
+    .map(([m, d]) => `${escapeHtml(m)} <span class="muted">(${todayD - d}d)</span>`);
+  const staleMain = byTier("main").filter((x) => daysAgo(x) >= 14).slice(0, 5);
+  const watchItems: string[] = [];
+  if (neglected.length) watchItems.push(`<li>Neglected muscles (3+ weeks): ${neglected.slice(0, 8).join(" · ")}.</li>`);
+  if (staleMain.length) watchItems.push(`<li>Top lifts going stale: ${staleMain.map((x) => `${escapeHtml(displayName(x.name))} <span class="muted">(${agoTxt(x)})</span>`).join(" · ")}.</li>`);
+  const watchSection = watchItems.length
+    ? `<section class="live-card live-warn"><h3 class="live-h">Watch-outs</h3><ul class="live-list">${watchItems.join("")}</ul></section>`
+    : "";
+
+  // 0) GOALS & CAUTIONS — the athlete's curated coaching profile (goals, injury
+  //    cautions + maintenance areas, style notes), plus the lifts they already do
+  //    that cover a caution muscle (e.g. adductor work for adductor pain).
+  let coachSection = "";
+  if (coach) {
+    const li = (s: string) => `<li>${escapeHtml(s)}</li>`;
+    const careLifts = (coach.maintainMuscles ?? []).length
+      ? list.filter((x) => x.muscles.some((m) => coach.maintainMuscles!.includes(m))).sort((a, b) => b.priority - a.priority).slice(0, 6)
+      : [];
+    coachSection =
+      `<section class="live-card live-goals"><h3 class="live-h">Goals &amp; cautions</h3>` +
+      (coach.goals?.length ? `<div class="live-block"><div class="live-block-hd">Goals</div><ul class="live-list">${coach.goals.map(li).join("")}</ul></div>` : "") +
+      (coach.notes?.length ? `<div class="live-block"><div class="live-block-hd">Style</div><ul class="live-list">${coach.notes.map(li).join("")}</ul></div>` : "") +
+      (coach.cautions?.length || coach.maintain?.length
+        ? `<div class="live-block live-block-warn"><div class="live-block-hd">⚠ Cautions — keep maintaining</div><ul class="live-list">` +
+          (coach.cautions ?? []).map((c) => `<li>${escapeHtml(c)}</li>`).join("") +
+          (coach.maintain?.length ? `<li>Keep training: <b>${coach.maintain.map((m) => escapeHtml(m)).join(" · ")}</b></li>` : "") +
+          `</ul>` +
+          (careLifts.length ? `<div class="live-ex-row">${careLifts.map(exPill).join("")}</div>` : "") +
+          `</div>`
+        : "") +
+      `</section>`;
+  }
+  // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
+  // section right after the plan; otherwise it sits lower.
+  const ordered = coach?.pushSupersets
+    ? coachSection + trainSection + ssSection + warmSection + watchSection
+    : coachSection + trainSection + warmSection + ssSection + watchSection;
+
+  box.innerHTML =
+    `<p class="live-for muted">Plan for <b>${escapeHtml(athleteLabel())}</b> — switch athlete on the Analysis view.</p>` +
+    ordered;
+}
+
 // ---- World records page ---------------------------------------------------
 // Which trio lift the records table is showing (mutually-exclusive pill set).
 let recordsLift: PowerLift = "total";
@@ -13845,6 +14068,7 @@ function switchTopTab(name: string) {
   if (name === "team") renderTeamView();
   if (name === "statsedit") renderStatsEdit();
   if (name === "records") renderRecords();
+  if (name === "live") renderLive();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.
