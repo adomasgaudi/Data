@@ -10902,7 +10902,8 @@ function renderSelector(scope: SelScope): void {
     // Category mode: the always-visible top strip IS the whole-category picker — one
     // expandable pill per group (tap opens its exercises), horizontally scrollable.
     // The per-pill count shows what's selected, so no separate selected-pills row.
-    selPills = `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
+    selPills = `<div class="wa-cat-allrow">${waCatAllPill(waChipListBase())}</div>` +
+      `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
   } else if (cur.length) {
     selPills = `<div class="wa-sel-pills">` +
       cur.map((n) => {
@@ -11090,26 +11091,35 @@ function waCatPill(key: string, label: string, sel: number, tot: number, subSel:
 /** The full category-pill row: an "all" pill + one pill per group. */
 /** Just the category pills (an "all" pill + one per group), no wrapper. Shared by
  * the dropdown (wrapped, multi-row) and the top strip (horizontally scrollable). */
+/** The "all" summary category pill (every shown exercise). Kept separate so it can
+ * sit on its OWN row ABOVE the horizontally-scrolling per-group pills. */
+function waCatAllPill(list: readonly WaItem[]): string {
+  const groups = new Map<string, WaItem[]>();
+  for (const e of list) groups.set(waGroupKey(e.name), []);
+  const dimShort = WA_DIM_SHORT[waGroupBy as ExerciseFilterDim] ?? "grp";
+  let groupsCovered = 0;
+  const byGroup = new Map<string, WaItem[]>();
+  for (const e of list) { const k = waGroupKey(e.name); (byGroup.get(k) ?? byGroup.set(k, []).get(k)!).push(e); }
+  for (const g of byGroup.values()) if (waSelCount(g) > 0) groupsCovered++;
+  return waCatPill("__all", "all", waSelCount(list), list.length, groupsCovered, byGroup.size, dimShort);
+}
+/** The per-group category pills (NOT the "all" pill — see waCatAllPill). */
 function waCatPillsInner(list: readonly WaItem[]): string {
   const groups = new Map<string, WaItem[]>();
   for (const e of list) {
     const k = waGroupKey(e.name);
     (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
   }
-  const dimShort = WA_DIM_SHORT[waGroupBy as ExerciseFilterDim] ?? "grp";
-  const groupsCovered = [...groups.values()].filter((g) => waSelCount(g) > 0).length;
-  const allPill = waCatPill("__all", "all", waSelCount(list), list.length, groupsCovered, groups.size, dimShort);
-  const pills = [...groups.entries()]
+  return [...groups.entries()]
     .sort((a, b) => (waGroupRank(a[0]) - waGroupRank(b[0])) || a[0].localeCompare(b[0]))
     .map(([k, items]) => {
       const cov = waSubgroupCoverage(items);
       return waCatPill(k, k, waSelCount(items), items.length, cov.sel, cov.total, "sub");
     })
     .join("");
-  return allPill + pills;
 }
 function waCatPillsHtml(list: readonly WaItem[]): string {
-  return `<div class="wa-cat-pills">${waCatPillsInner(list)}</div>`;
+  return `<div class="wa-cat-allrow">${waCatAllPill(list)}</div><div class="wa-cat-pills">${waCatPillsInner(list)}</div>`;
 }
 /** The exercises a category pill covers ("__all" = every shown exercise). */
 function waCatItems(key: string): WaItem[] {

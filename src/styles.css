@@ -2766,6 +2766,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Categories-mode picker: one two-line pill per category (label + sel/total, and
    a smaller sub-group line), tap to open its floating exercise dropdown. */
 .wa-cat-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+/* The "all" summary pill sits on its OWN row ABOVE the per-group pills (so it's
+   always visible, never scrolled away in the category strip). */
+.wa-cat-allrow { display: flex; margin: 0 0 0.4rem; }
+.wa-cat-allrow .wa-cat-pill { flex: 0 0 auto; }
 /* Category mode: the always-visible top strip is a SINGLE horizontally-scrolling
    row of expandable category pills (overrides the 2-row selected-pills grid). */
 .wa-sel-pills.wa-catstrip { display: flex; flex-wrap: nowrap; align-items: stretch; }
