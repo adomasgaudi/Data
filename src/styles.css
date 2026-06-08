@@ -1845,6 +1845,7 @@ sup.wr-bw { font-size: 0.85em; }
   margin: 0.3rem 0 0.1rem 0.35rem; vertical-align: middle;
 }
 .wo-addform .wo-af-ex { width: 8.5rem; }
+.wo-addform .wo-af-note { width: 8.5rem; }
 .wo-addform input {
   width: 3.4rem; font: inherit; font-size: 0.8rem; padding: 2px 6px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;

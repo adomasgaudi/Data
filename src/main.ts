@@ -10626,13 +10626,46 @@ function updateVariantField(): void {
 
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
 // forms (add-a-set and add-a-new-exercise).
-const AF_FIELDS =
+const AF_INPUTS =
   `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
   `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
-  `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />` +
+  `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />`;
+const AF_BUTTONS =
   `<button type="button" class="wo-af-go">Add</button>` +
   `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
   `<span class="wo-af-msg muted"></span>`;
+const AF_FIELDS = AF_INPUTS + AF_BUTTONS;
+
+/** Distinct variation NOTES already logged for an exercise (e.g. a handstand's
+ * "b2w +15cm", a push-up's "deficit"), most-used first — the choices we offer when
+ * hand-logging a set so it joins the same per-note difficulty system. */
+function variationNotesFor(exerciseName: string): string[] {
+  const byNote = new Map<string, { display: string; count: number }>();
+  for (const r of data.records) {
+    if (r.exerciseName !== exerciseName) continue;
+    const note = (r.notes ?? "").trim();
+    if (!note) continue;
+    const k = normNote(note);
+    const e = byNote.get(k);
+    if (e) e.count++;
+    else byNote.set(k, { display: note, count: 1 });
+  }
+  return [...byNote.values()].sort((a, b) => b.count - a.count).map((e) => e.display);
+}
+let afNoteSeq = 0; // unique <datalist> id per open form
+
+/** A variation-note field (with the exercise's logged variations as a datalist),
+ * or "" when the lift has no notes — so picking a handstand's depth/lean variant
+ * is one tap when hand-logging. Placed first in the form: choose, then reps. */
+function afVariationField(exerciseName: string): string {
+  const notes = variationNotesFor(exerciseName);
+  if (!notes.length) return "";
+  const listId = `afNotes-${++afNoteSeq}`;
+  return (
+    `<input class="wo-af-note" list="${listId}" placeholder="variation" aria-label="Variation / note" autocomplete="off" />` +
+    `<datalist id="${listId}">${notes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`
+  );
+}
 
 /** Day / Today chooser — only worth showing when the session you're viewing
  * isn't today (so you can log to a past day or to today). */
@@ -10653,6 +10686,7 @@ function inlineAddFormHtml(exerciseName: string, date: string): string {
   return (
     `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     afWhenToggle(date, today) +
+    afVariationField(exerciseName) +
     AF_FIELDS +
     `</span>`
   );
@@ -10759,6 +10793,8 @@ function onInlineAddGo(form: HTMLElement) {
   const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
   const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
   const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
+  // Chosen variation (note) — carries the difficulty for lifts like handstands.
+  const note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
   const username = els.athlete.value;
   const user = athleteLabel();
   if (!username || !exerciseName) return;
@@ -10776,6 +10812,7 @@ function onInlineAddGo(form: HTMLElement) {
       exerciseName,
       weight: Number.isFinite(weight) ? weight : null,
       reps,
+      ...(note ? { notes: note } : {}),
     });
   }
   saveManual();
