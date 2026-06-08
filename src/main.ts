@@ -698,13 +698,17 @@ type MetaKind = "cat" | "mg" | "tier" | "disc";
 type MetaOverrides = {
   cat?: Record<string, string>; mg?: Record<string, string>; tier?: Record<string, string>; disc?: Record<string, string>;
   catSet?: Record<string, string[]>; mgSet?: Record<string, string[]>; tierSet?: Record<string, string[]>; discSet?: Record<string, string[]>;
+  /** Per-exercise MUSCLE INVOLVEMENT level 0–4 per muscle group: 0 none · 1 tendons ·
+   * 2 maintain muscle · 3 counts as exercise (the level needed to appear in that
+   * muscle's category) · 4 top exercise. Absent muscles fall to a derived default. */
+  mgLevel?: Record<string, Record<string, number>>;
 };
 const metaOverrides: MetaOverrides = (() => {
-  const empty = (): MetaOverrides => ({ cat: {}, mg: {}, tier: {}, disc: {}, catSet: {}, mgSet: {}, tierSet: {}, discSet: {} });
+  const empty = (): MetaOverrides => ({ cat: {}, mg: {}, tier: {}, disc: {}, catSet: {}, mgSet: {}, tierSet: {}, discSet: {}, mgLevel: {} });
   try {
     const raw = localStorage.getItem(META_OVERRIDE_KEY);
     const o = raw ? (JSON.parse(raw) as MetaOverrides) : {};
-    const m: MetaOverrides = { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {}, disc: o.disc ?? {}, catSet: o.catSet ?? {}, mgSet: o.mgSet ?? {}, tierSet: o.tierSet ?? {}, discSet: o.discSet ?? {} };
+    const m: MetaOverrides = { cat: o.cat ?? {}, mg: o.mg ?? {}, tier: o.tier ?? {}, disc: o.disc ?? {}, catSet: o.catSet ?? {}, mgSet: o.mgSet ?? {}, tierSet: o.tierSet ?? {}, discSet: o.discSet ?? {}, mgLevel: o.mgLevel ?? {} };
     // Migrate any legacy single override into its list form (once).
     for (const k of ["cat", "mg", "tier", "disc"] as MetaKind[]) {
       const single = m[k]!, set = m[`${k}Set` as const]!;
@@ -727,9 +731,35 @@ function metaSet(kind: MetaKind, name: string): string[] | null {
 function catsFor(name: string): TrainingCategory[] {
   return (metaSet("cat", name) as TrainingCategory[]) ?? [exerciseCategory(name)];
 }
-/** All muscle groups a lift belongs to — the owner's list, else the single default. */
+/** This lift's MUSCLE INVOLVEMENT level (0–4) for one muscle: explicit override, else
+ * derived from the legacy membership (primary muscle → 4 top, other members → 3
+ * counts, non-members → 0). 0 none · 1 tendons · 2 maintain · 3 counts · 4 top. */
+function mgLevelOf(name: string, muscle: MuscleGroup): number {
+  const lv = metaOverrides.mgLevel?.[name];
+  if (lv && muscle in lv) return lv[muscle]!;
+  const base = (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  return base.includes(muscle) ? (muscle === base[0] ? 4 : 3) : 0;
+}
+/** Muscle groups a lift COUNTS toward (level ≥ 3), top-first — the membership every
+ * grouping/category uses. Falls back to the primary so a lift is never group-less. */
 function mgsFor(name: string): MuscleGroup[] {
-  return (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  // Fast path: no per-muscle levels set → the legacy override list (or auto default).
+  if (!metaOverrides.mgLevel?.[name]) return (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  const mem = MUSCLE_GROUPS.filter((m) => mgLevelOf(name, m) >= 3).sort((a, b) => mgLevelOf(name, b) - mgLevelOf(name, a));
+  if (mem.length) return mem;
+  const base = (metaSet("mg", name) as MuscleGroup[]) ?? [muscleGroup(name)];
+  return [base[0] ?? muscleGroup(name)];
+}
+/** Set one muscle's involvement level (0–4); persists + keeps it in the backup. */
+function setMgLevel(name: string, muscle: MuscleGroup, level: number) {
+  const all = metaOverrides.mgLevel ?? (metaOverrides.mgLevel = {});
+  (all[name] ?? (all[name] = {}))[muscle] = level;
+  saveMetaOverrides();
+}
+/** Clear this lift's muscle-level overrides (back to the automatic guess). */
+function resetMgLevel(name: string) {
+  if (metaOverrides.mgLevel) delete metaOverrides.mgLevel[name];
+  saveMetaOverrides();
 }
 /** All tiers a lift belongs to — the owner's list, else the single default. */
 function tiersFor(name: string): ExerciseTier[] {
@@ -7361,7 +7391,19 @@ function exerciseInfoHtml(name: string): string {
     (metaSet(kind, name) ? `<button type="button" class="ex-meta-reset" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
     `</span>`;
   const discChips = metaChips("disc", DISCIPLINES, (v) => v, discsFor(name));
-  const mgChips = metaChips("mg", MUSCLE_GROUPS, (v) => v, mgsFor(name));
+  // Muscle group is now a per-muscle INVOLVEMENT LEVEL 0–4 (cycling pill, rule 15):
+  // 0 none · 1 tendons · 2 maintain · 3 counts as exercise (shown in that category) ·
+  // 4 top exercise. Level ≥ 3 = the lift appears under that muscle's category.
+  const mgLevelHint = "0 none · 1 tendons · 2 maintain · 3 counts (shown here) · 4 top";
+  const mgChips =
+    `<span class="ex-meta-chips">` +
+    MUSCLE_GROUPS.map((m) => {
+      const lv = mgLevelOf(name, m);
+      const cls = lv >= 3 ? " is-on" : lv > 0 ? " is-partial" : "";
+      return `<button type="button" class="ex-meta-chip ex-mglvl-chip${cls}${lv === 4 ? " is-top" : ""}" data-mglvl-ex="${escapeHtml(name)}" data-mglvl-muscle="${escapeHtml(m)}" aria-label="${escapeHtml(m)} involvement level ${lv}" title="${escapeHtml(m)} — tap to cycle: ${mgLevelHint}. Now: ${lv}">${escapeHtml(m)}${lv ? `<span class="ex-mglvl-n">${lv}</span>` : ""}</button>`;
+    }).join("") +
+    (metaOverrides.mgLevel?.[name] ? `<button type="button" class="ex-meta-reset ex-mglvl-reset" data-mglvl-ex="${escapeHtml(name)}" title="Reset muscle levels to the automatic guess">↺</button>` : "") +
+    `</span>`;
   const tierChips = metaChips("tier", ["main", "second", "third"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
   // Combinable / Comparable membership chips — tap to add/remove this lift from a
   // group (comparable also gets a ratio input when it's an owner-added member).
@@ -9024,6 +9066,19 @@ async function init() {
     toggleMetaOverride(kind as MetaKind, ex, val);
     // grouping/colours depend on it (rebuilds the Index list); defer so the pill
     // feels instant and the page keeps its scroll, then reopen the inline panel.
+    scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
+  });
+  // Muscle INVOLVEMENT level chips: cycle 0→1→2→3→4→0 (≥3 = shown in that muscle's
+  // category); the ↺ resets all of this lift's muscle levels to the auto guess.
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-mglvl-chip, .ex-mglvl-reset");
+    const ex = chip?.dataset.mglvlEx;
+    if (!ex) return;
+    if (chip!.classList.contains("ex-mglvl-reset")) resetMgLevel(ex);
+    else {
+      const m = chip!.dataset.mglvlMuscle as MuscleGroup;
+      setMgLevel(ex, m, (mgLevelOf(ex, m) + 1) % 5);
+    }
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
   });
   // Combinable / Comparable membership chips — toggle this lift in/out of a group.
@@ -11093,7 +11148,10 @@ function saveUserTaxonomy(): void {
 }
 /** Metadata provider for the filter engine: built-in taxonomy + the user's saved
  * assignments. */
-const waMeta = (name: string, dim: ExerciseFilterDim): string[] => exerciseMetaValues(name, dim, userTaxonomy);
+// Muscle group goes through mgsFor so the selector honours the owner's per-muscle
+// involvement levels (membership = level ≥ 3), consistent with the Index/calendar.
+const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
+  dim === "muscleGroup" ? (mgsFor(name) as string[]) : exerciseMetaValues(name, dim, userTaxonomy);
 /** Distinct selectable exercises for the current athlete, tagged by identity:
  * their logged lifts are "original"; the synthetic group derived names they have
  * are "combined" / "comparison_group". De-duplicated by name (originals win). */

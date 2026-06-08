@@ -2228,6 +2228,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px; }
 .ex-meta-chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-meta-chip.is-on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* Muscle involvement levels: 1–2 (tendons/maintain) read as a faint tinted "partial"
+   chip; ≥3 (counts) is the solid accent (.is-on); 4 (top) gets a gold ring. */
+.ex-mglvl-chip.is-partial { color: var(--accent); background: var(--accent-soft); border-color: var(--line); }
+.ex-mglvl-chip.is-top { box-shadow: inset 0 0 0 2px var(--gold); }
+.ex-mglvl-n { display: inline-block; margin-left: 4px; font-size: 0.66rem; font-weight: 700; opacity: 0.85; }
 .ex-meta-reset { font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 7px; }
 .ex-meta-reset:hover { border-color: var(--accent); color: var(--accent); }
 /* Bodyweight-part range: min – max inputs plus the gold (calculated) average. */
