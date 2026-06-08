@@ -1490,11 +1490,17 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* ONE grid: columns = periods (near-full-screen cards, peek the next), rows =
    lifts. Each grid row auto-sizes to its tallest cell across columns, so the same
    lift lines up on the same row in every card AND nothing is clipped. */
-.hh-grid { --hh-card-w: clamp(15rem, 86vw, 32rem); display: grid; gap: 0 0.6rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: stretch; }
+/* The grid is its OWN 2-D scroll box (cards scroll horizontally AND vertically
+   inside it), so the tools / hint / dot-minimap above it stay put, and the date
+   header row can stick to the top while you scroll a tall card's rows. */
+.hh-grid { --hh-card-w: clamp(15rem, 86vw, 32rem); display: grid; gap: 0 0.6rem; overflow: auto; max-height: 72vh; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: stretch; }
 /* Backing card per column (spans all rows) gives the bordered card look behind
    the transparent header + cells. */
 .hh-card { grid-row: 1 / -1; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); z-index: 0; }
-.hh-head { position: relative; z-index: 1; font-weight: 700; font-size: 0.9rem; padding: 0.5rem 0.6rem 0.35rem; border-bottom: 1px solid var(--line); }
+/* Date header sticks to the top of the scroll box (stays visible when a card's
+   rows scroll vertically) but still moves sideways with its card. Opaque so the
+   scrolling rows don't show through. */
+.hh-head { position: sticky; top: 0; z-index: 3; background: var(--panel); font-weight: 700; font-size: 0.9rem; padding: 0.5rem 0.6rem 0.35rem; border-bottom: 1px solid var(--line); }
 .hh-cell { position: relative; z-index: 1; display: grid; grid-template-columns: 3.2rem 1fr; column-gap: 0.4rem; align-items: baseline; padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--line); }
 .hh-cell-empty { opacity: 0.4; }
 .hh-rm { text-align: right; font-weight: 700; color: var(--gold); font-size: 0.85rem; }
