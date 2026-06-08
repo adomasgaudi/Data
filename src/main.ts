@@ -12345,6 +12345,7 @@ function renderSearchPalette(value: string): void {
   const opts = [
     { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
     { act: "find", label: "📜 Find in workout history", desc: "Show every matching set in the history below", on: searchFindHistory },
+    { act: "index", label: "📇 Find in index", desc: n === 1 ? "Open it on the Index page" : "Open the first match on the Index page", on: false },
     { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
     { act: "clear", label: "✕ Clear search", desc: "", on: false },
   ];
@@ -12366,6 +12367,15 @@ function renderPaletteFor(value: string): void {
 /** Run a chosen search action, then full-refresh the Analysis view. */
 function runSearchAction(act: string): void {
   const input = document.getElementById("cmdInput") as HTMLInputElement | null;
+  // "Find in index" → jump straight to the matching lift on the Index page (opens its
+  // info card). Leaves the Analysis view rather than re-rendering it, so return early.
+  if (act === "index") {
+    const first = waChipListBase()[0]?.name;
+    hideCmdPalette();
+    input?.blur();
+    if (first) openExerciseInfo(first);
+    return;
+  }
   if (act === "filter") searchFindHistory = false;
   else if (act === "find") searchFindHistory = true;
   else if (act === "select") {
