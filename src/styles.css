@@ -650,16 +650,22 @@ main { padding-bottom: 5rem; }
 .athlete-chip.is-sexhidden { display: none; }
 /* Single cycling M/W toggle, pinned (opaque, on top) at the start of the athlete
    row so the scrolling name chips clip beside it and never show behind it. One tap
-   flips Men ⇄ Women; it shows the current sex (M blue / W pink). Hidden entirely in
+   flips Men ⇄ Women; it shows the current sex (M blue / W gold). Shaped to match the
+   name chips exactly (same pill height/round) so the row aligns. Hidden entirely in
    user/spectator views (you only see yourself there). */
 .ath-sex { flex: 0 0 auto; margin: 0; align-self: center; position: relative; z-index: 2; }
 .ath-sex-toggle {
-  width: 2.2rem; height: 2.2rem; display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
-  border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: #fff;
+  flex: 0 0 auto; min-width: 2.4rem; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 0.85rem; font-weight: 700; line-height: 1.2; cursor: pointer;
+  padding: 0.4rem 0.8rem; border-radius: 99px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
 }
-.ath-sex-toggle.is-women { background: #c2548a; border-color: #c2548a; }
+.ath-sex-toggle.is-women { background: var(--gold); border-color: var(--gold); color: #1b212b; }
 .ath-sex-toggle[hidden] { display: none; }
+/* Locked (user/spectator) view: just YOU. Drop the full-bleed sticky bar look so a
+   lone name chip doesn't sit in an empty white band — it reads as a plain label. */
+.ath-row--solo { position: static; background: none; border-bottom: none; padding: 0.2rem 0; margin: 0 0 0.6rem; }
 /* Collapsible "stats & training mix" so the page stays short by default. */
 /* Its own card so it clearly reads as a collapsible section. */
 .athlete-details {

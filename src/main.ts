@@ -3111,8 +3111,10 @@ function syncAthleteChips() {
   const active = els.athlete.value;
   const locked = lockedUsername(); // null in admin; the locked athlete otherwise
   // In a locked (user/spectator) view you only ever see yourself: hide the M/W sex
-  // menu and every other athlete's chip entirely (not just disable them).
+  // menu and every other athlete's chip entirely (not just disable them), and drop
+  // the full-bleed sticky-bar styling so the lone chip isn't an empty white band.
   els.athleteSexFilter.hidden = locked !== null;
+  els.athleteChips.closest(".ath-row")?.classList.toggle("ath-row--solo", locked !== null);
   for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
