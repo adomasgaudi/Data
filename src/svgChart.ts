@@ -253,6 +253,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
   let ry = { yMin: 0, yMax: 1 };
+  // True once the user has panned/zoomed: then a series UPDATE (e.g. toggling a graph
+  // metric) keeps the current view instead of re-fitting, so adding/removing metrics
+  // no longer resets the pan/zoom. Cleared by resetView (fitView / double-tap / mount).
+  let userAdjusted = false;
   let lastTap: { t: number; x: number } | null = null; // for double-tap-to-reset
   // Click-to-pin: every drawn datapoint's pixel box (in SVG user units), rebuilt
   // each draw, so a tap can hit-test the nearest one and pin a sticky detail popup.
@@ -265,6 +269,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
+    userAdjusted = false; // re-fitting to data → auto-fit re-enabled
     const xe = xExtent(geomSeries().filter(visible));
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
@@ -738,6 +743,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       ry = { yMin: fyR - (fyR - ry.yMin) * ky, yMax: fyR + (ry.yMax - fyR) * ky };
     }
     view = { xMin, xMax, yMin, yMax };
+    userAdjusted = true; // remember the user's pan/zoom across series updates
   }
 
   const SPREAD = 26; // min finger spread (px) on an axis before that axis stretches
@@ -790,6 +796,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const dy = fracY * (pan.v.yMax - pan.v.yMin);
       view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: pan.v.yMin + dy, yMax: pan.v.yMax + dy };
       if (!panX()) { const rr = pan.r.yMax - pan.r.yMin; ry = { yMin: pan.r.yMin + fracY * rr, yMax: pan.r.yMax + fracY * rr }; }
+      userAdjusted = true; // remember the user's pan across series updates
       hideTip();
       draw();
     }
@@ -930,7 +937,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     update(next: Partial<SvgChartConfig>) {
       const seriesChanged = next.series !== undefined;
       cfg = { ...cfg, ...next };
-      if (seriesChanged) { rebuildCompactor(); resetView(); }
+      // Series changed (e.g. a metric toggled on/off): keep the time-axis mapping
+      // fresh, but only RE-FIT the view if the user hasn't panned/zoomed — so adding
+      // / removing metrics preserves the user's pan & zoom (double-tap to re-fit).
+      if (seriesChanged) { rebuildCompactor(); if (!userAdjusted) resetView(); }
       hideTip();
       draw();
     },
