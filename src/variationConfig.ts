@@ -76,8 +76,13 @@ export const FAMILIES: Record<string, FamilyDef> = {
     defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused" },
   },
   PUSHUP: {
-    dims: { incline: { l0: 1.0, l1: 0.92, l2: 0.85, l3: 0.78, l4: 0.7, l5: 0.62, l6: 0.55 } },
-    defaults: { incline: "l0" },
+    // INCLINE (hands raised) is NOT a family dimension — it's how high the hands are,
+    // captured per-set by the smith-notch / squat-rack / cm LEVEL system (variants.ts,
+    // all converging on one cm incline) so it COMBINES with this. The one family
+    // dimension is body POSITION: on the knees is easier than on the feet (floor).
+    // Knees ≈ 0.7× a floor push-up (tune it in ⚙ Difficulty multipliers).
+    dims: { position: { floor: 1.0, knees: 0.7 } },
+    defaults: { position: "floor" },
   },
 };
 
@@ -133,7 +138,18 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "5 lygis": { support: "ladder", ladderH: "lad5" },
   },
   PUSHUP: {
-    /* token → { incline: "lN" } — the owner fills this in. */
+    // On the knees (easier) → the POSITION dimension. LT "ant kelių" / "nuo kelių".
+    // NB a plain "ant <number>" is an incline NOTCH (read by the level system) — only
+    // "ant kelių" (on the KNEES) is this variation, so the two never collide.
+    "from knees": { position: "knees" },
+    "on knees": { position: "knees" },
+    kneeling: { position: "knees" },
+    knees: { position: "knees" },
+    knee: { position: "knees" },
+    "ant kelių": { position: "knees" },
+    "ant keliu": { position: "knees" },
+    "nuo kelių": { position: "knees" },
+    "nuo keliu": { position: "knees" },
   },
 };
 
@@ -142,7 +158,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 8;
+export const CONFIG_VERSION = 9;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -155,6 +171,10 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Handstand Push Up": "HSPU",
   "Push Ups": "PUSHUP",
   "Push Up": "PUSHUP",
+  // Smith-machine incline push-ups are the SAME push, just on the smith bar — people
+  // log incline variations under either name — so they share the push-up model (and
+  // its position/knees variation). Incline scaling already covers it by name pattern.
+  "Smith Machine Incline Close Grip Push Up": "PUSHUP",
 };
 
 export function familyOf(

@@ -34,6 +34,13 @@ export function levelLabel(dim: LevelDim, value: number): string {
  * Accepts the spellings the owner uses: a height in centimetres ("43cm", "10 cm"),
  * a Smith-machine notch ("Smith 3", "3 smith") or a squat-rack hole ("SQ8", "sq3",
  * "Sq 5", "3 sq", "Squat rack 6"). cm is matched first (it carries an explicit unit).
+ *
+ * Push-up incline is ALSO logged loosely — "Ant 3" (LT "on notch 3"), "3 level" /
+ * "Level 5.66", "3 lygis" (LT level), or a bare number — so those read as a Smith
+ * notch too (fractional half-notches kept). These loose forms are matched globally
+ * but only KEPT on the push-up family (attachNoteLevel drops a Smith level on any
+ * other lift), so an HSPU "5 lygis" ladder note is never hijacked. NB "ant kelių"
+ * (on the KNEES) has no number, so it never matches — it's the position variation.
  */
 export function parseLevelNote(note: string | null | undefined): ParsedLevel | null {
   const raw = (note ?? "").trim();
@@ -55,6 +62,20 @@ export function parseLevelNote(note: string | null | undefined): ParsedLevel | n
   if (sq) {
     const value = parseInt(sq[1]!, 10);
     if (Number.isFinite(value)) return { dim: "sq", value, label: levelLabel("sq", value), matched: sq[0] };
+  }
+  // Loose incline (push-up family, kept only there): "Ant 3", "3 level"/"Level 3",
+  // "3 lygis"/"lygis 3", or a note that's just a number. Half-notches allowed.
+  const inc =
+    raw.match(/\bant\s+(\d+(?:[.,]\d+)?)\b/i) ??
+    raw.match(/\blygis\s*(\d+(?:[.,]\d+)?)\b/i) ?? raw.match(/\b(\d+(?:[.,]\d+)?)\s*lygis\b/i) ??
+    raw.match(/\blevel\s*(\d+(?:[.,]\d+)?)\b/i) ?? raw.match(/\b(\d+(?:[.,]\d+)?)\s*level\b/i) ??
+    raw.match(/^(\d+(?:[.,]\d+)?)$/);
+  if (inc) {
+    const v0 = parseFloat(inc[1]!.replace(",", "."));
+    if (Number.isFinite(v0)) {
+      const value = Math.round(v0 * 2) / 2; // nearest half-notch
+      return { dim: "smith", value, label: levelLabel("smith", value), matched: inc[0] };
+    }
   }
   return null;
 }
@@ -83,6 +104,10 @@ export function inclineScale(cm: number): number {
  * — so a Smith-machine incline push-up and a floor push-up sit on one effort scale. */
 export function isInclineLevelExercise(name: string): boolean {
   const n = name.toLowerCase();
+  // A HANDSTAND push-up is vertical — not an incline — and its "N lygis" / "lad5"
+  // notes are LADDER heights for the HSPU model, so it must be excluded (otherwise a
+  // loose incline note would hijack them as a Smith notch).
+  if (n.includes("handstand") || n.includes("hspu")) return false;
   return n.includes("push up") || n.includes("pushup") || n.includes("push-up");
 }
 

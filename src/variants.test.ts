@@ -100,6 +100,31 @@ describe("Smith-notch + cm incline (push-up family)", () => {
     expect(parseLevelNote("3 sq")).toEqual(expect.objectContaining({ dim: "sq", value: 3 }));
   });
 
+  it("reads the owner's LOOSE incline spellings as a Smith notch (Ant N / N level / N lygis / bare)", () => {
+    const cases: [string, number][] = [
+      ["Ant 2", 2], ["3 level", 3], ["Level 5.666", 5.5], ["3 lygis", 3],
+      ["4.5 level", 4.5], ["5", 5], ["3 lygis su dviem pakopom", 3],
+    ];
+    for (const [note, value] of cases) {
+      const v = parseLevelNote(note);
+      expect(v, note).not.toBeNull();
+      expect(v!.dim, note).toBe("smith");
+      expect(v!.value, note).toBe(value);
+    }
+    // "ant kelių" (on the KNEES) has no number → not a notch; it's the position variation.
+    expect(parseLevelNote("ant kelių")).toBeNull();
+    expect(parseLevelNote("from knees")).toBeNull();
+  });
+
+  it("keeps loose incline notes ONLY on the push-up family (peeling the tag)", () => {
+    const out = attachNoteLevel(rec("Ant 2 su pakopa", "Smith Machine Incline Close Grip Push Up"));
+    expect(out.levelDim).toBe("smith");
+    expect(out.levelValue).toBe(2);
+    expect(out.notes).toBe("su pakopa");
+    // An HSPU "5 lygis" ladder note must NOT be hijacked as a Smith incline level.
+    expect(attachNoteLevel(rec("5 lygis", "Handstand Push Ups")).levelDim).toBeUndefined();
+  });
+
   it("keeps a Smith level only on the push-up family", () => {
     expect(attachNoteLevel(rec("Smith 3", "Smith Machine Incline Close Grip Push Up")).levelDim).toBe("smith");
     expect(attachNoteLevel(rec("Smith 3", "Smith Machine Squat")).levelDim).toBeUndefined(); // not a push-up

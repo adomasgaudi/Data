@@ -6197,9 +6197,15 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // A "not comparable" note has no meaningful multiplier — the chip reads "UN".
   const uncmp = !!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote);
   const chipLabel = uncmp ? "UN" : `×${scaleNum}`;
+  // The set's incline level (smith/sq/cm) rides along as data-attrs so the popover can
+  // show it as the "incline" and edit its scale beside the family variation.
+  const lvlAttrs =
+    s.levelDim !== undefined && s.levelValue !== undefined
+      ? ` data-scaleedit-leveldim="${escapeHtml(s.levelDim)}" data-scaleedit-levelvalue="${s.levelValue}" data-scaleedit-levellabel="${escapeHtml(s.levelLabel ?? levelLabel(s.levelDim, s.levelValue))}"`
+      : "";
   const scaleTag = editNote
     ? // Editable chip that opens the floating modifier editor (note OR per-set form).
-      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
+      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}"${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
     : Math.abs(scaleVal - 1) > 1e-6
       ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
       : "";
@@ -6342,8 +6348,24 @@ function toggleSetNote(target: HTMLElement): boolean {
 }
 
 // ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
-let scaleEditState: { ex: string; note: string } | null = null;
+let scaleEditState: { ex: string; note: string; level?: { dim: LevelDim; value: number; label: string } } | null = null;
 let scaleEditDirty = false; // an edit was made while the popover was open
+/** The INCLINE block for the popover: the set's smith-notch / squat-rack / cm level
+ * (the real "incline" the owner logged) shown with its scale editable right here, so
+ * it appears alongside the family variation (e.g. on-the-knees) it combines with —
+ * instead of the popover showing only the family picker and hiding the logged SQ8. */
+function scaleEditLevelBlock(): string {
+  const lv = scaleEditState?.level;
+  if (!lv) return "";
+  const scale = levelScaleFor(scaleEditState!.ex, lv.dim, lv.value);
+  const key = levelKey(scaleEditState!.ex, lv.dim, lv.value);
+  return (
+    `<div class="ex-var-dim scale-edit-lvl-row"><span class="ex-var-dim-lbl">incline</span>` +
+    `<div class="ex-var-selrow"><span class="set-lvl">${escapeHtml(lv.label)}</span>` +
+    `<label class="ex-var-lbl">× <input class="ex-var-input scale-edit-lvl" type="number" step="0.05" min="0.1" max="5" ` +
+    `value="${scale}" data-levelkey="${escapeHtml(key)}" aria-label="Incline scale for ${escapeHtml(lv.label)}" /></label></div></div>`
+  );
+}
 function renderScaleEditor(): void {
   const pop = document.getElementById("scaleEditPop");
   if (!pop || !scaleEditState) return;
@@ -6351,6 +6373,7 @@ function renderScaleEditor(): void {
   pop.innerHTML =
     `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(title)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
+    scaleEditLevelBlock() +
     notePickerHtml(scaleEditState.ex, scaleEditState.note);
   refreshPoseViz();
 }
@@ -6365,8 +6388,8 @@ function positionScaleEditor(anchor: HTMLElement): void {
   const top = r.bottom + 6;
   pop.style.top = `${Math.min(top, window.innerHeight - 40)}px`;
 }
-function openScaleEditor(ex: string, note: string, anchor: HTMLElement): void {
-  scaleEditState = { ex, note };
+function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }): void {
+  scaleEditState = level ? { ex, note, level } : { ex, note };
   let pop = document.getElementById("scaleEditPop");
   if (!pop) {
     pop = document.createElement("div");
@@ -6397,7 +6420,13 @@ function toggleScaleEditor(target: HTMLElement): boolean {
   if (!btn?.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return false;
   if (scaleEditState && scaleEditState.ex === btn.dataset.scaleeditEx && scaleEditState.note === btn.dataset.scaleeditNote)
     closeScaleEditor();
-  else openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn);
+  else {
+    // The set's incline LEVEL (smith/sq/cm) rides along on the chip so it can be shown
+    // and tuned in the popover next to the family variation it combines with.
+    const ld = btn.dataset.scaleeditLeveldim, lv = btn.dataset.scaleeditLevelvalue, ll = btn.dataset.scaleeditLevellabel;
+    const level = ld && lv !== undefined && ll !== undefined ? { dim: ld as LevelDim, value: Number(lv), label: ll } : undefined;
+    openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn, level);
+  }
   return true;
 }
 
@@ -8532,6 +8561,18 @@ async function init() {
   // Note-variation difficulty: edit (change) and reset (click). Delegated on
   // document so it works inside the Index page's expandable info dropdown.
   document.addEventListener("change", (e) => {
+    // The popover's inline INCLINE scale (smith/sq/cm level) — save it (the override
+    // wins over the seeded incline default) and re-render the popover so the chip
+    // updates; the table/graphs sync on close.
+    const lvlIn = (e.target as HTMLElement).closest<HTMLInputElement>(".scale-edit-lvl");
+    if (lvlIn?.dataset.levelkey) {
+      let v = Number(lvlIn.value);
+      if (!Number.isFinite(v)) v = 1;
+      v = Math.min(5, Math.max(0.1, Math.round(v * 100) / 100));
+      setLevelScale(lvlIn.dataset.levelkey, v);
+      if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+      return;
+    }
     // Edit a difficulty-model factor. Keep it light so you can edit many in a row:
     // save + recolour just this cell (no rebuild of the editor you're in → focus &
     // scroll stay put), and apply to the rest of the app debounced after you pause.
