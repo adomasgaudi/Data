@@ -5756,6 +5756,40 @@ function renderWorkoutsPage() {
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
+  renderHorizontalHistory(); // EXPERIMENTAL sideways view — reuses the same groups
+}
+
+/**
+ * EXPERIMENTAL "Horizontal history": the same period buckets (built by
+ * buildWorkoutGroups, so it honours grouping mode / filters / hidden / alone) laid
+ * out as COLUMNS you scroll sideways through time, newest at the left. Read-only
+ * for now (the compact 1RM · name · sets lines, with the session tint); the full
+ * vertical history keeps the editing / expand / +set. Restore point: docs/restore-points.md.
+ */
+function renderHorizontalHistory(): void {
+  const box = document.getElementById("waHistHoriz");
+  if (!box) return;
+  const formula = currentFormula();
+  const cols = workoutGroups
+    .filter((g) => !g.rest) // skip rest slivers in the sideways view
+    .map((g) => {
+      const lines = g.exercises
+        .map((e) => {
+          const sets = g.sets.filter((s) => s.exerciseName === e.exerciseName);
+          const e1rms = sets
+            .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), formula))
+            .filter((v): v is number => v !== null && Number.isFinite(v));
+          const best = e1rms.length ? Math.max(...e1rms) : null;
+          const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated 1RM">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
+          return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
+        })
+        .join("");
+      return `<div class="hh-col"><div class="hh-col-head">${escapeHtml(g.label)} <span class="muted">${g.totalSets}</span></div><div class="hh-col-body">${lines}</div></div>`;
+    })
+    .join("");
+  box.innerHTML = cols
+    ? `<div class="hh-scroll">${cols}</div>`
+    : `<p class="muted">No workouts to show.</p>`;
 }
 
 /** Toggle the history's "show lifts hidden by the Index filter" mode, persist it,
