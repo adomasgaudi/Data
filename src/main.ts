@@ -7305,7 +7305,8 @@ function renderBwParts() {
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
   const rowHtml = (r: IndexRow, hidden: boolean) =>
     `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
-    `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>${originBadge(r.name)}` +
+    `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
+    ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
     ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
     (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") + `</td>` +
     `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
