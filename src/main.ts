@@ -5941,7 +5941,10 @@ function renderHorizontalHistory(): void {
   const box = document.getElementById("waHistHoriz");
   if (!box) return;
   const formula = currentFormula();
-  const groups = workoutGroups.filter((g) => !g.rest); // skip rest slivers sideways
+  // Include rest periods (and the collapsed >20-run "gap" markers) so the timeline
+  // is continuous — they render as thin slivers / a dashed discontinuity between
+  // the training cards, like the vertical history.
+  const groups = workoutGroups;
   // Row order tracks RECENT activity, lookback scaled to the grouping: day/week →
   // last month, month → last 3 months, 3-month → last 12 months.
   const mode = S.workoutViewMode;
@@ -5981,7 +5984,11 @@ function renderHorizontalHistory(): void {
       (recentByEx.get(ex) ?? 0) > 0 || (cnt90.get(ex) ?? 0) >= HH_LOT_3MO || (cntOld.get(ex) ?? 0) >= HH_LOT_OLD);
     if (kept.length) exList = kept; // fall back to all if nothing qualifies
   }
+  // Priority is CURRENT activity — most instances in the last 3 months — then the
+  // view's window, then all-time only as a final tiebreak, so a big PAST volume
+  // never outranks what you're training now.
   const exOrder = exList.sort((a, b) =>
+    ((cnt90.get(b) ?? 0) - (cnt90.get(a) ?? 0)) ||
     ((recentByEx.get(b) ?? 0) - (recentByEx.get(a) ?? 0)) ||
     ((totalByEx.get(b) ?? 0) - (totalByEx.get(a) ?? 0)) ||
     a.localeCompare(b));
@@ -5990,9 +5997,20 @@ function renderHorizontalHistory(): void {
   // content is never clipped. A backing card div per column gives the card look.
   const P = groups.length;
   const E = exOrder.length;
+  const colWidths: string[] = [];
   let cells = "";
   groups.forEach((g, ci) => {
     const col = ci + 1;
+    if (g.rest) {
+      // A rest period (or a collapsed-run "gap"): a thin full-height sliver / dashed
+      // discontinuity between the training cards — no rows.
+      colWidths.push(g.gap ? "1.7rem" : "9px");
+      cells += g.gap
+        ? `<div class="hh-card hh-gap" style="grid-column:${col};grid-row:1/-1" title="${g.gap} rest days"><span class="hh-gap-dots">⋯</span></div>`
+        : `<div class="hh-card hh-rest" style="grid-column:${col};grid-row:1/-1" title="${escapeHtml(g.label)} — rest"></div>`;
+      return;
+    }
+    colWidths.push("var(--hh-card-w)");
     cells += `<div class="hh-card" style="grid-column:${col};grid-row:1/-1"></div>`;
     cells += `<div class="hh-head" style="grid-column:${col};grid-row:1">${escapeHtml(g.label)} <span class="muted">${g.totalSets}</span></div>`;
     exOrder.forEach((exName, ri) => {
@@ -6016,6 +6034,7 @@ function renderHorizontalHistory(): void {
   const dotsHtml = groups
     .map((g, i) => {
       let cls = "hh-dot";
+      if (g.rest) cls += g.gap ? " hh-dot-gap" : " hh-dot-rest";
       const prev = i > 0 ? groups[i - 1] : null;
       if (prev) {
         if (g.date.slice(0, 4) !== prev.date.slice(0, 4)) cls += " hh-dot-yr";
@@ -6026,7 +6045,7 @@ function renderHorizontalHistory(): void {
     .join("");
   box.innerHTML = head +
     `<div class="hh-dots" style="grid-template-columns:repeat(${P},1fr)">${dotsHtml}</div>` +
-    `<div class="hh-grid" style="grid-template-columns:repeat(${P},var(--hh-card-w));grid-template-rows:auto repeat(${E},auto)">${cells}</div>`;
+    `<div class="hh-grid" style="grid-template-columns:${colWidths.join(" ")};grid-template-rows:auto repeat(${E},auto)">${cells}</div>`;
   // Light the dot under the current horizontal scroll position (rAF-throttled).
   const grid = box.querySelector<HTMLElement>(".hh-grid");
   const dotsRow = box.querySelector<HTMLElement>(".hh-dots");
