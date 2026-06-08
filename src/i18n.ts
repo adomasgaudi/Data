@@ -208,6 +208,11 @@ const LT: Record<string, string> = {
   "/mo": "/mėn.",
   "/3mo": "/3mėn.",
   // ---- Graph options ----
+  "Lines & filter": "Linijos ir filtras",
+  "Bars & axes": "Stulpeliai ir ašys",
+  "Prediction": "Prognozė",
+  "Decay": "Nykimas",
+  "Hard sets only": "Tik sunkios serijos",
   "Opacity": "Permatomumas",
   "Right axis ↕": "Dešinė ašis ↕",
   "Bar girth": "Stulpelių storis",

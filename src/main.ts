@@ -12720,28 +12720,42 @@ function renderWaGraph(): void {
   // options (not on the chart's own legend row), so all the graph settings sit in
   // one place. It flips the shared pref; every time chart redraws on change.
   const compact = getTimeCompact();
+  // Config is split into THREE collapsible sub-sections (all collapsed by default, so
+  // the menu opens compact): Data (binning + time), Lines & filter (the on/off lenses,
+  // now PILLS not checkboxes — rule 15), and Bars & axes (the visual sliders). A
+  // section's summary shows a tiny readout of its current state.
+  const onoff = (on: boolean, attr: string, label: string, title: string) =>
+    `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
+  const lensCount = [c.prediction, c.decay, S.waPerBodyweight, waHardOnly].filter(Boolean).length;
+  const cfgGroup = (label: string, sub: string, body: string) =>
+    `<details class="wa-cfg-group"><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   const cfgUi =
     `<div class="wa-gcfg">` +
-    `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
-    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
-    `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
-    // Bar / right-axis sliders only when a volume-style (bars / right-axis) metric is plotted.
+    cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
+      `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
+      `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
+      `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
+      onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps.")) +
+    cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
+      onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
+      onoff(S.waPerBodyweight, `data-waperbw="1"`, "×BW", "Show kg metrics as multiples of bodyweight instead of kilograms.") +
+      onoff(c.prediction, `data-wacfgtoggle="prediction"`, "Prediction", "Add a logarithmic strength forecast line.") +
+      onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it).")) +
+    // Bars & axes only when a volume-style (bars / right-axis) metric is plotted — its
+    // four sliders do nothing otherwise, so the section is hidden for a plain line graph.
     (hasBarMetric
-      ? `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
-        `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
-        `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
-        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates — the two only differ by axis, so the shift is vertical, not in time. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`
+      ? cfgGroup("Bars & axes", "",
+          `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
+          `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
+          `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
+          `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`)
       : "") +
-    // Set-spread knob only when a per-set / range metric is plotted.
+    // Set-spread knob (per-set / range views only) lives in its own little group.
     (hasSetMetric
-      ? `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out across its day on the per-set / Weight Range views (left = stacked on one line, right = spread across the whole day).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="0.98" step="0.02" value="${c.spread}" /></label>`
+      ? cfgGroup("Set spread", "",
+          `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out across its day on the per-set / Weight Range views (left = stacked on one line, right = spread across the whole day).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="0.98" step="0.02" value="${c.spread}" /></label>`)
       : "") +
-    `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="prediction"${c.prediction ? " checked" : ""} /> Prediction</label>` +
-    `<label class="wa-inc"><input type="checkbox" class="wa-cfg" data-wacfg="decay"${c.decay ? " checked" : ""} /> Decay</label>` +
-    `<label class="wa-inc" title="Show the kg metrics (1RM, weight, strength) as multiples of your bodyweight instead of kilograms."><input type="checkbox" id="waPerBw"${S.waPerBodyweight ? " checked" : ""} /> Per bodyweight (×BW)</label>` +
-    `<label class="wa-inc" title="Drop easy / warm-up sets (high reps-in-reserve) — keep only hard working sets. Also applies to the training calendar."><input type="checkbox" id="waHardOnly"${waHardOnly ? " checked" : ""} /> Hard sets only</label>` +
-    `<button type="button" class="wa-name-opt${compact ? " is-on" : ""}" data-watime="1" title="${compact ? "Showing compacted time (gaps squeezed). Tap for real spacing." : "Showing real time spacing. Tap to squeeze gaps so all sets fit."}">${compact ? "⇄ Compacted time" : "⇄ Realistic time"}</button>` +
-    `<button type="button" class="wa-name-opt${allGraphsAllowed ? " is-on" : ""}" data-allgraphs="1" title="${allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all, ignoring approval."}">${allGraphsAllowed ? "All graphs" : "Approved only"}</button>` +
+    onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.") +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open;
@@ -13505,6 +13519,27 @@ function setupWorkoutAnalysis(): void {
     if (t.closest<HTMLElement>("[data-watime]")) {
       setTimeCompact(!getTimeCompact());
       renderWaGraph();
+      return;
+    }
+    // "Hard sets only" lens (now a pill) — re-render graph AND calendar (both use it).
+    if (t.closest<HTMLElement>("[data-wahardonly]")) {
+      waHardOnly = !waHardOnly;
+      saveHardOnly();
+      deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
+      return;
+    }
+    // "Per bodyweight (×BW)" lens (pill).
+    if (t.closest<HTMLElement>("[data-waperbw]")) {
+      S.waPerBodyweight = !S.waPerBodyweight;
+      scheduleWaGraph();
+      return;
+    }
+    // Prediction / Decay line modifiers (pills) — flip the config flag, redraw.
+    const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
+    if (cfgTog?.dataset.wacfgtoggle) {
+      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay";
+      waGraphConfig[key] = !waGraphConfig[key];
+      scheduleWaGraph();
       return;
     }
     // Machine type (cable / gravity / mixed) for the selected exercise.

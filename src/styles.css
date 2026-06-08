@@ -3395,7 +3395,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .gp-lvl { font-size: 0.65rem; line-height: 1; padding: 1px 4px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.28); }
 .ex-gp-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .ex-gp-actions .gp-bulk { flex: 0 0 auto; font-size: 0.78rem; padding: 4px 10px; }
-.wa-gcfg { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: center; margin: 0 0 0.6rem; }
+/* Config now STACKS its collapsible sub-sections (Data / Lines & filter / Bars &
+   axes) one per row, so the menu opens compact; the lone "All graphs" pill sits
+   under them. */
+.wa-gcfg { display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; margin: 0.2rem 0 0.4rem; }
+.wa-cfg-group { width: 100%; border-top: 1px solid var(--line); }
+.wa-cfg-group-sum { cursor: pointer; list-style: none; font-size: 0.74rem; font-weight: 700; color: var(--muted); padding: 5px 0; }
+.wa-cfg-group-sum::-webkit-details-marker { display: none; }
+.wa-cfg-group-sum::before { content: "▸ "; }
+.wa-cfg-group[open] > .wa-cfg-group-sum::before { content: "▾ "; }
+.wa-cfg-body { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; align-items: center; padding: 0.1rem 0 0.45rem 0.5rem; }
 .wa-gcfg-f { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); }
 .wa-gcfg-f select, .wa-gcfg-f input { font: inherit; font-size: 0.8rem; padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-gcfg-f input[type="number"] { width: 3.2rem; }
