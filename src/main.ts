@@ -11188,8 +11188,11 @@ function waGroupKey(name: string): string {
   // "Strength" is too broad: when grouping by Discipline, split strength lifts by
   // their MUSCLE GROUP instead (Chest, Back, Quads…), so each shows as its own pill.
   // The pills are still tagged as falling under Strength (see waGroupIsStrength).
-  if (waGroupBy === "discipline" && (waMeta(name, "discipline")[0] ?? "") === "Strength")
-    return waMeta(name, "muscleGroup")[0] ?? "Strength";
+  if (waGroupBy === "discipline") {
+    const disc = waMeta(name, "discipline")[0] ?? "";
+    if (disc === "Strength") return waMeta(name, "muscleGroup")[0] ?? "Other";
+    if (disc === "Statics") return "Other"; // fold the tiny Statics discipline into the Other catch-all
+  }
   return waMeta(name, waGroupBy)[0] ?? "Unassigned";
 }
 /** True when a Discipline-grouping key is one of Strength's muscle-group sub-pills
@@ -11355,8 +11358,13 @@ function waCatPillsInner(list: readonly WaItem[]): string {
     const k = waGroupKey(e.name);
     (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
   }
+  // Sort the pills by total SET COUNT (most-trained category first), then alpha —
+  // so the categories you actually train lead, not a fixed taxonomy order.
+  const setCount = new Map<string, number>();
+  for (const c of exerciseCountsForUser(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
+  const groupSets = (items: readonly WaItem[]) => items.reduce((n, e) => n + (setCount.get(e.name) ?? 0), 0);
   return [...groups.entries()]
-    .sort((a, b) => (waGroupRank(a[0]) - waGroupRank(b[0])) || a[0].localeCompare(b[0]))
+    .sort((a, b) => (groupSets(b[1]) - groupSets(a[1])) || a[0].localeCompare(b[0]))
     .map(([k, items]) => {
       const cov = waSubgroupCoverage(items);
       return waCatPill(k, k, waSelCount(items), items.length, cov.sel, cov.total, "sub");
