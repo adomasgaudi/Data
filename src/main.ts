@@ -3521,17 +3521,25 @@ function renderAthleteProfile() {
   const potLbl = bcMassUnit === "kg" ? `+${f1s(potLeanKg)} kg` : `+${Math.round((potLeanKg / bw) * 100)}%`;
   const seg = (cls: string, pct: number, name: string, val: string, extra = "") =>
     `<div class="bc-seg ${cls}" style="height:${pct.toFixed(1)}%"${extra}>` +
-    `<span class="bc-seg-name">${name}</span><span class="bc-seg-val">${val}</span></div>`;
+    // Drop the uppercase NAME on a very short segment — only the value fits there;
+    // the colour already says which part it is (gold = fat, blue = lean, dashed = build).
+    (pct >= 12 ? `<span class="bc-seg-name">${name}</span>` : "") +
+    `<span class="bc-seg-val">${val}</span></div>`;
   // Ideal body-fat zone, as a band measured DOWN from the top (fat sits at the top):
   // a fat of X kg occupies the top X/barTotal of the column.
   const idealLoFr = p.sex === "f" ? 0.15 : 0.10;
   const idealHiFr = p.sex === "f" ? 0.25 : 0.20;
   const idealTop = ((idealLoFr * bw) / barTotal) * 100;
   const idealBot = Math.min(100, ((idealHiFr * bw) / barTotal) * 100);
+  const idealRangeLbl = `${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}%`;
+  // The band is drawn on the bar as a dashed zone (no text inside — it overlapped the
+  // Fat label); the range is spelled out in a caption under the bar instead.
   const idealBand = fatKg > 0
     ? `<div class="bc-fat-ideal" style="top:${idealTop.toFixed(1)}%;height:${Math.max(0, idealBot - idealTop).toFixed(1)}%" ` +
-      `title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}: ${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}% of bodyweight">` +
-      `<span class="bc-fat-ideal-lbl">ideal ${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}%</span></div>`
+      `title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}: ${idealRangeLbl} of bodyweight"></div>`
+    : "";
+  const idealCap = fatKg > 0
+    ? `<div class="bc-ideal-cap" title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}"><i class="bc-ideal-sw"></i><span class="bc-ideal-words">ideal fat</span> ${idealRangeLbl}</div>`
     : "";
   const potSeg = potH > 0.5
     ? seg("bc-seg-leanpot", potH, "Build", potLbl, ` title="Muscle still buildable to your natural cap (nFFMI ${f1s(ffmiCapFor(username))}, editable in ✎ Edit): lean cap ${f1s(leanCapKg)} kg"`)
@@ -3546,7 +3554,7 @@ function renderAthleteProfile() {
     `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;
   const massView =
     `<div class="bc-massview">` +
-    `<div class="bc-masscol">${massBar}</div>` +
+    `<div class="bc-masscol">${massBar}${idealCap}</div>` +
     `<div class="bc-massside">${badge} ${specLine}${bodyComp}${potBlock}</div>` +
     `</div>`;
   els.athleteProfile.innerHTML = editBtn + massView;
