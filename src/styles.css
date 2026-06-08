@@ -2801,7 +2801,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    small pill button), so the menu is exactly the panel's width and can never spill
    off the left or right edge of the screen. The chip grid inside just wraps. */
 .wa-sel-tools .wa-fe-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px);
+  position: absolute; z-index: 55; top: calc(100% + 4px); /* above the sticky hist selector (z-index 50) */
   left: 0; right: 0; width: auto; min-width: 0; max-width: none; padding: 0.7rem;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
@@ -2816,7 +2816,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-sel-cog-sum::-webkit-details-marker { display: none; }
 .wa-sel-cog[open] .wa-sel-cog-sum { color: var(--text); border-color: var(--accent); }
 .wa-sel-cog-menu {
-  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0;
+  position: absolute; z-index: 55; top: calc(100% + 4px); left: 0; /* above the sticky hist selector (z-index 50) */
   display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 13rem; white-space: nowrap;
