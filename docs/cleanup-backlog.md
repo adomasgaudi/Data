@@ -14,6 +14,22 @@ ones, re-grade as the code changes.
 
 ## ✅ Done sweeps (recent)
 
+- **Synthetic-lift inheritance prune (DONE)** `[exercises/grouping]` — synthetic
+  combined/comparable lifts (SQ mix, Pull/Chin, DL pattern…) keyword-match NOTHING, so
+  they fell to default categories ("Other"/"Strength"/BW-part 0) and were absent from
+  the Index. Made them inherit from their MEMBERS at every read-point in `main.ts`:
+  `coeffBase` (BW part = the reference member's — combinable = same lift, comparable =
+  ratio-1.0 reference), `catsFor` / `mgsFor` / `mgLevelOf` / `discsFor` (union of
+  members), `tiersFor` (reference's), and `waMeta` (union for non-muscle dims). New
+  single-source helpers `syntheticMembers` / `referenceMemberFor` / `inheritUnion`.
+  `renderBwParts` now lists synthetics as rows (set count = members summed). Synthetic
+  lifts no longer offer Combinable/Comparable editors (can't nest a group).
+  STILL-OPEN: (a) the PURE `profile.ts` functions (`muscleGroup`, `exerciseCategory`…)
+  still keyword-fail for synthetic names if called DIRECTLY rather than via the main.ts
+  wrappers — fine today (app paths use the wrappers) but a trap; (b) `waMissingExercises`
+  excludes synthetic names (intended — they're never "missing"); (c) deeper: comparable
+  members with DIFFERING bodyweight-parts may need the ratio to also account for the
+  BW-part gap in the 1RM compare, not just added load — revisit if numbers look off.
 - **Floating-menu open-state prune (DONE)** `[selector/menus]` — swept every floating
   (`position:absolute` body) `<details>`/popout that re-renders on an inner option tap,
   to ensure each preserves its OPEN state across the rebuild (else "clicking a setting

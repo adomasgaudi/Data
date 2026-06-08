@@ -630,9 +630,14 @@ function loadCoeffRanges(): Record<string, { min: number; max: number }> {
   }
 }
 
-/** The base (non-range) bodyweight part: the owner's single pin, else the heuristic. */
+/** The base (non-range) bodyweight part: the owner's single pin, else — for a
+ * synthetic combined/comparable lift — its reference member's BW part (a combinable
+ * group IS the same lift, a comparable group compares to its reference, so the
+ * bodyweight share is the reference's), else the name-based heuristic. */
 function coeffBase(exerciseName: string): number {
   if (Object.prototype.hasOwnProperty.call(coeffOverrides, exerciseName)) return coeffOverrides[exerciseName]!;
+  const ref = referenceMemberFor(exerciseName);
+  if (ref) return coeffFor(ref); // synthetic: inherit the reference member's bodyweight part
   return EXERCISE_BW_COEFF[exerciseName] ?? defaultBwCoeff(exerciseName);
 }
 
@@ -721,9 +726,13 @@ function metaSet(kind: MetaKind, name: string): string[] | null {
   const arr = metaOverrides[`${kind}Set` as const]![name];
   return arr && arr.length ? arr : null;
 }
-/** All training categories a lift belongs to — the owner's list, else the single default. */
+/** All training categories a lift belongs to — the owner's list, else (for a
+ * synthetic) the union of its members' categories, else the single keyword default. */
 function catsFor(name: string): TrainingCategory[] {
-  return (metaSet("cat", name) as TrainingCategory[]) ?? [exerciseCategory(name)];
+  const ov = metaSet("cat", name) as TrainingCategory[] | null;
+  if (ov) return ov;
+  if (syntheticMembers(name).length) return inheritUnion(name, catsFor);
+  return [exerciseCategory(name)];
 }
 /** This lift's MUSCLE INVOLVEMENT level (0–4) for one muscle: explicit override, else
  * derived from the legacy membership (primary muscle → 4 top, other members → 3
@@ -731,16 +740,23 @@ function catsFor(name: string): TrainingCategory[] {
 function mgLevelOf(name: string, muscle: MuscleGroup): number {
   const lv = metaOverrides.mgLevel?.[name];
   if (lv && muscle in lv) return lv[muscle]!;
+  // Synthetic lift: inherit the STRONGEST level any member trains this muscle at.
+  if (syntheticMembers(name).length) return Math.max(0, ...syntheticMembers(name).map((m) => mgLevelOf(m, muscle)));
   const base = (metaSet("mg", name) as MuscleGroup[]) ?? autoMuscleGroups(name);
   return base.includes(muscle) ? (muscle === base[0] ? 4 : 3) : 0;
 }
 /** Muscle groups a lift COUNTS toward (level ≥ 3), top-first — the membership every
  * grouping/category uses. Falls back to the primary so a lift is never group-less. */
 function mgsFor(name: string): MuscleGroup[] {
-  // Fast path: no per-muscle levels set → the legacy override list (or auto default,
-  // which now includes a compound lift's secondary muscles so it shows in every
-  // section it trains — e.g. a squat under Quads, Glutes and Lower back).
-  if (!metaOverrides.mgLevel?.[name]) return (metaSet("mg", name) as MuscleGroup[]) ?? autoMuscleGroups(name);
+  // Fast path: no per-muscle levels set → the legacy override list, else (synthetic)
+  // the union of its members' muscle groups, else the auto default (which includes a
+  // compound lift's secondary muscles so it shows in every section it trains).
+  if (!metaOverrides.mgLevel?.[name]) {
+    const ov = metaSet("mg", name) as MuscleGroup[] | null;
+    if (ov) return ov;
+    if (syntheticMembers(name).length) return inheritUnion(name, mgsFor);
+    return autoMuscleGroups(name);
+  }
   const mem = MUSCLE_GROUPS.filter((m) => mgLevelOf(name, m) >= 3).sort((a, b) => mgLevelOf(name, b) - mgLevelOf(name, a));
   if (mem.length) return mem;
   const base = (metaSet("mg", name) as MuscleGroup[]) ?? autoMuscleGroups(name);
@@ -757,13 +773,22 @@ function resetMgLevel(name: string) {
   if (metaOverrides.mgLevel) delete metaOverrides.mgLevel[name];
   saveMetaOverrides();
 }
-/** All tiers a lift belongs to — the owner's list, else the single default. */
+/** All tiers a lift belongs to — the owner's list, else (synthetic) its reference
+ * member's tier, else the single keyword default. */
 function tiersFor(name: string): ExerciseTier[] {
-  return (metaSet("tier", name) as ExerciseTier[]) ?? [exerciseTier(name)];
+  const ov = metaSet("tier", name) as ExerciseTier[] | null;
+  if (ov) return ov;
+  const ref = referenceMemberFor(name);
+  if (ref) return tiersFor(ref);
+  return [exerciseTier(name)];
 }
-/** All disciplines a lift belongs to — the owner's list, else the single default. */
+/** All disciplines a lift belongs to — the owner's list, else (synthetic) the union
+ * of its members' disciplines, else the single keyword default. */
 function discsFor(name: string): Discipline[] {
-  return (metaSet("disc", name) as Discipline[]) ?? exerciseDisciplines(name);
+  const ov = metaSet("disc", name) as Discipline[] | null;
+  if (ov) return ov;
+  if (syntheticMembers(name).length) return inheritUnion(name, discsFor);
+  return exerciseDisciplines(name);
 }
 /** Primary (first) of each dimension — what every single-value reader uses. */
 function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
@@ -2290,6 +2315,35 @@ function groupMembersForName(name: string): string[] {
   for (const t of [...effectiveCombinableGroups(), ...effectiveComparableGroups()])
     if ((t.derivedName ?? t.label) === name) return (t.members ?? []).map((m) => m.exerciseName);
   return [];
+}
+
+/** A synthetic lift's member exercises — a built-in combine/compare group OR a
+ * user-defined combined / comparison group — or [] for a plain lift. Members are
+ * always plain lifts, so deriving a synthetic's props from them never recurses. This
+ * is the single source for "what is this synthetic made of" used by every inherited
+ * property (bodyweight part, muscle group, discipline, tier, category…). */
+function syntheticMembers(name: string): string[] {
+  const built = groupMembersForName(name);
+  if (built.length) return built;
+  const def = userExerciseDefs.find((d) => d.name === name && (d.identity === "combined" || d.identity === "comparison_group"));
+  return def?.members ?? [];
+}
+/** The REFERENCE member of a synthetic lift — the yardstick its bodyweight-part and
+ * loads compare against. For a COMPARABLE group that's the ratio-1.0 lift (Squat for
+ * "Squat pattern", Deadlift for "DL pattern"); a COMBINABLE group's members are the
+ * SAME lift so any works; falls back to the first member. null for a plain lift. */
+function referenceMemberFor(name: string): string | null {
+  for (const t of [...effectiveCombinableGroups(), ...effectiveComparableGroups()])
+    if ((t.derivedName ?? t.label) === name) {
+      const refs = t.members ?? [];
+      return (refs.find((m) => m.ratio === 1) ?? refs[0])?.exerciseName ?? null;
+    }
+  return syntheticMembers(name)[0] ?? null;
+}
+/** Union of a synthetic lift's members' values for a list-valued property (so the
+ * synthetic shows up under every category any member belongs to). */
+function inheritUnion<T>(name: string, of: (m: string) => T[]): T[] {
+  return [...new Set(syntheticMembers(name).flatMap(of))];
 }
 
 /** True when `name` is a synthetic COMBINED / COMPARISON lift (made of members),
@@ -7334,9 +7388,19 @@ function renderBwParts() {
   for (const r of data.records) if (r.exerciseName) counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
 
   const rows: IndexRow[] = [...counts.keys()]
-    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)! }))
-    // Most-trained first (by set count), then alphabetical - kept inside each group.
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    .map((name) => ({ name, coeff: coeffFor(name), count: counts.get(name)! }));
+  // Synthetic combined/comparable lifts are first-class exercises too: list them
+  // alongside their members (set count = the members' sets summed) so they appear in
+  // every grouping. Only when at least one member is actually trained.
+  for (const g of [...effectiveCombinableGroups(), ...effectiveComparableGroups()]) {
+    const dn = g.derivedName ?? g.label;
+    if (counts.has(dn)) continue; // already a logged name (shouldn't happen for synthetics)
+    const present = (g.members ?? []).map((m) => m.exerciseName).filter((m) => counts.has(m));
+    if (!present.length) continue;
+    rows.push({ name: dn, coeff: coeffFor(dn), count: present.reduce((n, m) => n + (counts.get(m) ?? 0), 0) });
+  }
+  // Most-trained first (by set count), then alphabetical - kept inside each group.
+  rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   els.bwTitle.textContent = "Exercises";
   renderActiveSetBar(rows.length);
@@ -7992,8 +8056,12 @@ function exerciseInfoHtml(name: string): string {
       `</span>`
     );
   };
-  const combineChips = groupChips(COMBINABLE_GROUPS, "combine");
-  const compareChips = groupChips(COMPARABLE_GROUPS, "compare");
+  // A synthetic lift (one that IS a combined/comparable group, e.g. "SQ mix") can't
+  // itself be folded into another group — so it gets no Combinable/Comparable editors.
+  const isSyntheticGroup = isCompositeExercise(name)
+    || userExerciseDefs.some((d) => d.name === name && d.identity === "comparison_group" && (d.members?.length ?? 0) > 0);
+  const combineChips = isSyntheticGroup ? "" : groupChips(COMBINABLE_GROUPS, "combine");
+  const compareChips = isSyntheticGroup ? "" : groupChips(COMPARABLE_GROUPS, "compare");
   // Per-group DISPLAY mode for any merge/compare group this lift is part of (as a
   // member OR as the synthetic itself): a cycling pill Combined → Members → Both.
   const groupsOfName = [...effectiveCombinableGroups(), ...effectiveComparableGroups()]
@@ -8021,8 +8089,8 @@ function exerciseInfoHtml(name: string): string {
     item("Discipline", discChips),
     item("Muscle group", mgChips),
     item("Tier", tierChips),
-    item("Combinable", combineChips),
-    item("Comparable", compareChips),
+    combineChips ? item("Combinable", combineChips) : "",
+    compareChips ? item("Comparable", compareChips) : "",
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
     item("Total sets", setCount.toLocaleString()),
@@ -11826,7 +11894,11 @@ function saveUserTaxonomy(): void {
 // Muscle group goes through mgsFor so the selector honours the owner's per-muscle
 // involvement levels (membership = level ≥ 3), consistent with the Index/calendar.
 const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
-  dim === "muscleGroup" ? (mgsFor(name) as string[]) : exerciseMetaValues(name, dim, userTaxonomy);
+  dim === "muscleGroup" ? (mgsFor(name) as string[])
+  // Synthetic lifts inherit every grouping dimension from their members (their own
+  // name keyword-matches nothing), so they group exactly where their members do.
+  : syntheticMembers(name).length ? [...new Set(syntheticMembers(name).flatMap((m) => waMeta(m, dim)))]
+  : exerciseMetaValues(name, dim, userTaxonomy);
 /** Distinct selectable exercises for the current athlete, tagged by identity:
  * their logged lifts are "original"; the synthetic group derived names they have
  * are "combined" / "comparison_group". De-duplicated by name (originals win). */
