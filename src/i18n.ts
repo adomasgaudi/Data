@@ -55,7 +55,18 @@ const LT: Record<string, string> = {
   "Data": "Duomenys",
   "Formulas": "Formulės",
   "Site map": "Svetainės žemėlapis",
+  "World records": "Pasaulio rekordai",
   "Version history": "Versijų istorija",
+  // ---- World records page ----
+  "Each lifter's optimal weight class — from their height, natural muscle ceiling and ideal bodyweight — and the powerlifting world record there.":
+    "Kiekvieno sportininko optimali svorio kategorija — pagal ūgį, natūralią raumenų ribą ir idealų kūno svorį — ir to lygio jėgos trikovės pasaulio rekordas.",
+  "Optimal weight class from each lifter's height → natural nFFMI ceiling → lean mass → power bodyweight, then that class's world record.":
+    "Optimali svorio kategorija pagal ūgį → natūralią nFFMI ribą → liesąją masę → jėgos kūno svorį, tada tos kategorijos pasaulio rekordas.",
+  "⚠ provisional": "⚠ negalutiniai",
+  "source": "šaltinis",
+  "Class": "Kategorija",
+  "No athletes with a height & sex on file to place in a weight class.":
+    "Nėra sportininkų su įrašytu ūgiu ir lytimi, kad būtų galima priskirti svorio kategoriją.",
   "Every released version, newest first — the same log as the git history.": "Kiekviena išleista versija, naujausia viršuje — tas pats sąrašas kaip git istorijoje.",
   // ---- Settings ----
   "Calculations & display": "Skaičiavimai ir rodymas",

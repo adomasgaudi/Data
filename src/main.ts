@@ -139,6 +139,11 @@ import {
   exerciseDiscipline,
   exerciseDisciplines,
 } from "./profile";
+import {
+  POWER_LIFTS, LIFT_LABEL, LIFT_EXERCISE, RECORDS_FEDERATION, RECORDS_SOURCE_URL,
+  RECORDS_AS_OF, RECORDS_PROVISIONAL, weightClassFor, recordFor, percentOfRecord,
+  type PowerLift,
+} from "./records";
 import { DEFAULT_FORMULA } from "./config";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
@@ -7417,6 +7422,105 @@ function openStatsEditor(username: string): void {
 /** Render the editable stats form for `statsEditUser` (defaults to the selected
  * athlete). Body-fat is five % inputs (95/50 band + average); a live nFFMI range
  * shows how the band propagates. */
+// ---- World records page ---------------------------------------------------
+// Which trio lift the records table is showing (mutually-exclusive pill set).
+let recordsLift: PowerLift = "total";
+
+/** Each athlete's BEST estimated 1RM for one logged exercise, username → e1rm
+ * (kg). Mirrors the leaderboard pipeline so the numbers match that page. */
+function bestE1rmByUser(exerciseName: string): Map<string, number> {
+  const comp = selectionRecords(computedRecords(), exerciseName);
+  const filtered = filterRecords(comp, { excludeDropsets: els.excludeDropsets.checked, requireWeightAndReps: true });
+  const m = new Map<string, number>();
+  for (const e of leaderboard(filtered, exerciseName, currentFormula(), strengthAsOf()))
+    if (!m.has(e.username)) m.set(e.username, e.e1rm); // leaderboard is best-first per user
+  return m;
+}
+
+/** The athlete's best for the SELECTED record lift: a single exercise's best
+ * estimated 1RM, or — for "total" — the sum of the three trio bests (null if the
+ * athlete has logged none of them). */
+function recordsAthleteBest(username: string, byLift: Map<PowerLift, Map<string, number>>): number | null {
+  if (recordsLift !== "total") return byLift.get(recordsLift)!.get(username) ?? null;
+  const s = (byLift.get("squat")!.get(username) ?? 0)
+    + (byLift.get("bench")!.get(username) ?? 0)
+    + (byLift.get("deadlift")!.get(username) ?? 0);
+  return s > 0 ? s : null;
+}
+
+/**
+ * "World records" page: for every athlete, run height → natural-potential nFFMI
+ * ceiling → optimal lean mass → optimal (power) bodyweight → IPF weight class →
+ * that class's world record for the selected trio lift, and compare the athlete's
+ * own best estimated 1RM to it. Rule 21: a locked/non-admin view lists only the
+ * logged-in athlete. Pure data + lookups live in records.ts.
+ */
+function renderRecords(): void {
+  const box = document.getElementById("recordsBody");
+  if (!box) return;
+  // Per-lift best-1RM maps (built once; "total" reads all three).
+  const byLift = new Map<PowerLift, Map<string, number>>();
+  for (const lift of POWER_LIFTS) {
+    if (lift === "total") continue;
+    byLift.set(lift, bestE1rmByUser(LIFT_EXERCISE[lift as Exclude<PowerLift, "total">]));
+  }
+  // Athletes with a usable profile (height + sex), respecting the locked view.
+  const locked = lockedUsername();
+  const roster = rosterUsers().filter((u) => {
+    if (locked && u.username !== locked) return false;
+    const p = athProfile(u.username);
+    return !!p && p.height > 0 && p.sex !== undefined;
+  });
+
+  const liftPills = POWER_LIFTS
+    .map((l) => `<button type="button" class="rec-lift-pill${l === recordsLift ? " is-on" : ""}" data-reclift="${l}" aria-pressed="${l === recordsLift}">${escapeHtml(LIFT_LABEL[l])}</button>`)
+    .join("");
+
+  // One row per athlete: the optimal chain + the world record + their best vs it.
+  const rows = roster.map((u) => {
+    const p = athProfile(u.username)!;
+    const pot = naturalPotential(p.height, p.sex, ffmiCapFor(u.username));
+    if (!pot) return "";
+    const optLean = pot.leanLimit.avg;
+    const optBw = pot.idealPower.avg; // optimal bodyweight carried at a power body fat
+    const optFat = Math.max(0, optBw - optLean);
+    const cls = weightClassFor(p.sex, optBw);
+    const wr = recordFor(p.sex, cls.label, recordsLift);
+    const best = recordsAthleteBest(u.username, byLift);
+    const pct = percentOfRecord(best, wr);
+    const sexTag = `<span class="rec-sex rec-sex-${p.sex}">${p.sex === "f" ? "W" : "M"}</span>`;
+    return (
+      `<tr>` +
+      `<td class="rec-ath">${escapeHtml(u.user)} ${sexTag}</td>` +
+      `<td class="num">${p.height}</td>` +
+      `<td class="num">${fmt(optLean)}</td>` +
+      `<td class="num">${fmt(optFat)}</td>` +
+      `<td class="num"><strong>${fmt(optBw)}</strong></td>` +
+      `<td class="num rec-class">${escapeHtml(cls.label)}</td>` +
+      `<td class="num rec-wr">${wr === null ? "—" : fmt(wr)}</td>` +
+      `<td class="num">${best === null ? "—" : fmt(best)}</td>` +
+      `<td class="num rec-pct">${pct === null ? "—" : `${pct}%`}</td>` +
+      `</tr>`
+    );
+  }).join("");
+
+  const provis = RECORDS_PROVISIONAL
+    ? `<span class="rec-provisional" title="The kg values are seeded from known IPF records but not yet re-verified against the official database — treat as provisional.">⚠ provisional</span>`
+    : "";
+  box.innerHTML =
+    `<div class="rec-head">` +
+    `<div class="rec-lead muted">Optimal weight class from each lifter's height → natural nFFMI ceiling → lean mass → power bodyweight, then that class's world record.</div>` +
+    `<div class="rec-src muted">${escapeHtml(RECORDS_FEDERATION)} · as of ${escapeHtml(RECORDS_AS_OF)} ${provis} · <a href="${RECORDS_SOURCE_URL}" target="_blank" rel="noopener">source</a></div>` +
+    `</div>` +
+    `<div class="rec-lift-row">${liftPills}</div>` +
+    (rows
+      ? `<div class="data-table-wrap"><table class="data-table rec-table">` +
+        `<thead><tr><th>Athlete</th><th class="num">Ht</th><th class="num">Lean</th><th class="num">Fat</th><th class="num">Opt&nbsp;wt</th><th class="num">Class</th><th class="num">WR</th><th class="num">Best*</th><th class="num">%WR</th></tr></thead>` +
+        `<tbody>${rows}</tbody></table></div>` +
+        `<p class="rec-foot muted">Opt&nbsp;wt, Lean &amp; Fat are kg at the estimated natural ceiling (power body-fat). WR = world record for that optimal class. Best* = the athlete's best ESTIMATED 1RM from logged sets (Total = the three summed), so it's a rough gauge, not a meet lift.</p>`
+      : `<p class="muted">No athletes with a height & sex on file to place in a weight class.</p>`);
+}
+
 function renderStatsEdit(): void {
   const users = rosterUsers();
   if (!statsEditUser || !users.some((u) => u.username === statsEditUser))
@@ -8875,6 +8979,13 @@ async function init() {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
   });
   setupTabs();
+  // World-records page: the trio-lift selector pills (mutually-exclusive).
+  document.getElementById("recordsBody")?.addEventListener("click", (e) => {
+    const pill = (e.target as HTMLElement).closest<HTMLElement>(".rec-lift-pill");
+    if (!pill?.dataset.reclift) return;
+    recordsLift = pill.dataset.reclift as PowerLift;
+    renderRecords();
+  });
   setupDataTab();
   renderDataTab();
   setupAddTab();
@@ -13461,6 +13572,7 @@ function switchTopTab(name: string) {
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "statsedit") renderStatsEdit();
+  if (name === "records") renderRecords();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.

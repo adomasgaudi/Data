@@ -3072,6 +3072,26 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
      calendar / sitemap / data-table, fixed in b.2.7.72). */
   touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
 }
+/* ---- World records page ---- */
+.rec-head { margin: 0 0 0.5rem; }
+.rec-lead { font-size: 0.8rem; }
+.rec-src { font-size: 0.72rem; margin-top: 0.15rem; }
+.rec-src a { color: var(--accent); }
+.rec-provisional { color: var(--warn, #b8902f); font-weight: 600; }
+/* The trio-lift selector: one horizontally-scrolling row of pills (rule 16). */
+.rec-lift-row { display: flex; flex-wrap: nowrap; gap: 0.35rem; overflow-x: auto; margin: 0 0 0.6rem; padding-bottom: 2px; touch-action: pan-x pan-y; scrollbar-width: thin; }
+.rec-lift-pill { flex: 0 0 auto; white-space: nowrap; font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 12px; }
+.rec-lift-pill:hover { border-color: var(--accent); }
+.rec-lift-pill.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rec-table th, .rec-table td { white-space: nowrap; }
+.rec-table .rec-ath { font-weight: 600; }
+.rec-sex { font-size: 0.62rem; font-weight: 700; padding: 0 4px; border-radius: var(--r-pill); vertical-align: middle; }
+.rec-sex-m { color: var(--accent); background: var(--accent-soft); }
+.rec-sex-f { color: #b8902f; background: rgba(184, 144, 47, 0.16); }
+.rec-table .rec-wr { font-weight: 700; }
+.rec-table .rec-pct { color: var(--accent); font-weight: 600; }
+.rec-table .rec-class { color: var(--muted); }
+.rec-foot { font-size: 0.72rem; margin: 0.5rem 0 0; }
 .wa-sel-pill { flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 8px; }
 .wa-sel-pill:hover { border-color: var(--accent); }
 .wa-sel-pill-x { font-size: 0.72rem; opacity: 0.7; }
