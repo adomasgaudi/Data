@@ -2804,7 +2804,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    the ones past the graph's limit read dimmer so the split is obvious. */
 .wa-sel-pill.is-graphed { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .wa-sel-pill.is-ungraphed { opacity: 0.6; }
-.wa-sel-graphdot { font-size: 0.66rem; line-height: 1; }
+/* Small accent dot marking a pill that's actually plotted on the graph (replaces
+   the old 📈 emoji — a clean indicator that fits the design). */
+.wa-sel-graphdot { flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .wa-match-graph { white-space: nowrap; }
 /* Sticky selector bar: sits at the top of the Analysis card in normal flow, then
    pins to the top of the screen as you scroll the content below it. The card must
