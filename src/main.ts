@@ -274,7 +274,6 @@ const els = {
   workoutsPager: $("workoutsPager"),
   workoutViewToggle: $<HTMLButtonElement>("workoutViewToggle"),
   workoutShowToggle: $<HTMLButtonElement>("workoutShowToggle"),
-  workoutNameToggle: $<HTMLButtonElement>("workoutNameToggle"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
   restToggle: $<HTMLButtonElement>("restToggle"),
@@ -2943,9 +2942,8 @@ function syncWorkoutToggles(): void {
   // a .xdd twin, so hide BOTH the <select> and its twin (hiding the select alone left
   // the visible dropdown showing in exercise mode).
   setEnhancedSelectHidden(els.workoutGrouping, S.workoutShowMode !== "groups");
-  els.workoutNameToggle.hidden = S.workoutShowMode !== "exercises"; // names only apply to the exercise view
-  // This button is now a shortcut to the GLOBAL name mode (cycles code → short → full).
-  els.workoutNameToggle.textContent = nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full";
+  // (Name mode — Code / Short / Full — now lives ONLY in the exercise selector's
+  // "Show as" toggle; the redundant history-console button was removed.)
   els.workoutsPageBtn.textContent = String(S.workoutsPageSize);
   els.restToggle.hidden = false; // rest periods now apply to day AND the period modes
   els.restToggle.classList.toggle("is-active", S.showRestDays);
@@ -8887,10 +8885,6 @@ async function init() {
   els.workoutShowToggle.addEventListener("click", () => {
     S.workoutShowMode = S.workoutShowMode === "exercises" ? "groups" : "exercises";
     renderWorkoutsPage();
-  });
-  els.workoutNameToggle.addEventListener("click", () => {
-    setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code");
-    applyNameModeChange();
   });
   // Settings → "Exercise names shown as" — the global name-mode picker.
   document.getElementById("nameModeRow")?.addEventListener("click", (e) => {
