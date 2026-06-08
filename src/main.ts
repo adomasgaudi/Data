@@ -11035,12 +11035,19 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
   const byIdentity = waSelectorExercises().filter((e) => waIncludeIdentities.has(e.identity));
   // When "Show missing" is on, append the hidden/never-trained lifts (greyed) so
   // the picker reveals the whole catalogue, not just what this athlete has done.
+  const q = waSearchQuery.trim().toLowerCase();
+  // While SEARCHING, span the whole catalogue (append the missing/never-trained
+  // lifts) so any lift is findable by name, code OR short name — not just the ones
+  // this athlete has already trained. When not searching, only show-missing adds them.
+  const includeMissing = waShowMissing || q.length > 0;
   const list: { name: string; identity: ExerciseIdentity; missing?: boolean }[] = [
     ...byIdentity,
-    ...(waShowMissing ? waMissingExercises().map((e) => ({ ...e, missing: true })) : []),
+    ...(includeMissing ? waMissingExercises().map((e) => ({ ...e, missing: true })) : []),
   ];
-  const q = waSearchQuery.trim().toLowerCase();
-  return list.filter((e) => !q || e.name.toLowerCase().includes(q) || codeFor(e.name).toLowerCase().includes(q));
+  return list.filter((e) => !q
+    || e.name.toLowerCase().includes(q)
+    || codeFor(e.name).toLowerCase().includes(q)
+    || shortFor(e.name).toLowerCase().includes(q));
 }
 /** The group key (of the current Group-by dimension) an exercise falls under. */
 function waGroupKey(name: string): string {
