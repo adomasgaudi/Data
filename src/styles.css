@@ -736,12 +736,27 @@ main { padding-bottom: 5rem; }
 .bc-massview { display: flex; align-items: stretch; gap: 0.9rem; margin: 0.4rem 0 0.2rem; }
 .bc-masscol { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
 .bc-massbar {
-  display: flex; flex-direction: column; width: 76px; height: 180px;
+  display: flex; flex-direction: column; width: 76px; height: 180px; position: relative;
   border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
 }
 .bc-seg { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; color: #fff; overflow: hidden; line-height: 1.05; }
 .bc-seg-fat { background: var(--gold, #b8902f); }
 .bc-seg-lean { background: var(--accent); }
+/* Buildable-muscle headroom: a dashed, see-through continuation of the lean block up
+   to the natural nFFMI cap. */
+.bc-seg-leanpot {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0 6px, transparent 6px 12px);
+  border-top: 1px dashed var(--accent); border-bottom: 1px dashed var(--accent);
+  color: var(--accent);
+}
+.bc-seg-leanpot .bc-seg-name, .bc-seg-leanpot .bc-seg-val { opacity: 0.85; }
+/* Ideal body-fat zone marked on the fat region (dashed band, faint fill). */
+.bc-fat-ideal {
+  position: absolute; left: 0; right: 0; pointer-events: none;
+  border-top: 1px dashed rgba(255,255,255,0.85); border-bottom: 1px dashed rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center;
+}
+.bc-fat-ideal-lbl { font-size: 0.54rem; font-weight: 700; color: #fff; letter-spacing: 0.02em; white-space: nowrap; text-shadow: 0 1px 1px rgba(0,0,0,0.4); }
 .bc-seg-name { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; }
 .bc-seg-val { font-size: 0.82rem; font-weight: 800; }
 .bc-unit-toggle {

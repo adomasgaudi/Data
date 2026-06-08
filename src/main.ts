@@ -1355,6 +1355,10 @@ interface AthleteStatsOverride {
   age?: number | null;
   sex?: "m" | "f";
   bf?: BodyFatDist;
+  /** The athlete's natural nFFMI ceiling (muscle potential cap). Default ~25 (men) /
+   * ~21.5 (women); editable because genetics/frame move it. Drives the lean cap and
+   * the mass bar's dashed "room to grow" muscle continuation. */
+  ffmiCap?: number;
 }
 const ATHLETE_STATS_KEY = "colosseum.athleteStats.v1";
 const athleteOverrides: Record<string, AthleteStatsOverride> = (() => {
@@ -1385,6 +1389,15 @@ function rosterUsers(): { username: string; user: string }[] {
   for (const u of distinctUsers(data.records)) map.set(u.username, u.user);
   for (const u of manualAthletes) if (!map.has(u.username)) map.set(u.username, u.user);
   return [...map].map(([username, user]) => ({ username, user })).sort((a, b) => a.user.localeCompare(b.user));
+}
+
+/** The athlete's natural nFFMI ceiling — their on-device override, else the sex
+ * default (~25 men / ~21.5 women). Drives the lean cap + the mass bar's "room to
+ * grow" muscle continuation. */
+function ffmiCapFor(username: string): number {
+  const ov = athleteOverrides[username]?.ffmiCap;
+  if (ov && ov > 0) return ov;
+  return athProfile(username)?.sex === "f" ? 21.5 : 25;
 }
 
 /** Effective profile for an athlete: the ATHLETES baseline with any on-device
@@ -3399,20 +3412,19 @@ function renderAthleteProfile() {
   // Compact numbers line (no bars / ranges / ±). Each value carries a ⓘ that
   // toggles its math panel, shown below the line.
   const sep = ` <span class="bc-sep">·</span> `;
+  // Body fat / Lean / Fat are already shown on the mass bar (and bf in the summary),
+  // so the text line keeps only nFFMI (with its ⓘ math). bf/lean/fat derivations are
+  // still folded into the nFFMI panel.
+  void bfDerive; void leanDerive; void fatDerive;
   const bodyComp =
     `<div class="bodycomp"><div class="bc-line">` +
-    [
-      bcChip("bf", "Body fat", bfPct(dist.avg)),
-      bcChip("lean", "Lean", `${f1s(mass.lean.avg)} kg`),
-      bcChip("fat", "Fat", `${f1s(mass.fat.avg)} kg`),
-      bcChip("nffmi", "nFFMI", f1(range.avg)),
-    ].join(sep) +
+    bcChip("nffmi", "nFFMI", f1(range.avg)) +
     `</div>` +
-    bcPanel("bf", bfDerive) + bcPanel("lean", leanDerive) + bcPanel("fat", fatDerive) + bcPanel("nffmi", nffmiDerive) +
+    bcPanel("nffmi", nffmiDerive) +
     `</div>`;
   // Likely lifetime NATURAL potential: the drug-free lean ceiling at this height,
   // and the ideal bodyweight to carry it at each sport's typical body fat.
-  const pot = p.sex ? naturalPotential(p.height, p.sex) : null;
+  const pot = p.sex ? naturalPotential(p.height, p.sex, ffmiCapFor(username)) : null;
   const potBlock = pot
     ? (() => {
         const sexLbl = p.sex === "f" ? "women" : "men";
@@ -3443,19 +3455,46 @@ function renderAthleteProfile() {
     : "";
   // Proportional lean/fat MASS BAR: a vertical stacked column (fat on top, lean
   // below) sized by each share of bodyweight, with a kg ⇄ % toggle. The rest of
-  // the body-comp info sits to its right.
-  const totalMass = mass.lean.avg + mass.fat.avg || p.weight || 1;
-  const leanPct = (mass.lean.avg / totalMass) * 100;
-  const fatPct = (mass.fat.avg / totalMass) * 100;
-  const leanLbl = bcMassUnit === "kg" ? `${f1s(mass.lean.avg)} kg` : `${Math.round(leanPct)}%`;
-  const fatLbl = bcMassUnit === "kg" ? `${f1s(mass.fat.avg)} kg` : `${Math.round(fatPct)}%`;
-  const seg = (cls: string, pct: number, name: string, val: string) =>
-    `<div class="bc-seg ${cls}" style="height:${pct.toFixed(1)}%" title="${name}: ${val}">` +
+  // the body-comp info sits to its right. Two extras:
+  //  • a DASHED continuation above the lean block = the muscle still buildable up to
+  //    the natural nFFMI cap (editable in athlete settings) — "room to grow".
+  //  • an ideal BODY-FAT zone marked on the fat region (10–20% men / 15–25% women).
+  const leanKg = mass.lean.avg, fatKg = mass.fat.avg;
+  const bw = p.weight || leanKg + fatKg || 1;
+  const leanCapKg = pot ? pot.leanLimit.avg : leanKg;
+  const potLeanKg = Math.max(0, leanCapKg - leanKg); // buildable muscle headroom
+  // Scale the whole column to fat + the lean CEILING, so the dashed headroom shows.
+  const barTotal = fatKg + Math.max(leanKg, leanCapKg) || 1;
+  const fatH = (fatKg / barTotal) * 100;
+  const potH = (potLeanKg / barTotal) * 100;
+  const leanH = (leanKg / barTotal) * 100;
+  const leanPct = (leanKg / bw) * 100, fatPct = (fatKg / bw) * 100; // of bodyweight (labels)
+  const leanLbl = bcMassUnit === "kg" ? `${f1s(leanKg)} kg` : `${Math.round(leanPct)}%`;
+  const fatLbl = bcMassUnit === "kg" ? `${f1s(fatKg)} kg` : `${Math.round(fatPct)}%`;
+  const potLbl = bcMassUnit === "kg" ? `+${f1s(potLeanKg)} kg` : `+${Math.round((potLeanKg / bw) * 100)}%`;
+  const seg = (cls: string, pct: number, name: string, val: string, extra = "") =>
+    `<div class="bc-seg ${cls}" style="height:${pct.toFixed(1)}%"${extra}>` +
     `<span class="bc-seg-name">${name}</span><span class="bc-seg-val">${val}</span></div>`;
+  // Ideal body-fat zone, as a band measured DOWN from the top (fat sits at the top):
+  // a fat of X kg occupies the top X/barTotal of the column.
+  const idealLoFr = p.sex === "f" ? 0.15 : 0.10;
+  const idealHiFr = p.sex === "f" ? 0.25 : 0.20;
+  const idealTop = ((idealLoFr * bw) / barTotal) * 100;
+  const idealBot = Math.min(100, ((idealHiFr * bw) / barTotal) * 100);
+  const idealBand = fatKg > 0
+    ? `<div class="bc-fat-ideal" style="top:${idealTop.toFixed(1)}%;height:${Math.max(0, idealBot - idealTop).toFixed(1)}%" ` +
+      `title="Ideal body-fat zone for ${p.sex === "f" ? "women" : "men"}: ${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}% of bodyweight">` +
+      `<span class="bc-fat-ideal-lbl">ideal ${Math.round(idealLoFr * 100)}–${Math.round(idealHiFr * 100)}%</span></div>`
+    : "";
+  const potSeg = potH > 0.5
+    ? seg("bc-seg-leanpot", potH, "Build", potLbl, ` title="Muscle still buildable to your natural cap (nFFMI ${f1s(ffmiCapFor(username))}, editable in ✎ Edit): lean cap ${f1s(leanCapKg)} kg"`)
+    : "";
   const massBar =
-    `<div class="bc-massbar" title="Body composition — lean vs fat mass" aria-label="Lean ${leanLbl}, Fat ${fatLbl}">` +
-    seg("bc-seg-fat", fatPct, "Fat", fatLbl) +
-    seg("bc-seg-lean", leanPct, "Lean", leanLbl) +
+    `<div class="bc-massbar" title="Body composition — lean vs fat mass; dashed = muscle still buildable to your natural cap" aria-label="Lean ${leanLbl}, Fat ${fatLbl}, buildable ${potLbl}">` +
+    seg("bc-seg-fat", fatH, "Fat", fatLbl) +
+    potSeg +
+    seg("bc-seg-lean", leanH, "Lean", leanLbl) +
+    idealBand +
     `</div>` +
     `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;
   const massView =
@@ -7138,6 +7177,7 @@ function renderStatsEdit(): void {
     `<label class="se-field"><span class="se-lbl">Sex</span><select class="se-sex">` +
     `<option value="m"${p?.sex === "m" ? " selected" : ""}>Male</option>` +
     `<option value="f"${p?.sex === "f" ? " selected" : ""}>Female</option></select></label>` +
+    num("se-ffmicap", "FFMI cap", ffmiCapFor(username), "0.5", "natural muscle ceiling (~25 m / 21.5 w)") +
     `</div>` +
     `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high)</div><div class="se-bf-grid">` +
     num("se-bf-low95", "95% low", bfPct(dist.low95), "0.5") +
@@ -7186,6 +7226,7 @@ function saveStatsEdit(): void {
   };
   const w = numOf("se-weight"); if (w !== undefined) ov.weight = w;
   const h = numOf("se-height"); if (h !== undefined) ov.height = h;
+  const cap = numOf("se-ffmicap"); if (cap !== undefined && cap > 0) ov.ffmiCap = cap;
   athleteOverrides[username] = ov;
   saveAthleteOverrides();
   renderStatsEdit();

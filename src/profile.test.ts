@@ -222,6 +222,14 @@ describe("naturalPotential (lifetime natural ceiling + ideal sport weights)", ()
     expect(p.leanLimit.avg).toBeLessThan(p.leanLimit.hi95);
     expect(naturalPotential(0, "m")).toBeNull();
   });
+  it("honours a custom nFFMI ceiling override (editable per athlete)", () => {
+    const p = naturalPotential(180, "m", 27)!;
+    expect(p.ceilingNffmi).toBe(27);
+    expect(p.leanLimit.avg).toBeCloseTo(27 * 1.8 * 1.8, 4); // 87.48 kg
+    expect(p.leanLimit.avg).toBeGreaterThan(naturalPotential(180, "m")!.leanLimit.avg); // higher cap → more lean
+    // A bad / zero override falls back to the sex default (25 for men).
+    expect(naturalPotential(180, "m", 0)!.ceilingNffmi).toBe(25);
+  });
 });
 
 describe("exerciseCategory", () => {

@@ -166,10 +166,14 @@ export interface NaturalPotential {
  * calisthenics (better strength-to-weight), a bit fuller for power/weightlifting.
  * Estimates only: genetics, frame and training history all move the real number.
  */
-export function naturalPotential(height: number, sex: "m" | "f"): NaturalPotential | null {
+export function naturalPotential(height: number, sex: "m" | "f", ceilingOverride?: number): NaturalPotential | null {
   const h = height / 100;
   if (!(h > 0)) return null;
-  const ceil = sex === "f" ? { lo: 20.5, avg: 21.5, hi: 22.5 } : { lo: 24, avg: 25, hi: 26 };
+  // Default drug-free nFFMI cap (Kouri et al.); the owner may override it per athlete
+  // (e.g. exceptional genetics) — the ±1 band is kept around the chosen centre.
+  const ceil = ceilingOverride && ceilingOverride > 0
+    ? { lo: ceilingOverride - 1, avg: ceilingOverride, hi: ceilingOverride + 1 }
+    : sex === "f" ? { lo: 20.5, avg: 21.5, hi: 22.5 } : { lo: 24, avg: 25, hi: 26 };
   const lean = (nffmi: number) => Math.max(0, (nffmi - 6.1 * (1.8 - h)) * h * h);
   const leanLimit: MassRange = {
     lo95: lean(ceil.lo),
