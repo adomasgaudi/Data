@@ -3810,9 +3810,9 @@ function renderTrainBreakdown() {
 }
 
 /** "Maintenance" — every lift's CURRENT (decayed-to-today) strength vs its all-time
- * peak AND vs ~4 weeks ago, bucketed into expandable tiers: 📉 Declining (>2% below
- * peak), ➖ Neutral (holding), 📈 Improving (up >2% in the last month). Each tier is
- * a collapsible <details>, sorted by % inside. Uses the strength line's fade model. */
+ * peak, grouped by the lift's EXERCISE TIER (Primary / Secondary / Tertiary) into
+ * expandable rows, all lifts together, sorted by how far each has slipped below its
+ * peak. Uses the strength line's fade model. */
 function renderMaintenance() {
   if (!els.maintenance) return;
   const username = els.athlete.value;
@@ -3829,48 +3829,37 @@ function renderMaintenance() {
     const d = dayNumber(r.date);
     m.set(d, Math.max(m.get(d) ?? -Infinity, eff));
   }
-  const today = dayNumber(todayIso());
-  const refX = (today - 28) * MS_PER_DAY_RIR; // ~4 weeks ago, for the recent trend
-  type Item = { name: string; drop: number; trend: number };
-  const declining: Item[] = [], neutral: Item[] = [], improving: Item[] = [];
+  type Item = { name: string; drop: number };
+  const byTier = new Map<ExerciseTier, Item[]>();
   for (const [name, dm] of byEx) {
     const pts = [...dm.entries()].map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
     const peak = Math.max(...pts.map((p) => p.y));
     if (!(peak > 0)) continue;
     const series = decayingStrengthPoints(pts);
     const cur = series.length ? series[series.length - 1]!.y : peak;
-    // Strength ~4 weeks ago (last fade point at/under refX) for the recent trend.
-    let ref: number | null = null;
-    for (const p of series) { if (p.x <= refX) ref = p.y; else break; }
-    const drop = ((peak - cur) / peak) * 100; // current vs all-time peak (≥0)
-    const trend = ref && ref > 0 ? ((cur - ref) / ref) * 100 : 0; // current vs 4 weeks ago
-    const it: Item = { name, drop, trend };
-    if (trend >= 2) improving.push(it);
-    else if (drop > 2) declining.push(it);
-    else neutral.push(it);
+    const drop = Math.max(0, ((peak - cur) / peak) * 100); // current vs all-time peak
+    const t = tiersFor(name)[0] ?? "main"; // the lift's primary exercise tier
+    (byTier.get(t) ?? byTier.set(t, []).get(t)!).push({ name, drop });
   }
-  if (!declining.length && !neutral.length && !improving.length) { els.maintenance.innerHTML = ""; return; }
-  declining.sort((a, b) => b.drop - a.drop); // worst first
-  improving.sort((a, b) => b.trend - a.trend); // biggest gainer first
-  neutral.sort((a, b) => a.drop - b.drop); // closest to peak first
+  if (byTier.size === 0) { els.maintenance.innerHTML = ""; return; }
   // Keep each tier's open/closed state across re-renders (read the live DOM).
-  const wasOpen = (key: string, dflt: boolean) =>
-    els.maintenance.querySelector<HTMLDetailsElement>(`.mnt-tier[data-mtier="${key}"]`)?.open ?? dflt;
-  const pill = (it: Item, kind: "drop" | "up" | "flat") => {
-    const lbl = kind === "up" ? `+${it.trend.toFixed(1)}%` : kind === "drop" ? `−${it.drop.toFixed(1)}%` : `−${it.drop.toFixed(1)}%`;
-    return `<button type="button" class="mnt-item" data-waexinfo="${escapeHtml(it.name)}" title="${escapeHtml(it.name)} — tap for info">` +
-      `<span class="mnt-name">${escapeHtml(displayName(it.name))}</span><span class="mnt-${kind === "up" ? "up" : kind === "drop" ? "drop" : "flat"}">${lbl}</span></button>`;
-  };
-  const tier = (key: string, icon: string, label: string, list: Item[], kind: "drop" | "up" | "flat", dflt: boolean) =>
-    list.length === 0 ? "" :
-    `<details class="mnt-tier" data-mtier="${key}"${wasOpen(key, dflt) ? " open" : ""}>` +
-    `<summary class="mnt-tier-sum">${icon} <span class="mnt-tier-lbl">${label}</span> <span class="muted">(${list.length})</span></summary>` +
-    `<div class="mnt-list">${list.map((it) => pill(it, kind)).join("")}</div></details>`;
+  const wasOpen = (key: string) =>
+    els.maintenance.querySelector<HTMLDetailsElement>(`.mnt-tier[data-mtier="${key}"]`)?.open ?? true;
+  const pill = (it: Item) =>
+    `<button type="button" class="mnt-item" data-waexinfo="${escapeHtml(it.name)}" title="${escapeHtml(it.name)} — tap for info">` +
+    `<span class="mnt-name">${escapeHtml(displayName(it.name))}</span>` +
+    `<span class="mnt-${it.drop > 2 ? "drop" : "flat"}">${it.drop < 0.05 ? "peak" : `−${it.drop.toFixed(1)}%`}</span></button>`;
+  const TIER_ORDER: ExerciseTier[] = ["main", "second", "third"];
   els.maintenance.innerHTML =
-    `<div class="tb-title muted">Maintenance <span class="tb-sub">(strength vs peak · trend over 4 weeks)</span></div>` +
-    tier("declining", "📉", "Declining", declining, "drop", true) +
-    tier("neutral", "➖", "Holding", neutral, "flat", false) +
-    tier("improving", "📈", "Improving", improving, "up", true);
+    `<div class="tb-title muted">Maintenance <span class="tb-sub">(strength now vs peak, by tier)</span></div>` +
+    TIER_ORDER.map((t) => {
+      const list = byTier.get(t);
+      if (!list?.length) return "";
+      list.sort((a, b) => b.drop - a.drop); // most-slipped first
+      return `<details class="mnt-tier" data-mtier="${t}"${wasOpen(t) ? " open" : ""}>` +
+        `<summary class="mnt-tier-sum"><span class="mnt-tier-lbl">${TIER_LABELS[t]}</span> <span class="muted">(${list.length})</span></summary>` +
+        `<div class="mnt-list">${list.map(pill).join("")}</div></details>`;
+    }).join("");
 }
 
 /**
