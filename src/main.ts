@@ -6058,18 +6058,29 @@ function renderHorizontalHistory(): void {
   box.innerHTML = head +
     `<div class="hh-dots" style="grid-template-columns:repeat(${P},1fr)">${dotsHtml}</div>` +
     `<div class="hh-grid" style="grid-template-columns:${colWidths.join(" ")};grid-template-rows:auto repeat(${E},auto)">${cells}</div>`;
-  // Light the dot under the current horizontal scroll position (rAF-throttled).
+  // Light the dot for the column actually centred in the viewport (rAF-throttled).
+  // Each column has one backing `.hh-card`, in the same order as the dots — so we
+  // pick the nearest card to the viewport centre instead of a linear scroll
+  // fraction. That keeps the dot aligned to the visible card and advances faster
+  // across the thin rest / gap columns (variable column widths).
   const grid = box.querySelector<HTMLElement>(".hh-grid");
   const dotsRow = box.querySelector<HTMLElement>(".hh-dots");
   if (grid && dotsRow) {
     const dotEls = Array.from(dotsRow.children) as HTMLElement[];
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>(".hh-card"));
     let raf = 0;
     const sync = () => {
       raf = 0;
-      const max = grid.scrollWidth - grid.clientWidth;
-      const frac = max > 0 ? grid.scrollLeft / max : 0;
-      const active = Math.round(frac * (dotEls.length - 1));
-      dotEls.forEach((d, i) => d.classList.toggle("is-active", i === active));
+      const gr = grid.getBoundingClientRect();
+      const center = gr.left + grid.clientWidth / 2;
+      let best = 0;
+      let bestDist = Infinity;
+      cards.forEach((c, i) => {
+        const r = c.getBoundingClientRect();
+        const dist = Math.abs(r.left + r.width / 2 - center);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      });
+      dotEls.forEach((d, i) => d.classList.toggle("is-active", i === best));
     };
     grid.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(sync); }, { passive: true });
     sync();
