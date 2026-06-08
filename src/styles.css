@@ -1420,8 +1420,8 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-cell.lvl-1 { /* bg set inline */ }
 .hm-cell.lvl-2 { /* bg set inline */ }
 .hm-cell.lvl-3 { border: 2px solid rgba(255,255,255,0.55); }
-.hm-cell.lvl-4 { border: 2px solid rgba(255,255,255,0.75); box-shadow: 0 0 0 2px rgba(255,255,255,0.25); }
-.hm-cell.lvl-5 { border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 0 6px 2px #ffd700, 0 0 14px 4px rgba(255,200,0,0.55); }
+.hm-cell.lvl-4 { border: 2px solid rgba(255,255,255,0.75); }
+.hm-cell.lvl-5 { border: 2px solid rgba(255,255,255,0.9); }
 /* 2× zoom (⚙ "2×" toggle): double every cell + the column pitch so the whole
    heatmap is twice as big, identical otherwise and still horizontally scrollable
    (the .hm-year scroller is unchanged). Only sizes change — colours/borders/gap
