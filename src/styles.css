@@ -2743,6 +2743,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Categories-mode picker: one two-line pill per category (label + sel/total, and
    a smaller sub-group line), tap to open its floating exercise dropdown. */
 .wa-cat-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+/* Category mode: the always-visible top strip is a SINGLE horizontally-scrolling
+   row of expandable category pills (overrides the 2-row selected-pills grid). */
+.wa-sel-pills.wa-catstrip { display: flex; flex-wrap: nowrap; align-items: stretch; }
+.wa-catstrip .wa-cat-pill { flex: 0 0 auto; }
 .wa-cat-pill {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   font: inherit; cursor: pointer; padding: 5px 11px; border: 1px solid var(--line);

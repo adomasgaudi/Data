@@ -10520,7 +10520,7 @@ const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["discipline", "muscleGroup", "func
 // Picker pill mode: individual exercise pills (default) or ONE pill per category
 // (manual toggle), so whole categories can be opened/eliminated at once. Categories
 // mode needs a Group-by dimension (it groups by it).
-let waChipsMode: "exercises" | "categories" = "exercises";
+let waChipsMode: "exercises" | "categories" = "categories"; // default: whole-category pills (tap to expand)
 // Which category's floating exercise dropdown is open (a group key, "__all", or null).
 let waCatMenuKey: string | null = null;
 let waCatMenuScope: SelScope = "hist";
@@ -10853,14 +10853,11 @@ function renderSelector(scope: SelScope): void {
   const onGraph = scope === "graph" ? new Set(cur.slice(0, WA_GRAPH_MAX)) : new Set<string>();
   const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
   let selPills = "";
-  if (cur.length && stickyCats) {
-    const groups = new Map<string, string[]>();
-    for (const n of cur) { const k = waGroupKey(n); (groups.get(k) ?? groups.set(k, []).get(k)!).push(n); }
-    selPills = `<div class="wa-sel-pills">` +
-      [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, names]) => {
-        const title = `${k} — ${names.length} selected · tap to open, ✕ to remove all`;
-        return `<span class="wa-sel-pill wa-sel-catpill" data-waselcat="${escapeHtml(k)}" title="${escapeHtml(title)}">${escapeHtml(k)} <span class="wa-cat-count">${names.length}</span><span class="wa-sel-pill-x" data-waselcatx="${escapeHtml(k)}">✕</span></span>`;
-      }).join("") + `</div>`;
+  if (stickyCats) {
+    // Category mode: the always-visible top strip IS the whole-category picker — one
+    // expandable pill per group (tap opens its exercises), horizontally scrollable.
+    // The per-pill count shows what's selected, so no separate selected-pills row.
+    selPills = `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
   } else if (cur.length) {
     selPills = `<div class="wa-sel-pills">` +
       cur.map((n) => {
@@ -11046,7 +11043,9 @@ function waCatPill(key: string, label: string, sel: number, tot: number, subSel:
   );
 }
 /** The full category-pill row: an "all" pill + one pill per group. */
-function waCatPillsHtml(list: readonly WaItem[]): string {
+/** Just the category pills (an "all" pill + one per group), no wrapper. Shared by
+ * the dropdown (wrapped, multi-row) and the top strip (horizontally scrollable). */
+function waCatPillsInner(list: readonly WaItem[]): string {
   const groups = new Map<string, WaItem[]>();
   for (const e of list) {
     const k = waGroupKey(e.name);
@@ -11062,7 +11061,10 @@ function waCatPillsHtml(list: readonly WaItem[]): string {
       return waCatPill(k, k, waSelCount(items), items.length, cov.sel, cov.total, "sub");
     })
     .join("");
-  return `<div class="wa-cat-pills">${allPill}${pills}</div>`;
+  return allPill + pills;
+}
+function waCatPillsHtml(list: readonly WaItem[]): string {
+  return `<div class="wa-cat-pills">${waCatPillsInner(list)}</div>`;
 }
 /** The exercises a category pill covers ("__all" = every shown exercise). */
 function waCatItems(key: string): WaItem[] {
@@ -11672,21 +11674,8 @@ function setupWorkoutAnalysis(): void {
     // data-selscope. Selector actions below operate on that scope's selection.
     const scopeRoot = t.closest<HTMLElement>("[data-selscope]");
     if (scopeRoot) curSelScope = (scopeRoot.dataset.selscope as SelScope) ?? "hist";
-    // Sticky CATEGORY pill (categories mode): ✕ drops the whole category; tapping
-    // the pill opens that category's floating exercise dropdown.
-    const stickyCatX = t.closest<HTMLElement>("[data-waselcatx]");
-    if (stickyCatX?.dataset.waselcatx) {
-      const k = stickyCatX.dataset.waselcatx;
-      setSelArr(selArr().filter((n) => waGroupKey(n) !== k));
-      debounceWaRender();
-      return;
-    }
-    const stickyCat = t.closest<HTMLElement>(".wa-sel-catpill");
-    if (stickyCat?.dataset.waselcat) {
-      if (waCatMenuKey === stickyCat.dataset.waselcat) closeWaCatMenu();
-      else openWaCatMenu(stickyCat.dataset.waselcat, stickyCat, curSelScope);
-      return;
-    }
+    // (Category pills in the top strip are `.wa-cat-pill`s, handled by the
+    // document-level pill handler — tap opens that group's floating exercise menu.)
     // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
     const selPill = t.closest<HTMLElement>(".wa-sel-pill");
     if (selPill?.dataset.waselpill) {
