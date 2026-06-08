@@ -2259,22 +2259,43 @@ function mergeVariantsFor(name: string): string[] {
   return mergeVariantsCache.get(name) ?? [];
 }
 
+/** Member lifts of a built-in combinable/comparable GROUP whose synthetic lift is
+ * `name` (e.g. "SQ mix" → its squat variants) — what that combined/comparison
+ * exercise is made of. [] for a plain lift. */
+function groupMembersForName(name: string): string[] {
+  for (const t of [...effectiveCombinableGroups(), ...effectiveComparableGroups()])
+    if ((t.derivedName ?? t.label) === name) return (t.members ?? []).map((m) => m.exerciseName);
+  return [];
+}
+
+/** True when `name` is a synthetic COMBINED / COMPARISON lift (made of members),
+ * not just a spelling-merge — drives the "= made of" badge wording. */
+function isCompositeExercise(name: string): boolean {
+  return groupMembersForName(name).length > 0
+    || userExerciseDefs.some((d) => d.name === name && d.identity === "combined" && (d.members?.length ?? 0) > 0);
+}
+
 /** The other spellings folded into a merged name, or [] for a plain lift. */
 function exerciseOrigin(name: string): string[] {
   // Spelling variants auto-folded into this name, PLUS the member lifts of a
-  // user-defined merge (so a merged lift's title/badge lists what it contains).
+  // user-defined merge AND the members of a built-in combine/compare group (so a
+  // merged OR combined/comparison lift's title/badge lists what it contains).
   const def = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
-  return def?.members?.length ? [...mergeVariantsFor(name), ...def.members] : mergeVariantsFor(name);
+  return [...new Set([...mergeVariantsFor(name), ...(def?.members ?? []), ...groupMembersForName(name)])];
 }
 
-/** Inline "(also: A, B)" badge for a name, or "" when there's nothing to note.
- * `plain` returns un-escaped text (for chart labels / titles); default is HTML. */
+/** Inline badge listing what a lift is made of, or "" when there's nothing to note.
+ * Composite (combined/comparison) lifts read "= A, B"; spelling-merges read
+ * "(also: A, B)". `plain` returns un-escaped text (for chart labels / titles). */
 function originBadge(name: string, plain = false): string {
   const origin = exerciseOrigin(name).filter((n) => n !== name);
   if (origin.length === 0) return "";
-  const list = origin.join(", ");
-  if (plain) return ` (also: ${list})`;
-  return ` <span class="origin-note" title="Combined from: ${escapeHtml(list)}">(also: ${escapeHtml(list)})</span>`;
+  const composite = isCompositeExercise(name);
+  const list = origin.map((n) => displayName(n)).join(", ");
+  if (plain) return composite ? ` = ${list}` : ` (also: ${list})`;
+  const title = composite ? `Made of: ${escapeHtml(list)}` : `Combined from: ${escapeHtml(list)}`;
+  const text = composite ? `= ${escapeHtml(list)}` : `(also: ${escapeHtml(list)})`;
+  return ` <span class="origin-note" title="${title}">${text}</span>`;
 }
 
 function renderStatus() {
