@@ -3886,9 +3886,10 @@ function renderMaintenance() {
     (byGroup.get(k) ?? byGroup.set(k, []).get(k)!).push({ name, drop, gain });
   }
   if (byGroup.size === 0) { els.maintenance.innerHTML = ""; return; }
-  // Keep each group's open/closed state across re-renders (read the live DOM).
+  // Collapsed by DEFAULT (the section is long); keep each group's open/closed state
+  // across re-renders by reading the live DOM (only the first render falls back to closed).
   const wasOpen = (key: string) =>
-    els.maintenance.querySelector<HTMLDetailsElement>(`.mnt-tier[data-mtier="${key}"]`)?.open ?? true;
+    els.maintenance.querySelector<HTMLDetailsElement>(`.mnt-tier[data-mtier="${key}"]`)?.open ?? false;
   // At/near peak AND still climbing → green "+x%"; slipped >2% off peak → red "−x%";
   // otherwise just holding at peak → grey "peak".
   const tag = (it: Item) => {
