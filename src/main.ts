@@ -12809,6 +12809,19 @@ function renderSearchPalette(value: string): void {
   if (!pal) return;
   const q = value.trim();
   if (!q) { hideCmdPalette(); return; }
+  // "create <Name>" → a single action to make a brand-new exercise.
+  const createM = /^create\s+(.+)$/i.exec(q);
+  if (createM) {
+    const name = createM[1]!.trim();
+    const exists = new Set(selectableExercises(data.records)).has(name) || userExerciseDefs.some((d) => d.name === name);
+    cmdActiveIdx = 0;
+    pal.hidden = false;
+    pal.innerHTML =
+      `<button type="button" class="cmd-opt is-active" data-searchact="createex" role="option">` +
+      `<span class="cmd-opt-cmd">➕ Create exercise “${escapeHtml(name)}”</span>` +
+      `<span class="cmd-opt-desc">${exists ? "Already exists — opens it on the Add page" : "Opens the Add page to log its first set"}</span></button>`;
+    return;
+  }
   const n = waChipListBase().length;
   const opts = [
     { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
@@ -12844,6 +12857,23 @@ function runSearchAction(act: string): void {
     if (first) openExerciseInfo(first);
     return;
   }
+  if (act === "createex") {
+    // Parse the name from "create <Name>" and open the Add page prefilled — the
+    // exercise comes into being when its first set is logged.
+    const m = /^create\s+(.+)$/i.exec(input?.value.trim() ?? "");
+    const name = m ? m[1]!.trim() : "";
+    hideCmdPalette();
+    if (input) input.value = "";
+    input?.blur();
+    if (!name) return;
+    switchTopTab("add");
+    if (els.addAthlete.value !== els.athlete.value && [...els.addAthlete.options].some((o) => o.value === els.athlete.value)) els.addAthlete.value = els.athlete.value;
+    els.addExercise.value = name;
+    els.addExercise.dispatchEvent(new Event("input", { bubbles: true })); // toggle arm-pos / variant fields
+    els.addHint.textContent = `New exercise “${name}” — enter weight/reps and tap Add to create it.`;
+    els.addReps.focus();
+    return;
+  }
   if (act === "filter") searchFindHistory = false;
   else if (act === "find") searchFindHistory = true;
   else if (act === "select") {
@@ -12875,6 +12905,8 @@ function setupCommandBar(): void {
   input.addEventListener("input", () => {
     const v = input.value;
     if (v.startsWith(".")) { cmdActiveIdx = 0; renderCmdPalette(v); return; }
+    // "create <Name>" → offer to create a brand-new exercise (don't filter the picker).
+    if (/^create\s+\S/i.test(v)) { cmdActiveIdx = 0; renderSearchPalette(v); return; }
     // On the Index page, plain text FINDS the lift in the Index (flat match list) —
     // it doesn't throw you to the Analysis view, and shows no action popup.
     if (document.getElementById("tab-bwparts")?.hidden === false) {
