@@ -14,6 +14,13 @@ ones, re-grade as the code changes.
 
 ## ✅ Done sweeps (recent)
 
+- **Floating-menu open-state prune (DONE)** `[selector/menus]` — swept every floating
+  (`position:absolute` body) `<details>`/popout that re-renders on an inner option tap,
+  to ensure each preserves its OPEN state across the rebuild (else "clicking a setting
+  closes the menu"). Only `wa-sel-cog` (selector ⚙) was missing it — fixed by reading the
+  prev `.open` before rebuild. `cal-settings`, `wa-graph-fold` already preserved (via
+  `calSettingsOpen` / `S.waGraphFoldOpen`). Codified as CLAUDE.md HARD RULE 24. Re-audit
+  any NEW floating menu against rule 24.
 - **`#design` rounding prune (DONE)** — replaced every full/pill rounding
   (`border-radius: 999px` ×69, `99px` ×1) in `src/styles.css` with the new small
   `--r-pill` token (8px). Genuine circular dots/avatars (`50%`) left as-is. Rule 21

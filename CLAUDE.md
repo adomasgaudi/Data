@@ -34,6 +34,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 21. **User/Spectator (locked, non-admin) views show ONLY the logged-in athlete — never other athletes' chips, never the M/W sex menu, never admin-only tabs.** Anything that lets you pick or peek at another user is admin-only; locked views hide it entirely (not just disable it).
 22. **`#design` — corners use SMALL rounding, NEVER full/pill rounding:** no `border-radius: 999px`/`99px`/`50%` on buttons, chips, pills or inputs — use the `--r-pill` token (small radius) in `src/styles.css`. (Genuine circular dots/avatars may stay `50%`.)
 23. **Merge/combine groups show ONLY the combined lift by DEFAULT (members hidden); a per-group Combined·Members·Both setting overrides it — and a merged member keeps its OWN per-set scaling (Smith-incline push-ups auto-scale by their incline note, unrecognised → flagged for review), never a flat ratio.**
+24. **A floating/popout menu (`<details>` or div with `position:absolute` body) MUST preserve its OPEN state across the re-render its own options trigger — read the previous `.open` from the live DOM before rebuilding `innerHTML` (like `cal-settings`/`wa-sel-cog`/`wa-graph-fold`). Else tapping a setting inside rebuilds the menu CLOSED — the recurring "clicking a setting closes the menu" bug.**
 
 ## Commands the owner types (act on these even with no other context)
 

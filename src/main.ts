@@ -11134,9 +11134,12 @@ function renderSelector(scope: SelScope): void {
   const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
   const prevChipScroll = sel.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
   // Everything but Group lives in the ⚙ popout now: pick-mode, Select all / Clear,
-  // Match, Show missing, the identity toggles and name mode.
+  // Match, Show missing, the identity toggles and name mode. Its open state MUST
+  // survive the re-render every inner toggle triggers — otherwise tapping any option
+  // rebuilds the menu closed (the recurring "clicking a setting closes the menu" bug).
+  const cogOpen = sel.querySelector<HTMLDetailsElement>(".wa-sel-cog")?.open ?? false;
   const settingsCog =
-    `<details class="wa-sel-cog"><summary class="wa-sel-cog-sum" title="Selector settings — pick mode, select all / clear, identities, name mode, match, show missing">⚙</summary>` +
+    `<details class="wa-sel-cog"${cogOpen ? " open" : ""}><summary class="wa-sel-cog-sum" title="Selector settings — pick mode, select all / clear, identities, name mode, match, show missing">⚙</summary>` +
     `<div class="wa-sel-cog-menu"><div class="wa-chips-tools">${modeToggle}${selAllBtn}${clearBtn}</div>${foldTools}${settingsBlock}</div></details>`;
   // Selected pills. For the GRAPH selector the first WA_GRAPH_MAX are marked 📈 (the
   // graph's point budget) with a "Trim to N" button; the history selector has no cap.
