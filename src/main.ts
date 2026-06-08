@@ -3810,10 +3810,34 @@ function renderTrainBreakdown() {
   renderMaintenance();
 }
 
+/** Which taxonomy the Maintenance section groups its lifts by (cycled by the header pill). */
+type MaintDim = "tier" | "mg" | "cat" | "disc";
+const MAINT_DIMS: MaintDim[] = ["tier", "mg", "cat", "disc"];
+const MAINT_DIM_LABEL: Record<MaintDim, string> = { tier: "Tier", mg: "Muscle", cat: "Category", disc: "Discipline" };
+function readMaintDim(): MaintDim {
+  try { const v = localStorage.getItem("colosseum.maintGroupBy"); if (MAINT_DIMS.includes(v as MaintDim)) return v as MaintDim; } catch { /* ignore */ }
+  return "tier";
+}
+let maintGroupBy: MaintDim = readMaintDim();
+function setMaintDim(d: MaintDim) {
+  maintGroupBy = d;
+  try { localStorage.setItem("colosseum.maintGroupBy", d); } catch { /* ignore */ }
+}
+/** The ordered group keys + label for whichever dimension is active, and the
+ * primary group a lift falls into. One lift → one group (its primary value). */
+function maintGrouping(dim: MaintDim): { order: string[]; label: (k: string) => string; keyOf: (name: string) => string } {
+  switch (dim) {
+    case "mg": return { order: MUSCLE_GROUPS as string[], label: (k) => k, keyOf: (n) => mgsFor(n)[0] ?? muscleGroup(n) };
+    case "cat": return { order: TRAINING_CATEGORIES as string[], label: (k) => k, keyOf: (n) => catsFor(n)[0] ?? exerciseCategory(n) };
+    case "disc": return { order: DISCIPLINES as string[], label: (k) => k, keyOf: (n) => discsFor(n)[0] ?? exerciseDiscipline(n) };
+    default: return { order: ["main", "second", "third"], label: (k) => TIER_LABELS[k as ExerciseTier], keyOf: (n) => tiersFor(n)[0] ?? "main" };
+  }
+}
+
 /** "Maintenance" — every lift's CURRENT (decayed-to-today) strength vs its all-time
- * peak, grouped by the lift's EXERCISE TIER (Primary / Secondary / Tertiary) into
- * expandable rows, all lifts together, sorted by how far each has slipped below its
- * peak. Uses the strength line's fade model. */
+ * peak, grouped by the chosen taxonomy (Tier / Muscle / Category / Discipline, cycled
+ * by the header pill) into expandable rows: all lifts together, declining first (red
+ * −%), holding at peak (grey), improving last (green +%). Uses the strength fade model. */
 function renderMaintenance() {
   if (!els.maintenance) return;
   const username = els.athlete.value;
@@ -3830,8 +3854,11 @@ function renderMaintenance() {
     const d = dayNumber(r.date);
     m.set(d, Math.max(m.get(d) ?? -Infinity, eff));
   }
-  type Item = { name: string; drop: number };
-  const byTier = new Map<ExerciseTier, Item[]>();
+  type Item = { name: string; drop: number; gain: number };
+  const grp = maintGrouping(maintGroupBy);
+  const byGroup = new Map<string, Item[]>();
+  const todayMs = Date.parse(todayIso());
+  const GAIN_WINDOW_MS = 90 * MS_PER_DAY_RIR; // trailing window for "improving" momentum
   for (const [name, dm] of byEx) {
     const pts = [...dm.entries()].map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
     const peak = Math.max(...pts.map((p) => p.y));
@@ -3839,26 +3866,43 @@ function renderMaintenance() {
     const series = decayingStrengthPoints(pts);
     const cur = series.length ? series[series.length - 1]!.y : peak;
     const drop = Math.max(0, ((peak - cur) / peak) * 100); // current vs all-time peak
-    const t = tiersFor(name)[0] ?? "main"; // the lift's primary exercise tier
-    (byTier.get(t) ?? byTier.set(t, []).get(t)!).push({ name, drop });
+    // Recent momentum: current strength vs where it was ~90 days ago (or the first
+    // session if newer) — drives the green "+x%" for lifts that are still climbing.
+    let past = series.length ? series[0]!.y : cur;
+    const cutoff = todayMs - GAIN_WINDOW_MS;
+    for (const p of series) { if (p.x <= cutoff) past = p.y; else break; }
+    const gain = past > 0 ? ((cur - past) / past) * 100 : 0;
+    const k = grp.keyOf(name); // the lift's primary group in the active dimension
+    (byGroup.get(k) ?? byGroup.set(k, []).get(k)!).push({ name, drop, gain });
   }
-  if (byTier.size === 0) { els.maintenance.innerHTML = ""; return; }
-  // Keep each tier's open/closed state across re-renders (read the live DOM).
+  if (byGroup.size === 0) { els.maintenance.innerHTML = ""; return; }
+  // Keep each group's open/closed state across re-renders (read the live DOM).
   const wasOpen = (key: string) =>
     els.maintenance.querySelector<HTMLDetailsElement>(`.mnt-tier[data-mtier="${key}"]`)?.open ?? true;
+  // At/near peak AND still climbing → green "+x%"; slipped >2% off peak → red "−x%";
+  // otherwise just holding at peak → grey "peak".
+  const tag = (it: Item) => {
+    if (it.drop <= 2 && it.gain > 0.05)
+      return `<span class="mnt-up">+${it.gain.toFixed(1)}%</span>`;
+    if (it.drop > 2) return `<span class="mnt-drop">−${it.drop.toFixed(1)}%</span>`;
+    return `<span class="mnt-flat">${it.drop < 0.05 ? "peak" : `−${it.drop.toFixed(1)}%`}</span>`;
+  };
   const pill = (it: Item) =>
     `<button type="button" class="mnt-item" data-waexinfo="${escapeHtml(it.name)}" title="${escapeHtml(it.name)} — tap for info">` +
-    `<span class="mnt-name">${escapeHtml(displayName(it.name))}</span>` +
-    `<span class="mnt-${it.drop > 2 ? "drop" : "flat"}">${it.drop < 0.05 ? "peak" : `−${it.drop.toFixed(1)}%`}</span></button>`;
-  const TIER_ORDER: ExerciseTier[] = ["main", "second", "third"];
+    `<span class="mnt-name">${escapeHtml(displayName(it.name))}</span>${tag(it)}</button>`;
+  // Declining first (most-slipped), then holding, then improving (most-improved last).
+  const score = (it: Item) => (it.drop > 2 ? it.drop : -it.gain);
+  // Groups in the dimension's natural order, plus any stragglers not in that list.
+  const keys = [...grp.order.filter((k) => byGroup.has(k)), ...[...byGroup.keys()].filter((k) => !grp.order.includes(k))];
+  const groupByPill =
+    `<button type="button" class="mnt-groupby" title="Group by — tap to cycle">${escapeHtml(MAINT_DIM_LABEL[maintGroupBy])}</button>`;
   els.maintenance.innerHTML =
-    `<div class="tb-title muted">Maintenance <span class="tb-sub">(strength now vs peak, by tier)</span></div>` +
-    TIER_ORDER.map((t) => {
-      const list = byTier.get(t);
-      if (!list?.length) return "";
-      list.sort((a, b) => b.drop - a.drop); // most-slipped first
-      return `<details class="mnt-tier" data-mtier="${t}"${wasOpen(t) ? " open" : ""}>` +
-        `<summary class="mnt-tier-sum"><span class="mnt-tier-lbl">${TIER_LABELS[t]}</span> <span class="muted">(${list.length})</span></summary>` +
+    `<div class="tb-title muted">Maintenance <span class="tb-sub">(strength now vs peak)</span> ${groupByPill}</div>` +
+    keys.map((k) => {
+      const list = byGroup.get(k)!;
+      list.sort((a, b) => score(b) - score(a)); // declining first, improving last
+      return `<details class="mnt-tier" data-mtier="${k}"${wasOpen(k) ? " open" : ""}>` +
+        `<summary class="mnt-tier-sum"><span class="mnt-tier-lbl">${escapeHtml(grp.label(k))}</span> <span class="muted">(${list.length})</span></summary>` +
         `<div class="mnt-list">${list.map(pill).join("")}</div></details>`;
     }).join("");
 }
@@ -12764,6 +12808,13 @@ function setupWorkoutAnalysis(): void {
       selPill.remove(); // instant feedback; the deferred re-render rebuilds the rest
       setSelArr(selArr().filter((x) => x !== selPill.dataset.waselpill));
       debounceWaRender();
+      return;
+    }
+    // Maintenance header pill: cycle the grouping dimension (Tier → Muscle → Category → Discipline).
+    if (t.closest(".mnt-groupby")) {
+      const i = MAINT_DIMS.indexOf(maintGroupBy);
+      setMaintDim(MAINT_DIMS[(i + 1) % MAINT_DIMS.length]!);
+      renderMaintenance(); // local, cheap — re-render just this section
       return;
     }
     // The ⓘ on a chip opens that lift's More-info overlay (not select/deselect).
