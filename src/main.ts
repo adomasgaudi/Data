@@ -12365,12 +12365,12 @@ function refreshHistorySearch(): void {
   waListExerciseFilter = historyFilterWithSearch(base);
 }
 
-/** A big section title from a lift selection: the first 5 lift NAMES + "… +N" when
- * there are more (never a wall of text, but always shows up to 5 names — not a bare
- * count). `removable` makes each name a tap-to-remove-from-graph button AND prepends a
- * total-count badge (graph title); plain text otherwise (history title). Shared so the
- * graph and Calendar/history titles cap IDENTICALLY (the recurring "one capped, one
- * not" bug). */
+/** A big section title from a lift selection: a big total-COUNT badge, then the first
+ * 5 lift NAMES, then "… +N" when there are more (never a wall of text, but always
+ * shows the count up front and up to 5 names). `removable` makes each name a
+ * tap-to-remove-from-graph button (graph title) vs plain text (history title). Shared
+ * so the graph and Calendar/history titles look IDENTICAL (the recurring "one has the
+ * count / cap, the other doesn't" bug). */
 const TITLE_NAME_CAP = 5;
 function liftSelectionTitle(sel: readonly string[], removable = false): string {
   if (sel.length === 0) return "";
@@ -12379,9 +12379,9 @@ function liftSelectionTitle(sel: readonly string[], removable = false): string {
     ? `<button type="button" class="wa-title-lift" data-graphremove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`
     : escapeHtml(displayName(n))).join(sep);
   const more = sel.length > TITLE_NAME_CAP
-    ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — trim in the picker below">… +${sel.length - TITLE_NAME_CAP}</span>`
+    ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — pick them off in the selector below">… +${sel.length - TITLE_NAME_CAP}</span>`
     : "";
-  const count = removable ? `<span class="wa-title-count" title="${sel.length} lifts on the graph">${sel.length}</span>` : "";
+  const count = `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>`;
   return `${count}<span class="wa-seltitle">${names}${more}</span>`;
 }
 function renderWorkoutAnalysis(): void {
