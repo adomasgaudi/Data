@@ -7829,7 +7829,8 @@ function renderLive(): void {
     : coachSection + trainSection + warmSection + ssSection + watchSection;
 
   box.innerHTML =
-    `<p class="live-for muted">Plan for <b>${escapeHtml(athleteLabel())}</b> — switch athlete on the Analysis view.</p>` +
+    `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
+    `<p class="live-for muted">Training plan — switch athlete on the Analysis view.</p>` +
     ordered;
 }
 

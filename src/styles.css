@@ -3472,3 +3472,5 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .live-editor-actions { display: flex; align-items: center; gap: 0.6rem; }
 .live-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 6px 16px; }
 .live-ss-toggle { align-self: flex-start; }
+.live-title { font-size: 1.8rem; font-weight: 800; color: var(--accent); margin: 0.1rem 0 0; line-height: 1.1; }
+.live-for { margin-top: 0.1rem; }
