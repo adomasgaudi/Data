@@ -93,10 +93,12 @@ const DEFAULT_SPREAD = 0.9;
  * at full slot width (see buildCompactor), so the sets stay separated even when
  * long gaps squeeze the sessions together. */
 function setTimes(records: readonly SetRecord[], spread: number = DEFAULT_SPREAD): Map<SetRecord, number> {
-  // The fan occupies `spread` of the day, centred on noon — clamped so it always
-  // stays strictly inside [0, 1) of the day (floor-bucketing needs that).
-  const half = Math.max(0.02, Math.min(0.49, (Number.isFinite(spread) ? spread : DEFAULT_SPREAD) / 2));
-  const lo = 0.5 - half, hi = 0.5 + half;
+  // The fan starts at the session's day and extends FORWARD by `spread` days (so the
+  // sets never appear BEFORE their logged date). `spread` ≤ ~1 keeps a session inside
+  // its own day (exact dates); a larger spread (up to ~10 days) lets a dense session
+  // fan across several days for separation — best read in realistic-time mode.
+  const width = Math.max(0, Math.min(9.9, Number.isFinite(spread) ? spread : DEFAULT_SPREAD));
+  const lo = 0.05;
   const byDay = new Map<number, SetRecord[]>();
   for (const r of records) {
     const t = ts(r.date);
@@ -109,8 +111,8 @@ function setTimes(records: readonly SetRecord[], spread: number = DEFAULT_SPREAD
     const ordered = [...rs].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0));
     const n = ordered.length;
     ordered.forEach((r, i) => {
-      const frac = n <= 1 ? 0.5 : lo + (hi - lo) * (i / (n - 1));
-      out.set(r, day * DAY + frac * DAY);
+      const frac = n <= 1 ? 0.5 : lo + width * (i / (n - 1)); // first set at the day, last `width` days on
+      out.set(r, (day + frac) * DAY);
     });
   }
   return out;

@@ -12757,7 +12757,7 @@ function renderWaGraph(): void {
     // Set-spread knob (per-set / range views only) lives in its own little group.
     (hasSetMetric
       ? cfgGroup("Set spread", "",
-          `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out across its day on the per-set / Weight Range views (left = stacked on one line, right = spread across the whole day).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="0.98" step="0.02" value="${c.spread}" /></label>`)
+          `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
       : "") +
     onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.") +
     `</div>`;
@@ -13345,7 +13345,7 @@ function setupWorkoutAnalysis(): void {
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
       else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
-      else if (key === "spread") waGraphConfig.spread = Math.min(0.98, Math.max(0, Number((el as HTMLInputElement).value)));
+      else if (key === "spread") waGraphConfig.spread = Math.min(9.8, Math.max(0, Number((el as HTMLInputElement).value)));
       else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
