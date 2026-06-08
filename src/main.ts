@@ -2673,7 +2673,6 @@ function renderChangelog() {
     };
     // Cumulative total, COLOURED per zanpakutō era — contiguous segments join into one line.
     const eraSeries: SvgSeries[] = [];
-    const seenEra = new Set<string>();
     let i0 = 0;
     for (let i = 1; i <= timeline.length; i++) {
       if (i < timeline.length && eraName(timeline[i]!.version) === eraName(timeline[i0]!.version)) continue;
@@ -2684,8 +2683,7 @@ function renderChangelog() {
         const p = timeline[k]!;
         pts.push({ x: Date.parse(p.date), y: p.cumulative, meta: `${displayVersion(p.version)} · ${p.date} · ${fmtSp(p.cumulative)} SP` });
       }
-      const repeat = seenEra.has(era); seenEra.add(era);
-      eraSeries.push({ name: era, color: eraColor(timeline[i0]!.version), type: "line", points: pts, noLegend: repeat });
+      eraSeries.push({ name: era, color: eraColor(timeline[i0]!.version), type: "line", points: pts, noLegend: true });
       i0 = i;
     }
     // Per-tag cumulative lines (top 10 task codes) — hidden by default; toggle in the legend.
