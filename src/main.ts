@@ -9044,6 +9044,16 @@ async function init() {
     // on document so it works wherever the taxonomy editor is shown.
     const taxSave = t.closest<HTMLElement>(".wa-assign-save");
     if (taxSave?.dataset.waassign) { saveTaxonomyAssignment(taxSave, taxSave.dataset.waassign); return; }
+    // A selected-exercise pill (shown when only a few are picked) — tap to drop it.
+    const selex = t.closest<HTMLElement>(".wa-selex-pill");
+    if (selex?.dataset.waselex) {
+      curSelScope = (selex.closest<HTMLElement>("[data-selscope]")?.dataset.selscope as SelScope) ?? curSelScope;
+      const n = selex.dataset.waselex;
+      setSelArr(selArr().filter((x) => x !== n));
+      renderWaChips();    // rebuild the selected row + category-pill counts
+      debounceWaRender(); // graph / history / calendar catch up
+      return;
+    }
     // Categories-mode picker: a category pill opens its floating exercise dropdown;
     // the dropdown has per-exercise toggles + a Select/Deselect-all for the group.
     // Delegated on document because the dropdown lives at the body root (it floats).
@@ -11914,14 +11924,13 @@ function renderSelector(scope: SelScope): void {
   // These controls live at the TOP level (in the header, next to the button), not
   // buried in the menu: Group-by, Pills mode, Select all, Clear.
   const groupCtl = `<label class="wa-gcfg-f wa-sel-group" title="Group the picker by"><select class="wa-groupby">${groupOpts}</select></label>`;
-  // Select all / Clear are ONE toggle now, lifted OUT of the ⚙ popout to the top row:
-  // when every shown lift is picked it reads "Clear" (and clears); otherwise "Select
-  // all" (and selects them all). One pressable pill that shows its state (rule 15).
+  // Select all / Deselect all are TWO separate buttons (owner's choice). "Select all"
+  // is disabled once everything is picked; "Deselect all" is disabled when nothing is.
   const selectable = waChipList().filter((ex) => !ex.missing).map((ex) => ex.name);
   const allOn = selectable.length > 0 && selectable.every((n) => cur.includes(n));
   const selAllToggle =
-    `<button type="button" class="wa-clear wa-selall-toggle${allOn ? " is-on" : ""}"${selectable.length ? "" : " disabled"} ` +
-    `title="${allOn ? "Clear the selection" : "Select every shown lift"}">${allOn ? "Clear" : "Select all"}</button>`;
+    `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift">Select all</button>` +
+    `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the selection">Deselect all</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
   // keeps the "what / how many" context the old dropdown summary showed.
@@ -12199,21 +12208,38 @@ function waCatPillsInner(list: readonly WaItem[]): string {
     for (const k of waGroupKeys(e.name)) // an exercise shows under EVERY group it's in
       (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
   }
-  // Sort the pills by total SET COUNT (most-trained category first), then alpha —
-  // so the categories you actually train lead, not a fixed taxonomy order.
+  // Sort: categories with a SELECTION lead (so you never scroll to find what you
+  // picked), then by total SET COUNT (most-trained first), then alpha.
   const setCount = new Map<string, number>();
   for (const c of exerciseCountsForUser(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
   const groupSets = (items: readonly WaItem[]) => items.reduce((n, e) => n + (setCount.get(e.name) ?? 0), 0);
   return [...groups.entries()]
-    .sort((a, b) => (groupSets(b[1]) - groupSets(a[1])) || a[0].localeCompare(b[0]))
+    .sort((a, b) =>
+      ((waSelCount(b[1]) > 0 ? 1 : 0) - (waSelCount(a[1]) > 0 ? 1 : 0)) ||
+      (groupSets(b[1]) - groupSets(a[1])) ||
+      a[0].localeCompare(b[0]))
     .map(([k, items]) => {
       const cov = waSubgroupCoverage(items);
       return waCatPill(k, k, waSelCount(items), items.length, cov.sel, cov.total, "sub");
     })
     .join("");
 }
+/** When only a few exercises are selected, show them directly as removable pills
+ * above the category row — so you see exactly what's picked without opening a menu
+ * (tap one to drop it). Hidden when nothing or a lot (>8) is selected. */
+function waSelectedExPills(list: readonly WaItem[]): string {
+  const sel = selArr();
+  if (sel.length === 0 || sel.length > 8) return "";
+  const known = new Set(list.map((e) => e.name));
+  const names = sel.filter((n) => known.has(n));
+  if (names.length === 0) return "";
+  const pills = names
+    .map((n) => `<button type="button" class="wa-selex-pill" data-waselex="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(displayName(n))} from the selection">${escapeHtml(displayName(n))} <span class="wa-selex-x">✕</span></button>`)
+    .join("");
+  return `<div class="wa-selex-row">${pills}</div>`;
+}
 function waCatPillsHtml(list: readonly WaItem[]): string {
-  return `<div class="wa-cat-allrow">${waCatAllPill(list)}</div><div class="wa-cat-pills">${waCatPillsInner(list)}</div>`;
+  return waSelectedExPills(list) + `<div class="wa-cat-allrow">${waCatAllPill(list)}</div><div class="wa-cat-pills">${waCatPillsInner(list)}</div>`;
 }
 /** The exercises a category pill covers ("__all" = every shown exercise). */
 function waCatItems(key: string): WaItem[] {
@@ -12937,12 +12963,14 @@ function setupWorkoutAnalysis(): void {
       debounceWaRender();
       return;
     }
-    if (t.closest(".wa-selall-toggle")) {
-      // One toggle: if every shown (non-missing) lift is already picked, clear; else
-      // select them all (respects the active identity-includes / filters / search).
-      const selectable = waChipList().filter((ex) => !ex.missing).map((ex) => ex.name);
-      const allOn = selectable.length > 0 && selectable.every((n) => selArr().includes(n));
-      setSelArr(allOn ? [] : selectable);
+    if (t.closest(".wa-deselall")) { // clear the whole selection
+      setSelArr([]);
+      debounceWaRender();
+      return;
+    }
+    if (t.closest(".wa-selall")) {
+      // Select every shown (non-missing) lift (respects identity-includes / filters / search).
+      setSelArr(waChipList().filter((ex) => !ex.missing).map((ex) => ex.name));
       debounceWaRender();
       return;
     }
