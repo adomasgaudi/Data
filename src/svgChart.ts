@@ -112,6 +112,11 @@ export interface SvgChartConfig {
   height?: number;
   /** Force the (left) y-axis to include 0. */
   yBeginAtZero?: boolean;
+  /** Pin the left y-axis to this exact range on (re)fit, instead of auto-fitting to
+   * the data — used by the per-bodyweight view to keep the main athlete's curve in
+   * place (axis = kg range ÷ their bodyweight) while other athletes stretch. Pan /
+   * zoom still override it. */
+  forceLeftRange?: { min: number; max: number };
   rightBeginAtZero?: boolean;
   /** Stretch the right y-axis by this factor so its series sit low/squished
    * (e.g. 3 = bars only fill the bottom third). Default 1. */
@@ -352,7 +357,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
-    if (Number.isFinite(le.yMin)) {
+    if (cfg.forceLeftRange) {
+      // Pinned left axis (per-bodyweight): use the caller's range verbatim.
+      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: cfg.forceLeftRange.min, yMax: cfg.forceLeftRange.max };
+    } else if (Number.isFinite(le.yMin)) {
       const yPad = (le.yMax - le.yMin) * 0.08 || 1;
       view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
     } else {
