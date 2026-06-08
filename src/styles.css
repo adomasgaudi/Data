@@ -1720,6 +1720,10 @@ sup.wr-bw { font-size: 0.85em; }
    sessions. Hover/tap shows the date via the row's title. */
 .rest-row td { height: 3px; padding: 0; border-bottom: 1px solid var(--line); background: var(--accent-soft); }
 .rest-row:hover td { background: var(--accent); }
+/* Broken-axis break for a long run of empty days (collapseRestRuns): a centred,
+   dashed "N more rest days" marker standing in for the skipped slivers. */
+.rest-gap-row td { padding: 0.15rem 0; text-align: center; background: var(--accent-soft); border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.rest-gap { font-size: 0.7rem; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
 /* 3-letter exercise code (used where space is tight, e.g. the Records table). */
 .ex-code { font-weight: 700; letter-spacing: 0.05em; }
 .ex-fullname { font-size: 0.7rem; font-weight: 400; margin-top: 1px; }

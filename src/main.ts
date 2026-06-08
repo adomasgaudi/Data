@@ -2897,6 +2897,9 @@ interface WorkoutGroup {
   exercises: ExerciseCount[];
   sets: SetRecord[];
   rest: boolean;
+  /** A collapsed run of rest days: this single row stands in for `gap` empty days
+   * (a long stretch of nothing is shown as 10 slivers · "N more" · 10 slivers). */
+  gap?: number;
 }
 let workoutGroups: WorkoutGroup[] = [];
 // Workouts-list view state lives on S (appState). The two localStorage-backed
@@ -4921,7 +4924,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   }
   const base = woShowAllExercises ? workoutsForUser(recs, els.athlete.value) : athleteWorkouts;
   const days = S.showRestDays ? workoutsWithRestDays(base) : base;
-  return scopeWorkoutGroups(
+  return collapseRestRuns(scopeWorkoutGroups(
     days
       .map((d) => ({
         label: d.date === todayIso() ? "Today" : `${dowLetter(d.date)} ${shortDate(d.date)}`,
@@ -4932,7 +4935,33 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         rest: d.totalSets === 0,
       }))
       .filter(keep),
-  );
+  ));
+}
+
+/** A long stretch of empty/rest days is a giant gray void (especially when the
+ * history is scoped to a rarely-trained lift). Collapse any run of MORE than 20
+ * consecutive rest slivers into the first 10 · a "N more rest days" break · the
+ * last 10 — a discontinuous, broken-axis look so the gap reads at a glance without
+ * scrolling past hundreds of empty rows. */
+function collapseRestRuns(groups: WorkoutGroup[]): WorkoutGroup[] {
+  const CAP = 20, HEAD = 10, TAIL = 10;
+  const out: WorkoutGroup[] = [];
+  for (let i = 0; i < groups.length; ) {
+    if (!groups[i]!.rest) { out.push(groups[i]!); i++; continue; }
+    let j = i;
+    while (j < groups.length && groups[j]!.rest) j++; // the whole consecutive rest run
+    const run = groups.slice(i, j);
+    if (run.length > CAP) {
+      const hidden = run.length - HEAD - TAIL;
+      out.push(...run.slice(0, HEAD));
+      out.push({ label: `${hidden} rest days`, date: run[HEAD]!.date, totalSets: 0, exercises: [], sets: [], rest: true, gap: hidden });
+      out.push(...run.slice(run.length - TAIL));
+    } else {
+      out.push(...run);
+    }
+    i = j;
+  }
+  return out;
 }
 
 /** Narrow each group's sets/exercises to {@link waListExerciseFilter} (when set,
@@ -5527,6 +5556,11 @@ function renderWorkoutsPage() {
     .slice(start, end)
     .map((g, i) => {
       if (g.rest) {
+        if (g.gap) {
+          // A collapsed run of empty days: a broken-axis break showing how many
+          // rest days were skipped between the slivers above and below.
+          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td colspan="2"><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">more rest days</span> ⋯</span></td></tr>`;
+        }
         // A rest day is just a thin sliver with a separating line — count the
         // lines between sessions to see how many days passed, no text needed.
         return `<tr class="rest-row" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
