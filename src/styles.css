@@ -635,7 +635,10 @@ main { padding-bottom: 5rem; }
 .ath-row {
   display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem;
   position: sticky; top: 0; z-index: 30;
-  background: var(--bg); padding-top: 0.6rem; border-bottom: 1px solid var(--line);
+  /* Flat: blend with the page (no white-card band), a single clean divider, no
+     shadow, square corners — just the chips sitting on the page. */
+  background: var(--page); padding-top: 0.6rem; border-bottom: 1px solid var(--line);
+  border-radius: 0; box-shadow: none;
 }
 .athlete-chips {
   display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem;
@@ -647,7 +650,7 @@ main { padding-bottom: 5rem; }
   flex: 0 0 auto; white-space: nowrap; box-sizing: border-box;
   background: none; border: 1px solid var(--line); color: var(--muted);
   font: inherit; font-size: var(--athpill-fs); font-weight: 600; line-height: 1.2; cursor: pointer;
-  padding: var(--athpill-py) 1rem; border-radius: var(--r-pill);
+  padding: var(--athpill-py) 1rem; border-radius: 4px; /* sharper than the default pill (owner ask) */
 }
 .athlete-chip:hover { color: var(--text); border-color: var(--accent); }
 .athlete-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
@@ -666,7 +669,7 @@ main { padding-bottom: 5rem; }
   flex: 0 0 auto; min-width: 2.2rem; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
   font: inherit; font-size: var(--athpill-fs); font-weight: 700; line-height: 1.2; cursor: pointer;
-  padding: var(--athpill-py) 0.7rem; border-radius: var(--r-pill);
+  padding: var(--athpill-py) 0.7rem; border-radius: 4px; /* matches the sharper name chips */
   border: 1px solid var(--accent); background: var(--accent); color: #fff;
 }
 .ath-sex-toggle.is-women { background: var(--gold); border-color: var(--gold); color: #1b212b; }
