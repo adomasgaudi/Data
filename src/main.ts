@@ -12138,6 +12138,9 @@ function renderSelector(scope: SelScope): void {
       : `Tap to remove ${n}`;
     return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
   };
+  // The GRAPH selector shows its picked lifts in the big title (clickable to remove,
+  // below) — NOT as a separate ✕-pill row. So the picked-pill rows are history-only.
+  const showPickedPills = scope !== "graph";
   let selPills = "";
   if (stickyCats) {
     // Category mode: the always-visible top strip IS the whole-category picker — one
@@ -12147,11 +12150,11 @@ function renderSelector(scope: SelScope): void {
     // exercises are selected — a category "1/13" count alone never says WHICH one. One
     // horizontally-scrolling row (rule 16); shown up to a sane count, beyond which the
     // per-category counts carry it without swamping the strip.
-    const pickedRow = cur.length && cur.length <= 12
+    const pickedRow = showPickedPills && cur.length && cur.length <= 12
       ? `<div class="wa-sel-pills wa-catstrip wa-sel-picked">${cur.map(selPill).join("")}</div>`
       : "";
     selPills = pickedRow + `<div class="wa-sel-pills wa-catstrip">${waCatPillsInner(waChipListBase())}</div>`;
-  } else if (cur.length) {
+  } else if (showPickedPills && cur.length) {
     selPills = `<div class="wa-sel-pills">${cur.map(selPill).join("")}</div>`;
   }
   const trimBtn = (scope === "graph" && cur.length > graphCap)
@@ -12162,11 +12165,16 @@ function renderSelector(scope: SelScope): void {
   // otherwise the chip grid shows below the controls.
   const showGrid = !stickyCats;
   // GRAPH selector: a big headline above the controls — the COUNT (title-size number)
-  // and the picked lift names (near-title), so what's plotted reads at a glance.
+  // and the picked lift NAMES (near-title). Each name is itself the remove control:
+  // tap it to drop that lift from the graph (no ✕ icon, no separate pill row).
   const bigSel = scope === "graph"
     ? `<div class="wa-sel-big">` +
       `<span class="wa-sel-bigcount">${cur.length}</span><span class="wa-sel-biglabel muted">on graph</span>` +
-      (cur.length ? `<span class="wa-sel-bignames">${cur.map((n) => escapeHtml(displayName(n))).join(", ")}</span>` : "") +
+      (cur.length
+        ? `<div class="wa-sel-bignames">` +
+          cur.map((n) => `<button type="button" class="wa-sel-bigname" data-waselpill="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the graph">${escapeHtml(displayName(n))}</button>`).join("") +
+          `</div>`
+        : "") +
       `</div>`
     : "";
   sel.innerHTML =
@@ -13236,8 +13244,8 @@ function setupWorkoutAnalysis(): void {
     if (scopeRoot) curSelScope = (scopeRoot.dataset.selscope as SelScope) ?? "hist";
     // (Category pills in the top strip are `.wa-cat-pill`s, handled by the
     // document-level pill handler — tap opens that group's floating exercise menu.)
-    // A selected-pill ✕ in the sticky bar removes that exercise from the selection.
-    const selPill = t.closest<HTMLElement>(".wa-sel-pill");
+    // A selected-pill ✕ (or a graph big-title name) removes that lift from the selection.
+    const selPill = t.closest<HTMLElement>("[data-waselpill]");
     if (selPill?.dataset.waselpill) {
       selPill.remove(); // instant feedback; the deferred re-render rebuilds the rest
       setSelArr(selArr().filter((x) => x !== selPill.dataset.waselpill));
