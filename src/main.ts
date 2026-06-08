@@ -5823,18 +5823,31 @@ function renderHorizontalHistory(): void {
   if (!box) return;
   const formula = currentFormula();
   const groups = workoutGroups.filter((g) => !g.rest); // skip rest slivers sideways
+  // Row order tracks RECENT activity, lookback scaled to the grouping: day/week →
+  // last month, month → last 3 months, 3-month → last 12 months.
+  const mode = S.workoutViewMode;
+  const lookbackDays = mode === "3month" ? 365 : mode === "month" ? 90 : 30;
+  const windowLabel = lookbackDays === 365 ? "12 months" : lookbackDays === 90 ? "3 months" : "month";
+  const cutoff = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10);
   // Grouping control (Day → Week → 2 wks → Month → 3 mo), mirrors the ⚙ toggle.
   const head =
     `<div class="hh-tools"><span class="muted hh-tools-lbl">Group by</span>` +
-    `<button type="button" id="hhPeriod" class="wo-dj-btn" title="Day ↔ week ↔ month — same as the history ⚙">${escapeHtml(WO_VIEW_LABEL[S.workoutViewMode])}</button>` +
-    `<span class="muted hh-tools-hint">— same lifts as your selection; rows line up across time to compare</span></div>`;
+    `<button type="button" id="hhPeriod" class="wo-dj-btn" title="Day ↔ week ↔ month — same as the history ⚙ (rows sort by sets in the last ${escapeHtml(windowLabel)})">${escapeHtml(WO_VIEW_LABEL[mode])}</button>` +
+    `<span class="muted hh-tools-hint">— rows ordered by recent activity, aligned across time</span></div>`;
   if (groups.length === 0) { box.innerHTML = head + `<p class="muted">No workouts to show.</p>`; return; }
-  // Fixed exercise order across ALL columns: the union of lifts in the shown
-  // periods, most-trained (by total sets) first — so row N is the same lift in
-  // every card and you can scan one lift left-to-right through time.
+  // Fixed exercise order across ALL columns (row N = same lift in every card):
+  // sort by INSTANCES (sets) in the recent window — most-trained-lately first —
+  // then all-time sets, then name. Rows are the union of lifts across the periods.
   const totalByEx = new Map<string, number>();
-  for (const g of groups) for (const e of g.exercises) totalByEx.set(e.exerciseName, (totalByEx.get(e.exerciseName) ?? 0) + e.count);
-  const exOrder = [...totalByEx.keys()].sort((a, b) => (totalByEx.get(b)! - totalByEx.get(a)!) || a.localeCompare(b));
+  const recentByEx = new Map<string, number>();
+  for (const g of groups) {
+    for (const e of g.exercises) totalByEx.set(e.exerciseName, (totalByEx.get(e.exerciseName) ?? 0) + e.count);
+    for (const s of g.sets) if (s.date >= cutoff) recentByEx.set(s.exerciseName, (recentByEx.get(s.exerciseName) ?? 0) + 1);
+  }
+  const exOrder = [...totalByEx.keys()].sort((a, b) =>
+    ((recentByEx.get(b) ?? 0) - (recentByEx.get(a) ?? 0)) ||
+    ((totalByEx.get(b) ?? 0) - (totalByEx.get(a) ?? 0)) ||
+    a.localeCompare(b));
   const cols = groups
     .map((g) => {
       const rows = exOrder
