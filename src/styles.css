@@ -716,6 +716,26 @@ main { padding-bottom: 5rem; }
 .nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
 .nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
 .nffmi-ci { font-size: 0.7rem; font-weight: 700; opacity: 0.85; }
+/* Lean/fat mass bar: a vertical stacked column (fat on top, lean below) sized by
+   each share of bodyweight, with the rest of the body-comp info to its right. */
+.bc-massview { display: flex; align-items: stretch; gap: 0.9rem; margin: 0.4rem 0 0.2rem; }
+.bc-masscol { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
+.bc-massbar {
+  display: flex; flex-direction: column; width: 76px; height: 180px;
+  border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
+}
+.bc-seg { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; color: #fff; overflow: hidden; line-height: 1.05; }
+.bc-seg-fat { background: var(--gold, #b8902f); }
+.bc-seg-lean { background: var(--accent); }
+.bc-seg-name { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; }
+.bc-seg-val { font-size: 0.82rem; font-weight: 800; }
+.bc-unit-toggle {
+  font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; min-width: 38px;
+  padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.bc-unit-toggle:hover { background: var(--accent); color: #fff; }
+.bc-massside { flex: 1 1 auto; min-width: 0; }
 /* Body composition (complex view): one compact line of "label value" chips, each
    with a ⓘ that expands its math panel below. No bars / ranges / ±. */
 .bodycomp { margin: 0.5rem 0 0.2rem; }

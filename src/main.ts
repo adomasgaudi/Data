@@ -3169,6 +3169,10 @@ function renderAthlete() {
 // ---- Athlete Records sub-page: this athlete's PRs across all exercises ----
 /** Build one body-stat "value chip" for the compact line (label + number, plus a
  * tappable ⓘ that toggles its math panel) and the matching hidden panel. */
+// Body-stats lean/fat mass bar: show the split in kg or as a % of bodyweight.
+let bcMassUnit: "kg" | "pct" = (() => {
+  try { return localStorage.getItem("colosseum.bcMassUnit") === "pct" ? "pct" : "kg"; } catch { return "kg"; }
+})();
 function bcChip(id: string, label: string, valueStr: string): string {
   return (
     `<span class="bc-chip"><span class="bc-c-lbl muted">${escapeHtml(label)}</span> <b class="bc-c-val">${valueStr}</b>` +
@@ -3300,7 +3304,29 @@ function renderAthleteProfile() {
         );
       })()
     : "";
-  els.athleteProfile.innerHTML = editBtn + badge + " " + specLine + bodyComp + potBlock;
+  // Proportional lean/fat MASS BAR: a vertical stacked column (fat on top, lean
+  // below) sized by each share of bodyweight, with a kg ⇄ % toggle. The rest of
+  // the body-comp info sits to its right.
+  const totalMass = mass.lean.avg + mass.fat.avg || p.weight || 1;
+  const leanPct = (mass.lean.avg / totalMass) * 100;
+  const fatPct = (mass.fat.avg / totalMass) * 100;
+  const leanLbl = bcMassUnit === "kg" ? `${f1s(mass.lean.avg)} kg` : `${Math.round(leanPct)}%`;
+  const fatLbl = bcMassUnit === "kg" ? `${f1s(mass.fat.avg)} kg` : `${Math.round(fatPct)}%`;
+  const seg = (cls: string, pct: number, name: string, val: string) =>
+    `<div class="bc-seg ${cls}" style="height:${pct.toFixed(1)}%" title="${name}: ${val}">` +
+    `<span class="bc-seg-name">${name}</span><span class="bc-seg-val">${val}</span></div>`;
+  const massBar =
+    `<div class="bc-massbar" title="Body composition — lean vs fat mass" aria-label="Lean ${leanLbl}, Fat ${fatLbl}">` +
+    seg("bc-seg-fat", fatPct, "Fat", fatLbl) +
+    seg("bc-seg-lean", leanPct, "Lean", leanLbl) +
+    `</div>` +
+    `<button type="button" class="bc-unit-toggle" data-bcunit="1" aria-pressed="${bcMassUnit === "pct"}" title="Show the split in kilograms or as a percent of bodyweight">${bcMassUnit === "kg" ? "kg" : "%"}</button>`;
+  const massView =
+    `<div class="bc-massview">` +
+    `<div class="bc-masscol">${massBar}</div>` +
+    `<div class="bc-massside">${badge} ${specLine}${bodyComp}${potBlock}</div>` +
+    `</div>`;
+  els.athleteProfile.innerHTML = editBtn + massView;
 }
 
 // ===========================================================================
@@ -8027,6 +8053,13 @@ async function init() {
       const id = info.dataset.bcinfo;
       const panel = info.closest(".bodycomp")?.querySelector<HTMLElement>(`.bc-panel[data-bcpanel="${id}"]`);
       if (panel) { panel.toggleAttribute("hidden"); info.classList.toggle("is-open"); }
+      return;
+    }
+    // kg ⇄ % toggle for the lean/fat mass bar.
+    if (target.closest("[data-bcunit]")) {
+      bcMassUnit = bcMassUnit === "kg" ? "pct" : "kg";
+      try { localStorage.setItem("colosseum.bcMassUnit", bcMassUnit); } catch { /* ignore */ }
+      renderAthleteProfile();
       return;
     }
     const btn = target.closest<HTMLElement>("[data-editstats]");
