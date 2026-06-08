@@ -12030,16 +12030,18 @@ function renderWorkoutAnalysis(): void {
     // Single mode: the title carries an ℹ info icon (opens that lift's details +
     // the editable difficulty of each note-identified variation), right beside the
     // name — no separate "More info" button below.
-    if (contentTitle) {
+    if (contentTitle) contentTitle.textContent = "Workout history"; // the lift now names the SECTION title
+    const calHistTitle = document.getElementById("waCalHistSummary");
+    if (calHistTitle) {
       if (selTitle) {
-        // 1–2 lifts → the name(s) as a big title; single keeps its ℹ + origin badge.
+        // 1–2 lifts → name them in the section title; single keeps its ℹ + origin badge.
         const ex = waSelected[0]!;
         const extra = mode === "single"
           ? `${originBadge(ex)} <button type="button" class="wa-moreinfo wa-title-info" data-moreinfoex="${escapeHtml(ex)}" title="${escapeHtml(displayName(ex))} info" aria-label="${escapeHtml(displayName(ex))} info">ℹ</button>`
           : "";
-        contentTitle.innerHTML = `<span class="wa-seltitle">${escapeHtml(selTitle)}</span>${extra}`;
+        calHistTitle.innerHTML = `Calendar &amp; history · <span class="wa-seltitle">${escapeHtml(selTitle)}</span>${extra}`;
       } else {
-        contentTitle.textContent = `${athleteLabel()} — selected lifts`;
+        calHistTitle.textContent = `Calendar & history · selected lifts`;
       }
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -12054,6 +12056,8 @@ function renderWorkoutAnalysis(): void {
     waListExerciseFilter = searching ? historyFilterWithSearch([]) : [HISTORY_NONE];
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
+    const calHistTitle = document.getElementById("waCalHistSummary");
+    if (calHistTitle) calHistTitle.textContent = "Calendar & history"; // nothing selected → plain section title
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     }
@@ -12061,9 +12065,9 @@ function renderWorkoutAnalysis(): void {
   // the selection (the history list is filtered to them by historyFilterWithSearch).
   if (waSearchQuery.trim() && contentTitle)
     contentTitle.textContent = `${athleteLabel()} — “${waSearchQuery.trim()}” in history`;
-  // Big-title the history header only when it's actually showing the 1–2 lift names
-  // (not while a search has overridden it).
-  contentTitle?.classList.toggle("is-bigtitle", !!selTitle && !waSearchQuery.trim());
+  // The lift name(s) live in the SECTION title now, so the inner "Workout history"
+  // header is plain (never big-titled).
+  contentTitle?.classList.remove("is-bigtitle");
   // The training-year calendar shows in EVERY mode (own always-on section). With
   // exercises selected it highlights just those lifts' squares; with nothing
   // selected it keeps the user's own calendar filter (saved/restored around a
