@@ -11124,7 +11124,7 @@ function renderSelector(scope: SelScope): void {
   const matchBtn = `<button type="button" class="wa-clear wa-match" data-matchfrom="${matchSrc}" title="Copy the other selector's picks here">${matchLabel}</button>`;
   // These controls live at the TOP level (in the header, next to the button), not
   // buried in the menu: Group-by, Pills mode, Select all, Clear.
-  const groupCtl = `<label class="wa-gcfg-f wa-sel-group">Group<select class="wa-groupby">${groupOpts}</select></label>`;
+  const groupCtl = `<label class="wa-gcfg-f wa-sel-group" title="Group the picker by"><select class="wa-groupby">${groupOpts}</select></label>`;
   const selAllBtn = `<button type="button" class="wa-selectall wa-clear">Select all</button>`;
   const clearBtn = `<button type="button" class="wa-clearsel wa-clear"${cur.length ? "" : " disabled"}>Clear</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below

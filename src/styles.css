@@ -1560,7 +1560,7 @@ sup.wr-bw { font-size: 0.85em; }
 .hm-legend .hm-cell { width: 12px; height: 12px; cursor: default; }
 /* Interactive under-calendar slicer: Group-by picker + "All" + a clickable
    colour pill per group. Tap a pill to show only that group. */
-.hm-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.4rem; }
+.hm-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.35rem; margin-top: 0.4rem; }
 .hm-groupby { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); margin-right: 0.2rem; }
 .hm-groupby-sel { font: inherit; font-size: 0.78rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
 .hm-pill {
@@ -2927,7 +2927,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
      each menu's z-index up in an escalation war and the next new menu regresses). */
   position: sticky; top: 0; z-index: 35;
   margin: 0 0 0.4rem; padding: 0.45rem 0;
-  background: var(--panel); border-bottom: 1px solid var(--line);
+  /* Page background (not a white card) — matches the card-less Analysis view; still
+     opaque so pinned content scrolls cleanly under it. */
+  background: var(--bg); border-bottom: 1px solid var(--line);
 }
 .wa-selector-sticky .wa-sel-header { margin: 0; }
 #waAssign:empty { display: none; }
