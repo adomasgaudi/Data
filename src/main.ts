@@ -856,10 +856,11 @@ function setCodeOverride(exerciseName: string, code: string) {
 }
 
 // ---- Exercise SHORT names (a middle tier between the tiny code and the full
-// name) ----. Same layering as codes: the default short name is the exercise's
-// FULL name (so "short" mode is always readable, never a cryptic code — that's
-// the separate "code" mode), but the owner can type a shorter, friendlier label
-// per lift. shortFor() is the single read point.
+// name) ----. Same layering as codes: the default short name is the full name with
+// common long words abbreviated (Dumbbell→DB, Romanian→Rom…; see defaultShort), so
+// "short" is genuinely shorter than full but still readable (never the cryptic code
+// — that's the separate "code" mode). The owner can type a custom short per lift.
+// shortFor() is the single read point.
 const SHORT_STORE_KEY = "colosseum.exerciseShortNames.v1";
 const shortOverrides: Record<string, string> = loadShortOverrides();
 
@@ -873,11 +874,30 @@ function loadShortOverrides(): Record<string, string> {
   }
 }
 
-/** The default short name for an exercise: its FULL name, so "short" mode reads
- * as the friendly full label (never the cryptic code — that's the separate "code"
- * mode) until the owner types a shorter, friendlier short name for a lift. */
+// Readable word abbreviations for the auto short name — a MIDDLE tier between the
+// cryptic code (HS-PU) and the full name (Handstand Push Up). Each cuts a long,
+// well-understood word down without turning the whole label into a code. The owner
+// can still type a custom short per lift (which wins). Order matters: longer
+// multi-word phrases first so "Smith Machine" isn't half-replaced by "Machine".
+const SHORT_WORD_MAP: [RegExp, string][] = [
+  [/\bsmith machine\b/gi, "Smith"],
+  [/\bsingle arm\b/gi, "1-Arm"], [/\bone arm\b/gi, "1-Arm"],
+  [/\bsingle leg\b/gi, "1-Leg"], [/\bone leg\b/gi, "1-Leg"],
+  [/\bbehind the neck\b/gi, "BTN"],
+  [/\bdumbbell\b/gi, "DB"], [/\bbarbell\b/gi, "BB"], [/\bkettlebell\b/gi, "KB"],
+  [/\bmachine\b/gi, "Mach"], [/\bromanian\b/gi, "Rom"], [/\bbulgarian\b/gi, "Bulg"],
+  [/\balternating\b/gi, "Alt"], [/\boverhead\b/gi, "OH"], [/\bbodyweight\b/gi, "BW"],
+  [/\bassisted\b/gi, "Asst"], [/\bdeclined?\b/gi, "Decl"], [/\binclined?\b/gi, "Incl"],
+];
+/** The default short name for an exercise: the full name with common long words
+ * abbreviated (Dumbbell→DB, Romanian→Rom, Machine→Mach…), so "short" mode is a
+ * genuinely shorter middle tier — never the cryptic code, never the full name —
+ * until the owner types a custom short for a lift. Already-short names (e.g. "Squat")
+ * pass through unchanged. */
 function defaultShort(exerciseName: string): string {
-  return exerciseName;
+  let s = exerciseName;
+  for (const [re, rep] of SHORT_WORD_MAP) s = s.replace(re, rep);
+  return s.replace(/\s{2,}/g, " ").trim();
 }
 
 /** The short name shown for an exercise: the owner's override if set, else the
