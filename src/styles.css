@@ -3013,6 +3013,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    (their menus overlay the chart, so opening either never pushes the layout). */
 .wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; position: relative; }
 .wa-graph-bar .svgc-legend { margin: 0; }
+/* Multi-athlete overlay row: a label + ONE sideways-scrolling row of athlete pills
+   (rule: cram — swipe, never wrap into a tall block) + the series-budget hint. */
+.wa-ath-overlay { display: flex; align-items: center; gap: 0.35rem; width: 100%; min-width: 0; }
+.wa-ath-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; flex: 0 0 auto; }
+.wa-ath-pills { display: flex; flex-wrap: nowrap; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; min-width: 0; padding-bottom: 1px; }
+.wa-ath-pill { flex: 0 0 auto; font-size: 0.7rem; font-weight: 600; padding: 1px 9px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--muted); white-space: nowrap; cursor: pointer; }
+.wa-ath-pill.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.wa-ath-pill.is-primary { cursor: default; border-style: dashed; }
+.wa-ath-cap { flex: 0 0 auto; font-size: 0.64rem; }
 .wa-graph-fold { position: relative; margin: 0; }
 .wa-graph-fold-sum {
   cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 0.25rem;

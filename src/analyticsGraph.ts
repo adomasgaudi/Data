@@ -16,7 +16,7 @@ import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import type { GraphConfig } from "./graphConfig";
 
-const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a8a", "#c0603a", "#7a6f9b"];
+const SERIES_COLORS = ["#284e86", "#b8902f", "#2e7d52", "#a23b3b", "#6c4ab0", "#1f8a8a", "#c0603a", "#7a6f9b", "#3a7d3a", "#9b59b6", "#d4843a", "#406a9e"];
 
 /** A shade of a base hex colour, for distinguishing a 2nd+ series of the SAME
  * render-shape within one exercise. n=0 is the base; odd n lightens, even n
@@ -55,8 +55,17 @@ export interface AnalyticsGraphInput {
   /** The athlete's bodyweight in kg, for the per-bodyweight view. */
   bodyweight?: number | null;
   /** Bodyweight+sex-scaled world record (kg) for an exercise, for the "% of world
-   * record" metric; null when none is set. */
-  worldRecordKg?: (exercise: string) => number | null;
+   * record" metric; null when none is set. The optional `user` is passed when
+   * several athletes are overlaid, so each series uses its OWN scaled record. */
+  worldRecordKg?: (exercise: string, user?: string) => number | null;
+  /** MULTI-ATHLETE overlay: when >1 user is given, a series is built per
+   * (exercise × user) instead of per exercise, each labelled with the athlete. */
+  users?: readonly string[];
+  /** Display name for an athlete username (multi-athlete series labels). */
+  userLabelOf?: (user: string) => string;
+  /** Per-athlete bodyweight (kg) for the per-bodyweight view when overlaying users
+   * — each series divides by its own athlete's bodyweight. */
+  bodyweightOf?: (user: string) => number | null;
   /** Disable pan/zoom gesture capture (a static chart that never hijacks scroll).
    * Defaults to true (interactive). */
   interactive?: boolean;
@@ -94,11 +103,22 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   const code = input.codeOf ?? ((n) => n);
 
   // "all" → one whole-athlete series per metric over EVERY logged set; otherwise
-  // a series per (selected exercise × metric). Same compute path either way — no
-  // mock data in the shipped view.
-  const groups: { label: string; records: SetRecord[] }[] = isAll
+  // a series per (selected exercise × metric) — or, when several athletes are
+  // overlaid, per (exercise × athlete) so each lift's line is split by who did it.
+  // Same compute path either way — no mock data in the shipped view.
+  const multiUser = !!(input.users && input.users.length > 1);
+  const userLabel = (u: string) => input.userLabelOf?.(u) ?? u;
+  const groups: { label: string; records: SetRecord[]; user?: string }[] = isAll
     ? [{ label: "All exercises", records: [...records] }]
-    : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
+    : multiUser
+      ? input.exercises.flatMap((ex) =>
+          input.users!.map((u) => ({
+            label: `${userLabel(u)} · ${code(ex)}`,
+            records: records.filter((r) => r.exerciseName === ex && r.username === u),
+            user: u,
+          })),
+        )
+      : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
 
   const series: SvgSeries[] = [];
   let gi = -1;
@@ -119,7 +139,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // "% of world record": each set's added-weight 1RM ÷ this exercise's
       // (bodyweight+sex-scaled) world record × 100. Needs the e1rm compute + the WR.
       if (m.id === "pctWR") {
-        const wr = input.worldRecordKg?.(g.records[0]?.exerciseName ?? "");
+        const wr = input.worldRecordKg?.(g.records[0]?.exerciseName ?? "", g.user);
         if (!wr || wr <= 0) continue;
         // Fraction of the world record (1.0 = the record). Uses the BODYWEIGHT-
         // INCLUSIVE 1RM (effectiveE1RM) vs the bodyweight-inclusive record, so it
@@ -140,9 +160,11 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       }
       if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
       // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
-      // read as multiples of BW; the count metrics (right axis) are left alone.
-      if (input.perBodyweight && input.bodyweight && input.bodyweight > 0 && m.axis !== "right") {
-        const bw = input.bodyweight;
+      // read as multiples of BW; the count metrics (right axis) are left alone. With
+      // several athletes overlaid, each series uses its OWN athlete's bodyweight.
+      const groupBw = g.user != null && input.bodyweightOf ? input.bodyweightOf(g.user) : input.bodyweight;
+      if (input.perBodyweight && groupBw && groupBw > 0 && m.axis !== "right") {
+        const bw = groupBw;
         const d = (v: number) => Math.round((v / bw) * 1000) / 1000;
         pts = pts.map((p) => ({
           ...p,

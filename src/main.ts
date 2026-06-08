@@ -8704,6 +8704,18 @@ async function init() {
     // Global "All graphs / Approved only" master toggle (in Graph options).
     const allGraphsBtn = t.closest<HTMLElement>("[data-allgraphs]");
     if (allGraphsBtn) { setAllGraphsAllowed(!allGraphsAllowed); return; }
+    // Multi-athlete graph overlay: toggle an extra athlete on/off (admin only). The
+    // primary is fixed (set in the athlete selector); the exercise cap auto-shrinks.
+    const athPill = t.closest<HTMLElement>(".wa-ath-pill");
+    if (athPill?.dataset.waath) {
+      const u = athPill.dataset.waath;
+      if (lockedUsername() === null && u !== els.athlete.value) {
+        waGraphAthletes = waGraphAthletes.includes(u) ? waGraphAthletes.filter((x) => x !== u) : [...waGraphAthletes, u];
+        renderWaGraph();
+        renderSelector("graph"); // refresh the 📈 cap marks for the new athlete count
+      }
+      return;
+    }
     // The graph's "Review in Index →" button → jump to the Index page at that lift.
     const review = t.closest<HTMLElement>("[data-graphreview]");
     if (review?.dataset.graphreview) { reviewGraphsForExercise(review.dataset.graphreview); return; }
@@ -11071,9 +11083,29 @@ let analysisSeeded = false;
 function defaultSelection(): string[] {
   return exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
 }
-/** Max exercises plotted on the analysis graph at once — past this the SVG
- * redraw lags, so extra selections are listed but not drawn (see renderWaGraph). */
+/** Max SERIES plotted on the analysis graph at once (users × exercises) — past this
+ * the SVG redraw lags, so extra selections are listed but not drawn (see
+ * renderWaGraph). With N athletes overlaid, the per-graph exercise cap is this ÷ N. */
 const WA_GRAPH_MAX = 10;
+// MULTI-ATHLETE graph overlay (ADMIN only — a locked/spectator view stays single,
+// rule 21). Holds the EXTRA athletes overlaid alongside the primary (els.athlete);
+// the primary is always plotted. Each (exercise × athlete) is its own line, so the
+// exercise cap shrinks as athletes are added (2 athletes → 5 lifts, etc.).
+let waGraphAthletes: string[] = [];
+/** Athletes plotted on the graph: the primary first, then any valid extras. Locked
+ * (non-admin) views see only themselves. */
+function graphAthleteList(): string[] {
+  const primary = els.athlete.value;
+  if (lockedUsername() !== null) return [primary];
+  const roster = new Set(rosterUsers().map((r) => r.username));
+  const extras = waGraphAthletes.filter((u) => u !== primary && roster.has(u));
+  return [primary, ...extras];
+}
+/** The per-graph exercise cap given how many athletes are overlaid: WA_GRAPH_MAX
+ * total series ÷ athletes (≥1), so users × exercises never exceeds the limit. */
+function graphExerciseCap(): number {
+  return Math.max(1, Math.floor(WA_GRAPH_MAX / graphAthleteList().length));
+}
 // When the Analysis "compare" mode is showing the workout-history list scoped to
 // the picked lifts, this holds the RAW exercise names to keep (members expanded
 // for combined / comparison groups). Empty = no scoping (the normal full history).
@@ -11458,9 +11490,11 @@ function renderSelector(scope: SelScope): void {
   const settingsCog =
     `<details class="wa-sel-cog"${cogOpen ? " open" : ""}><summary class="wa-sel-cog-sum" title="Selector settings — pick mode, select all / clear, identities, name mode, match, show missing">⚙</summary>` +
     `<div class="wa-sel-cog-menu"><div class="wa-chips-tools">${modeToggle}${selAllBtn}${clearBtn}</div>${foldTools}${settingsBlock}</div></details>`;
-  // Selected pills. For the GRAPH selector the first WA_GRAPH_MAX are marked 📈 (the
-  // graph's point budget) with a "Trim to N" button; the history selector has no cap.
-  const onGraph = scope === "graph" ? new Set(cur.slice(0, WA_GRAPH_MAX)) : new Set<string>();
+  // Selected pills. For the GRAPH selector the first N are marked 📈 (the graph's
+  // point budget, which SHRINKS as athletes are overlaid: 10 series ÷ athletes) with
+  // a "Trim to N" button; the history selector has no cap.
+  const graphCap = graphExerciseCap();
+  const onGraph = scope === "graph" ? new Set(cur.slice(0, graphCap)) : new Set<string>();
   const stickyCats = waChipsMode === "categories" && waGroupBy !== "none";
   let selPills = "";
   if (stickyCats) {
@@ -11474,13 +11508,13 @@ function renderSelector(scope: SelScope): void {
         const g = onGraph.has(n);
         const dot = g ? `<span class="wa-sel-graphdot" aria-hidden="true"></span>` : "";
         const title = scope === "graph"
-          ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${WA_GRAPH_MAX}-lift limit · tap to remove ${n}`)
+          ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${graphCap}-lift limit · tap to remove ${n}`)
           : `Tap to remove ${n}`;
         return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>`;
       }).join("") + `</div>`;
   }
-  const trimBtn = (scope === "graph" && cur.length > WA_GRAPH_MAX)
-    ? `<button type="button" class="wa-clear wa-trimgraph wa-match-graph" title="Trim this graph selection to just the ${WA_GRAPH_MAX} lifts the graph plots">Trim to ${WA_GRAPH_MAX}</button>`
+  const trimBtn = (scope === "graph" && cur.length > graphCap)
+    ? `<button type="button" class="wa-clear wa-trimgraph wa-match-graph" title="Trim this graph selection to just the ${graphCap} lifts the graph plots">Trim to ${graphCap}</button>`
     : "";
   // Picker chips live INLINE now (no dropdown). In category-strip mode the outside
   // strip (selPills) IS the picker, so the grid is hidden to avoid duplication;
@@ -11797,6 +11831,34 @@ function scheduleWaChartOnly(): void {
 /** Universal Analytics Graph section (TASKS 25–29): metric toggles + config +
  * the reusable graph, rendered from the current selection. Light to re-render, so
  * metric/config changes don't disturb the hosted panels or the selection. */
+/** Admin-only multi-athlete overlay pills for the graph: one pill per roster athlete
+ * (the primary is fixed-on, set by the main athlete selector). Tapping a pill
+ * overlays/removes that athlete; the exercise cap then auto-shrinks (10 series total
+ * ÷ athletes). Hidden in locked/spectator views (rule 21). ONE sideways-scrolling
+ * row (rule: cram). */
+function graphAthletesPillsHtml(): string {
+  if (lockedUsername() !== null) return ""; // locked view → self only
+  const roster = rosterUsers();
+  if (roster.length < 2) return ""; // nobody to compare with
+  const primary = els.athlete.value;
+  const on = new Set(graphAthleteList());
+  const pills = roster
+    .map(({ username, user }) => {
+      const isOn = on.has(username);
+      const isPrimary = username === primary;
+      const cls = `wa-ath-pill${isOn ? " is-on" : ""}${isPrimary ? " is-primary" : ""}`;
+      const title = isPrimary
+        ? "Primary athlete — pick it in the athlete selector above"
+        : isOn
+          ? `Remove ${user} from the graph`
+          : `Overlay ${user} on the graph`;
+      return `<button type="button" class="${cls}" data-waath="${escapeHtml(username)}" title="${escapeHtml(title)}"${isPrimary ? " aria-disabled=\"true\"" : ""}>${escapeHtml(user)}</button>`;
+    })
+    .join("");
+  const n = on.size;
+  const cap = n > 1 ? `<span class="wa-ath-cap muted">${n}×${graphExerciseCap()} ≤ ${WA_GRAPH_MAX}</span>` : "";
+  return `<div class="wa-ath-overlay"><span class="wa-ath-lbl muted">Compare</span><div class="wa-ath-pills">${pills}</div>${cap}</div>`;
+}
 function renderWaGraph(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
@@ -11810,13 +11872,17 @@ function renderWaGraph(): void {
     const sm = currentStrengthByUserExercise(fm);
     waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
   }
-  const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => r.username === els.athlete.value));
+  const gAthletes = graphAthleteList();
+  const multiAthlete = gAthletes.length > 1;
+  const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => gAthletes.includes(r.username)));
   const autoDefault = waGraphSel.length === 0;
   const baseExercises = autoDefault
     ? exerciseCountsForUser(athleteRecs, els.athlete.value).map((e) => e.exerciseName)
     : waGraphSel;
-  const graphExercises = baseExercises.slice(0, WA_GRAPH_MAX);
-  const graphExcluded = baseExercises.slice(WA_GRAPH_MAX);
+  // The exercise cap shrinks with each overlaid athlete so users × exercises ≤ 10.
+  const exCap = graphExerciseCap();
+  const graphExercises = baseExercises.slice(0, exCap);
+  const graphExcluded = baseExercises.slice(exCap);
   // A metric may draw only when EVERY plotted exercise allows it (intersection)
   // — UNLESS the global "All graphs" override is on, which lets everything draw.
   const scopeAllowed = allGraphsAllowed
@@ -11886,6 +11952,7 @@ function renderWaGraph(): void {
   // chart draws (its innerHTML keeps updating in place wherever it lives).
   const graphBarHtml =
     `<div class="wa-graph-bar">` +
+    graphAthletesPillsHtml() +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu"><div class="wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>${cfgUi}</div>` +
@@ -11924,7 +11991,19 @@ function renderWaGraph(): void {
     codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(els.athlete.value)?.weight ?? null,
-    worldRecordKg: (ex: string) => worldRecordKg(ex, athProfile(els.athlete.value)?.sex ?? "m", athProfile(els.athlete.value)?.weight ?? null),
+    // WR (and per-bodyweight) are per-athlete when several are overlaid, so each
+    // series scales to its OWN athlete's bodyweight/sex.
+    worldRecordKg: (ex: string, user?: string) => {
+      const u = user ?? els.athlete.value;
+      return worldRecordKg(ex, athProfile(u)?.sex ?? "m", athProfile(u)?.weight ?? null);
+    },
+    ...(multiAthlete
+      ? {
+          users: gAthletes,
+          userLabelOf: (u: string) => rosterUsers().find((r) => r.username === u)?.user ?? u,
+          bodyweightOf: (u: string) => athProfile(u)?.weight ?? null,
+        }
+      : {}),
   };
   const drawn = chartBox ? renderAnalyticsGraph(chartBox, analyticsInput) : 0;
   // Re-plot just the chart with the live config (no menu rebuild) — used by the
@@ -11966,10 +12045,12 @@ function renderWaGraph(): void {
       if (blockedSelected.length && reviewTarget) {
         html += `${html ? "  ·  " : ""}<span class="wa-gb-inline">${blockedSelected.length} selected graph${blockedSelected.length === 1 ? "" : "s"} need review · <button type="button" class="wa-gb-link" data-graphreview="${escapeHtml(reviewTarget)}">review</button></span>`;
       }
-      // Over the cap: just the "N of M" count as a dropdown revealing the rest.
+      // Over the cap: just the "N of M" count as a dropdown revealing the rest. With
+      // athletes overlaid the cap is per-athlete (10 series total), so say why.
       if (graphExcluded.length) {
+        const capNote = multiAthlete ? ` <span class="muted">(${gAthletes.length} athletes × ${exCap})</span>` : "";
         const block =
-          `<details class="wa-excluded"><summary>${WA_GRAPH_MAX} of ${baseExercises.length}</summary>` +
+          `<details class="wa-excluded"><summary>${exCap} of ${baseExercises.length}${capNote}</summary>` +
           `<div class="wa-excluded-list">${graphExcluded.map(escapeHtml).join(", ")}</div></details>`;
         html = html ? `${html}  ·  ${block}` : block;
       }
@@ -12375,7 +12456,7 @@ function setupWorkoutAnalysis(): void {
     }
     // "Trim to N" — drop the graph-selection lifts past the graph's plot budget.
     if (t.closest(".wa-trimgraph")) {
-      waGraphSel = waGraphSel.slice(0, WA_GRAPH_MAX);
+      waGraphSel = waGraphSel.slice(0, graphExerciseCap());
       debounceWaRender();
       return;
     }
