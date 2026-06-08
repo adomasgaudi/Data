@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.116</span> <span id="effortSummary" class="effort-inline"></span></div>
+        <div class="title-ver"><span class="version">b.2.7.117</span> <span id="effortSummary" class="effort-inline"></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1114,6 +1114,10 @@
       <div id="tab-s-analysis" class="tab-panel" hidden>
         <div id="sAnalysis" class="s-analysis"></div>
       </div>
+      <div id="tab-changelog" class="tab-panel" hidden>
+        <p class="muted">Every released version, newest first — the same log as the git history.</p>
+        <div id="changelog"></div>
+      </div>
     </main>
 
     <!-- Persistent command / search bar, pinned just above the bottom nav and
@@ -1145,6 +1149,7 @@
         <button class="other-item" data-tab="test" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 6.5h8"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/></svg> Formulas</button>
         <button class="other-item" data-tab="sitemap" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3 3 5.5v15l6-2.5 6 2.5 6-2.5v-15L15 5.5 9 3z"/><path d="M9 3v15M15 5.5v15"/></svg> Site map</button>
         <button class="other-item" data-tab="guide" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Guide</button>
+        <button class="other-item" data-tab="changelog" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Version history</button>
       </div>
     </div>
 
@@ -1175,16 +1180,6 @@
       </div>
     </div>
 
-    <div id="changelogPage" class="overlay-page" hidden>
-      <div class="overlay-inner">
-        <div class="overlay-head">
-          <h2>Version history</h2>
-          <button type="button" id="changelogClose" class="overlay-close" aria-label="Close">✕</button>
-        </div>
-        <p class="muted">Every released version, newest first — the same log as the git history.</p>
-        <div id="changelog"></div>
-      </div>
-    </div>
 
     <div id="backlogPage" class="overlay-page" hidden>
       <div class="overlay-inner">

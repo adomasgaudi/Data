@@ -202,8 +202,6 @@ const els = {
   healthClose: $<HTMLButtonElement>("healthClose"),
   changelogBtn: $<HTMLButtonElement>("changelogBtn"),
   changelogVer: $("changelogVer"),
-  changelogPage: $("changelogPage"),
-  changelogClose: $<HTMLButtonElement>("changelogClose"),
   changelog: $("changelog"),
   backlogBtn: $<HTMLButtonElement>("backlogBtn"),
   backlogPage: $("backlogPage"),
@@ -2115,7 +2113,8 @@ function openHealth() {
 /** Open the version-history overlay from Settings. */
 function openChangelog() {
   setSettingsOpen(false);
-  els.changelogPage.hidden = false;
+  setOtherSheetOpen(false);
+  switchTopTab("changelog");
 }
 
 /** Minimal Markdown → HTML for the docs/ task files. Supports just what those
@@ -2386,13 +2385,13 @@ function renderChangelog() {
     `<div id="spHistoryChart"></div></div>`;
   // Effort per part — exact SP and the Fibonacci grade it snaps to.
   const sections =
-    `<div class="cl-sections"><div class="cl-sections-lbl muted">Effort per task code — exact SP (≈ Fibonacci)</div>` +
+    `<details class="cl-sections cl-effort-fold"><summary class="cl-sections-lbl muted">Effort per task code — exact SP (≈ Fibonacci)</summary>` +
     `<div class="cl-sections-row">` +
     COMPONENTS.map(
       (c) => `<span class="cv-chip"><span class="cv-name">${escapeHtml(c.name)}</span>` +
         `<span class="cv-ver">${c.sp}<span class="cv-fib">≈${fibSp(c.sp)}</span></span></span>`,
     ).join("") +
-    `</div></div>`;
+    `</div></details>`;
   // Render the tree recursively. Every node is a <details> that starts CLOSED,
   // so the page opens as a short list of chapters; the one-line note and any
   // nested groups/releases only show once you expand a row. `depth` drives the
@@ -8296,9 +8295,6 @@ async function init() {
     els.healthPage.hidden = true;
   });
   els.changelogBtn.addEventListener("click", openChangelog);
-  els.changelogClose.addEventListener("click", () => {
-    els.changelogPage.hidden = true;
-  });
   els.backlogBtn.addEventListener("click", openBacklog);
   els.backlogClose.addEventListener("click", () => {
     els.backlogPage.hidden = true;
@@ -12254,6 +12250,7 @@ function switchTopTab(name: string) {
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
   if (name === "sitemap") renderSiteMap();
+  if (name === "changelog") renderChangelog();
   if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
@@ -12394,7 +12391,7 @@ const PAGE_NAMES: Record<string, string> = {
   analysis: "Analysis", "s-analysis": "S-Analysis", leaderboards: "Colosseum",
   athlete: "Athlete", bwparts: "Index", groups: "Stats", team: "Group",
   data: "Data", add: "Add", test: "Formulas", statsedit: "Athletes",
-  sitemap: "Site map", guide: "Guide",
+  sitemap: "Site map", guide: "Guide", changelog: "Version history",
 };
 function updateBrand() {
   const el = document.getElementById("brandTitle");

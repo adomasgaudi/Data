@@ -55,6 +55,8 @@ const LT: Record<string, string> = {
   "Data": "Duomenys",
   "Formulas": "Formulės",
   "Site map": "Svetainės žemėlapis",
+  "Version history": "Versijų istorija",
+  "Every released version, newest first — the same log as the git history.": "Kiekviena išleista versija, naujausia viršuje — tas pats sąrašas kaip git istorijoje.",
   // ---- Settings ----
   "Calculations & display": "Skaičiavimai ir rodymas",
   "1RM formula": "1RM formulė",
