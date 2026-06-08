@@ -94,9 +94,10 @@ export function levelInclineCm(dim: LevelDim, value: number, cmPerStep: number =
 
 /** Incline difficulty factor for a push-up done at `cm` of incline: 0cm (hands on
  * the floor — a pure push-up) is the HARDEST, the ×1 reference; raising the hands
- * (more cm) is EASIER (<1); below the floor (negative cm) is harder (>1). Clamped. */
+ * (more cm) is EASIER (<1); below the floor (negative cm) is harder (>1). The slope
+ * is the owner's calibration: ~0.05 per Smith notch, i.e. per 15cm (cm/300). Clamped. */
 export function inclineScale(cm: number): number {
-  return Math.max(0.4, Math.min(1.6, Math.round((1 - 0.006 * cm) * 100) / 100));
+  return Math.max(0.4, Math.min(1.6, Math.round((1 - cm / 300) * 100) / 100));
 }
 
 /** Exercises whose technique LEVEL is an incline height (the push-up family): their
