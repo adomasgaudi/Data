@@ -869,10 +869,10 @@ function setCodeOverride(exerciseName: string, code: string) {
 }
 
 // ---- Exercise SHORT names (a middle tier between the tiny code and the full
-// name) ----. Same layering as codes: the default short name is just the
-// exercise's effective code (so a common lift reads as its code), but the owner
-// can type a longer, friendlier short name per lift (a rare lift can be as long
-// as its full name). shortFor() is the single read point.
+// name) ----. Same layering as codes: the default short name is the exercise's
+// FULL name (so "short" mode is always readable, never a cryptic code — that's
+// the separate "code" mode), but the owner can type a shorter, friendlier label
+// per lift. shortFor() is the single read point.
 const SHORT_STORE_KEY = "colosseum.exerciseShortNames.v1";
 const shortOverrides: Record<string, string> = loadShortOverrides();
 
@@ -886,11 +886,11 @@ function loadShortOverrides(): Record<string, string> {
   }
 }
 
-/** The default short name for an exercise: its effective CODE, so "short" mode
- * actually reads short (the tiny code) until the owner types a friendlier short
- * name for a lift. */
+/** The default short name for an exercise: its FULL name, so "short" mode reads
+ * as the friendly full label (never the cryptic code — that's the separate "code"
+ * mode) until the owner types a shorter, friendlier short name for a lift. */
 function defaultShort(exerciseName: string): string {
-  return codeFor(exerciseName);
+  return exerciseName;
 }
 
 /** The short name shown for an exercise: the owner's override if set, else the
