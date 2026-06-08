@@ -33,6 +33,7 @@ import {
   workoutsWithRestDays,
   periodsForUser,
   periodsWithRest,
+  periodStartOf,
   type HistoryPeriod,
   exerciseProgressByWeek,
   addedWeight1RM,
@@ -5969,6 +5970,11 @@ function renderWorkoutsPage() {
       if (hidden > 0) { hiddenByKey.set(d.key, { total: names.size, hidden }); liveByKey.set(d.key, { exercises: d.exercises, sets: d.sets }); }
     }
   }
+  // Week / month / year boundaries between day rows: compare each active day to the
+  // one ABOVE it (later in time — the list is newest-first). Seed from the last active
+  // day before this page so a boundary at the page top still shows.
+  let prevRowDate: string | null = workoutGroups.slice(0, start).reverse().find((g) => !g.rest)?.date ?? null;
+  const dayBoundaries = S.workoutViewMode === "day"; // week lines only matter in the day view
   const rows = workoutGroups
     .slice(start, end)
     .map((g, i) => {
@@ -6036,9 +6042,21 @@ function renderWorkoutsPage() {
       const addExBtn = S.showAddSets
         ? `<div class="wo-addex-wrap"><button type="button" class="wo-addex" data-adddate="${escapeHtml(g.date)}" title="Add a new exercise to this session">+ exercise</button></div>`
         : "";
+      // A subtle separator when this day starts a new week / month / year vs the day
+      // above. Year wins over month wins over week; a year change also shows the year.
+      let boundaryCls = "";
+      let yearMark = "";
+      if (prevRowDate) {
+        const yr = g.date.slice(0, 4) !== prevRowDate.slice(0, 4);
+        const mo = g.date.slice(0, 7) !== prevRowDate.slice(0, 7);
+        const wk = dayBoundaries && periodStartOf(g.date, "week") !== periodStartOf(prevRowDate, "week");
+        boundaryCls = yr ? " wo-newyear" : mo ? " wo-newmonth" : wk ? " wo-newweek" : "";
+        if (yr) yearMark = `<span class="wo-yearmark">${escapeHtml(g.date.slice(0, 4))}</span>`;
+      }
+      prevRowDate = g.date;
       return (
-        `<tr class="wo-row" data-index="${abs}"><td>` +
-        `<div class="wo-date"><span class="caret">▸</span>${g.label}<span class="wo-year"> '${escapeHtml(g.date.slice(2, 4))}</span>${tagBtn}</div>` +
+        `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
+        `<div class="wo-date">${yearMark}<span class="caret">▸</span>${g.label}<span class="wo-year"> '${escapeHtml(g.date.slice(2, 4))}</span>${tagBtn}</div>` +
         `<div class="wo-did">${did}${addExBtn}</div></td>` +
         `<td class="num">${g.totalSets}</td></tr>`
       );

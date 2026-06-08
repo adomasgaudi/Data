@@ -1801,6 +1801,13 @@ sup.wr-bw { font-size: 0.85em; }
    collapsed list clean but disambiguates the year when you open a session. */
 .wo-year { display: none; color: var(--muted); font-weight: 600; }
 .wo-row.open .wo-year { display: inline; }
+/* Slight separators between day rows when the week / month / year changes (the list
+   is newest-first). Week = faint dashed, month = a soft accent line, year = a bolder
+   accent line plus a year chip. */
+.wo-row.wo-newweek > td { border-top: 1px dashed color-mix(in srgb, var(--muted) 35%, transparent); }
+.wo-row.wo-newmonth > td { border-top: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line)); }
+.wo-row.wo-newyear > td { border-top: 2px solid var(--accent); }
+.wo-yearmark { display: inline-block; font-size: 0.72rem; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 0 7px; margin-right: 6px; }
 /* In the workouts list the date sits as a small header above that entry's exercises. */
 .wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
 .wo-did { line-height: 1.5; }
