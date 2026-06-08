@@ -1742,9 +1742,15 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-dj-btn[hidden] { display: none; }
 /* Banner above the history list when the Index app-wide filter hides some lifts. */
-.wo-hidden-note { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 0.82rem; color: var(--muted); }
-.wo-hidden-btn { font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 2px 9px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-.wo-hidden-btn:hover { background: var(--accent); color: #fff; }
+/* "Hidden lifts" warning toggle in the history head row (next to the ⚙): amber
+   warning when the Index filter is hiding lifts, accent when revealing them. */
+.wo-hidden-toggle { font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--gold); background: rgba(184,144,47,0.14); color: #8a6d1f; }
+.wo-hidden-toggle:hover { filter: brightness(0.97); }
+.wo-hidden-toggle.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+/* A grayed "another exercise line" under a day/week that has filter-hidden lifts. */
+.wo-hidden-line { display: block; margin-top: 2px; }
+.wo-hidden-daybtn { font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; padding: 1px 9px; border-radius: 999px; border: 1px dashed var(--line); background: none; color: var(--muted); }
+.wo-hidden-daybtn:hover { border-color: var(--accent); color: var(--accent); }
 .wo-dj-sel { font: inherit; font-size: 0.7rem; padding: 4px 4px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); }
 /* Calendar bottom row: the slicer pills + a compact ⚙ settings dropdown (scope +
    tag-alone) side by side. The scope/tag controls reuse the DJ-console buttons. */
