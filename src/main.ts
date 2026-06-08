@@ -7540,6 +7540,20 @@ function renderStatsEdit(): void {
   const live = range
     ? `nFFMI <strong>${range.avg.toFixed(1)}</strong> <span class="muted">· 95% ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} · 50% ${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}</span>`
     : `<span class="muted">Enter weight & height for nFFMI</span>`;
+  // Each body-fat % implies its own nFFMI (more fat → less lean → lower nFFMI), so
+  // show that FFMI right UNDER its body-fat input. The band is flipped: the 95%-LOW
+  // body-fat gives the HIGHEST nFFMI (range.hi95) and the 95%-HIGH fat the lowest.
+  const ffmiByKey: Record<string, number> | null = range
+    ? { low95: range.hi95, low50: range.hi50, avg: range.avg, high50: range.lo50, high95: range.lo95 }
+    : null;
+  const ffmiSpan = (key: string) =>
+    `<span class="se-bf-ffmi" data-ffmikey="${key}" title="Natural FFMI this body-fat % implies">` +
+    `${ffmiByKey ? `FFMI ${ffmiByKey[key]!.toFixed(1)}` : ""}</span>`;
+  // A body-fat input with its implied-FFMI line underneath.
+  const bfNum = (cls: string, label: string, value: number, key: string) =>
+    `<label class="se-field"><span class="se-lbl">${label}</span>` +
+    `<input class="${cls}" type="number" step="0.5" inputmode="decimal" value="${value}" />` +
+    ffmiSpan(key) + `</label>`;
 
   // Admin-only "＋ Add athlete": create a user not in the scraped data.
   const addBtn = viewMode === "admin" ? `<button type="button" class="se-add settings-link">＋ Add athlete</button>` : "";
@@ -7554,15 +7568,15 @@ function renderStatsEdit(): void {
     `<option value="f"${p?.sex === "f" ? " selected" : ""}>Female</option></select></label>` +
     num("se-ffmicap", "FFMI cap", ffmiCapFor(username), "0.5", "natural muscle ceiling (~25 m / 21.5 w)") +
     `</div>` +
-    `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high)</div><div class="se-bf-grid">` +
-    num("se-bf-low95", "95% low", bfPct(dist.low95), "0.5") +
-    num("se-bf-low50", "50% low", bfPct(dist.low50), "0.5") +
+    `<div class="se-bf"><div class="se-bf-lead">Body fat % — a confidence band (low → high), with the nFFMI each implies</div><div class="se-bf-grid">` +
+    bfNum("se-bf-low95", "95% low", bfPct(dist.low95), "low95") +
+    bfNum("se-bf-low50", "50% low", bfPct(dist.low50), "low50") +
     // Average is auto-calculated (middle of the 95% band) — read-only, not editable.
     `<label class="se-field"><span class="se-lbl">average</span>` +
     `<output class="se-bf-avg-out" title="Auto-calculated — the middle of the 95% band">${Math.round((dist.low95 + dist.high95) / 2 * 1000) / 10}</output>` +
-    `<span class="se-hint muted">auto</span></label>` +
-    num("se-bf-high50", "50% high", bfPct(dist.high50), "0.5") +
-    num("se-bf-high95", "95% high", bfPct(dist.high95), "0.5") +
+    `<span class="se-hint muted">auto</span>${ffmiSpan("avg")}</label>` +
+    bfNum("se-bf-high50", "50% high", bfPct(dist.high50), "high50") +
+    bfNum("se-bf-high95", "95% high", bfPct(dist.high95), "high95") +
     `</div></div>` +
     `<div class="se-live">${live}</div>` +
     `<div class="se-actions">` +
@@ -7570,6 +7584,42 @@ function renderStatsEdit(): void {
     `<button type="button" class="se-reset"${edited ? "" : " disabled"}>Reset to default</button>` +
     `<span class="se-msg muted">${edited ? "Edited on this device." : "Using the built-in defaults."}</span>` +
     `</div>`;
+}
+
+/** Live-update (no save) the auto-average, the nFFMI under each body-fat input, and
+ * the summary line, from whatever's typed in the stats-edit form right now. */
+function recomputeStatsEditLive(): void {
+  const root = els.statsEditBody;
+  const val = (cls: string): number | null => {
+    const v = parseFloat(root.querySelector<HTMLInputElement>(`.${cls}`)?.value ?? "");
+    return Number.isFinite(v) ? v : null;
+  };
+  const lo95 = val("se-bf-low95"), hi95 = val("se-bf-high95");
+  const avgPct = lo95 != null && hi95 != null ? Math.round((lo95 + hi95) / 2 * 10) / 10 : null;
+  const out = root.querySelector<HTMLOutputElement>(".se-bf-avg-out");
+  if (out && avgPct != null) out.textContent = String(avgPct);
+  const w = val("se-weight"), h = val("se-height");
+  const lo50 = val("se-bf-low50"), hi50 = val("se-bf-high50");
+  const setSpan = (key: string, text: string) => {
+    const el = root.querySelector<HTMLElement>(`.se-bf-ffmi[data-ffmikey="${key}"]`);
+    if (el) el.textContent = text;
+  };
+  const liveEl = root.querySelector<HTMLElement>(".se-live");
+  if (w == null || h == null || lo95 == null || lo50 == null || avgPct == null || hi50 == null || hi95 == null) {
+    for (const k of ["low95", "low50", "avg", "high50", "high95"]) setSpan(k, "");
+    return;
+  }
+  const dist = normalizeBodyFatDist({ low95: lo95 / 100, low50: lo50 / 100, avg: avgPct / 100, high50: hi50 / 100, high95: hi95 / 100 });
+  const range = nffmiRange(w, h, dist);
+  if (!range) { for (const k of ["low95", "low50", "avg", "high50", "high95"]) setSpan(k, ""); return; }
+  // Flipped: lowest body fat → highest nFFMI.
+  setSpan("low95", `FFMI ${range.hi95.toFixed(1)}`);
+  setSpan("low50", `FFMI ${range.hi50.toFixed(1)}`);
+  setSpan("avg", `FFMI ${range.avg.toFixed(1)}`);
+  setSpan("high50", `FFMI ${range.lo50.toFixed(1)}`);
+  setSpan("high95", `FFMI ${range.lo95.toFixed(1)}`);
+  if (liveEl)
+    liveEl.innerHTML = `nFFMI <strong>${range.avg.toFixed(1)}</strong> <span class="muted">· 95% ${range.lo95.toFixed(1)}–${range.hi95.toFixed(1)} · 50% ${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}</span>`;
 }
 
 /** Read the form, store the override, refresh everything. */
@@ -7644,16 +7694,9 @@ function setupStatsEdit(): void {
     const t = e.target as HTMLElement;
     if (t.id === "seAthlete") { statsEditUser = (t as HTMLSelectElement).value; renderStatsEdit(); }
   });
-  // Keep the auto-calculated average (middle of the 95% band) live as you type.
-  els.statsEditBody.addEventListener("input", (e) => {
-    const t = e.target as HTMLElement;
-    if (!t.classList.contains("se-bf-low95") && !t.classList.contains("se-bf-high95")) return;
-    const root = els.statsEditBody;
-    const out = root.querySelector<HTMLOutputElement>(".se-bf-avg-out");
-    const lo = parseFloat(root.querySelector<HTMLInputElement>(".se-bf-low95")?.value ?? "");
-    const hi = parseFloat(root.querySelector<HTMLInputElement>(".se-bf-high95")?.value ?? "");
-    if (out && Number.isFinite(lo) && Number.isFinite(hi)) out.textContent = String(Math.round((lo + hi) / 2 * 10) / 10);
-  });
+  // Keep the auto-average AND every implied-nFFMI (the line under each body-fat
+  // input + the summary) live as you edit weight / height / body fat.
+  els.statsEditBody.addEventListener("input", () => recomputeStatsEditLive());
   els.statsEditBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     if (t.closest(".se-add")) { addManualAthlete(); return; }
