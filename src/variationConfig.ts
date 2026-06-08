@@ -72,8 +72,15 @@ export const FAMILIES: Record<string, FamilyDef> = {
       lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
       // Reps done unbroken (no pause at the bottom) reads slightly harder.
       continuity: { paused: 1.0, uninterrupted: 1.05 },
+      // Hands down: both (×1 reference) or ONE hand. A one-hand handstand push-up
+      // is far harder — placeholder ×1.8 (calibrate). Used by the scapular HSPU
+      // variant the owner logs "one hand" on.
+      hands: { two: 1.0, one: 1.8 },
+      // RANGE: a "low ROM" partial (only the short top portion — a more scapular,
+      // shrug-like press) is an easier press → <1. full = the whole press (×1).
+      range: { full: 1.0, low: 0.7 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused", hands: "two", range: "full" },
   },
   PUSHUP: {
     // INCLINE (hands raised) is NOT a family dimension — it's how high the hands are,
@@ -128,6 +135,18 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
     uninterrupted: { continuity: "uninterrupted" },
+    // hands down — one-hand / one-arm (much harder). Longest-match-first handles
+    // the spacings; bare "one hand" / "1 hand" / "one arm" all map to one.
+    "one hand": { hands: "one" },
+    "1 hand": { hands: "one" },
+    "one arm": { hands: "one" },
+    "1 arm": { hands: "one" },
+    // low / partial RANGE of motion (the short, scapular top portion — easier press)
+    "low rom": { range: "low" },
+    "partial rom": { range: "low" },
+    "partial": { range: "low" },
+    "half rom": { range: "low" },
+    "short rom": { range: "low" },
     // ladder / wall-bar rung height → ladder SUPPORT + a HEIGHT ("lad5", "9lygis", …)
     "lad3": { support: "ladder", ladderH: "lad3" },
     "lad5": { support: "ladder", ladderH: "lad5" },
@@ -158,7 +177,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 9;
+export const CONFIG_VERSION = 10;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -189,7 +208,10 @@ export function familyOf(
   // unknown notes. Matches "handstand push up(s)" in any spacing/hyphen/plural form,
   // and the "HSPU" code. (Holds / walks / kicks have no "pushup", so they're excluded.)
   const n = exerciseName.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (n.includes("handstandpushup") || n.startsWith("hspu")) return "HSPU";
+  // Any handstand PUSH-UP (incl. a scapular / low-ROM / one-hand variant) uses the
+  // HSPU model — "hspu" or "handstandpush" anywhere (holds / walks / kicks lack
+  // "push", so they're still excluded).
+  if (n.includes("hspu") || n.includes("handstandpush")) return "HSPU";
   return null;
 }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
+import { resolveNote } from "./variationModel";
 
 describe("familyOf", () => {
   it("maps known exercise names to a family, else null", () => {
@@ -22,6 +23,27 @@ describe("familyOf", () => {
     expect(familyOf("Handstand Hold")).toBeNull();
     expect(familyOf("Handstand Walk")).toBeNull();
     expect(familyOf("Handstand Kicks")).toBeNull();
+  });
+  it("treats the scapular handstand push-up variant as HSPU", () => {
+    expect(familyOf("Scapular Handstand Push Up")).toBe("HSPU");
+    expect(familyOf("Scapular HSPU")).toBe("HSPU");
+  });
+});
+
+describe("HSPU one-hand / low-ROM variation tokens", () => {
+  const res = (note: string) => resolveNote("HSPU", note, DEFAULT_VARIATION_CONFIG);
+  it("maps 'one hand' / 'one arm' to the one-hand factor", () => {
+    expect(res("one hand").vec.hands).toBe("one");
+    expect(res("one arm").vec.hands).toBe("one");
+    expect(res("one hand").scalar).toBeCloseTo(1.8, 6);
+  });
+  it("maps 'low rom' / 'partial' to the low-range factor", () => {
+    expect(res("low rom").vec.range).toBe("low");
+    expect(res("partial").vec.range).toBe("low");
+    expect(res("low rom").scalar).toBeCloseTo(0.7, 6);
+  });
+  it("combines one-hand × low-ROM multiplicatively", () => {
+    expect(res("one hand low rom").scalar).toBeCloseTo(1.8 * 0.7, 6);
   });
 });
 
