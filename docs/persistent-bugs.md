@@ -63,3 +63,28 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   a per-row control.**
 - **If it recurs:** someone re-wired the per-day button to a global toggle again, or
   added a `renderWorkoutsPage()`/`workoutsPage = 0` into its path. Keep it DOM-only.
+
+---
+
+## PB-3 — athlete picker: M/W toggle and name chips drift in size + misalign
+
+- **Recurrences:** 3+ (each resize of one — "match the chips", "50% bigger" — re-broke
+  the other; owner has flagged "misaligned / too big" repeatedly).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data),
+  Analysis top athlete row.
+- **Symptom:** the left **M/W toggle** and the scrolling **athlete name chips** end up
+  different heights and vertically off from each other (and lately too big).
+- **Why it keeps coming back:** TWO separately-styled elements (`.ath-sex-toggle` and
+  `.athlete-chip`) with their own font-size/padding. Every time one is resized the
+  other isn't, so they drift. PLUS the chips' container had an asymmetric
+  `padding-bottom: 6px` (scrollbar space) which, under the row's `align-items:center`,
+  pushed the chips ~3px ABOVE the toggle even when heights matched.
+- **Root fix (b.2.7.x, PB-3):** (1) both pills now derive font-size + vertical padding
+  + line-height from SHARED tokens `--athpill-fs` / `--athpill-py` (same border too),
+  so they're guaranteed the same height. (2) the chips container uses SYMMETRIC
+  vertical padding (`3px 0`) + `align-items:center` so the chips centre-align with the
+  toggle. **Invariant: never give the toggle or a chip its own font-size/padding —
+  change `--athpill-*`; keep the chip container's vertical padding symmetric.**
+- **If it recurs:** someone hard-coded a font-size/padding on `.ath-sex-toggle` or
+  `.athlete-chip` again, or re-introduced an asymmetric `padding-bottom` on
+  `.athlete-chips`. Route sizing through the tokens.

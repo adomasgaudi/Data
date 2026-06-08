@@ -1,6 +1,11 @@
 :root {
   /* Light, minimal base */
   --bg: #ffffff;
+  /* SHARED athlete-pill sizing (PB-3): the M/W toggle and the name chips MUST use
+     the same font-size + vertical padding + line-height + border so they stay the
+     SAME HEIGHT and aligned. Drive both from these tokens — never size them apart. */
+  --athpill-fs: 0.9rem;
+  --athpill-py: 0.42rem;
   /* DESIGN: corners use a SMALL radius — never full/pill rounding (no 999px / 50%
      on buttons & chips). This token replaces every former 999px pill. */
   --r-pill: 8px;
@@ -633,16 +638,16 @@ main { padding-bottom: 5rem; }
   background: var(--bg); padding-top: 0.6rem; border-bottom: 1px solid var(--line);
 }
 .athlete-chips {
-  display: flex; flex-wrap: nowrap; gap: 0.5rem;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem;
   flex: 1 1 auto; min-width: 0; /* take the rest of the row and scroll within it */
   overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch;
-  padding-bottom: 6px; scrollbar-width: thin;
+  padding: 3px 0; scrollbar-width: thin; /* SYMMETRIC pad so chips centre-align with the M toggle (PB-3) */
 }
 .athlete-chip {
-  flex: 0 0 auto; white-space: nowrap;
+  flex: 0 0 auto; white-space: nowrap; box-sizing: border-box;
   background: none; border: 1px solid var(--line); color: var(--muted);
-  font: inherit; font-size: 1.05rem; font-weight: 600; cursor: pointer;
-  padding: 0.62rem 1.4rem; border-radius: var(--r-pill);
+  font: inherit; font-size: var(--athpill-fs); font-weight: 600; line-height: 1.2; cursor: pointer;
+  padding: var(--athpill-py) 1rem; border-radius: var(--r-pill);
 }
 .athlete-chip:hover { color: var(--text); border-color: var(--accent); }
 .athlete-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
@@ -653,15 +658,15 @@ main { padding-bottom: 5rem; }
 .athlete-chip.is-sexhidden { display: none; }
 /* Single cycling M/W toggle, pinned (opaque, on top) at the start of the athlete
    row so the scrolling name chips clip beside it and never show behind it. One tap
-   flips Men ⇄ Women; it shows the current sex (M blue / W gold). Shaped to match the
-   (now bigger) name chips — same height/round — so the row aligns. Hidden entirely in
-   user/spectator views (you only see yourself there). */
+   flips Men ⇄ Women; it shows the current sex (M blue / W gold). Same height as the
+   name chips via the shared --athpill-* tokens so the row stays aligned (PB-3).
+   Hidden entirely in user/spectator views (you only see yourself there). */
 .ath-sex { flex: 0 0 auto; margin: 0; align-self: center; position: relative; z-index: 2; }
 .ath-sex-toggle {
-  flex: 0 0 auto; min-width: 2.8rem; box-sizing: border-box;
+  flex: 0 0 auto; min-width: 2.2rem; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
-  font: inherit; font-size: 1.05rem; font-weight: 700; line-height: 1.2; cursor: pointer;
-  padding: 0.62rem 0.9rem; border-radius: var(--r-pill);
+  font: inherit; font-size: var(--athpill-fs); font-weight: 700; line-height: 1.2; cursor: pointer;
+  padding: var(--athpill-py) 0.7rem; border-radius: var(--r-pill);
   border: 1px solid var(--accent); background: var(--accent); color: #fff;
 }
 .ath-sex-toggle.is-women { background: var(--gold); border-color: var(--gold); color: #1b212b; }
