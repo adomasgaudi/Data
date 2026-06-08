@@ -5555,6 +5555,35 @@ function setDisplay(raw: SetRecord): string {
     return `${chips}<span class="wo-note">${escapeHtml(note)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
   return `${chips}${wr(s.weight, s.reps)}`;
 }
+/** ISO date of the Monday starting the week of `iso` (week-boundary key). */
+function mondayKey(iso: string): string {
+  const dt = new Date(`${iso}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+  return dt.toISOString().slice(0, 10);
+}
+/** One exercise's sets as compact chips, with a SUBTLE separator where the day
+ * changes (week / 2-week modes) or the week changes (month / 3-month modes), so a
+ * period bucket still reads as distinct sessions. Day mode = one day, no separators. */
+function setListHtml(sets: readonly SetRecord[]): string {
+  const mode = S.workoutViewMode;
+  const sepKind: "day" | "week" | null =
+    mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
+  if (!sepKind) return sets.map((s) => setDisplay(s)).join(" ");
+  const key = (d: string) => (sepKind === "week" ? mondayKey(d) : d);
+  let prev: string | null = null;
+  const out: string[] = [];
+  for (const s of sets) {
+    const k = key(s.date);
+    if (prev !== null && k !== prev) {
+      out.push(sepKind === "week"
+        ? `<span class="wo-set-wsep" title="${escapeHtml(periodGroupLabel(mondayKey(s.date), "week"))}"></span>`
+        : `<span class="wo-set-dsep" title="${escapeHtml(shortDate(s.date))}"></span>`);
+    }
+    out.push(setDisplay(s));
+    prev = k;
+  }
+  return out.join(" ");
+}
 
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
@@ -5614,7 +5643,7 @@ function renderWorkoutsPage() {
       // One exercise's compact line (1RM · name · sets), reused for the day's active
       // lifts AND for its hidden-lift reveal.
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
-        const setsTxt = sets.map((s) => setDisplay(s)).join(" ");
+        const setsTxt = setListHtml(sets);
         const name = displayName(exerciseName);
         const e1rms = sets
           .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))

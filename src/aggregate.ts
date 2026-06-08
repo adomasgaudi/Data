@@ -330,8 +330,13 @@ function summariseSets(sets: SetRecord[]): { exercises: ExerciseCount[]; sets: S
   const exercises = [...counts]
     .map(([exerciseName, count]) => ({ exerciseName, count }))
     .sort((a, b) => b.count - a.count || a.exerciseName.localeCompare(b.exerciseName));
+  // Within each exercise, keep the sets in DATE order (then set number) so a
+  // period bucket (week / month) reads chronologically, not interleaved by set #.
   const ordered = [...sets].sort(
-    (a, b) => a.exerciseName.localeCompare(b.exerciseName) || a.setNumber - b.setNumber,
+    (a, b) =>
+      a.exerciseName.localeCompare(b.exerciseName) ||
+      (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) ||
+      a.setNumber - b.setNumber,
   );
   return { exercises, sets: ordered };
 }
