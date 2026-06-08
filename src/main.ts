@@ -5216,8 +5216,13 @@ function collapseRestRuns(groups: WorkoutGroup[], unit = "rest days"): WorkoutGr
 /** Narrow each group's sets/exercises to {@link waListExerciseFilter} (when set,
  * in Analysis compare mode) and drop groups left with no matching sets — so the
  * workout history reads as "every past set of just the picked lifts". */
+// Sentinel for "show NOTHING" in the history scope (an empty selection in Analysis):
+// no exercise has this name, so it matches none — and scopeWorkoutGroups drops even
+// the rest slivers for it, so the history reads as truly empty (not an implicit all).
+const HISTORY_NONE = " __none__";
 function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
   if (waListExerciseFilter.length === 0) return groups;
+  if (waListExerciseFilter.length === 1 && waListExerciseFilter[0] === HISTORY_NONE) return []; // empty selection → empty history
   const keepEx = new Set(waListExerciseFilter);
   const out: WorkoutGroup[] = [];
   for (const g of groups) {
@@ -11479,7 +11484,12 @@ function historyFilterWithSearch(base: string[]): string[] {
  * update that refreshes the history without rebuilding the whole Analysis view. */
 function refreshHistorySearch(): void {
   const mode = waMode();
-  const base = mode === "single" || mode === "compare" ? expandToRawExercises(waSelected) : [];
+  if (mode === "all") {
+    // Nothing selected: a Find-in-history search scopes to its matches, else empty.
+    waListExerciseFilter = (searchFindHistory && waSearchQuery.trim()) ? historyFilterWithSearch([]) : [HISTORY_NONE];
+    return;
+  }
+  const base = expandToRawExercises(waSelected);
   waListExerciseFilter = historyFilterWithSearch(base);
 }
 
@@ -11528,10 +11538,13 @@ function renderWorkoutAnalysis(): void {
     S.workoutsPage = 0; // the scoped list is shorter; start at the top
     renderWorkoutsPage();
     } else {
-    // All (nothing selected): the live Workouts panel — its history list.
-    waListExerciseFilter = historyFilterWithSearch([]);
+    // Nothing selected: the history shows NOTHING (an empty selection is allowed —
+    // no implicit "show everything"). A "Find in history" search still scopes to its
+    // matches; otherwise the list is empty until you pick lifts (or Select all).
+    const searching = searchFindHistory && waSearchQuery.trim();
+    waListExerciseFilter = searching ? historyFilterWithSearch([]) : [HISTORY_NONE];
     setAnalysisMainPanel("workouts");
-    if (contentTitle) contentTitle.textContent = `${athleteLabel()} — workouts`;
+    if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     }
@@ -12015,10 +12028,10 @@ function renderWaGraph(): void {
   const gAthletes = graphAthleteList();
   const multiAthlete = gAthletes.length > 1;
   const athleteRecs = applyHardSetsFilter(computedRecords().filter((r) => gAthletes.includes(r.username)));
-  const autoDefault = waGraphSel.length === 0;
-  const baseExercises = autoDefault
-    ? exerciseCountsForUser(athleteRecs, els.athlete.value).map((e) => e.exerciseName)
-    : waGraphSel;
+  // The plot shows EXACTLY the picked lifts — clearing the selection leaves it
+  // empty, never an implicit "show everything" (the owner wants an empty graph to
+  // be possible). Use Select-all to plot the whole catalogue.
+  const baseExercises = waGraphSel;
   // The exercise cap shrinks with each overlaid athlete so users × exercises ≤ 10.
   const exCap = graphExerciseCap();
   const graphExercises = baseExercises.slice(0, exCap);
@@ -12137,6 +12150,7 @@ function renderWaGraph(): void {
       const u = user ?? els.athlete.value;
       return worldRecordKg(ex, athProfile(u)?.sex ?? "m", athProfile(u)?.weight ?? null);
     },
+    emptyOnNoExercises: true, // no lifts picked → empty plot, not the whole-athlete aggregate
     ...(multiAthlete
       ? {
           users: gAthletes,
@@ -12187,7 +12201,7 @@ function renderWaGraph(): void {
       (n) => [...waMetrics].some((id) => !isMetricAllowed(graphPerms, n, id)),
     ) ?? graphExercises[0] ?? "";
     if (graphExercises.length === 0) {
-      noteEl.textContent = "No data yet.";
+      noteEl.textContent = "No lifts picked — choose lifts above (or Select all) to plot.";
     } else if (waMetrics.size > 0 && drawMetricIds.length === 0) {
       noteEl.innerHTML = graphReviewPromptHtml(reviewTarget, graphExercises);
     } else {

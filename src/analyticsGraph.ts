@@ -78,6 +78,10 @@ export interface AnalyticsGraphInput {
   /** Disable pan/zoom gesture capture (a static chart that never hijacks scroll).
    * Defaults to true (interactive). */
   interactive?: boolean;
+  /** When true, NO exercises means an EMPTY graph (draw nothing) instead of the
+   * whole-athlete "All exercises" aggregate — so clearing the selection leaves the
+   * plot empty rather than implicitly showing everything. */
+  emptyOnNoExercises?: boolean;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -101,7 +105,10 @@ const charts = new WeakMap<HTMLElement, SvgChart>();
 /** Render the universal graph into `container`. Returns how many series were
  * drawn, so the caller can show a missing-data note (0 = nothing to plot). */
 export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGraphInput): number {
-  const isAll = input.exercises.length === 0;
+  // Empty selection: either the whole-athlete aggregate (isAll) OR a truly empty
+  // plot, depending on the caller. emptyOnNoExercises wins — no implicit "show all".
+  const noneSelected = input.exercises.length === 0;
+  const isAll = noneSelected && !input.emptyOnNoExercises;
   // Metric defaults: a single lift reads best as Estimated 1RM; the whole-athlete
   // "all" view defaults to total VOLUME (a 1RM across mixed lifts is meaningless,
   // but total training volume per day/week is a useful whole-athlete trend).
