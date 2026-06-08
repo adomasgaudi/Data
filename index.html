@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.7.190</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.7.191</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -143,8 +143,10 @@
       <button class="tab" data-tab="bwparts" role="tab">Index</button>
       <button class="tab" data-tab="test" role="tab">Test</button>
       <button class="tab" data-tab="data" role="tab">Data</button>
-      <button class="tab" data-tab="add" role="tab">Add</button>
     </nav>
+    <!-- Shared exercise-name autocomplete for the inline "add new exercise" form in the
+         workouts view (the standalone Add page was removed — sets are logged inline). -->
+    <datalist id="addExerciseList"></datalist>
 
     <main>
       <div id="tab-leaderboards" class="tab-panel" hidden>
@@ -940,62 +942,6 @@
         </section>
       </div>
 
-      <div id="tab-add" class="tab-panel" hidden>
-        <section class="panel">
-          <h2>Add a set</h2>
-          <p class="muted" style="margin: 0 0 1rem">
-            Log a set by hand — it's saved on this device and merged with the StrengthLevel data
-            everywhere (leaderboards, records, graphs). Pick or type an exercise name.
-          </p>
-          <div class="add-form">
-            <label class="add-field">Athlete
-              <select id="addAthlete"></select>
-            </label>
-            <label class="add-field">Exercise
-              <input id="addExercise" list="addExerciseList" placeholder="e.g. Bench Press" autocomplete="off" />
-              <datalist id="addExerciseList"></datalist>
-            </label>
-            <label class="add-field" id="addArmPosField" hidden>Arm position
-              <select id="addArmPos"></select>
-            </label>
-            <label class="add-field add-field--sm" id="addVariantField" hidden><span id="addVariantLabel">Squat-rack hole</span>
-              <input id="addVariant" type="number" step="1" inputmode="numeric" placeholder="e.g. 8" />
-            </label>
-            <label class="add-field add-field--sm">Weight (kg)
-              <input id="addWeight" type="number" step="0.5" inputmode="decimal" placeholder="kg" />
-            </label>
-            <label class="add-field add-field--sm">Reps
-              <input id="addReps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" />
-            </label>
-            <label class="add-field add-field--sm">Sets
-              <input id="addSets" type="number" step="1" min="1" inputmode="numeric" placeholder="1" />
-            </label>
-            <label class="add-field add-field--sm">Date
-              <input id="addDate" type="date" />
-            </label>
-            <label class="add-field">Note / variation
-              <input id="addNote" type="text" placeholder="e.g. b2w, +15cm, uninterrupted" autocomplete="off" />
-            </label>
-            <button type="button" id="addSubmit" class="primary-btn">+ Add set</button>
-          </div>
-          <p id="addHint" class="muted" style="margin: 0.5rem 0 0; font-size: 0.85rem"></p>
-        </section>
-        <section class="panel">
-          <div class="add-saved-head">
-            <h2>Your added sets <span class="muted" id="addCount"></span></h2>
-            <div class="add-io">
-              <button type="button" id="addExport" class="settings-link">⬇ Export (backup)</button>
-              <button type="button" id="addImport" class="settings-link">⬆ Import</button>
-              <input type="file" id="addImportFile" accept="application/json,.json" hidden />
-            </div>
-          </div>
-          <p class="muted" style="margin: 0 0 0.75rem; font-size: 0.82rem">
-            Saved on this device. To keep them when you switch browser or phone, <strong>Export</strong> a
-            backup and <strong>Import</strong> it there — or send me the file and I'll bake it into the app for good.
-          </p>
-          <table id="addTable" class="data-table"></table>
-        </section>
-      </div>
 
       <div id="tab-groups" class="tab-panel" hidden>
         <section class="panel">

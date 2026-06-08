@@ -286,26 +286,7 @@ const els = {
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   woShowAllToggle: $<HTMLButtonElement>("woShowAllToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
-  addAthlete: $<HTMLSelectElement>("addAthlete"),
-  addExercise: $<HTMLInputElement>("addExercise"),
-  addExerciseList: $("addExerciseList"),
-  addArmPos: $<HTMLSelectElement>("addArmPos"),
-  addArmPosField: $("addArmPosField"),
-  addVariant: $<HTMLInputElement>("addVariant"),
-  addVariantField: $("addVariantField"),
-  addVariantLabel: $("addVariantLabel"),
-  addNote: $<HTMLInputElement>("addNote"),
-  addWeight: $<HTMLInputElement>("addWeight"),
-  addReps: $<HTMLInputElement>("addReps"),
-  addSets: $<HTMLInputElement>("addSets"),
-  addDate: $<HTMLInputElement>("addDate"),
-  addSubmit: $<HTMLButtonElement>("addSubmit"),
-  addHint: $("addHint"),
-  addCount: $("addCount"),
-  addTable: $<HTMLTableElement>("addTable"),
-  addExport: $<HTMLButtonElement>("addExport"),
-  addImport: $<HTMLButtonElement>("addImport"),
-  addImportFile: $<HTMLInputElement>("addImportFile"),
+  addExerciseList: $("addExerciseList"), // shared datalist for the inline add-exercise form
   summariseBtn: $<HTMLButtonElement>("summariseBtn"),
   summaryOut: $("summaryOut"),
   bwTitle: $("bwTitle"),
@@ -2739,10 +2720,6 @@ const SITE_MAP: MapNode = {
     { label: "Data", children: [
       { label: "Refresh from StrengthLevel (+ status)" },
       { label: "Original CSV vs Processed table" },
-    ] },
-    { label: "Add", children: [
-      { label: "Hand-log a set" },
-      { label: "Export / import" },
     ] },
     { label: "Formulas", children: [
       { label: "Weight↔reps curve" },
@@ -9031,7 +9008,7 @@ async function init() {
   });
   setupDataTab();
   renderDataTab();
-  setupAddTab();
+  populateAddExerciseList();
   void setupBackup();
   setupStatsEdit();
   els.athleteProfile.addEventListener("click", (e) => {
@@ -10283,7 +10260,7 @@ async function init() {
   for (const sel of [
     els.formula, els.rank, els.sexFilter,
     els.workoutGrouping, els.testAthlete, els.testExercise,
-    els.dataUser, els.groupsAthlete, els.addAthlete,
+    els.dataUser, els.groupsAthlete,
   ])
     enhanceSelect(sel);
   // PRUNE (DROP-1): the app has many DYNAMICALLY-rendered menus (Index Group-by /
@@ -10692,7 +10669,6 @@ interface ManualEntry {
 }
 const MANUAL_KEY = "colosseum.manualSets.v1";
 let manualEntries: ManualEntry[] = loadManual();
-let editingManualId: string | null = null; // which hand-logged set is being edited inline
 
 function loadManual(): ManualEntry[] {
   try {
@@ -10745,84 +10721,13 @@ function mergeManualSets() {
 }
 
 /** Populate the Add form's athlete dropdown + exercise suggestions and the table. */
-function renderAddTab() {
-  const users = rosterUsers();
-  const prev = els.addAthlete.value;
-  els.addAthlete.innerHTML = users
-    .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
-    .join("");
-  if (prev) els.addAthlete.value = prev;
+/** Fill the shared #addExerciseList datalist (the inline "add new exercise" form's
+ * autocomplete) with every known exercise name. (The standalone Add page is gone;
+ * sets are logged inline in the workouts view, and the cache persists them.) */
+function populateAddExerciseList(): void {
   els.addExerciseList.innerHTML = selectableExercises(data.records)
     .map((e) => `<option value="${escapeHtml(e)}"></option>`)
     .join("");
-  if (!els.addDate.value) els.addDate.value = todayIso();
-
-  // Recently-added list (newest first). Each row has Edit + Delete; the row being
-  // edited swaps its cells for inputs (exercise / weight × reps / date) + Save.
-  const rows = [...manualEntries]
-    .reverse()
-    .map((m) => {
-      if (m.id === editingManualId) {
-        return (
-          `<tr data-edit-row="${escapeHtml(m.id)}"><td>${escapeHtml(m.user)}</td>` +
-          `<td><input class="me-ex" value="${escapeHtml(m.exerciseName)}" /></td>` +
-          `<td class="num"><input class="me-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" value="${m.weight ?? ""}" />` +
-          `<span class="muted"> × </span><input class="me-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" value="${m.reps ?? ""}" /></td>` +
-          `<td class="num"><input class="me-date" type="date" value="${escapeHtml(m.date)}" /></td>` +
-          `<td class="num"><button type="button" class="manual-save" data-id="${escapeHtml(m.id)}">Save</button>` +
-          `<button type="button" class="manual-cancel" aria-label="Cancel">×</button></td></tr>`
-        );
-      }
-      return (
-        `<tr><td>${escapeHtml(m.user)}</td><td>${escapeHtml(m.exerciseName)}</td>` +
-        `<td class="num">${m.weight ?? "—"}${m.reps != null ? `×${m.reps}` : ""}</td>` +
-        `<td class="num">${escapeHtml(m.date)}</td>` +
-        `<td class="num"><button type="button" class="manual-edit" data-id="${escapeHtml(m.id)}" aria-label="Edit">✎</button>` +
-        `<button type="button" class="manual-del" data-id="${escapeHtml(m.id)}" aria-label="Delete">×</button></td></tr>`
-      );
-    })
-    .join("");
-  els.addCount.textContent = manualEntries.length ? `(${manualEntries.length})` : "";
-  els.addTable.innerHTML = manualEntries.length
-    ? `<thead><tr><th>Athlete</th><th>Exercise</th><th class="num">Set</th><th class="num">Date</th><th></th></tr></thead><tbody>${rows}</tbody>`
-    : `<tbody><tr><td class="muted">No hand-logged sets yet.</td></tr></tbody>`;
-}
-
-/* Some bodyweight lifts are progressed by changing leverage, not load. Decline
- * sit-ups get harder as the arms move from the stomach up over the head — so when
- * that exercise is entered, the Add form offers an arm-position choice (easiest →
- * hardest) and the pick is folded into the logged exercise name, making each
- * position its own tracked variant (like a heavier weight would be). */
-const SITUP_ARM_POSITIONS = [
-  "arms on stomach",
-  "arms straight by sides",
-  "hands on head",
-  "arms overhead, elbows bent",
-  "arms overhead, straight",
-];
-const isDeclineSitup = (name: string): boolean =>
-  /decline\s*sit[\s-]*ups?/.test(name.toLowerCase());
-
-/** Show/populate the arm-position dropdown only for decline sit-ups. */
-function updateArmPosField(): void {
-  const show = isDeclineSitup(els.addExercise.value);
-  els.addArmPosField.hidden = !show;
-  if (show && els.addArmPos.options.length === 0)
-    els.addArmPos.innerHTML =
-      `<option value="">— pick a position —</option>` +
-      SITUP_ARM_POSITIONS.map((p) => `<option value="${p}">${p}</option>`).join("");
-}
-
-/* Push-ups (and the other lifts the owner does on the squat rack) are progressed
- * by hole, not weight. For those a "Squat-rack hole" field appears, and its value
- * is stored as the set's LEVEL — a per-set selection that picks a bodyweight-part
- * instead of added kilos. The exercise name never changes (one exercise). */
-const usesSquatRackHole = (name: string): boolean =>
-  /push|inverted row|\brow\b|deadlift|good morning|\bdip\b|leg pull|pull[- ]?in|leg raise/i.test(name);
-
-/** Show the squat-rack-hole field only for exercises that use it. */
-function updateVariantField(): void {
-  els.addVariantField.hidden = !usesSquatRackHole(els.addExercise.value.trim());
 }
 
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
@@ -11091,94 +10996,6 @@ function reopenWorkoutGroups(dates: Set<string>) {
   }
 }
 
-function onAddSubmit() {
-  const username = els.addAthlete.value;
-  const user = els.addAthlete.selectedOptions[0]?.textContent ?? username;
-  let exerciseName = els.addExercise.value.trim();
-  // Fold the chosen arm position into the name so it tracks as its own variant.
-  const armPos = !els.addArmPosField.hidden ? els.addArmPos.value : "";
-  if (armPos && isDeclineSitup(exerciseName)) exerciseName = `${exerciseName} (${armPos})`;
-  // A chosen squat-rack hole is stored PER SET (not in the name) — it's the
-  // difficulty selection that stands in for added weight on an incline push-up.
-  const holeRaw = parseFloat(els.addVariant.value);
-  const levelValue =
-    !els.addVariantField.hidden && Number.isFinite(holeRaw) ? Math.round(holeRaw) : undefined;
-  const weight = parseFloat(els.addWeight.value);
-  const reps = Math.round(parseFloat(els.addReps.value));
-  const note = els.addNote.value.trim(); // variation circumstances (resolves + editable like CSV)
-  const date = els.addDate.value || todayIso();
-  // How many identical sets to log at once (blank/1 = a single set).
-  const setsRaw = Math.round(parseFloat(els.addSets.value));
-  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
-  if (!username || !exerciseName) {
-    els.addHint.textContent = "Pick an athlete and enter an exercise.";
-    return;
-  }
-  if (!Number.isFinite(reps) || reps < 1) {
-    els.addHint.textContent = "Enter the reps (1 or more).";
-    return;
-  }
-  for (let i = 0; i < sets; i++) {
-    manualEntries.push({
-      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
-      user,
-      username,
-      date,
-      exerciseName,
-      weight: Number.isFinite(weight) ? weight : null,
-      reps,
-      ...(note ? { notes: note } : {}),
-      ...(levelValue !== undefined ? { levelValue } : {}),
-    });
-  }
-  saveManual();
-  mergeManualSets();
-  // Keep the just-entered athlete / exercise / weight / reps / sets / date in
-  // place so logging the next set of the same exercise is one tap (Add again).
-  // Nothing is cleared — the form "remembers" what you last added.
-  const setWord = sets === 1 ? "set" : `${sets} sets`;
-  els.addHint.textContent = `Added ${setWord} of ${exerciseName} ${Number.isFinite(weight) ? `${weight}kg × ` : ""}${reps} for ${user}. Tap Add again to log more.`;
-  renderAddTab();
-  renderAll(); // every view now includes the new set
-  renderDataTab();
-}
-
-/** Download the hand-logged sets as a JSON backup (portable across devices). */
-function exportManual() {
-  const blob = new Blob([JSON.stringify(manualEntries, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `colosseum-added-sets-${todayIso()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-/** Merge an imported backup into the on-device sets (dedupe by id). */
-async function importManual(file: File) {
-  try {
-    const arr = JSON.parse(await file.text()) as ManualEntry[];
-    if (!Array.isArray(arr)) throw new Error("not a backup file");
-    const byId = new Map(manualEntries.map((m) => [m.id, m]));
-    let added = 0;
-    for (const m of arr)
-      if (m && typeof m.id === "string" && typeof m.username === "string" && typeof m.exerciseName === "string") {
-        if (!byId.has(m.id)) added++;
-        byId.set(m.id, m);
-      }
-    manualEntries = [...byId.values()];
-    saveManual();
-    mergeManualSets();
-    renderAddTab();
-    renderAll();
-    renderDataTab();
-    els.addHint.textContent = `Imported — ${added} new set${added === 1 ? "" : "s"} added (${manualEntries.length} total).`;
-  } catch (err) {
-    els.addHint.textContent = `Couldn't read that file: ${String(err)}`;
-  }
-}
 
 // ===========================================================================
 // FULL-SITE BACKUP  (see src/backup.ts for the pure, tested core)
@@ -11398,76 +11215,6 @@ async function setupBackup() {
   }
 }
 
-function setupAddTab() {
-  renderAddTab();
-  updateArmPosField();
-  updateVariantField();
-  els.addExercise.addEventListener("input", () => {
-    updateArmPosField();
-    updateVariantField();
-  });
-  els.addSubmit.addEventListener("click", onAddSubmit);
-  els.addExport.addEventListener("click", exportManual);
-  els.addImport.addEventListener("click", () => els.addImportFile.click());
-  els.addImportFile.addEventListener("change", () => {
-    const file = els.addImportFile.files?.[0];
-    if (file) void importManual(file);
-    els.addImportFile.value = ""; // allow re-importing the same file
-  });
-  els.addTable.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    const editBtn = t.closest<HTMLButtonElement>(".manual-edit");
-    if (editBtn?.dataset.id) {
-      editingManualId = editBtn.dataset.id; // open this row's inline editor
-      renderAddTab();
-      return;
-    }
-    if (t.closest(".manual-cancel")) {
-      editingManualId = null;
-      renderAddTab();
-      return;
-    }
-    const saveBtn = t.closest<HTMLButtonElement>(".manual-save");
-    if (saveBtn?.dataset.id) {
-      saveManualEdit(saveBtn.dataset.id, saveBtn.closest("tr")!);
-      return;
-    }
-    const delBtn = t.closest<HTMLButtonElement>(".manual-del");
-    if (!delBtn?.dataset.id) return;
-    manualEntries = manualEntries.filter((m) => m.id !== delBtn.dataset.id);
-    saveManual();
-    mergeManualSets();
-    renderAddTab();
-    renderAll();
-    renderDataTab();
-  });
-}
-
-/** Commit the inline edits for one hand-logged set (exercise / weight / reps /
- * date) from its editor row, then refresh everywhere. */
-function saveManualEdit(id: string, row: HTMLElement) {
-  const entry = manualEntries.find((m) => m.id === id);
-  if (!entry) return;
-  const exerciseName = row.querySelector<HTMLInputElement>(".me-ex")!.value.trim();
-  const weight = parseFloat(row.querySelector<HTMLInputElement>(".me-weight")!.value);
-  const reps = Math.round(parseFloat(row.querySelector<HTMLInputElement>(".me-reps")!.value));
-  const date = row.querySelector<HTMLInputElement>(".me-date")!.value || entry.date;
-  if (!exerciseName || !Number.isFinite(reps) || reps < 1) {
-    els.addHint.textContent = "Need an exercise and reps (1 or more) to save.";
-    return;
-  }
-  entry.exerciseName = exerciseName;
-  entry.weight = Number.isFinite(weight) ? weight : null;
-  entry.reps = reps;
-  entry.date = date;
-  editingManualId = null;
-  saveManual();
-  mergeManualSets();
-  renderAddTab();
-  renderAll();
-  renderDataTab();
-  els.addHint.textContent = `Updated ${exerciseName} for ${entry.user}.`;
-}
 
 function setupChecklists() {
   const lists = Array.from(document.querySelectorAll<HTMLElement>("[data-checklist]"));
@@ -12933,6 +12680,29 @@ function goToAnalysis(): void {
   if (document.getElementById(`tab-${tab}`)?.hidden !== false) switchTopTab(tab);
   else if (tab === "analysis") renderWorkoutAnalysis();
 }
+/** Create a new exercise (the standalone Add page was removed): jump to the Analysis
+ * workouts view, turn on the inline "+ set" affordances, and open the inline
+ * "add new exercise" form on the most recent session prefilled with the name — the
+ * exercise comes into being once its first set is logged there. */
+function createExerciseInline(name: string): void {
+  if (!S.showAddSets) {
+    S.showAddSets = true;
+    localStorage.setItem("colosseum.showAddSets", "1");
+  }
+  goToAnalysis();
+  requestAnimationFrame(() => {
+    const btn = document.querySelector<HTMLButtonElement>(".wo-addex");
+    if (!btn) return; // no logged session yet to attach the form to
+    toggleInlineAddExerciseForm(btn);
+    const form = document.querySelector<HTMLElement>(".wo-addform--new");
+    const ex = form?.querySelector<HTMLInputElement>(".wo-af-ex");
+    if (ex) {
+      ex.value = name;
+      ex.scrollIntoView({ block: "center" });
+      form?.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
+    }
+  });
+}
 /** Open BOTH exercise-selector section folds so the (now inline) chip lists show
  * search results. (The chips no longer live in a dropdown — they're always inline.) */
 function openSelectorFolds(): void {
@@ -12949,7 +12719,6 @@ function commandList(): CmdSpec[] {
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
     { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true; } },
-    { cmd: ".add", desc: "Add a set (open the Add page)", run: () => switchTopTab("add") },
     { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
     { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },
   ];
@@ -13044,7 +12813,7 @@ function renderSearchPalette(value: string): void {
     pal.innerHTML =
       `<button type="button" class="cmd-opt is-active" data-searchact="createex" role="option">` +
       `<span class="cmd-opt-cmd">➕ Create exercise “${escapeHtml(cre.name)}”</span>` +
-      `<span class="cmd-opt-desc">${exists ? "Already exists — opens it on the Add page" : "Opens the Add page to log its first set"}</span></button>`;
+      `<span class="cmd-opt-desc">${exists ? "Already exists — opens the inline add form" : "Opens the inline add form to log its first set"}</span></button>`;
     return;
   }
   const n = waChipListBase().length;
@@ -13083,19 +12852,13 @@ function runSearchAction(act: string): void {
     return;
   }
   if (act === "createex") {
-    // Parse the name from "create <Name>" and open the Add page prefilled — the
-    // exercise comes into being when its first set is logged.
+    // Parse the name from "create <Name>" and open the INLINE add-exercise form in the
+    // workouts view prefilled — the exercise is born when its first set is logged.
     const name = parseCreateQuery(input?.value ?? "").name;
     hideCmdPalette();
     if (input) input.value = "";
     input?.blur();
-    if (!name) return;
-    switchTopTab("add");
-    if (els.addAthlete.value !== els.athlete.value && [...els.addAthlete.options].some((o) => o.value === els.athlete.value)) els.addAthlete.value = els.athlete.value;
-    els.addExercise.value = name;
-    els.addExercise.dispatchEvent(new Event("input", { bubbles: true })); // toggle arm-pos / variant fields
-    els.addHint.textContent = `New exercise “${name}” — enter weight/reps and tap Add to create it.`;
-    els.addReps.focus();
+    if (name) createExerciseInline(name);
     return;
   }
   if (act === "filter") searchFindHistory = false;
@@ -13768,7 +13531,7 @@ function updateBottomNav() {
 const PAGE_NAMES: Record<string, string> = {
   analysis: "Analysis", "s-analysis": "S-Analysis", leaderboards: "Colosseum",
   athlete: "Athlete", bwparts: "Index", groups: "Stats", team: "Group",
-  data: "Data", add: "Add", test: "Formulas", statsedit: "Athletes",
+  data: "Data", test: "Formulas", statsedit: "Athletes",
   sitemap: "Site map", guide: "Guide", changelog: "Version history",
 };
 function updateBrand() {
