@@ -3186,9 +3186,21 @@ function renderAthleteProfile() {
   // title. Each is a small value+unit cell.
   const setStatsSummary = (cellsHtml: string) => { if (els.bodyStatsSummary) els.bodyStatsSummary.innerHTML = cellsHtml; };
   const bsCell = (val: string, unit: string) => `<span class="bs-cell"><b>${escapeHtml(val)}</b><span class="bs-u">${escapeHtml(unit)}</span></span>`;
+  // Training-summary cells appended after the body stats: how long they've trained
+  // (the span, e.g. "14 months") and the average sessions per week.
+  const ts = athleteSummary(activeRecords(), username);
+  const trainCells: string[] = [];
+  if (ts.sets > 0) {
+    if (ts.firstDate && ts.lastDate) {
+      const dur = trainingDuration(ts.firstDate, ts.lastDate); // "14 months" / "1.2 years" / …
+      const sp = dur.indexOf(" ");
+      trainCells.push(sp > 0 ? bsCell(dur.slice(0, sp), dur.slice(sp + 1)) : bsCell(dur, ""));
+    }
+    trainCells.push(bsCell(ts.sessionsPerWeek.toFixed(1), "/wk"));
+  }
   const editBtn = `<div class="profile-edit-row"><button type="button" class="profile-edit" data-editstats="${escapeHtml(username)}" title="Edit these stats">✎ Edit</button></div>`;
   if (!p) {
-    setStatsSummary(""); // no profile → just the title (the empty dashboard hides itself)
+    setStatsSummary(trainCells.join("")); // no body profile → still show training stats
     els.athleteProfile.innerHTML = `<span class="muted">No profile on file</span> ${editBtn}`;
     return;
   }
@@ -3206,11 +3218,11 @@ function renderAthleteProfile() {
 
   const range = nffmiRange(p.weight, p.height, dist);
   if (!range) {
-    setStatsSummary(sumCells.join(""));
+    setStatsSummary([...sumCells, ...trainCells].join(""));
     els.athleteProfile.innerHTML = specLine + " " + editBtn;
     return;
   }
-  setStatsSummary([...sumCells, bsCell(range.avg.toFixed(1), "nFFMI")].join(""));
+  setStatsSummary([...sumCells, bsCell(range.avg.toFixed(1), "nFFMI"), ...trainCells].join(""));
   const f1 = (n: number) => n.toFixed(1);
   const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
   // nFFMI badge — headline number only; the detail lives in the line + ⓘ math.
@@ -3332,7 +3344,7 @@ function sBodyStatsHtml(): string {
   ];
   if (range) items.push(item("nFFMI", `${range.lo50.toFixed(1)}–${range.hi50.toFixed(1)}`, "A muscle-for-your-height score — like BMI but counting only lean mass. Roughly: ~18 untrained, ~22 well-trained, ~25 the natural ceiling."));
   return (
-    `<details class="s-bodystats" open><summary class="s-bodystats-sum">Body stats</summary>` +
+    `<details class="s-bodystats" open><summary class="s-bodystats-sum">Stats</summary>` +
     `<div class="s-bs-body"><div class="s-bs-specs muted">${specs.join("  ·  ")}</div>` +
     items.join("") +
     `</div></details>`

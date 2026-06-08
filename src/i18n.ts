@@ -92,7 +92,7 @@ const LT: Record<string, string> = {
     "Jėgos lyderių lentelės tau ir tavo draugams — fiksuok kiekvieną pakėlimą, matyk apytiksles 1RM ir kopk lentelėje.",
   "Password": "Slaptažodis",
   "Wrong password.": "Neteisingas slaptažodis.",
-  // ---- Body stats card ----
+  // ---- Stats card (body + training) — title "Stats" reuses the existing entry ----
   "Body stats": "Kūno rodikliai",
   "Body fat": "Kūno riebalai",
   "Lean": "Liesoji masė",
