@@ -51,10 +51,10 @@ export interface SetRecord {
    * not added weight (e.g. an incline push-up at squat-rack hole 8). It's a
    * per-set "quantified selection" — like the weight on a bar, but it picks a
    * BODYWEIGHT-PART rather than added kilos, so every height stays ONE exercise.
-   * `levelDim` is the dimension (squat-rack hole), `levelValue` the setting and
-   * `levelLabel` its short tag ("SQ8"). Parsed from the note at load, or chosen
-   * on the Add form. */
-  levelDim?: "sq" | "cm";
+   * `levelDim` is the dimension (squat-rack hole / Smith notch / cm), `levelValue`
+   * the setting and `levelLabel` its short tag ("SQ8", "Sm3", "43cm"). Parsed from
+   * the note at load, or chosen on the Add form. */
+  levelDim?: "sq" | "cm" | "smith";
   levelValue?: number;
   levelLabel?: string;
   /** Set when the exercise is marked "not comparable" (e.g. a static push against

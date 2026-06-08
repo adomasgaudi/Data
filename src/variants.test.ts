@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLevelNote, attachNoteLevel, levelLabel, levelKey, defaultLevelScale } from "./variants";
+import { parseLevelNote, attachNoteLevel, levelLabel, levelKey, defaultLevelScale, levelInclineCm, inclineScale, isInclineLevelExercise } from "./variants";
 import type { SetRecord } from "./domain";
 
 const rec = (notes: string, exerciseName = "Push Ups"): SetRecord => ({
@@ -82,5 +82,47 @@ describe("level scaling helpers", () => {
     expect(out.levelValue).toBe(43);
     expect(out.levelLabel).toBe("43cm");
     expect(out.notes).toBe("low");
+  });
+});
+
+describe("Smith-notch + cm incline (push-up family)", () => {
+  it("reads a Smith-machine notch in the owner's spellings", () => {
+    for (const [note, value] of [["Smith 3", 3], ["smith4", 4], ["3 smith", 3]] as [string, number][]) {
+      const v = parseLevelNote(note);
+      expect(v, note).not.toBeNull();
+      expect(v!.dim).toBe("smith");
+      expect(v!.value).toBe(value);
+      expect(v!.label).toBe(`Sm${value}`);
+    }
+  });
+
+  it("also reads '3 sq' (number-first squat-rack hole)", () => {
+    expect(parseLevelNote("3 sq")).toEqual(expect.objectContaining({ dim: "sq", value: 3 }));
+  });
+
+  it("keeps a Smith level only on the push-up family", () => {
+    expect(attachNoteLevel(rec("Smith 3", "Smith Machine Incline Close Grip Push Up")).levelDim).toBe("smith");
+    expect(attachNoteLevel(rec("Smith 3", "Smith Machine Squat")).levelDim).toBeUndefined(); // not a push-up
+  });
+
+  it("converts cm / sq / smith levels onto one cm incline (~15cm per step)", () => {
+    expect(levelInclineCm("cm", 20)).toBe(20);
+    expect(levelInclineCm("sq", 3)).toBe(45);
+    expect(levelInclineCm("smith", 3)).toBe(45);
+    expect(levelInclineCm("smith", 2, 10)).toBe(20); // tunable step
+  });
+
+  it("scales incline so a floor push-up is hardest (×1) and higher is easier", () => {
+    expect(inclineScale(0)).toBe(1); // 0cm = pure push-up = reference
+    expect(inclineScale(45)).toBeLessThan(1); // raised hands = easier
+    expect(inclineScale(75)).toBeLessThan(inclineScale(45)); // higher still = easier still
+    expect(inclineScale(-10)).toBeGreaterThan(1); // below the floor = harder
+    expect(inclineScale(500)).toBeGreaterThanOrEqual(0.4); // clamped
+  });
+
+  it("knows which exercises are incline (push-up family)", () => {
+    expect(isInclineLevelExercise("Smith Machine Incline Close Grip Push Up")).toBe(true);
+    expect(isInclineLevelExercise("Push Ups")).toBe(true);
+    expect(isInclineLevelExercise("Squat")).toBe(false);
   });
 });

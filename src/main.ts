@@ -70,7 +70,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { levelLabel, levelKey, defaultLevelScale, type LevelDim } from "./variants";
+import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, levelInclineCm, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
@@ -929,10 +929,15 @@ const levelScaleOverrides: Record<string, number> = (() => {
 })();
 
 /** Technique scaling factor for one set's level: the owner's override, else the
- * seeded default (×1 at the floor/neutral, easier levels scaled down). */
+ * seeded default (×1 at the floor/neutral, easier levels scaled down). For the
+ * push-up family the level is an INCLINE: cm / squat-rack hole / Smith notch all
+ * convert to one cm height, and a higher incline reads easier (a floor push-up at
+ * 0cm is the ×1 reference) — so a Smith-machine incline push-up lines up with a
+ * floor one. The owner still tunes any single level via the ⚙ scaling table. */
 function levelScaleFor(exerciseName: string, dim: LevelDim, value: number): number {
   const key = levelKey(exerciseName, dim, value);
   if (Object.prototype.hasOwnProperty.call(levelScaleOverrides, key)) return levelScaleOverrides[key]!;
+  if (isInclineLevelExercise(exerciseName)) return inclineScale(levelInclineCm(dim, value));
   return defaultLevelScale(dim, value);
 }
 
@@ -4591,7 +4596,7 @@ function renderExerciseLevels(exName: string, username: string): void {
     `<details class="exl-settings">` +
     `<summary class="exl-settings-sum">⚙ Technique scaling <span class="muted">(${byLevel.size} level${byLevel.size === 1 ? "" : "s"})</span></summary>` +
     `<div class="exl-settings-body">` +
-    `<div class="exl-head muted">For levels logged in the note (squat-rack hole SQ8, or a height like 43cm). Real weight and 1RM stay as logged; tune each Scale so equal-effort levels show the same Effort.</div>` +
+    `<div class="exl-head muted">For levels logged in the note — a height (43cm), a squat-rack hole (SQ8) or a Smith notch (Smith 3). On push-ups all three read as one incline (higher = easier; a floor push-up is the ×1 reference). Real weight and 1RM stay as logged; tune each Scale so equal-effort levels show the same Effort.</div>` +
     `<table class="data-table exl-table"><thead><tr>` +
     `<th>Level</th><th class="num">Best</th>` +
     `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the level">1RM</th>` +

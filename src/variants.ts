@@ -12,27 +12,28 @@
  */
 import type { SetRecord } from "./domain";
 
-export type LevelDim = "sq" | "cm";
+export type LevelDim = "sq" | "cm" | "smith";
 
 export interface ParsedLevel {
   dim: LevelDim;
-  /** The setting: squat-rack hole (can be negative) or centimetres. */
+  /** The setting: squat-rack hole / Smith notch (can be negative) or centimetres. */
   value: number;
-  /** Short tag for display, e.g. "SQ8" or "43cm". */
+  /** Short tag for display, e.g. "SQ8", "Sm3" or "43cm". */
   label: string;
   /** The matched substring, so it can be peeled out of the leftover note. */
   matched: string;
 }
 
-/** The short tag for a level, e.g. ("sq",8) → "SQ8", ("cm",43) → "43cm". */
+/** The short tag for a level, e.g. ("sq",8) → "SQ8", ("smith",3) → "Sm3", ("cm",43) → "43cm". */
 export function levelLabel(dim: LevelDim, value: number): string {
-  return dim === "sq" ? `SQ${value}` : `${value}cm`;
+  return dim === "sq" ? `SQ${value}` : dim === "smith" ? `Sm${value}` : `${value}cm`;
 }
 
 /**
  * Read a technique level out of a logged note, or null if there isn't one.
- * Accepts the spellings the owner uses: a squat-rack hole ("SQ8", "sq3", "Sq 5",
- * "SQ-1", "Squat rack 6") or a height in centimetres ("43cm", "10 cm").
+ * Accepts the spellings the owner uses: a height in centimetres ("43cm", "10 cm"),
+ * a Smith-machine notch ("Smith 3", "3 smith") or a squat-rack hole ("SQ8", "sq3",
+ * "Sq 5", "3 sq", "Squat rack 6"). cm is matched first (it carries an explicit unit).
  */
 export function parseLevelNote(note: string | null | undefined): ParsedLevel | null {
   const raw = (note ?? "").trim();
@@ -43,7 +44,14 @@ export function parseLevelNote(note: string | null | undefined): ParsedLevel | n
     const value = Math.round(parseFloat(cm[1]!.replace(",", ".")));
     if (Number.isFinite(value)) return { dim: "cm", value, label: levelLabel("cm", value), matched: cm[0] };
   }
-  const sq = raw.match(/\bsq\s*(-?\d+)\b/i) ?? raw.match(/\bsquat\s*rack\s*(-?\d+)\b/i);
+  // Smith-machine notch: "Smith 3", "smith3", "3 smith".
+  const smith = raw.match(/\bsmith\s*(-?\d+)\b/i) ?? raw.match(/\b(-?\d+)\s*smith\b/i);
+  if (smith) {
+    const value = parseInt(smith[1]!, 10);
+    if (Number.isFinite(value)) return { dim: "smith", value, label: levelLabel("smith", value), matched: smith[0] };
+  }
+  // Squat-rack hole: "SQ8", "sq 3", "3 sq", "Squat rack 6".
+  const sq = raw.match(/\bsq\s*(-?\d+)\b/i) ?? raw.match(/\bsquat\s*rack\s*(-?\d+)\b/i) ?? raw.match(/\b(-?\d+)\s*sq\b/i);
   if (sq) {
     const value = parseInt(sq[1]!, 10);
     if (Number.isFinite(value)) return { dim: "sq", value, label: levelLabel("sq", value), matched: sq[0] };
@@ -51,17 +59,47 @@ export function parseLevelNote(note: string | null | undefined): ParsedLevel | n
   return null;
 }
 
+/** Default cm of incline per equipment STEP — a squat-rack hole or a Smith notch.
+ * The canonical incline measure is centimetres; sq & smith notes convert at this
+ * step so all three units line up on one cm scale. (~15cm per step; tune per level
+ * in the exercise's ⚙ Technique scaling if a level reads off.) */
+export const CM_PER_LEVEL_STEP = 15;
+
+/** A level's incline height in CENTIMETRES (the canonical measure): cm as-is; a
+ * squat-rack hole / Smith notch × the per-step cm. */
+export function levelInclineCm(dim: LevelDim, value: number, cmPerStep: number = CM_PER_LEVEL_STEP): number {
+  return dim === "cm" ? value : value * cmPerStep;
+}
+
+/** Incline difficulty factor for a push-up done at `cm` of incline: 0cm (hands on
+ * the floor — a pure push-up) is the HARDEST, the ×1 reference; raising the hands
+ * (more cm) is EASIER (<1); below the floor (negative cm) is harder (>1). Clamped. */
+export function inclineScale(cm: number): number {
+  return Math.max(0.4, Math.min(1.6, Math.round((1 - 0.006 * cm) * 100) / 100));
+}
+
+/** Exercises whose technique LEVEL is an incline height (the push-up family): their
+ * sq / smith / cm levels all read as ONE cm incline that drives {@link inclineScale}
+ * — so a Smith-machine incline push-up and a floor push-up sit on one effort scale. */
+export function isInclineLevelExercise(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("push up") || n.includes("pushup") || n.includes("push-up");
+}
+
 /**
  * Attach a technique level to a logged set, read from its note, WITHOUT changing
  * the exercise name. A no-op when the set already carries a level (chosen on the
  * Add form) or the note has no recognised level. The matched token is peeled out
  * of the note so it isn't shown twice; any other note text is kept. Applied once
- * at load (like name canonicalisation).
+ * at load (like name canonicalisation). A Smith-notch level is only kept on the
+ * push-up family (where "Smith N" means an incline notch); elsewhere "smith" in a
+ * note isn't a level.
  */
 export function attachNoteLevel(record: SetRecord): SetRecord {
   if (record.levelDim !== undefined) return record;
   const lv = parseLevelNote(record.notes);
   if (!lv) return record;
+  if (lv.dim === "smith" && !isInclineLevelExercise(record.exerciseName)) return record;
   const leftover = record.notes
     .replace(lv.matched, "")
     .replace(/\s{2,}/g, " ")
@@ -80,8 +118,9 @@ export function levelKey(exerciseName: string, dim: LevelDim, value: number): st
  * A sensible DEFAULT technique scaling factor for a level — only a starting point,
  * the owner tunes each by eye so equal-effort levels line up. For a squat-rack
  * hole, hole 0 (floor) is the ×1 reference; higher holes are easier ⇒ scaled down
- * (<1), lower/negative holes harder ⇒ scaled up (>1). Centimetres are ambiguous
- * (deficit vs assisting height), so they default to ×1 for the owner to set.
+ * (<1), lower/negative holes harder ⇒ scaled up (>1). Centimetres / Smith notches
+ * are ambiguous out of context, so they default to ×1 (the push-up family overrides
+ * this with the cm-incline model in levelScaleFor).
  */
 export function defaultLevelScale(dim: LevelDim, value: number): number {
   if (dim !== "sq") return 1;
