@@ -5626,6 +5626,9 @@ function onWorkoutRowClick(e: MouseEvent) {
     toggleInlineAddForm(addBtn);
     return;
   }
+  // Per-day "hidden N/M" reveal toggles itself (its own document handler, PB-2) —
+  // swallow it here so it never falls through to EXPAND the day's detail.
+  if (target.closest("[data-woshowday]")) return;
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
