@@ -32,6 +32,31 @@ function setCompactPref(on: boolean): void {
 export const getTimeCompact = (): boolean => compactPref;
 export const setTimeCompact = (on: boolean): void => setCompactPref(on);
 
+/* Two app-wide chart-STYLE prefs, toggled by tiny legend buttons (only on charts
+ * that opt in via cfg.styleToggles): faintLines draws trend/strength LINES thin,
+ * dashed and greyed so the data dots dominate; dataTags floats a leader-line + brace
+ * "tag" naming each line so you can still tell them apart when faint. Stored on the
+ * device; subscribers redraw on change. */
+const FAINT_KEY = "colosseum.faintLines.v1";
+const TAGS_KEY = "colosseum.dataTags.v1";
+let faintLines = (() => { try { return localStorage.getItem(FAINT_KEY) === "1"; } catch { return false; } })();
+let dataTags = (() => { try { return localStorage.getItem(TAGS_KEY) === "1"; } catch { return false; } })();
+const styleSubs = new Set<() => void>();
+function setFaintLines(on: boolean): void { if (on === faintLines) return; faintLines = on; try { localStorage.setItem(FAINT_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
+function setDataTags(on: boolean): void { if (on === dataTags) return; dataTags = on; try { localStorage.setItem(TAGS_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
+
+/** Blend a #rrggbb colour toward its own grey (luma) by `amt` (0..1) → #rrggbb. */
+function grayify(hex: string, amt: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1]!, 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const gray = Math.round(0.3 * r + 0.59 * g + 0.11 * b);
+  r = Math.round(r + (gray - r) * amt); g = Math.round(g + (gray - g) * amt); b = Math.round(b + (gray - b) * amt);
+  const hh = (v: number) => v.toString(16).padStart(2, "0");
+  return `#${hh(r)}${hh(g)}${hh(b)}`;
+}
+
 /** Scatter marker shapes — used to tell series apart by FORM (not just colour). */
 export type SvgShape = "circle" | "diamond" | "square" | "triangle" | "ring" | "plus";
 export interface SvgPoint {
@@ -123,6 +148,10 @@ export interface SvgChartConfig {
    * segment — tapping a value toggles every series sharing it on/off at once, so you
    * can hide a whole athlete / exercise / graph-type in one tap. */
   legendGroupLabels?: string[];
+  /** Opt in to the two tiny legend style toggles: "faint lines" (thin/dashed/grey
+   * trend lines so the data dots dominate) and "tags" (leader-line brace labels that
+   * name each line). They drive app-wide prefs but only affect charts that opt in. */
+  styleToggles?: boolean;
   /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
    * region as you approach a target. Drawn behind everything. */
   yBands?: { from: number; to?: number; fill: string }[];
@@ -458,6 +487,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // (deduped by the name's prefix before " · "), only for dot/line "record" series.
     const directLabels: string[] = [];
     const labeled = new Set<string>();
+    // "Tags": leader-line + brace labels naming each LINE near its end (so you can
+    // still tell faint/grey lines apart). Capped + deduped so the chart isn't buried.
+    const tagAnnotations: string[] = [];
+    const tagged = new Set<string>();
+    const wantTags = !!cfg.styleToggles && dataTags;
     for (const s of geomSeries()) {
       if (!s.noLegend)
         keyHtml.push(
@@ -474,11 +508,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const yShiftPx = (s.yShiftFrac ?? 0) * plotH;
       const ymap = yShiftPx ? (v: number) => baseYmap(v) - yShiftPx : baseYmap;
       if (s.type === "line") {
+        // Faint mode: trend/strength lines go thin, dashed and greyed so the raw data
+        // (the scatter dots) reads as the foreground, not the smoothed curve.
+        const faint = !!cfg.styleToggles && faintLines;
+        const col = faint ? grayify(s.color, 0.55) : s.color;
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
-        body += `<polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-opacity="0.9"/>`;
+        body += `<polyline points="${d}" fill="none" stroke="${col}" stroke-width="${faint ? 1 : 2}" stroke-opacity="${faint ? 0.4 : 0.9}"${faint ? ` stroke-dasharray="3 3"` : ""}/>`;
+        const dotR = faint ? 1.3 : 2.4;
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
-          body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.4" fill="${s.color}" fill-opacity="0.6"/>`;
+          body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${dotR}" fill="${col}" fill-opacity="${faint ? 0.35 : 0.6}"/>`;
           hitPoints.push({ px: cx, py: cy, yTop: cy, yBot: cy, s, p });
         }
       } else if (s.type === "scatter") {
@@ -598,6 +637,31 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // Floating exercise name next to this series' last record (dots/lines only —
       // the "records"; bars are excluded). One label per exercise, with a white halo
       // for legibility over a busy chart; flips to the left near the right edge.
+      // Tag annotation: a small leader line + brace + name at a LINE's last point.
+      if (wantTags && s.type === "line" && s.points.length && tagAnnotations.length < 14) {
+        const parts = s.name.split(" · ");
+        const lbl = parts.length >= 3 ? parts[1]! : parts[0]!; // the exercise segment
+        if (!tagged.has(s.name)) {
+          tagged.add(s.name);
+          const last = s.points[s.points.length - 1]!;
+          const cx = xPix(last.x), cy = ymap(last.y ?? 0);
+          if (cx >= M.l && cx <= W - M.r && cy >= M.t + 3 && cy <= h - M.b - 3) {
+            const col = grayify(s.color, 0.35);
+            const nearRight = cx > W - M.r - 64;
+            const dir = nearRight ? -1 : 1;
+            const x1 = (cx + dir * 11).toFixed(1); // leader end / brace
+            const tx = (cx + dir * 14).toFixed(1); // label
+            const yt = (cy + 2.5).toFixed(1);
+            const brace = dir > 0 ? "}" : "{";
+            const anchor = nearRight ? "end" : "start";
+            tagAnnotations.push(
+              `<line x1="${(cx + dir * 2).toFixed(1)}" y1="${cy.toFixed(1)}" x2="${x1}" y2="${cy.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.7"/>` +
+                `<text x="${x1}" y="${yt}" font-size="10" text-anchor="middle" fill="${col}" fill-opacity="0.85">${brace}</text>` +
+                `<text x="${tx}" y="${yt}" font-size="8.5" text-anchor="${anchor}" paint-order="stroke" stroke="#fff" stroke-width="2" stroke-opacity="0.85" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
+            );
+          }
+        }
+      }
       if (cfg.directLabels && (s.type === "scatter" || s.type === "line") && s.points.length) {
         const label = s.name.split(" · ")[0]!;
         if (!labeled.has(label)) {
@@ -617,6 +681,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       }
     }
     body += directLabels.join("");
+    body += tagAnnotations.join("");
 
     const frame = inside()
       ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" class="svgc-frame" stroke-width="1"/>`
@@ -631,6 +696,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           `title="${useCompact() ? "Showing compacted time (gaps squeezed). Tap for real time spacing." : "Showing real time (with the gaps). Tap to squeeze the gaps so all sets fit."}">` +
           `${useCompact() ? "⇄ Compacted time" : "⇄ Realistic time"}</button>`
         : "";
+    // Two tiny style toggles (opt-in): faint trend lines + line tags.
+    const styleBtns = cfg.styleToggles
+      ? `<button type="button" class="svgc-style-btn${faintLines ? " is-on" : ""}" data-stylebtn="faint" aria-pressed="${faintLines}" title="${faintLines ? "Trend lines are thin/dashed/grey — tap for bold lines." : "Make the trend lines thin, dashed & grey so the data dots stand out."}">〰</button>` +
+        `<button type="button" class="svgc-style-btn${dataTags ? " is-on" : ""}" data-stylebtn="tags" aria-pressed="${dataTags}" title="${dataTags ? "Line tags shown — tap to hide." : "Tag each line with a leader-brace label naming it."}">⟨ ⟩</button>`
+      : "";
     // Many keys get cramped in an inline row, so past a handful collapse them into
     // a floating "Legend" dropdown (overlay — doesn't grow the chart). The compact
     // toggle stays inline. Toggling series still works: the keys keep their
@@ -666,8 +736,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     legendEl.innerHTML =
       keyHtml.length > 6 || groupTogglesHtml
         ? `<details class="svgc-legend-fold"${legendOpen ? " open" : ""}><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
-          `<div class="svgc-legend-menu">${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${compactBtn}`
-        : keys + compactBtn;
+          `<div class="svgc-legend-menu">${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${styleBtns}${compactBtn}`
+        : keys + styleBtns + compactBtn;
     // Sync the remembered open state when the user opens/closes it directly, and on
     // open decide whether to flip the menu ABOVE the button (when there's more room
     // above than below — it then overlays the chart instead of pushing the page).
@@ -1000,6 +1070,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // is now orphaned) and it would wrongly close the legend. Stop propagation on
     // any in-legend action so the legend stays open until you click truly outside.
     if ((e.target as HTMLElement).closest(".svgc-compact")) { e.stopPropagation(); setCompactPref(!compactPref); return; }
+    const sb = (e.target as HTMLElement).closest<HTMLElement>(".svgc-style-btn");
+    if (sb?.dataset.stylebtn) { e.stopPropagation(); if (sb.dataset.stylebtn === "faint") setFaintLines(!faintLines); else setDataTags(!dataTags); return; }
     const grp = (e.target as HTMLElement).closest<HTMLElement>(".svgc-grp-chip");
     if (grp?.dataset.grouppos !== undefined && grp.dataset.groupval !== undefined) {
       e.stopPropagation(); toggleGroup(Number(grp.dataset.grouppos), grp.dataset.groupval); return;
@@ -1036,6 +1108,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       draw();
     };
     compactSubs.add(sub);
+  }
+  // Follow the app-wide faint-lines / tags prefs (toggled from this chart's legend).
+  if (cfg.styleToggles) {
+    const sub = () => { if (!container.isConnected) { styleSubs.delete(sub); return; } hideTip(); draw(); };
+    styleSubs.add(sub);
   }
 
   rebuildCompactor();

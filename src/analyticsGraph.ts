@@ -231,6 +231,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     rightHeadroom: input.config.rightHeadroom,
     barGirth: input.config.barGirth,
     directLabels: true, // float each lift's name next to its records
+    styleToggles: true, // tiny legend buttons: faint lines + line tags
     ...(legendGroupLabels ? { legendGroupLabels } : {}),
     // Free 2-D pan/zoom: both y-axes shift together, so volume and 1RM stay aligned;
     // use Right-axis / Volume-shift knobs to separate overlapping series.

@@ -587,6 +587,10 @@ main { padding-bottom: 5rem; }
 }
 .svgc-compact:hover { border-color: var(--accent); color: var(--accent); }
 .svgc-compact.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+/* Two tiny style toggles in the legend row (faint lines · line tags). */
+.svgc-style-btn { cursor: pointer; font: inherit; font-size: 0.8rem; line-height: 1; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 7px; user-select: none; align-self: flex-start; }
+.svgc-style-btn:hover { border-color: var(--accent); color: var(--accent); }
+.svgc-style-btn.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .svgc-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
 .svgc-note[hidden] { display: none; }
 .svgc-tip {
