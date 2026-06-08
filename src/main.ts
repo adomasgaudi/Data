@@ -1958,7 +1958,11 @@ const groupDisplayOverrides: Record<string, GroupDisplay> = (() => {
 })();
 function groupDisplayDefault(id: string): GroupDisplay {
   const g = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].find((x) => x.id === id);
-  return g?.defaultDisplay ?? "both";
+  // A comparable group (e.g. "Squat pattern") defaults to "combined" too: when its
+  // synthetic is shown, its member lifts (Squat, Front Squat…) are folded in, not
+  // listed as separate options — so a squat synthetic doesn't sit next to its parts.
+  // Flip a group to Members / Both in its settings to see the individuals again.
+  return g?.defaultDisplay ?? (g?.kind === "comparable-group" ? "combined" : "both");
 }
 function groupDisplayFor(id: string): GroupDisplay {
   return groupDisplayOverrides[id] ?? groupDisplayDefault(id);
