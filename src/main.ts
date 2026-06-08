@@ -12637,9 +12637,14 @@ function renderSelector(scope: SelScope): void {
   // The GRAPH selector offers ONLY "Deselect all" — plotting every lift at once is
   // never wanted, so there's no "Select all" for it. The history selector keeps both
   // (Select all disabled once all picked; Deselect all disabled when none are).
+  // "Complete" (history only) selects EVERY exercise — the whole catalogue, ignoring
+  // the picker's current group / search / identity filter (vs "Select all" = shown only).
+  const everyEx = scope === "graph" ? [] : waSelectorExercises().map((e) => e.name);
+  const completeOn = everyEx.length > 0 && everyEx.every((n) => cur.includes(n));
   const selAllToggle = scope === "graph"
     ? `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the graph selection">Deselect all</button>`
-    : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift">Select all</button>` +
+    : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
+      `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>` +
       `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the selection">Deselect all</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
@@ -13921,6 +13926,13 @@ function setupWorkoutAnalysis(): void {
     if (t.closest(".wa-selall")) {
       // Select every shown (non-missing) lift (respects identity-includes / filters / search).
       setSelArr(waChipList().filter((ex) => !ex.missing).map((ex) => ex.name));
+      debounceWaRender();
+      return;
+    }
+    if (t.closest(".wa-complete")) {
+      // Select EVERY exercise the athlete has — the whole catalogue, ignoring the
+      // picker's group / search / show-missing filters (unlike "Select all" = shown only).
+      setSelArr(waSelectorExercises().map((e) => e.name));
       debounceWaRender();
       return;
     }
