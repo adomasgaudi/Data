@@ -12438,15 +12438,20 @@ function refreshHistorySearch(): void {
  * so the graph and Calendar/history titles look IDENTICAL (the recurring "one has the
  * count / cap, the other doesn't" bug). */
 const TITLE_NAME_CAP = 5;
+// Whether each title is EXPANDED to show ALL its lift names (tap the "… +N" to toggle).
+// When a title is expanded its selector hides the now-redundant picked-lift pills.
+const titleExpanded: Record<"graph" | "hist", boolean> = { graph: false, hist: false };
 function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | null = null): string {
   if (sel.length === 0) return "";
   const sep = `<span class="wa-title-sep"> · </span>`;
-  // Each name is a tap-to-REMOVE button (from the graph OR the history selection); its
-  // handler preventDefaults so a name-tap removes the lift instead of collapsing the
-  // section. Tapping EMPTY space / the caret still toggles the fold. `remove` doubles
-  // as the SelScope for the per-lift Combine / Compare lens toggles appended to each.
+  // Each name is a tap-to-REMOVE button (from the graph OR the history selection); the
+  // capture handler (PB-5) removes it instead of collapsing the section. Tapping EMPTY
+  // space / the caret still toggles the fold. `remove` doubles as the SelScope for the
+  // per-lift Combine / Compare lens toggles appended to each.
   const where = remove === "graph" ? "graph" : "history";
-  const names = sel.slice(0, TITLE_NAME_CAP).map((n) => {
+  const expanded = remove ? titleExpanded[remove] : false;
+  const shown = expanded ? sel.length : TITLE_NAME_CAP;
+  const names = sel.slice(0, shown).map((n) => {
     const nameHtml = remove
       ? `<button type="button" class="wa-title-lift" data-${remove}remove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the ${where}">${escapeHtml(displayName(n))}</button>`
       : escapeHtml(displayName(n));
@@ -12454,9 +12459,16 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     const infoHtml = `<button type="button" class="wa-title-info" data-titleinfo="${escapeHtml(n)}" title="Open ${escapeHtml(displayName(n))} in the Index" aria-label="${escapeHtml(displayName(n))} — info">ⓘ</button>`;
     return nameHtml + infoHtml + (remove ? lensTogglesHtml(remove, n) : ""); // ⓘ + per-lift Combine / Compare toggles
   }).join(sep);
-  const more = sel.length > TITLE_NAME_CAP
-    ? `<span class="wa-title-more" title="${sel.length - TITLE_NAME_CAP} more — pick them off in the selector below">… +${sel.length - TITLE_NAME_CAP}</span>`
-    : "";
+  // The "… +N" trailer is a TOGGLE: tap to expand the title to ALL names (which hides
+  // the redundant picked-lift pills below), tap again ("less") to collapse it.
+  let more = "";
+  if (sel.length > TITLE_NAME_CAP) {
+    more = remove
+      ? (expanded
+          ? `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show fewer">… less</button>`
+          : `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show all ${sel.length} — and hide the pills below">… +${sel.length - TITLE_NAME_CAP}</button>`)
+      : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
+  }
   const count = `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>`;
   return `${count}<span class="wa-seltitle">${names}${more}</span>`;
 }
@@ -12664,9 +12676,11 @@ function renderSelector(scope: SelScope): void {
       : `Tap to remove ${n}`;
     return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>${lensTogglesHtml(scope, n)}`;
   };
-  // The GRAPH selector shows its picked lifts in the big title (clickable to remove,
-  // below) — NOT as a separate ✕-pill row. So the picked-pill rows are history-only.
-  const showPickedPills = scope !== "graph";
+  // The GRAPH selector shows its picked lifts in the big title (clickable to remove)
+  // — NOT as a separate ✕-pill row. The HISTORY selector shows them as pills UNLESS
+  // its title is expanded to list them all (then the pills are redundant). The GROUP
+  // / category pills are unaffected either way.
+  const showPickedPills = scope === "hist" && !titleExpanded.hist;
   let selPills = "";
   if (stickyCats) {
     // Category mode: the always-visible top strip IS the whole-category picker — one
@@ -13819,33 +13833,44 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
     }
   });
-  panel.addEventListener("click", (e) => {
+  // PB-5: tapping a lift NAME in the graph OR Calendar/history fold title removes it
+  // from that selection. Both buttons live inside a <summary>, so a bubble-phase
+  // handler racing the <details> toggle was fragile (worked for the graph, not the
+  // history). Handle it in the CAPTURE phase — before the summary's default toggle —
+  // with preventDefault + stopPropagation, so a name tap ALWAYS removes and never
+  // collapses the fold, identically for both titles. (Same lesson as PB-4: capture
+  // beats bubble.) `data-titleexpand` (the "… +N" toggle) is handled here too.
+  document.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
-    // A lift's ⓘ in a fold title → open it on the Index page. preventDefault stops the
-    // <summary> from also toggling the fold. Runs FIRST (before the name-remove).
+    // A lift's ⓘ in a fold title → open it on the Index page (capture: runs before the
+    // <summary> toggles, same PB-5 fix as the name-remove below).
     const tInfo = t.closest<HTMLElement>("[data-titleinfo]");
-    if (tInfo?.dataset.titleinfo) { e.preventDefault(); openExerciseInfo(tInfo.dataset.titleinfo); return; }
-    // A lift NAME in the graph's fold title → remove it from the graph. preventDefault
-    // stops the <summary> from also toggling the fold (so tapping a name removes it,
-    // while the caret / empty title space still collapse the graph). Runs FIRST.
+    if (tInfo?.dataset.titleinfo) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(tInfo.dataset.titleinfo); return; }
     const gRem = t.closest<HTMLElement>("[data-graphremove]");
     if (gRem?.dataset.graphremove) {
-      e.preventDefault();
-      const name = gRem.dataset.graphremove;
-      waGraphSel = waGraphSel.filter((x) => x !== name);
+      e.preventDefault(); e.stopPropagation();
+      waGraphSel = waGraphSel.filter((x) => x !== gRem.dataset.graphremove);
       debounceWaRender();
       return;
     }
-    // A lift NAME in the Calendar/history fold title → remove it from the HISTORY
-    // selection (not the graph), same preventDefault-so-it-doesn't-collapse trick.
     const hRem = t.closest<HTMLElement>("[data-histremove]");
     if (hRem?.dataset.histremove) {
-      e.preventDefault();
-      const name = hRem.dataset.histremove;
-      waSelected = waSelected.filter((x) => x !== name);
+      e.preventDefault(); e.stopPropagation();
+      waSelected = waSelected.filter((x) => x !== hRem.dataset.histremove);
       debounceWaRender();
       return;
     }
+    const tExp = t.closest<HTMLElement>("[data-titleexpand]");
+    if (tExp?.dataset.titleexpand) {
+      e.preventDefault(); e.stopPropagation();
+      const sc = tExp.dataset.titleexpand as "graph" | "hist";
+      titleExpanded[sc] = !titleExpanded[sc];
+      deferRender(renderWorkoutAnalysis);
+      return;
+    }
+  }, true);
+  panel.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
     // Which selector (graph vs calendar/history) was clicked — its root carries
     // data-selscope. Selector actions below operate on that scope's selection.
     const scopeRoot = t.closest<HTMLElement>("[data-selscope]");

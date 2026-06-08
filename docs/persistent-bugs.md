@@ -11,6 +11,29 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-5 — Tapping a lift name in a fold-title removes it on the graph but NOT the history
+
+- **Recurrences:** 2 (added the history-title removal in b.2.8.31; user reports it
+  STILL doesn't work — the graph title's identical removal does).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data).
+- **Symptom:** the graph and "Calendar & history" titles both list the picked lift
+  NAMES; tapping a name in the GRAPH title removes it from the graph, but tapping a
+  name in the HISTORY title appears to do nothing (or collapses the section).
+- **Prior fix that didn't hold:** added a `data-histremove` button + a bubble-phase
+  handler in the `#tab-analysis` click listener, mirroring `data-graphremove`
+  (b.2.8.31). Both buttons live inside a `<summary>`; both handlers `preventDefault`
+  to stop the `<details>` toggling. The graph one works, the history one didn't.
+- **Suspected root cause:** the buttons are children of a `<summary>`, so the click's
+  DEFAULT action is to toggle the `<details>`. A bubble-phase `preventDefault` on an
+  ancestor is meant to stop it, but on this touch engine the toggle (and/or another
+  listener) can win for the history title, so the remove either doesn't register or
+  the section just collapses. Relying on bubble-phase ordering for a summary-child is
+  fragile (same family as PB-4: capture beats bubble).
+- **Root fix:** handle BOTH title removals in a CAPTURE-phase document listener that
+  runs before the summary's default toggle, with `preventDefault` + `stopPropagation`
+  — so a name tap always removes and never toggles, identically for graph and history.
+  Fix site tagged `PB-5`.
+
 ## PB-1 — "History lifts" sticky selector covers open floating menus
 
 - **Recurrences:** 2+ (Graph-options menu reported covered; earlier the Exercises
