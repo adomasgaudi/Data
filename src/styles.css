@@ -459,6 +459,12 @@ main { padding-bottom: 5rem; }
 }
 .other-item:hover { background: var(--accent-soft); }
 .other-item:hover .other-ico { color: var(--accent); }
+/* Paired menu rows: two related items share one line (tighter menu). */
+.other-row { display: flex; gap: 2px; }
+.other-row .other-item { flex: 1 1 0; min-width: 0; gap: 0.5rem; font-size: 0.92rem; padding: 0.7rem 0.5rem; white-space: nowrap; }
+.other-row .other-item > span { overflow: hidden; text-overflow: ellipsis; }
+/* In non-admin (only Guide shows) a fully-hidden pair row collapses away. */
+.other-row:not(:has(.other-item:not([hidden]))) { display: none; }
 /* Minimal line icons (inline SVG): muted by default, accent on hover. */
 .other-ico { width: 1.5rem; height: 1.5rem; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .other-ico svg, svg.other-ico { width: 1.35rem; height: 1.35rem; display: block; }
