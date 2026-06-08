@@ -328,6 +328,12 @@ body.on-s-anl .appfoot { display: none; }
 }
 .ex-info-navbtn:hover { border-color: var(--accent); color: var(--accent); }
 .overlay-head h2 { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ex-modal header stacks: title row on top (back + full-width title), then the
+   Index / Analysis jump buttons on their OWN row below — so the title isn't
+   squeezed/truncated by the buttons. */
+.ex-modal-head { flex-direction: column; align-items: stretch; gap: 0.4rem; }
+.ex-info-titlerow { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.ex-modal-head .ex-info-nav { justify-content: flex-end; }
 /* The old top tab bar is retired in favour of the app-style bottom nav. The
    buttons stay in the DOM (they're the is-active source of truth switchTopTab
    reads/sets) but are never shown. */
