@@ -3331,19 +3331,23 @@ function remapCombined(recs: SetRecord[]): SetRecord[] {
   const primary = selectedExercise;
   return recs.map((r) => (extra.has(r.exerciseName) ? { ...r, exerciseName: primary } : r));
 }
-/** Relabel REGISTRY combinable-group members to their combined name (when the group
- * is in "combined" display) so the workout history reads them as ONE lift — e.g. a
- * person who only logs "Smith Machine Incline Close Grip Push Up" sees those sets
- * under the combined "Push Up". Combinable groups are 1:1 (no weight scaling), so the
- * logged weight/reps are untouched; only the name changes. */
+/** Relabel REGISTRY group members to their merged name (when a selected lift's COMBINE
+ * lens — the "Merged" view — points at that group) so the workout history reads them as
+ * ONE lift — e.g. a person who only logs "Smith Machine Incline Close Grip Push Up" sees
+ * those sets under the combined "Push Up". The merged name is the synthetic group lift
+ * (e.g. "SQ mix" or, for a comparable group viewed merged, "Squat pattern"); the logged
+ * weight/reps are untouched — only the name changes (scaling is a graph-only concern, so
+ * the raw session log stays honest). */
 function remapRegistryCombined(recs: SetRecord[]): SetRecord[] {
   const map = new Map<string, string>();
-  for (const g of effectiveCombinableGroups()) {
-    // PB-6: merge a combinable group into ONE lift only when a SELECTED history lift in
-    // it has its COMBINE lens on — the per-lift lens is the source of truth now (the
-    // old global "combined" display default wrongly hijacked a Compare-lensed member,
-    // since a lift can be in BOTH a combinable and a comparable group).
-    const on = (g.members ?? []).some((m) => waSelected.includes(m.exerciseName) && lensFor("hist", m.exerciseName).combine);
+  // PB-6 (recurrence 3): the "Merged" toggle sets a lift's COMBINE lens slot for EITHER a
+  // combinable group (SQ mix) OR a comparable group viewed merged (Squat pattern) — both
+  // fold the group's members under ONE synthetic name in the history. So sweep both kinds,
+  // and merge a group only when a SELECTED history lift's combine lens RESOLVES to THIS
+  // group (a lift can be in both a combinable and a comparable group, so match the chosen
+  // id — not just "has any combine lens" — or a Merged comparable group shows empty).
+  for (const g of [...effectiveCombinableGroups(), ...effectiveComparableGroups()]) {
+    const on = (g.members ?? []).some((m) => waSelected.includes(m.exerciseName) && chosenGroup("hist", m.exerciseName, "combine")?.id === g.id);
     if (!on) continue;
     const dn = g.derivedName ?? g.label;
     for (const m of g.members ?? []) map.set(m.exerciseName, dn);
