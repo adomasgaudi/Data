@@ -3552,6 +3552,26 @@ const idxSubMode: Record<string, string> = (() => {
 })();
 function saveIdxSubMode(): void { try { localStorage.setItem(IDX_SUBMODE_KEY, JSON.stringify(idxSubMode)); } catch { /* ignore */ } }
 
+// Index "quick bulk-edit": pick ONE attribute and the editable middle column of
+// every row becomes that attribute's editor — so you can retag tier / discipline /
+// muscle group, or tweak the BW part, for the whole view without opening each lift.
+type IndexEditAttr = "coeff" | "tier" | "disc" | "mg";
+const INDEX_EDIT_ATTRS: { attr: IndexEditAttr; label: string }[] = [
+  { attr: "coeff", label: "BW part" },
+  { attr: "tier", label: "Tier" },
+  { attr: "disc", label: "Discipline" },
+  { attr: "mg", label: "Muscle group" },
+];
+const IDX_EDIT_ATTR_KEY = "colosseum.idxEditAttr.v1";
+let indexEditAttr: IndexEditAttr = (() => {
+  const v = localStorage.getItem(IDX_EDIT_ATTR_KEY);
+  return INDEX_EDIT_ATTRS.some((a) => a.attr === v) ? (v as IndexEditAttr) : "coeff";
+})();
+function setIndexEditAttr(a: IndexEditAttr): void {
+  indexEditAttr = a;
+  try { localStorage.setItem(IDX_EDIT_ATTR_KEY, a); } catch { /* ignore */ }
+}
+
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
 
@@ -7616,6 +7636,34 @@ function openAncestorDetails(el: HTMLElement): void {
     if (p instanceof HTMLDetailsElement) p.open = true;
 }
 
+/** The editable middle cell of an Index row, for whichever attribute the quick-edit
+ * picker has chosen. BW part stays a number input; tier / discipline / muscle group
+ * become a single-pick <select> (auto-enhanced to our .xdd dropdown, rule 20) that
+ * sets the override for THAT lift only. Empty option ↺ clears back to the auto guess. */
+function indexEditCell(r: IndexRow): string {
+  if (indexEditAttr === "coeff")
+    return `<input class="bw-input" type="number" step="0.05" min="0" max="2" value="${r.coeff}" ` +
+      `data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" />`;
+  const name = r.name;
+  const kind = indexEditAttr; // "tier" | "disc" | "mg"
+  const cur =
+    kind === "tier" ? tiersFor(name)[0]!
+    : kind === "disc" ? discsFor(name)[0]!
+    : mgsFor(name)[0]!;
+  const values: readonly string[] =
+    kind === "tier" ? (["main", "second", "third", "ugly"] as const)
+    : kind === "disc" ? DISCIPLINES
+    : MUSCLE_GROUPS;
+  const labelOf = (v: string) => (kind === "tier" ? TIER_LABELS[v as ExerciseTier] : v);
+  const overridden = metaSet(kind, name) != null;
+  const opts = values
+    .map((v) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(labelOf(v))}</option>`)
+    .join("");
+  return `<select class="bw-attr-edit subtle-select${overridden ? " is-overridden" : ""}" ` +
+    `data-attrex="${escapeHtml(name)}" data-attrkind="${kind}" ` +
+    `aria-label="${escapeHtml(INDEX_EDIT_ATTRS.find((a) => a.attr === kind)!.label)} for ${escapeHtml(name)}">${opts}</select>`;
+}
+
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
 function renderBwParts() {
   renderMergeList();
@@ -7658,7 +7706,8 @@ function renderBwParts() {
   }
   const open = (cat: string) => S.bwOpenCats!.has(cat);
 
-  const head = `<thead><tr><th>Exercise</th><th class="num">BW part</th><th class="num">Sets</th></tr></thead>`;
+  const editLabel = INDEX_EDIT_ATTRS.find((a) => a.attr === indexEditAttr)!.label;
+  const head = `<thead><tr><th>Exercise</th><th class="num">${escapeHtml(editLabel)}</th><th class="num">Sets</th></tr></thead>`;
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
   const rowHtml = (r: IndexRow, hidden: boolean) =>
     `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
@@ -7666,8 +7715,7 @@ function renderBwParts() {
     ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
     ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
     (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") + `</td>` +
-    `<td class="num"><input class="bw-input" type="number" step="0.05" min="0" max="2" ` +
-    `value="${r.coeff}" data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" /></td>` +
+    `<td class="num">${indexEditCell(r)}</td>` +
     `<td class="num">${r.count.toLocaleString()}</td></tr>`;
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
@@ -7777,8 +7825,12 @@ function renderBwGroupBar(): void {
   const opts = INDEX_GROUP_MODES
     .map((m) => `<option value="${m.mode}"${m.mode === S.bwGroupMode ? " selected" : ""}>${escapeHtml(m.label)}</option>`)
     .join("");
+  const editOpts = INDEX_EDIT_ATTRS
+    .map((a) => `<option value="${a.attr}"${a.attr === indexEditAttr ? " selected" : ""}>${escapeHtml(a.label)}</option>`)
+    .join("");
   els.bwGroupBar.innerHTML =
-    `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>`;
+    `<label class="as-label">Group by <select id="bwGroupBy" class="subtle-select">${opts}</select></label>` +
+    `<label class="as-label">Edit <select id="indexEditAttr" class="subtle-select">${editOpts}</select></label>`;
 }
 
 // ---- Edit athlete stats page ----
@@ -9204,6 +9256,21 @@ function onBwInputChange(e: Event) {
       if (v === "none") delete idxSubMode[key]; else idxSubMode[key] = v;
       saveIdxSubMode();
       renderBwParts();
+    }
+    return;
+  }
+  // Quick bulk-edit: the middle column is a tier/discipline/muscle-group picker.
+  // Setting it overrides JUST that lift's primary value, then re-renders so the
+  // grouping (which may key off the changed attribute) follows along.
+  if (input.classList.contains("bw-attr-edit")) {
+    const sel = input as HTMLSelectElement;
+    const name = sel.dataset.attrex, kind = sel.dataset.attrkind as MetaKind | undefined;
+    if (name && kind) {
+      const sc = els.bwGroups.scrollTop;
+      setMetaSet(kind, name, [sel.value]);
+      renderBwParts();
+      els.bwGroups.scrollTop = sc;
+      renderLeaderboard();
     }
     return;
   }
@@ -10986,10 +11053,12 @@ async function init() {
   });
   // Index "Group by" picker: re-slice the same lifts by category / muscle / etc.
   els.bwGroupBar.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#bwGroupBy");
-    if (!sel) return;
-    S.bwGroupMode = sel.value as IndexGroupMode;
-    renderBwParts();
+    const target = e.target as HTMLElement;
+    const grp = target.closest<HTMLSelectElement>("#bwGroupBy");
+    if (grp) { S.bwGroupMode = grp.value as IndexGroupMode; renderBwParts(); return; }
+    // Quick-edit attribute picker: switch which attribute the middle column edits.
+    const edit = target.closest<HTMLSelectElement>("#indexEditAttr");
+    if (edit) { setIndexEditAttr(edit.value as IndexEditAttr); renderBwParts(); return; }
   });
   // "Create variant / group" form (moved here from the Analysis bar) — its Create
   // button + the pill/chip member picker live in #idxCreate on the Index page.

@@ -290,6 +290,7 @@ const LT: Record<string, string> = {
   "Combined from": "Sujungta iš",
   "Group by": "Grupuoti pagal",
   "Sub-group by": "Pogrupis pagal",
+  "BW part": "KS dalis",
   "Discipline": "Disciplina",
   "Statics": "Statika",
   "Strength": "Jėga",

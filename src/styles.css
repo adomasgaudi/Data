@@ -2628,6 +2628,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
 }
 .bw-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Quick bulk-edit: the middle column's tier/discipline/muscle-group picker. A
+   gold left-edge marks rows whose value has been overridden away from the auto guess. */
+select.bw-attr-edit { width: auto; max-width: 9rem; font-size: 0.8rem; text-align: left; }
+select.bw-attr-edit.is-overridden { border-color: var(--accent); }
 
 /* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
 /* App-wide active-set control bar on the Index page. */
