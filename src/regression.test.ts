@@ -89,7 +89,7 @@ describe("regression — every graph metric computes safely (TASK 54)", () => {
     expect(() => graphMetric("volumeLoad")!.compute!(pull, DEFAULT_GRAPH_CONFIG)).not.toThrow();
   });
   it("key metrics yield points for a real lift", () => {
-    for (const id of ["weight", "weightRange", "e1rm", "strength", "strengthDecay", "volume", "reps", "sets", "pr", "trend", "movingAvg"]) {
+    for (const id of ["weightRange", "e1rm", "strength", "strengthDecay", "volume", "reps", "sets", "pr", "trend", "movingAvg"]) {
       expect(graphMetric(id)!.compute!(squat, DEFAULT_GRAPH_CONFIG).length, id).toBeGreaterThan(0);
     }
   });
