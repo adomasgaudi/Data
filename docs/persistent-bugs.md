@@ -41,21 +41,24 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   not by replacing the merge. Fix sites: `analyticsGraph.ts` config, `svgChart.ts` types +
   `update()` note.
 - **Prior partial fix (b.2.8.96, recurrence 1):** the ×BW pin's TOP PADDING didn't match the
-  kg auto-fit (8% from zero vs 8% of the data spread), causing a small vertical jump. Kept —
-  it's still needed so that, once the axis DOES re-fit, BW = kg ÷ bw exactly and nothing
-  shifts. But it didn't fix the empty-graph (the stale-key bug above did).
-- **Root cause:** ×BW (1) divides the left-axis data by bodyweight AND (2) pins the y-axis
-  to `forceLeftRange` (= kg range ÷ bodyweight) so the main athlete shouldn't move. The pin
-  was supposed to equal the kg view ÷ bw, but its TOP PADDING didn't match: the kg auto-fit
-  pads 8% **from zero** (begin-at-zero → `kgMax × 1.08`), while the pin padded 8% of the
-  **data spread** (`(kgMax − kgMin) × 0.08`). When lifts sit high (e.g. 30–65 kg) those
-  differ a lot, so the BW axis ≠ kg axis ÷ bw and the points landed at different heights.
-  Two independent computations of the same axis with mismatched padding.
-- **Root fix (PB-8):** make `forceLeftRange.max` use the SAME pad as the kg view —
-  `(kgMax + kgMax×0.08) / mainBw` — so BW = kg ÷ bw exactly and the toggle never moves the
-  main athlete in either direction. Per-athlete division (each compare series ÷ its OWN
-  bodyweight) is unchanged — that's what makes multi-user overlays comparable, and a single
-  relabeled axis couldn't express it. Fix site: `analyticsGraph.ts` `forceLeftRange`.
+  kg auto-fit (8% from zero vs 8% of `(kgMax − kgMin)`), so even when the axis DID re-fit the
+  points landed at slightly different heights — a small jump. Kept (it's still needed so
+  BW = kg ÷ bw exactly), but it did NOT fix the empty-graph; the stale-key bug above did.
+- **CONFIRMED FIXED (b.2.8.100):** owner verified ×BW → kg now shows the kg points again on
+  Android/Brave (was the same env it failed on). **Why it worked:** passing `forceLeftRange:
+  undefined` (instead of omitting the key) makes the config merge actually CLEAR the pin, so
+  `resetView`'s `if (cfg.forceLeftRange)` is now falsy and the y-axis re-fits to the kg data
+  range — the kg points come back into view.
+- **WHAT I MISSED last time (the lesson):** I fixed recurrence 1 from the WORD "jump" and
+  assumed a small vertical shift → patched the padding, the most visible suspect. I never
+  confirmed the ACTUAL visual (the graph was EMPTY, not jumped) and never traced HOW the
+  config reaches the chart (a MERGE, so a turned-off feature's key persists). Two misses:
+  (1) didn't verify the real symptom (clipped/empty vs moved) — the owner's screenshots, not
+  my mental model, held the answer; (2) treated the symptom (axis padding) instead of the
+  data flow (config merge / stale key). **Rule for next time:** when a "graph moved" report
+  SURVIVES a fix, first check whether data is actually MISSING/clipped (an axis-range/refit
+  problem, not a padding one), and trace whether config is applied by MERGE or REPLACE — an
+  omitted key under a merge is a stale-ghost, the same class as the cache-skip in PB-6.
 - **Not covered (known):** if you've PANNED/ZOOMED then toggle, the held view doesn't refit
   so the divided data still shifts under it. Fixing that fully needs ×BW to become a
   label-only transform (no data division) — rejected here because it can't normalise
