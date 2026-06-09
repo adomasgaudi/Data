@@ -2020,16 +2020,34 @@ function histFilterNames(names: readonly string[]): string[] {
 }
 /** The lens toggle buttons for a selected lift (only the relations it actually has) —
  * a small ⊕ Combine and/or ⇄ Compare pill; their presence is the "has relations" hint. */
-function lensTogglesHtml(scope: SelScope, n: string): string {
-  const hc = hasCombinable(n), hp = hasComparable(n);
-  if (!hc && !hp) return "";
-  const lens = lensFor(scope, n);
-  const btn = (key: "combine" | "compare", on: boolean, sym: string, verb: string) =>
-    `<button type="button" class="wa-lens-btn${on ? " is-on" : ""}" data-lens="${key}" data-lensex="${escapeHtml(n)}" data-lensscope="${scope}" title="${verb} ${escapeHtml(displayName(n))} with its group${on ? " (on)" : ""}">${sym}</button>`;
-  return `<span class="wa-lens" title="${escapeHtml(displayName(n))} has related exercises">` +
-    (hc ? btn("combine", !!lens.combine, "⊕", "Combine") : "") +
-    (hp ? btn("compare", !!lens.compare, "⇄", "Compare") : "") +
-    `</span>`;
+/** Colour class for a selected lift name, reflecting its lens state when the menu is
+ * CLOSED: gold = combined, green = compared, purple = both, none = original. */
+function lensClass(scope: SelScope, n: string): string {
+  const l = lensFor(scope, n);
+  return l.combine && l.compare ? " lens-both" : l.combine ? " lens-combined" : l.compare ? " lens-compared" : "";
+}
+function closeLiftMenu(): void { document.getElementById("liftMenu")?.remove(); }
+/** Small popup menu off a selected lift (replaces the inline ⓘ ⊕ ⇄ buttons): Info,
+ * Combine, Compare (only the relations it has), Remove. The lift name opens it. */
+function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void {
+  closeLiftMenu();
+  const lens = lensFor(scope, name);
+  const row = (act: string, label: string, on = false) =>
+    `<button type="button" class="lift-menu-row${on ? " is-on" : ""}${act === "remove" ? " lift-menu-rm" : ""}" data-lm="${act}">${label}${on ? ' <span class="lift-menu-ck">✓</span>' : ""}</button>`;
+  const rows = [row("info", "ⓘ Info")];
+  if (hasCombinable(name)) rows.push(row("combine", "⊕ Combine", !!lens.combine));
+  if (hasComparable(name)) rows.push(row("compare", "⇄ Compare", !!lens.compare));
+  rows.push(row("remove", "✕ Remove"));
+  const menu = document.createElement("div");
+  menu.id = "liftMenu";
+  menu.className = "lift-menu";
+  menu.dataset.lmex = name;
+  menu.dataset.lmscope = scope;
+  menu.innerHTML = `<div class="lift-menu-title">${escapeHtml(displayName(name))}</div>${rows.join("")}`;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 4)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
 }
 /** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
 function toggleGroupMembership(groupId: string, exName: string): void {
@@ -9749,15 +9767,35 @@ async function init() {
   // remembers it, and re-renders. preventDefault/stopPropagation so it doesn't toggle
   // the surrounding <summary> fold or remove the pill.
   document.addEventListener("click", (e) => {
-    const lensBtn = (e.target as HTMLElement).closest<HTMLElement>("[data-lens]");
-    if (!lensBtn?.dataset.lens || !lensBtn.dataset.lensex || !lensBtn.dataset.lensscope) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const scope = lensBtn.dataset.lensscope as SelScope;
-    const name = lensBtn.dataset.lensex;
-    const key = lensBtn.dataset.lens as "combine" | "compare";
-    setLens(scope, name, key, !lensFor(scope, name)[key]); // remembered per lift
-    deferRender(renderWorkoutAnalysis);
+    const t = e.target as HTMLElement;
+    // Open (or toggle) the per-lift menu from a selected lift's name.
+    const opener = t.closest<HTMLElement>("[data-liftmenu]");
+    if (opener?.dataset.liftmenu && opener.dataset.liftscope) {
+      e.preventDefault();
+      e.stopPropagation();
+      const open = document.getElementById("liftMenu");
+      if (open?.dataset.lmex === opener.dataset.liftmenu && open.dataset.lmscope === opener.dataset.liftscope) { closeLiftMenu(); return; }
+      openLiftMenu(opener, opener.dataset.liftscope as SelScope, opener.dataset.liftmenu);
+      return;
+    }
+    const menu = document.getElementById("liftMenu");
+    if (!menu) return;
+    const row = t.closest<HTMLElement>("[data-lm]");
+    if (row && menu.contains(row)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const act = row.dataset.lm;
+      const name = menu.dataset.lmex!;
+      const scope = menu.dataset.lmscope as SelScope;
+      if (act === "info") { closeLiftMenu(); jumpToExerciseInfo(name); return; }
+      if (act === "combine") setLens(scope, name, "combine", !lensFor(scope, name).combine);
+      else if (act === "compare") setLens(scope, name, "compare", !lensFor(scope, name).compare);
+      else if (act === "remove") { if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name); else waSelected = waSelected.filter((x) => x !== name); }
+      closeLiftMenu();
+      deferRender(renderWorkoutAnalysis);
+      return;
+    }
+    if (!menu.contains(t)) closeLiftMenu();
   });
   // Index "↗" button: jump straight to this lift's workout history (Analysis, single
   // mode — its real logged sets are the example), with it selected on the graph too.
@@ -12528,16 +12566,13 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // capture handler (PB-5) removes it instead of collapsing the section. Tapping EMPTY
   // space / the caret still toggles the fold. `remove` doubles as the SelScope for the
   // per-lift Combine / Compare lens toggles appended to each.
-  const where = remove === "graph" ? "graph" : "history";
   const expanded = remove ? titleExpanded[remove] : false;
   const shown = expanded ? sel.length : TITLE_NAME_CAP;
   const names = sel.slice(0, shown).map((n) => {
-    const nameHtml = remove
-      ? `<button type="button" class="wa-title-lift" data-${remove}remove="${escapeHtml(n)}" title="Tap to remove ${escapeHtml(n)} from the ${where}">${escapeHtml(displayName(n))}</button>`
-      : escapeHtml(displayName(n));
-    // A small ⓘ jumps straight to this lift on the Index page (its settings card).
-    const infoHtml = `<button type="button" class="wa-title-info" data-titleinfo="${escapeHtml(n)}" title="Open ${escapeHtml(displayName(n))} in the Index" aria-label="${escapeHtml(displayName(n))} — info">ⓘ</button>`;
-    return nameHtml + infoHtml + (remove ? lensTogglesHtml(remove, n) : ""); // ⓘ + per-lift Combine / Compare toggles
+    // The name opens a small popup menu (Info / Combine / Compare / Remove) and is
+    // COLOURED by its lens state — replaces the old inline ⓘ ⊕ ⇄ button cluster.
+    if (!remove) return escapeHtml(displayName(n));
+    return `<button type="button" class="wa-title-lift${lensClass(remove, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${remove}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
   }).join(sep);
   // The "… +N" trailer is a TOGGLE: tap to expand the title to ALL names (which hides
   // the redundant picked-lift pills below), tap again ("less") to collapse it.
@@ -12759,7 +12794,7 @@ function renderSelector(scope: SelScope): void {
     const title = scope === "graph"
       ? (g ? `On the graph · tap to remove ${n}` : `Selected but past the graph's ${graphCap}-lift limit · tap to remove ${n}`)
       : `Tap to remove ${n}`;
-    return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}" data-waselpill="${escapeHtml(n)}" title="${escapeHtml(title)}">${dot}${escapeHtml(displayName(n))}<span class="wa-sel-pill-x">✕</span></button>${lensTogglesHtml(scope, n)}`;
+    return `<button type="button" class="wa-sel-pill${scope === "graph" ? (g ? " is-graphed" : " is-ungraphed") : ""}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(title)} — tap for Info / Combine / Compare / Remove">${dot}${escapeHtml(displayName(n))}</button>`;
   };
   // BOTH selectors now show their picked lifts in the big section TITLE (count + names,
   // each tap-to-remove, with lens toggles, and "… +N" to expand to all) — so the
