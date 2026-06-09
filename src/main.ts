@@ -2279,6 +2279,15 @@ const ACTIVE_SOLO_KEY = "colosseum.activeSet.solo.v1";
 let activeCutoff: string | null = (() => { try { const v = localStorage.getItem(ACTIVE_CUTOFF_KEY); return v && v !== "none" ? v : null; } catch { return null; } })();
 let activeInclude = new Set<string>(loadJsonArray(ACTIVE_INCLUDE_KEY));
 let activeExclude = new Set<string>(loadJsonArray(ACTIVE_EXCLUDE_KEY));
+// Lifts the owner has FLAGGED as "this is just a variation — review & merge it into
+// another lift". A simple on-device queue surfaced at the top of the Index; the merge
+// itself is done from the flagged lift's info card (⊕ Combine / ⇄ Compare). On device.
+const MERGE_REVIEW_KEY = "colosseum.mergeReview.v1";
+const mergeReview = new Set<string>(loadJsonArray(MERGE_REVIEW_KEY));
+function toggleMergeReview(name: string): void {
+  if (mergeReview.has(name)) mergeReview.delete(name); else mergeReview.add(name);
+  saveJson(MERGE_REVIEW_KEY, [...mergeReview]);
+}
 // "Solo" = show ONLY these exercises app-wide (a group's "Only these" action). When
 // set it replaces the tier cutoff as the base; include/exclude still apply on top.
 let activeSolo: Set<string> | null = (() => { const a = loadJsonArray(ACTIVE_SOLO_KEY); return a.length ? new Set(a) : null; })();
@@ -7922,6 +7931,9 @@ function renderBwParts() {
       ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
       // Example-jump shows on EVERY lift; admin falls back to whoever's done it the most.
       ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history${lockedUsername() === null ? " — falls back to whoever's done it the most" : ""}">↗</button>` +
+      // Flag a lift as "just a variation — review & merge into another" (a queue at the
+      // top of the Index). The merge itself is done from the lift's ⓘ info card.
+      ` <button type="button" class="bw-mergeflag${mergeReview.has(r.name) ? " is-on" : ""}" data-mergeflag="${escapeHtml(r.name)}" title="${mergeReview.has(r.name) ? "Flagged to merge — tap to unflag" : "Flag to review & merge into another lift"}">${mergeReview.has(r.name) ? "⤳ flagged" : "⤳ merge?"}</button>` +
       whyChip +
       // Force-show this lift app-wide despite the filter — the rare, TRACKED exception
       // (managed in the Great Filter's "kept exceptions" list), for when the tags are
@@ -7980,6 +7992,19 @@ function renderBwParts() {
       `<summary class="bw-review-sum">Review ${allHidden.length} filtered-out — tap “＋ keep” to make an exception</summary>` +
       reviewBody +
       `</details>`
+    : "";
+
+  // The merge-review queue: lifts the owner flagged "⤳ merge?". Listed by NAME (kept
+  // even if the current filter hides them), each opening its info card (⊕ Combine /
+  // ⇄ Compare) or unflagged with ✕. Sits at the very top of the Index when non-empty.
+  const flaggedNames = [...mergeReview];
+  const mergeFold = flaggedNames.length
+    ? `<details class="bw-review bw-mergefold" open><summary class="bw-review-sum">⤳ Flagged to merge (${flaggedNames.length}) — tap a lift to open it &amp; ⊕ Combine / ⇄ Compare</summary>` +
+      `<div class="bw-mergelist">` +
+      flaggedNames.map((n) =>
+        `<span class="bw-mergechip"><button type="button" class="bw-mergechip-open" data-moreinfoex="${escapeHtml(n)}" title="Open ${escapeHtml(n)} to merge it">${escapeHtml(displayName(n))} <span class="muted">${escapeHtml(codeFor(n))}</span></button>` +
+        `<button type="button" class="bw-mergechip-x" data-mergeflag="${escapeHtml(n)}" title="Unflag" aria-label="Unflag">✕</button></span>`).join("") +
+      `</div></details>`
     : "";
 
   // Live search (from the bottom bar): show a FLAT list of every lift whose name /
@@ -8088,11 +8113,11 @@ function renderBwParts() {
         `</details>`
       : "";
     const majorHtml = major.map((b) => bucketHtml(b)).join("");
-    els.bwGroups.innerHTML = reviewHtml + majorHtml + otherBlock;
+    els.bwGroups.innerHTML = mergeFold + reviewHtml + majorHtml + otherBlock;
     return;
   }
 
-  els.bwGroups.innerHTML = reviewHtml + buckets.map((b) => bucketHtml(b)).join("");
+  els.bwGroups.innerHTML = mergeFold + reviewHtml + buckets.map((b) => bucketHtml(b)).join("");
 }
 
 /** The "Group by" picker above the Index exercise groups. */
@@ -11444,6 +11469,15 @@ async function init() {
       const sy = window.scrollY;
       setBwReviewOpen(true);
       toggleActiveOverride(keep.dataset.askeep, "include");
+      window.scrollTo(0, sy);
+      return;
+    }
+    // "⤳ merge?" — flag / unflag a lift for the merge-review queue (top of the Index).
+    const mflag = (e.target as HTMLElement).closest<HTMLElement>("[data-mergeflag]");
+    if (mflag?.dataset.mergeflag) {
+      const sy = window.scrollY;
+      toggleMergeReview(mflag.dataset.mergeflag);
+      renderBwParts();
       window.scrollTo(0, sy);
       return;
     }
