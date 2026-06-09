@@ -12,10 +12,10 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 15 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(15);
+  it("registers all 14 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(14);
     for (const id of [
-      "weight", "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
+      "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
       "volume", "volumeLoad", "reps", "sets", "frequency", "pr", "trend", "movingAvg",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
@@ -29,9 +29,9 @@ describe("graph metric registry (TASK 26)", () => {
       rec({ date: "2024-02-01", weight: 90, reps: 5 }),
       rec({ date: "2024-01-01", weight: 100, reps: 3 }),
     ];
-    const w = graphMetric("weight")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
-    expect(w.map((p) => p.y)).toEqual([100, 90]); // sorted by date ascending
-    expect(w[0]!.x).toBeLessThan(w[1]!.x);
+    const e = graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(e.length).toBe(2);
+    expect(e[0]!.x).toBeLessThan(e[1]!.x); // sorted by date ascending
     const vol = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
     expect(vol.map((p) => p.y)).toEqual([300, 450]); // 100×3, 90×5
     expect(graphMetric("reps")!.compute!(recs, DEFAULT_GRAPH_CONFIG).map((p) => p.y)).toEqual([3, 5]);
@@ -54,7 +54,7 @@ describe("graph metric registry (TASK 26)", () => {
   it("a combined lift shapes each member-origin differently (same series), plain lifts don't", () => {
     // A combined lift relabels member sets to one name, keeping the source in
     // originalExerciseName — scatter points then get a per-origin shape.
-    const combined = graphMetric("weight")!.compute!(
+    const combined = graphMetric("e1rm")!.compute!(
       [
         rec({ exerciseName: "SQ mix", originalExerciseName: "Squat", weight: 100 }),
         rec({ exerciseName: "SQ mix", originalExerciseName: "Front Squat", weight: 80, setNumber: 2 }),
@@ -66,7 +66,7 @@ describe("graph metric registry (TASK 26)", () => {
     expect(byShape.size).toBe(2); // two distinct member shapes
     expect([...byShape].every((s) => s !== undefined)).toBe(true);
     // A plain single-origin lift gets NO per-point shapes (stays plain dots).
-    const plain = graphMetric("weight")!.compute!(
+    const plain = graphMetric("e1rm")!.compute!(
       [rec({ weight: 100 }), rec({ weight: 105, date: "2024-01-02" })],
       DEFAULT_GRAPH_CONFIG,
     );

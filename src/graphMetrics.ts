@@ -287,12 +287,6 @@ function movingAvgMetric(records: readonly SetRecord[], cfg: GraphConfig): Graph
 
 export const GRAPH_METRICS: GraphMetricDef[] = [
   {
-    id: "weight",
-    label: "Weight",
-    type: "scatter",
-    compute: (rs, cfg) => perSet(rs, (r) => added(r), (r) => `${added(r)}kg × ${r.reps ?? "?"}`, cfg),
-  },
-  {
     id: "weightRange",
     label: "Weight Range",
     type: "range",
@@ -353,7 +347,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
 export const graphMetric = (id: string): GraphMetricDef | undefined => GRAPH_METRICS.find((m) => m.id === id);
 
 /** Metrics measured in kilograms (left axis) vs counts/volume (right axis). */
-const KG_METRICS = new Set(["weight", "weightRange", "e1rm", "strength", "strengthDecay", "predicted", "trend", "movingAvg", "pr"]);
+const KG_METRICS = new Set(["weightRange", "e1rm", "strength", "strengthDecay", "predicted", "trend", "movingAvg", "pr"]);
 const COUNT_METRICS = new Set(["volume", "volumeLoad", "reps", "sets", "frequency"]);
 
 /**
