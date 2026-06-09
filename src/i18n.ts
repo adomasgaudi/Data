@@ -294,6 +294,7 @@ const LT: Record<string, string> = {
   "BW part": "KS dalis",
   "＋ keep": "＋ palikti",
   "✓ kept": "✓ palikta",
+  "clear all exceptions": "išvalyti visas išimtis",
   "Auto-organised because this group is large — tap the menu to change": "Sutvarkyta automatiškai, nes grupė didelė — keisk meniu",
   "Discipline": "Disciplina",
   "Statics": "Statika",

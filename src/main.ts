@@ -2356,6 +2356,28 @@ function syntheticLiftNames(): string[] {
   }
   return out;
 }
+/** WHY a lift is filtered out of the app-wide set — one entry per filter that rejects
+ * it, carrying the lift's OWN value for that dimension (e.g. Tier → "Ugly"). Lets the
+ * Index's "filtered-out" review show the reason so you can go fix the bad tag instead
+ * of blindly forcing it in. Empty ⇒ it passes (not actually hidden). */
+function hiddenReasons(name: string): { key: string; label: string; detail: string }[] {
+  const out: { key: string; label: string; detail: string }[] = [];
+  if (activeExclude.has(name)) out.push({ key: "exclude", label: "Forced out", detail: "" });
+  if (activeFreqTiers.size) {
+    const t = freqTierOf(name);
+    if (!t || !activeFreqTiers.has(t)) out.push({ key: "frequency", label: "Frequency", detail: t ?? "none" });
+  }
+  for (const f of activeMetaFilterList()) {
+    const vals = waMeta(name, f.dim);
+    if (!vals.some((v) => f.values.includes(v)))
+      out.push({
+        key: f.dim,
+        label: FILTER_DIM_LABELS[f.dim],
+        detail: vals.length ? vals.map((v) => (f.dim === "tier" ? TIER_LABELS[v as ExerciseTier] : v)).join("/") : "none",
+      });
+  }
+  return out;
+}
 /** The allowed-exercise set, or null when the filter is off. Rebuilt by refreshActiveSet(). */
 let activeSet: Set<string> | null = null;
 
@@ -3632,6 +3654,13 @@ let bwReviewOpen = (() => { try { return localStorage.getItem("colosseum.bwRevie
 function setBwReviewOpen(v: boolean): void {
   bwReviewOpen = v;
   try { localStorage.setItem("colosseum.bwReviewOpen", v ? "1" : "0"); } catch { /* ignore */ }
+}
+// The Great Filter's "kept exceptions" manager fold — open state persists so removing
+// several exceptions in a row (each re-renders the bar) doesn't snap it shut.
+let asExceptionsOpen = (() => { try { return localStorage.getItem("colosseum.asExcOpen") === "1"; } catch { return false; } })();
+function setAsExceptionsOpen(v: boolean): void {
+  asExceptionsOpen = v;
+  try { localStorage.setItem("colosseum.asExcOpen", v ? "1" : "0"); } catch { /* ignore */ }
 }
 // Fine muscle groups in display order, with a colour (legs/arms split off the
 // CATEGORY_COLORS shades; the rest reuse them).
@@ -7654,10 +7683,21 @@ function renderActiveSetBar(totalExercises: number): void {
     const pillsRow = valuePills ? `<div class="as-fpills">${valuePills}</div>` : `<div class="as-fpills muted as-fnone">no values</div>`;
     return `<div class="as-filter-row"><label class="as-label">Filter by <select class="subtle-select as-dim-sel" data-fidx="${idx}">${dimOpts}</select></label>${pillsRow}</div>`;
   };
-  // Active-filter summary chips (Frequency + every dimension), each removable.
+  // "Kept exceptions" manager: every lift you force-SHOW (or force-hide) despite the
+  // filter, listed and removable — so exceptions never pile up invisibly. (The right fix
+  // for most hidden lifts is to correct their tags, not keep them; this tracks the rest.)
+  const excChips = (set: Set<string>, kind: "include" | "exclude", verb: string) =>
+    [...set].map((n) => `<button type="button" class="as-exc-chip as-exc-${kind}" data-asexc="${escapeHtml(n)}" data-asexckind="${kind}" title="${verb} — tap ✕ to remove">${escapeHtml(displayName(n))} ✕</button>`).join("");
+  const exceptionsRow = (activeInclude.size || activeExclude.size)
+    ? `<details class="as-exceptions"${asExceptionsOpen ? " open" : ""}>` +
+      `<summary class="as-exc-sum">⚑ Exceptions: ${activeInclude.size} kept${activeExclude.size ? ` · ${activeExclude.size} forced-out` : ""}</summary>` +
+      `<div class="as-exc-list">${excChips(activeInclude, "include", "Force-shown")}${excChips(activeExclude, "exclude", "Force-hidden")}` +
+      `<button type="button" class="as-clear" data-asclear="1">clear all exceptions</button></div></details>`
+    : "";
   els.activeSetBar.innerHTML =
     `<div class="as-title">The Great Filter</div>` +
     `<div class="as-statusrow">${status}${reset}</div>` +
+    exceptionsRow +
     activeFilterDims.map((d, i) => filterRow(d, i)).join("") +
     `<p class="as-hint muted">Restricts the WHOLE app — every list, graph, leaderboard, and the Index below. Each row is a category; tap values to keep only those. Rows stack (they AND together; any value within one row passes). “Show all” clears every filter at once.</p>`;
 }
@@ -7824,18 +7864,28 @@ function renderBwParts() {
   const editLabel = INDEX_EDIT_ATTRS.find((a) => a.attr === indexEditAttr)!.label;
   const head = `<thead><tr><th>Exercise</th><th class="num">${escapeHtml(editLabel)}</th><th class="num">Sets</th></tr></thead>`;
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
-  const rowHtml = (r: IndexRow, hidden: boolean) =>
-    `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
-    `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
-    ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
-    ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
-    (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") +
-    // On a filtered-out (greyed) row: a one-tap exception that force-shows this lift
-    // app-wide despite the filter — so you can review what's hidden and keep the odd one.
-    (hidden ? ` <button type="button" class="bw-keep${activeInclude.has(r.name) ? " is-on" : ""}" data-askeep="${escapeHtml(r.name)}" title="${activeInclude.has(r.name) ? "Kept as an exception — tap to drop back into the filter" : "Make an exception — always show this lift despite the filter"}">${activeInclude.has(r.name) ? "✓ kept" : "＋ keep"}</button>` : "") +
-    `</td>` +
-    `<td class="num">${indexEditCell(r)}</td>` +
-    `<td class="num">${r.count.toLocaleString()}</td></tr>`;
+  const rowHtml = (r: IndexRow, hidden: boolean) => {
+    // On a filtered-out row: show WHY (the failing filter + this lift's value) as a red
+    // chip that opens the tag editor — most hidden lifts are mis-tagged, not unwanted,
+    // so the fix is to correct the tag, not force an exception.
+    const reasons = hidden ? hiddenReasons(r.name) : [];
+    const whyChip = reasons.length
+      ? ` <button type="button" class="bw-why" data-moreinfoex="${escapeHtml(r.name)}" title="Filtered out — ${escapeHtml(reasons.map((x) => `${x.label}: ${x.detail || "—"}`).join("; "))}. Tap to open &amp; fix its tags.">✗ ${escapeHtml(reasons.map((x) => x.detail || x.label).join(" · "))}</button>`
+      : "";
+    return `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
+      `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
+      ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
+      ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
+      (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") +
+      whyChip +
+      // Force-show this lift app-wide despite the filter — the rare, TRACKED exception
+      // (managed in the Great Filter's "kept exceptions" list), for when the tags are
+      // right but you still want it shown.
+      (hidden ? ` <button type="button" class="bw-keep${activeInclude.has(r.name) ? " is-on" : ""}" data-askeep="${escapeHtml(r.name)}" title="${activeInclude.has(r.name) ? "Kept as an exception — tap to drop back into the filter" : "Make an exception — always show this lift despite the filter (it stays tagged as-is)"}">${activeInclude.has(r.name) ? "✓ kept" : "＋ keep"}</button>` : "") +
+      `</td>` +
+      `<td class="num">${indexEditCell(r)}</td>` +
+      `<td class="num">${r.count.toLocaleString()}</td></tr>`;
+  };
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
@@ -11274,9 +11324,16 @@ async function init() {
     const dimSel = (e.target as HTMLElement).closest<HTMLSelectElement>(".as-dim-sel");
     if (dimSel?.dataset.fidx) { activeFilterDims[+dimSel.dataset.fidx] = dimSel.value as GreatFilterDim; rerenderActiveSetBar(); return; }
   });
+  els.activeSetBar.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (d instanceof HTMLDetailsElement && d.classList.contains("as-exceptions")) setAsExceptionsOpen(d.open);
+  }, true);
   els.activeSetBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     if (t.closest("[data-asreset]")) { resetActiveSetAll(); return; }
+    // Remove one kept/forced-out exception (keep the manager fold open across re-render).
+    const exc = t.closest<HTMLElement>("[data-asexc]");
+    if (exc?.dataset.asexc) { setAsExceptionsOpen(true); toggleActiveOverride(exc.dataset.asexc, exc.dataset.asexckind === "exclude" ? "exclude" : "include"); return; }
     if (t.closest("[data-asclear]")) { clearActiveOverrides(); return; }
     // Toggle one taxonomy value for the current dimension (OR within the dim).
     const pill = t.closest<HTMLElement>("[data-asfval]");
