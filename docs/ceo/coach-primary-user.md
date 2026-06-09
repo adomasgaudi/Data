@@ -1,149 +1,154 @@
 # CEO: The coach is the primary user of the live page — make it better for the coach
 
-- **Asked:** 2026-06-09  ·  **Status:** PLANNING (awaiting owner approval of direction)
-- **The point it serves:** Colosseum is a competitive strength arena. The owner
-  (the coach) opens the live page most — far more than any athlete. Today the
-  page is built to analyze ONE athlete's ONE exercise in depth (tier-③ nerd
-  view). A coach's daily job is the opposite: scan the whole roster, spot who
-  needs attention, and decide what to do. The app should open like a coach's
-  cockpit, not an analyst's microscope — without losing the depth that's
-  already there.
+- **Asked:** 2026-06-09  ·  **Status:** PLANNING (direction set by owner; one architectural fork open — see Decisions)
+- **The point it serves:** Colosseum is a competitive strength arena, but the
+  person on the page most is the COACH, working **one client at a time**. The
+  coach's job isn't analysis for its own sake — it's **prescription**: decide
+  what this client should train next and hand it to them. The live page should
+  become the coach's session-building cockpit, with the existing deep analysis
+  feeding the decisions underneath.
 
 ## The question (in the owner's words)
 "Me — the coach — being the primary user of the live page, let's make it better."
 
-## The reframe
-The coach is not a fourth audience bolted on; the coach is the LENS. The four
-`#CEO` tiers map onto the coach's own daily journey:
+## What the coach actually does (owner's answer — the spec)
+Working one client at a time, the coach needs to:
+- **Figure out the client's PRIORITY exercises** (what matters for this client now).
+- Decide the **progression lever** per exercise:
+  - needs **more weight**, or
+  - needs **more volume**, or
+  - needs **more stamina** → longer sets or **dropsets**.
+- Add **auxiliary / safety** exercises.
+- **Remember left-out body parts** (coverage gaps).
+- **Remember maintenance exercises** (lifts that must be kept up, not progressed).
+- **Calculate working weights for hard sets.**
+- **Calculate warmups.**
+- And (owner) the resulting plan should **reach the athlete** (their locked view).
 
-- **① Hook (curious / low-effort):** the moment the page opens it must hit the
-  coach with something they *want* to see every day — a punchy team digest:
-  "🔥 3 PRs this week · ⚠️ Jonas: 11 days no-show · 📈 team volume +12%". A
-  reason to open it daily, screenshot-worthy, zero effort to read.
-- **② Easy control (interested):** switching athlete, filtering the roster,
-  flagging "needs attention", jumping into a lift — all one tap, no menus.
-- **③ Depth (nerd):** the coach IS the nerd — the existing ANL / EXR / IDX
-  deep analysis stays, but becomes one tap from any signal, with context
-  carried in (athlete + exercise pre-selected).
-- **④ Actionable:** every signal ends in a verb — "review", "message", "log a
-  set", "adjust plan". The page produces a short coaching to-do queue, not just
-  charts.
+## The reframe (four `#CEO` tiers, coach-as-lens)
+- **① Hook:** open the page on a client and immediately see **"here's today's
+  session draft for [client]"** — priorities, gaps, and a ready prescription. A
+  reason to open it before every session.
+- **② Easy control:** one-tap to set each lift's lever (weight ↑ / volume ↑ /
+  stamina ↑ / add auxiliary), recalc weights, swap an exercise.
+- **③ Depth:** every recommendation is backed by the existing deep analysis
+  (1RM trend, volume, stalls) — one tap to inspect why.
+- **④ Actionable:** the output IS the action — a finished session prescription
+  **sent to the client**, not just charts.
 
 ## Strategic thesis (the single big lever)
-Add a **Coach Home digest** as the admin's default landing: a roster-level
-attention feed that answers "who needs me today?" in 5 seconds, with one-tap
-drill-down into the existing deep views. Everything else hangs off this.
-(Locked/spectator athlete views — rule 21 — are untouched; this is admin-only.)
+Turn the live page (for the admin/coach, one client selected) into a **Session
+Prescription Cockpit**: it reads the client's data, flags priorities + coverage
+gaps, recommends a progression lever per lift, computes hard-set weights and
+warmups, lets the coach assemble today's session, and **delivers it to the
+client's locked view**. Read-analysis stays underneath; prescription is the new
+top layer.
+
+> PARKED IDEA (owner: "mark this as an idea"): a roster-level **Coach Home
+> digest** (scan all athletes: who PR'd / stalled / vanished). Not now — the
+> coach works one client at a time. Recorded as `FEAT-20` in `docs/roadmap.md`.
 
 ## The ~100-prompt plan
-> Numbered checkbox steps in ~10 phases. Tick `[x]` + leave version/commit when
-> done. Any later AI: read this file, do the next unchecked step, push, update.
-> Phases 1–4 are the spine; 5–9 deepen and harden. RE-derive task codes/version
-> at commit (CLAUDE.md rule 8). Ship every step (commit + push, rule 3).
+> Numbered checkbox steps in phases. Tick `[x]` + leave version/commit when done.
+> Any later AI: read this file, do the next unchecked step, push, update it.
+> RE-derive task codes/version at commit (CLAUDE.md rule 8). Ship every step
+> (commit + push, rule 3). Phases 1–4 are the spine (coach-side value with NO
+> backend); Phase 5 is the write-back to athletes (needs the architectural
+> decision below); 6–8 deepen and harden. Not padded — steps grow as the build
+> reveals sub-steps (rule 11).
 
-### Phase 0 — Frame & measure (decide before building)
-- [ ] 1. Lock the coach's #1 daily job with the owner (attention/retention vs PRs/motivation vs programming) — this orders the signals.
-- [ ] 2. Confirm roster size & growth (changes strip-vs-table-vs-search design).
-- [ ] 3. Confirm whether write-back (notes/messages to athletes) is in scope or the page stays read-only analysis (data comes from a Google Sheet).
-- [ ] 4. Decide: new dedicated Coach Home vs enhance ANL landing in place.
-- [ ] 5. Write the coach's top 5 questions ("who PR'd? who's slacking? who's stalling? who's hurt? what do I do today?") — these become the digest cards.
-- [ ] 6. Add a tiny `CODENAMES.md` entry reserving `COACH` / `COACH-HOME` codes.
+### Phase 0 — Frame & decide
+- [ ] 1. Resolve the write-back fork (Decisions Q1) — how a prescription reaches the athlete (data is one-way today). Blocks Phase 5 only; Phases 1–4 proceed regardless.
+- [ ] 2. Define the **Prescription model** (typed): client, date, list of items {exercise, lever, target sets×reps, working weight, warmup ramp, note}, plus auxiliary + maintenance flags. Pure types in a new `src/prescription.ts`.
+- [ ] 3. Confirm "hard set" definition with owner (target reps + RIR? % of 1RM?) and the warmup scheme (ramp steps, %s) — drives the calculators.
+- [ ] 4. Reserve codes in `CODENAMES.md`: `RX` (prescription cockpit) + sub-cards.
+- [ ] 5. Record the parked roster-digest idea as `FEAT-20` (done in this commit).
 
-### Phase 1 — Coach Home skeleton (admin-only landing)
-- [ ] 7. New `COACH-HOME` section, admin-only, shown on open for admins (config flag, default ON for admin, never for locked views — rule 21).
-- [ ] 8. Title + date + roster size header; "View as athlete" still reachable.
-- [ ] 9. A vertical stack of digest CARDS (pure render from existing computed data — no new data source).
-- [ ] 10. Each card = signal + count + a one-tap action target. Empty-state for each.
-- [ ] 11. Make it the NAV default for admins; keep ANL one tap away ("Deep dive").
-- [ ] 12. i18n (LT) for every new string (rule 13).
-- [ ] 13. Snappy: render Coach Home from the already-computed records cache, no app-wide rebuild on open (rule 17).
-- [ ] 14. Ship skeleton; owner sanity-check on phone (rule 19).
+### Phase 1 — Coverage & priorities (per selected client, READ-only, no backend)
+- [ ] 6. **Coverage map**: which muscle groups / body parts the client trained in the last N days vs not (reuse IDX taxonomy + recent sets). Pure + tested in `aggregate.ts`.
+- [ ] 7. **Gaps card**: surface LEFT-OUT body parts (trained least / not at all recently).
+- [ ] 8. **Maintenance-due card**: lifts the client used to do but hasn't recently (should be maintained), with "days since".
+- [ ] 9. **Priority exercises**: rank the client's lifts by tier (Primary/Secondary/Tertiary) × recency × stall, into a "focus today" shortlist.
+- [ ] 10. Render these as compact cards in a new `RX` section, admin-only, when a single client is selected (locked views never see it — rule 21).
+- [ ] 11. i18n (LT) all strings (rule 13); snappy render from the records cache (rule 17).
+- [ ] 12. Ship; owner sanity-checks the priorities/gaps feel right for a real client.
 
-### Phase 2 — Tier ① Hook cards (the "why I open it daily" signals)
-- [ ] 15. **PRs this week** card: who set a new best 1RM / rep PR, per athlete, last 7 days.
-- [ ] 16. **Team momentum** card: total volume / sessions this week vs last (the "+12%" line).
-- [ ] 17. **Biggest mover** card: athlete with the largest 1RM jump (the bragworthy stat).
-- [ ] 18. **Streaks** card: longest active training streaks across the roster.
-- [ ] 19. **Shocking-stat rotator**: one surprising fact per open (e.g. "team benched 4.2 tonnes this week").
-- [ ] 20. Pure compute functions for each (in `metrics.ts`/`aggregate.ts`), unit-tested.
-- [ ] 21. Tasteful visual punch (accent, small spark, no roomy layout — rule 16).
-- [ ] 22. Each card tap → the relevant athlete/exercise deep view, pre-selected.
-- [ ] 23. i18n + test + ship each card; owner reviews which actually feel useful.
+### Phase 2 — Progression-lever recommendation (per priority lift)
+- [ ] 13. Pure rule: detect **stalled weight** (no 1RM progress in N weeks) → suggest a lever.
+- [ ] 14. Lever **more weight**: when reps/RIR show headroom on a progressing lift.
+- [ ] 15. Lever **more volume**: when weight is maxing but work capacity is low.
+- [ ] 16. Lever **more stamina** (longer sets / **dropset**): when the goal is endurance / high-rep lifts.
+- [ ] 17. Lever **add auxiliary / safety**: suggest related antagonist / prehab lifts for an at-risk or unbalanced pattern.
+- [ ] 18. Each lift shows a recommended lever as a one-tap pill the coach can override (cycling pill — rule 15).
+- [ ] 19. Pure, tested recommendation functions (`metrics.ts`/new module); explain WHY in one line.
+- [ ] 20. i18n + test + ship; owner tunes the rules against real clients.
 
-### Phase 3 — Tier ② Easy-control roster
-- [ ] 24. **Roster strip** at top of Coach Home: every athlete as a chip (horizontal scroll, like the athlete strip — rule 16), tap = switch into their deep view.
-- [ ] 25. Per-chip status dot (PR'd / stalled / no-show / fine) at a glance.
-- [ ] 26. Sort/filter the roster: by attention, by recency, by name (one cycling pill — rule 15, not a button row).
-- [ ] 27. "Needs attention" flag toggle per athlete (coach-set), persisted locally.
-- [ ] 28. Quick search box for big rosters (custom `.xdd`, not native — rule 20).
-- [ ] 29. Sex / cohort filter only if owner manages mixed groups (admin-only — rule 21).
-- [ ] 30. One-tap "log a set for this athlete" from a chip → ADD prefilled.
-- [ ] 31. Snappy per-tap feedback; defer heavy re-render (rule 17).
-- [ ] 32. i18n + test + ship.
+### Phase 3 — Weight & warmup calculators (concrete, high-value)
+- [ ] 21. **Hard-set weight**: from the client's current 1RM (existing FORM curve) + target reps/RIR → working weight. Reuse `formulas`, don't re-derive.
+- [ ] 22. **Warmup ramp**: generate ramp sets (e.g. empty bar → ~50/70/85% → working weight) per lift, rounded to plate/loadable increments.
+- [ ] 23. Per-exercise loadable-increment awareness (barbell vs dumbbell vs bodyweight/level lifts — reuse the level/variant logic).
+- [ ] 24. Bodyweight & level lifts (push-ups etc.): express "harder/easier" as the technique level (incline cm / squat-rack hole) instead of kg.
+- [ ] 25. Pure, property-tested calculators (fast-check) — these must be trustworthy.
+- [ ] 26. i18n + test + ship; owner verifies the weights/warmups match what they'd prescribe.
 
-### Phase 4 — Tier ④ Actionable: the coaching to-do queue
-- [ ] 33. **Attention queue** card: ranked list of athletes who need the coach today.
-- [ ] 34. Rule: no-show (N+ days since last session) → "check in".
-- [ ] 35. Rule: stalled lift (no 1RM progress in N weeks on a primary lift) → "review program".
-- [ ] 36. Rule: form/data flag (unrecognised variation, review-tagged set) → "verify data".
-- [ ] 37. Rule: deload/overreach signal (volume spike or crash) → "watch".
-- [ ] 38. Each queue item carries a concrete action button (review / message / log / dismiss).
-- [ ] 39. "Mark reviewed" / dismiss, persisted so the queue clears as the coach works it.
-- [ ] 40. Tunable thresholds (N days, N weeks) in settings, sane defaults.
-- [ ] 41. Pure, tested rule functions; queue is a projection, no duplicated state.
-- [ ] 42. i18n + test + ship; owner tunes thresholds against real roster.
+### Phase 4 — Prescription builder (assemble today's session)
+- [ ] 27. Assemble the selected lifts + levers + weights + warmups into one editable **session draft** for the client + date.
+- [ ] 28. Add/remove/reorder exercises; pull from priorities, gaps, maintenance, or search (custom `.xdd` — rule 20).
+- [ ] 29. Per-item edit: sets×reps, weight (auto from calc, overridable), dropset toggle, note.
+- [ ] 30. Auxiliary + maintenance sections clearly grouped.
+- [ ] 31. Save the draft locally (persists on the coach's device) so it survives reloads.
+- [ ] 32. Cramped, dense layout; small rounding (rules 16, 22); snappy edits (rule 17).
+- [ ] 33. i18n + test + ship; this is usable by the coach even before delivery exists.
 
-### Phase 5 — Tier ③ Depth wiring (carry context into the microscope)
-- [ ] 43. Every Coach Home tap deep-links: set athlete + exercise + metric, then open ANL/EXR.
-- [ ] 44. A persistent "back to Coach Home" affordance from deep views (admin).
-- [ ] 45. Pre-select the lift that triggered a signal (e.g. the stalled bench).
-- [ ] 46. Keep deep-view state when bouncing back to the digest (don't lose scroll/selection — rule 24 / snappy recipe).
-- [ ] 47. Verify no regression to the existing ANL/EXR/IDX flows for non-admin/locked users.
-- [ ] 48. i18n + test + ship.
+### Phase 5 — Reaches the athlete (write-back — needs Decisions Q1)
+- [ ] 34. Implement the chosen delivery channel (see Decisions Q1) — store the prescription somewhere the athlete's session can read.
+- [ ] 35. Athlete LOCKED view shows **"Today's plan from your coach"** (read-only) — never the cockpit (rule 21).
+- [ ] 36. Athlete can see warmups + working weights + notes for each lift.
+- [ ] 37. Status: sent / seen / done (as far as the channel allows).
+- [ ] 38. Handle no-plan and stale-plan empty states gracefully.
+- [ ] 39. i18n + test + ship; owner + a test client verify delivery end-to-end.
 
-### Phase 6 — Roster comparison & cohort leverage
-- [ ] 49. Surface GRP (compare people) as a one-tap "compare these athletes" from the roster.
-- [ ] 50. Surface STATS per-category leaderboards as a coach lens (who leads each lift).
-- [ ] 51. "Cohort progress" mini-view: the whole roster's trend on a chosen lift.
-- [ ] 52. Reuse existing LB/GRP/STATS compute — projection, not a rewrite (rule 12).
-- [ ] 53. i18n + test + ship.
+### Phase 6 — Close the loop (did they do it?)
+- [ ] 40. After the client logs sets, compare prescribed vs actual (adherence) on the cockpit.
+- [ ] 41. Surface "did less / more than prescribed" to inform next session's levers.
+- [ ] 42. Feed adherence back into Phase-2 recommendations.
+- [ ] 43. i18n + test + ship.
 
-### Phase 7 — Data trust (a coach must trust the numbers)
-- [ ] 54. Surface Data-health (SET-HEALTH) flags relevant to the roster on Coach Home.
-- [ ] 55. "Sets to review" feed: review-tagged / unrecognised-variation sets, per athlete.
-- [ ] 56. One-tap fix-in-place from a flag (jump to the set's variation chip / IDX-CARD).
-- [ ] 57. Freshness indicator: last data refresh from StrengthLevel (DATA), nudge if stale.
-- [ ] 58. i18n + test + ship.
+### Phase 7 — Depth wiring & data trust
+- [ ] 44. Every cockpit lift → one tap into its deep ANL/EXR analysis, pre-selected, with a way back.
+- [ ] 45. Surface data-health flags for the client (review-tagged / unrecognised sets) so the coach trusts the inputs (SET-HEALTH).
+- [ ] 46. Freshness: warn if the client's data is stale before prescribing.
+- [ ] 47. i18n + test + ship.
 
-### Phase 8 — Motivation loop (what the coach shares back)
-- [ ] 59. A "share-worthy" snapshot per PR (clean card the coach can screenshot for an athlete).
-- [ ] 60. Weekly team recap the coach can show the group (PRs, movers, streaks).
-- [ ] 61. Optional per-athlete "highlight" the coach pins for them to see in their locked view.
-- [ ] 62. i18n + test + ship.
+### Phase 8 — Harden, polish, perf, verify
+- [ ] 48. Full LT i18n sweep (rule 13); `#design` pass (rules 16, 22); `#prune` pass for new repeated patterns.
+- [ ] 49. Snappy audit + memoise any new N×-per-render compute (rule 17 recipe).
+- [ ] 50. `npm run typecheck` + `npm test` + build green; property tests for all calculators.
+- [ ] 51. Owner verifies the whole flow on phone (rule 19); iterate on feel.
+- [ ] 52. Update `CODENAMES.md`, `docs/roadmap.md`, this Log; mark Status DONE.
 
-### Phase 9 — Harden, polish, perf, verify
-- [ ] 63. Full LT i18n sweep of all new strings (rule 13).
-- [ ] 64. `#design` pass: small rounding, dense layout, cramped labels (rules 16, 22).
-- [ ] 65. `#prune` pass for any pattern this introduced repeated wrong.
-- [ ] 66. Snappy audit: Coach Home open + every tap stays <1 frame heavy work (rule 17).
-- [ ] 67. Memoise any new N×-per-render compute (snappy recipe).
-- [ ] 68. Full `npm run typecheck` + `npm test` + build green.
-- [ ] 69. Owner verifies the whole flow on phone (rule 19); iterate on what doesn't feel right.
-- [ ] 70. Update `CODENAMES.md`, `docs/roadmap.md`, and this file's Log; mark Status DONE.
+> ~52 backbone steps; Phases 1–4 each spawn per-card/per-lever sub-steps in their
+> own commits as we build, growing toward ~100. We add steps as work reveals
+> them — never invent busywork to hit a round number (rule 11).
 
-> ~70 concrete steps; the count grows as phases 2–4 spawn per-card sub-steps in
-> their own commits. Not padded to 100 — the real work is here (rule 11); we add
-> steps as the build reveals them, never invent busywork to hit a number.
-
-## Decisions / open questions for the owner (BEFORE we build)
-1. **Coach Home vs enhance-in-place?** New admin landing digest, or improve the
-   existing ANL landing where it stands?
-2. **Coach's #1 daily job?** Attention/retention · PRs/motivation · programming
-   — orders which signals lead.
-3. **Roster size?** Handful vs dozens vs hundreds — changes the roster UI.
-4. **Write-back in scope?** Notes/messages/flags that persist & reach athletes,
-   or keep the live page read-only analysis (data is sheet-sourced)?
+## Decisions / open questions for the owner
+1. **How should a prescription REACH the athlete?** (the one hard constraint —
+   data is currently one-way: sheet → site). Options:
+   - (a) Same Google Sheet: a new "prescriptions" tab the Apps Script also
+     serves via `doGet`; coach writes to it (needs a write path / `doPost` or a
+     small form). Keeps one data home.
+   - (b) A lightweight separate store (e.g. a tiny key-value / paste link / its
+     own endpoint) just for prescriptions.
+   - (c) Phase it: build the whole coach-side cockpit first (Phases 1–4, no
+     backend), deliver prescriptions manually (screenshot/share) until we pick a
+     real channel. **(Recommended — fastest value, defers the hard part.)**
+2. **"Hard set" definition?** Target reps + RIR (e.g. 5 reps @ RIR 2), or % of
+   1RM? Drives the weight calculator.
+3. **Warmup scheme preference?** Default ramp (empty bar → ~50/70/85% → working)
+   or your own percentages/step count?
 
 ## Log
-- 2026-06-09 — Plan drafted (PLANNING). Awaiting owner answers to the 4 questions
-  above before any code.
+- 2026-06-09 — Plan v1 drafted (roster digest). Owner answers reframed it.
+- 2026-06-09 — Plan v2: pivoted to per-client **Session Prescription Cockpit**;
+  roster digest parked as `FEAT-20`. Awaiting owner answers to Decisions Q1–Q3
+  before code (Phase 0).
