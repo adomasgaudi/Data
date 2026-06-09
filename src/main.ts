@@ -855,6 +855,10 @@ const MUSCLE_GROUPS: MuscleGroup[] = [
   "Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Core",
 ];
 const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary", ugly: "Ugly" };
+// Canonical tier rank (best → worst) + dot colours, shared by the Index tier
+// grouping. "ugly" sorts LAST and gets a muted grey, the others a green→amber ramp.
+const TIER_RANK: ExerciseTier[] = ["main", "second", "third", "ugly"];
+const TIER_COLORS: Record<ExerciseTier, string> = { main: "#2e9e5b", second: "#c0651f", third: "#2b5fa8", ugly: "#7a7f87" };
 const MUSCLE_KEY_SET = new Set<string>(MUSCLE_GROUPS as readonly string[]);
 /** The highest muscle-involvement level (0–4) a lift reaches across all muscles. */
 function maxMgLevel(name: string): number {
@@ -3649,17 +3653,23 @@ function indexBuckets(rows: IndexRow[], mode: IndexGroupMode): IndexBucket[] {
   const valuesFor = (name: string): string[] =>
     mode === "discipline" ? discsFor(name)
     : mode === "muscleGroup" ? mgsFor(name)
+    // Tier reads the override-aware resolver (same as the quick-edit / info card), so a
+    // lift retagged "Ugly" actually lands in the Ugly bucket — not the auto guess.
+    : mode === "tier" ? tiersFor(name)
     : waMeta(name, mode as ExerciseFilterDim);
   const by = groupByMulti((r) => valuesFor(r.name));
   const order: string[] =
     mode === "discipline" ? DISCIPLINES.filter((d) => by.has(d))
     : mode === "muscleGroup" ? INDEX_MUSCLES.filter((m) => by.has(m))
+    : mode === "tier" ? TIER_RANK.filter((t) => by.has(t))
     : [...by.keys()].sort((a, b) => a.localeCompare(b));
   const colorFor = (k: string): string =>
     mode === "discipline" ? disciplineColor(k as Discipline)
     : mode === "muscleGroup" ? muscleColor(k as MuscleGroup)
+    : mode === "tier" ? TIER_COLORS[k as ExerciseTier]
     : hashHueHex(k);
-  return order.map((k) => ({ key: k, label: k, color: colorFor(k), rows: by.get(k)! }));
+  const labelFor = (k: string): string => (mode === "tier" ? TIER_LABELS[k as ExerciseTier] : k);
+  return order.map((k) => ({ key: k, label: labelFor(k), color: colorFor(k), rows: by.get(k)! }));
 }
 
 /** Build the custom athlete chip row from the (hidden) select's options. */
@@ -12630,7 +12640,12 @@ function saveUserTaxonomy(): void {
 // Muscle group goes through mgsFor so the selector honours the owner's per-muscle
 // involvement levels (membership = level ≥ 3), consistent with the Index/calendar.
 const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
+  // Dimensions that have an editable override (muscle group, tier, discipline) read
+  // their override-aware resolver, so a retagged lift groups/filters by its NEW value
+  // everywhere (Index, graph picker, calendar) — those resolvers are synthetic-aware too.
   dim === "muscleGroup" ? (mgsFor(name) as string[])
+  : dim === "tier" ? (tiersFor(name) as string[])
+  : dim === "discipline" ? (discsFor(name) as string[])
   // Synthetic lifts inherit every grouping dimension from their members (their own
   // name keyword-matches nothing), so they group exactly where their members do.
   : syntheticMembers(name).length ? [...new Set(syntheticMembers(name).flatMap((m) => waMeta(m, dim)))]
