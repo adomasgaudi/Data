@@ -1,6 +1,6 @@
 # CEO: The coach is the primary user of the live page — make it better for the coach
 
-- **Asked:** 2026-06-09  ·  **Status:** PLANNING (direction set by owner; one architectural fork open — see Decisions)
+- **Asked:** 2026-06-09  ·  **Status:** IN-PROGRESS — Phase 3 (calculators) FIRST, per owner. Delivery = manual for now; cockpit phases follow.
 - **The point it serves:** Colosseum is a competitive strength arena, but the
   person on the page most is the COACH, working **one client at a time**. The
   coach's job isn't analysis for its own sake — it's **prescription**: decide
@@ -84,12 +84,12 @@ top layer.
 - [ ] 20. i18n + test + ship; owner tunes the rules against real clients.
 
 ### Phase 3 — Weight & warmup calculators (concrete, high-value)
-- [ ] 21. **Hard-set weight**: from the client's current 1RM (existing FORM curve) + target reps/RIR → working weight. Reuse `formulas`, don't re-derive.
-- [ ] 22. **Warmup ramp**: generate ramp sets (e.g. empty bar → ~50/70/85% → working weight) per lift, rounded to plate/loadable increments.
-- [ ] 23. Per-exercise loadable-increment awareness (barbell vs dumbbell vs bodyweight/level lifts — reuse the level/variant logic).
+- [x] 21. **Hard-set weight**: from the client's current 1RM + target reps/RIR OR %1RM → working weight. Reuses `metrics.ts` `weightForReps`/`repsForWeight`, no re-derive. → `src/prescription.ts` `hardSetWeight`.
+- [x] 22. **Warmup ramp**: general 30–60% primers + 60%→90% ramp at ⅓ of achievable reps, pyramid set-count by intensity, rounded to the loadable increment. → `src/prescription.ts` `warmupRamp` / `rampSetCount`.
+- [ ] 23. Per-exercise loadable-increment awareness (barbell vs dumbbell vs bodyweight/level lifts — reuse the level/variant logic). *(increment is a param today, default 2.5; per-exercise wiring still to do.)*
 - [ ] 24. Bodyweight & level lifts (push-ups etc.): express "harder/easier" as the technique level (incline cm / squat-rack hole) instead of kg.
-- [ ] 25. Pure, property-tested calculators (fast-check) — these must be trustworthy.
-- [ ] 26. i18n + test + ship; owner verifies the weights/warmups match what they'd prescribe.
+- [x] 25. Pure, property-tested calculators (fast-check) — these must be trustworthy. → `src/prescription.test.ts` (13 tests, incl. monotonicity + bounds props).
+- [ ] 26. UI: surface the calculators in the app + i18n + ship; owner verifies the weights/warmups match what they'd prescribe.
 
 ### Phase 4 — Prescription builder (assemble today's session)
 - [ ] 27. Assemble the selected lifts + levers + weights + warmups into one editable **session draft** for the client + date.
@@ -131,24 +131,27 @@ top layer.
 > own commits as we build, growing toward ~100. We add steps as work reveals
 > them — never invent busywork to hit a round number (rule 11).
 
-## Decisions / open questions for the owner
-1. **How should a prescription REACH the athlete?** (the one hard constraint —
-   data is currently one-way: sheet → site). Options:
-   - (a) Same Google Sheet: a new "prescriptions" tab the Apps Script also
-     serves via `doGet`; coach writes to it (needs a write path / `doPost` or a
-     small form). Keeps one data home.
-   - (b) A lightweight separate store (e.g. a tiny key-value / paste link / its
-     own endpoint) just for prescriptions.
-   - (c) Phase it: build the whole coach-side cockpit first (Phases 1–4, no
-     backend), deliver prescriptions manually (screenshot/share) until we pick a
-     real channel. **(Recommended — fastest value, defers the hard part.)**
-2. **"Hard set" definition?** Target reps + RIR (e.g. 5 reps @ RIR 2), or % of
-   1RM? Drives the weight calculator.
-3. **Warmup scheme preference?** Default ramp (empty bar → ~50/70/85% → working)
-   or your own percentages/step count?
+## Decisions / answers from the owner (LOCKED)
+1. **Start with the CALCULATORS (Phase 3) first** — most concrete win.
+2. **Delivery to athlete = MANUAL for now** — build the coach-side first;
+   share/screenshot until we commit to a write channel (revisit at Phase 5).
+3. **"Hard set" = BOTH, switchable per exercise:** reps + RIR (e.g. 5 @ RIR 2)
+   OR % of 1RM. Calculator supports both modes.
+4. **Warmup scheme (owner's spec — implement exactly):**
+   - **General phase:** light sets at **30–60% of the working weight, 10–20 reps**.
+   - **Ramp phase:** from **60% up to the working weight**, each ramp set does
+     **⅓ of the reps you *could* do at that load** (⅓ of predicted max reps).
+   - **Pyramid:** the **heavier the working weight, the MORE ramp sets** to reach it.
 
 ## Log
 - 2026-06-09 — Plan v1 drafted (roster digest). Owner answers reframed it.
 - 2026-06-09 — Plan v2: pivoted to per-client **Session Prescription Cockpit**;
-  roster digest parked as `FEAT-20`. Awaiting owner answers to Decisions Q1–Q3
-  before code (Phase 0).
+  roster digest parked as `FEAT-20`.
+- 2026-06-09 — Owner locked decisions (above). Starting Phase 3: pure, tested
+  weight + warmup calculators in `src/prescription.ts` (reuse `metrics.ts`
+  1RM curve — `weightForReps` / `repsForWeight`; no re-derivation).
+- 2026-06-09 — Phase 3 maths DONE: `src/prescription.ts` (`hardSetWeight`,
+  `warmupRamp`, `rampSetCount`, `roundToIncrement`) + 13 passing unit/property
+  tests; typecheck clean. NOT yet wired into the UI (step 26) — no site change
+  yet, so no version bump. Next: a coach-facing calculator UI, then per-exercise
+  increments (23) and bodyweight/level lifts (24).
