@@ -13102,10 +13102,9 @@ let waGroupBy: "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effecti
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
 // toggle. Replaces the old separate Filter button.
 const waGroupsOff = new Set<string>();
-// The picker, calendar and Index all share these CORE group-by dimensions. The
-// extra taxonomy dims (body part, joint, movement, plane, difficulty, equipment)
-// live only in the Index now — see INDEX_GROUP_MODES.
-const WA_GROUPBY_DIMS: ExerciseFilterDim[] = ["discipline", "muscleGroup", "function", "tier"];
+// The core taxonomy group-by dims (discipline, muscleGroup, function, tier) are listed
+// inline in groupOptList where the selector menu is built — see INDEX_GROUP_MODES for
+// the Index's wider set.
 // Picker pill mode: individual exercise pills (default) or ONE pill per category
 // (manual toggle), so whole categories can be opened/eliminated at once. Categories
 // mode needs a Group-by dimension (it groups by it).
@@ -13351,11 +13350,18 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
       : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
   const count = `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>`;
+  // "Deselect all" lives here as a big ✕ at the END of the title list (owner's choice) —
+  // not as a button in the tools row below. Clears the WHOLE selection for this scope.
+  // It sits inside the graph's <summary>, so the capture handler (data-titledeselect)
+  // preventDefaults the fold toggle, like the per-lift remove buttons.
+  const deselectX = remove
+    ? `<button type="button" class="wa-title-deselect" data-titledeselect="${remove}" title="Deselect all — clear the whole selection" aria-label="Deselect all">✕</button>`
+    : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span></span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span>${deselectX}</span>`;
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
@@ -13526,11 +13532,20 @@ function renderSelector(scope: SelScope): void {
   const nextName: NameMode = nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code";
   const nameToggle =
     `<button type="button" class="wa-name-opt name-mode-opt" data-waname="${nextName}" title="Lift labels — tap to cycle: code → short → full">${nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full"}</button>`;
-  const groupOpts =
-    `<option value="bestlifts"${waGroupBy === "bestlifts" ? " selected" : ""}>Best lifts</option>` +
-    `<option value="frequency"${waGroupBy === "frequency" ? " selected" : ""}>Frequency</option>` +
-    `<option value="effectiveness"${waGroupBy === "effectiveness" ? " selected" : ""}>Effectiveness</option>` +
-    WA_GROUPBY_DIMS.map((d) => `<option value="${d}"${waGroupBy === d ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`).join("");
+  // Owner-chosen display order: Frequency · Best lifts · Discipline · Muscle group ·
+  // Effectiveness · Function · Tier. (None was already removed from this menu.)
+  const groupOptList: { value: string; label: string }[] = [
+    { value: "frequency", label: "Frequency" },
+    { value: "bestlifts", label: "Best lifts" },
+    { value: "discipline", label: FILTER_DIM_LABELS["discipline"] },
+    { value: "muscleGroup", label: FILTER_DIM_LABELS["muscleGroup"] },
+    { value: "effectiveness", label: "Effectiveness" },
+    { value: "function", label: FILTER_DIM_LABELS["function"] },
+    { value: "tier", label: FILTER_DIM_LABELS["tier"] },
+  ];
+  const groupOpts = groupOptList
+    .map((o) => `<option value="${o.value}"${waGroupBy === o.value ? " selected" : ""}>${escapeHtml(o.label)}</option>`)
+    .join("");
   // Frequency sub-controls: a period pill (cycles) + a sets/hard-sets pill.
   const freqCtl = waGroupBy === "frequency"
     ? `<button type="button" class="wa-clear wa-freq-period" title="Period for the set counts — tap to cycle">${FREQ_PERIOD_LABEL[waFreqPeriod]}</button>` +
@@ -13553,23 +13568,19 @@ function renderSelector(scope: SelScope): void {
   // These controls live at the TOP level (in the header, next to the button), not
   // buried in the menu: Group-by, Pills mode, Select all, Clear.
   const groupCtl = `<label class="wa-gcfg-f wa-sel-group" title="Group the picker by"><select class="wa-groupby">${groupOpts}</select></label>`;
-  // Select all / Deselect all are TWO separate buttons (owner's choice). "Select all"
-  // is disabled once everything is picked; "Deselect all" is disabled when nothing is.
+  // "Deselect all" is no longer a tools-row button — it moved to the big ✕ at the end
+  // of the selection TITLE (see liftSelectionTitle). The tools row keeps only the
+  // ADD-side buttons: "Select all" (history) is disabled once everything is picked.
   const selectable = waChipList().filter((ex) => !ex.missing).map((ex) => ex.name);
   const allOn = selectable.length > 0 && selectable.every((n) => cur.includes(n));
-  // The GRAPH selector offers ONLY "Deselect all" — plotting every lift at once is
-  // never wanted, so there's no "Select all" for it. The history selector keeps both
-  // (Select all disabled once all picked; Deselect all disabled when none are).
   // "Complete" (history only) selects EVERY exercise — the whole catalogue, ignoring
   // the picker's current group / search / identity filter (vs "Select all" = shown only).
   const everyEx = scope === "graph" ? [] : waSelectorExercises().map((e) => e.name);
   const completeOn = everyEx.length > 0 && everyEx.every((n) => cur.includes(n));
   const selAllToggle = scope === "graph"
-    ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>` +
-      `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the graph selection">Deselect all</button>`
+    ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
     : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
-      `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>` +
-      `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the selection">Deselect all</button>`;
+      `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
   // keeps the "what / how many" context the old dropdown summary showed.
@@ -14849,6 +14860,17 @@ function setupWorkoutAnalysis(): void {
       deferRender(renderWorkoutAnalysis);
       return;
     }
+    // The big ✕ at the end of a selection title = Deselect all (capture: it lives in the
+    // graph's <summary>, so preventDefault stops the fold from toggling).
+    const tDes = t.closest<HTMLElement>("[data-titledeselect]");
+    if (tDes?.dataset.titledeselect) {
+      e.preventDefault(); e.stopPropagation();
+      const sc = tDes.dataset.titledeselect as "graph" | "hist";
+      if (sc === "graph") waGraphSel = []; else waSelected = [];
+      titleExpanded[sc] = false;
+      debounceWaRender();
+      return;
+    }
   }, true);
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -14903,11 +14925,6 @@ function setupWorkoutAnalysis(): void {
     if (matchBtn?.dataset.matchfrom) {
       const from = matchBtn.dataset.matchfrom as SelScope;
       setSelArr([...(from === "graph" ? waGraphSel : waSelected)]);
-      debounceWaRender();
-      return;
-    }
-    if (t.closest(".wa-deselall")) { // clear the whole selection
-      setSelArr([]);
       debounceWaRender();
       return;
     }
