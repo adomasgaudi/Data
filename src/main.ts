@@ -10565,6 +10565,13 @@ async function init() {
     // Global "All graphs / Approved only" master toggle (in Graph options).
     const allGraphsBtn = t.closest<HTMLElement>("[data-allgraphs]");
     if (allGraphsBtn) { setAllGraphsAllowed(!allGraphsAllowed); return; }
+    // "Compare" toggle (graph bar, beside Graph options / Legend): show/hide the
+    // other-athlete compare pill row, which is hidden by default to keep things clean.
+    if (t.closest<HTMLElement>("[data-wacompare]")) {
+      waCompareOpen = !waCompareOpen;
+      renderWaGraph();
+      return;
+    }
     // Multi-athlete graph overlay: toggle an extra athlete on/off (admin only). The
     // primary is fixed (set in the athlete selector); the exercise cap auto-shrinks.
     const athPill = t.closest<HTMLElement>(".wa-ath-pill");
@@ -13097,6 +13104,10 @@ const WA_GRAPH_MAX = 20;
 // the primary is always plotted. Each (exercise × athlete) is its own line, so the
 // exercise cap shrinks as athletes are added (2 athletes → 5 lifts, etc.).
 let waGraphAthletes: string[] = [];
+// The COMPARE other-athlete pill row is HIDDEN by default and only revealed when the
+// "Compare" button (in the graph bar, beside Graph options / Legend) is pressed —
+// keeps the default view uncluttered. Session-only (resets to hidden on reload).
+let waCompareOpen = false;
 /** Athletes plotted on the graph: the primary first, then any valid extras. Locked
  * (non-admin) views see only themselves. */
 function graphAthleteList(): string[] {
@@ -14292,15 +14303,21 @@ function renderWaGraph(): void {
   // the SVG engine inside #waGraphChart; we relocate it down into this bar after the
   // chart draws (its innerHTML keeps updating in place wherever it lives).
   // The expand (⛶), kg⇄×BW and ⤢ Fit buttons now OVERLAY the chart's top-right corner
-  // (see overlayHtml below) instead of sitting in this bar, so the COMPARE athletes row
-  // sits right under the graph. This bar holds just the Compare pills + Graph options.
+  // (see overlayHtml below) instead of sitting in this bar. The COMPARE other-athlete
+  // row is HIDDEN by default — it only appears (right under the graph) when the
+  // "Compare" toggle (in the options line, beside Graph options / Legend) is on.
+  const canCompare = lockedUsername() === null && rosterUsers().length >= 2;
+  const compareBtn = canCompare
+    ? `<button type="button" class="wa-graph-compare-btn wa-clear${waCompareOpen ? " is-on" : ""}" data-wacompare="1" aria-pressed="${waCompareOpen}" title="${waCompareOpen ? "Hide the other-athlete compare row" : "Compare other athletes on the graph"}">Compare</button>`
+    : "";
   const graphBarHtml =
     `<div class="wa-graph-bar">` +
-    graphAthletesPillsHtml() +
+    (waCompareOpen ? graphAthletesPillsHtml() : "") +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu">${cfgUi}</div>` +
     `</details>` +
+    compareBtn +
     `</div>`;
   // In-chart overlay toolbar (top-right corner): kg unit toggle, ⤢ Fit (proxies the
   // chart's own re-fit), and ⛶ fullscreen. Compact icons over the plot so they don't

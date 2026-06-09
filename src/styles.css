@@ -3508,6 +3508,14 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-graph-fold-sum::-webkit-details-marker { display: none; }
 .wa-graph-fold-sum::after { content: " ▾"; color: var(--muted); }
 .wa-graph-fold[open] .wa-graph-fold-sum { border-color: var(--accent); background: var(--accent-soft); }
+/* "Compare" toggle — matches the Graph options / Legend buttons it sits beside; filled
+   accent when on (the compare row is showing). */
+.wa-graph-compare-btn {
+  cursor: pointer; display: inline-flex; align-items: center; min-height: var(--tap-min);
+  padding: 5px 12px; font-size: 0.82rem; font-weight: 600; color: var(--accent);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+.wa-graph-compare-btn.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
 .wa-graph-menu {
   /* A bottom-anchored, height-CAPPED, internally-scrollable sheet — NOT a tall dropdown
      that pushes the page. It sits just above the command bar, so the chart stays visible

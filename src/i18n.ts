@@ -267,6 +267,7 @@ const LT: Record<string, string> = {
   "All graphs": "Visi grafikai",
   "Approved only": "Tik patvirtinti",
   "Match graph": "Atitikti grafiką",
+  "Compare": "Palyginti",
   "Match history": "Atitikti istoriją",
   "Graph lifts": "Grafiko pratimai",
   "History lifts": "Istorijos pratimai",
