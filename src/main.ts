@@ -773,14 +773,50 @@ function resetMgLevel(name: string) {
   if (metaOverrides.mgLevel) delete metaOverrides.mgLevel[name];
   saveMetaOverrides();
 }
+// Per-exercise usage (total sets + last-used ms) from the live records, memoised for
+// one synchronous pass (cleared on the next microtask so it's never stale after an edit).
+let exUsageCache: Map<string, { sets: number; last: number }> | null = null;
+function exUsage(): Map<string, { sets: number; last: number }> {
+  if (exUsageCache) return exUsageCache;
+  const m = new Map<string, { sets: number; last: number }>();
+  for (const r of data.records) {
+    if (!r.exerciseName) continue;
+    const e = m.get(r.exerciseName) ?? { sets: 0, last: 0 };
+    e.sets++;
+    const t = Date.parse(r.date);
+    if (Number.isFinite(t) && t > e.last) e.last = t;
+    m.set(r.exerciseName, e);
+  }
+  exUsageCache = m;
+  queueMicrotask(() => { exUsageCache = null; });
+  return m;
+}
+/** Automatic tier from RECENCY + frequency (the owner's curated mains stay Primary;
+ * cardio/mobility/warm-ups stay Tertiary). Among accessory strength work: a long-stale
+ * one-off → Ugly; a former staple now dropped → Tertiary; recent/frequent → Secondary.
+ * Owner tier overrides always win (see tiersFor) — this is just the smart default. */
+function autoTier(name: string): ExerciseTier {
+  const base = exerciseTier(name);
+  if (base !== "second") return base; // curated Primary, or non-strength Tertiary — leave
+  const u = exUsage().get(name);
+  if (!u || !u.sets) return "second";
+  const days = (Date.now() - u.last) / 86_400_000;
+  if ((u.sets <= 2 && days > 365) || days > 730) return "ugly";       // one-off long ago / untouched 2y+
+  if (u.sets <= 5 && days > 540) return "ugly";                       // barely used and very stale
+  if (days > 365) return u.sets >= 10 ? "third" : "ugly";             // a year cold: real volume → tertiary, else ugly
+  if (u.sets >= 20 && days > 180) return "third";                     // former staple, now dropped → tertiary
+  if (u.sets >= 25 && days <= 150) return "second";                   // current staple-ish
+  if (days <= 180) return "second";                                  // still in rotation
+  return "third";
+}
 /** All tiers a lift belongs to — the owner's list, else (synthetic) its reference
- * member's tier, else the single keyword default. */
+ * member's tier, else the smart auto-tier default. */
 function tiersFor(name: string): ExerciseTier[] {
   const ov = metaSet("tier", name) as ExerciseTier[] | null;
   if (ov) return ov;
   const ref = referenceMemberFor(name);
   if (ref) return tiersFor(ref);
-  return [exerciseTier(name)];
+  return [autoTier(name)];
 }
 /** All disciplines a lift belongs to — the owner's list, else (synthetic) the union
  * of its members' disciplines, else the single keyword default. */
@@ -2228,6 +2264,9 @@ let activeMetaFilters: Partial<Record<ExerciseFilterDim, string[]>> = (() => {
 // dims like any other. (Replaces the old single "tier cutoff" dropdown.)
 const ACTIVE_FREQ_KEY = "colosseum.activeSet.freq.v1";
 let activeFreqTiers = new Set<string>(loadJsonArray(ACTIVE_FREQ_KEY));
+// Hide "Ugly"-tier lifts app-wide by default (auto-tiered junk/one-offs). On unless
+// the owner turns the whole filter off; force-included lifts still show.
+let hideUgly = (() => { try { return localStorage.getItem("colosseum.hideUgly") !== "0"; } catch { return true; } })();
 // One-time migration: an old "S+ cutoff" becomes the exact tiers at/above it.
 if (activeCutoff && activeFreqTiers.size === 0) {
   const min = FREQ_TIERS.find((t) => t.tier === activeCutoff)?.min ?? 0;
@@ -2270,15 +2309,19 @@ let activeSet: Set<string> | null = null;
  * after data loads or any active-set control changes, then re-render. */
 function refreshActiveSet(): void {
   const metaFilters = activeMetaFilterList();
-  if (activeFreqTiers.size === 0 && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo && metaFilters.length === 0) {
+  const anyFilter = activeFreqTiers.size || activeInclude.size || activeExclude.size || activeSolo || metaFilters.length;
+  if (!anyFilter && !hideUgly) {
     activeSet = null; // filter fully off → no filtering at all
     return;
   }
   // Solo mode shows exactly its set as the base; otherwise ALL logged lifts (frequency
-  // is now a stackable category below, not the base cutoff).
+  // is now a stackable category below, not the base cutoff). With only hide-ugly on,
+  // the base is every logged lift (we just drop the Ugly ones below).
   let base = activeSolo
     ? new Set(activeSolo)
-    : buildActiveExerciseSet(data.records, null, [...activeInclude], [...activeExclude], FREQ_TIERS);
+    : anyFilter
+      ? buildActiveExerciseSet(data.records, null, [...activeInclude], [...activeExclude], FREQ_TIERS)
+      : new Set<string>(data.records.map((r) => r.exerciseName).filter((n): n is string => !!n));
   // Frequency category (exact tiers, OR within): keep lifts whose app-wide tier is chosen.
   if (activeFreqTiers.size && !activeSolo) base = new Set([...base].filter((n) => { const t = freqTierOf(n); return t !== null && activeFreqTiers.has(t); }));
   // Taxonomy filters narrow the base further (AND across dimensions).
@@ -2287,6 +2330,8 @@ function refreshActiveSet(): void {
   // beats everything. (Re-applied here so they also override the taxonomy filters.)
   for (const n of activeInclude) base.add(n);
   for (const n of activeExclude) base.delete(n);
+  // Drop auto-"Ugly" lifts app-wide (unless the owner force-included one).
+  if (hideUgly) for (const n of [...base]) if (!activeInclude.has(n) && tierFor(n) === "ugly") base.delete(n);
   activeSet = base;
 }
 
@@ -2299,6 +2344,7 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
     localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
     localStorage.setItem(ACTIVE_META_KEY, JSON.stringify(activeMetaFilters));
+    localStorage.setItem("colosseum.hideUgly", hideUgly ? "1" : "0");
   } catch { /* storage may be unavailable */ }
 }
 
@@ -7572,6 +7618,7 @@ function resetActiveSetAll(): void {
   activeExclude = new Set();
   activeSolo = null;
   activeMetaFilters = {};
+  hideUgly = false; // "show everything" includes the Ugly-tier lifts
   saveActiveSet();
   scheduleRender();
 }
