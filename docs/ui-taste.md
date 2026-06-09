@@ -88,3 +88,28 @@ a min tap-height — don't shrink the target.
 6. **Form** — a pill toggle, not a checkbox/segment/button-row.
 7. **Stability** — if it lives in a menu/fold, preserve open state; if it touches the
    graph, don't let the chart move/blank.
+
+## Researched UI fundamentals (`#research ui`, graded — re-judged for this phone-first app)
+The owner expects you to DECIDE layout from these, not ask (CLAUDE.md hard rule). Apply,
+don't cite, to the owner.
+- **Fitts's law — GRADE: High** (foundational HCI, empirically robust). Frequent/important
+  targets should be BIGGER and easy to reach; tap targets ≥ ~44px (Apple HIG) / 48dp
+  (Material). → The primary control (athlete chips) is largest; even "small" secondary
+  pills keep a comfortable tap height (~36–44px), shrink the FONT not the hit area.
+- **Visual hierarchy = size/weight means importance — GRADE: High** (typographic scale,
+  Gestalt). Biggest/boldest reads as primary. → Encode the reach-level in the SIZE: chips
+  big, secondary actions clearly smaller/quieter. Never size a rare action like a primary.
+- **Gestalt proximity & similarity — GRADE: High.** Same size+style + close together =
+  read as ONE group. → To SEPARATE two unrelated controls, change size/style AND add space
+  (or put them in different families/rows). This is exactly why twin "Stats + Default"
+  pills failed — similar+adjacent = false pair.
+- **Progressive disclosure (Nielsen) — GRADE: High.** Show the few primary actions; tuck
+  rare/advanced ones behind a step. → Rare controls (a reset) get demoted; detail panels
+  stay collapsed (Stats is off by default).
+- **Jakob's law / convention — GRADE: Moderate-High.** Put a control where its kind usually
+  lives: a "reset/default" belongs WITH the thing it resets (the selection tools), a
+  panel-toggle next to its panel. → Placement should echo the control's family.
+- **Hick's law — GRADE: Moderate.** Fewer top-level choices = faster. → Don't crowd the
+  always-visible row; give the primary control its own room.
+- **Tap-target minimum — GRADE: High** (Apple 44pt / Material 48dp). The taste doc's 30px
+  floor is the FLOOR; prefer ~36–44px for anything tapped often.
