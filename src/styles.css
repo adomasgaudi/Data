@@ -9,6 +9,10 @@
   /* DESIGN: corners use a SMALL radius — never full/pill rounding (no 999px / 50%
      on buttons & chips). This token replaces every former 999px pill. */
   --r-pill: 8px;
+  /* DESIGN: no super-small buttons — every tappable control (pill, toggle, icon
+     button) gets at least this tap height. Compact horizontally is fine (rule
+     #cram), but never a button so short it's hard to tap. One home for the floor. */
+  --tap-min: 30px;
   --panel: #ffffff;
   /* Page (body) is plain white — a flat white theme (was a warm cream); .panel cards
      read as cards via their borders/shadows, not a page tint. */
@@ -616,6 +620,25 @@ main { padding-bottom: 5rem; }
 .svgc-style-btn { cursor: pointer; font: inherit; font-size: 0.8rem; line-height: 1; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 7px; user-select: none; align-self: flex-start; }
 .svgc-style-btn:hover { border-color: var(--accent); color: var(--accent); }
 .svgc-style-btn.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+/* DESIGN: no super-small buttons. These pills/toggles/icon buttons were ~19–24px
+   tall (1–2px padding) — too short to tap reliably. Floor them to --tap-min while
+   keeping them horizontally compact (rule #cram); inline-flex just vertically
+   centres the label in the taller box. New tappable controls should do the same. */
+.svgc-style-btn,
+.svgc-compact,
+.svgc-legend-sum,
+.svgc-grp-chip,
+.svgc-key.is-toggle,
+.wa-name-opt,
+.wa-metric,
+.wa-groupby,
+.mnt-groupby,
+.mo-period {
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .svgc-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
 .svgc-note[hidden] { display: none; }
 .svgc-tip {
