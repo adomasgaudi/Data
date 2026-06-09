@@ -2270,9 +2270,18 @@ let activeMetaFilters: Partial<Record<ExerciseFilterDim, string[]>> = (() => {
 // dims like any other. (Replaces the old single "tier cutoff" dropdown.)
 const ACTIVE_FREQ_KEY = "colosseum.activeSet.freq.v1";
 let activeFreqTiers = new Set<string>(loadJsonArray(ACTIVE_FREQ_KEY));
-// Hide "Ugly"-tier lifts app-wide by default (auto-tiered junk/one-offs). On unless
-// the owner turns the whole filter off; force-included lifts still show.
-let hideUgly = (() => { try { return localStorage.getItem("colosseum.hideUgly") !== "0"; } catch { return true; } })();
+// Default to HIDING the auto-"Ugly" tier by seeding the Tier filter to the three real
+// tiers (visible/honest in the filter, not a hidden side-rule). One-time per device.
+(() => {
+  try {
+    if (localStorage.getItem("colosseum.tierSeed.v1")) return;
+    localStorage.setItem("colosseum.tierSeed.v1", "1");
+    if (!activeMetaFilters.tier) {
+      activeMetaFilters.tier = [TIER_LABELS.main, TIER_LABELS.second, TIER_LABELS.third];
+      localStorage.setItem(ACTIVE_META_KEY, JSON.stringify(activeMetaFilters));
+    }
+  } catch { /* ignore */ }
+})();
 // One-time migration: an old "S+ cutoff" becomes the exact tiers at/above it.
 if (activeCutoff && activeFreqTiers.size === 0) {
   const min = FREQ_TIERS.find((t) => t.tier === activeCutoff)?.min ?? 0;
@@ -2317,7 +2326,7 @@ let activeSet: Set<string> | null = null;
 function refreshActiveSet(): void {
   const metaFilters = activeMetaFilterList();
   const anyFilter = activeFreqTiers.size || activeInclude.size || activeExclude.size || activeSolo || metaFilters.length;
-  if (!anyFilter && !hideUgly) {
+  if (!anyFilter) {
     activeSet = null; // filter fully off → no filtering at all
     return;
   }
@@ -2337,10 +2346,6 @@ function refreshActiveSet(): void {
   // beats everything. (Re-applied here so they also override the taxonomy filters.)
   for (const n of activeInclude) base.add(n);
   for (const n of activeExclude) base.delete(n);
-  // Drop auto-"Ugly" lifts app-wide (unless the owner force-included one, OR is
-  // explicitly filtering BY the Ugly tier — then they want to see them).
-  const tierFilterShowsUgly = (activeMetaFilters.tier ?? []).includes(TIER_LABELS.ugly);
-  if (hideUgly && !tierFilterShowsUgly) for (const n of [...base]) if (!activeInclude.has(n) && tierFor(n) === "ugly") base.delete(n);
   activeSet = base;
 }
 
@@ -2353,7 +2358,6 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
     localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
     localStorage.setItem(ACTIVE_META_KEY, JSON.stringify(activeMetaFilters));
-    localStorage.setItem("colosseum.hideUgly", hideUgly ? "1" : "0");
   } catch { /* storage may be unavailable */ }
 }
 
@@ -7596,11 +7600,12 @@ function renderActiveSetBar(totalExercises: number): void {
       .map((d) => `<option value="${d}"${d === dim ? " selected" : ""}>${escapeHtml(GREAT_FILTER_LABELS[d])}</option>`)
       .join("");
     const valuePills = dim === "frequency"
-      ? FREQ_TIERS.map((t) => `<button type="button" class="as-fpill${activeFreqTiers.has(t.tier) ? " is-on" : ""}" data-asfdim="frequency" data-asfval="${t.tier}" aria-pressed="${activeFreqTiers.has(t.tier)}">${escapeHtml(t.label)}</button>`).join("")
+      ? FREQ_TIERS.map((t) => { const on = activeFreqTiers.size === 0 || activeFreqTiers.has(t.tier); return `<button type="button" class="as-fpill${on ? " is-on" : ""}" data-asfdim="frequency" data-asfval="${t.tier}" aria-pressed="${on}">${escapeHtml(t.label)}</button>`; }).join("")
       : (() => {
           const chosen = new Set(activeMetaFilters[dim as ExerciseFilterDim] ?? []);
+          const allOn = chosen.size === 0; // nothing chosen → every value passes → show all ON
           return distinctMetaValues(dim as ExerciseFilterDim)
-            .map((v) => `<button type="button" class="as-fpill${chosen.has(v) ? " is-on" : ""}" data-asfdim="${escapeHtml(dim)}" data-asfval="${escapeHtml(v)}" aria-pressed="${chosen.has(v)}">${escapeHtml(v)}</button>`)
+            .map((v) => { const on = allOn || chosen.has(v); return `<button type="button" class="as-fpill${on ? " is-on" : ""}" data-asfdim="${escapeHtml(dim)}" data-asfval="${escapeHtml(v)}" aria-pressed="${on}">${escapeHtml(v)}</button>`; })
             .join("");
         })();
     const pillsRow = valuePills ? `<div class="as-fpills">${valuePills}</div>` : `<div class="as-fpills muted as-fnone">no values</div>`;
@@ -7634,7 +7639,6 @@ function resetActiveSetAll(): void {
   activeExclude = new Set();
   activeSolo = null;
   activeMetaFilters = {};
-  hideUgly = false; // "show everything" includes the Ugly-tier lifts
   saveActiveSet();
   scheduleRender();
 }
@@ -7649,15 +7653,18 @@ function rerenderActiveSetBar(): void {
 /** Toggle one taxonomy value for a dimension in the app-wide filter (OR within the
  * dim, AND across dims), then re-apply app-wide. */
 function toggleActiveMetaValue(dim: GreatFilterDim, value: string): void {
-  if (dim === "frequency") {
-    if (activeFreqTiers.has(value)) activeFreqTiers.delete(value); else activeFreqTiers.add(value);
-  } else {
-    const cur = new Set(activeMetaFilters[dim] ?? []);
-    if (cur.has(value)) cur.delete(value);
-    else cur.add(value);
-    if (cur.size) activeMetaFilters[dim] = [...cur];
-    else delete activeMetaFilters[dim];
-  }
+  // A row with NOTHING chosen means ALL values pass (every pill shown ON). So the FIRST
+  // tap from that state DESELECTS the tapped value (keep the rest); further taps toggle;
+  // and if every value ends up chosen again it resets to "all" (no filter).
+  const all = dim === "frequency" ? FREQ_TIERS.map((t) => t.tier) : distinctMetaValues(dim as ExerciseFilterDim);
+  const cur = new Set<string>(dim === "frequency" ? activeFreqTiers : (activeMetaFilters[dim] ?? []));
+  let next: Set<string>;
+  if (cur.size === 0) next = new Set(all.filter((v) => v !== value));
+  else { next = new Set(cur); if (next.has(value)) next.delete(value); else next.add(value); }
+  if (next.size >= all.length) next = new Set();
+  if (dim === "frequency") activeFreqTiers = next;
+  else if (next.size) activeMetaFilters[dim] = [...next];
+  else delete activeMetaFilters[dim];
   saveActiveSet();
   scheduleRender();
 }
