@@ -1844,47 +1844,51 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-alone:hover { border-color: var(--accent); color: var(--accent); }
 .wo-alone.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Add-set form controls sized ~30% larger than the surrounding compact UI — these
+   are the things you tap while LOGGING (+ set / + exercise / kg·reps·sets / Add / ✕ /
+   date pills), so they're deliberately bigger tap targets (owner request). */
 .wo-addset {
-  margin-left: 0.35rem; font: inherit; font-size: 0.68rem; font-weight: 700;
-  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 7px;
+  margin-left: 0.35rem; font: inherit; font-size: 0.88rem; font-weight: 700;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px;
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
 .wo-addset:hover { border-color: var(--accent); color: var(--accent); }
 .wo-addex-wrap { margin-top: 0.35rem; }
 .wo-addex {
-  font: inherit; font-size: 0.7rem; font-weight: 700;
-  border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 2px 10px;
+  font: inherit; font-size: 0.91rem; font-weight: 700;
+  border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 3px 13px;
   background: var(--panel); color: var(--muted); cursor: pointer;
 }
 .wo-addex:hover { border-color: var(--accent); color: var(--accent); }
 .wo-addform {
-  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
   margin: 0.3rem 0 0.1rem 0.35rem; vertical-align: middle;
 }
-.wo-addform .wo-af-ex { width: 8.5rem; }
-.wo-addform .wo-af-note { width: 8.5rem; }
+.wo-addform .wo-af-ex { width: 11rem; }
+.wo-addform .wo-af-note { width: 11rem; }
 /* Structured variation pickers: a tight, horizontally-scrolling row of small labelled
-   dropdowns (the lift's variables — support, ROM, lean…), one tap each. */
-.wo-addform .wo-af-dims { display: inline-flex; flex-wrap: nowrap; gap: 0.3rem; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; vertical-align: middle; }
+   dropdowns (the lift's variables — support, ROM, lean…), one tap each. ~30% larger
+   here too, matching the rest of the add-set form. */
+.wo-addform .wo-af-dims { display: inline-flex; flex-wrap: nowrap; gap: 0.4rem; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; vertical-align: middle; }
 .wo-af-dimf { display: inline-flex; flex-direction: column; gap: 1px; flex: 0 0 auto; }
-.wo-af-dimlbl { font-size: 0.56rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
-.wo-addform .wo-af-dims select { font: inherit; font-size: 0.76rem; padding: 2px 4px; }
+.wo-af-dimlbl { font-size: 0.73rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.wo-addform .wo-af-dims select { font: inherit; font-size: 0.99rem; padding: 3px 6px; }
 .wo-addform input {
-  width: 3.4rem; font: inherit; font-size: 0.8rem; padding: 2px 6px;
+  width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
 }
 .wo-addform .wo-af-go {
-  font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 10px;
+  font: inherit; font-size: 0.94rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 3px 13px;
   background: var(--accent); color: #fff;
 }
 .wo-addform .wo-af-cancel {
-  font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer;
-  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 7px;
+  font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px;
   background: var(--panel); color: var(--muted);
 }
 .wo-addform .wo-af-msg { font-size: 0.72rem; }
-.wo-addform .wo-af-when .seg-btn { padding: 2px 8px; font-size: 0.72rem; font-weight: 700; }
+.wo-addform .wo-af-when .seg-btn { padding: 3px 10px; font-size: 0.94rem; font-weight: 700; }
 .wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
