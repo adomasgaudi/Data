@@ -764,7 +764,7 @@ main { padding-bottom: 5rem; }
    "↺ Default" reset pushed to the far RIGHT, so two UNRELATED controls read as separate,
    not a pair (Gestalt). Sized clearly SMALLER than the chips (lighter weight, smaller
    font) so size says "secondary setting", but a comfortable ~34px tap height (Fitts). */
-.wa-top-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: -0.2rem 0 0.7rem; }
+.wa-top-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0.2rem 0 0.5rem; }
 .wa-topact-btn {
   flex: 0 0 auto; box-sizing: border-box;
   display: inline-flex; align-items: center; min-height: 34px;

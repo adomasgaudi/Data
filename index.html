@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.114</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.115</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1066,16 +1066,15 @@
         <!-- The athlete picker (.ath-row) is relocated here — ABOVE the Analysis
              card, at the very top — while the view is open, and returned to
              #tab-athlete on leave. -->
-        <div id="waAthleteHost" class="wa-athlete-top"></div>
-        <!-- Secondary athlete-context actions on their OWN thin line below the chips, so
-             the level-1 nav chips keep full scroll width: Stats (reveals the panel just
-             below) on the LEFT, the rare "↺ Default" reset on the far RIGHT — separated,
-             and sized smaller than the chips so size reads as "secondary setting", not
-             navigation. -->
+        <!-- Secondary athlete-context actions on their OWN thin line ABOVE the chips:
+             Stats (reveals the panel below) on the LEFT, the rare "↺ Default" reset on
+             the far RIGHT — separated, and sized smaller than the chips so size reads as
+             "secondary setting", not navigation. -->
         <div id="waTopActions" class="wa-top-actions">
           <button type="button" id="statsToggleBtn" class="wa-topact-btn" aria-pressed="false" title="Show the Stats section">Stats</button>
           <button type="button" id="waDefaultBtn" class="wa-topact-btn wa-topact-default" title="Reset to the default view for this athlete: graph = top 5 lifts of the last 3 months, history = all exercises">↺ Default</button>
         </div>
+        <div id="waAthleteHost" class="wa-athlete-top"></div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,
              just under the athlete picker and above the Analysis card. -->
         <div id="waStatsHost" class="wa-stats-top"></div>
