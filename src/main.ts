@@ -83,7 +83,7 @@ import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
-import { GRAPH_METRICS, graphCompatibilityNotes } from "./graphMetrics";
+import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import { renderTestGraph, type TestPoint } from "./testGraph";
@@ -2041,6 +2041,19 @@ function lensClass(scope: SelScope, n: string): string {
   const l = lensFor(scope, n);
   return l.combine && l.compare ? " lens-both" : l.combine ? " lens-combined" : l.compare ? " lens-compared" : "";
 }
+/** A tiny inline-SVG legend marker matching how the chart draws that point shape, so
+ * the menu can show WHICH dot shape each merged member uses. Inherits currentColor. */
+function shapeIconSvg(shape: string): string {
+  const wrap = (inner: string) => `<svg class="lift-shape" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">${inner}</svg>`;
+  switch (shape) {
+    case "diamond": return wrap(`<path d="M6 1l5 5-5 5-5-5z" fill="currentColor"/>`);
+    case "triangle": return wrap(`<path d="M6 1l5 9H1z" fill="currentColor"/>`);
+    case "square": return wrap(`<rect x="2" y="2" width="8" height="8" fill="currentColor"/>`);
+    case "ring": return wrap(`<circle cx="6" cy="6" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/>`);
+    case "plus": return wrap(`<path d="M5 1h2v4h4v2H7v4H5V7H1V5h4z" fill="currentColor"/>`);
+    default: return wrap(`<circle cx="6" cy="6" r="4.5" fill="currentColor"/>`); // circle
+  }
+}
 function closeLiftMenu(): void { document.getElementById("liftMenu")?.remove(); }
 /** Small popup menu off a selected lift (replaces the inline ⓘ ⊕ ⇄ buttons): Info,
  * Combine, Compare (only the relations it has), Remove. The lift name opens it. */
@@ -2054,10 +2067,15 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
   const groupBlock = (g: RegistryTag): string => {
     const merged = chosenGroup(scope, name, "combine")?.id === g.id;
     const separated = chosenGroup(scope, name, "compare")?.id === g.id;
-    const others = (g.members ?? []).map((m) => displayName(m.exerciseName)).filter((x) => x !== displayName(name));
+    // Members SORTED the same way the chart assigns shapes (distinctOrigins sorts), so
+    // each member shows the exact dot shape it gets in the merged graph view.
+    const ordered = [...new Set((g.members ?? []).map((m) => m.exerciseName))].sort();
+    const legend = ordered
+      .map((ex, i) => `<span class="lift-menu-mem">${shapeIconSvg(ORIGIN_SHAPES[i % ORIGIN_SHAPES.length]!)}${escapeHtml(displayName(ex))}</span>`)
+      .join("");
     return `<div class="lift-menu-grp">` +
       `<div class="lift-menu-grp-name">${escapeHtml(g.derivedName ?? g.label)}</div>` +
-      (others.length ? `<div class="lift-menu-grp-sub muted">with ${escapeHtml(others.join(", "))}</div>` : "") +
+      (legend ? `<div class="lift-menu-grp-sub muted">${legend}</div>` : "") +
       `<div class="lift-menu-modes">` +
       `<button type="button" class="lift-menu-mode${merged ? " is-on" : ""}" data-lm="merged" data-lmgid="${escapeHtml(g.id)}">⊕ Merged</button>` +
       `<button type="button" class="lift-menu-mode${separated ? " is-on" : ""}" data-lm="separated" data-lmgid="${escapeHtml(g.id)}">⇄ Separated</button>` +

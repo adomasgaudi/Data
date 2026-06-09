@@ -3554,3 +3554,8 @@ body.wa-graph-full .wa-graph-full-btn {
 .lift-menu-mode { flex: 1 1 0; font: inherit; font-size: 0.78rem; cursor: pointer; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: none; color: var(--text); }
 .lift-menu-mode:hover { border-color: var(--accent); }
 .lift-menu-mode.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* Member legend in the lift menu: each group member on its own line with the dot
+   SHAPE it uses in the merged graph view, so the shapes are decodable. */
+.lift-menu-grp-sub { display: flex; flex-direction: column; gap: 2px; }
+.lift-menu-mem { display: inline-flex; align-items: center; gap: 5px; }
+.lift-shape { flex: 0 0 auto; }
