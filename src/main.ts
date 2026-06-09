@@ -2937,7 +2937,10 @@ function gotoAnlFromInfo(): void {
   const name = currentExInfo;
   currentExInfo = null;
   els.exInfoPage.hidden = true;
-  openWorkoutAnalysis(name ? { exercises: [name] } : {});
+  // Find a real example even when the current athlete hasn't done this lift (admin →
+  // jumps to whoever's done it the most; locked views stay on their own data).
+  if (name) openLiftExample(name);
+  else openWorkoutAnalysis({});
 }
 /** Re-render the open exercise-settings overlay (after an edit anywhere in it),
  * so it stays in sync without closing. No-op when the overlay is closed. */
@@ -2955,6 +2958,27 @@ function gotoNoteSet(username: string, exName: string, date: string): void {
   }
   openWorkoutAnalysis({ exercises: [exName] }); // single mode → workout history for this lift
   requestAnimationFrame(() => jumpToWorkoutDate(date)); // opens the fold + scrolls to the day
+}
+/** Open a lift's workout-history "example". If the SELECTED athlete has logged it, show
+ * theirs; otherwise — ADMIN only (locked/spectator views never peek at other athletes,
+ * rule 21) — switch to whoever has done it the MOST so there's always a real example to
+ * see, even for a lift the current athlete has never touched. */
+function openLiftExample(name: string): void {
+  // Synthetic/combined names (e.g. "SQ mix") aren't logged raw — count their members too.
+  const targets = new Set([name, ...expandToRawExercises([name]), ...groupMembersForName(name)]);
+  const matches = (r: SetRecord) => targets.has(r.exerciseName);
+  if (lockedUsername() === null) {
+    const cur = els.athlete.value;
+    const curHas = computedRecords().some((r) => r.username === cur && matches(r));
+    if (!curHas) {
+      // Find the athlete with the most logged sets of this lift and switch to them.
+      const byUser = new Map<string, number>();
+      for (const r of computedRecords()) if (r.username && matches(r)) byUser.set(r.username, (byUser.get(r.username) ?? 0) + 1);
+      const top = [...byUser.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (top && top[0] !== cur) { els.athlete.value = top[0]; renderAthlete(); }
+    }
+  }
+  openWorkoutAnalysis({ exercises: [name] });
 }
 
 /** Render the version-history list (newest first) into the overlay. Each release
@@ -7880,7 +7904,8 @@ function renderBwParts() {
       `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
       ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
       ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
-      (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") +
+      // Example-jump shows on EVERY lift; admin falls back to whoever's done it the most.
+      ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history${lockedUsername() === null ? " — falls back to whoever's done it the most" : ""}">↗</button>` +
       whyChip +
       // Force-show this lift app-wide despite the filter — the rare, TRACKED exception
       // (managed in the Great Filter's "kept exceptions" list), for when the tags are
@@ -10283,7 +10308,7 @@ async function init() {
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-histex]");
     if (btn?.dataset.histex) {
       e.preventDefault();
-      openWorkoutAnalysis({ exercises: [btn.dataset.histex] });
+      openLiftExample(btn.dataset.histex);
     }
   });
   // "Allowed graphs" review chips + bulk buttons. Delegated on document so they
