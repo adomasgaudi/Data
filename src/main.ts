@@ -2168,6 +2168,33 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
   menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
 }
 /** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
+/** User-created combinable/comparable groups (userExerciseDefs) of one kind. */
+function userGroupsOfKind(kind: "combine" | "compare"): UserExerciseDef[] {
+  const id = kind === "combine" ? "combined" : "comparison_group";
+  return userExerciseDefs.filter((d) => d.identity === id && Array.isArray(d.members));
+}
+/** Add / remove a lift from a user-created group (edits the def's member list). */
+function toggleUserGroupMember(defName: string, exName: string): void {
+  const d = userExerciseDefs.find((x) => x.name === defName);
+  if (!d) return;
+  const members = d.members ?? [];
+  d.members = members.includes(exName) ? members.filter((m) => m !== exName) : [...members, exName];
+  saveUserExerciseDefs();
+}
+/** Create a NEW user combinable/comparable group, seeded with one lift. Prompts for
+ * a name (must be unique). Returns the new name, or null if cancelled / clashed. */
+function createUserGroup(kind: "combine" | "compare", seedEx: string): string | null {
+  const fallback = kind === "combine" ? `${seedEx} mix` : `${seedEx} compare`;
+  const name = (window.prompt(`Name the new ${kind === "combine" ? "combinable" : "comparable"} group (it starts with “${seedEx}” — open other lifts to add them):`, fallback) ?? "").trim();
+  if (!name) return null;
+  if (selectableExercises(data.records).includes(name) || userExerciseDefs.some((d) => d.name === name)) {
+    window.alert(`“${name}” already exists — pick another name.`);
+    return null;
+  }
+  userExerciseDefs.push({ name, identity: kind === "combine" ? "combined" : "comparison_group", members: [seedEx] });
+  saveUserExerciseDefs();
+  return name;
+}
 function toggleGroupMembership(groupId: string, exName: string): void {
   const g = [...COMBINABLE_GROUPS, ...COMPARABLE_GROUPS].find((x) => x.id === groupId);
   if (!g) return;
@@ -9009,7 +9036,13 @@ function exerciseInfoHtml(name: string): string {
           : "";
         return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratio}`;
       }).join("") +
-      (all.length ? "" : `<span class="muted">none</span>`) +
+      // YOUR groups (created here) — toggle this lift in/out the same way.
+      userGroupsOfKind(kind).map((d) => {
+        const on = (d.members ?? []).includes(name);
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>`;
+      }).join("") +
+      // ＋ New — create a brand-new group seeded with this lift.
+      `<button type="button" class="ex-meta-chip ex-newgroup" data-newgroup="${kind}" data-newgroup-ex="${escapeHtml(name)}" title="Create a new ${kind === "combine" ? "combinable" : "comparable"} group from this lift">＋ New</button>` +
       `</span>`
     );
   };
@@ -10846,7 +10879,23 @@ async function init() {
   });
   // Combinable / Comparable membership chips — toggle this lift in/out of a group.
   document.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip[data-grp-id]");
+    const t = e.target as HTMLElement;
+    // ＋ New: create a new combinable/comparable group seeded with this lift.
+    const neu = t.closest<HTMLElement>(".ex-newgroup[data-newgroup]");
+    if (neu?.dataset.newgroup && neu.dataset.newgroupEx) {
+      const made = createUserGroup(neu.dataset.newgroup as "combine" | "compare", neu.dataset.newgroupEx);
+      if (made) { populateExercisePicker(); scheduleRender(() => { reopenIndexDetail(neu.dataset.newgroupEx!); refreshPoseViz(); }); }
+      return;
+    }
+    // A YOUR-group chip → add/remove this lift from that user group.
+    const ug = t.closest<HTMLElement>(".ex-meta-chip[data-usergrp]");
+    if (ug?.dataset.usergrp && ug.dataset.usergrpEx) {
+      toggleUserGroupMember(ug.dataset.usergrp, ug.dataset.usergrpEx);
+      populateExercisePicker();
+      scheduleRender(() => { reopenIndexDetail(ug.dataset.usergrpEx!); refreshPoseViz(); });
+      return;
+    }
+    const chip = t.closest<HTMLElement>(".ex-meta-chip[data-grp-id]");
     const ex = chip?.dataset.grpEx, gid = chip?.dataset.grpId;
     if (!ex || !gid) return;
     toggleGroupMembership(gid, ex);

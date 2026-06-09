@@ -3691,3 +3691,6 @@ body.wa-graph-full .wa-graph-full-btn {
 .bw-mergechip-open:hover { color: var(--accent); }
 .bw-mergechip-x { font: inherit; font-size: 0.75rem; cursor: pointer; color: var(--muted); background: none; border: none; border-left: 1px solid var(--gold); padding: 0 7px; }
 .bw-mergechip-x:hover { color: var(--danger); }
+/* "＋ New" chip in the Combinable/Comparable inspector sections (create a group). */
+.ex-newgroup { color: var(--accent); border-style: dashed !important; font-weight: 700; }
+.ex-newgroup:hover { background: var(--accent-soft); }
