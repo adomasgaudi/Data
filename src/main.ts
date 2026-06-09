@@ -12835,7 +12835,7 @@ function defaultSelection(): string[] {
 /** Max SERIES plotted on the analysis graph at once (users × exercises) — past this
  * the SVG redraw lags, so extra selections are listed but not drawn (see
  * renderWaGraph). With N athletes overlaid, the per-graph exercise cap is this ÷ N. */
-const WA_GRAPH_MAX = 10;
+const WA_GRAPH_MAX = 20;
 // MULTI-ATHLETE graph overlay (ADMIN only — a locked/spectator view stays single,
 // rule 21). Holds the EXTRA athletes overlaid alongside the primary (els.athlete);
 // the primary is always plotted. Each (exercise × athlete) is its own line, so the
@@ -13151,7 +13151,11 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
       : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
   const count = `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>`;
-  return `${count}<span class="wa-seltitle">${names}${more}</span>`;
+  // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
+  // removing a lift never changes the title's height — otherwise the reflow shoves the
+  // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
+  // out of the clamp to show every name.
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span></span>`;
 }
 function renderWorkoutAnalysis(): void {
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
@@ -13323,7 +13327,8 @@ function renderSelector(scope: SelScope): void {
   const everyEx = scope === "graph" ? [] : waSelectorExercises().map((e) => e.name);
   const completeOn = everyEx.length > 0 && everyEx.every((n) => cur.includes(n));
   const selAllToggle = scope === "graph"
-    ? `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the graph selection">Deselect all</button>`
+    ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>` +
+      `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the graph selection">Deselect all</button>`
     : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
       `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>` +
       `<button type="button" class="wa-clear wa-deselall"${cur.length ? "" : " disabled"} title="Clear the selection">Deselect all</button>`;
@@ -14602,6 +14607,13 @@ function setupWorkoutAnalysis(): void {
     }
     if (t.closest(".wa-deselall")) { // clear the whole selection
       setSelArr([]);
+      debounceWaRender();
+      return;
+    }
+    if (t.closest(".wa-selfirst")) {
+      // Graph: select the first N shown lifts (N = the graph's plot budget, up to
+      // WA_GRAPH_MAX), in the picker's current order — a one-tap "fill the graph".
+      setSelArr(waChipList().filter((ex) => !ex.missing).slice(0, graphExerciseCap()).map((ex) => ex.name));
       debounceWaRender();
       return;
     }
