@@ -391,18 +391,25 @@ export const FUNCTIONAL_PATTERN_TAGS: RegistryTag[] = [
     why: "Hip-hinge movements (push the hips back, flat-ish back): deadlifts, RDLs, good mornings, back extensions, thrusts.",
     keywords: ["deadlift", "rdl", "romanian", "good morning", "back extension", "hyperextension", "reverse hyper", "nordic", "hip thrust"],
     exclude: ["Inverted deadlift"] },
-  { id: "pattern.calisthenics", kind: "functional-pattern", label: "Calisthenics",
-    why: "Bodyweight strength movements — handstands & handstand push-ups, pull-ups/chin-ups, dips, push-ups, muscle-ups, L-sits, levers, planche, leg/knee raises, pistol squats and the like.",
-    keywords: [
-      "handstand", "pull up", "pullup", "chin up", "chinup", "dip", "push up", "pushup",
-      "muscle up", "muscleup", "l-sit", "lsit", "planche", "lever", "leg raise",
-      "knee raise", "toes to bar", "pistol", "archer", "inverted row", "australian",
-      "hollow", "pike push", "pseudo", "rings", "bar hang", "hanging", "crow", "frog stand",
-      "human flag", "dragon flag", "front lever", "back lever", "skin the cat", "wall touch", "wall walk",
-    ],
-    // "rings" (not "ring") avoids hamSTRING; "l-sit"/"lsit" (not "l sit") avoids waLL SITs.
-    // A few weighted/machine items that still slip a keyword through:
-    exclude: ["Ring Curl", "Cable Tricep Pushdown", "Seated Dip Machine"] },
+  // Push / pull split by plane (vertical vs horizontal) + core. (Calisthenics is a
+  // DISCIPLINE, not a movement pattern, so it's not a function here.)
+  { id: "pattern.vpull", kind: "functional-pattern", label: "Vertical pull",
+    why: "Pulling DOWN to you / yourself UP: pull-ups, chin-ups, lat pulldowns, muscle-ups.",
+    keywords: ["pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up", "pulldown", "lat pull", "muscle up", "muscleup"] },
+  { id: "pattern.hpull", kind: "functional-pattern", label: "Horizontal pull",
+    why: "Pulling toward you on the horizontal: barbell/dumbbell/cable rows, inverted rows, face pulls.",
+    keywords: ["row", "inverted row", "australian", "face pull", "rear delt"],
+    exclude: ["Upright Row"] }, // upright row is a vertical shoulder pull
+  { id: "pattern.vpush", kind: "functional-pattern", label: "Vertical push",
+    why: "Pressing overhead: shoulder/overhead/military press, handstand & pike push-ups.",
+    keywords: ["shoulder press", "overhead press", "military", "handstand push", "handstand pushup", "pike push", "push press", "arnold", "hspu", "behind the neck"] },
+  { id: "pattern.hpush", kind: "functional-pattern", label: "Horizontal push",
+    why: "Pressing away on the horizontal: bench press, push-ups, dips, chest flyes.",
+    keywords: ["bench", "push up", "pushup", "push-up", "dip", "chest press", "fly", "pec"],
+    exclude: ["Handstand Push Ups", "Handstand Push Up", "Pike Push Up", "Pike Push Ups"] }, // those are vertical
+  { id: "pattern.core", kind: "functional-pattern", label: "Core",
+    why: "Trunk work: crunches, sit-ups, planks, leg/knee raises, hollows, rotation, L-sits, levers.",
+    keywords: ["crunch", "sit up", "situp", "sit-up", "plank", "leg raise", "legs raise", "knee raise", "knee tuck", "ab ", "ab wheel", "ab curl", "oblique", "side bend", "hollow", "woodchop", "pallof", "rollout", "twist", "bicycle", "mountain climber", "l-sit", "lsit", "toes to bar", "hanging leg", "hanging knee", "dragon flag", "front lever", "windshield"] },
 ];
 
 /** Combinable groups: members are the SAME lift, merged 1:1 into one staple. They
