@@ -14235,25 +14235,32 @@ function renderWaGraph(): void {
   // never pushes the layout or needs a scroll). The legend element is rendered by
   // the SVG engine inside #waGraphChart; we relocate it down into this bar after the
   // chart draws (its innerHTML keeps updating in place wherever it lives).
+  // The expand (⛶), kg⇄×BW and ⤢ Fit buttons now OVERLAY the chart's top-right corner
+  // (see overlayHtml below) instead of sitting in this bar, so the COMPARE athletes row
+  // sits right under the graph. This bar holds just the Compare pills + Graph options.
   const graphBarHtml =
     `<div class="wa-graph-bar">` +
-    `<button type="button" class="wa-graph-full-btn wa-name-opt" data-graphfull="1" title="${document.body.classList.contains("wa-graph-full") ? "Exit fullscreen" : "Fullscreen — graph + all settings together (no scrolling away)"}" aria-label="${document.body.classList.contains("wa-graph-full") ? "Exit fullscreen graph" : "Fullscreen graph"}">${document.body.classList.contains("wa-graph-full") ? "✕" : "⛶"}</button>` +
     graphAthletesPillsHtml() +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu">${cfgUi}</div>` +
     `</details>` +
-    // kg ⇄ ×BW display toggle, pulled out of Graph options to sit at the bottom-right
-    // corner under the chart (a one-tap unit switch without opening the settings).
-    `<button type="button" class="wa-name-opt wa-graph-bw${S.waPerBodyweight ? " is-on" : ""}" data-waperbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>` +
     `</div>`;
+  // In-chart overlay toolbar (top-right corner): kg unit toggle, ⤢ Fit (proxies the
+  // chart's own re-fit), and ⛶ fullscreen. Compact icons over the plot so they don't
+  // take a row below it. Re-rendered each pass to track their state.
+  const fs = document.body.classList.contains("wa-graph-full");
+  const overlayHtml =
+    `<button type="button" class="wa-gov-btn wa-gov-bw${S.waPerBodyweight ? " is-on" : ""}" data-waperbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>` +
+    `<button type="button" class="wa-gov-btn" data-graphfit="1" title="Centre the data — fit everything in view (reset zoom & pan)." aria-label="Fit all data">⤢</button>` +
+    `<button type="button" class="wa-gov-btn" data-graphfull="1" title="${fs ? "Exit fullscreen" : "Fullscreen — graph + all settings together (no scrolling away)"}" aria-label="${fs ? "Exit fullscreen graph" : "Fullscreen graph"}">${fs ? "✕" : "⛶"}</button>`;
   // Keep #waGraphChart alive across option/selection re-renders so pan/zoom isn't
   // wiped and pointer listeners stay attached (innerHTML used to recreate it every time).
   let chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   let preservedLegend: Element | null = null;
   if (!chartBox) {
     box.innerHTML =
-      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphChart"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
+      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
     // The legend node was relocated into the bar; the SVG engine keeps writing into
@@ -14269,6 +14276,14 @@ function renderWaGraph(): void {
       afterBar.insertAdjacentHTML("afterend", `<div class="muted wa-placeholder" id="waGraphNote"></div>`);
     }
   }
+  // Ensure the in-chart overlay toolbar exists (it sits between the chart and the bar)
+  // and refresh its button states each render.
+  let overlayEl = box.querySelector<HTMLElement>("#waGraphOverlay");
+  if (!overlayEl && chartBox) {
+    chartBox.insertAdjacentHTML("afterend", `<div id="waGraphOverlay" class="wa-graph-overlay"></div>`);
+    overlayEl = box.querySelector<HTMLElement>("#waGraphOverlay");
+  }
+  if (overlayEl) overlayEl.innerHTML = overlayHtml;
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
@@ -15068,6 +15083,12 @@ function setupWorkoutAnalysis(): void {
       document.body.classList.toggle("wa-graph-full", entering);
       if (entering) S.waGraphFoldOpen = true; // reveal the settings panel
       renderWaGraph(); // swaps ⛶/✕ + opens the fold; the chart's ResizeObserver re-fits it
+      return;
+    }
+    // ⤢ Fit (in-chart overlay): re-centre & fit all data — proxy the chart engine's own
+    // "Fit" button (its listener lives on the legend node, which we relocate into the bar).
+    if (t.closest<HTMLElement>("[data-graphfit]")) {
+      document.getElementById("waGraph")?.querySelector<HTMLElement>(".svgc-center")?.click();
       return;
     }
     // Realistic ⇄ compacted time toggle (moved here from the chart's legend row).

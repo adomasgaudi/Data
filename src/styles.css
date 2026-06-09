@@ -3431,13 +3431,28 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-chips-fold.is-open .wa-pick-toggle::before { content: "▾"; }
 .wa-chips-fold .wa-sel-group { font-weight: 600; }
 .wa-chips-fold .wa-chips-wrap { padding: 0 0.5rem 0.5rem; }
+/* Anchor for the in-chart overlay toolbar. */
+#waGraph { position: relative; }
+/* In-chart overlay toolbar (top-right corner of the plot): kg / ⤢ Fit / ⛶. The wrapper
+   passes clicks THROUGH (pointer-events:none) so it never blocks the chart; only the
+   buttons are interactive. Compact, translucent, so they don't hide data. */
+.wa-graph-overlay { position: absolute; top: 5px; right: 6px; z-index: 6; display: flex; gap: 4px; pointer-events: none; }
+.wa-gov-btn {
+  pointer-events: auto; cursor: pointer; font: inherit; font-size: 0.72rem; font-weight: 600; line-height: 1;
+  padding: 3px 7px; border-radius: 7px; color: var(--muted); white-space: nowrap;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  backdrop-filter: blur(2px);
+}
+.wa-gov-btn:hover { color: var(--accent); border-color: var(--accent); }
+.wa-gov-btn.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* The chart engine's own "⤢ Fit" button is replaced by the overlay one — hide the
+   relocated copy in the bar (the overlay proxy-clicks it, so it must stay in the DOM). */
+.wa-graph-bar .svgc-center { display: none; }
 /* Graph options + Legend sit side by side in one bar, each a floating dropdown
    (their menus overlay the chart, so opening either never pushes the layout). */
-.wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; position: relative; }
+.wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.25rem 0 0.5rem; position: relative; }
 .wa-graph-bar .svgc-legend { margin: 0; flex: 0 1 auto; }
-/* The kg ⇄ ×BW unit toggle is pinned to the right end of the bar (bottom-right under
-   the chart). margin-left:auto pushes it past Graph options to the corner. */
-.wa-graph-bw { margin-left: auto; }
 /* Per-athlete colour key above the chart (multi-athlete overlay): name + line colour,
    one sideways-scrolling row so it never pushes the chart down. */
 .wa-ath-key { display: flex; flex-wrap: nowrap; gap: 0.3rem 0.9rem; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 0.3rem; font-size: 0.74rem; font-weight: 600; color: var(--text); }
@@ -3508,11 +3523,9 @@ body.wa-graph-full .wa-graph-menu {
   position: static; width: auto; max-width: none; max-height: none; overflow: visible;
   border: none; box-shadow: none; background: none; padding: 0.6rem 0;
 }
-/* The toggle floats to the top-right corner as the close ✕. */
-body.wa-graph-full .wa-graph-full-btn {
-  position: fixed; top: 0.6rem; right: 0.7rem; z-index: 202;
-  background: var(--panel); border-color: var(--accent); color: var(--accent);
-}
+/* In fullscreen the in-chart overlay pins to the viewport's top-right (its ⛶ shows ✕
+   to exit), staying put while the chart scrolls under it. */
+body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7rem; z-index: 203; }
 
 /* WorkoutAnalysis selector tools: Settings + Create variant are small SQUARE
    icon buttons (top-right of the section) whose menus FLOAT — absolutely
