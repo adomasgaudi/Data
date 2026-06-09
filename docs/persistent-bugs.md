@@ -13,16 +13,37 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
-## PB-8 — Graph jumps vertically when toggling kg ⇄ ×BW
+## PB-8 — Graph breaks when toggling kg ⇄ ×BW (BW→kg)
 
-- **Recurrences:** 1 (first log). Same FAMILY as the earlier "graph slides on a control
-  change" fixes (b.2.8.81 bars overflow, b.2.8.85 time axis slides, b.2.8.86 sections
-  collapse) — two code paths computing "the same" axis that drift apart.
+- **Recurrences:** 2 (the b.2.8.96 padding fix below addressed only the small "jump"; the
+  REAL fault was bigger — BW→kg left the graph EMPTY, axis stuck at the BW range, kg points
+  clipped off the top). Same FAMILY as the "graph slides on a control change" fixes
+  (b.2.8.81 bars overflow, b.2.8.85 time axis slides, b.2.8.86 sections collapse).
 - **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data), Analysis
-  graph, single athlete.
-- **Symptom:** the ×BW (kg ⇄ bodyweight-multiples) toggle below the chart is meant to only
-  relabel the y-axis, not move the points. kg→BW looked fine, but BW→kg shifted everything
-  vertically. (Reported "going to BW works, going back doesn't.")
+  graph, single athlete (also with several athletes overlaid).
+- **Symptom:** the ×BW (kg ⇄ bodyweight-multiples) toggle below the chart should only
+  relabel the y-axis. kg→BW worked, but **BW→kg left the chart EMPTY** — the y-axis stayed
+  pinned to the BW scale (0–1.4) so the kg points (30–70) sat far above it and were clipped.
+  (Reported repeatedly: "kg to bw works, bw to kg doesn't.")
+- **REAL ROOT (recurrence 2) — "think more broadly":** the chart's `update()` MERGES the
+  new config over the old (`cfg = {...cfg, ...next}`), but `analyticsGraph` SPREAD the
+  per-bodyweight `forceLeftRange` CONDITIONALLY (`...(forceLeftRange ? {forceLeftRange} :
+  {})`). So turning ×BW OFF omitted the key entirely → the merge KEPT the stale BW range →
+  axis pinned to 0–1.4 → kg data clipped → empty graph. Setting it worked (key present),
+  clearing it didn't (key absent). A whole CLASS: any optional key omitted-when-off goes
+  stale (`yBands` WR-shading, `legendGroupLabels` had the same latent bug).
+- **REAL FIX (b.2.8.x, recurrence 2):** the producer now ALWAYS passes every toggleable key
+  EXPLICITLY (set to `undefined` when off) — `forceLeftRange`, `yBands`, `legendGroupLabels`
+  — so `undefined` overwrites the stale value through the merge and the axis re-fits to the
+  kg data. Widened those config types to `… | undefined` (exactOptionalPropertyTypes) and
+  left a note at the merge site so future keys follow the rule. Partial callers
+  (`update({series:[]})`) still rely on the merge — that's why the fix is at the producer,
+  not by replacing the merge. Fix sites: `analyticsGraph.ts` config, `svgChart.ts` types +
+  `update()` note.
+- **Prior partial fix (b.2.8.96, recurrence 1):** the ×BW pin's TOP PADDING didn't match the
+  kg auto-fit (8% from zero vs 8% of the data spread), causing a small vertical jump. Kept —
+  it's still needed so that, once the axis DOES re-fit, BW = kg ÷ bw exactly and nothing
+  shifts. But it didn't fix the empty-graph (the stale-key bug above did).
 - **Root cause:** ×BW (1) divides the left-axis data by bodyweight AND (2) pins the y-axis
   to `forceLeftRange` (= kg range ÷ bodyweight) so the main athlete shouldn't move. The pin
   was supposed to equal the kg view ÷ bw, but its TOP PADDING didn't match: the kg auto-fit

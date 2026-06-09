@@ -272,19 +272,27 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
     interactive: input.interactive ?? true,
     yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
-    ...(forceLeftRange ? { forceLeftRange } : {}),
+    // PB-8 (real root): the chart's update() MERGES this config over the previous one
+    // (`{...cfg, ...next}`), so any optional key OMITTED when its feature is off keeps its
+    // stale ON value. That's why kg→BW worked but BW→kg left the y-axis pinned to the BW
+    // range (0–1.4) and clipped the kg points off the top → empty graph. So every
+    // toggleable key below is ALWAYS present (undefined when off), never conditionally
+    // spread — undefined overwrites the stale value through the merge.
+    forceLeftRange, // undefined in kg mode → axis re-fits to the kg data
     rightHeadroom: input.config.rightHeadroom,
     barGirth: input.config.barGirth,
     directLabels: true, // float each lift's name next to its records
     styleToggles: true, // tiny legend buttons: faint lines + line tags
-    ...(legendGroupLabels ? { legendGroupLabels } : {}),
+    legendGroupLabels, // undefined → no grouped legend (cleared when grouping changes)
     // Free 2-D pan/zoom: both y-axes shift together, so volume and 1RM stay aligned;
     // use Right-axis / Volume-shift knobs to separate overlapping series.
     panMode: "xy" as const,
-    ...(showsWr ? { yBands: [
-      { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
-      { from: 0.6, fill: "rgba(120,120,120,0.12)" },
-    ] } : {}),
+    yBands: showsWr
+      ? [
+          { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
+          { from: 0.6, fill: "rgba(120,120,120,0.12)" },
+        ]
+      : undefined, // cleared when the %WR metric is turned off (no stale shading)
   };
   const existing = charts.get(container);
   container.classList.add("svgc-freepan");

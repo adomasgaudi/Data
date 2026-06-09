@@ -124,7 +124,10 @@ export interface SvgChartConfig {
    * the data — used by the per-bodyweight view to keep the main athlete's curve in
    * place (axis = kg range ÷ their bodyweight) while other athletes stretch. Pan /
    * zoom still override it. */
-  forceLeftRange?: { min: number; max: number };
+  // Allow explicit `undefined` (not just absent): producers pass these keys ALWAYS — set
+  // to undefined when off — so the merge in update() clears a stale value instead of
+  // keeping the previous one (PB-8: BW→kg left the axis pinned to the BW range).
+  forceLeftRange?: { min: number; max: number } | undefined;
   rightBeginAtZero?: boolean;
   /** Stretch the right y-axis by this factor so its series sit low/squished
    * (e.g. 3 = bars only fill the bottom third). Default 1. */
@@ -160,14 +163,14 @@ export interface SvgChartConfig {
    * "Exercise", "Type"]). When set, the legend menu adds a row of show/hide CHIPS per
    * segment — tapping a value toggles every series sharing it on/off at once, so you
    * can hide a whole athlete / exercise / graph-type in one tap. */
-  legendGroupLabels?: string[];
+  legendGroupLabels?: string[] | undefined;
   /** Opt in to the two tiny legend style toggles: "faint lines" (thin/dashed/grey
    * trend lines so the data dots dominate) and "tags" (leader-line brace labels that
    * name each line). They drive app-wide prefs but only affect charts that opt in. */
   styleToggles?: boolean;
   /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
    * region as you approach a target. Drawn behind everything. */
-  yBands?: { from: number; to?: number; fill: string }[];
+  yBands?: { from: number; to?: number; fill: string }[] | undefined;
 }
 export interface SvgChart {
   update(cfg: Partial<SvgChartConfig>): void;
@@ -1190,6 +1193,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   return {
     update(next: Partial<SvgChartConfig>) {
       const seriesChanged = next.series !== undefined;
+      // NOTE (PB-8): this MERGES — an optional key absent from `next` keeps its previous
+      // value. Callers that build a full config must therefore pass every toggleable key
+      // EXPLICITLY (undefined when off), or a turned-off feature (e.g. the per-bodyweight
+      // forceLeftRange) leaves a stale value pinning the view. Partial callers (e.g.
+      // `update({ series: [] })`) rely on this merge to keep the rest of their config.
       cfg = { ...cfg, ...next };
       // Series changed (e.g. a metric toggled on/off): keep the time-axis mapping
       // fresh, but only RE-FIT the view if the user hasn't panned/zoomed — so adding
