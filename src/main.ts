@@ -11303,6 +11303,13 @@ async function init() {
       if (pos === "absolute" || pos === "fixed") d.open = false;
     }
   }, true);
+  // When the selector ⚙ opens, clamp its popout into the viewport (its anchor cog can
+  // wrap to anywhere on the row, so a static left/right would clip — "out of bounds").
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (d instanceof HTMLDetailsElement && d.classList.contains("wa-sel-cog") && d.open)
+      clampMenuIntoView(d.querySelector<HTMLElement>(".wa-sel-cog-menu"));
+  }, true);
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
     els.aloneFilter.dataset.state = aloneFilter;
@@ -13461,6 +13468,21 @@ function renderWorkoutAnalysis(): void {
  * and draws (graph vs the calendar/history). The two share the ancillary settings
  * (group-by, name mode, identities, search, show-missing); only the SELECTION is
  * per-scope. A "match" button copies the OTHER selector's picks into this one. */
+/** Nudge a floating popout horizontally (via --menu-shift) so it stays inside the
+ * viewport. For menus whose anchor can wrap to anywhere on a row, neither a fixed
+ * left:0 nor right:0 keeps them on-screen (the "settings out of bounds" bug); this
+ * measures the rendered menu and shifts it just enough to fit. Idempotent. */
+function clampMenuIntoView(menu: HTMLElement | null | undefined): void {
+  if (!menu) return;
+  menu.style.setProperty("--menu-shift", "0px");
+  const m = 6;
+  const r = menu.getBoundingClientRect();
+  let shift = 0;
+  if (r.right > window.innerWidth - m) shift = -(r.right - (window.innerWidth - m));
+  if (r.left + shift < m) shift = m - r.left; // never push it off the LEFT either
+  if (shift) menu.style.setProperty("--menu-shift", `${Math.round(shift)}px`);
+}
+
 function renderSelector(scope: SelScope): void {
   const sel = document.getElementById(scope === "graph" ? "waExerciseSelector" : "waExerciseSelectorHist");
   if (!sel) return;
@@ -13604,6 +13626,9 @@ function renderSelector(scope: SelScope): void {
   if (showGrid) renderWaChipsScope(scope);
   const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
   if (newWrap) newWrap.scrollTop = prevChipScroll;
+  // Keep the ⚙ settings popout on-screen when it's open (its anchor cog can wrap to
+  // anywhere on the tools row), re-clamping after each re-render.
+  if (cogOpen) clampMenuIntoView(sel.querySelector<HTMLElement>(".wa-sel-cog-menu"));
 }
 
 /** One chip for an exercise (selected state + identity). `missing` greys it out:
