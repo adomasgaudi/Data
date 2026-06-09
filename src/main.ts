@@ -13994,8 +13994,16 @@ function renderWaGraph(): void {
   const onoff = (on: boolean, attr: string, label: string, title: string) =>
     `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
   const lensCount = [c.prediction, c.decay, S.waPerBodyweight, waHardOnly].filter(Boolean).length;
+  // Preserve which config sub-sections (Data / Lines & filter / Bars & axes / Set spread)
+  // are OPEN across this re-render: changing a slider or toggle rebuilds this whole panel,
+  // which would otherwise snap every <details> shut — the recurring "the menu collapses
+  // the moment I change a setting" bug (rule 24). Read the live DOM's open state FIRST,
+  // keyed by the section label, and re-apply it below.
+  const openCfgGroups = new Set<string>();
+  for (const d of box.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
+    if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
   const cfgGroup = (label: string, sub: string, body: string) =>
-    `<details class="wa-cfg-group"><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
+    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   // Each config section built separately so the two-column menu can place them: Data +
   // Lines & filter across the TOP, the metric groups in the LEFT column, Bars & axes in
   // the RIGHT column, the global "All graphs" toggle spanning the bottom.
