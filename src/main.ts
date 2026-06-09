@@ -3578,6 +3578,14 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
 // sub-sections (a navigable table-of-contents) so you never scan a flat 100-row list —
 // see the per-group "Sub-group by" default in renderBwParts. Small groups stay flat.
 const IDX_AUTO_SUB_THRESHOLD = 20;
+// The Index's "Review filtered-out" fold (every lift the Great Filter hides, in one
+// place, each with a one-tap "keep" exception). Its open state persists so making an
+// exception — which re-renders the app — doesn't snap the review shut.
+let bwReviewOpen = (() => { try { return localStorage.getItem("colosseum.bwReviewOpen") === "1"; } catch { return false; } })();
+function setBwReviewOpen(v: boolean): void {
+  bwReviewOpen = v;
+  try { localStorage.setItem("colosseum.bwReviewOpen", v ? "1" : "0"); } catch { /* ignore */ }
+}
 // Fine muscle groups in display order, with a colour (legs/arms split off the
 // CATEGORY_COLORS shades; the rest reuse them).
 const INDEX_MUSCLES: MuscleGroup[] = [
@@ -7771,11 +7779,27 @@ function renderBwParts() {
     `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
     ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
     ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
-    (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") + `</td>` +
+    (r.count > 0 ? ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history">↗</button>` : "") +
+    // On a filtered-out (greyed) row: a one-tap exception that force-shows this lift
+    // app-wide despite the filter — so you can review what's hidden and keep the odd one.
+    (hidden ? ` <button type="button" class="bw-keep${activeInclude.has(r.name) ? " is-on" : ""}" data-askeep="${escapeHtml(r.name)}" title="${activeInclude.has(r.name) ? "Kept as an exception — tap to drop back into the filter" : "Make an exception — always show this lift despite the filter"}">${activeInclude.has(r.name) ? "✓ kept" : "＋ keep"}</button>` : "") +
+    `</td>` +
     `<td class="num">${indexEditCell(r)}</td>` +
     `<td class="num">${r.count.toLocaleString()}</td></tr>`;
   const table = (rs: IndexRow[], hidden: boolean) =>
     `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
+
+  // "Review filtered-out": ONE place to see every lift the Great Filter is hiding
+  // (greyed, across all groups) and tap "＋ keep" to make an exception. Only shown
+  // when a filter is actually hiding something; its open state persists across the
+  // re-render that "keep" triggers.
+  const allHidden = activeSet ? rows.filter((r) => !activeSet!.has(r.name)) : [];
+  const reviewHtml = allHidden.length
+    ? `<details class="bw-review" id="bwReview"${bwReviewOpen ? " open" : ""}>` +
+      `<summary class="bw-review-sum">Review ${allHidden.length} filtered-out — tap “＋ keep” to make an exception</summary>` +
+      table(allHidden, true) +
+      `</details>`
+    : "";
 
   // Live search (from the bottom bar): show a FLAT list of every lift whose name /
   // code / short-name matches, so you find it right here in the Index instead of
@@ -7883,11 +7907,11 @@ function renderBwParts() {
         `</details>`
       : "";
     const majorHtml = major.map((b) => bucketHtml(b)).join("");
-    els.bwGroups.innerHTML = majorHtml + otherBlock;
+    els.bwGroups.innerHTML = reviewHtml + majorHtml + otherBlock;
     return;
   }
 
-  els.bwGroups.innerHTML = buckets.map((b) => bucketHtml(b)).join("");
+  els.bwGroups.innerHTML = reviewHtml + buckets.map((b) => bucketHtml(b)).join("");
 }
 
 /** The "Group by" picker above the Index exercise groups. */
@@ -11096,6 +11120,7 @@ async function init() {
   // `toggle` event doesn't bubble, so listen in the capture phase.
   els.bwGroups.addEventListener("toggle", (e) => {
     const d = e.target as HTMLElement;
+    if (d instanceof HTMLDetailsElement && d.id === "bwReview") { setBwReviewOpen(d.open); return; }
     if (!(d instanceof HTMLDetailsElement) || !d.classList.contains("ex-vars-fold")) return;
     const ex = d.dataset.exvars;
     if (!ex) return;
@@ -11159,6 +11184,16 @@ async function init() {
   });
   // Tap an exercise name on the Index to open its settings in the floating overlay.
   els.bwGroups.addEventListener("click", (e) => {
+    // "＋ keep" on a filtered-out row: make an exception (force-show app-wide). Keep the
+    // Review fold open across the re-render so you can keep several in a row.
+    const keep = (e.target as HTMLElement).closest<HTMLElement>("[data-askeep]");
+    if (keep?.dataset.askeep) {
+      const sy = window.scrollY;
+      setBwReviewOpen(true);
+      toggleActiveOverride(keep.dataset.askeep, "include");
+      window.scrollTo(0, sy);
+      return;
+    }
     // Quick-edit tier pill: cycle Primary → Secondary → Tertiary → Ugly. Update the
     // tapped pill instantly (snappy, rule 17), then re-render so the row re-sorts into
     // its new tier bucket; keep the scroll position so editing a list stays put.

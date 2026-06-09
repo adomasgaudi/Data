@@ -291,6 +291,8 @@ const LT: Record<string, string> = {
   "Group by": "Grupuoti pagal",
   "Sub-group by": "Pogrupis pagal",
   "BW part": "KS dalis",
+  "＋ keep": "＋ palikti",
+  "✓ kept": "✓ palikta",
   "Auto-organised because this group is large — tap the menu to change": "Sutvarkyta automatiškai, nes grupė didelė — keisk meniu",
   "Discipline": "Disciplina",
   "Statics": "Statika",

@@ -2742,7 +2742,31 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-hidden[open] > .bw-hidden-sum::before { content: "▾ "; }
 .bw-hidden-sum:hover { color: var(--accent); }
 .bw-row-hidden { opacity: 0.5; }
+.bw-row-hidden .bw-keep { opacity: 1; } /* the keep action stays legible even on a greyed row */
 .bw-allhidden { margin: 0; padding: 9px 12px; font-size: 0.82rem; }
+
+/* "Review filtered-out" fold: one place to scan every lift the Great Filter hides
+   and keep exceptions. Sits at the top of the Index, set apart with a soft accent tint. */
+.bw-review {
+  margin: 0 0 0.6rem; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 10px; background: color-mix(in srgb, var(--accent) 5%, var(--panel)); overflow: hidden;
+}
+.bw-review-sum {
+  cursor: pointer; list-style: none; padding: 8px 12px;
+  font-size: 0.82rem; font-weight: 700; color: var(--accent); user-select: none;
+}
+.bw-review-sum::-webkit-details-marker { display: none; }
+.bw-review-sum::before { content: "▸ "; font-size: 0.72rem; }
+.bw-review[open] > .bw-review-sum::before { content: "▾ "; }
+/* One-tap exception pill on a filtered-out row (small rounding, rule 22). */
+.bw-keep {
+  font: inherit; font-size: 0.7rem; font-weight: 600; line-height: 1.1; white-space: nowrap; cursor: pointer;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--r-pill); padding: 1px 7px; margin-left: 2px; vertical-align: middle;
+}
+.bw-keep:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.bw-keep.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 
 /* Exercise codes tab: editable per-lift code + short name. The two editors stack
    in ONE cell, each on its own labelled line, so neither is squeezed on a phone. */
