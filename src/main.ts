@@ -7820,14 +7820,30 @@ function renderBwParts() {
     `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
   // "Review filtered-out": ONE place to see every lift the Great Filter is hiding
-  // (greyed, across all groups) and tap "＋ keep" to make an exception. Only shown
-  // when a filter is actually hiding something; its open state persists across the
+  // (greyed) and tap "＋ keep" to make an exception. Organised into the SAME groups as
+  // the Index (by the current Group-by) so you can review by category, not one flat
+  // wall. Only shown when a filter is hiding something; open states persist across the
   // re-render that "keep" triggers.
   const allHidden = activeSet ? rows.filter((r) => !activeSet!.has(r.name)) : [];
+  const reviewBody = (() => {
+    if (allHidden.length < 2) return table(allHidden, true);
+    const hb = indexBuckets(allHidden, S.bwGroupMode);
+    if (hb.length < 2) return table(allHidden, true); // a single group → stay flat
+    return hb.map((b) =>
+      `<details class="bw-cat bw-cat-sub bw-review-cat" data-cat="rv:${escapeHtml(b.key)}" style="--sub-color:${b.color}"${open("rv:" + b.key) ? " open" : ""}>` +
+      `<summary class="bw-cat-summary">` +
+      `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
+      `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
+      `<span class="bw-cat-meta muted">${b.rows.length}</span>` +
+      `</summary>` +
+      table(b.rows, true) +
+      `</details>`,
+    ).join("");
+  })();
   const reviewHtml = allHidden.length
     ? `<details class="bw-review" id="bwReview"${bwReviewOpen ? " open" : ""}>` +
       `<summary class="bw-review-sum">Review ${allHidden.length} filtered-out — tap “＋ keep” to make an exception</summary>` +
-      table(allHidden, true) +
+      reviewBody +
       `</details>`
     : "";
 

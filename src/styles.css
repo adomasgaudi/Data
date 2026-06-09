@@ -2758,6 +2758,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-review-sum::-webkit-details-marker { display: none; }
 .bw-review-sum::before { content: "▸ "; font-size: 0.72rem; }
 .bw-review[open] > .bw-review-sum::before { content: "▾ "; }
+/* The review's exercises are organised into the same colour-coded groups as the Index
+   (one collapsible per category). They sit under .bw-review, so re-state the nested
+   look: a coloured left edge + a separating top border, no double box. */
+.bw-review > .bw-review-cat {
+  border: none; border-top: 1px solid var(--line);
+  border-left: 3px solid var(--sub-color, var(--line)); border-radius: 0; margin: 0;
+}
+.bw-review > .bw-review-cat > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 /* One-tap exception pill on a filtered-out row (small rounding, rule 22). */
 .bw-keep {
   font: inherit; font-size: 0.7rem; font-weight: 600; line-height: 1.1; white-space: nowrap; cursor: pointer;
