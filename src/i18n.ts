@@ -120,6 +120,7 @@ const LT: Record<string, string> = {
   "No hidden lifts.": "Paslėptų pratimų nėra.",
   "Show hidden in the list (don't unhide)": "Rodyti paslėptus sąraše (neatslepiant)",
   "Did you mean…?": "Ar turėjote omenyje…?",
+  "None": "Nėra",
   "ⓘ Info": "ⓘ Informacija",
   "⊕ Combine": "⊕ Sujungti",
   "⇄ Compare": "⇄ Palyginti",

@@ -3507,8 +3507,13 @@ const DISCIPLINE_COLORS: Record<Discipline, string> = {
 const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";
 // The two "main" disciplines shown at the Index top level; the rest nest under "Other".
 const MAJOR_DISCIPLINES: Discipline[] = ["Strength", "Calisthenics"];
-// Inside the big "Strength" discipline, slice its lifts further by muscle or function.
-let strengthSubMode: "muscleGroup" | "function" = "muscleGroup";
+// Per-group sub-grouping in the Index: EACH top-level group can be sliced further by
+// another dimension. Keyed `${primaryMode}:${groupKey}` → an IndexGroupMode or "none".
+const IDX_SUBMODE_KEY = "colosseum.idxSubMode.v1";
+const idxSubMode: Record<string, string> = (() => {
+  try { return JSON.parse(localStorage.getItem(IDX_SUBMODE_KEY) ?? "{}") as Record<string, string>; } catch { return {}; }
+})();
+function saveIdxSubMode(): void { try { localStorage.setItem(IDX_SUBMODE_KEY, JSON.stringify(idxSubMode)); } catch { /* ignore */ } }
 
 interface IndexRow { name: string; coeff: number; count: number; }
 interface IndexBucket { key: string; label: string; color: string; rows: IndexRow[]; }
@@ -7647,20 +7652,38 @@ function renderBwParts() {
     );
   };
 
-  // One group's collapsible <details> (a coloured title + its exercise table). The
-  // active-set filter splits it: active lifts stay; the rest go under "Show hidden".
+  // Per-group sub-grouping: each TOP-LEVEL group can be sliced further by another
+  // dimension (remembered per group). Strength still defaults to muscle-group.
+  const subModeKey = (key: string) => `${S.bwGroupMode}:${key}`;
+  const subModeFor = (key: string): string =>
+    idxSubMode[subModeKey(key)] ?? (S.bwGroupMode === "discipline" && key === "Strength" ? "muscleGroup" : "none");
+  const subSelHtml = (key: string): string => {
+    const cur = subModeFor(key);
+    const opts = `<option value="none"${cur === "none" ? " selected" : ""}>None</option>` +
+      INDEX_GROUP_MODES.filter((m) => m.mode !== S.bwGroupMode)
+        .map((m) => `<option value="${m.mode}"${cur === m.mode ? " selected" : ""}>${escapeHtml(m.label)}</option>`).join("");
+    return `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select" data-subkey="${escapeHtml(subModeKey(key))}">${opts}</select></div>`;
+  };
+  // One group's collapsible <details> (coloured title + a "Sub-group by" selector, then
+  // either its exercise table OR — when a sub-mode is chosen — nested sub-groups). The
+  // active-set filter splits the flat table: active lifts stay; the rest go under "Show
+  // hidden". `sub` = this is already a nested sub-group (no further nesting / selector).
   const bucketHtml = (b: IndexBucket, sub = false): string => {
+    const sm = sub ? "none" : subModeFor(b.key);
     const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
     const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
     const meta = activeSet
       ? `${shown.length}${hidden.length ? ` <span class="bw-cat-hidden">${hidden.length} hidden</span>` : ""}`
       : `${b.rows.length}`;
-    const shownBlock = shown.length
+    const flatBody = (shown.length
       ? table(shown, false)
-      : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`;
-    const hiddenBlock = hidden.length
-      ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
-      : "";
+      : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`) +
+      (hidden.length
+        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
+        : "");
+    const body = sm !== "none"
+      ? indexBuckets(b.rows, sm as IndexGroupMode).map((s) => bucketHtml(s, true)).join("")
+      : flatBody;
     return (
       `<details class="bw-cat${sub ? " bw-cat-sub" : ""}" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
       `<summary class="bw-cat-summary">` +
@@ -7669,29 +7692,8 @@ function renderBwParts() {
       `<span class="bw-cat-meta muted">${meta}</span>` +
       groupFilterToggle(b.rows.map((r) => r.name)) +
       `</summary>` +
-      shownBlock +
-      hiddenBlock +
-      `</details>`
-    );
-  };
-
-  // The big "Strength" discipline is sliced further into sub-groups by muscle or
-  // function (the owner picks which). Its lifts re-run through indexBuckets in the
-  // chosen sub-mode and render as nested sub-groups, with a little selector on top.
-  const strengthBucketHtml = (b: IndexBucket): string => {
-    const subs = indexBuckets(b.rows, strengthSubMode);
-    const opt = (m: "muscleGroup" | "function", lbl: string) => `<option value="${m}"${strengthSubMode === m ? " selected" : ""}>${lbl}</option>`;
-    const sel = `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select">${opt("muscleGroup", "Muscle group")}${opt("function", "Function")}</select></div>`;
-    return (
-      `<details class="bw-cat" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
-      `<summary class="bw-cat-summary">` +
-      `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
-      `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
-      `<span class="bw-cat-meta muted">${b.rows.length} exercise${b.rows.length === 1 ? "" : "s"}</span>` +
-      groupFilterToggle(b.rows.map((r) => r.name)) +
-      `</summary>` +
-      sel +
-      subs.map((s) => bucketHtml(s, true)).join("") +
+      (sub ? "" : subSelHtml(b.key)) +
+      body +
       `</details>`
     );
   };
@@ -7714,7 +7716,7 @@ function renderBwParts() {
         minor.map((b) => bucketHtml(b, true)).join("") +
         `</details>`
       : "";
-    const majorHtml = major.map((b) => (b.key === "Strength" ? strengthBucketHtml(b) : bucketHtml(b))).join("");
+    const majorHtml = major.map((b) => bucketHtml(b)).join("");
     els.bwGroups.innerHTML = majorHtml + otherBlock;
     return;
   }
@@ -9145,10 +9147,15 @@ function reviewGraphsForExercise(exName: string) {
 /** Apply an edited bodyweight coefficient and refresh every dependent view. */
 function onBwInputChange(e: Event) {
   const input = e.target as HTMLElement;
-  // The "Sub-group by" picker inside the Strength discipline (muscle / function).
+  // A group's "Sub-group by" picker — remembered per group (keyed by data-subkey).
   if (input.classList.contains("bw-substrat")) {
-    strengthSubMode = (input as HTMLSelectElement).value === "function" ? "function" : "muscleGroup";
-    renderBwParts();
+    const key = (input as HTMLElement).dataset.subkey;
+    if (key) {
+      const v = (input as HTMLSelectElement).value;
+      if (v === "none") delete idxSubMode[key]; else idxSubMode[key] = v;
+      saveIdxSubMode();
+      renderBwParts();
+    }
     return;
   }
   if (!input.classList.contains("bw-input")) return;
