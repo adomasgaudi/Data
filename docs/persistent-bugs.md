@@ -13,13 +13,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ## PB-6 — A lift's history is empty / partial when it belongs to a combinable group
 
-- **Recurrences:** 2 (b.2.8.38 "fixed" the empty combined history by expanding the
-  synthetic name; the user then saw Squat's COMPARE view show only Front Squat, not
-  Squat/Smith squat — the same root tangle, different face).
-- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data).
+- **Recurrences:** 3 (b.2.8.38 "fixed" the empty combined history by expanding the
+  synthetic name; b.2.8.40 fixed Squat's COMPARE view showing only Front Squat; then
+  the user set a COMPARABLE group ("Squat pattern") to **Merged** and the history went
+  blank again — "546 rest days" — the same root tangle, third face).
+- **Device/browser seen on:** Android phone, Brave/Samsung (adomasgaudi.github.io/Data).
 - **Symptom:** select Squat in the history; with the ⇄ Compare lens on it should show
   Squat + Front Squat (its comparable "Squat pattern"), but only Front Squat appears.
-  Earlier: with Combine on it showed "546 rest days" (empty).
+  Earlier: with Combine on it showed "546 rest days" (empty). b.2.8.45: setting a
+  COMPARABLE group to **Merged** (its combine-slot lens) showed "546 rest days" too —
+  the merged synthetic name ("Squat pattern") was the filter, but no record carried it.
 - **Root cause:** `remapRegistryCombined` relabels a combinable group's member records
   to the combined name whenever the group's GLOBAL display (`groupDisplayFor`) is
   "combined" — which is the DEFAULT (rule 23). So a logged "Squat" set became "SQ mix"
@@ -33,6 +36,13 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   remap: combine → the synthetic name (records are relabelled to it), compare → the raw
   members, none → the raw lift (expanded if it's itself a synthetic). The calendar
   keeps RAW member names (its records aren't remapped). Fix site tagged `PB-6`.
+- **Root fix (b.2.8.45, recurrence 3):** the "Merged" toggle writes the COMBINE lens
+  slot for ANY group — combinable OR comparable — but `remapRegistryCombined` only swept
+  `effectiveCombinableGroups()`, so a Merged comparable group's records never got the
+  synthetic name while `histFilterNames` filtered on it → empty. Fix: sweep BOTH kinds
+  and remap a group only when a selected lift's combine lens RESOLVES to that exact group
+  (`chosenGroup("hist", m, "combine")?.id === g.id`) — which also tightens the old loose
+  "has any combine lens" check. Raw weights are kept (scaling stays a graph-only concern).
 
 ## PB-5 — Tapping a lift name in a fold-title removes it on the graph but NOT the history
 
