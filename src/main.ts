@@ -2542,6 +2542,18 @@ function computedRecords(): SetRecord[] {
   return computedRecordsCache;
 }
 
+/** Like {@link computedRecords} but IGNORING the app-wide Index/Great filter (only
+ * hidden/"deleted" sets drop). Used by a single lift's INFO CARD: the filter governs
+ * which lifts show in lists/graphs, not whether a lift's OWN detail card knows its
+ * data — otherwise a filtered-out lift (e.g. an Ugly-tiered one hidden by default)
+ * reads "0 sets / 0 athletes" even though it has real logged sets. Not memoised
+ * (one card render); same transform pipeline, just the unfiltered base. */
+function computedRecordsAllLifts(): SetRecord[] {
+  const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
+  const pure = liveRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
+  return [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
+}
+
 /**
  * Fill the Colosseum exercise picker with every distinct logged lift, each on its
  * own (no scaling, no groups). Re-runnable: keeps the current selection if it
@@ -8878,7 +8890,10 @@ function openModelEditor(): void {
 
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
-  const recs = computedRecords().filter((r) => r.exerciseName === name);
+  // The info card shows THIS lift's real data — unfiltered, so a lift hidden by the
+  // app-wide Index/Great filter (e.g. tagged Ugly) still reports its true sets /
+  // athletes / 1RM rather than zeros.
+  const recs = computedRecordsAllLifts().filter((r) => r.exerciseName === name);
   const coeff = coeffFor(name);
   // A user-created merge (this lift combines several exercises) vs auto spelling-merges.
   const userMergeDef = userExerciseDefs.find((d) => d.name === name && d.identity === "combined");
