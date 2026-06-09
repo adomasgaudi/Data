@@ -8000,6 +8000,16 @@ interface CoachingProfile {
   maintain?: string[]; // areas to keep training to protect the cautions (muscle names auto-detected)
   /** Lean on antagonist supersets (e.g. tends to rush / cut rests short). */
   pushSupersets?: boolean;
+  /** Explicit planned work for today (e.g. "2 sets of adductors"). Each item names a
+   * muscle group; the working weight + warm-up are computed from recent strength. */
+  planned?: PlannedWork[];
+}
+/** A planned block of work: N sets targeting a muscle group, with the working weight
+ * and warm-up sized off the athlete's recent top set for that muscle. */
+interface PlannedWork {
+  muscle: MuscleGroup;
+  sets: number;
+  note?: string;
 }
 // Code-seeded defaults, matched by a name fragment. The owner's in-app edits (saved
 // on device, keyed by exact username) take precedence over these.
@@ -8016,6 +8026,7 @@ const COACHING_SEED: Record<string, CoachingProfile> = {
     cautions: ["Adductor pain", "Low back pain"],
     maintain: ["Adductors", "Hip flexors"],
     pushSupersets: true,
+    planned: [{ muscle: "Adductors", sets: 2, note: "adductor care — keep it light" }],
   },
 };
 const COACHING_KEY = "colosseum.coaching.v1";
@@ -8037,6 +8048,26 @@ function maintainMusclesFor(coach: CoachingProfile | null): MuscleGroup[] {
   if (!coach?.maintain?.length) return [];
   const hay = coach.maintain.join(" ").toLowerCase();
   return MUSCLE_GROUPS.filter((m) => hay.includes(m.toLowerCase()));
+}
+/** The athlete's recent top weighted set on any lift hitting a muscle group — the
+ * heaviest set logged for it in the last ~60 days. Used to size a warm-up off recent
+ * strength. Returns null if no weighted set is on record. */
+function recentTopSetForMuscle(username: string, muscle: MuscleGroup, todayD: number): { exercise: string; weight: number; reps: number; daysAgo: number } | null {
+  let best: { exercise: string; weight: number; reps: number; day: number } | null = null;
+  for (const r of computedRecords()) {
+    if (r.username !== username || !r.date) continue;
+    if (typeof r.weight !== "number" || !(r.weight > 0)) continue;
+    const d = dayNumber(r.date);
+    if (todayD - d > 60) continue; // only "recent" strength
+    if (!mgsFor(r.exerciseName).includes(muscle)) continue;
+    if (!best || r.weight > best.weight) best = { exercise: r.exerciseName, weight: r.weight, reps: r.reps ?? 0, day: d };
+  }
+  return best ? { exercise: best.exercise, weight: best.weight, reps: best.reps, daysAgo: todayD - best.day } : null;
+}
+/** Round a warm-up weight to a tidy increment (2.5 kg ≥ 20, else 1 kg). */
+function tidyWarmupKg(kg: number): number {
+  if (kg >= 20) return Math.round(kg / 2.5) * 2.5;
+  return Math.max(1, Math.round(kg));
 }
 /** Lowercased goal/maintain keywords (≥3 chars), for goal-weighting the plan. */
 function goalKeywords(coach: CoachingProfile | null): string[] {
@@ -8183,6 +8214,27 @@ function renderLive(): void {
       pairs.join("") + `</section>`
     : "";
 
+  // 2.5) PLANNED TODAY — explicit planned work from the coaching profile (e.g. Marija's
+  //      "2 sets of adductors"), with the working weight + a warm-up sized off her recent
+  //      top set for that muscle (so the warm-up tracks current strength, not a guess).
+  const plannedItems = (coach?.planned ?? []).map((p) => {
+    const top = recentTopSetForMuscle(username, p.muscle, todayD);
+    const setsTxt = `<b>${p.sets} set${p.sets === 1 ? "" : "s"}</b> of <b>${escapeHtml(p.muscle)}</b>`;
+    if (!top) {
+      return `<li>${setsTxt}${p.note ? ` <span class="muted">(${escapeHtml(p.note)})</span>` : ""} — <span class="muted">no recent weight on record, start light and feel it out.</span></li>`;
+    }
+    const warm = tidyWarmupKg(top.weight * 0.5);
+    const recentTxt = `recent top: ${top.weight} kg × ${top.reps} on ${escapeHtml(displayName(top.exercise))}, ${top.daysAgo}d ago`;
+    return `<li>${setsTxt} at ~<b>${top.weight} kg</b> <span class="muted">(${recentTxt})</span>. ` +
+      `Warm-up: 1 set ×15 at ~<b>${warm} kg</b> <span class="muted">(≈50% of recent)</span>.` +
+      (p.note ? ` <span class="muted">${escapeHtml(p.note)}</span>` : "") + `</li>`;
+  });
+  const plannedSection = plannedItems.length
+    ? `<section class="live-card"><h3 class="live-h">Planned today</h3>` +
+      `<p class="live-sub muted">Set work added to the plan, with the warm-up sized off your recent strength.</p>` +
+      `<ul class="live-list">${plannedItems.join("")}</ul></section>`
+    : "";
+
   // 3) WARM-UPS — the muscle groups today's top lifts hit, + a simple ramp recipe.
   const topToday = [...byTier("main"), ...byTier("second")].sort((a, b) => b.priority - a.priority).slice(0, 4);
   const warmMuscles = [...new Set(topToday.flatMap((x) => x.muscles.slice(0, 2)))].slice(0, 6);
@@ -8252,8 +8304,8 @@ function renderLive(): void {
   // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
   // section right after the plan; otherwise it sits lower.
   const ordered = coach?.pushSupersets
-    ? coachSection + trainSection + ssSection + warmSection + watchSection
-    : coachSection + trainSection + warmSection + ssSection + watchSection;
+    ? coachSection + plannedSection + trainSection + ssSection + warmSection + watchSection
+    : coachSection + plannedSection + trainSection + warmSection + ssSection + watchSection;
 
   box.innerHTML =
     `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
@@ -8574,6 +8626,10 @@ function setupLive(): void {
         maintain: lines("maintain"),
         pushSupersets: !!box.querySelector(".live-ss-toggle.is-on"),
       };
+      // Planned work isn't editable in this text editor — carry it over so saving the
+      // profile doesn't wipe the seeded plan (e.g. Marija's 2 sets of adductors).
+      const keepPlanned = coachingFor(username)?.planned;
+      if (keepPlanned?.length) prof.planned = keepPlanned;
       coachingOverrides[username] = prof;
       saveCoaching();
       renderLive();
