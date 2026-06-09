@@ -1079,30 +1079,50 @@ const inclineKey = (dim: LevelDim, value: number): string => `${dim}|${value}`;
 // Smith notch 4 = 66cm (see levelCm) — which still lands sm3 ≈ sq3 (50 vs 51cm). The
 // difficulty then steps ~0.05 per Smith notch (15cm) off the curve below.
 const DEFAULT_CM_PER_SQ = 5, DEFAULT_CM_PER_SMITH = 15;
+// Each incline TOOL converts a step (hole / notch / box position) to a hand-height
+// in cm, anchored to a measured ground-height: { default cm-per-step, anchor step,
+// anchor cm, override-key }. cm itself isn't here (it's already cm). The two box
+// tools (finger push-ups etc.) start from owner-tunable guesses — re-measure in
+// Settings → ✎ Difficulty multipliers → incline.
+const INCLINE_TOOLS: Record<Exclude<LevelDim, "cm">, { step: number; anchorLevel: number; anchorCm: number; ovKey: string }> = {
+  sq: { step: DEFAULT_CM_PER_SQ, anchorLevel: 5, anchorCm: 60, ovKey: "cmPerSq" },
+  smith: { step: DEFAULT_CM_PER_SMITH, anchorLevel: 4, anchorCm: 66, ovKey: "cmPerSmith" },
+  rackbox: { step: 5, anchorLevel: 0, anchorCm: 45, ovKey: "cmPerRackbox" },
+  ladbox: { step: 7, anchorLevel: 0, anchorCm: 30, ovKey: "cmPerLadbox" },
+};
 function inclineCmPerStep(dim: LevelDim): number {
-  if (dim === "sq") return inclineScaleOverrides["cmPerSq"] ?? DEFAULT_CM_PER_SQ;
-  if (dim === "smith") return inclineScaleOverrides["cmPerSmith"] ?? DEFAULT_CM_PER_SMITH;
-  return 1; // cm is already cm
+  if (dim === "cm") return 1; // cm is already cm
+  const t = INCLINE_TOOLS[dim];
+  return inclineScaleOverrides[t.ovKey] ?? t.step;
 }
-function setInclineCmPerStep(dim: "sq" | "smith", v: number): void {
-  inclineScaleOverrides[dim === "sq" ? "cmPerSq" : "cmPerSmith"] = v;
+function setInclineCmPerStep(dim: Exclude<LevelDim, "cm">, v: number): void {
+  inclineScaleOverrides[INCLINE_TOOLS[dim].ovKey] = v;
   saveInclineScales();
+}
+// The tool cycle (one pill cycling, rule 15) + human labels, shared by the popover
+// and the Settings editor so a new tool is added in one place.
+const INCLINE_DIM_ORDER: LevelDim[] = ["sq", "smith", "cm", "rackbox", "ladbox"];
+const INCLINE_DIM_LABELS: Record<LevelDim, string> = {
+  sq: "SQ hole", smith: "Smith notch", cm: "cm", rackbox: "rack box", ladbox: "ladder box",
+};
+function inclineNextDim(dim: LevelDim): LevelDim {
+  const i = INCLINE_DIM_ORDER.indexOf(dim);
+  return INCLINE_DIM_ORDER[(i + 1) % INCLINE_DIM_ORDER.length]!;
+}
+function inclineDimLabel(dim: LevelDim): string {
+  return INCLINE_DIM_LABELS[dim] ?? dim;
 }
 // Each unit is anchored to its OWN measured ground-height, then steps by its cm-per-
 // step: a squat-rack hole 5 sits at 60cm (owner taped it), a Smith notch 4 at 66cm.
 // Different step sizes (5 vs 15cm) only coincide via these offsets — and they do, near
 // level 3 (SQ3 = 50cm, Smith3 = 51cm), matching the owner's sm3 ≈ sq3 reference.
-const INCLINE_SQ_ANCHOR_LEVEL = 5, INCLINE_SQ_ANCHOR_CM = 60; // squat-rack hole 5 = 60cm
-const INCLINE_SMITH_ANCHOR_LEVEL = 4, INCLINE_SMITH_ANCHOR_CM = 66; // Smith notch 4 = 66cm
-/** A level's hand-height in CM: cm as-is; a SQ hole / Smith notch via its cm-per-step,
- * anchored to the owner's tape-measured ground heights (SQ5 = 60cm, Smith4 = 66cm). */
+/** A level's hand-height in CM: cm as-is; a SQ hole / Smith notch / box position via
+ * its cm-per-step, anchored to the owner's tape-measured ground heights (SQ5 = 60cm,
+ * Smith4 = 66cm; the boxes start from tunable guesses). */
 function levelCm(dim: LevelDim, value: number): number {
   if (dim === "cm") return value;
-  const [anchorLevel, anchorCm] =
-    dim === "smith"
-      ? [INCLINE_SMITH_ANCHOR_LEVEL, INCLINE_SMITH_ANCHOR_CM]
-      : [INCLINE_SQ_ANCHOR_LEVEL, INCLINE_SQ_ANCHOR_CM];
-  return Math.round((anchorCm + (value - anchorLevel) * inclineCmPerStep(dim)) * 10) / 10;
+  const t = INCLINE_TOOLS[dim];
+  return Math.round((t.anchorCm + (value - t.anchorLevel) * inclineCmPerStep(dim)) * 10) / 10;
 }
 // The cm→× curve is a handful of editable anchor heights; in between we interpolate,
 // so SQ/Smith (any cm) read off the same curve. An anchor defaults to the formula.
@@ -5338,7 +5358,7 @@ function renderExerciseLevels(exName: string, username: string): void {
     `<details class="exl-settings">` +
     `<summary class="exl-settings-sum">⚙ Technique scaling <span class="muted">(${byLevel.size} level${byLevel.size === 1 ? "" : "s"})</span></summary>` +
     `<div class="exl-settings-body">` +
-    `<div class="exl-head muted">For levels logged in the note — a height (43cm), a squat-rack hole (SQ8) or a Smith notch (Smith 3). On push-ups all three read as one incline (higher = easier; a floor push-up is the ×1 reference). Real weight and 1RM stay as logged; tune each Scale so equal-effort levels show the same Effort.</div>` +
+    `<div class="exl-head muted">For levels logged in the note — a height (43cm), a squat-rack hole (SQ8), a Smith notch (Smith 3), a rack box (RB3) or a ladder box (LB2). On push-ups all read as one incline (higher = easier; a floor push-up is the ×1 reference). Real weight and 1RM stay as logged; tune each Scale so equal-effort levels show the same Effort.</div>` +
     `<table class="data-table exl-table"><thead><tr>` +
     `<th>Level</th><th class="num">Best</th>` +
     `<th class="num" title="The real estimated 1RM from the logged weight — unchanged by the level">1RM</th>` +
@@ -7305,8 +7325,8 @@ function scaleEditLevelBlock(): string {
   // from the shared cm curve (read-only). Defaults to the parsed level, else SQ 0.
   const dim: LevelDim = lv?.dim ?? "sq";
   const value = lv?.value ?? 0;
-  const nextDim: LevelDim = dim === "sq" ? "smith" : dim === "smith" ? "cm" : "sq";
-  const dimLbl = dim === "sq" ? "SQ hole" : dim === "smith" ? "Smith notch" : "cm";
+  const nextDim = inclineNextDim(dim);
+  const dimLbl = inclineDimLabel(dim);
   const mult = inclineScaleFor(dim, value);
   const editable = !!st.setId; // only a real set can carry a per-set level override
   return (
@@ -7314,7 +7334,7 @@ function scaleEditLevelBlock(): string {
     `<div class="ex-var-dim scale-edit-lvl-row"><span class="ex-var-dim-lbl">incline</span>` +
     `<div class="ex-var-selrow">` +
     (editable
-      ? `<button type="button" class="wa-name-opt scale-edit-lvldim" data-lvlnextdim="${nextDim}" title="Tap to change the unit: squat-rack hole → Smith notch → cm">${escapeHtml(dimLbl)}</button>` +
+      ? `<button type="button" class="wa-name-opt scale-edit-lvldim" data-lvlnextdim="${nextDim}" title="Tap to change the tool: squat-rack hole → Smith notch → cm → rack box → ladder box">${escapeHtml(dimLbl)}</button>` +
         `<input class="ex-var-input scale-edit-lvlval" type="number" step="${dim === "cm" ? "1" : "0.5"}" value="${value}" data-lvldim="${dim}" aria-label="Incline ${escapeHtml(dimLbl)} value" />`
       : `<span class="set-lvl">${escapeHtml(lv?.label ?? `${dimLbl} ${value}`)}</span>`) +
     `<span class="scale-edit-lvlmult muted">→ ×${mult}</span>` +
@@ -8688,7 +8708,7 @@ function familyFactorTableHtml(fam: string): string {
  * tune two conversions + a few cm points — never a number per notch. ×1 = floor
  * (hardest); higher = easier. Shared by every push-up. */
 function inclineLevelsEditorHtml(): string {
-  const stepCell = (dim: "sq" | "smith", label: string) =>
+  const stepCell = (dim: Exclude<LevelDim, "cm">, label: string) =>
     `<label class="fac-cell inc-cell"><span class="fac-lvl">${escapeHtml(label)}</span>` +
     `<input class="fac-input inc-step" type="number" step="0.5" min="0.5" max="40" value="${inclineCmPerStep(dim)}" ` +
     `data-incstep="${dim}" aria-label="cm of incline per ${escapeHtml(label)}" /><span class="inc-unit muted">cm</span></label>`;
@@ -8707,11 +8727,11 @@ function inclineLevelsEditorHtml(): string {
     const cm = levelCm(dim, value);
     return `<span class="inc-prev-item">${escapeHtml(levelLabel(dim, value))}<span class="muted"> → ${cm}cm → ×${inclineScaleFor(dim, value)}</span></span>`;
   };
-  const preview = [prev("sq", 4), prev("sq", 8), prev("smith", 3), prev("smith", 6)].join("");
+  const preview = [prev("sq", 4), prev("sq", 8), prev("smith", 3), prev("smith", 6), prev("rackbox", 3), prev("ladbox", 2)].join("");
   return (
     `<div class="fac-dim-h inc-hd">incline — one cm scale (×1 = floor, hardest; raised = easier)</div>` +
     `<div class="ex-group-why muted">SQ holes & Smith notches each convert to a hand-height in cm; the multiplier comes from the cm curve below — so you set the conversion + the curve, not a number per notch. Shared by every push-up.</div>` +
-    `<div class="fac-dim"><div class="fac-dim-h">cm raised per step</div><div class="fac-cells">${stepCell("sq", "SQ hole")}${stepCell("smith", "Smith notch")}</div></div>` +
+    `<div class="fac-dim"><div class="fac-dim-h">cm raised per step</div><div class="fac-cells">${stepCell("sq", "SQ hole")}${stepCell("smith", "Smith notch")}${stepCell("rackbox", "Rack box")}${stepCell("ladbox", "Ladder box")}</div></div>` +
     `<div class="fac-dim"><div class="fac-dim-h">cm → × curve (interpolated)</div><div class="fac-cells inc-cells">${cmCells}</div></div>` +
     `<div class="inc-prev muted">${preview}</div>`
   );
@@ -10356,10 +10376,11 @@ async function init() {
     // The SQ-hole / Smith-notch → cm conversion (one knob each). Re-render the editor
     // so the preview + derived levels update, and apply app-wide.
     const step = (e.target as HTMLElement).closest<HTMLInputElement>(".inc-step");
-    if (step?.dataset.incstep === "sq" || step?.dataset.incstep === "smith") {
-      const v = Number(step.value);
+    const stepDim = step?.dataset.incstep;
+    if (stepDim === "sq" || stepDim === "smith" || stepDim === "rackbox" || stepDim === "ladbox") {
+      const v = Number(step!.value);
       if (Number.isFinite(v) && v > 0) {
-        setInclineCmPerStep(step.dataset.incstep, Math.round(v * 10) / 10);
+        setInclineCmPerStep(stepDim, Math.round(v * 10) / 10);
         if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
         scheduleModelFactorsApply();
       }
@@ -10425,8 +10446,8 @@ async function init() {
     renderScaleEditor();
     refreshAfterDifficultyEdit();
   });
-  // Popover incline UNIT cycle (SQ hole → Smith notch → cm): keep the value, switch the
-  // unit, store the per-set level override, re-render (derived × updates).
+  // Popover incline TOOL cycle (SQ hole → Smith notch → cm → rack box → ladder box):
+  // keep the value, switch the tool, store the per-set level override, re-render.
   document.addEventListener("click", (e) => {
     const pill = (e.target as HTMLElement).closest<HTMLElement>(".scale-edit-lvldim");
     if (!pill?.dataset.lvlnextdim || !scaleEditState?.setId) return;

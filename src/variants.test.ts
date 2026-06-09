@@ -130,6 +130,21 @@ describe("Smith-notch + cm incline (push-up family)", () => {
     expect(attachNoteLevel(rec("Smith 3", "Smith Machine Squat")).levelDim).toBeUndefined(); // not a push-up
   });
 
+  it("reads box-at-rig incline tools (rack box / ladder box)", () => {
+    expect(parseLevelNote("rack box 3")).toEqual(expect.objectContaining({ dim: "rackbox", value: 3, label: "RB3" }));
+    expect(parseLevelNote("RB3")).toEqual(expect.objectContaining({ dim: "rackbox", value: 3 }));
+    expect(parseLevelNote("box rack 2")).toEqual(expect.objectContaining({ dim: "rackbox", value: 2 }));
+    expect(parseLevelNote("ladder box 2")).toEqual(expect.objectContaining({ dim: "ladbox", value: 2, label: "LB2" }));
+    expect(parseLevelNote("LB2")).toEqual(expect.objectContaining({ dim: "ladbox", value: 2 }));
+    expect(parseLevelNote("box ladder 4")).toEqual(expect.objectContaining({ dim: "ladbox", value: 4 }));
+  });
+
+  it("keeps box-tool levels only on the push-up family (e.g. finger push ups)", () => {
+    expect(attachNoteLevel(rec("rack box 3", "Finger Push Ups")).levelDim).toBe("rackbox");
+    expect(attachNoteLevel(rec("ladder box 2", "Finger Push Ups")).levelDim).toBe("ladbox");
+    expect(attachNoteLevel(rec("rack box 3", "Smith Machine Squat")).levelDim).toBeUndefined();
+  });
+
   it("converts cm / sq / smith levels onto one cm incline (~15cm per step)", () => {
     expect(levelInclineCm("cm", 20)).toBe(20);
     expect(levelInclineCm("sq", 3)).toBe(45);

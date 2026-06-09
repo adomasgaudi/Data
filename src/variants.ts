@@ -12,7 +12,14 @@
  */
 import type { SetRecord } from "./domain";
 
-export type LevelDim = "sq" | "cm" | "smith";
+// The TOOL used to create the incline. Each converts to one cm hand-height (see
+// main.ts levelCm) so every push-up sits on one effort scale, whatever the rig:
+//   • "sq"      squat-rack hole         "SQ8"
+//   • "smith"   Smith-machine notch     "Sm3"
+//   • "cm"      raw centimetres         "43cm"
+//   • "rackbox" a box at the squat rack "RB3"   (finger push-ups etc.)
+//   • "ladbox"  a box at the ladder     "LB2"
+export type LevelDim = "sq" | "cm" | "smith" | "rackbox" | "ladbox";
 
 export interface ParsedLevel {
   dim: LevelDim;
@@ -24,9 +31,14 @@ export interface ParsedLevel {
   matched: string;
 }
 
-/** The short tag for a level, e.g. ("sq",8) → "SQ8", ("smith",3) → "Sm3", ("cm",43) → "43cm". */
+/** The short tag for a level, e.g. ("sq",8) → "SQ8", ("smith",3) → "Sm3",
+ * ("rackbox",3) → "RB3", ("ladbox",2) → "LB2", ("cm",43) → "43cm". */
 export function levelLabel(dim: LevelDim, value: number): string {
-  return dim === "sq" ? `SQ${value}` : dim === "smith" ? `Sm${value}` : `${value}cm`;
+  return dim === "sq" ? `SQ${value}`
+    : dim === "smith" ? `Sm${value}`
+    : dim === "rackbox" ? `RB${value}`
+    : dim === "ladbox" ? `LB${value}`
+    : `${value}cm`;
 }
 
 /**
@@ -50,6 +62,18 @@ export function parseLevelNote(note: string | null | undefined): ParsedLevel | n
   if (cm) {
     const value = Math.round(parseFloat(cm[1]!.replace(",", ".")));
     if (Number.isFinite(value)) return { dim: "cm", value, label: levelLabel("cm", value), matched: cm[0] };
+  }
+  // Box at the squat rack: "rack box 3", "box rack 3", "RB3", "3 rb".
+  const rbox = raw.match(/\b(?:rack\s*box|box\s*rack|rb)\s*(-?\d+)\b/i) ?? raw.match(/\b(-?\d+)\s*(?:rack\s*box|rb)\b/i);
+  if (rbox) {
+    const value = parseInt(rbox[1]!, 10);
+    if (Number.isFinite(value)) return { dim: "rackbox", value, label: levelLabel("rackbox", value), matched: rbox[0] };
+  }
+  // Box at the ladder: "ladder box 2", "box ladder 2", "LB2", "2 lb".
+  const lbox = raw.match(/\b(?:lad(?:der)?\s*box|box\s*lad(?:der)?|lb)\s*(-?\d+)\b/i) ?? raw.match(/\b(-?\d+)\s*(?:lad(?:der)?\s*box|lb)\b/i);
+  if (lbox) {
+    const value = parseInt(lbox[1]!, 10);
+    if (Number.isFinite(value)) return { dim: "ladbox", value, label: levelLabel("ladbox", value), matched: lbox[0] };
   }
   // Smith-machine notch: "Smith 3", "smith3", "3 smith".
   const smith = raw.match(/\bsmith\s*(-?\d+)\b/i) ?? raw.match(/\b(-?\d+)\s*smith\b/i);
@@ -125,7 +149,7 @@ export function attachNoteLevel(record: SetRecord): SetRecord {
   if (record.levelDim !== undefined) return record;
   const lv = parseLevelNote(record.notes);
   if (!lv) return record;
-  if (lv.dim === "smith" && !isInclineLevelExercise(record.exerciseName)) return record;
+  if ((lv.dim === "smith" || lv.dim === "rackbox" || lv.dim === "ladbox") && !isInclineLevelExercise(record.exerciseName)) return record;
   const leftover = record.notes
     .replace(lv.matched, "")
     .replace(/\s{2,}/g, " ")
