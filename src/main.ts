@@ -3024,19 +3024,11 @@ function closeExerciseInfo(): void {
   const name = currentExInfo;
   currentExInfo = null;
   els.exInfoPage.hidden = true;
-  // Came from Analysis (or S-Analysis) → go back there, scoped to this lift.
-  if (exInfoOrigin === "analysis" || exInfoOrigin === "s-analysis") {
-    if (name) openWorkoutAnalysis({ exercises: [name] });
-    else switchTopTab(exInfoOrigin);
-    return;
-  }
-  // Index backdrop: flash the row so closing leaves your eye where you are.
-  if (!name) return;
-  const row = indexRowFor(name);
-  if (!row) return;
-  row.scrollIntoView({ behavior: "auto", block: "center" });
-  row.classList.add("wo-flash");
-  window.setTimeout(() => row.classList.remove("wo-flash"), 1200);
+  // Back ALWAYS lands on the Analysis view scoped to JUST this lift (single-exercise
+  // view) — the lift you were inspecting becomes the whole selection, for both the
+  // graph and the history. (The header "Index" button is there if you want the Index.)
+  if (name) { openWorkoutAnalysis({ exercises: [name] }); return; }
+  switchTopTab(exInfoOrigin === "s-analysis" ? "s-analysis" : "analysis");
 }
 /** Overlay header "Index" button: close it and land on the Index, on this lift. */
 function gotoIndexFromInfo(): void {
