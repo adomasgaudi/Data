@@ -13527,7 +13527,6 @@ function renderSelector(scope: SelScope): void {
   const nameToggle =
     `<button type="button" class="wa-name-opt name-mode-opt" data-waname="${nextName}" title="Lift labels — tap to cycle: code → short → full">${nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full"}</button>`;
   const groupOpts =
-    `<option value="none"${waGroupBy === "none" ? " selected" : ""}>None</option>` +
     `<option value="bestlifts"${waGroupBy === "bestlifts" ? " selected" : ""}>Best lifts</option>` +
     `<option value="frequency"${waGroupBy === "frequency" ? " selected" : ""}>Frequency</option>` +
     `<option value="effectiveness"${waGroupBy === "effectiveness" ? " selected" : ""}>Effectiveness</option>` +
