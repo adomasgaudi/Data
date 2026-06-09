@@ -31,6 +31,17 @@ a min tap-height — don't shrink the target.
 - **Custom `.xdd` dropdowns**, never the native OS `<select>` picker.
 - **Snappy.** A tap updates its OWN control instantly; defer the heavy app-wide render to
   the next frame (rAF/debounce). Never block the tap or rebuild everything synchronously.
+- **Size & placement ENCODE the hierarchy (the visual grammar).** A control's size, weight
+  and where it sits must tell you (a) its reach-level — the primary/most-used control is the
+  biggest and gets the most room; rarer ones are visibly smaller and quieter — and (b) which
+  FAMILY it belongs to: a control should look like and sit beside its functional siblings
+  (a selection-reset belongs with the other selection tools, not glued to the navigation).
+  Two UNRELATED controls made the SAME size read as a related pair and flatten the hierarchy
+  — a known miss (the b.2.8.107 "Stats + Default twin pills" the owner rejected: same size
+  hid that Stats reveals a panel while Default resets the selection, and they're different
+  tiers). Give the level-1 control (e.g. the athlete chips) its OWN room to breathe/scroll —
+  don't let secondary buttons eat its width. Separate unrelated controls visually; size each
+  by its tier; let each echo its family.
 
 ## What reliably ANNOYS the owner (recurring pain — avoid proactively)
 - **Menus/folds that snap shut when you tap a setting inside them.** THE most-repeated
@@ -67,8 +78,13 @@ a min tap-height — don't shrink the target.
 1. **Purpose** — the one job it does.
 2. **Frequency** — every session / sometimes / rarely / once?
 3. **Reach level** — pick 1–7 from the ladder by that frequency; state it + why.
-4. **Fit** — match the tightest neighbouring density; same pill family, `--r-pill`, shared
-   tokens; quiet until active; comfortable tap height.
-5. **Form** — a pill toggle, not a checkbox/segment/button-row.
-6. **Stability** — if it lives in a menu/fold, preserve open state; if it touches the
+4. **Family & size** — which existing control family is this? Make it look like its
+   siblings and SIT WITH THEM (selection-reset → by the selection tools; panel-toggle → by
+   the panel). Size it by its tier: smaller/quieter than the primary control, bigger than
+   nothing. Don't make two UNRELATED controls the same size (reads as a pair / flattens
+   hierarchy). Protect the level-1 control's room — don't let secondary buttons shrink it.
+5. **Fit** — match the tightest neighbouring density; `--r-pill`, shared tokens; quiet
+   until active; comfortable tap height.
+6. **Form** — a pill toggle, not a checkbox/segment/button-row.
+7. **Stability** — if it lives in a menu/fold, preserve open state; if it touches the
    graph, don't let the chart move/blank.
