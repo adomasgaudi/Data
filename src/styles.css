@@ -594,6 +594,8 @@ main { padding-bottom: 5rem; }
 /* Grouped show/hide chips (Athlete / Exercise / Type) at the top of the legend menu:
    one row per segment, each value a small toggle that bulk-hides its whole group. */
 .svgc-legend-groups { display: flex; flex-direction: column; gap: 0.3rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem; border-bottom: 1px solid var(--line); }
+/* The line-style toggles (〰 faint · ⟨ ⟩ tags) relocated INTO the legend dropdown. */
+.svgc-legend-style { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; padding-bottom: 0.45rem; margin-bottom: 0.2rem; border-bottom: 1px solid var(--line); }
 .svgc-grp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
 .svgc-grp-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin-right: 0.15rem; }
 .svgc-grp-chip { font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 1px 7px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--text); }
@@ -3431,7 +3433,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* Graph options + Legend sit side by side in one bar, each a floating dropdown
    (their menus overlay the chart, so opening either never pushes the layout). */
 .wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; position: relative; }
-.wa-graph-bar .svgc-legend { margin: 0 0 0 auto; }
+.wa-graph-bar .svgc-legend { margin: 0; flex: 0 1 auto; }
 /* The kg ⇄ ×BW unit toggle is pinned to the right end of the bar (bottom-right under
    the chart). margin-left:auto pushes it past Graph options to the corner. */
 .wa-graph-bw { margin-left: auto; }

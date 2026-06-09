@@ -800,13 +800,20 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const centerBtn = interactive()
       ? `<button type="button" class="svgc-center" title="Centre the data — fit everything in view (reset zoom & pan)">⤢ Fit</button>`
       : "";
-    const tail = styleBtns + compactBtn + centerBtn;
+    // The two style toggles (faint lines / line tags) live INSIDE the Legend dropdown
+    // when there is one — so the bar below the chart stays to just "Legend ▾  ⤢ Fit".
+    // With no dropdown (few series) they stay inline beside the keys, as before.
+    const hasFold = keyHtml.length > 6 || !!groupTogglesHtml;
+    const styleRow = styleBtns
+      ? `<div class="svgc-legend-style"><span class="svgc-grp-lbl">Lines</span>${styleBtns}</div>`
+      : "";
+    const tail = compactBtn + centerBtn;
     const keys = keyHtml.join("");
     legendEl.innerHTML =
-      keyHtml.length > 6 || groupTogglesHtml
+      hasFold
         ? `<details class="svgc-legend-fold"${legendOpen ? " open" : ""}><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
-          `<div class="svgc-legend-menu">${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${tail}`
-        : keys + tail;
+          `<div class="svgc-legend-menu">${styleRow}${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${tail}`
+        : keys + styleBtns + tail;
     // Sync the remembered open state when the user opens/closes it directly, and on
     // open decide whether to flip the menu ABOVE the button (when there's more room
     // above than below — it then overlays the chart instead of pushing the page).

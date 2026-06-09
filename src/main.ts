@@ -14327,7 +14327,13 @@ function renderWaGraph(): void {
   // Fresh mount → the new legend sits inside chartBox; rebuild path → reuse the
   // node we rescued before the bar was replaced (the engine just updated it).
   const legendEl = preservedLegend ?? chartBox?.querySelector(".svgc-legend");
-  if (graphBar && legendEl && legendEl.parentElement !== graphBar) graphBar.appendChild(legendEl);
+  if (graphBar && legendEl && legendEl.parentElement !== graphBar) {
+    // Sit the legend dropdown right AFTER "Graph options" (before the kg/×BW button,
+    // which keeps its margin-left:auto and stays far right) so both share one line.
+    const fold = graphBar.querySelector(".wa-graph-fold");
+    if (fold) fold.insertAdjacentElement("afterend", legendEl);
+    else graphBar.appendChild(legendEl);
+  }
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {
     // BLOCKED state: metrics are selected but none is allowed for the plotted
