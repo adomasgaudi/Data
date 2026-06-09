@@ -14911,7 +14911,7 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // "Default" button (next to the athlete bar): reset graph + history to the defaults.
-    if (t.closest(".wa-default-btn")) {
+    if (t.closest(".wa-topact-default")) {
       resetAnalysisToDefault();
       return;
     }
