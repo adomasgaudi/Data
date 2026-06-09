@@ -12557,12 +12557,12 @@ function renderWorkoutAnalysis(): void {
   // view opens as a real selection (pills shown), not the implicit aggregate.
   if (!analysisSeeded) {
     analysisSeeded = true;
-    const all = defaultSelection(); // most-trained first (sorted by set count)
-    // History opens with ALL lifts (most-trained first); the GRAPH opens with just the
-    // TOP 5 most-trained (plotting all ~200 is unreadable). The two selections are
-    // INDEPENDENT — change either in its own picker.
-    if (waSelected.length === 0) waSelected = all;
-    if (waGraphSel.length === 0) waGraphSel = all.slice(0, 5);
+    // History opens with EVERY exercise (the full catalogue, all groups) — no filter,
+    // whatever group they're from. The GRAPH opens with just the TOP 3 best lifts —
+    // the powerlifting three (Squat / Bench / Deadlift) via defaultSelection(). The two
+    // selections are INDEPENDENT — change either in its own picker.
+    if (waSelected.length === 0) waSelected = waSelectorExercises().map((e) => e.name);
+    if (waGraphSel.length === 0) waGraphSel = defaultSelection().slice(0, 3);
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
