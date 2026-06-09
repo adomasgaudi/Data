@@ -472,14 +472,22 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // x bands + gridlines + thinned labels.
     let xLabels = "";
     const clampX = (px: number) => Math.max(M.l, Math.min(W - M.r, px));
-    if (xKind() === "time" && !useCompact()) {
+    if (xKind() === "time") {
       // Calendar bands (day/week/month/year): alternating background stripes give
       // the period at a glance, and each band's label is centred in it — so labels
       // never disappear when you zoom in and never collide into "Jan 1, Jan 1".
+      // In COMPACTED time the view coords are squeezed (empty days dropped), so we
+      // build the bands over the REAL date range and map each boundary back onto the
+      // compacted axis — the month/week stripes + labels survive compaction (squeezed
+      // thin where there was no training) instead of the axis degrading into evenly-
+      // spaced "random" days with no month structure.
+      const realMin = useCompact() ? compactor.from(view.xMin) : view.xMin;
+      const realMax = useCompact() ? compactor.from(view.xMax) : view.xMax;
+      const toView = (realT: number) => (useCompact() ? compactor.to(realT) : realT);
       let lastLabelPx = -Infinity;
-      for (const b of timeBands(view.xMin, view.xMax)) {
-        const x0 = xPix(b.start);
-        const x1 = xPix(b.end);
+      for (const b of timeBands(realMin, realMax)) {
+        const x0 = xPix(toView(b.start));
+        const x1 = xPix(toView(b.end));
         if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) continue;
         const cx0 = clampX(x0);
         const cx1 = clampX(x1);
