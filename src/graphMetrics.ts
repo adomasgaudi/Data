@@ -12,6 +12,9 @@ import type { GraphConfig } from "./graphConfig";
 
 const DAY = 86_400_000;
 const r1 = (n: number): number => Math.round(n * 10) / 10;
+/** Round to at most 3 significant figures (73.33333 → 73.3, 106.4 → 106), as a plain
+ * number — so click-to-pin details never show a long float. */
+const sig3 = (n: number): number => (Number.isFinite(n) ? Number(n.toPrecision(3)) : n);
 
 export interface GraphPoint {
   x: number;
@@ -33,7 +36,7 @@ export interface GraphPoint {
 }
 /** Marker shapes cycled across a combined/comparison lift's member origins (same
  * colour, different form). Order chosen so the first few read most distinctly. */
-const ORIGIN_SHAPES = ["circle", "diamond", "triangle", "square", "ring", "plus"] as const;
+export const ORIGIN_SHAPES = ["circle", "diamond", "triangle", "square", "ring", "plus"] as const;
 /** Map a record's source lift (combined member) to a shape, given the sorted list
  * of distinct origins in the series — or undefined when it's a single-origin lift. */
 function originShapeOf(r: SetRecord, origins: string[]): GraphPoint["shape"] {
@@ -54,12 +57,16 @@ const isFail = (r: SetRecord): boolean => /fail/i.test(r.notes ?? "");
  * detail popup: date, weight×reps, est. 1RM, RIR (when resolvable) and the note. */
 function setDetail(r: SetRecord, cfg?: GraphConfig): string {
   const w = added(r);
-  const lines: string[] = [r.date, `${w ?? "?"}kg × ${r.reps ?? "?"}`];
+  const lines: string[] = [r.date, `${w != null ? sig3(w) : "?"}kg × ${r.reps ?? "?"}`];
+  // For a merged combined/comparison lift, name the SOURCE member this dot came from
+  // (decodes its shape).
+  const src = r.originalExerciseName && r.originalExerciseName !== r.exerciseName ? r.originalExerciseName : null;
+  if (src) lines.push(`from ${src}`);
   if (cfg) {
     const e = addedWeight1RM(r, cfg.formula);
-    if (e != null) lines.push(`1RM ${r1(e)} kg`);
+    if (e != null) lines.push(`1RM ${sig3(e)} kg`);
     const rir = cfg.rirOf?.(r);
-    if (rir != null && Number.isFinite(rir)) lines.push(`RIR ${r1(rir)}`);
+    if (rir != null && Number.isFinite(rir)) lines.push(`RIR ${sig3(rir)}`);
   }
   if (r.notes?.trim()) lines.push(r.notes.trim());
   return lines.join("\n");
