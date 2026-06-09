@@ -13635,21 +13635,23 @@ function renderSelector(scope: SelScope): void {
   const showGrid = !stickyCats;
   // (The old "N on graph" big count + names block was removed — the graph TITLE now
   // names every plotted lift, so it was redundant.)
+  // ALL the picker controls — group-by ("Best lifts ▾"), the First-N / Deselect-all
+  // buttons and the ⚙ settings cog — now live in the picker HEADER (owner request:
+  // consolidate them with the exercises they act on, off the crowded top row). In the
+  // category-STRIP mode there's no fold, so they fall back to a top tools row.
+  const controls = `${freqCtl}${selAllToggle}${settingsCog}`;
+  const topTools = showGrid ? trimBtn : `${groupCtl}${controls}${trimBtn}`;
   sel.innerHTML =
-    `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${freqCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
-    `</div>` +
+    (topTools ? `<div class="wa-sel-header"><div class="wa-sel-tools">${topTools}</div></div>` : "") +
     selPills +
-    // The group-by selector ("Best lifts ▾") now lives HERE — the picker's header row,
-    // doubling as the collapse toggle (the caret expands/collapses the chip grid). Moved
-    // off the top tools row (owner request) so grouping sits with the exercises it groups.
-    // A manual fold (not <details>) so the group dropdown's own menu isn't clipped by the
-    // fold's rounding and a <select> in a <summary> doesn't fight the toggle.
+    // The picker header doubles as the collapse toggle (the caret expands/collapses the
+    // chip grid). A manual fold (not <details>) so the group dropdown's / ⚙'s own menus
+    // aren't clipped by the fold and don't fight a <summary>'s toggle.
     (showGrid
       ? `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
         `<div class="wa-chips-fold-sum">` +
         `<button type="button" class="wa-pick-toggle" data-chipsfold aria-expanded="${chipsFoldOpen}" title="${chipsFoldOpen ? "Hide the exercise picker" : "Show the exercise picker"}" aria-label="Toggle exercise picker"></button>` +
-        groupCtl +
+        groupCtl + controls +
         `</div>` +
         `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"${chipsFoldOpen ? "" : " hidden"}></div>` +
         `</div>`
