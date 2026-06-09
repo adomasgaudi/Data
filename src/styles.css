@@ -3357,6 +3357,9 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    (their menus overlay the chart, so opening either never pushes the layout). */
 .wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0 0 0.5rem; position: relative; }
 .wa-graph-bar .svgc-legend { margin: 0 0 0 auto; }
+/* The kg ⇄ ×BW unit toggle is pinned to the right end of the bar (bottom-right under
+   the chart). margin-left:auto pushes it past Graph options to the corner. */
+.wa-graph-bw { margin-left: auto; }
 /* Per-athlete colour key above the chart (multi-athlete overlay): name + line colour,
    one sideways-scrolling row so it never pushes the chart down. */
 .wa-ath-key { display: flex; flex-wrap: nowrap; gap: 0.3rem 0.9rem; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 0.3rem; font-size: 0.74rem; font-weight: 600; color: var(--text); }

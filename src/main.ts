@@ -13993,7 +13993,9 @@ function renderWaGraph(): void {
   // section's summary shows a tiny readout of its current state.
   const onoff = (on: boolean, attr: string, label: string, title: string) =>
     `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
-  const lensCount = [c.prediction, c.decay, S.waPerBodyweight, waHardOnly].filter(Boolean).length;
+  // ×BW now lives as a standalone toggle on the graph bar (below the chart), not in
+  // here — so it's excluded from the Lines & filter count.
+  const lensCount = [c.prediction, c.decay, waHardOnly].filter(Boolean).length;
   // Preserve which config sub-sections (Data / Lines & filter / Bars & axes / Set spread)
   // are OPEN across this re-render: changing a slider or toggle rebuilds this whole panel,
   // which would otherwise snap every <details> shut — the recurring "the menu collapses
@@ -14014,7 +14016,6 @@ function renderWaGraph(): void {
     onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."));
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
     onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
-    onoff(S.waPerBodyweight, `data-waperbw="1"`, "×BW", "Show kg metrics as multiples of bodyweight instead of kilograms.") +
     onoff(c.prediction, `data-wacfgtoggle="prediction"`, "Prediction", "Add a logarithmic strength forecast line.") +
     onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."));
   // Bars & axes only when a volume-style (bars / right-axis) metric is plotted — its
@@ -14063,6 +14064,9 @@ function renderWaGraph(): void {
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu">${cfgUi}</div>` +
     `</details>` +
+    // kg ⇄ ×BW display toggle, pulled out of Graph options to sit at the bottom-right
+    // corner under the chart (a one-tap unit switch without opening the settings).
+    `<button type="button" class="wa-name-opt wa-graph-bw${S.waPerBodyweight ? " is-on" : ""}" data-waperbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>` +
     `</div>`;
   // Keep #waGraphChart alive across option/selection re-renders so pan/zoom isn't
   // wiped and pointer listeners stay attached (innerHTML used to recreate it every time).
