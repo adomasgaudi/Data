@@ -241,50 +241,6 @@ function sessionsPerWeek(records: readonly SetRecord[]): GraphPoint[] {
   }
   return [...weeks.entries()].sort((a, b) => a[0] - b[0]).map(([x, set]) => ({ x, y: set.size }));
 }
-/** New-personal-record sets (each time the est. 1RM beats all before it). */
-function prMarkers(records: readonly SetRecord[], formula: OneRepMaxFormula): GraphPoint[] {
-  let best = -Infinity;
-  const out: GraphPoint[] = [];
-  for (const p of e1rmPoints(records, formula)) {
-    if (p.y > best + 1e-9) {
-      best = p.y;
-      out.push({ x: p.x, y: r1(p.y), meta: `PR ${r1(p.y)}` });
-    }
-  }
-  return out;
-}
-/** Logarithmic best-fit over the data span (no future projection). */
-function trendLine(records: readonly SetRecord[], formula: OneRepMaxFormula): GraphPoint[] {
-  const pts = e1rmPoints(records, formula);
-  if (pts.length < 2) return [];
-  const t0 = pts[0]!.x;
-  const dayOf = (x: number) => (x - t0) / DAY;
-  const fit = linearFit(pts.map((p) => ({ x: Math.log(dayOf(p.x) + 1), y: p.y })));
-  if (!fit) return [];
-  const lastDay = dayOf(pts[pts.length - 1]!.x);
-  const out: GraphPoint[] = [];
-  for (let i = 0; i <= 16; i++) {
-    const d = (lastDay * i) / 16;
-    out.push({ x: t0 + d * DAY, y: r1(fit.intercept + fit.slope * Math.log(d + 1)) });
-  }
-  return out;
-}
-/** Moving average of est. 1RM; window = config smoothing (≥2) else 3. */
-function movingAvgMetric(records: readonly SetRecord[], cfg: GraphConfig): GraphPoint[] {
-  const pts = e1rmPoints(records, cfg.formula);
-  const win = cfg.smoothing > 1 ? cfg.smoothing : 3;
-  const out: GraphPoint[] = [];
-  const q: number[] = [];
-  let sum = 0;
-  for (const p of pts) {
-    q.push(p.y);
-    sum += p.y;
-    if (q.length > win) sum -= q.shift()!;
-    out.push({ x: p.x, y: r1(sum / q.length) });
-  }
-  return out;
-}
-
 export const GRAPH_METRICS: GraphMetricDef[] = [
   {
     id: "weightRange",
@@ -326,9 +282,9 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // "% of world record" — computed specially in analyticsGraph (needs the athlete's
   // sex + bodyweight + the per-exercise record); carries no compute. Shown as a
   // FRACTION of the record (1.0 = world record), so it shares the left value axis.
-  { id: "pctWR", label: "% of world record", type: "scatter" },
-  { id: "strength", label: "Strength Score", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
-  { id: "strengthDecay", label: "Strength Score With Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
+  { id: "pctWR", label: "WR%", type: "scatter" },
+  { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
+  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
@@ -339,15 +295,12 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => r.reps, cfg.interval) },
   { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs, cfg) => setsPerBucket(rs, cfg.interval) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },
-  { id: "pr", label: "Personal Records", type: "scatter", compute: (rs, cfg) => prMarkers(rs, cfg.formula) },
-  { id: "trend", label: "Trend Line", compute: (rs, cfg) => trendLine(rs, cfg.formula) },
-  { id: "movingAvg", label: "Moving Average", compute: (rs, cfg) => movingAvgMetric(rs, cfg) },
 ];
 
 export const graphMetric = (id: string): GraphMetricDef | undefined => GRAPH_METRICS.find((m) => m.id === id);
 
 /** Metrics measured in kilograms (left axis) vs counts/volume (right axis). */
-const KG_METRICS = new Set(["weightRange", "e1rm", "strength", "strengthDecay", "predicted", "trend", "movingAvg", "pr"]);
+const KG_METRICS = new Set(["weightRange", "e1rm", "strength", "strengthDecay", "predicted"]);
 const COUNT_METRICS = new Set(["volume", "volumeLoad", "reps", "sets", "frequency"]);
 
 /**
@@ -364,7 +317,6 @@ export function graphCompatibilityNotes(
   const ids = new Set(metricIds);
   const notes: string[] = [];
   if (ids.has("predicted") && ctx.e1rmPoints < 3) notes.push("Predicted strength needs at least 3 logged points — not enough data yet.");
-  if (ids.has("trend") && ctx.e1rmPoints < 2) notes.push("Trend line needs at least 2 logged points.");
   if (cfg.decay && !["strength", "e1rm", "strengthDecay"].some((m) => ids.has(m)))
     notes.push("Decay only affects the Strength / 1RM metrics — enable one to see it.");
   const hasKg = [...ids].some((m) => KG_METRICS.has(m));

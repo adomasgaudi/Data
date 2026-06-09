@@ -14087,7 +14087,7 @@ function renderWaGraph(): void {
   // blocked for the plotted lift(s) shows greyed-out with a needs-review tip.
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted", "trend", "movingAvg", "pr"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
   const metricChips = METRIC_GROUPS.map((g) => {

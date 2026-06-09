@@ -12,11 +12,11 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 14 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(14);
+  it("registers all 11 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(11);
     for (const id of [
       "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
-      "volume", "volumeLoad", "reps", "sets", "frequency", "pr", "trend", "movingAvg",
+      "volume", "volumeLoad", "reps", "sets", "frequency",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
       expect(graphMetric(id)!.label.length).toBeGreaterThan(0);
@@ -156,24 +156,6 @@ describe("volume / reps / sets / frequency aggregates (TASKS 37–39)", () => {
     const byDay = graphMetric("volume")!.compute!(wk, { ...DEFAULT_GRAPH_CONFIG, interval: "day" });
     expect(byDay.length).toBe(3); // three distinct days
     expect(graphMetric("sets")!.compute!(wk, DEFAULT_GRAPH_CONFIG)[0]!.y).toBe(2); // 2 sets in week 1
-  });
-});
-
-describe("PR markers, trend, moving average (TASKS 40–41)", () => {
-  const recs = [
-    rec({ date: "2024-01-01", weight: 100, reps: 1 }),
-    rec({ date: "2024-02-01", weight: 90, reps: 1 }), // not a PR
-    rec({ date: "2024-03-01", weight: 110, reps: 1 }), // new PR
-  ];
-  it("PR markers fire only on new records (scatter)", () => {
-    const pr = graphMetric("pr")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
-    expect(pr.map((p) => p.y)).toEqual([100, 110]); // 90 skipped
-    expect(graphMetric("pr")!.type).toBe("scatter");
-  });
-  it("trend + moving average produce points (and don't crash on little data)", () => {
-    expect(graphMetric("trend")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
-    expect(graphMetric("trend")!.compute!([rec({})], DEFAULT_GRAPH_CONFIG)).toEqual([]); // <2 → empty
-    expect(graphMetric("movingAvg")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, smoothing: 2 }).length).toBe(3);
   });
 });
 
