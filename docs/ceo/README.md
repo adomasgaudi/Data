@@ -110,4 +110,4 @@ way (commit + push every change, rule 3). A CEO project will span many versions.
 
 *(newest first — add a line when you open a new `docs/ceo/<slug>.md`)*
 
-- _none yet — this command was just created._
+- 2026-06-09 — [`coach-primary-user.md`](./coach-primary-user.md) — make the live page better for the coach as primary user. **Status: PLANNING.**
