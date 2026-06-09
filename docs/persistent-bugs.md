@@ -11,6 +11,35 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-7 — Can't edit Tier from an exercise's info card
+
+- **Recurrences:** 2 (b.2.8.63 "fixed" it by converting the multi-toggle to a
+  single-select with its OWN dedicated `data-tierset-*` handler — but tapping a Tier
+  chip in the info card STILL did nothing; reported again).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data),
+  exercise info overlay (e.g. "Barbell Lunge").
+- **Symptom:** in a lift's info card the TIER row (Primary/Secondary/Tertiary/Ugly + ↺)
+  renders fine, but tapping a tier doesn't change it — the highlight stays put. The
+  sibling Discipline / Muscle-level chips DO edit, so it's tier-specific.
+- **Prior failed fix (b.2.8.63):** gave tier its OWN click handler + its OWN data
+  attributes (`data-tierset-ex/-val`), separate from the shared `.ex-meta-chip`
+  (`data-meta-ex/-kind/-val`) handler that Discipline uses and that works. That parallel
+  path was either never wired into the live build correctly or got clobbered, and there
+  was no way to observe it — a textbook "claimed fixed but unverifiable" patch.
+- **Root cause (wrong abstraction):** tier was special-cased onto a parallel code path.
+  Discipline's chip→handler path demonstrably works; duplicating it for tier created a
+  second thing to drift/break, with no shared guarantee. The earlier metaDefault/autoTier
+  mismatch (taps "accumulated") was a real but secondary cause.
+- **Root fix (b.2.8.x, PB-7):** DELETE the parallel tier handler + attributes. Tier now
+  renders as a normal `.ex-meta-chip` with `data-meta-kind="tier"` (identical to
+  Discipline) and is handled by the ONE meta-chip listener; `toggleMetaOverride`
+  single-selects when `kind === "tier"`. One path → if Discipline edits, Tier edits.
+- **If it recurs:** the shared `.ex-meta-chip` handler itself is broken (then Discipline
+  fails too — test that first), or something between the chip and `document` calls
+  `stopPropagation` on bubble, or the overlay refresh (`reopenIndexDetail` →
+  `refreshExerciseInfo`, gated on `currentExInfo`) isn't running. Do NOT re-add a
+  tier-only handler.
+
 ## PB-6 — A lift's history is empty / partial when it belongs to a combinable group
 
 - **Recurrences:** 4 (b.2.8.38 "fixed" the empty combined history by expanding the

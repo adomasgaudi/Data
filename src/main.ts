@@ -846,9 +846,13 @@ function setMetaSet(kind: MetaKind, name: string, values: string[]) {
   else { set[name] = values; single[name] = values[0]!; }
   saveMetaOverrides();
 }
-/** Toggle one value in a dimension's list (starting from whatever is shown now). */
+/** Toggle one value in a dimension's list (starting from whatever is shown now). TIER
+ * is the exception: a lift has exactly ONE tier, so tapping a tier SETS it (replacing),
+ * never accumulates. Keeping this in the ONE shared meta-chip path (not a parallel
+ * tier-only handler) is the fix for the recurring "can't edit tier" bug — see PB-7. */
 function toggleMetaOverride(kind: MetaKind, name: string, value: string) {
   if (!value || value === "auto") { setMetaSet(kind, name, []); return; } // ↺ reset to default
+  if (kind === "tier") { setMetaSet("tier", name, [value]); return; }     // single-select
   const effective = metaSet(kind, name) ?? [metaDefault(kind, name)];
   const next = new Set(effective);
   if (next.has(value)) next.delete(value); else next.add(value);
@@ -8941,17 +8945,11 @@ function exerciseInfoHtml(name: string): string {
     }).join("") +
     (metaOverrides.mgLevel?.[name] ? `<button type="button" class="ex-meta-reset ex-mglvl-reset" data-mglvl-ex="${escapeHtml(name)}" title="Reset muscle levels to the automatic guess">↺</button>` : "") +
     `</span>`;
-  // Tier is a SINGLE value (a lift has exactly one) — so tap to SET it (replacing),
-  // ↺ = back to the auto guess. (It used to be a multi-toggle that started from the raw
-  // keyword tier while the chips showed the autoTier guess, so taps accumulated instead
-  // of switching — which is why tier looked uneditable.)
-  const curTier = tierFor(name);
-  const tierChips =
-    `<span class="ex-meta-chips">` +
-    (["main", "second", "third", "ugly"] as ExerciseTier[])
-      .map((v) => `<button type="button" class="ex-meta-chip${v === curTier ? " is-on" : ""}" data-tierset-ex="${escapeHtml(name)}" data-tierset-val="${v}">${escapeHtml(TIER_LABELS[v])}</button>`).join("") +
-    (metaSet("tier", name) ? `<button type="button" class="ex-meta-reset" data-tierset-ex="${escapeHtml(name)}" data-tierset-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
-    `</span>`;
+  // Tier uses the SAME chip mechanism as Discipline (data-meta-*), handled by the one
+  // meta-chip click listener — toggleMetaOverride single-selects it. (A previous fix gave
+  // tier its OWN handler/attributes; that parallel path kept breaking — the recurring
+  // "can't edit tier" bug, PB-7. One path = one place to break.)
+  const tierChips = metaChips("tier", ["main", "second", "third", "ugly"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
   // Combinable / Comparable membership chips — tap to add/remove this lift from a
   // group (comparable also gets a ratio input when it's an owner-added member).
   const groupChips = (all: RegistryTag[], kind: "combine" | "compare") => {
@@ -10787,14 +10785,6 @@ async function init() {
     // grouping/colours depend on it (rebuilds the Index list); defer so the pill
     // feels instant and the page keeps its scroll, then reopen the inline panel.
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
-  });
-  // Tier chips are SINGLE-select: tapping one SETS it as the lift's sole tier (↺ = auto).
-  document.addEventListener("click", (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>("[data-tierset-ex]");
-    const ex = chip?.dataset.tiersetEx, val = chip?.dataset.tiersetVal;
-    if (!ex || val === undefined) return;
-    setMetaSet("tier", ex, val === "auto" ? [] : [val]);
-    scheduleRender(() => reopenIndexDetail(ex));
   });
   // Muscle INVOLVEMENT level chips: cycle 0→1→2→3→4→0 (≥3 = shown in that muscle's
   // category); the ↺ resets all of this lift's muscle levels to the auto guess.
