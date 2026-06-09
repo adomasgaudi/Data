@@ -375,12 +375,6 @@ html.kb-open .subtabs { display: none; }
 /* Athlete picker relocated above the Analysis card — give it a little breathing
    room so it doesn't crowd the header or the card. */
 .wa-athlete-top:not(:empty) { margin: 0.4rem 0 0.6rem; }
-/* Athlete bar + the "Default" reset button on one row: the bar takes the room and
-   scrolls; the button sits at the end and never shrinks. */
-.wa-athlete-top-row { display: flex; align-items: center; gap: 0.5rem; }
-.wa-athlete-top-row .wa-athlete-top { flex: 1 1 auto; min-width: 0; }
-.wa-default-btn { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 30px; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 4px 12px; white-space: nowrap; }
-.wa-default-btn:hover { background: var(--accent); color: #fff; }
 .subtab {
   flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -770,6 +764,16 @@ main { padding-bottom: 5rem; }
 }
 .ath-statsbtn:hover { color: var(--text); border-color: var(--accent); }
 .ath-statsbtn.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* "↺ Default" trails the Stats toggle as a matching quiet sibling pill (same height /
+   corners / muted look via the shared --athpill-* tokens) — NO margin-left:auto, so it
+   flows right after Stats as a grouped pair (the chips' scroll leaves them at the end). */
+.wa-default-btn {
+  flex: 0 0 auto; box-sizing: border-box; align-self: center;
+  font: inherit; font-size: var(--athpill-fs); font-weight: 600; line-height: 1.2; cursor: pointer;
+  padding: var(--athpill-py) 0.7rem; border-radius: 4px;
+  border: 1px solid var(--line); background: none; color: var(--muted); white-space: nowrap;
+}
+.wa-default-btn:hover { color: var(--text); border-color: var(--accent); }
 .ath-sex-toggle[hidden] { display: none; }
 /* Locked (user/spectator) view: just YOU. Drop the full-bleed sticky bar look so a
    lone name chip doesn't sit in an empty white band — it reads as a plain label. */
