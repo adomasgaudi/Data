@@ -834,7 +834,10 @@ function mgFor(name: string): MuscleGroup { return mgsFor(name)[0]!; }
 function tierFor(name: string): ExerciseTier { return tiersFor(name)[0]!; }
 /** The auto-default value for a dimension (used when seeding a fresh toggle). */
 function metaDefault(kind: MetaKind, name: string): string {
-  return kind === "cat" ? exerciseCategory(name) : kind === "mg" ? muscleGroup(name) : kind === "disc" ? exerciseDiscipline(name) : exerciseTier(name);
+  // Tier's default is the RECENCY-aware autoTier (what the UI actually shows), not the
+  // raw keyword tier — otherwise a toggle would start from a different value than the
+  // chips display and editing looks broken.
+  return kind === "cat" ? exerciseCategory(name) : kind === "mg" ? muscleGroup(name) : kind === "disc" ? exerciseDiscipline(name) : autoTier(name);
 }
 /** Replace the whole override list for one dimension (empty → back to auto default). */
 function setMetaSet(kind: MetaKind, name: string, values: string[]) {
@@ -8732,7 +8735,17 @@ function exerciseInfoHtml(name: string): string {
     }).join("") +
     (metaOverrides.mgLevel?.[name] ? `<button type="button" class="ex-meta-reset ex-mglvl-reset" data-mglvl-ex="${escapeHtml(name)}" title="Reset muscle levels to the automatic guess">↺</button>` : "") +
     `</span>`;
-  const tierChips = metaChips("tier", ["main", "second", "third", "ugly"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
+  // Tier is a SINGLE value (a lift has exactly one) — so tap to SET it (replacing),
+  // ↺ = back to the auto guess. (It used to be a multi-toggle that started from the raw
+  // keyword tier while the chips showed the autoTier guess, so taps accumulated instead
+  // of switching — which is why tier looked uneditable.)
+  const curTier = tierFor(name);
+  const tierChips =
+    `<span class="ex-meta-chips">` +
+    (["main", "second", "third", "ugly"] as ExerciseTier[])
+      .map((v) => `<button type="button" class="ex-meta-chip${v === curTier ? " is-on" : ""}" data-tierset-ex="${escapeHtml(name)}" data-tierset-val="${v}">${escapeHtml(TIER_LABELS[v])}</button>`).join("") +
+    (metaSet("tier", name) ? `<button type="button" class="ex-meta-reset" data-tierset-ex="${escapeHtml(name)}" data-tierset-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
+    `</span>`;
   // Combinable / Comparable membership chips — tap to add/remove this lift from a
   // group (comparable also gets a ratio input when it's an owner-added member).
   const groupChips = (all: RegistryTag[], kind: "combine" | "compare") => {
@@ -10566,6 +10579,14 @@ async function init() {
     // grouping/colours depend on it (rebuilds the Index list); defer so the pill
     // feels instant and the page keeps its scroll, then reopen the inline panel.
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
+  });
+  // Tier chips are SINGLE-select: tapping one SETS it as the lift's sole tier (↺ = auto).
+  document.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>("[data-tierset-ex]");
+    const ex = chip?.dataset.tiersetEx, val = chip?.dataset.tiersetVal;
+    if (!ex || val === undefined) return;
+    setMetaSet("tier", ex, val === "auto" ? [] : [val]);
+    scheduleRender(() => reopenIndexDetail(ex));
   });
   // Muscle INVOLVEMENT level chips: cycle 0→1→2→3→4→0 (≥3 = shown in that muscle's
   // category); the ↺ resets all of this lift's muscle levels to the auto guess.
