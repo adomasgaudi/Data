@@ -3541,3 +3541,16 @@ body.wa-graph-full .wa-graph-full-btn {
 .lift-menu-row.is-on { color: var(--accent); font-weight: 700; }
 .lift-menu-row.lift-menu-rm { color: #a23b3b; }
 .lift-menu-ck { margin-left: auto; }
+/* Lift menu rows can carry a second small grey line (the group's other members). */
+.lift-menu-row { flex-direction: column; align-items: flex-start; gap: 1px; }
+.lift-menu-main { display: flex; align-items: center; gap: 6px; width: 100%; }
+.lift-menu-sub { font-size: 0.7rem; line-height: 1.2; }
+.lift-menu-ck { margin-left: auto; }
+/* Per-group block in the lift menu: name + grey members + two view-mode buttons. */
+.lift-menu-grp { padding: 6px 8px; border-top: 1px solid var(--line); }
+.lift-menu-grp-name { font-size: 0.85rem; font-weight: 700; }
+.lift-menu-grp-sub { font-size: 0.7rem; line-height: 1.2; margin: 1px 0 4px; }
+.lift-menu-modes { display: flex; gap: 6px; }
+.lift-menu-mode { flex: 1 1 0; font: inherit; font-size: 0.78rem; cursor: pointer; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: none; color: var(--text); }
+.lift-menu-mode:hover { border-color: var(--accent); }
+.lift-menu-mode.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }

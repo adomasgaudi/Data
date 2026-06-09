@@ -123,6 +123,8 @@ const LT: Record<string, string> = {
   "ⓘ Info": "ⓘ Informacija",
   "⊕ Combine": "⊕ Sujungti",
   "⇄ Compare": "⇄ Palyginti",
+  "⊕ Merged": "⊕ Sujungta",
+  "⇄ Separated": "⇄ Atskirai",
   "✕ Remove": "✕ Pašalinti",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",

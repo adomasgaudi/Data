@@ -1970,18 +1970,35 @@ const comparableGroupsForEx = (name: string): RegistryTag[] => effectiveComparab
 // history, INDEPENDENT). You always pick the ORIGINAL lift; these two toggles fold it
 // into its combinable group's merged lift (combine) and/or expand it to its comparable
 // group's members shown separately (compare). A lift with BOTH relations shows both. ----
-type ExLens = { combine?: boolean; compare?: boolean };
+// A lift can be in MULTIPLE combinable / comparable groups, so the lens remembers
+// WHICH group is active (a group id), not just on/off. (Legacy `true` = "first group".)
+type ExLens = { combine?: string | boolean; compare?: string | boolean };
 const EX_LENS_KEY = "colosseum.exerciseLens.v1";
 const exLens: Record<string, Record<string, ExLens>> = (() => {
   try { return JSON.parse(localStorage.getItem(EX_LENS_KEY) ?? "{}") as Record<string, Record<string, ExLens>>; } catch { return {}; }
 })();
-const hasCombinable = (name: string): boolean => combinableGroupsForEx(name).length > 0;
-const hasComparable = (name: string): boolean => comparableGroupsForEx(name).length > 0;
+/** Every group a lift is in (combinable ∪ comparable, deduped). EACH can be viewed
+ * either MERGED (one line, ratios + source-marked dots) or SEPARATED (a line per
+ * member) — the "combine" lens slot = merged, the "compare" slot = separated. */
+function allGroupsForEx(name: string): RegistryTag[] {
+  const seen = new Set<string>();
+  const out: RegistryTag[] = [];
+  for (const g of [...combinableGroupsForEx(name), ...comparableGroupsForEx(name)]) if (g.id && !seen.has(g.id)) { seen.add(g.id); out.push(g); }
+  return out;
+}
 function lensFor(scope: SelScope, name: string): ExLens { return exLens[scope]?.[name] ?? {}; }
-function setLens(scope: SelScope, name: string, key: "combine" | "compare", on: boolean): void {
+/** The group chosen for a lift's merged ("combine") or separated ("compare") view, from
+ * ANY group it's in. A stored id resolves to that group; a legacy `true` → the first. */
+function chosenGroup(scope: SelScope, name: string, kind: "combine" | "compare"): RegistryTag | undefined {
+  const sel = lensFor(scope, name)[kind];
+  if (!sel) return undefined;
+  const groups = allGroupsForEx(name);
+  return (typeof sel === "string" ? groups.find((g) => g.id === sel) : undefined) ?? groups[0];
+}
+function setLens(scope: SelScope, name: string, key: "combine" | "compare", value: string | undefined): void {
   const s = exLens[scope] ?? (exLens[scope] = {});
   const cur: ExLens = { ...(s[name] ?? {}) };
-  if (on) cur[key] = true; else delete cur[key];
+  if (value) cur[key] = value; else delete cur[key];
   if (cur.combine || cur.compare) s[name] = cur; else delete s[name];
   try { localStorage.setItem(EX_LENS_KEY, JSON.stringify(exLens)); } catch { /* ignore */ }
 }
@@ -1991,10 +2008,9 @@ function setLens(scope: SelScope, name: string, key: "combine" | "compare", on: 
 function lensExpand(scope: SelScope, names: readonly string[]): string[] {
   const out: string[] = [];
   for (const n of names) {
-    const lens = lensFor(scope, n);
     let added = false;
-    if (lens.combine) { const g = combinableGroupsForEx(n)[0]; if (g) { out.push(g.derivedName ?? g.label); added = true; } }
-    if (lens.compare) { const g = comparableGroupsForEx(n)[0]; if (g) { for (const m of g.members ?? []) out.push(m.exerciseName); added = true; } }
+    const cg = chosenGroup(scope, n, "combine"); if (cg) { out.push(cg.derivedName ?? cg.label); added = true; }
+    const pg = chosenGroup(scope, n, "compare"); if (pg) { for (const m of pg.members ?? []) out.push(m.exerciseName); added = true; }
     if (!added) out.push(n);
   }
   return [...new Set(out)];
@@ -2011,9 +2027,8 @@ function lensExpand(scope: SelScope, names: readonly string[]): string[] {
 function histFilterNames(names: readonly string[]): string[] {
   const out: string[] = [];
   for (const n of names) {
-    const lens = lensFor("hist", n);
-    if (lens.combine) { const g = combinableGroupsForEx(n)[0]; if (g) { out.push(g.derivedName ?? g.label); continue; } }
-    if (lens.compare) { const g = comparableGroupsForEx(n)[0]; if (g) { out.push(...(g.members ?? []).map((m) => m.exerciseName)); continue; } }
+    const cg = chosenGroup("hist", n, "combine"); if (cg) { out.push(cg.derivedName ?? cg.label); continue; }
+    const pg = chosenGroup("hist", n, "compare"); if (pg) { out.push(...(pg.members ?? []).map((m) => m.exerciseName)); continue; }
     out.push(...expandToRawExercises([n]));
   }
   return [...new Set(out)];
@@ -2031,13 +2046,26 @@ function closeLiftMenu(): void { document.getElementById("liftMenu")?.remove(); 
  * Combine, Compare (only the relations it has), Remove. The lift name opens it. */
 function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void {
   closeLiftMenu();
-  const lens = lensFor(scope, name);
-  const row = (act: string, label: string, on = false) =>
-    `<button type="button" class="lift-menu-row${on ? " is-on" : ""}${act === "remove" ? " lift-menu-rm" : ""}" data-lm="${act}">${label}${on ? ' <span class="lift-menu-ck">✓</span>' : ""}</button>`;
-  const rows = [row("info", "ⓘ Info")];
-  if (hasCombinable(name)) rows.push(row("combine", "⊕ Combine", !!lens.combine));
-  if (hasComparable(name)) rows.push(row("compare", "⇄ Compare", !!lens.compare));
-  rows.push(row("remove", "✕ Remove"));
+  const simple = (act: string, label: string) =>
+    `<button type="button" class="lift-menu-row${act === "remove" ? " lift-menu-rm" : ""}" data-lm="${act}">${label}</button>`;
+  // One block PER group the lift is in (it can be in several): the group's name, its
+  // OTHER members in small grey, and TWO view modes — ⊕ Merged (one line, scaled +
+  // source-marked dots) and ⇄ Separated (a line per member).
+  const groupBlock = (g: RegistryTag): string => {
+    const merged = chosenGroup(scope, name, "combine")?.id === g.id;
+    const separated = chosenGroup(scope, name, "compare")?.id === g.id;
+    const others = (g.members ?? []).map((m) => displayName(m.exerciseName)).filter((x) => x !== displayName(name));
+    return `<div class="lift-menu-grp">` +
+      `<div class="lift-menu-grp-name">${escapeHtml(g.derivedName ?? g.label)}</div>` +
+      (others.length ? `<div class="lift-menu-grp-sub muted">with ${escapeHtml(others.join(", "))}</div>` : "") +
+      `<div class="lift-menu-modes">` +
+      `<button type="button" class="lift-menu-mode${merged ? " is-on" : ""}" data-lm="merged" data-lmgid="${escapeHtml(g.id)}">⊕ Merged</button>` +
+      `<button type="button" class="lift-menu-mode${separated ? " is-on" : ""}" data-lm="separated" data-lmgid="${escapeHtml(g.id)}">⇄ Separated</button>` +
+      `</div></div>`;
+  };
+  const rows = [simple("info", "ⓘ Info")];
+  for (const g of allGroupsForEx(name)) rows.push(groupBlock(g));
+  rows.push(simple("remove", "✕ Remove"));
   const menu = document.createElement("div");
   menu.id = "liftMenu";
   menu.className = "lift-menu";
@@ -9790,8 +9818,13 @@ async function init() {
       const name = menu.dataset.lmex!;
       const scope = menu.dataset.lmscope as SelScope;
       if (act === "info") { closeLiftMenu(); jumpToExerciseInfo(name); return; }
-      if (act === "combine") setLens(scope, name, "combine", !lensFor(scope, name).combine);
-      else if (act === "compare") setLens(scope, name, "compare", !lensFor(scope, name).compare);
+      if (act === "merged" || act === "separated") {
+        const gid = row.dataset.lmgid;
+        const key = act === "merged" ? "combine" : "compare"; // merged = combine slot, separated = compare slot
+        const other = act === "merged" ? "compare" : "combine";
+        if (chosenGroup(scope, name, key)?.id === gid) setLens(scope, name, key, undefined); // tap again = off
+        else { setLens(scope, name, key, gid); if (chosenGroup(scope, name, other)?.id === gid) setLens(scope, name, other, undefined); } // one view per group
+      }
       else if (act === "remove") { if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name); else waSelected = waSelected.filter((x) => x !== name); }
       closeLiftMenu();
       deferRender(renderWorkoutAnalysis);
