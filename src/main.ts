@@ -12295,6 +12295,11 @@ function onInlineAddGo(form: HTMLElement) {
   reopenWorkoutGroups(openDates);
   renderWorkoutCalendar();
   renderDataTab();
+  // The Analysis GRAPH is a separate render from its workout list; when you're on that
+  // page (the add form is embedded there too), redraw just the graph so it reflects the
+  // just-added set — not only the list. Graph-only, so the day group re-expanded above
+  // isn't collapsed by a full re-render.
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
 }
 
 /** After a re-render, re-expand the workout rows whose group date is in the set. */
