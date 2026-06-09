@@ -13,10 +13,11 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ## PB-6 — A lift's history is empty / partial when it belongs to a combinable group
 
-- **Recurrences:** 3 (b.2.8.38 "fixed" the empty combined history by expanding the
-  synthetic name; b.2.8.40 fixed Squat's COMPARE view showing only Front Squat; then
-  the user set a COMPARABLE group ("Squat pattern") to **Merged** and the history went
-  blank again — "546 rest days" — the same root tangle, third face).
+- **Recurrences:** 4 (b.2.8.38 "fixed" the empty combined history by expanding the
+  synthetic name; b.2.8.40 fixed Squat's COMPARE view showing only Front Squat; b.2.8.48
+  fixed a COMPARABLE group set to **Merged** going blank; then "Smith Squat" set to
+  **Merged** STILL showed "546 rest days" — the previous three fixes all patched
+  `remapRegistryCombined`, but the DAY view never even ran it. This was the real root.).
 - **Device/browser seen on:** Android phone, Brave/Samsung (adomasgaudi.github.io/Data).
 - **Symptom:** select Squat in the history; with the ⇄ Compare lens on it should show
   Squat + Front Squat (its comparable "Squat pattern"), but only Front Squat appears.
@@ -43,6 +44,21 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   and remap a group only when a selected lift's combine lens RESOLVES to that exact group
   (`chosenGroup("hist", m, "combine")?.id === g.id`) — which also tightens the old loose
   "has any combine lens" check. Raw weights are kept (scaling stays a graph-only concern).
+- **REAL ROOT (b.2.8.51, recurrence 4) — why it kept coming back.** All three earlier
+  fixes lived in `remapRegistryCombined`, but `buildWorkoutGroups` only called it for the
+  PERIOD (week/month) view. The DAY view (the default) read the CACHED `athleteWorkouts`,
+  which is remapped ONLY in `renderAthlete()` / after adding a set — NEVER when a lens
+  toggles. So: the history FILTER (`waListExerciseFilter` = `histFilterNames`) is recomputed
+  live every render with the current lens → "SQ mix"; the day-view RECORDS came from the
+  stale cache → still "Smith Machine Squat". Filter ≠ data → every set dropped → "546 rest
+  days". Two sources of truth that drift apart on a lens toggle — the classic stale-cache
+  bug, which is exactly why patching the remap never held: the day view skipped the remap.
+- **REAL FIX:** build the day view from the FRESHLY remapped `recs` too
+  (`const base = workoutsForUser(recs, …)`), so the data and its filter both derive from the
+  CURRENT lens in the SAME render pass — no drifting cached copy. The `athleteWorkouts`
+  cache stays for its other consumers (calendar/heatmap, latest-date, counts). Fix site at
+  `buildWorkoutGroups`, tagged `PB-6 ROOT`. Lesson: when a fix to a transform "doesn't
+  take", check the consumer actually RUNS the transform — a cache upstream can skip it.
 
 ## PB-5 — Tapping a lift name in a fold-title removes it on the graph but NOT the history
 

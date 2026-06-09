@@ -5536,7 +5536,15 @@ function buildWorkoutGroups(): WorkoutGroup[] {
         .filter(keep),
     ), WO_REST_UNIT[S.workoutViewMode]);
   }
-  const base = woShowAllExercises ? workoutsForUser(recs, els.athlete.value) : athleteWorkouts;
+  // PB-6 ROOT: build the day view from the FRESHLY remapped `recs` — NOT the cached
+  // `athleteWorkouts` (rebuilt only on athlete-change / add-set, so it's STALE the moment
+  // a lens toggles). The history FILTER (waListExerciseFilter = histFilterNames) is
+  // recomputed live every render with the current lens, so if the records aren't remapped
+  // in the SAME pass the two disagree — the filter wants "SQ mix", the stale records still
+  // say "Smith Machine Squat" → nothing matches → "546 rest days". One source of truth:
+  // both the data and its filter derive from the current lens in this render. (The period
+  // view above already does this; the day view was the lone drifting copy.)
+  const base = workoutsForUser(recs, els.athlete.value);
   const days = S.showRestDays ? workoutsWithRestDays(base) : base;
   return collapseRestRuns(scopeWorkoutGroups(
     days
