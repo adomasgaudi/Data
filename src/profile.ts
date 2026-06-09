@@ -998,7 +998,7 @@ export function isStatic(name: string): boolean {
  * AI-NOTE: created on request to tag main vs second lifts; not yet wired into any
  * view. Edit MAIN_EXERCISES (canonical names) to change the set.
  */
-export type ExerciseTier = "main" | "second" | "third";
+export type ExerciseTier = "main" | "second" | "third" | "ugly";
 
 const normalizeExerciseName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 

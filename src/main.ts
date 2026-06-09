@@ -818,7 +818,7 @@ const MUSCLE_GROUPS: MuscleGroup[] = [
   "Quads", "Hamstrings", "Glutes", "Abductors", "Adductors", "Calves", "Lower back", "Upper back", "Lats",
   "Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Core",
 ];
-const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary" };
+const TIER_LABELS: Record<ExerciseTier, string> = { main: "Primary", second: "Secondary", third: "Tertiary", ugly: "Ugly" };
 const MUSCLE_KEY_SET = new Set<string>(MUSCLE_GROUPS as readonly string[]);
 /** The highest muscle-involvement level (0–4) a lift reaches across all muscles. */
 function maxMgLevel(name: string): number {
@@ -4090,7 +4090,7 @@ function maintGrouping(dim: MaintDim): { order: string[]; label: (k: string) => 
     case "mg": return { order: MUSCLE_GROUPS as string[], label: (k) => k, keyOf: (n) => mgsFor(n)[0] ?? muscleGroup(n) };
     case "cat": return { order: TRAINING_CATEGORIES as string[], label: (k) => k, keyOf: (n) => catsFor(n)[0] ?? exerciseCategory(n) };
     case "disc": return { order: DISCIPLINES as string[], label: (k) => k, keyOf: (n) => discsFor(n)[0] ?? exerciseDiscipline(n) };
-    default: return { order: ["main", "second", "third"], label: (k) => TIER_LABELS[k as ExerciseTier], keyOf: (n) => tiersFor(n)[0] ?? "main" };
+    default: return { order: ["main", "second", "third", "ugly"], label: (k) => TIER_LABELS[k as ExerciseTier], keyOf: (n) => tiersFor(n)[0] ?? "main" };
   }
 }
 
@@ -7924,6 +7924,7 @@ function renderLive(): void {
     tierBlock("main", 6, "top priorities") +
     tierBlock("second", 6, "secondary") +
     tierBlock("third", 12, "maintenance") +
+    tierBlock("ugly", 12, "ugly — deprioritised") +
     `</section>`;
 
   // 2) ANTAGONIST SUPERSETS — pair an opposing-muscle lift either side. Pick the
@@ -8538,7 +8539,7 @@ function exerciseInfoHtml(name: string): string {
     }).join("") +
     (metaOverrides.mgLevel?.[name] ? `<button type="button" class="ex-meta-reset ex-mglvl-reset" data-mglvl-ex="${escapeHtml(name)}" title="Reset muscle levels to the automatic guess">↺</button>` : "") +
     `</span>`;
-  const tierChips = metaChips("tier", ["main", "second", "third"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
+  const tierChips = metaChips("tier", ["main", "second", "third", "ugly"], (v) => TIER_LABELS[v as ExerciseTier], tiersFor(name));
   // Combinable / Comparable membership chips — tap to add/remove this lift from a
   // group (comparable also gets a ratio input when it's an owner-added member).
   const groupChips = (all: RegistryTag[], kind: "combine" | "compare") => {
@@ -13246,10 +13247,10 @@ function closeWaCatMenu(): void {
   if (m) m.hidden = true;
   for (const p of document.querySelectorAll<HTMLElement>(".wa-cat-pill")) p.setAttribute("aria-expanded", "false");
 }
-/** A lift's tier as a sort rank (Primary 0 · Secondary 1 · Tertiary 2 · unknown last). */
+/** A lift's tier as a sort rank (Primary 0 · Secondary 1 · Tertiary 2 · Ugly 3 · unknown last). */
 function tierRank(name: string): number {
   const t = (waMeta(name, "tier")[0] ?? "").toLowerCase();
-  return t.startsWith("prim") || t === "main" ? 0 : t.startsWith("sec") ? 1 : t.startsWith("tert") || t === "third" ? 2 : 99;
+  return t.startsWith("prim") || t === "main" ? 0 : t.startsWith("sec") ? 1 : t.startsWith("tert") || t === "third" ? 2 : t === "ugly" ? 3 : 99;
 }
 /** Sort a category menu's exercises by the chosen internal order. "eff" uses the
  * level the lift trains THAT category's muscle (or its top level for non-muscle

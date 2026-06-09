@@ -121,6 +121,7 @@ const LT: Record<string, string> = {
   "Show hidden in the list (don't unhide)": "Rodyti paslėptus sąraše (neatslepiant)",
   "Did you mean…?": "Ar turėjote omenyje…?",
   "None": "Nėra",
+  "Ugly": "Bjaurus",
   "Vertical pull": "Vertikalus traukimas",
   "Horizontal pull": "Horizontalus traukimas",
   "Vertical push": "Vertikalus stūmimas",
