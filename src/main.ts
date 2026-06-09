@@ -7790,11 +7790,10 @@ function openAncestorDetails(el: HTMLElement): void {
 }
 
 /** The editable middle cell of an Index row, for whichever attribute the quick-edit
- * picker has chosen. BW part stays a number input. Tier is a compact COLOURED pill
- * that CYCLES Primary → Secondary → Tertiary → Ugly on tap (rule 15 — a mutually-
- * exclusive set is one cycling pill, never a wide dropdown that crushes the table).
- * Discipline / muscle group (too many values to cycle) stay a compact single-pick
- * dropdown (auto-enhanced to our .xdd, rule 20). Each sets the override for THIS lift. */
+ * picker has chosen. BW part stays a number input. Tier, discipline & muscle group are
+ * all a compact single-pick .xdd dropdown MENU (auto-enhanced, rule 20) — tier keeps
+ * its colour and adds an "↺ Auto" option to drop the override. Each sets the override
+ * for THIS lift. */
 function indexEditCell(r: IndexRow): string {
   if (indexEditAttr === "coeff")
     return `<input class="bw-input" type="number" step="0.05" min="0" max="2" value="${r.coeff}" ` +
@@ -7804,10 +7803,15 @@ function indexEditCell(r: IndexRow): string {
   const overridden = metaSet(kind, name) != null;
   if (kind === "tier") {
     const t = tiersFor(name)[0]!;
-    return `<button type="button" class="bw-attr-pill tier-${t}${overridden ? " is-overridden" : ""}" ` +
-      `data-attrcycle="tier" data-attrex="${escapeHtml(name)}" style="--tier-c:${TIER_COLORS[t]}" ` +
-      `title="Tier — tap to cycle: Primary → Secondary → Tertiary → Ugly. Now: ${escapeHtml(TIER_LABELS[t])}">` +
-      `${escapeHtml(TIER_LABELS[t])}</button>`;
+    // A real menu (auto-enhanced to our .xdd, rule 20), not a cycling pill — tap to
+    // pick the tier directly, with ↺ Auto to drop the override. Coloured by the
+    // current tier via its `tier-<t>` class (carried onto the .xdd twin).
+    const opts = TIER_RANK
+      .map((v) => `<option value="${v}"${v === t ? " selected" : ""}>${escapeHtml(TIER_LABELS[v])}</option>`)
+      .join("") + `<option value="auto">↺ Auto</option>`;
+    return `<select class="bw-attr-edit subtle-select tier-${t}${overridden ? " is-overridden" : ""}" ` +
+      `data-attrex="${escapeHtml(name)}" data-attrkind="tier" style="--tier-c:${TIER_COLORS[t]}" ` +
+      `aria-label="Tier for ${escapeHtml(name)}">${opts}</select>`;
   }
   const cur = kind === "disc" ? discsFor(name)[0]! : mgsFor(name)[0]!;
   const values: readonly string[] = kind === "disc" ? DISCIPLINES : MUSCLE_GROUPS;
@@ -9545,7 +9549,8 @@ function onBwInputChange(e: Event) {
     const name = sel.dataset.attrex, kind = sel.dataset.attrkind as MetaKind | undefined;
     if (name && kind) {
       const sy = window.scrollY;
-      setMetaSet(kind, name, [sel.value]);
+      // Tier offers an "↺ Auto" option that drops the override (back to the guess).
+      setMetaSet(kind, name, sel.value === "auto" ? [] : [sel.value]);
       renderBwParts();
       window.scrollTo(0, sy);
       renderLeaderboard();
@@ -11392,23 +11397,8 @@ async function init() {
       window.scrollTo(0, sy);
       return;
     }
-    // Quick-edit tier pill: cycle Primary → Secondary → Tertiary → Ugly. Update the
-    // tapped pill instantly (snappy, rule 17), then re-render so the row re-sorts into
-    // its new tier bucket; keep the scroll position so editing a list stays put.
-    const pill = (e.target as HTMLElement).closest<HTMLElement>(".bw-attr-pill");
-    if (pill?.dataset.attrcycle === "tier" && pill.dataset.attrex) {
-      const name = pill.dataset.attrex;
-      const next = TIER_RANK[(TIER_RANK.indexOf(tiersFor(name)[0]!) + 1) % TIER_RANK.length]!;
-      pill.textContent = TIER_LABELS[next];
-      pill.className = `bw-attr-pill tier-${next} is-overridden`;
-      pill.style.setProperty("--tier-c", TIER_COLORS[next]);
-      const sy = window.scrollY;
-      setMetaSet("tier", name, [next]);
-      renderBwParts();
-      window.scrollTo(0, sy);
-      renderLeaderboard();
-      return;
-    }
+    // (Tier quick-edit is now a .xdd dropdown — handled by the bw-attr-edit change
+    // listener above, like discipline / muscle group — no cycling pill any more.)
     // Group header "only / hide / show" — read the group's lifts from its rows and
     // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
     const filt = (e.target as HTMLElement).closest<HTMLElement>(".bw-filt");

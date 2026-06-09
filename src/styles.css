@@ -2629,20 +2629,24 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .bw-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* Quick bulk-edit middle column — compact controls so a row stays one line and the
-   Sets column isn't crushed. Tier is a coloured pill that CYCLES on tap; discipline /
-   muscle group are a narrow, no-wrap .xdd dropdown (the visible twin now carries the
-   .bw-attr-edit class). An accent edge marks values overridden from the auto guess. */
-.bw-attr-pill {
-  font: inherit; font-size: 0.78rem; font-weight: 600; line-height: 1.15; white-space: nowrap; cursor: pointer;
-  color: var(--tier-c, var(--text));
-  background: color-mix(in srgb, var(--tier-c, var(--accent)) 13%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tier-c, var(--accent)) 50%, transparent);
-  border-radius: var(--r-pill); padding: 3px 9px;
-}
-.bw-attr-pill:hover { background: color-mix(in srgb, var(--tier-c, var(--accent)) 22%, transparent); }
+   Sets column isn't crushed. Tier, discipline & muscle group are all a narrow, no-wrap
+   .xdd dropdown menu (the visible twin carries the .bw-attr-edit class; tier also keeps
+   its colour). An accent edge marks values overridden from the auto guess. */
 .xdd.bw-attr-edit { max-width: 100%; }
 .xdd.bw-attr-edit .xdd-btn { white-space: nowrap; font-size: 0.78rem; padding: 3px 8px; }
 .xdd.bw-attr-edit.is-overridden .xdd-btn { border-color: var(--accent); color: var(--accent); }
+/* Tier is now a .xdd dropdown too (a real menu, not a cycling pill). Keep it COLOUR-
+   coded by tier — the twin carries the `tier-<t>` class, so define `--tier-c` per
+   tier here (the inline style doesn't ride onto the twin) and tint the trigger. */
+.tier-main { --tier-c: #2e9e5b; }
+.tier-second { --tier-c: #c0651f; }
+.tier-third { --tier-c: #2b5fa8; }
+.tier-ugly { --tier-c: #7a7f87; }
+.xdd.bw-attr-edit[class*="tier-"] .xdd-btn {
+  color: var(--tier-c, var(--text));
+  background: color-mix(in srgb, var(--tier-c, var(--accent)) 13%, transparent);
+  border-color: color-mix(in srgb, var(--tier-c, var(--accent)) 50%, transparent);
+}
 /* Keep the Index's Sets/Tier columns on one line, hugging the right; let the Exercise
    name column take the slack and wrap (it always could). */
 .bw-table td.num, .bw-table th.num { white-space: nowrap; }
