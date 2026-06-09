@@ -11274,7 +11274,8 @@ async function init() {
     for (const d of document.querySelectorAll<HTMLDetailsElement>("details[open]")) {
       if (d.contains(t)) continue; // click inside the menu → leave it open
       const body = d.querySelector<HTMLElement>(":scope > :not(summary)");
-      if (body && getComputedStyle(body).position === "absolute") d.open = false;
+      const pos = body ? getComputedStyle(body).position : "";
+      if (pos === "absolute" || pos === "fixed") d.open = false;
     }
   }, true);
   els.aloneFilter.addEventListener("click", () => {
