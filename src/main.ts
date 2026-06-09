@@ -7694,27 +7694,29 @@ function openAncestorDetails(el: HTMLElement): void {
 }
 
 /** The editable middle cell of an Index row, for whichever attribute the quick-edit
- * picker has chosen. BW part stays a number input; tier / discipline / muscle group
- * become a single-pick <select> (auto-enhanced to our .xdd dropdown, rule 20) that
- * sets the override for THAT lift only. Empty option ↺ clears back to the auto guess. */
+ * picker has chosen. BW part stays a number input. Tier is a compact COLOURED pill
+ * that CYCLES Primary → Secondary → Tertiary → Ugly on tap (rule 15 — a mutually-
+ * exclusive set is one cycling pill, never a wide dropdown that crushes the table).
+ * Discipline / muscle group (too many values to cycle) stay a compact single-pick
+ * dropdown (auto-enhanced to our .xdd, rule 20). Each sets the override for THIS lift. */
 function indexEditCell(r: IndexRow): string {
   if (indexEditAttr === "coeff")
     return `<input class="bw-input" type="number" step="0.05" min="0" max="2" value="${r.coeff}" ` +
       `data-ex="${escapeHtml(r.name)}" aria-label="Bodyweight part for ${escapeHtml(r.name)}" />`;
   const name = r.name;
   const kind = indexEditAttr; // "tier" | "disc" | "mg"
-  const cur =
-    kind === "tier" ? tiersFor(name)[0]!
-    : kind === "disc" ? discsFor(name)[0]!
-    : mgsFor(name)[0]!;
-  const values: readonly string[] =
-    kind === "tier" ? (["main", "second", "third", "ugly"] as const)
-    : kind === "disc" ? DISCIPLINES
-    : MUSCLE_GROUPS;
-  const labelOf = (v: string) => (kind === "tier" ? TIER_LABELS[v as ExerciseTier] : v);
   const overridden = metaSet(kind, name) != null;
+  if (kind === "tier") {
+    const t = tiersFor(name)[0]!;
+    return `<button type="button" class="bw-attr-pill tier-${t}${overridden ? " is-overridden" : ""}" ` +
+      `data-attrcycle="tier" data-attrex="${escapeHtml(name)}" style="--tier-c:${TIER_COLORS[t]}" ` +
+      `title="Tier — tap to cycle: Primary → Secondary → Tertiary → Ugly. Now: ${escapeHtml(TIER_LABELS[t])}">` +
+      `${escapeHtml(TIER_LABELS[t])}</button>`;
+  }
+  const cur = kind === "disc" ? discsFor(name)[0]! : mgsFor(name)[0]!;
+  const values: readonly string[] = kind === "disc" ? DISCIPLINES : MUSCLE_GROUPS;
   const opts = values
-    .map((v) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(labelOf(v))}</option>`)
+    .map((v) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(v)}</option>`)
     .join("");
   return `<select class="bw-attr-edit subtle-select${overridden ? " is-overridden" : ""}" ` +
     `data-attrex="${escapeHtml(name)}" data-attrkind="${kind}" ` +
@@ -7775,7 +7777,7 @@ function renderBwParts() {
     `<td class="num">${indexEditCell(r)}</td>` +
     `<td class="num">${r.count.toLocaleString()}</td></tr>`;
   const table = (rs: IndexRow[], hidden: boolean) =>
-    `<table class="data-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
+    `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
 
   // Live search (from the bottom bar): show a FLAT list of every lift whose name /
   // code / short-name matches, so you find it right here in the Index instead of
@@ -9323,10 +9325,10 @@ function onBwInputChange(e: Event) {
     const sel = input as HTMLSelectElement;
     const name = sel.dataset.attrex, kind = sel.dataset.attrkind as MetaKind | undefined;
     if (name && kind) {
-      const sc = els.bwGroups.scrollTop;
+      const sy = window.scrollY;
       setMetaSet(kind, name, [sel.value]);
       renderBwParts();
-      els.bwGroups.scrollTop = sc;
+      window.scrollTo(0, sy);
       renderLeaderboard();
     }
     return;
@@ -11144,6 +11146,23 @@ async function init() {
   });
   // Tap an exercise name on the Index to open its settings in the floating overlay.
   els.bwGroups.addEventListener("click", (e) => {
+    // Quick-edit tier pill: cycle Primary → Secondary → Tertiary → Ugly. Update the
+    // tapped pill instantly (snappy, rule 17), then re-render so the row re-sorts into
+    // its new tier bucket; keep the scroll position so editing a list stays put.
+    const pill = (e.target as HTMLElement).closest<HTMLElement>(".bw-attr-pill");
+    if (pill?.dataset.attrcycle === "tier" && pill.dataset.attrex) {
+      const name = pill.dataset.attrex;
+      const next = TIER_RANK[(TIER_RANK.indexOf(tiersFor(name)[0]!) + 1) % TIER_RANK.length]!;
+      pill.textContent = TIER_LABELS[next];
+      pill.className = `bw-attr-pill tier-${next} is-overridden`;
+      pill.style.setProperty("--tier-c", TIER_COLORS[next]);
+      const sy = window.scrollY;
+      setMetaSet("tier", name, [next]);
+      renderBwParts();
+      window.scrollTo(0, sy);
+      renderLeaderboard();
+      return;
+    }
     // Group header "only / hide / show" — read the group's lifts from its rows and
     // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
     const filt = (e.target as HTMLElement).closest<HTMLElement>(".bw-filt");
@@ -14724,6 +14743,11 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   sel.classList.add("dd-native");
   const dd = document.createElement("div");
   dd.className = "xdd" + (opts.wide ? " xdd-wide" : "");
+  // Carry the source select's own classes onto the visible twin so per-instance
+  // styling (e.g. .bw-attr-edit's compact, no-wrap trigger) actually reaches the
+  // control the user sees — the native <select> is hidden, the .xdd div is shown.
+  for (const c of sel.classList)
+    if (c !== "dd-native" && c !== "dd-wide" && c !== "subtle-select" && c !== "plain-select") dd.classList.add(c);
   sel.insertAdjacentElement("afterend", dd);
 
   const optHtml = (o: HTMLOptionElement) =>

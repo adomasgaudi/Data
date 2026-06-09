@@ -2628,10 +2628,25 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
 }
 .bw-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-/* Quick bulk-edit: the middle column's tier/discipline/muscle-group picker. A
-   gold left-edge marks rows whose value has been overridden away from the auto guess. */
-select.bw-attr-edit { width: auto; max-width: 9rem; font-size: 0.8rem; text-align: left; }
-select.bw-attr-edit.is-overridden { border-color: var(--accent); }
+/* Quick bulk-edit middle column — compact controls so a row stays one line and the
+   Sets column isn't crushed. Tier is a coloured pill that CYCLES on tap; discipline /
+   muscle group are a narrow, no-wrap .xdd dropdown (the visible twin now carries the
+   .bw-attr-edit class). An accent edge marks values overridden from the auto guess. */
+.bw-attr-pill {
+  font: inherit; font-size: 0.78rem; font-weight: 600; line-height: 1.15; white-space: nowrap; cursor: pointer;
+  color: var(--tier-c, var(--text));
+  background: color-mix(in srgb, var(--tier-c, var(--accent)) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tier-c, var(--accent)) 50%, transparent);
+  border-radius: var(--r-pill); padding: 3px 9px;
+}
+.bw-attr-pill:hover { background: color-mix(in srgb, var(--tier-c, var(--accent)) 22%, transparent); }
+.xdd.bw-attr-edit { max-width: 100%; }
+.xdd.bw-attr-edit .xdd-btn { white-space: nowrap; font-size: 0.78rem; padding: 3px 8px; }
+.xdd.bw-attr-edit.is-overridden .xdd-btn { border-color: var(--accent); color: var(--accent); }
+/* Keep the Index's Sets/Tier columns on one line, hugging the right; let the Exercise
+   name column take the slack and wrap (it always could). */
+.bw-table td.num, .bw-table th.num { white-space: nowrap; }
+.bw-table td.num:last-child, .bw-table th.num:last-child { width: 1%; padding-left: 0.6rem; }
 
 /* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
 /* App-wide active-set control bar on the Index page. */
