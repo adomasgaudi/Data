@@ -13363,11 +13363,18 @@ function renderWorkoutAnalysis(): void {
   if (!analysisSeeded) {
     analysisSeeded = true;
     // History opens with EVERY exercise (the full catalogue, all groups) — no filter,
-    // whatever group they're from. The GRAPH opens with just the TOP 3 best lifts —
-    // the powerlifting three (Squat / Bench / Deadlift) via defaultSelection(). The two
-    // selections are INDEPENDENT — change either in its own picker.
+    // whatever group they're from. The GRAPH opens with the TOP 5 most-frequent lifts
+    // of the LAST 3 MONTHS (what you're actually training now) — falling back to the
+    // all-time default if nothing's been logged recently. The two selections are
+    // INDEPENDENT — change either in its own picker.
     if (waSelected.length === 0) waSelected = waSelectorExercises().map((e) => e.name);
-    if (waGraphSel.length === 0) waGraphSel = defaultSelection().slice(0, 3);
+    if (waGraphSel.length === 0) {
+      const has = new Set(waSelectorExercises().map((e) => e.name));
+      const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+      const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
+      const byFreq = exerciseCountsForUser(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
+      waGraphSel = (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
+    }
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
