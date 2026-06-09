@@ -795,12 +795,18 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       });
       if (rows.length) groupTogglesHtml = `<div class="svgc-legend-groups">${rows.join("")}</div>`;
     }
+    // "Fit" button — re-centre & fit all the data in view (undoes any pan/zoom).
+    // Same as double-tapping the plot, but discoverable. Only when pan/zoom is on.
+    const centerBtn = interactive()
+      ? `<button type="button" class="svgc-center" title="Centre the data — fit everything in view (reset zoom & pan)">⤢ Fit</button>`
+      : "";
+    const tail = styleBtns + compactBtn + centerBtn;
     const keys = keyHtml.join("");
     legendEl.innerHTML =
       keyHtml.length > 6 || groupTogglesHtml
         ? `<details class="svgc-legend-fold"${legendOpen ? " open" : ""}><summary class="svgc-legend-sum">Legend <span class="svgc-legend-n">(${keyHtml.length})</span></summary>` +
-          `<div class="svgc-legend-menu">${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${styleBtns}${compactBtn}`
-        : keys + styleBtns + compactBtn;
+          `<div class="svgc-legend-menu">${groupTogglesHtml}<div class="svgc-legend-keys">${keys}</div></div></details>${tail}`
+        : keys + tail;
     // Sync the remembered open state when the user opens/closes it directly, and on
     // open decide whether to flip the menu ABOVE the button (when there's more room
     // above than below — it then overlays the chart instead of pushing the page).
@@ -1140,6 +1146,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // outside-click handler, `legendEl.contains(target)` would be false (the node
     // is now orphaned) and it would wrongly close the legend. Stop propagation on
     // any in-legend action so the legend stays open until you click truly outside.
+    if ((e.target as HTMLElement).closest(".svgc-center")) { e.stopPropagation(); if (interactive()) fitView(); return; }
     if ((e.target as HTMLElement).closest(".svgc-compact")) { e.stopPropagation(); setCompactPref(!compactPref); return; }
     const sb = (e.target as HTMLElement).closest<HTMLElement>(".svgc-style-btn");
     if (sb?.dataset.stylebtn) { e.stopPropagation(); if (sb.dataset.stylebtn === "faint") setFaintLines(!faintLines); else setDataTags(!dataTags); return; }
