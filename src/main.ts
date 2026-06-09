@@ -14090,6 +14090,14 @@ function renderWaGraph(): void {
     { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
+  // Preserve which metric groups (Weight / Strength / Volume & frequency) are OPEN
+  // across this re-render. Toggling a metric PILL rebuilds the whole panel; without
+  // this the group's open attr is derived from nOn alone, so UN-clicking the last pill
+  // (nOn→0) snaps the section shut — you couldn't then click another pill in it. Read
+  // the live DOM's open state first, keyed by label (same fix as the cfg groups, rule 24).
+  const openMetricGroups = new Set<string>();
+  for (const d of box.querySelectorAll<HTMLDetailsElement>(".wa-metric-group"))
+    if (d.open) { const lbl = d.querySelector(".wa-metric-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openMetricGroups.add(lbl); }
   const metricChips = METRIC_GROUPS.map((g) => {
     const chips = g.ids
       .map((id) => GRAPH_METRICS.find((x) => x.id === id))
@@ -14103,7 +14111,7 @@ function renderWaGraph(): void {
       .join("");
     const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
     return (
-      `<details class="wa-metric-group"${nOn ? " open" : ""}>` +
+      `<details class="wa-metric-group"${nOn || openMetricGroups.has(g.label) ? " open" : ""}>` +
       `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
       `<div class="wa-metric-chips">${chips}</div></details>`
     );
