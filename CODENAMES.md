@@ -43,6 +43,7 @@ file first, then it will understand requests like "put EXR-CMP into S-ANL" or
 - `ADD` — **Add a set** — hand-log a set; export / import.
 - `ATHED` — **Athletes (edit stats)** — edit an athlete's bodyweight/height/sex etc.
 - `FORM` — **Formulas** — the weight↔reps 1RM curve & calculators.
+  - `FORM-RX` — the **Coach prescription calculator** (top panel of the Formulas tab): a client's 1RM → hard-set working weight (reps+RIR or %1RM, cycling-pill mode) + a warm-up ramp. Pure maths in `src/prescription.ts`; glue in `renderCoachRx()`. From `#CEO` "coach as primary user" (`docs/ceo/coach-primary-user.md`).
 - `SMAP` — **Site map** — the mind-map of the whole site.
 - `GUIDE` — **Guide** — training plan & benchmarks.
 

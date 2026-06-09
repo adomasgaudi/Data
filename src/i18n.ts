@@ -67,6 +67,20 @@ const LT: Record<string, string> = {
   "Site map": "Svetainės žemėlapis",
   "World records": "Pasaulio rekordai",
   "Version history": "Versijų istorija",
+  // ---- Coach calculator (Formulas tab) ----
+  "Coach — working weight & warm-up": "Treneris — darbinis svoris ir apšilimas",
+  "From a client's 1RM: the hard-set load and a full warm-up ramp up to it.":
+    "Pagal kliento 1RM: sunkaus sakinio svoris ir pilnas apšilimas iki jo.",
+  "Target: reps + RIR": "Tikslas: pakartojimai + RIR",
+  "Target: % of 1RM": "Tikslas: % nuo 1RM",
+  "Reps": "Pakartojimai",
+  "% of 1RM": "% nuo 1RM",
+  "Formula": "Formulė",
+  "Plates (kg)": "Blynai (kg)",
+  "Work set": "Darbinis sakinys",
+  "Warm-up": "Apšilimas",
+  "reps": "pak.",
+  "Enter a 1RM to see the prescription.": "Įveskite 1RM, kad pamatytumėte programą.",
   // ---- World records page ----
   "Each lifter's optimal weight class — from their height, natural muscle ceiling and ideal bodyweight — and the powerlifting world record there.":
     "Kiekvieno sportininko optimali svorio kategorija — pagal ūgį, natūralią raumenų ribą ir idealų kūno svorį — ir to lygio jėgos trikovės pasaulio rekordas.",

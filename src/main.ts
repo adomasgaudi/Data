@@ -71,6 +71,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
+import { hardSetWeight, warmupRamp, type HardSetTarget } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
@@ -307,6 +308,17 @@ const els = {
   testExercise: $<HTMLSelectElement>("testExercise"),
   testPickHint: $("testPickHint"),
   calcTabs: $("calcTabs"),
+  rxModeBtn: $<HTMLButtonElement>("rxModeBtn"),
+  rxOrm: $<HTMLInputElement>("rxOrm"),
+  rxReps: $<HTMLInputElement>("rxReps"),
+  rxRir: $<HTMLInputElement>("rxRir"),
+  rxPct: $<HTMLInputElement>("rxPct"),
+  rxRepsField: $("rxRepsField"),
+  rxRirField: $("rxRirField"),
+  rxPctField: $("rxPctField"),
+  rxFormula: $<HTMLSelectElement>("rxFormula"),
+  rxInc: $<HTMLSelectElement>("rxInc"),
+  rxOut: $("rxOut"),
   dataTableWrap: $("dataTableWrap"),
   dataPager: $("dataPager"),
   refreshStatus: $("refreshStatus"),
@@ -9823,6 +9835,57 @@ function renderTest() {
 }
 
 /**
+ * Coach prescription calculator (Formulas tab, top panel) — turns a client's 1RM
+ * into the hard-set working weight and a warm-up ramp, using the pure, tested
+ * maths in prescription.ts. Two target modes (cycling pill): reps+RIR or %1RM.
+ * Pure DOM glue: read inputs → compute → write innerHTML. See
+ * docs/ceo/coach-primary-user.md (Phase 3, step 26).
+ */
+function renderCoachRx(): void {
+  const num = (el: HTMLInputElement, fallback: number): number => {
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const mode = els.rxModeBtn.dataset.mode === "pct" ? "pct" : "repsRIR";
+  // Show only the inputs relevant to the current mode.
+  els.rxRepsField.hidden = mode === "pct";
+  els.rxRirField.hidden = mode === "pct";
+  els.rxPctField.hidden = mode !== "pct";
+  els.rxModeBtn.textContent = mode === "pct" ? "Target: % of 1RM" : "Target: reps + RIR";
+
+  const orm = num(els.rxOrm, 0);
+  const formula = els.rxFormula.value as OneRepMaxFormula;
+  const increment = parseFloat(els.rxInc.value) || 2.5;
+  const target: HardSetTarget =
+    mode === "pct"
+      ? { kind: "pct", pct: num(els.rxPct, 0) }
+      : { kind: "repsRIR", reps: Math.max(1, Math.round(num(els.rxReps, 1))), rir: Math.max(0, Math.round(num(els.rxRir, 0))) };
+
+  const hs = hardSetWeight(orm, target, formula, increment);
+  if (!hs) {
+    els.rxOut.innerHTML = `<p class="muted" style="font-size:0.85rem">Enter a 1RM to see the prescription.</p>`;
+    return;
+  }
+  const repText =
+    hs.rir !== null ? `${hs.reps} reps @ RIR ${hs.rir}` : `~${hs.reps} reps`;
+  const work =
+    `<div class="rx-work"><span class="rx-work-lbl">Work set</span> ` +
+    `<b>${hs.weightKg} kg</b> × ${repText} <span class="muted">(${hs.pctOf1RM}% 1RM)</span></div>`;
+
+  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: hs.weightKg, formula, increment });
+  const wuRows = wu
+    .map(
+      (s) =>
+        `<tr class="rx-wu-${s.kind}"><td>${s.weightKg} kg</td><td>× ${s.reps}</td><td class="muted">${s.pctOfWorking}%</td></tr>`,
+    )
+    .join("");
+  const wuTable = wu.length
+    ? `<table class="rx-wu"><thead><tr><th>Warm-up</th><th>reps</th><th></th></tr></thead><tbody>${wuRows}</tbody></table>`
+    : "";
+  els.rxOut.innerHTML = work + wuTable;
+}
+
+/**
  * Strength-fade explainer: % of a peak 1RM still available vs days since you last
  * trained the lift (the spaced-repetition model in metrics.ts). Two curves show
  * the key idea — a freshly-hit lift fades faster than one you've drilled for
@@ -11556,6 +11619,19 @@ async function init() {
       els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
       renderTest();
     });
+
+  // Coach prescription calculator: recompute on any input/select change, and
+  // cycle the target mode (reps+RIR ↔ %1RM) on the mode pill (rule 15: one
+  // cycling pill, not a segmented control).
+  for (const el of [els.rxOrm, els.rxReps, els.rxRir, els.rxPct])
+    el.addEventListener("input", renderCoachRx);
+  for (const sel of [els.rxFormula, els.rxInc])
+    sel.addEventListener("change", renderCoachRx);
+  els.rxModeBtn.addEventListener("click", () => {
+    els.rxModeBtn.dataset.mode = els.rxModeBtn.dataset.mode === "pct" ? "repsRIR" : "pct";
+    renderCoachRx();
+  });
+  renderCoachRx(); // initial paint
 
   setupBottomNav();
 
@@ -15094,6 +15170,7 @@ function switchTopTab(name: string) {
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
+  if (name === "test") renderCoachRx();
   if (name === "sitemap") renderSiteMap();
   if (name === "changelog") renderChangelog();
   if (name === "s-analysis") renderSAnalysis();

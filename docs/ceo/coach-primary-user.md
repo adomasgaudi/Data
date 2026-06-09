@@ -89,7 +89,7 @@ top layer.
 - [ ] 23. Per-exercise loadable-increment awareness (barbell vs dumbbell vs bodyweight/level lifts — reuse the level/variant logic). *(increment is a param today, default 2.5; per-exercise wiring still to do.)*
 - [ ] 24. Bodyweight & level lifts (push-ups etc.): express "harder/easier" as the technique level (incline cm / squat-rack hole) instead of kg.
 - [x] 25. Pure, property-tested calculators (fast-check) — these must be trustworthy. → `src/prescription.test.ts` (13 tests, incl. monotonicity + bounds props).
-- [ ] 26. UI: surface the calculators in the app + i18n + ship; owner verifies the weights/warmups match what they'd prescribe.
+- [x] 26. UI: surface the calculators in the app + i18n + ship. → `FORM-RX` panel at the top of the Formulas tab (`renderCoachRx()` in main.ts), reps+RIR/%1RM cycling-pill mode, warm-up table, LT translated. Owner to verify the numbers match what they'd prescribe.
 
 ### Phase 4 — Prescription builder (assemble today's session)
 - [ ] 27. Assemble the selected lifts + levers + weights + warmups into one editable **session draft** for the client + date.

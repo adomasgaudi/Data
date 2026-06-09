@@ -2237,6 +2237,21 @@ sup.wr-bw { font-size: 0.85em; }
 .calc-expr { color: var(--muted); }
 .calc-result { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .calc-explain p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.5; }
+/* Coach prescription calculator (Formulas tab, top panel) — the working-weight
+   + warm-up output. Mode is ONE cycling pill (rule 15); small rounding (rule 22). */
+.rx-mode {
+  font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 4px 12px;
+  background: var(--accent-soft); color: var(--accent); margin-bottom: 0.75rem;
+}
+.rx-mode:hover { background: var(--accent); color: #fff; }
+.rx-work { font-size: 1rem; margin: 0.25rem 0 0.6rem; }
+.rx-work-lbl { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin-right: 0.4rem; }
+.rx-work b { font-variant-numeric: tabular-nums; color: var(--accent); font-size: 1.15rem; }
+table.rx-wu { border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+table.rx-wu th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.9rem 2px 0; }
+table.rx-wu td { padding: 2px 0.9rem 2px 0; border-top: 1px solid var(--line); }
+table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
 /* Each guide topic is a collapsible <details> section. The summary is styled
