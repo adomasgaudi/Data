@@ -796,14 +796,16 @@ function exUsage(): Map<string, { sets: number; last: number }> {
  * one-off → Ugly; a former staple now dropped → Tertiary; recent/frequent → Secondary.
  * Owner tier overrides always win (see tiersFor) — this is just the smart default. */
 function autoTier(name: string): ExerciseTier {
-  const base = exerciseTier(name);
-  if (base !== "second") return base; // curated Primary, or non-strength Tertiary — leave
+  const base = exerciseTier(name); // "main" (curated) | "third" (cardio/mobility/warmup) | "second"
+  if (base === "main") return "main"; // curated core stays Primary
   const u = exUsage().get(name);
-  if (!u || !u.sets) return "second";
+  if (!u || !u.sets) return base;
   const days = (Date.now() - u.last) / 86_400_000;
+  // Old / one-off / very stale → Ugly, regardless of category (the weird one-offs).
   if ((u.sets <= 2 && days > 365) || days > 730) return "ugly";       // one-off long ago / untouched 2y+
   if (u.sets <= 5 && days > 540) return "ugly";                       // barely used and very stale
   if (days > 365) return u.sets >= 10 ? "third" : "ugly";             // a year cold: real volume → tertiary, else ugly
+  if (base === "third") return "third";                              // recent non-strength (cardio/mobility) stays Tertiary
   if (u.sets >= 20 && days > 180) return "third";                     // former staple, now dropped → tertiary
   if (u.sets >= 25 && days <= 150) return "second";                   // current staple-ish
   if (days <= 180) return "second";                                  // still in rotation
@@ -2286,6 +2288,9 @@ const GREAT_FILTER_LABELS: Record<GreatFilterDim, string> = { frequency: "Freque
 // Which category's value pills are currently shown in the filter UI (display-only;
 // the active values across ALL categories still apply). Default = Frequency.
 let activeFilterDim: GreatFilterDim = "frequency";
+// A SECOND, always-visible filter category so you can stack two at a glance (defaults
+// to Tier, so the four tiers incl. Ugly are right there). Both write to the same store.
+let activeFilterDim2: GreatFilterDim = "tier";
 /** App-wide set count for an exercise (its frequency basis), summed across members
  * for a synthetic lift. Cached per synchronous render pass. */
 let _appCountCache: Map<string, number> | null = null;
@@ -2334,8 +2339,10 @@ function refreshActiveSet(): void {
   // beats everything. (Re-applied here so they also override the taxonomy filters.)
   for (const n of activeInclude) base.add(n);
   for (const n of activeExclude) base.delete(n);
-  // Drop auto-"Ugly" lifts app-wide (unless the owner force-included one).
-  if (hideUgly) for (const n of [...base]) if (!activeInclude.has(n) && tierFor(n) === "ugly") base.delete(n);
+  // Drop auto-"Ugly" lifts app-wide (unless the owner force-included one, OR is
+  // explicitly filtering BY the Ugly tier — then they want to see them).
+  const tierFilterShowsUgly = (activeMetaFilters.tier ?? []).includes(TIER_LABELS.ugly);
+  if (hideUgly && !tierFilterShowsUgly) for (const n of [...base]) if (!activeInclude.has(n) && tierFor(n) === "ugly") base.delete(n);
   activeSet = base;
 }
 
@@ -7573,20 +7580,22 @@ function renderActiveSetBar(totalExercises: number): void {
   // Pick a CATEGORY (Frequency + every taxonomy dim); its value pills toggle that
   // category's accepted values. Stack as many categories as you like — chips below
   // show them all and they AND together (OR within one category).
-  const dimOpts = GREAT_FILTER_DIMS
-    .map((d) => `<option value="${d}"${d === activeFilterDim ? " selected" : ""}>${escapeHtml(GREAT_FILTER_LABELS[d])}</option>`)
-    .join("");
-  const valuePills = activeFilterDim === "frequency"
-    ? FREQ_TIERS.map((t) => `<button type="button" class="as-fpill${activeFreqTiers.has(t.tier) ? " is-on" : ""}" data-asfval="${t.tier}" aria-pressed="${activeFreqTiers.has(t.tier)}">${escapeHtml(t.label)}</button>`).join("")
-    : (() => {
-        const chosen = new Set(activeMetaFilters[activeFilterDim as ExerciseFilterDim] ?? []);
-        return distinctMetaValues(activeFilterDim as ExerciseFilterDim)
-          .map((v) => `<button type="button" class="as-fpill${chosen.has(v) ? " is-on" : ""}" data-asfval="${escapeHtml(v)}" aria-pressed="${chosen.has(v)}">${escapeHtml(v)}</button>`)
-          .join("");
-      })();
-  const pillsRow = valuePills
-    ? `<div class="as-fpills">${valuePills}</div>`
-    : `<div class="as-fpills muted as-fnone">no values</div>`;
+  // A filter row = a category picker + its value-pills. Two are shown (stackable, AND).
+  const filterRow = (dim: GreatFilterDim, selId: string): string => {
+    const dimOpts = GREAT_FILTER_DIMS
+      .map((d) => `<option value="${d}"${d === dim ? " selected" : ""}>${escapeHtml(GREAT_FILTER_LABELS[d])}</option>`)
+      .join("");
+    const valuePills = dim === "frequency"
+      ? FREQ_TIERS.map((t) => `<button type="button" class="as-fpill${activeFreqTiers.has(t.tier) ? " is-on" : ""}" data-asfdim="frequency" data-asfval="${t.tier}" aria-pressed="${activeFreqTiers.has(t.tier)}">${escapeHtml(t.label)}</button>`).join("")
+      : (() => {
+          const chosen = new Set(activeMetaFilters[dim as ExerciseFilterDim] ?? []);
+          return distinctMetaValues(dim as ExerciseFilterDim)
+            .map((v) => `<button type="button" class="as-fpill${chosen.has(v) ? " is-on" : ""}" data-asfdim="${escapeHtml(dim)}" data-asfval="${escapeHtml(v)}" aria-pressed="${chosen.has(v)}">${escapeHtml(v)}</button>`)
+            .join("");
+        })();
+    const pillsRow = valuePills ? `<div class="as-fpills">${valuePills}</div>` : `<div class="as-fpills muted as-fnone">no values</div>`;
+    return `<div class="as-filter-row"><label class="as-label">Filter by <select id="${selId}" class="subtle-select">${dimOpts}</select></label>${pillsRow}</div>`;
+  };
   // Active-filter summary chips (Frequency + every dimension), each removable.
   const freqChips = [...activeFreqTiers].map((tier) => {
     const lbl = FREQ_TIERS.find((t) => t.tier === tier)?.label ?? tier;
@@ -7602,8 +7611,8 @@ function renderActiveSetBar(totalExercises: number): void {
   els.activeSetBar.innerHTML =
     `<div class="as-title">The Great Filter</div>` +
     `<div class="as-statusrow">${status}${reset}</div>` +
-    `<div class="as-filter-row"><label class="as-label">Filter by ` +
-    `<select id="activeFilterDim" class="subtle-select">${dimOpts}</select></label>${pillsRow}</div>` +
+    filterRow(activeFilterDim, "activeFilterDim") +
+    filterRow(activeFilterDim2, "activeFilterDim2") +
     activeChipsRow +
     `<p class="as-hint muted">Restricts the WHOLE app — every list, graph, leaderboard, and the Index below. Pick a category, tap values to keep only those, then stack as many categories as you like (they AND together; any value within one category passes). “Show all” clears every filter at once.</p>`;
 }
@@ -11094,6 +11103,8 @@ async function init() {
     // re-render the bar in place rather than the whole app).
     const dimSel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeFilterDim");
     if (dimSel) { activeFilterDim = dimSel.value as GreatFilterDim; rerenderActiveSetBar(); return; }
+    const dimSel2 = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeFilterDim2");
+    if (dimSel2) { activeFilterDim2 = dimSel2.value as GreatFilterDim; rerenderActiveSetBar(); return; }
   });
   els.activeSetBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -11101,7 +11112,7 @@ async function init() {
     if (t.closest("[data-asclear]")) { clearActiveOverrides(); return; }
     // Toggle one taxonomy value for the current dimension (OR within the dim).
     const pill = t.closest<HTMLElement>("[data-asfval]");
-    if (pill?.dataset.asfval) { toggleActiveMetaValue(activeFilterDim, pill.dataset.asfval); return; }
+    if (pill?.dataset.asfval) { toggleActiveMetaValue((pill.dataset.asfdim as GreatFilterDim) ?? activeFilterDim, pill.dataset.asfval); return; }
     // Remove one active filter chip.
     const chip = t.closest<HTMLElement>("[data-asfclear-dim]");
     if (chip?.dataset.asfclearDim && chip.dataset.asfclearVal !== undefined) {
@@ -12663,7 +12674,9 @@ const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
   // their override-aware resolver, so a retagged lift groups/filters by its NEW value
   // everywhere (Index, graph picker, calendar) — those resolvers are synthetic-aware too.
   dim === "muscleGroup" ? (mgsFor(name) as string[])
-  : dim === "tier" ? (tiersFor(name) as string[])
+  // Tier uses the app-wide tiersFor (owner override → auto-tier), mapped to its LABEL so
+  // the filter + group-by show all four — Primary / Secondary / Tertiary / Ugly.
+  : dim === "tier" ? tiersFor(name).map((t) => TIER_LABELS[t])
   : dim === "discipline" ? (discsFor(name) as string[])
   // Synthetic lifts inherit every grouping dimension from their members (their own
   // name keyword-matches nothing), so they group exactly where their members do.
