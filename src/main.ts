@@ -9741,7 +9741,9 @@ async function init() {
     if (exc?.dataset.asexclude) { toggleActiveOverride(exc.dataset.asexclude, "exclude"); return; }
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !els.exInfoPage.hidden) closeExerciseInfo();
+    if (e.key !== "Escape") return;
+    if (!els.exInfoPage.hidden) closeExerciseInfo();
+    else if (document.body.classList.contains("wa-graph-full")) { document.body.classList.remove("wa-graph-full"); renderWaGraph(); }
   });
   // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
   els.modelBtn.addEventListener("click", openModelEditor);
@@ -13377,6 +13379,7 @@ function renderWaGraph(): void {
   // chart draws (its innerHTML keeps updating in place wherever it lives).
   const graphBarHtml =
     `<div class="wa-graph-bar">` +
+    `<button type="button" class="wa-graph-full-btn wa-name-opt" data-graphfull="1" title="${document.body.classList.contains("wa-graph-full") ? "Exit fullscreen" : "Fullscreen — graph + all settings together (no scrolling away)"}" aria-label="${document.body.classList.contains("wa-graph-full") ? "Exit fullscreen graph" : "Fullscreen graph"}">${document.body.classList.contains("wa-graph-full") ? "✕" : "⛶"}</button>` +
     graphAthletesPillsHtml() +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
@@ -14152,6 +14155,16 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
+    // Fullscreen the graph: the chart pins to the top and the Graph-options settings
+    // become an in-flow panel below it, so you change settings while watching the graph
+    // (no scrolling away). The same button (now ✕) exits.
+    if (t.closest<HTMLElement>("[data-graphfull]")) {
+      const entering = !document.body.classList.contains("wa-graph-full");
+      document.body.classList.toggle("wa-graph-full", entering);
+      if (entering) S.waGraphFoldOpen = true; // reveal the settings panel
+      renderWaGraph(); // swaps ⛶/✕ + opens the fold; the chart's ResizeObserver re-fits it
+      return;
+    }
     // Realistic ⇄ compacted time toggle (moved here from the chart's legend row).
     if (t.closest<HTMLElement>("[data-watime]")) {
       setTimeCompact(!getTimeCompact());
@@ -14407,7 +14420,7 @@ function switchTopTab(name: string) {
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.
-  if (name !== "analysis") restoreAnalysisPanels();
+  if (name !== "analysis") { restoreAnalysisPanels(); document.body.classList.remove("wa-graph-full"); }
   updateBottomNav();
 }
 
