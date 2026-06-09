@@ -249,6 +249,9 @@ const LT: Record<string, string> = {
   "Combined only": "Tik sujungtą",
   "Members only": "Tik narius",
   "Show both": "Rodyti abu",
+  "Composed of": "Sudaryta iš",
+  "— merged 1:1 into this lift": "— sujungta 1:1 į šį pratimą",
+  "— scaled onto this lift's curve": "— priderinta prie šio pratimo kreivės",
   // ---- Momentum trend period ----
   "/wk": "/sav.",
   "/mo": "/mėn.",

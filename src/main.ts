@@ -9212,6 +9212,26 @@ function exerciseInfoHtml(name: string): string {
     })
     .join("");
 
+  // If THIS lift IS a synthetic group (e.g. "Pull/Chin", "DL pattern"), show what it's
+  // COMPOSED OF — each component exercise and its MULTIPLIER (the per-member ratio toward
+  // the group's reference: 1 = merged 1:1, 0.8 = 80% of the reference). Owner request:
+  // a compare/combined lift should show its parts' multipliers. The member-of `groupHtml`
+  // above never fires here (the group isn't a member of itself), so this is its own block.
+  const selfGroups = [...effectiveCombinableGroups(), ...effectiveComparableGroups()]
+    .filter((g) => (g.derivedName ?? g.label) === name);
+  const selfGroupHtml = selfGroups
+    .map((g) => {
+      const memberList = (g.members ?? [])
+        .map((m) => `${escapeHtml(m.exerciseName)} <span class="muted">×${m.ratio}</span>`)
+        .join(", ");
+      const kindNote = g.kind === "combinable-group" ? "merged 1:1 into this lift" : "scaled onto this lift's curve";
+      return (
+        `<div class="ex-group"><div class="ex-group-hd">Composed of <span class="muted">— ${kindNote}</span></div>` +
+        `<div class="ex-group-members">${memberList || "—"}</div></div>`
+      );
+    })
+    .join("");
+
   // User-merge controls: list the merged-in exercises, each with a "Separate"
   // (pull it back out) button, plus "Dissolve" to un-merge them all at once.
   const mergePanel = userMergeDef?.members?.length
@@ -9245,7 +9265,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
