@@ -283,6 +283,7 @@ const els = {
   workoutShowToggle: $<HTMLButtonElement>("workoutShowToggle"),
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
+  workoutRmCycle: $<HTMLButtonElement>("workoutRmCycle"),
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
@@ -3646,6 +3647,8 @@ function syncWorkoutToggles(): void {
   // (Name mode — Code / Short / Full — now lives ONLY in the exercise selector's
   // "Show as" toggle; the redundant history-console button was removed.)
   els.workoutsPageBtn.textContent = String(S.workoutsPageSize);
+  els.workoutRmCycle.textContent = `${xrmReps}RM`;
+  els.workoutRmCycle.classList.toggle("is-active", xrmReps > 1);
   els.restToggle.hidden = false; // rest periods now apply to day AND the period modes
   els.restToggle.classList.toggle("is-active", S.showRestDays);
   els.restToggle.setAttribute("aria-pressed", S.showRestDays ? "true" : "false");
@@ -6504,6 +6507,24 @@ function setListHtml(setsAsc: readonly SetRecord[]): string {
     .join(" ");
 }
 
+// The golden "best RM" column normally shows each lift's estimated 1RM. The X-RM
+// picker (a cycling pill in the ⚙ console) lets you instead see the X-rep max — the
+// load liftable for X reps, derived from the 1RM via the rep formula — so you can read
+// off working weights (5RM, 8RM…) straight from the history. 1 = the 1RM itself.
+const XRM_CYCLE = [1, 2, 3, 5, 8, 10, 12];
+let xrmReps = (() => { const n = parseInt(localStorage.getItem("colosseum.xrmReps") ?? "1", 10); return XRM_CYCLE.includes(n) ? n : 1; })();
+function cycleXrmReps(): void {
+  const i = XRM_CYCLE.indexOf(xrmReps);
+  xrmReps = XRM_CYCLE[(i + 1) % XRM_CYCLE.length]!;
+  try { localStorage.setItem("colosseum.xrmReps", String(xrmReps)); } catch { /* ignore */ }
+}
+/** Inner HTML for a golden best-RM number: the 1RM by default, else the X-RM (load for
+ * `xrmReps` reps from the 1RM), with the rep count as the superscript. */
+function xrmInner(best: number): string {
+  const v = xrmReps <= 1 ? best : (weightForReps(best, xrmReps, currentFormula()) ?? best);
+  return `${Math.round(v * 10) / 10}<sup class="onerm-sup">${xrmReps}</sup>`;
+}
+
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const workoutFormula = currentFormula();
@@ -6579,7 +6600,7 @@ function renderWorkoutsPage() {
         // column, so a note-only lift looked broken vs the others (PB).
         const rmTxt = best === null
           ? `<span class="wo-1rm"></span>`
-          : `<span class="wo-1rm" title="Best estimated 1RM this day">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
+          : `<span class="wo-1rm" title="Best estimated ${xrmReps}RM this day${xrmReps > 1 ? " (from the 1RM)" : ""}">${xrmInner(best)}</span>`;
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
@@ -6744,7 +6765,7 @@ function renderHorizontalHistory(): void {
         .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), formula))
         .filter((v): v is number => v !== null && Number.isFinite(v));
       const best = e1rms.length ? Math.max(...e1rms) : null;
-      const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated 1RM">${fmt(best)}<sup class="onerm-sup">1</sup></span>`;
+      const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated ${xrmReps}RM${xrmReps > 1 ? " (from the 1RM)" : ""}">${xrmInner(best)}</span>`;
       cells += `<div class="hh-cell" style="grid-column:${col};grid-row:${row}"><span class="hh-rm">${rmTxt}</span><span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exName)}">${escapeHtml(displayName(exName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
     });
   });
@@ -11203,6 +11224,10 @@ async function init() {
   els.workoutsPageBtn.addEventListener("click", () => {
     S.workoutsPageSize = S.workoutsPageSize === 50 ? 20 : 50;
     S.workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  els.workoutRmCycle.addEventListener("click", () => {
+    cycleXrmReps(); // golden column: 1RM → 2RM → 3RM → 5RM → 8RM → 10RM → 12RM → …
     renderWorkoutsPage();
   });
   els.restToggle.addEventListener("click", () => {
