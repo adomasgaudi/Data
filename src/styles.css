@@ -3419,7 +3419,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-ath-overlay { display: flex; align-items: center; gap: 0.35rem; width: 100%; min-width: 0; }
 .wa-ath-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; flex: 0 0 auto; }
 .wa-ath-pills { display: flex; flex-wrap: nowrap; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; min-width: 0; padding-bottom: 1px; }
-.wa-ath-pill { flex: 0 0 auto; font-size: 0.7rem; font-weight: 600; padding: 1px 9px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--muted); white-space: nowrap; cursor: pointer; }
+.wa-ath-pill { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 30px; font-size: 0.84rem; font-weight: 600; padding: 4px 13px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--muted); white-space: nowrap; cursor: pointer; }
 .wa-ath-pill.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .wa-ath-pill.is-primary { cursor: default; border-style: dashed; }
 .wa-ath-cap { flex: 0 0 auto; font-size: 0.64rem; }
