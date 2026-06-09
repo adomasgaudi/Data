@@ -2285,12 +2285,10 @@ if (activeCutoff && activeFreqTiers.size === 0) {
 type GreatFilterDim = ExerciseFilterDim | "frequency";
 const GREAT_FILTER_DIMS: GreatFilterDim[] = ["frequency", ...FILTER_DIMS];
 const GREAT_FILTER_LABELS: Record<GreatFilterDim, string> = { frequency: "Frequency", ...FILTER_DIM_LABELS };
-// Which category's value pills are currently shown in the filter UI (display-only;
-// the active values across ALL categories still apply). Default = Frequency.
-let activeFilterDim: GreatFilterDim = "frequency";
-// A SECOND, always-visible filter category so you can stack two at a glance (defaults
-// to Tier, so the four tiers incl. Ugly are right there). Both write to the same store.
-let activeFilterDim2: GreatFilterDim = "tier";
+// FIVE always-visible filter rows — each points at any category and its pills toggle
+// that category's values; they all stack & AND together. Display-only (which categories
+// are shown); the chosen values across ALL categories still apply. Re-point any row.
+const activeFilterDims: GreatFilterDim[] = ["frequency", "tier", "discipline", "muscleGroup", "movement"];
 /** App-wide set count for an exercise (its frequency basis), summed across members
  * for a synthetic lift. Cached per synchronous render pass. */
 let _appCountCache: Map<string, number> | null = null;
@@ -7585,7 +7583,7 @@ function renderActiveSetBar(totalExercises: number): void {
   // category's accepted values. Stack as many categories as you like — chips below
   // show them all and they AND together (OR within one category).
   // A filter row = a category picker + its value-pills. Two are shown (stackable, AND).
-  const filterRow = (dim: GreatFilterDim, selId: string): string => {
+  const filterRow = (dim: GreatFilterDim, idx: number): string => {
     const dimOpts = GREAT_FILTER_DIMS
       .map((d) => `<option value="${d}"${d === dim ? " selected" : ""}>${escapeHtml(GREAT_FILTER_LABELS[d])}</option>`)
       .join("");
@@ -7598,27 +7596,14 @@ function renderActiveSetBar(totalExercises: number): void {
             .join("");
         })();
     const pillsRow = valuePills ? `<div class="as-fpills">${valuePills}</div>` : `<div class="as-fpills muted as-fnone">no values</div>`;
-    return `<div class="as-filter-row"><label class="as-label">Filter by <select id="${selId}" class="subtle-select">${dimOpts}</select></label>${pillsRow}</div>`;
+    return `<div class="as-filter-row"><label class="as-label">Filter by <select class="subtle-select as-dim-sel" data-fidx="${idx}">${dimOpts}</select></label>${pillsRow}</div>`;
   };
   // Active-filter summary chips (Frequency + every dimension), each removable.
-  const freqChips = [...activeFreqTiers].map((tier) => {
-    const lbl = FREQ_TIERS.find((t) => t.tier === tier)?.label ?? tier;
-    return `<button type="button" class="as-fchip" data-asfclear-dim="frequency" data-asfclear-val="${escapeHtml(tier)}" title="Remove this filter">Frequency: ${escapeHtml(lbl)} ✕</button>`;
-  });
-  const metaChips = activeMetaFilterList()
-    .flatMap((f) => f.values.map((v) =>
-      `<button type="button" class="as-fchip" data-asfclear-dim="${f.dim}" data-asfclear-val="${escapeHtml(v)}" title="Remove this filter">${escapeHtml(FILTER_DIM_LABELS[f.dim])}: ${escapeHtml(v)} ✕</button>`));
-  const allChips = [...freqChips, ...metaChips].join("");
-  const activeChipsRow = allChips
-    ? `<div class="as-fchips">${allChips}<button type="button" class="as-clear" data-asfclear-all="1">clear all</button></div>`
-    : "";
   els.activeSetBar.innerHTML =
     `<div class="as-title">The Great Filter</div>` +
     `<div class="as-statusrow">${status}${reset}</div>` +
-    filterRow(activeFilterDim, "activeFilterDim") +
-    filterRow(activeFilterDim2, "activeFilterDim2") +
-    activeChipsRow +
-    `<p class="as-hint muted">Restricts the WHOLE app — every list, graph, leaderboard, and the Index below. Pick a category, tap values to keep only those, then stack as many categories as you like (they AND together; any value within one category passes). “Show all” clears every filter at once.</p>`;
+    activeFilterDims.map((d, i) => filterRow(d, i)).join("") +
+    `<p class="as-hint muted">Restricts the WHOLE app — every list, graph, leaderboard, and the Index below. Each row is a category; tap values to keep only those. Rows stack (they AND together; any value within one row passes). “Show all” clears every filter at once.</p>`;
 }
 
 /** Cutoff dropdown changed: save + re-render the whole app. */
@@ -11120,10 +11105,8 @@ async function init() {
   els.activeSetBar.addEventListener("change", (e) => {
     // Category picker → just swap which value pills show (no filter change, so
     // re-render the bar in place rather than the whole app).
-    const dimSel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeFilterDim");
-    if (dimSel) { activeFilterDim = dimSel.value as GreatFilterDim; rerenderActiveSetBar(); return; }
-    const dimSel2 = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeFilterDim2");
-    if (dimSel2) { activeFilterDim2 = dimSel2.value as GreatFilterDim; rerenderActiveSetBar(); return; }
+    const dimSel = (e.target as HTMLElement).closest<HTMLSelectElement>(".as-dim-sel");
+    if (dimSel?.dataset.fidx) { activeFilterDims[+dimSel.dataset.fidx] = dimSel.value as GreatFilterDim; rerenderActiveSetBar(); return; }
   });
   els.activeSetBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -11131,7 +11114,7 @@ async function init() {
     if (t.closest("[data-asclear]")) { clearActiveOverrides(); return; }
     // Toggle one taxonomy value for the current dimension (OR within the dim).
     const pill = t.closest<HTMLElement>("[data-asfval]");
-    if (pill?.dataset.asfval) { toggleActiveMetaValue((pill.dataset.asfdim as GreatFilterDim) ?? activeFilterDim, pill.dataset.asfval); return; }
+    if (pill?.dataset.asfval) { toggleActiveMetaValue((pill.dataset.asfdim as GreatFilterDim) ?? activeFilterDims[0], pill.dataset.asfval); return; }
     // Remove one active filter chip.
     const chip = t.closest<HTMLElement>("[data-asfclear-dim]");
     if (chip?.dataset.asfclearDim && chip.dataset.asfclearVal !== undefined) {
