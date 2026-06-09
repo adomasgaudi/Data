@@ -91,6 +91,19 @@ export const FAMILIES: Record<string, FamilyDef> = {
     dims: { position: { floor: 1.0, knees: 0.7 } },
     defaults: { position: "floor" },
   },
+  PULLUP: {
+    // Pull-ups / chin-ups. The one modelled variation is the assistance BAND ("guma"):
+    // exactly like HSPU, a band removes a near-constant force, so its help is measured in
+    // KILOGRAMS subtracted from the bodyweight load (see bandAssistKg / the band-knob) —
+    // NOT a multiplier (band is skipped by noteVariationScale). Higher guma number =
+    // heavier band = more help = more kg off. none = unassisted (×1 reference). The
+    // factor values below are unused for scaling (band is kg-only); kept only so the
+    // 1–6 levels exist for the picker. Tune the kg in ⚙ Difficulty multipliers → band.
+    dims: {
+      band: { none: 1.0, "1": 0.92, "2": 0.85, "3": 0.75, "4": 0.62, "5": 0.56, "6": 0.5 },
+    },
+    defaults: { band: "none" },
+  },
 };
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
@@ -170,6 +183,17 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "nuo kelių": { position: "knees" },
     "nuo keliu": { position: "knees" },
   },
+  PULLUP: {
+    // Assistance band ("guma") by its NUMBER (1–6) — same as HSPU. Higher = heavier band
+    // = more help (more kg off). Longest-match-first means "guma 5" beats bare "guma".
+    "guma 1": { band: "1" },
+    "guma 2": { band: "2" },
+    "guma 3": { band: "3" },
+    "guma 4": { band: "4" },
+    "guma 5": { band: "5" },
+    "guma 6": { band: "6" },
+    guma: { band: "5" },
+  },
 };
 
 /** The bundled config (passed by default to the resolver; callers may pass their
@@ -177,7 +201,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 10;
+export const CONFIG_VERSION = 11;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -194,6 +218,10 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   // log incline variations under either name — so they share the push-up model (and
   // its position/knees variation). Incline scaling already covers it by name pattern.
   "Smith Machine Incline Close Grip Push Up": "PUSHUP",
+  "Pull Up": "PULLUP",
+  "Pull Ups": "PULLUP",
+  "Chin Up": "PULLUP",
+  "Chin Ups": "PULLUP",
 };
 
 export function familyOf(
@@ -212,6 +240,10 @@ export function familyOf(
   // HSPU model — "hspu" or "handstandpush" anywhere (holds / walks / kicks lack
   // "push", so they're still excluded).
   if (n.includes("hspu") || n.includes("handstandpush")) return "HSPU";
+  // Any pull-up / chin-up uses the PULLUP model so band ("guma") assistance is read in
+  // kg like HSPU — however it's spelled (assisted, wide/neutral grip, weighted…). Lat
+  // PULLDOWNs contain "pull" but not "pullup", so they're correctly excluded.
+  if (n.includes("pullup") || n.includes("chinup")) return "PULLUP";
   return null;
 }
 
