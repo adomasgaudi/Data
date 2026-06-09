@@ -2321,6 +2321,21 @@ function freqTierOf(name: string): string | null {
 function activeMetaFilterList(): { dim: ExerciseFilterDim; values: string[] }[] {
   return FILTER_DIMS.map((d) => ({ dim: d, values: activeMetaFilters[d] ?? [] })).filter((f) => f.values.length > 0);
 }
+/** Synthetic combined/comparable lift names (SQ mix, DL pattern, …) that have ≥1
+ * trained member — the same first-class lifts the Index lists. They carry no logged
+ * sets under their own name, so they must be ADDED to the app-wide filter's base set
+ * explicitly; their tier/discipline/muscle/frequency are inherited from members
+ * (waMeta / freqTierOf are synthetic-aware), so the filter judges them correctly. */
+function syntheticLiftNames(): string[] {
+  const logged = new Set(data.records.map((r) => r.exerciseName).filter((n): n is string => !!n));
+  const out: string[] = [];
+  for (const g of [...effectiveCombinableGroups(), ...effectiveComparableGroups()]) {
+    const dn = g.derivedName ?? g.label;
+    if (logged.has(dn)) continue;
+    if ((g.members ?? []).some((m) => logged.has(m.exerciseName))) out.push(dn);
+  }
+  return out;
+}
 /** The allowed-exercise set, or null when the filter is off. Rebuilt by refreshActiveSet(). */
 let activeSet: Set<string> | null = null;
 
@@ -2341,6 +2356,11 @@ function refreshActiveSet(): void {
     : anyFilter
       ? buildActiveExerciseSet(data.records, null, [...activeInclude], [...activeExclude], FREQ_TIERS)
       : new Set<string>(data.records.map((r) => r.exerciseName).filter((n): n is string => !!n));
+  // Synthetic combos (SQ mix, DL pattern…) carry no logged sets under their own name,
+  // so they'd never enter the base — meaning any active filter would silently hide ALL
+  // of them. Add them here (unless soloing) so they pass/fail the filters below by their
+  // inherited metadata, just like a real lift.
+  if (!activeSolo) for (const n of syntheticLiftNames()) base.add(n);
   // Frequency category (exact tiers, OR within): keep lifts whose app-wide tier is chosen.
   if (activeFreqTiers.size && !activeSolo) base = new Set([...base].filter((n) => { const t = freqTierOf(n); return t !== null && activeFreqTiers.has(t); }));
   // Taxonomy filters narrow the base further (AND across dimensions).
