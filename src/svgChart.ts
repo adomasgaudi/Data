@@ -370,6 +370,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     } else {
       view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: 0, yMax: 1 };
     }
+    fitRight();
+  }
+
+  /** Fit the RIGHT axis to its current series (bars / counts). Kept separate from
+   * resetView so it can refit even when the user has panned/zoomed the left/x view:
+   * the right axis is a dependent secondary scale for the bars, never user-panned, so
+   * it must always describe whatever bar metric is currently plotted — otherwise
+   * switching e.g. Frequency (0–2) → Volume (0–500) leaves the bars overflowing a stale
+   * right axis (they shoot off the top). */
+  function fitRight() {
     const re = yExtent(rightSeries(), cfg.rightBeginAtZero);
     if (Number.isFinite(re.yMin)) {
       const ryPad = (re.yMax - re.yMin) * 0.08 || 1;
@@ -1157,7 +1167,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // Series changed (e.g. a metric toggled on/off): keep the time-axis mapping
       // fresh, but only RE-FIT the view if the user hasn't panned/zoomed — so adding
       // / removing metrics preserves the user's pan & zoom (double-tap to re-fit).
-      if (seriesChanged) { rebuildCompactor(); if (!userAdjusted) resetView(); }
+      // Re-fit the whole view only if the user hasn't panned/zoomed; but ALWAYS re-fit
+      // the right axis to the (possibly new) bar metric, so its bars never overflow a
+      // stale right-axis scale left over from a different metric.
+      if (seriesChanged) { rebuildCompactor(); if (!userAdjusted) resetView(); else fitRight(); }
       hideTip();
       draw();
     },
