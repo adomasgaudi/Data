@@ -3061,12 +3061,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Stable-height title: collapsed, the title box is clamped to 2 lines with a reserved
    min-height, so adding/removing a lift can't change its height and shove the picker
    pills below (the mis-tap the owner hit). Expanding (… +N) drops the clamp. */
+/* Title height: the NUMBER of names shown is capped in JS (TITLE_NAME_CAP) and the
+   "… +N" trailer is part of the content, so we must NOT also visually clamp — a
+   CSS line-clamp truncates wider (chip) names early and eats the "+N", hiding the
+   hidden-count. Reserve 2 lines (min-height) so short titles don't jump; let longer
+   ones wrap to a 3rd line rather than clipping the count. Expanding drops the floor. */
 .wa-seltitle-box {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  overflow: hidden; min-height: 2.6em; line-height: 1.3;
+  display: block; min-height: 2.6em; line-height: 1.7;
 }
 .wa-seltitle-box.is-expanded {
-  display: block; -webkit-line-clamp: unset; overflow: visible; min-height: 0;
+  min-height: 0;
 }
 /* A bigger caret with clear margin from the title, so there's an obvious "empty"
    spot (the caret) to COLLAPSE — distinct from the lift names, which REMOVE. */
@@ -3077,7 +3081,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Each lift name is a tappable CHIP — soft background + thin border + small rounding
    (--r-pill, rule 22) so it's obviously clickable on touch (no hover to rely on), not
    bare text. Modest horizontal padding only, so the 2-line clamp height is unchanged. */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 /* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover lifts
    the border to the accent. NO strike-through (legacy from when a tap deleted it). */
 .wa-title-lift:hover { border-color: var(--accent); }
