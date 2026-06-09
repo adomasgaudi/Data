@@ -2065,6 +2065,9 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
   };
   const rows = [simple("info", "ⓘ Info")];
   for (const g of allGroupsForEx(name)) rows.push(groupBlock(g));
+  // "Only this" — collapse the whole scope's selection down to just this lift (history
+  // and graph stay independent: this acts on whichever opened the menu).
+  rows.push(simple("only", `◎ Only this (${scope === "graph" ? "graph" : "history"})`));
   rows.push(simple("remove", "✕ Remove"));
   const menu = document.createElement("div");
   menu.id = "liftMenu";
@@ -9825,6 +9828,7 @@ async function init() {
         if (chosenGroup(scope, name, key)?.id === gid) setLens(scope, name, key, undefined); // tap again = off
         else { setLens(scope, name, key, gid); if (chosenGroup(scope, name, other)?.id === gid) setLens(scope, name, other, undefined); } // one view per group
       }
+      else if (act === "only") { if (scope === "graph") waGraphSel = [name]; else waSelected = [name]; }
       else if (act === "remove") { if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name); else waSelected = waSelected.filter((x) => x !== name); }
       closeLiftMenu();
       deferRender(renderWorkoutAnalysis);
