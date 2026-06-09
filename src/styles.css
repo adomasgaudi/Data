@@ -2770,6 +2770,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   border-left: 3px solid var(--sub-color, var(--line)); border-radius: 0; margin: 0;
 }
 .bw-review > .bw-review-cat > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
+/* SECOND level inside a filtered-out group: inline colour-coded sub-sections (a small
+   header band + its rows), so a big reject group reads as labelled chunks, not one list. */
+.bw-review-sub { border-left: 3px solid var(--sub-color, var(--line)); margin: 0 0 0 0.4rem; }
+.bw-review-sub-h {
+  display: flex; align-items: center; gap: 0.45rem; padding: 5px 12px;
+  font-size: 0.78rem; font-weight: 600; color: var(--muted);
+  border-top: 1px solid var(--line); background: color-mix(in srgb, var(--sub-color) 7%, transparent);
+}
 /* One-tap exception pill on a filtered-out row (small rounding, rule 22). */
 .bw-keep {
   font: inherit; font-size: 0.7rem; font-weight: 600; line-height: 1.1; white-space: nowrap; cursor: pointer;

@@ -7940,10 +7940,30 @@ function renderBwParts() {
   // wall. Only shown when a filter is hiding something; open states persist across the
   // re-render that "keep" triggers.
   const allHidden = activeSet ? rows.filter((r) => !activeSet!.has(r.name)) : [];
+  // SECOND level inside each filtered-out group: split a sizeable group by another
+  // dimension so e.g. 19 mixed "Tertiary" rejects read as labelled, colour-coded chunks
+  // (Mobility / Balance / …) instead of one flat list. Discipline is the most telling lens
+  // for rejects (it's usually WHY they're hidden); fall back to muscle when the primary
+  // grouping IS discipline. Shown INLINE (not another collapsible) — the owner asked for
+  // organisation, not more taps. Small groups / single-bucket splits stay flat.
+  const reviewSubDim: IndexGroupMode = S.bwGroupMode === "discipline" ? "muscleGroup" : "discipline";
+  const REVIEW_SUB_MIN = 8;
+  const reviewGroupBody = (rs: IndexRow[]): string => {
+    if (rs.length < REVIEW_SUB_MIN) return table(rs, true);
+    const sb = indexBuckets(rs, reviewSubDim);
+    if (sb.length < 2) return table(rs, true);
+    return sb.map((s) =>
+      `<div class="bw-review-sub" style="--sub-color:${s.color}">` +
+      `<div class="bw-review-sub-h"><span class="bw-cat-dot" style="background:${s.color}"></span>` +
+      `<span class="bw-cat-name">${escapeHtml(s.label)}</span> <span class="bw-cat-meta muted">${s.rows.length}</span></div>` +
+      table(s.rows, true) +
+      `</div>`,
+    ).join("");
+  };
   const reviewBody = (() => {
     if (allHidden.length < 2) return table(allHidden, true);
     const hb = indexBuckets(allHidden, S.bwGroupMode);
-    if (hb.length < 2) return table(allHidden, true); // a single group → stay flat
+    if (hb.length < 2) return reviewGroupBody(allHidden); // one primary group → still split it inside
     return hb.map((b) =>
       `<details class="bw-cat bw-cat-sub bw-review-cat" data-cat="rv:${escapeHtml(b.key)}" style="--sub-color:${b.color}"${open("rv:" + b.key) ? " open" : ""}>` +
       `<summary class="bw-cat-summary">` +
@@ -7951,7 +7971,7 @@ function renderBwParts() {
       `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
       `<span class="bw-cat-meta muted">${b.rows.length}</span>` +
       `</summary>` +
-      table(b.rows, true) +
+      reviewGroupBody(b.rows) +
       `</details>`,
     ).join("");
   })();
