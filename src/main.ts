@@ -10135,6 +10135,19 @@ function debounceWaRender(): void {
   if (waRenderTimer) clearTimeout(waRenderTimer);
   waRenderTimer = setTimeout(() => { waRenderTimer = null; renderWorkoutAnalysis(); }, 200);
 }
+/** The ONE place a lift leaves a selection (graph OR history — independent scopes).
+ * Mutates the SSOT array, then INSTANTLY drops every on-screen projection of that
+ * lift (its title chip + picked pill) so editing feels immediate, and DEBOUNCES the
+ * heavy analysis/chart re-render so the graph "catches up" once you pause instead of
+ * blocking each edit (CLAUDE.md rule 17 snappy-UI recipe — same idiom as the pill ✕
+ * and data-graphremove paths). Used by the lift-menu Remove and the swipe gesture. */
+function removeLiftFromSelection(name: string, scope: SelScope): void {
+  if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name);
+  else waSelected = waSelected.filter((x) => x !== name);
+  for (const el of document.querySelectorAll<HTMLElement>(`[data-liftmenu="${CSS.escape(name)}"][data-liftscope="${scope}"]`))
+    el.remove();
+  debounceWaRender();
+}
 
 /**
  * Re-render everything a difficulty / scale / note edit affects. renderAll covers
@@ -10507,17 +10520,11 @@ async function init() {
       const scope = menu.dataset.lmscope as SelScope;
       if (act === "info") { closeLiftMenu(); jumpToExerciseInfo(name); return; }
       if (act === "remove") {
-        // Only an explicit Remove strikes the lift out — a red line across its name,
-        // then it actually drops ~0.5s later (tapping the name just opens this menu now;
-        // the cross-out used to fire on every tap, legacy from when a tap = delete).
+        // Instant edit: the chip drops NOW and the heavy graph redraw is debounced so
+        // it catches up on pause (no 500ms block, no synchronous full re-render that
+        // janked the removal). One choke-point so the menu + swipe stay consistent.
         closeLiftMenu();
-        for (const el of document.querySelectorAll<HTMLElement>(`[data-liftmenu="${CSS.escape(name)}"][data-liftscope="${scope}"]`))
-          el.classList.add("is-removing");
-        window.setTimeout(() => {
-          if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name);
-          else waSelected = waSelected.filter((x) => x !== name);
-          deferRender(renderWorkoutAnalysis);
-        }, 500);
+        removeLiftFromSelection(name, scope);
         return;
       }
       if (act === "merged" || act === "separated") {
@@ -10534,6 +10541,61 @@ async function init() {
     }
     if (!menu.contains(t)) closeLiftMenu();
   });
+  // Swipe-RIGHT-to-remove on the selection-title chips (same drop as the menu's ✕
+  // Remove, via the one removeLiftFromSelection choke-point). Only the title chips —
+  // they WRAP (no horizontal scroll to fight); the picked-pill row scrolls sideways so
+  // it's deliberately excluded. touch-action:pan-y (CSS) keeps vertical page-scroll
+  // working while handing horizontal drags to us. Delegated on document so it survives
+  // every re-render. The finger drags the chip right; past a threshold it's removed,
+  // otherwise it snaps back. A claimed swipe eats the trailing synthetic tap so it
+  // doesn't also open the lift menu.
+  const SWIPE_SLOP = 8;     // px of clear horizontal travel before we "claim" the drag
+  const SWIPE_REMOVE = 56;  // px (rightward) needed to commit the removal
+  let swChip: HTMLElement | null = null;
+  let swName = "", swScope: SelScope = "hist";
+  let swX0 = 0, swY0 = 0, swDx = 0, swClaimed = false, swPtr = -1, swEndedAt = 0;
+  const swReset = (snapBack: boolean): void => {
+    if (swChip) {
+      swChip.classList.remove("is-swiping");
+      if (snapBack) { swChip.style.transform = ""; swChip.style.opacity = ""; }
+    }
+    swChip = null; swClaimed = false; swDx = 0; swPtr = -1;
+  };
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button > 0) return; // primary button / touch only
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".wa-title-lift[data-liftmenu][data-liftscope]");
+    if (!chip) return;
+    swChip = chip; swName = chip.dataset.liftmenu!; swScope = chip.dataset.liftscope as SelScope;
+    swX0 = e.clientX; swY0 = e.clientY; swDx = 0; swClaimed = false; swPtr = e.pointerId;
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!swChip || e.pointerId !== swPtr) return;
+    const dx = e.clientX - swX0, dy = e.clientY - swY0;
+    if (!swClaimed) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_SLOP) { swReset(true); return; } // vertical → let the page scroll
+      if (dx <= SWIPE_SLOP) return; // not yet a clear rightward drag
+      swClaimed = true;
+      swChip.classList.add("is-swiping"); // kill the snap-back transition while following the finger
+      try { swChip.setPointerCapture(swPtr); } catch { /* not all engines */ }
+    }
+    swDx = Math.max(0, dx); // rightward only
+    swChip.style.transform = `translateX(${swDx}px)`;
+    swChip.style.opacity = String(Math.max(0.25, 1 - swDx / 140));
+  });
+  const swEnd = (): void => {
+    if (!swChip) return;
+    const claimed = swClaimed, dx = swDx, name = swName, scope = swScope;
+    if (claimed) swEndedAt = Date.now(); // a real swipe happened → eat the trailing tap
+    if (claimed && dx >= SWIPE_REMOVE) { swReset(false); removeLiftFromSelection(name, scope); }
+    else swReset(true); // snap back
+  };
+  document.addEventListener("pointerup", swEnd);
+  document.addEventListener("pointercancel", () => swReset(true));
+  // Capture-phase: swallow the synthetic click that fires right after a committed/partial
+  // swipe so it never reaches the chip's tap handler (which would open the lift menu).
+  document.addEventListener("click", (e) => {
+    if (Date.now() - swEndedAt < 350) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
   // Index "↗" button: jump straight to this lift's workout history (Analysis, single
   // mode — its real logged sets are the example), with it selected on the graph too.
   document.addEventListener("click", (e) => {

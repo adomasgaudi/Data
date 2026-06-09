@@ -3121,7 +3121,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Each lift name is a tappable CHIP — soft background + thin border + small rounding
    (--r-pill, rule 22) so it's obviously clickable on touch (no hover to rely on), not
    bare text. Modest horizontal padding only, so the 2-line clamp height is unchanged. */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+/* touch-action:pan-y — a VERTICAL drag still scrolls the page, but a horizontal drag is
+   handed to JS for swipe-RIGHT-to-remove (the chips wrap, so there's no sideways scroll
+   to fight). The transition animates the snap-back when a swipe doesn't reach threshold. */
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+/* While the finger is dragging the chip we follow it 1:1 — no transition lag. */
+.wa-title-lift.is-swiping { transition: none; will-change: transform; }
 /* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover lifts
    the border to the accent. NO strike-through (legacy from when a tap deleted it). */
 .wa-title-lift:hover { border-color: var(--accent); }
