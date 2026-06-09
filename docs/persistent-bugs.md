@@ -11,6 +11,36 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+---
+
+## PB-8 — Graph jumps vertically when toggling kg ⇄ ×BW
+
+- **Recurrences:** 1 (first log). Same FAMILY as the earlier "graph slides on a control
+  change" fixes (b.2.8.81 bars overflow, b.2.8.85 time axis slides, b.2.8.86 sections
+  collapse) — two code paths computing "the same" axis that drift apart.
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data), Analysis
+  graph, single athlete.
+- **Symptom:** the ×BW (kg ⇄ bodyweight-multiples) toggle below the chart is meant to only
+  relabel the y-axis, not move the points. kg→BW looked fine, but BW→kg shifted everything
+  vertically. (Reported "going to BW works, going back doesn't.")
+- **Root cause:** ×BW (1) divides the left-axis data by bodyweight AND (2) pins the y-axis
+  to `forceLeftRange` (= kg range ÷ bodyweight) so the main athlete shouldn't move. The pin
+  was supposed to equal the kg view ÷ bw, but its TOP PADDING didn't match: the kg auto-fit
+  pads 8% **from zero** (begin-at-zero → `kgMax × 1.08`), while the pin padded 8% of the
+  **data spread** (`(kgMax − kgMin) × 0.08`). When lifts sit high (e.g. 30–65 kg) those
+  differ a lot, so the BW axis ≠ kg axis ÷ bw and the points landed at different heights.
+  Two independent computations of the same axis with mismatched padding.
+- **Root fix (PB-8):** make `forceLeftRange.max` use the SAME pad as the kg view —
+  `(kgMax + kgMax×0.08) / mainBw` — so BW = kg ÷ bw exactly and the toggle never moves the
+  main athlete in either direction. Per-athlete division (each compare series ÷ its OWN
+  bodyweight) is unchanged — that's what makes multi-user overlays comparable, and a single
+  relabeled axis couldn't express it. Fix site: `analyticsGraph.ts` `forceLeftRange`.
+- **Not covered (known):** if you've PANNED/ZOOMED then toggle, the held view doesn't refit
+  so the divided data still shifts under it. Fixing that fully needs ×BW to become a
+  label-only transform (no data division) — rejected here because it can't normalise
+  multiple athletes' differing bodyweights on one axis. If it recurs in the zoomed case,
+  that's the trade-off, not a regression of this fix.
+
 ## PB-7 — Can't edit Tier from an exercise's info card
 
 - **Recurrences:** 2 (b.2.8.63 "fixed" it by converting the multi-toggle to a

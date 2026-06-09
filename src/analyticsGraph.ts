@@ -154,11 +154,10 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
 
   const series: SvgSeries[] = [];
-  // Per-bodyweight: track the RAW kg extent of the left-axis series so the y-axis
-  // can be pinned to (kg range ÷ the MAIN athlete's bodyweight). That keeps the main
-  // athlete's curve exactly where it was in kg (1.0 sits where their bodyweight was)
-  // and lets the other athletes stretch / contract against it.
-  let kgMin = Infinity;
+  // Per-bodyweight: track the RAW kg MAX of the left-axis series so the y-axis can be
+  // pinned to (kg range ÷ the MAIN athlete's bodyweight). That keeps the main athlete's
+  // curve exactly where it was in kg (1.0 sits where their bodyweight was) and lets the
+  // other athletes stretch / contract against it.
   let kgMax = -Infinity;
   let gi = -1;
   for (const g of groups) {
@@ -213,9 +212,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // several athletes overlaid, each series uses its OWN athlete's bodyweight.
       const groupBw = g.user != null && input.bodyweightOf ? input.bodyweightOf(g.user) : input.bodyweight;
       if (input.perBodyweight && m.axis !== "right") {
-        // Note the raw kg spread (all left-axis series) before dividing, for the pin.
+        // Note the raw kg MAX (all left-axis series) before dividing, for the pin.
         for (const p of pts) for (const v of [p.y, p.lo, p.hi, ...(p.bands ?? [])]) {
-          if (v != null && Number.isFinite(v)) { if (v < kgMin) kgMin = v; if (v > kgMax) kgMax = v; }
+          if (v != null && Number.isFinite(v) && v > kgMax) kgMax = v;
         }
       }
       if (input.perBodyweight && groupBw && groupBw > 0 && m.axis !== "right") {
@@ -259,12 +258,15 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     : groups.length > 1 ? ["Exercise", "Type"]
     : metrics.length > 1 ? ["Type"]
     : undefined;
-  // Per-bodyweight: pin the left axis to the kg spread ÷ the MAIN athlete's bodyweight
-  // (same 8% top pad + begin-at-zero as the kg view), so toggling kg ⇄ BW doesn't move
-  // the main athlete — their bodyweight lands where their 1RM-in-kg axis was.
+  // Per-bodyweight: pin the left axis to the kg view ÷ the MAIN athlete's bodyweight, so
+  // toggling kg ⇄ BW never moves the main athlete (1.0 lands where their 1RM-in-kg axis
+  // was). CRITICAL (PB-8): use the SAME top padding the kg auto-fit uses — 8% measured
+  // from ZERO (begin-at-zero), i.e. kgMax × 1.08 — NOT 8% of the data spread (max−min).
+  // The two paddings diverge when the lifts sit high (e.g. 30–65 kg), which is what made
+  // the graph jump on the kg ⇄ BW toggle. Mirroring the kg view makes BW = kg ÷ bw exactly.
   const mainBw = input.bodyweight ?? null;
   const forceLeftRange = (input.perBodyweight && mainBw && mainBw > 0 && Number.isFinite(kgMax))
-    ? { min: 0, max: (kgMax + ((kgMax - kgMin) * 0.08 || 1)) / mainBw }
+    ? { min: 0, max: (kgMax + (kgMax * 0.08 || 1)) / mainBw }
     : undefined;
   const config = {
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
