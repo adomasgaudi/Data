@@ -8215,6 +8215,9 @@ const COACHING_SEED: Record<string, CoachingProfile> = {
     pushSupersets: true,
     planned: [{ muscle: "Adductors", sets: 2, note: "adductor care — keep it light" }],
   },
+  indre: {
+    notes: ["SQ height 19–20 (squat-rack holes)"],
+  },
 };
 const COACHING_KEY = "colosseum.coaching.v1";
 const coachingOverrides: Record<string, CoachingProfile> = loadJsonObject<Record<string, CoachingProfile>>(COACHING_KEY) ?? {};
