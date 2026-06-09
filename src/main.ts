@@ -2137,6 +2137,62 @@ function shapeIconSvg(shape: string): string {
   }
 }
 function closeLiftMenu(): void { document.getElementById("liftMenu")?.remove(); }
+
+/** Custom CSS/HTML modal text prompt — replaces the native window.prompt, which
+ * looks different on every device and ignores our styling (same reasoning as the
+ * banned native <select>). Resolves to the entered string, or null if cancelled. */
+function uiPrompt(message: string, value = "", opts: { ok?: string; cancel?: string } = {}): Promise<string | null> {
+  return new Promise((resolve) => {
+    document.getElementById("uiModal")?.remove();
+    const wrap = document.createElement("div");
+    wrap.id = "uiModal";
+    wrap.className = "ui-modal-back";
+    wrap.innerHTML =
+      `<div class="ui-modal" role="dialog" aria-modal="true">` +
+        `<div class="ui-modal-msg">${escapeHtml(message)}</div>` +
+        `<input class="ui-modal-input" type="text" />` +
+        `<div class="ui-modal-acts">` +
+          `<button type="button" class="ui-modal-cancel">${escapeHtml(opts.cancel ?? "Cancel")}</button>` +
+          `<button type="button" class="ui-modal-ok">${escapeHtml(opts.ok ?? "OK")}</button>` +
+        `</div></div>`;
+    document.body.appendChild(wrap);
+    const input = wrap.querySelector<HTMLInputElement>(".ui-modal-input")!;
+    input.value = value;
+    const done = (v: string | null) => { document.removeEventListener("keydown", onKey, true); wrap.remove(); resolve(v); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); done(null); }
+      else if (e.key === "Enter") { e.preventDefault(); done(input.value); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    wrap.querySelector(".ui-modal-ok")!.addEventListener("click", () => done(input.value));
+    wrap.querySelector(".ui-modal-cancel")!.addEventListener("click", () => done(null));
+    wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) done(null); }); // tap the backdrop = cancel
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+  });
+}
+
+/** Custom CSS/HTML alert — replaces window.alert. Resolves when dismissed. */
+function uiAlert(message: string, opts: { ok?: string } = {}): Promise<void> {
+  return new Promise((resolve) => {
+    document.getElementById("uiModal")?.remove();
+    const wrap = document.createElement("div");
+    wrap.id = "uiModal";
+    wrap.className = "ui-modal-back";
+    wrap.innerHTML =
+      `<div class="ui-modal" role="alertdialog" aria-modal="true">` +
+        `<div class="ui-modal-msg">${escapeHtml(message)}</div>` +
+        `<div class="ui-modal-acts">` +
+          `<button type="button" class="ui-modal-ok">${escapeHtml(opts.ok ?? "OK")}</button>` +
+        `</div></div>`;
+    document.body.appendChild(wrap);
+    const done = () => { document.removeEventListener("keydown", onKey, true); wrap.remove(); resolve(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" || e.key === "Enter") { e.preventDefault(); done(); } };
+    document.addEventListener("keydown", onKey, true);
+    wrap.querySelector(".ui-modal-ok")!.addEventListener("click", done);
+    wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) done(); });
+    requestAnimationFrame(() => wrap.querySelector<HTMLButtonElement>(".ui-modal-ok")!.focus());
+  });
+}
 /** Small popup menu off a selected lift (replaces the inline ⓘ ⊕ ⇄ buttons): Info,
  * Combine, Compare (only the relations it has), Remove. The lift name opens it. */
 function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void {
@@ -2196,12 +2252,14 @@ function toggleUserGroupMember(defName: string, exName: string): void {
 }
 /** Create a NEW user combinable/comparable group, seeded with one lift. Prompts for
  * a name (must be unique). Returns the new name, or null if cancelled / clashed. */
-function createUserGroup(kind: "combine" | "compare", seedEx: string): string | null {
+async function createUserGroup(kind: "combine" | "compare", seedEx: string): Promise<string | null> {
   const fallback = kind === "combine" ? `${seedEx} mix` : `${seedEx} compare`;
-  const name = (window.prompt(`Name the new ${kind === "combine" ? "combinable" : "comparable"} group (it starts with “${seedEx}” — open other lifts to add them):`, fallback) ?? "").trim();
+  const entered = await uiPrompt(`Name the new ${kind === "combine" ? "combinable" : "comparable"} group (it starts with “${seedEx}” — open other lifts to add them):`, fallback);
+  if (entered === null) return null; // cancelled
+  const name = entered.trim();
   if (!name) return null;
   if (selectableExercises(data.records).includes(name) || userExerciseDefs.some((d) => d.name === name)) {
-    window.alert(`“${name}” already exists — pick another name.`);
+    await uiAlert(`“${name}” already exists — pick another name.`);
     return null;
   }
   userExerciseDefs.push({ name, identity: kind === "combine" ? "combined" : "comparison_group", members: [seedEx] });
@@ -5386,14 +5444,16 @@ function renderCombineBar(exName: string, username: string) {
 /** Persist the current drill-in "viewing together" set as a permanent merged
  * lift. Asks for a name (defaults to "<primary> (merged)"), saves a user
  * "combined" def, and selects it so every view shows the one merged lift. */
-function saveCurrentCombine(): void {
+async function saveCurrentCombine(): Promise<void> {
   if (selectedExercise === null || combinedWith.length === 0) return;
   const members = [selectedExercise, ...combinedWith];
   const fallback = `${selectedExercise} (merged)`;
-  const name = (window.prompt("Name for the merged lift:", fallback) ?? "").trim() || fallback;
+  const entered = await uiPrompt("Name for the merged lift:", fallback);
+  if (entered === null) return; // cancelled
+  const name = entered.trim() || fallback;
   // Guard against clashing with an existing lift/def name.
   if (selectableExercises(data.records).includes(name) || userExerciseDefs.some((d) => d.name === name)) {
-    window.alert(`“${name}” already exists — pick another name.`);
+    await uiAlert(`“${name}” already exists — pick another name.`);
     return;
   }
   userExerciseDefs.push({ name, identity: "combined", members });
@@ -8788,8 +8848,10 @@ function rebuildAthleteRosters(select?: string): void {
 
 /** Admin "＋ Add athlete": add a user who isn't in the scraped StrengthLevel data,
  * so you can set their stats and hand-log sets. Saved on device + in the backup. */
-function addManualAthlete(): void {
-  const name = (window.prompt("New athlete's name:") ?? "").trim();
+async function addManualAthlete(): Promise<void> {
+  const entered = await uiPrompt("New athlete's name:");
+  if (entered === null) return; // cancelled
+  const name = entered.trim();
   if (!name) return;
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "user";
   const taken = new Set(rosterUsers().map((u) => u.username));
@@ -8813,7 +8875,7 @@ function setupStatsEdit(): void {
   els.statsEditBody.addEventListener("input", () => recomputeStatsEditLive());
   els.statsEditBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
-    if (t.closest(".se-add")) { addManualAthlete(); return; }
+    if (t.closest(".se-add")) { void addManualAthlete(); return; }
     if (t.closest(".se-save")) saveStatsEdit();
     else if (t.closest(".se-reset")) {
       delete athleteOverrides[statsEditUser];
@@ -10970,8 +11032,10 @@ async function init() {
     // ＋ New: create a new combinable/comparable group seeded with this lift.
     const neu = t.closest<HTMLElement>(".ex-newgroup[data-newgroup]");
     if (neu?.dataset.newgroup && neu.dataset.newgroupEx) {
-      const made = createUserGroup(neu.dataset.newgroup as "combine" | "compare", neu.dataset.newgroupEx);
-      if (made) { populateExercisePicker(); scheduleRender(() => { reopenIndexDetail(neu.dataset.newgroupEx!); refreshPoseViz(); }); }
+      const ex = neu.dataset.newgroupEx;
+      void createUserGroup(neu.dataset.newgroup as "combine" | "compare", ex).then((made) => {
+        if (made) { populateExercisePicker(); scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); }); }
+      });
       return;
     }
     // A YOUR-group chip → add/remove this lift from that user group.
@@ -11382,7 +11446,7 @@ async function init() {
   els.exCombineBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     // Save the current "viewing together" set as a permanent merged lift.
-    if (t.closest(".ex-combine-save")) { saveCurrentCombine(); return; }
+    if (t.closest(".ex-combine-save")) { void saveCurrentCombine(); return; }
     // Toggle the custom "+ combine with…" dropdown.
     const btn = t.closest(".ex-combine-btn");
     if (btn) {

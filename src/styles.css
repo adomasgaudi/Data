@@ -280,6 +280,33 @@ body.on-s-anl .appfoot { display: none; }
 }
 .refresh-check:hover { border-color: var(--accent); color: var(--accent); }
 /* Full-screen overlay "page" (e.g. Data health), opened from Settings. */
+/* Custom CSS/HTML modal (uiPrompt / uiAlert) — replaces native window.prompt /
+   alert so it matches the app's theme on every device (cf. the native <select> ban).
+   Themed via the same tokens, so dark mode works for free. */
+.ui-modal-back {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: rgba(20, 24, 38, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); padding: 1.25rem;
+}
+.ui-modal {
+  width: 100%; max-width: 360px; background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.1rem 0.9rem;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32); display: flex; flex-direction: column; gap: 0.8rem;
+}
+.ui-modal-msg { font-size: 0.95rem; line-height: 1.4; }
+.ui-modal-input {
+  font: inherit; width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-pill);
+}
+.ui-modal-input:focus { outline: none; border-color: var(--accent); }
+.ui-modal-acts { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.ui-modal-ok, .ui-modal-cancel {
+  font: inherit; font-weight: 600; cursor: pointer; padding: 0 0.9rem; min-height: var(--tap-min);
+  border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg); color: var(--text);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ui-modal-ok { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ui-modal-cancel:hover { border-color: var(--accent); color: var(--accent); }
+.ui-modal-ok:hover { filter: brightness(1.08); }
 .overlay-page {
   position: fixed; inset: 0; z-index: 60; background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y;
