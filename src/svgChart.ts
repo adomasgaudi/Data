@@ -105,6 +105,10 @@ export interface SvgSeries {
   outline?: boolean;
   /** Fill opacity 0..1 (e.g. bars you want see-through over other series). Default 1. */
   fillOpacity?: number;
+  /** This series may DRAW but must never widen the x (time) domain — for future
+   * projections (e.g. Predicted Strength) whose tail extends past the real data.
+   * The axis stays anchored to the logged data and the projection is clipped. */
+  noExtendX?: boolean;
   /** Vertical shift for THIS series only, as a fraction of the plot height
    * (+ = up, − = down). A pure visual reposition — moves the whole series (bars
    * move with their baseline) without changing its values; used to lift the
@@ -276,6 +280,16 @@ function xExtent(series: SvgSeries[]) {
   }
   return { xMin, xMax };
 }
+/** The single source of truth for the TIME axis: the extent of all real DATA series,
+ * IGNORING legend visibility and EXCLUDING future-projection overlays (`noExtendX`,
+ * e.g. Predicted Strength). Toggling a series in the legend rescales the VALUE axes
+ * but must never slide the TIME axis — the "volume bars move independently" bug.
+ * Volume bars (bucketed, narrow span) and e1RM lines (per-set, full span)
+ * therefore share one fixed frame instead of each pulling the domain to its own data.
+ * (Compact mode is the one intentional exception — it squeezes to the visible days.) */
+export function dataXExtent(series: SvgSeries[]) {
+  return xExtent(series.filter((s) => !s.noExtendX));
+}
 
 export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): SvgChart {
   let cfg: SvgChartConfig = { ...initial };
@@ -357,7 +371,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
   function resetView() {
     userAdjusted = false; // re-fitting to data → auto-fit re-enabled
-    const xe = xExtent(geomSeries().filter(visible));
+    // TIME axis = the stable extent of ALL real data (visibility-independent), so
+    // toggling a legend entry never slides it (bars stop "moving"). Compact mode is
+    // the deliberate exception: it squeezes to the VISIBLE exercise's training days.
+    const xe = useCompact()
+      ? xExtent(geomSeries().filter(visible))
+      : dataXExtent(geomSeries());
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);

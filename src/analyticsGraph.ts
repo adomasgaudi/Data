@@ -242,6 +242,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           ...(m.axis ? { axis: m.axis } : {}),
           ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
           ...(isVolume && input.config.volumeYShift ? { yShiftFrac: input.config.volumeYShift } : {}),
+          // Predicted Strength projects into the future — let it draw (clipped) but
+          // never let its tail widen the time axis (owner: anchor to real data).
+          ...(m.id === "predicted" ? { noExtendX: true } : {}),
         });
     }
   }
