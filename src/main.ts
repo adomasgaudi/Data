@@ -13579,8 +13579,8 @@ function renderSelector(scope: SelScope): void {
   // Collapse the (often long) exercise-chip picker under a fold so it doesn't fill the
   // screen — the selected lifts stay visible as pills above. Default CLOSED; auto-open
   // while searching (so matches show), and preserve the open state across re-renders.
-  const prevChipsFold = sel.querySelector<HTMLDetailsElement>(".wa-chips-fold");
-  const chipsFoldOpen = waSearchQuery.trim() ? true : prevChipsFold ? prevChipsFold.open : false;
+  const prevChipsFold = sel.querySelector<HTMLElement>(".wa-chips-fold");
+  const chipsFoldOpen = waSearchQuery.trim() ? true : prevChipsFold ? prevChipsFold.classList.contains("is-open") : false;
   // Everything but Group lives in the ⚙ popout now: pick-mode, Select all / Clear,
   // Match, Show missing, the identity toggles and name mode. Its open state MUST
   // survive the re-render every inner toggle triggers — otherwise tapping any option
@@ -13637,14 +13637,22 @@ function renderSelector(scope: SelScope): void {
   // names every plotted lift, so it was redundant.)
   sel.innerHTML =
     `<div class="wa-sel-header">` +
-    `<div class="wa-sel-tools">${groupCtl}${freqCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
+    `<div class="wa-sel-tools">${freqCtl}${selAllToggle}${settingsCog}${trimBtn}</div>` +
     `</div>` +
     selPills +
+    // The group-by selector ("Best lifts ▾") now lives HERE — the picker's header row,
+    // doubling as the collapse toggle (the caret expands/collapses the chip grid). Moved
+    // off the top tools row (owner request) so grouping sits with the exercises it groups.
+    // A manual fold (not <details>) so the group dropdown's own menu isn't clipped by the
+    // fold's rounding and a <select> in a <summary> doesn't fight the toggle.
     (showGrid
-      ? `<details class="wa-chips-fold"${chipsFoldOpen ? " open" : ""}>` +
-        `<summary class="wa-chips-fold-sum">Pick exercises</summary>` +
-        `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` +
-        `</details>`
+      ? `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
+        `<div class="wa-chips-fold-sum">` +
+        `<button type="button" class="wa-pick-toggle" data-chipsfold aria-expanded="${chipsFoldOpen}" title="${chipsFoldOpen ? "Hide the exercise picker" : "Show the exercise picker"}" aria-label="Toggle exercise picker"></button>` +
+        groupCtl +
+        `</div>` +
+        `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"${chipsFoldOpen ? "" : " hidden"}></div>` +
+        `</div>`
       : "");
   if (showGrid) renderWaChipsScope(scope);
   const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
@@ -14846,6 +14854,18 @@ function setupWorkoutAnalysis(): void {
     // data-selscope. Selector actions below operate on that scope's selection.
     const scopeRoot = t.closest<HTMLElement>("[data-selscope]");
     if (scopeRoot) curSelScope = (scopeRoot.dataset.selscope as SelScope) ?? "hist";
+    // Exercise-picker fold toggle (the caret beside the group selector). Toggle in place
+    // (no re-render) so it's instant and keeps the group dropdown's state.
+    const chipsToggle = t.closest<HTMLElement>("[data-chipsfold]");
+    if (chipsToggle) {
+      const fold = chipsToggle.closest<HTMLElement>(".wa-chips-fold");
+      const open = !fold?.classList.contains("is-open");
+      fold?.classList.toggle("is-open", open);
+      const chips = fold?.querySelector<HTMLElement>(".wa-chips-wrap");
+      if (chips) chips.hidden = !open;
+      chipsToggle.setAttribute("aria-expanded", String(open));
+      return;
+    }
     // (Category pills in the top strip are `.wa-cat-pill`s, handled by the
     // document-level pill handler — tap opens that group's floating exercise menu.)
     // A selected-pill ✕ (or a graph big-title name) removes that lift from the selection.
