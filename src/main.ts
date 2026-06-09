@@ -3722,7 +3722,7 @@ const muscleColor = (m: MuscleGroup): string =>
 const DISCIPLINE_COLORS: Record<Discipline, string> = {
   "Strength": "#284e86", Calisthenics: "#2e7d52", Statics: "#5e708a", Mobility: "#1f8a8a",
   Dynamic: "#c0603a", Posture: "#6c4ab0", Cardio: "#a23b3b",
-  Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b",
+  Balance: "#3a7d9b", Parkour: "#8a6d3b", Climbing: "#7a6f9b", Other: "#9aa1ac",
 };
 const disciplineColor = (d: Discipline): string => DISCIPLINE_COLORS[d] ?? "#777";
 // The two "main" disciplines shown at the Index top level; the rest nest under "Other".

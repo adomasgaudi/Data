@@ -678,10 +678,11 @@ export type Discipline =
   | "Cardio"
   | "Balance"
   | "Parkour"
-  | "Climbing";
+  | "Climbing"
+  | "Other";
 export const DISCIPLINES: Discipline[] = [
   "Strength", "Calisthenics", "Statics", "Mobility", "Dynamic", "Posture",
-  "Cardio", "Balance", "Parkour", "Climbing",
+  "Cardio", "Balance", "Parkour", "Climbing", "Other",
 ];
 /** Best-guess primary discipline by keyword; everything loaded falls to
  * Strength (the owner re-tags from there as needed). */
