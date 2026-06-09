@@ -49,7 +49,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.105</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.106</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1069,7 +1069,10 @@
         <!-- The athlete picker (.ath-row) is relocated here — ABOVE the Analysis
              card, at the very top — while the view is open, and returned to
              #tab-athlete on leave. -->
-        <div id="waAthleteHost" class="wa-athlete-top"></div>
+        <div class="wa-athlete-top-row">
+          <div id="waAthleteHost" class="wa-athlete-top"></div>
+          <button type="button" id="waDefaultBtn" class="wa-default-btn" title="Reset to the default view for this athlete: graph = top 5 lifts of the last 3 months, history = all exercises">↺ Default</button>
+        </div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,
              just under the athlete picker and above the Analysis card. -->
         <div id="waStatsHost" class="wa-stats-top"></div>

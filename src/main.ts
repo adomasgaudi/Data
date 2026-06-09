@@ -13357,24 +13357,41 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // out of the clamp to show every name.
   return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span></span>`;
 }
+/** History DEFAULT: every selectable exercise for the current athlete (all groups). */
+function defaultHistorySelection(): string[] {
+  return waSelectorExercises().map((e) => e.name);
+}
+/** Graph DEFAULT: the TOP 5 most-frequently-trained lifts of the LAST 3 MONTHS for the
+ * current athlete (what they're working on now), falling back to the all-time default
+ * if nothing's been logged recently. */
+function defaultGraphSelection(): string[] {
+  const has = new Set(waSelectorExercises().map((e) => e.name));
+  const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+  const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
+  const byFreq = exerciseCountsForUser(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
+  return (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
+}
+/** "Default" button (next to the athlete bar): reset BOTH selections to their defaults
+ * for the CURRENTLY-selected athlete, then re-render. (Normally the selection persists
+ * across athlete switches; this is the explicit "give me the sensible default" reset.) */
+function resetAnalysisToDefault(): void {
+  waSelected = defaultHistorySelection();
+  waGraphSel = defaultGraphSelection();
+  titleExpanded.graph = false;
+  titleExpanded.hist = false;
+  deferRender(renderWorkoutAnalysis);
+}
 function renderWorkoutAnalysis(): void {
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
   // view opens as a real selection (pills shown), not the implicit aggregate.
   if (!analysisSeeded) {
     analysisSeeded = true;
-    // History opens with EVERY exercise (the full catalogue, all groups) — no filter,
-    // whatever group they're from. The GRAPH opens with the TOP 5 most-frequent lifts
-    // of the LAST 3 MONTHS (what you're actually training now) — falling back to the
-    // all-time default if nothing's been logged recently. The two selections are
-    // INDEPENDENT — change either in its own picker.
-    if (waSelected.length === 0) waSelected = waSelectorExercises().map((e) => e.name);
-    if (waGraphSel.length === 0) {
-      const has = new Set(waSelectorExercises().map((e) => e.name));
-      const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
-      const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
-      const byFreq = exerciseCountsForUser(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
-      waGraphSel = (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
-    }
+    // History opens with EVERY exercise (all groups); the GRAPH opens with the TOP 5
+    // most-frequent lifts of the last 3 months. The selection then PERSISTS across
+    // athlete switches (same lifts, the new athlete's data) — the "Default" button by
+    // the athlete bar re-applies these defaults for whoever's selected now.
+    if (waSelected.length === 0) waSelected = defaultHistorySelection();
+    if (waGraphSel.length === 0) waGraphSel = defaultGraphSelection();
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
   const mode = waMode();
@@ -14891,6 +14908,11 @@ function setupWorkoutAnalysis(): void {
       // picker's group / search / show-missing filters (unlike "Select all" = shown only).
       setSelArr(waSelectorExercises().map((e) => e.name));
       debounceWaRender();
+      return;
+    }
+    // "Default" button (next to the athlete bar): reset graph + history to the defaults.
+    if (t.closest(".wa-default-btn")) {
+      resetAnalysisToDefault();
       return;
     }
     // "Trim to N" — drop the graph-selection lifts past the graph's plot budget.

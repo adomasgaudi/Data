@@ -375,6 +375,12 @@ html.kb-open .subtabs { display: none; }
 /* Athlete picker relocated above the Analysis card — give it a little breathing
    room so it doesn't crowd the header or the card. */
 .wa-athlete-top:not(:empty) { margin: 0.4rem 0 0.6rem; }
+/* Athlete bar + the "Default" reset button on one row: the bar takes the room and
+   scrolls; the button sits at the end and never shrinks. */
+.wa-athlete-top-row { display: flex; align-items: center; gap: 0.5rem; }
+.wa-athlete-top-row .wa-athlete-top { flex: 1 1 auto; min-width: 0; }
+.wa-default-btn { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 30px; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 4px 12px; white-space: nowrap; }
+.wa-default-btn:hover { background: var(--accent); color: #fff; }
 .subtab {
   flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; align-items: center; gap: 3px;

@@ -130,6 +130,7 @@ const LT: Record<string, string> = {
   "No sets logged in this period.": "Šiuo laikotarpiu serijų neįrašyta.",
   "Select all": "Pažymėti visus",
   "Deselect all": "Atžymėti visus",
+  "↺ Default": "↺ Numatyta",
   "Hidden lifts": "Paslėpti pratimai",
   "Unhide all": "Atslėpti visus",
   "No hidden lifts.": "Paslėptų pratimų nėra.",
