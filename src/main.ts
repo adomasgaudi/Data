@@ -14774,6 +14774,14 @@ function setupWorkoutAnalysis(): void {
   // beats bubble.) `data-titleexpand` (the "… +N" toggle) is handled here too.
   document.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // Tap OUTSIDE the open Graph-options menu closes it. The tall two-column menu can
+    // cover its own "Graph options" toggle, so tapping the summary again isn't always
+    // reachable — tapping the chart (or anywhere else) now dismisses it. Skipped in
+    // fullscreen, where the settings panel is meant to stay open beside the chart.
+    if (!document.body.classList.contains("wa-graph-full")) {
+      const gFold = document.querySelector<HTMLDetailsElement>(".wa-graph-fold[open]");
+      if (gFold && !gFold.contains(t)) { gFold.open = false; S.waGraphFoldOpen = false; }
+    }
     // A lift's ⓘ in a fold title → open it on the Index page (capture: runs before the
     // <summary> toggles, same PB-5 fix as the name-remove below).
     const tInfo = t.closest<HTMLElement>("[data-titleinfo]");
