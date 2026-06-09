@@ -9818,6 +9818,20 @@ async function init() {
       const name = menu.dataset.lmex!;
       const scope = menu.dataset.lmscope as SelScope;
       if (act === "info") { closeLiftMenu(); jumpToExerciseInfo(name); return; }
+      if (act === "remove") {
+        // Only an explicit Remove strikes the lift out — a red line across its name,
+        // then it actually drops ~0.5s later (tapping the name just opens this menu now;
+        // the cross-out used to fire on every tap, legacy from when a tap = delete).
+        closeLiftMenu();
+        for (const el of document.querySelectorAll<HTMLElement>(`[data-liftmenu="${CSS.escape(name)}"][data-liftscope="${scope}"]`))
+          el.classList.add("is-removing");
+        window.setTimeout(() => {
+          if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name);
+          else waSelected = waSelected.filter((x) => x !== name);
+          deferRender(renderWorkoutAnalysis);
+        }, 500);
+        return;
+      }
       if (act === "merged" || act === "separated") {
         const gid = row.dataset.lmgid;
         const key = act === "merged" ? "combine" : "compare"; // merged = combine slot, separated = compare slot
@@ -9825,7 +9839,6 @@ async function init() {
         if (chosenGroup(scope, name, key)?.id === gid) setLens(scope, name, key, undefined); // tap again = off
         else { setLens(scope, name, key, gid); if (chosenGroup(scope, name, other)?.id === gid) setLens(scope, name, other, undefined); } // one view per group
       }
-      else if (act === "remove") { if (scope === "graph") waGraphSel = waGraphSel.filter((x) => x !== name); else waSelected = waSelected.filter((x) => x !== name); }
       closeLiftMenu();
       deferRender(renderWorkoutAnalysis);
       return;

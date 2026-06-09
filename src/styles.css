@@ -2919,7 +2919,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    the graph). Looks like the title text; hover hints removal (red, struck through).
    The summary's caret / empty space still toggles the fold. */
 .wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; }
-.wa-title-lift:hover { color: #a23b3b; text-decoration: line-through; }
+/* Tapping a lift name opens its menu (Info / Combine / Compare / Remove) — a subtle
+   underline hints it's tappable. NO strike-through (legacy from when a tap deleted it). */
+.wa-title-lift:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+/* Explicit Remove: a red line across the name, fading out, then it's gone ~0.5s later. */
+.wa-title-lift.is-removing, .wa-sel-pill.is-removing {
+  color: #c0392b !important; text-decoration: line-through; text-decoration-color: #c0392b;
+  opacity: 0.45; transition: opacity 0.45s ease;
+}
 .wa-title-sep { color: var(--muted); font-weight: 400; }
 /* Per-lift Combine (⊕) / Compare (⇄) lens toggles, shown on a selected lift that has
    a combinable / comparable group. Small + quiet until on (then accent-filled). */
