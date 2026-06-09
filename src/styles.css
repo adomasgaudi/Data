@@ -3074,10 +3074,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Each plotted lift in the graph title is its own remove button (tap = drop it from
    the graph). Looks like the title text; hover hints removal (red, struck through).
    The summary's caret / empty space still toggles the fold. */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; }
-/* Tapping a lift name opens its menu (Info / Combine / Compare / Remove) — a subtle
-   underline hints it's tappable. NO strike-through (legacy from when a tap deleted it). */
-.wa-title-lift:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+/* Each lift name is a tappable CHIP — soft background + thin border + small rounding
+   (--r-pill, rule 22) so it's obviously clickable on touch (no hover to rely on), not
+   bare text. Modest horizontal padding only, so the 2-line clamp height is unchanged. */
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+/* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover lifts
+   the border to the accent. NO strike-through (legacy from when a tap deleted it). */
+.wa-title-lift:hover { border-color: var(--accent); }
 /* Explicit Remove: a red line across the name, fading out, then it's gone ~0.5s later. */
 .wa-title-lift.is-removing, .wa-sel-pill.is-removing {
   color: #c0392b !important; text-decoration: line-through; text-decoration-color: #c0392b;
