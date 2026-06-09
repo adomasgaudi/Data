@@ -2223,9 +2223,42 @@ let activeMetaFilters: Partial<Record<ExerciseFilterDim, string[]>> = (() => {
     return o && typeof o === "object" ? (o as Partial<Record<ExerciseFilterDim, string[]>>) : {};
   } catch { return {}; }
 })();
-// Which dimension's value pills are currently shown in the app-wide filter UI
-// (display-only; the active values across ALL dims still apply). Default first dim.
-let activeFilterDim: ExerciseFilterDim = "discipline";
+// FREQUENCY is now just another filterable CATEGORY in "The Great Filter" (exact
+// tiers, OR within — pick S and A): its own state so it stacks with the taxonomy
+// dims like any other. (Replaces the old single "tier cutoff" dropdown.)
+const ACTIVE_FREQ_KEY = "colosseum.activeSet.freq.v1";
+let activeFreqTiers = new Set<string>(loadJsonArray(ACTIVE_FREQ_KEY));
+// One-time migration: an old "S+ cutoff" becomes the exact tiers at/above it.
+if (activeCutoff && activeFreqTiers.size === 0) {
+  const min = FREQ_TIERS.find((t) => t.tier === activeCutoff)?.min ?? 0;
+  for (const t of FREQ_TIERS) if (t.min >= min) activeFreqTiers.add(t.tier);
+  activeCutoff = null;
+}
+// "The Great Filter" categories = Frequency + every taxonomy dimension. Picking a
+// category shows its value pills; chosen values become removable chips that AND
+// together (OR within one category) — stack as many as you like (first, second, …).
+type GreatFilterDim = ExerciseFilterDim | "frequency";
+const GREAT_FILTER_DIMS: GreatFilterDim[] = ["frequency", ...FILTER_DIMS];
+const GREAT_FILTER_LABELS: Record<GreatFilterDim, string> = { frequency: "Frequency", ...FILTER_DIM_LABELS };
+// Which category's value pills are currently shown in the filter UI (display-only;
+// the active values across ALL categories still apply). Default = Frequency.
+let activeFilterDim: GreatFilterDim = "frequency";
+/** App-wide set count for an exercise (its frequency basis), summed across members
+ * for a synthetic lift. Cached per synchronous render pass. */
+let _appCountCache: Map<string, number> | null = null;
+function appWideCounts(): Map<string, number> {
+  if (_appCountCache) return _appCountCache;
+  const m = new Map<string, number>();
+  for (const r of data.records) if (r.exerciseName) m.set(r.exerciseName, (m.get(r.exerciseName) ?? 0) + 1);
+  _appCountCache = m;
+  queueMicrotask(() => { _appCountCache = null; });
+  return m;
+}
+function freqTierOf(name: string): string | null {
+  let count = appWideCounts().get(name) ?? 0;
+  if (count === 0) { const mem = syntheticMembers(name); if (mem.length) count = mem.reduce((n, m) => n + (appWideCounts().get(m) ?? 0), 0); }
+  return frequencyTier(count)?.tier ?? null;
+}
 /** The taxonomy filters that are actually active (have ≥1 chosen value). */
 function activeMetaFilterList(): { dim: ExerciseFilterDim; values: string[] }[] {
   return FILTER_DIMS.map((d) => ({ dim: d, values: activeMetaFilters[d] ?? [] })).filter((f) => f.values.length > 0);
@@ -2237,14 +2270,17 @@ let activeSet: Set<string> | null = null;
  * after data loads or any active-set control changes, then re-render. */
 function refreshActiveSet(): void {
   const metaFilters = activeMetaFilterList();
-  if (!activeCutoff && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo && metaFilters.length === 0) {
+  if (activeFreqTiers.size === 0 && activeInclude.size === 0 && activeExclude.size === 0 && !activeSolo && metaFilters.length === 0) {
     activeSet = null; // filter fully off → no filtering at all
     return;
   }
-  // Solo mode shows exactly its set as the base; otherwise the tier cutoff does.
+  // Solo mode shows exactly its set as the base; otherwise ALL logged lifts (frequency
+  // is now a stackable category below, not the base cutoff).
   let base = activeSolo
     ? new Set(activeSolo)
-    : buildActiveExerciseSet(data.records, activeCutoff, [...activeInclude], [...activeExclude], FREQ_TIERS);
+    : buildActiveExerciseSet(data.records, null, [...activeInclude], [...activeExclude], FREQ_TIERS);
+  // Frequency category (exact tiers, OR within): keep lifts whose app-wide tier is chosen.
+  if (activeFreqTiers.size && !activeSolo) base = new Set([...base].filter((n) => { const t = freqTierOf(n); return t !== null && activeFreqTiers.has(t); }));
   // Taxonomy filters narrow the base further (AND across dimensions).
   if (metaFilters.length) base = new Set(filterExercises([...base], metaFilters, waMeta));
   // Manual overrides are the final word: force-in beats every filter, force-out
@@ -2258,6 +2294,7 @@ function refreshActiveSet(): void {
 function saveActiveSet(): void {
   try {
     localStorage.setItem(ACTIVE_CUTOFF_KEY, activeCutoff ?? "none");
+    localStorage.setItem(ACTIVE_FREQ_KEY, JSON.stringify([...activeFreqTiers]));
     localStorage.setItem(ACTIVE_INCLUDE_KEY, JSON.stringify([...activeInclude]));
     localStorage.setItem(ACTIVE_EXCLUDE_KEY, JSON.stringify([...activeExclude]));
     localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
@@ -7438,68 +7475,65 @@ function distinctMetaValues(dim: ExerciseFilterDim): string[] {
 function renderActiveSetBar(totalExercises: number): void {
   const active = activeSet ? activeSet.size : totalExercises;
   const hidden = Math.max(0, totalExercises - active);
-  const opt = (val: string, label: string) =>
-    `<option value="${val}"${(activeCutoff ?? "none") === val ? " selected" : ""}>${label}</option>`;
-  const tierOpts = FREQ_TIERS.map((t) => opt(t.tier, t.label)).join("");
-  // Spell out WHY lifts are hidden (tier / a picked "only these" set / taxonomy
-  // filters / manual overrides) so the filter is never a mystery, and give ONE
-  // obvious escape hatch that turns the whole thing off.
+  // Spell out WHY lifts are hidden (frequency tiers / a picked "only these" set /
+  // taxonomy filters / manual overrides) so the filter is never a mystery, and give
+  // ONE obvious escape hatch that turns the whole thing off.
   let status: string;
   let reset = "";
   if (activeSet) {
     const why: string[] = [];
     if (activeSolo) why.push("a picked “only these” set");
-    if (activeCutoff) why.push(`tier ${activeCutoff}+`);
+    if (activeFreqTiers.size) why.push(`frequency ${[...activeFreqTiers].join("/")}`);
     for (const f of activeMetaFilterList()) why.push(`${FILTER_DIM_LABELS[f.dim].toLowerCase()}: ${f.values.join("/")}`);
     if (activeInclude.size) why.push(`${activeInclude.size} forced-in`);
     if (activeExclude.size) why.push(`${activeExclude.size} forced-out`);
     status =
       `<span class="as-status is-on">Showing ${active} of ${totalExercises} — <strong>${hidden} hidden</strong>` +
       (why.length ? ` <span class="as-why">(${escapeHtml(why.join(" · "))})</span>` : "") + `</span>`;
-    reset = ` <button type="button" class="as-clear as-reset" data-asreset="1">Show all ${totalExercises} (turn filter off)</button>`;
+    reset = ` <button type="button" class="as-clear as-reset" data-asreset="1">Show all ${totalExercises} (clear the filter)</button>`;
   } else {
     status = `<span class="as-status muted">Showing all ${totalExercises} exercises (filter off)</span>`;
   }
-  // ---- Combinable taxonomy filters (AND with the tier) ----
-  // A dimension picker chooses which value pills to show; the pills (OR within the
-  // dim) toggle that dimension's accepted values. All active dims AND together, so
-  // you can keep e.g. only S-tier AND only calisthenics.
-  const dimOpts = FILTER_DIMS
-    .map((d) => `<option value="${d}"${d === activeFilterDim ? " selected" : ""}>${escapeHtml(FILTER_DIM_LABELS[d])}</option>`)
+  // Pick a CATEGORY (Frequency + every taxonomy dim); its value pills toggle that
+  // category's accepted values. Stack as many categories as you like — chips below
+  // show them all and they AND together (OR within one category).
+  const dimOpts = GREAT_FILTER_DIMS
+    .map((d) => `<option value="${d}"${d === activeFilterDim ? " selected" : ""}>${escapeHtml(GREAT_FILTER_LABELS[d])}</option>`)
     .join("");
-  const chosen = new Set(activeMetaFilters[activeFilterDim] ?? []);
-  const valuePills = distinctMetaValues(activeFilterDim)
-    .map((v) => `<button type="button" class="as-fpill${chosen.has(v) ? " is-on" : ""}" data-asfval="${escapeHtml(v)}" aria-pressed="${chosen.has(v)}">${escapeHtml(v)}</button>`)
-    .join("");
+  const valuePills = activeFilterDim === "frequency"
+    ? FREQ_TIERS.map((t) => `<button type="button" class="as-fpill${activeFreqTiers.has(t.tier) ? " is-on" : ""}" data-asfval="${t.tier}" aria-pressed="${activeFreqTiers.has(t.tier)}">${escapeHtml(t.label)}</button>`).join("")
+    : (() => {
+        const chosen = new Set(activeMetaFilters[activeFilterDim as ExerciseFilterDim] ?? []);
+        return distinctMetaValues(activeFilterDim as ExerciseFilterDim)
+          .map((v) => `<button type="button" class="as-fpill${chosen.has(v) ? " is-on" : ""}" data-asfval="${escapeHtml(v)}" aria-pressed="${chosen.has(v)}">${escapeHtml(v)}</button>`)
+          .join("");
+      })();
   const pillsRow = valuePills
     ? `<div class="as-fpills">${valuePills}</div>`
     : `<div class="as-fpills muted as-fnone">no values</div>`;
-  // Active-filter summary chips (across every dimension), each removable.
-  const activeChips = activeMetaFilterList()
+  // Active-filter summary chips (Frequency + every dimension), each removable.
+  const freqChips = [...activeFreqTiers].map((tier) => {
+    const lbl = FREQ_TIERS.find((t) => t.tier === tier)?.label ?? tier;
+    return `<button type="button" class="as-fchip" data-asfclear-dim="frequency" data-asfclear-val="${escapeHtml(tier)}" title="Remove this filter">Frequency: ${escapeHtml(lbl)} ✕</button>`;
+  });
+  const metaChips = activeMetaFilterList()
     .flatMap((f) => f.values.map((v) =>
-      `<button type="button" class="as-fchip" data-asfclear-dim="${f.dim}" data-asfclear-val="${escapeHtml(v)}" title="Remove this filter">${escapeHtml(FILTER_DIM_LABELS[f.dim])}: ${escapeHtml(v)} ✕</button>`))
-    .join("");
-  const activeChipsRow = activeChips
-    ? `<div class="as-fchips">${activeChips}<button type="button" class="as-clear" data-asfclear-all="1">clear filters</button></div>`
+      `<button type="button" class="as-fchip" data-asfclear-dim="${f.dim}" data-asfclear-val="${escapeHtml(v)}" title="Remove this filter">${escapeHtml(FILTER_DIM_LABELS[f.dim])}: ${escapeHtml(v)} ✕</button>`));
+  const allChips = [...freqChips, ...metaChips].join("");
+  const activeChipsRow = allChips
+    ? `<div class="as-fchips">${allChips}<button type="button" class="as-clear" data-asfclear-all="1">clear all</button></div>`
     : "";
   els.activeSetBar.innerHTML =
-    `<label class="as-label">Show app-wide ` +
-    `<select id="activeCutoff" class="subtle-select">${opt("none", "All exercises")}${tierOpts}</select>` +
-    `</label> ${status}${reset}` +
-    `<div class="as-filter-row"><label class="as-label">Filter ` +
+    `<div class="as-title">The Great Filter</div>` +
+    `<div class="as-statusrow">${status}${reset}</div>` +
+    `<div class="as-filter-row"><label class="as-label">Filter by ` +
     `<select id="activeFilterDim" class="subtle-select">${dimOpts}</select></label>${pillsRow}</div>` +
     activeChipsRow +
-    `<p class="as-hint muted">Restrict the whole app (every list, graph, leaderboard). Three layers stack (AND): a frequency tier, any taxonomy filters below, and a group's “only these” button. “Show all” clears every layer at once.</p>`;
+    `<p class="as-hint muted">Restricts the WHOLE app — every list, graph, leaderboard, and the Index below. Pick a category, tap values to keep only those, then stack as many categories as you like (they AND together; any value within one category passes). “Show all” clears every filter at once.</p>`;
 }
 
 /** Cutoff dropdown changed: save + re-render the whole app. */
-function onActiveCutoffChange(value: string): void {
-  activeCutoff = value === "none" ? null : value;
-  saveActiveSet();
-  scheduleRender();
-}
-
-/** Clear all manual include/exclude overrides (keeps the tier cutoff). */
+/** Clear all manual include/exclude overrides (keeps the category filters). */
 function clearActiveOverrides(): void {
   activeInclude = new Set();
   activeExclude = new Set();
@@ -7513,6 +7547,7 @@ function clearActiveOverrides(): void {
  * The one escape hatch when "where did my lift go?". */
 function resetActiveSetAll(): void {
   activeCutoff = null;
+  activeFreqTiers = new Set();
   activeInclude = new Set();
   activeExclude = new Set();
   activeSolo = null;
@@ -7530,19 +7565,24 @@ function rerenderActiveSetBar(): void {
 
 /** Toggle one taxonomy value for a dimension in the app-wide filter (OR within the
  * dim, AND across dims), then re-apply app-wide. */
-function toggleActiveMetaValue(dim: ExerciseFilterDim, value: string): void {
-  const cur = new Set(activeMetaFilters[dim] ?? []);
-  if (cur.has(value)) cur.delete(value);
-  else cur.add(value);
-  if (cur.size) activeMetaFilters[dim] = [...cur];
-  else delete activeMetaFilters[dim];
+function toggleActiveMetaValue(dim: GreatFilterDim, value: string): void {
+  if (dim === "frequency") {
+    if (activeFreqTiers.has(value)) activeFreqTiers.delete(value); else activeFreqTiers.add(value);
+  } else {
+    const cur = new Set(activeMetaFilters[dim] ?? []);
+    if (cur.has(value)) cur.delete(value);
+    else cur.add(value);
+    if (cur.size) activeMetaFilters[dim] = [...cur];
+    else delete activeMetaFilters[dim];
+  }
   saveActiveSet();
   scheduleRender();
 }
 
-/** Clear every app-wide taxonomy filter (keeps the tier cutoff + overrides). */
+/** Clear every app-wide category filter — Frequency + taxonomy (keeps overrides). */
 function clearActiveMetaFilters(): void {
   activeMetaFilters = {};
+  activeFreqTiers = new Set();
   saveActiveSet();
   scheduleRender();
 }
@@ -7599,7 +7639,7 @@ function renderBwParts() {
   // Most-trained first (by set count), then alphabetical - kept inside each group.
   rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
-  els.bwTitle.textContent = "Exercises";
+  els.bwTitle.textContent = "Index";
   renderActiveSetBar(rows.length);
   renderBwGroupBar();
 
@@ -10924,12 +10964,10 @@ async function init() {
   }, true);
   // App-wide active-set controls (Index): tier cutoff dropdown + clear-overrides.
   els.activeSetBar.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeCutoff");
-    if (sel) { onActiveCutoffChange(sel.value); return; }
-    // Taxonomy-filter dimension picker → just swap which value pills show (no
-    // filter change, so re-render the bar in place rather than the whole app).
+    // Category picker → just swap which value pills show (no filter change, so
+    // re-render the bar in place rather than the whole app).
     const dimSel = (e.target as HTMLElement).closest<HTMLSelectElement>("#activeFilterDim");
-    if (dimSel) { activeFilterDim = dimSel.value as ExerciseFilterDim; rerenderActiveSetBar(); return; }
+    if (dimSel) { activeFilterDim = dimSel.value as GreatFilterDim; rerenderActiveSetBar(); return; }
   });
   els.activeSetBar.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -10941,7 +10979,7 @@ async function init() {
     // Remove one active filter chip.
     const chip = t.closest<HTMLElement>("[data-asfclear-dim]");
     if (chip?.dataset.asfclearDim && chip.dataset.asfclearVal !== undefined) {
-      toggleActiveMetaValue(chip.dataset.asfclearDim as ExerciseFilterDim, chip.dataset.asfclearVal);
+      toggleActiveMetaValue(chip.dataset.asfclearDim as GreatFilterDim, chip.dataset.asfclearVal);
       return;
     }
     if (t.closest("[data-asfclear-all]")) { clearActiveMetaFilters(); return; }

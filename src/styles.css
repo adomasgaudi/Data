@@ -2632,6 +2632,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
 /* App-wide active-set control bar on the Index page. */
 .active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.active-set-bar .as-title { font-size: 1.05rem; font-weight: 800; color: var(--accent); margin: 0 0 0.4rem; letter-spacing: 0.01em; }
+.active-set-bar .as-statusrow { margin: 0 0 0.2rem; }
+.active-set-bar .as-statusrow .as-status { margin-left: 0; }
 .active-set-bar .as-label { font-size: 0.85rem; font-weight: 600; }
 .active-set-bar .as-status { margin-left: 0.5rem; font-size: 0.82rem; }
 .active-set-bar .as-status.is-on { color: var(--accent); font-weight: 700; }
