@@ -2700,8 +2700,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-filt-toggle.is-only { border-color: var(--accent); color: #fff; background: var(--accent); }
 .bw-filt-toggle.is-hide { border-color: var(--muted); color: var(--text); background: var(--accent-soft); }
 /* Strength sub-grouping: the muscle/function picker + the nested sub-groups. */
-.bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; }
-.bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
+.bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; display: flex; align-items: center; gap: 6px; }
+/* "auto" tag by the sub-group picker: this group was auto-organized because it's large. */
+.bw-sub-auto { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 5px; }
+/* A coloured left edge ties each sub-section to its dot colour (the "grouped by colour"
+   the owner asked for), so a big group reads as a stack of colour-coded chunks. */
+.bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-left: 3px solid var(--sub-color, var(--line)); border-radius: 0; margin: 0 0 0 0.5rem; }
 .bw-cat > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 .bw-cat-summary::-webkit-details-marker { display: none; }
 .bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }

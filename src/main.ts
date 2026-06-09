@@ -3576,6 +3576,10 @@ const INDEX_GROUP_MODES: { mode: IndexGroupMode; label: string }[] = [
   { mode: "combinable", label: "Combinable" },
   { mode: "comparable", label: "Comparable" },
 ];
+// A top-level Index group bigger than this auto-organizes into collapsed, colour-coded
+// sub-sections (a navigable table-of-contents) so you never scan a flat 100-row list —
+// see the per-group "Sub-group by" default in renderBwParts. Small groups stay flat.
+const IDX_AUTO_SUB_THRESHOLD = 20;
 // Fine muscle groups in display order, with a colour (legs/arms split off the
 // CATEGORY_COLORS shades; the rest reuse them).
 const INDEX_MUSCLES: MuscleGroup[] = [
@@ -7819,21 +7823,34 @@ function renderBwParts() {
   // Per-group sub-grouping: each TOP-LEVEL group can be sliced further by another
   // dimension (remembered per group). Strength still defaults to muscle-group.
   const subModeKey = (key: string) => `${S.bwGroupMode}:${key}`;
-  const subModeFor = (key: string): string =>
-    idxSubMode[subModeKey(key)] ?? (S.bwGroupMode === "discipline" && key === "Strength" ? "muscleGroup" : "none");
-  const subSelHtml = (key: string): string => {
-    const cur = subModeFor(key);
+  // Big groups auto-organize so you never read a flat 100-row list: with NO explicit
+  // per-group choice, a group over the threshold is sliced by MUSCLE (the natural
+  // legs/chest/back split) — or, when you're ALREADY grouping by muscle, by DISCIPLINE
+  // (strength vs calisthenics). Small groups stay flat. An explicit pick (incl. a sticky
+  // "None") always wins — see onBwInputChange, which now persists "none" to override this.
+  const autoSubMode = (rowCount: number): IndexGroupMode | "none" =>
+    rowCount > IDX_AUTO_SUB_THRESHOLD ? (S.bwGroupMode === "muscleGroup" ? "discipline" : "muscleGroup") : "none";
+  const subModeFor = (key: string, rowCount: number): string =>
+    idxSubMode[subModeKey(key)] ?? autoSubMode(rowCount);
+  const subSelHtml = (key: string, rowCount: number): string => {
+    const explicit = idxSubMode[subModeKey(key)];
+    const cur = explicit ?? autoSubMode(rowCount);
+    const auto = explicit === undefined && cur !== "none"; // came from the size default, not a user pick
     const opts = `<option value="none"${cur === "none" ? " selected" : ""}>None</option>` +
       INDEX_GROUP_MODES.filter((m) => m.mode !== S.bwGroupMode)
         .map((m) => `<option value="${m.mode}"${cur === m.mode ? " selected" : ""}>${escapeHtml(m.label)}</option>`).join("");
-    return `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select" data-subkey="${escapeHtml(subModeKey(key))}">${opts}</select></div>`;
+    return `<div class="bw-substrat-bar">Sub-group by <select class="bw-substrat subtle-select" data-subkey="${escapeHtml(subModeKey(key))}">${opts}</select>` +
+      (auto ? `<span class="bw-sub-auto" title="Auto-organised because this group is large — tap the menu to change">auto</span>` : "") +
+      `</div>`;
   };
   // One group's collapsible <details> (coloured title + a "Sub-group by" selector, then
   // either its exercise table OR — when a sub-mode is chosen — nested sub-groups). The
   // active-set filter splits the flat table: active lifts stay; the rest go under "Show
   // hidden". `sub` = this is already a nested sub-group (no further nesting / selector).
   const bucketHtml = (b: IndexBucket, sub = false): string => {
-    const sm = sub ? "none" : subModeFor(b.key);
+    let sm = sub ? "none" : subModeFor(b.key, b.rows.length);
+    // Don't add a pointless single sub-section: if the split yields <2 buckets, stay flat.
+    if (sm !== "none" && indexBuckets(b.rows, sm as IndexGroupMode).length < 2) sm = "none";
     const shown = activeSet ? b.rows.filter((r) => activeSet!.has(r.name)) : b.rows;
     const hidden = activeSet ? b.rows.filter((r) => !activeSet!.has(r.name)) : [];
     const meta = activeSet
@@ -7849,14 +7866,14 @@ function renderBwParts() {
       ? indexBuckets(b.rows, sm as IndexGroupMode).map((s) => bucketHtml(s, true)).join("")
       : flatBody;
     return (
-      `<details class="bw-cat${sub ? " bw-cat-sub" : ""}" data-cat="${escapeHtml(b.key)}"${open(b.key) ? " open" : ""}>` +
+      `<details class="bw-cat${sub ? " bw-cat-sub" : ""}" data-cat="${escapeHtml(b.key)}"${sub ? ` style="--sub-color:${b.color}"` : ""}${open(b.key) ? " open" : ""}>` +
       `<summary class="bw-cat-summary">` +
       `<span class="bw-cat-dot" style="background:${b.color}"></span>` +
       `<span class="bw-cat-name">${escapeHtml(b.label)}</span>` +
       `<span class="bw-cat-meta muted">${meta}</span>` +
       groupFilterToggle(b.rows.map((r) => r.name)) +
       `</summary>` +
-      (sub ? "" : subSelHtml(b.key)) +
+      (sub ? "" : subSelHtml(b.key, b.rows.length)) +
       body +
       `</details>`
     );
@@ -9321,7 +9338,9 @@ function onBwInputChange(e: Event) {
     const key = (input as HTMLElement).dataset.subkey;
     if (key) {
       const v = (input as HTMLSelectElement).value;
-      if (v === "none") delete idxSubMode[key]; else idxSubMode[key] = v;
+      // Store EVERY explicit pick, incl. "none" — a user choice must override the
+      // size-based auto sub-grouping (deleting "none" would let the auto-default win back).
+      idxSubMode[key] = v;
       saveIdxSubMode();
       renderBwParts();
     }
