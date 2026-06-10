@@ -108,6 +108,21 @@ export const FAMILIES: Record<string, FamilyDef> = {
     },
     defaults: { band: "none" },
   },
+  RCSIDEBEND: {
+    // Roman-chair (45° hyperextension bench) SIDE BEND. The owner logs four variation
+    // attributes per set: the bench HEIGHT notch (−1 … 8), the back-pad ANGLE (1 … 5),
+    // whether it's the ADDUCTOR-focused or the FULL side bend, and the RANGE OF MOTION as
+    // cm of torso drop measured from the ground (0cm = to the ground / deepest; +cm =
+    // shorter range, raised, easier). All factors are PLACEHOLDERS (×1 — they CAPTURE the
+    // attribute without scaling yet); calibrate the numbers in ⚙ Difficulty multipliers.
+    dims: {
+      height: { "-1": 1.0, "0": 1.0, "1": 1.0, "2": 1.0, "3": 1.0, "4": 1.0, "5": 1.0, "6": 1.0, "7": 1.0, "8": 1.0 },
+      angle: { "1": 1.0, "2": 1.0, "3": 1.0, "4": 1.0, "5": 1.0 },
+      position: { full: 1.0, adductor: 1.0 },
+      rom: { "0cm": 1.0, "+5cm": 1.0, "+10cm": 1.0, "+15cm": 1.0, "+20cm": 1.0, "+25cm": 1.0, "+30cm": 1.0 },
+    },
+    defaults: { height: "0", angle: "1", position: "full", rom: "0cm" },
+  },
 };
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
@@ -198,6 +213,14 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "guma 6": { band: "6" },
     guma: { band: "5" },
   },
+  RCSIDEBEND: {
+    // Free-text note hints for the side-bend. Height/angle/ROM are usually set in the
+    // per-set editor (no common note word), but the position focus shows up in notes.
+    adductor: { position: "adductor" },
+    adduktor: { position: "adductor" }, // LT spelling
+    "full bend": { position: "full" },
+    full: { position: "full" },
+  },
 };
 
 /** The bundled config (passed by default to the resolver; callers may pass their
@@ -205,7 +228,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 12;
+export const CONFIG_VERSION = 13;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -226,6 +249,7 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Pull Ups": "PULLUP",
   "Chin Up": "PULLUP",
   "Chin Ups": "PULLUP",
+  "Roman Chair Side Bend": "RCSIDEBEND",
 };
 
 export function familyOf(
