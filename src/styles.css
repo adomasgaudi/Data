@@ -1283,6 +1283,16 @@ main { padding-bottom: 5rem; }
 .rm-col-input::-webkit-outer-spin-button,
 .rm-col-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .rm-col-input { -moz-appearance: textfield; }
+/* Detail-table "1RM" column header: an editable rep input + the "RM" suffix. */
+.rm-head { display: inline-flex; align-items: center; gap: 1px; white-space: nowrap; cursor: text; font-weight: 700; }
+.rm-head-input {
+  width: 1.7em; text-align: right; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--panel); color: var(--text); font: inherit; font-size: inherit; font-weight: 700; padding: 1px 2px;
+}
+.rm-head-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.rm-head-input::-webkit-outer-spin-button,
+.rm-head-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.rm-head-input { -moz-appearance: textfield; }
 .tier-S { background: #b8902f; }
 .tier-A { background: #284e86; }
 .tier-B { background: #2e7d52; }

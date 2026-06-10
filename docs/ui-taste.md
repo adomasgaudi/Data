@@ -143,6 +143,13 @@ yourself.") Default bias: encode info into what's already there before adding ch
 Append one line per notable UI call (newest first): `vX.Y.Z — [✅ accepted | ✎ adjusted |
 ✗ declined] — the choice — owner's reaction / what I learned`. Update the verdict when the
 owner reacts on the live site (rule 19: I can't see it, so these start UNCONFIRMED).
+- **b.2.8.x — (proposed, unconfirmed)** — `#ui` make the detail-table "1RM" column header an
+  editable rep INPUT that drives the golden column to show that X-rep max (from each 1RM).
+  Form call: honoured the owner's literal "input" over the doc's "toggles only" because this
+  is a genuine NUMERIC entry (any 1–20 reps), where a cycling pill would need many taps —
+  the taste rule is for mutually-exclusive sets / booleans, not free numbers. Reach-2 (lives
+  in the expanded table header, its own family). Reused the existing `xrmReps` so the ⚙
+  cycle pill and this header stay one setting. Awaiting verdict.
 - **b.2.8.x — (proposed, unconfirmed)** — `#ui add info to the tag UI`: chose to COLOUR-encode
   the set ×difficulty tag by direction (harder ×>1 = gold/warm, easier ×<1 = blue/cool)
   rather than add text or a widget — uses "colour instead of a tag" + "separate

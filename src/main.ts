@@ -6617,11 +6617,17 @@ function setListHtml(setsAsc: readonly SetRecord[]): string {
 // load liftable for X reps, derived from the 1RM via the rep formula — so you can read
 // off working weights (5RM, 8RM…) straight from the history. 1 = the 1RM itself.
 const XRM_CYCLE = [1, 2, 3, 5, 8, 10, 12];
-let xrmReps = (() => { const n = parseInt(localStorage.getItem("colosseum.xrmReps") ?? "1", 10); return XRM_CYCLE.includes(n) ? n : 1; })();
+// The rep-max shown in the golden "1RM" column / best-RM number: 1 = the 1RM itself,
+// higher = that-many-rep max computed FROM the 1RM. Set via the ⚙ cycle pill OR by
+// typing in the detail table's column header (any 1–20).
+let xrmReps = (() => { const n = parseInt(localStorage.getItem("colosseum.xrmReps") ?? "1", 10); return Number.isFinite(n) && n >= 1 && n <= 20 ? n : 1; })();
+function setXrmReps(n: number): void {
+  xrmReps = Math.min(20, Math.max(1, Math.round(n) || 1));
+  try { localStorage.setItem("colosseum.xrmReps", String(xrmReps)); } catch { /* ignore */ }
+}
 function cycleXrmReps(): void {
   const i = XRM_CYCLE.indexOf(xrmReps);
-  xrmReps = XRM_CYCLE[(i + 1) % XRM_CYCLE.length]!;
-  try { localStorage.setItem("colosseum.xrmReps", String(xrmReps)); } catch { /* ignore */ }
+  setXrmReps(XRM_CYCLE[(i + 1) % XRM_CYCLE.length]!);
 }
 /** Inner HTML for a golden best-RM number: the 1RM by default, else the X-RM (load for
  * `xrmReps` reps from the 1RM), with the rep count as the superscript. */
@@ -7137,10 +7143,10 @@ function workoutGroupHtml(group: WorkoutGroup): string {
     hiddenRow =
       `<tr class="set-ex-row wo-hidden-exp-host"><td colspan="5">` +
       `<button type="button" class="wo-hidden-daybtn" data-woshowexp data-hlabel="${lbl}" aria-expanded="false" title="Show the ${hl.exercises.length} lift${hl.exercises.length === 1 ? "" : "s"} the Index filter hides here (just this session)">hidden ${lbl}</button>` +
-      `<div class="wo-hidden-exp" hidden><table class="data-table detail-table">${SETS_HEAD}<tbody>${hiddenBody}</tbody></table></div>` +
+      `<div class="wo-hidden-exp" hidden><table class="data-table detail-table">${setsHead()}<tbody>${hiddenBody}</tbody></table></div>` +
       `</td></tr>`;
   }
-  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}${addExRow}${hiddenRow}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${body}${addExRow}${hiddenRow}</tbody></table>`;
 }
 
 // ---- Shared expand/collapse helpers ----
@@ -7225,8 +7231,17 @@ const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): 
 // and the collapsible-note layout therefore apply to both views; change here
 // and you change both. The note toggle is handled by toggleSetNote(), wired
 // into onWorkoutRowClick and onExerciseRowClick.
-const SETS_HEAD =
-  `<thead><tr><th class="num">W</th><th class="num">1RM</th><th class="num">Vol</th><th class="num" title="Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. High = the set was easy (many left); ~0 = near failure. Tap a number to see the maths.">pRIR</th><th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
+// The "1RM" column header is an editable rep-max INPUT: type a rep count (1 = 1RM, 2 =
+// 2RM, …) and the whole golden column switches to that X-rep max, computed from each
+// set's 1RM. So it's a function (reads the live xrmReps), not a const.
+function setsHead(): string {
+  return `<thead><tr><th class="num">W</th>` +
+    `<th class="num"><label class="rm-head" title="Rep-max shown in this column — type how many reps: 1 = the 1RM, higher = that-many-rep max (computed from the 1RM).">` +
+    `<input type="number" class="rm-head-input" min="1" max="20" inputmode="numeric" value="${xrmReps}" aria-label="Rep max (reps)" />RM</label></th>` +
+    `<th class="num">Vol</th>` +
+    `<th class="num" title="Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. High = the set was easy (many left); ~0 = near failure. Tap a number to see the maths.">pRIR</th>` +
+    `<th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
+}
 
 
 /**
@@ -7345,12 +7360,14 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       ? "—"
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
   const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, s.notes ?? "")].filter(Boolean).join(" · ");
-  // The 1RM is, by definition, a weight done for ONE rep — so show it as
-  // value¹ (matching the weight column's weight^reps), making that explicit.
+  // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
+  // load for X reps, computed from this set's 1RM. Shown as value^X (matching the weight
+  // column's weight^reps). The reps come from the header, so the whole column re-reads.
+  const rmShown = e1rm === null ? null : (xrmReps <= 1 ? e1rm : weightForReps(e1rm, xrmReps, formula));
   const e1rmCell =
-    e1rm === null
+    rmShown === null
       ? "—"
-      : `<button type="button" class="e1rm-btn" title="Estimated 1RM — the weight you could do for 1 rep. Tap for the formula.">${fmt(e1rm)}<sup class="onerm-sup">1</sup></button>`;
+      : `<button type="button" class="e1rm-btn" title="Estimated ${xrmReps}RM — the weight you could do for ${xrmReps} rep${xrmReps === 1 ? "" : "s"}${xrmReps > 1 ? " (from the 1RM)" : ""}. Tap for the formula.">${fmt(rmShown)}<sup class="onerm-sup">${xrmReps}</sup></button>`;
   const sid = setId(s);
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.
@@ -7811,7 +7828,7 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
     return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
   }).join("");
-  return `<table class="data-table detail-table">${SETS_HEAD}<tbody>${body}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${body}</tbody></table>`;
 }
 
 /** Best / latest / trend summary line for an exercise's day-by-day 1RM series.
@@ -11702,6 +11719,16 @@ async function init() {
     if (exercisesTab === "list" && selectedExercise === null) renderExercisesPage();
   });
   els.workoutsTable.addEventListener("change", onSetEditInput); // per-set edits in the Workouts sets tables
+  // Detail-table "1RM" column header is an editable rep-max input — typing a rep count
+  // switches the whole golden column to that X-rep max (computed from each set's 1RM).
+  // Global (shared with the ⚙ cycle pill); covers the Workouts AND Analysis detail tables.
+  document.addEventListener("change", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-head-input");
+    if (!inp) return;
+    setXrmReps(Number(inp.value));
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  });
   // Category picker bar: tap a category chip to show/hide it in the list.
   els.exCatBar.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-cat-chip");
