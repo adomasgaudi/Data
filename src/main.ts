@@ -429,19 +429,19 @@ function setViewMode(mode: ViewMode) {
 }
 
 /** The version · SP line (.title-ver) sits under the title in ADMIN view, but in a
- * user / spectator view (incl. an admin previewing them) it's tucked under the ⚙
- * settings button instead — meta info out of the way for non-admin views. */
+ * user / spectator view (incl. an admin previewing them) it moves INSIDE the ⚙
+ * settings menu — meta info fully out of the way on the views athletes use. */
 function placeVersionLine(): void {
   const ver = document.querySelector<HTMLElement>(".title-ver");
   const titleBlock = document.querySelector<HTMLElement>(".topbar-title");
-  const rightBlock = document.querySelector<HTMLElement>(".topbar-right");
-  if (!ver || !titleBlock || !rightBlock) return;
-  if (viewMode === "admin") {
+  const panel = document.getElementById("settingsPanel");
+  if (!ver || !titleBlock) return;
+  ver.classList.remove("title-ver--right", "title-ver--menu");
+  if (viewMode === "admin" || !panel) {
     titleBlock.appendChild(ver); // back under the title (after .title-row)
-    ver.classList.remove("title-ver--right");
   } else {
-    rightBlock.appendChild(ver); // a second line under the top-right buttons
-    ver.classList.add("title-ver--right");
+    panel.appendChild(ver); // a footer line inside the settings cog dropdown
+    ver.classList.add("title-ver--menu");
   }
 }
 
