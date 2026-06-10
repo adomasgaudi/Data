@@ -3301,6 +3301,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    double heading (the selector's ⚙ cog, a sibling of that title, stays). */
 .wa-fold { border-bottom: 1px solid var(--line); position: relative; }
 .wa-fold:last-of-type { border-bottom: none; }
+/* Card-fold: a bordered white card around a section (the Graph) so it reads as one
+   unit and its open/closed state is obvious — not just dividers on the flat page. */
+.wa-card-fold { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 0 0.7rem; margin: 0.7rem 0; box-shadow: 0 1px 3px rgba(20, 24, 38, 0.05); }
+.wa-card-fold[open] { padding-bottom: 0.55rem; }
 .wa-fold > summary.wa-fold-sum {
   cursor: pointer; list-style: none; user-select: none;
   padding: 0.6rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text);
