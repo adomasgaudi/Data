@@ -6504,7 +6504,7 @@ function setDisplay(raw: SetRecord): string {
     const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
     return bw
       ? `${chips}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
-      : `${chips}${wr(s.weight, s.reps)}<span class="wo-scale"> ×${Math.round(scale * 100) / 100}</span>`;
+      : `${chips}${wr(s.weight, s.reps)}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>`;
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a

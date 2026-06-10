@@ -1642,7 +1642,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-ex-body { min-width: 0; display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
-.wo-scale { font-weight: 700; color: var(--accent); } /* multiplier in blue (workout history) */
+/* Difficulty-multiplier tag (×1.3): a SMALL distinct pill matching the handstand
+   variation tags (.wo-var-chip), so it reads as a tag — not another blue number. */
+.wo-scale {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); border-radius: 4px;
+  padding: 0 4px; line-height: 1.5; vertical-align: middle; margin: 0 1px 0 3px;
+}
+.wo-uncmp { color: var(--muted); background: var(--line); } /* "UN" tag — muted, not blue */
 /* 1RM derivation — a readable, math-paper-style breakdown (one step per line). */
 .rm-derive { font-family: Georgia, "Times New Roman", serif; font-size: 0.82rem; color: var(--text); margin: 0.2rem 0; }
 .rm-step { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.12rem 0; border-bottom: 1px dotted var(--line); }
