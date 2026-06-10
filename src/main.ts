@@ -13043,6 +13043,15 @@ function onInlineAddGo(form: HTMLElement) {
   if (note && chosenDims.length) for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, note, dim, lvl);
   saveManual();
   mergeManualSets();
+  // You just logged a set — GUARANTEE the lift is visible, so "I added a set but don't see
+  // it" can't happen. The history is both Index-filtered (activeSet) and selection-scoped
+  // (scopeWorkoutGroups → waSelected): un-hide the lift if the app-wide filter hides it, and
+  // add it to the selection if it's scoped out (e.g. a brand-new exercise not in "all").
+  if (activeSet && !activeSet.has(exerciseName)) {
+    activeInclude.add(exerciseName); activeExclude.delete(exerciseName);
+    saveActiveSet(); refreshActiveSet();
+  }
+  if (waSelected.length && !waSelected.includes(exerciseName)) waSelected = [...waSelected, exerciseName];
   // Which weeks/days are expanded right now — reopen them after the rebuild.
   const openDates = new Set(
     Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
