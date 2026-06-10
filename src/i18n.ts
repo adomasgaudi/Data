@@ -41,6 +41,8 @@ const LT: Record<string, string> = {
   "Guide": "Vadovas",
   "Settings": "Nustatymai",
   // ---- "More" menu ----
+  "Clients": "Klientai",
+  "Coach": "Treneris",
   "Group view": "Grupių rodinys",
   "Stats view": "Statistikos rodinys",
   "Add a set": "Pridėti seriją",
