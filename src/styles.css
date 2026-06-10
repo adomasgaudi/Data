@@ -3351,6 +3351,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Reserve room at the right edge ONLY when the Pick tab is present, so the inline ✕ / ≈ /
    names never slide UNDER it. (When there's no selection there's no tab and no reserve.) */
 .wa-seltitle-box.has-pick { padding-right: 2.1rem; }
+/* Collapsed GRAPH fold: show "Graph" big instead of the picked exercise names (the
+   lifts are only relevant once the chart is open). CSS-toggled on the fold's [open]. */
+.wa-graph-closed { display: none; font-weight: 700; color: var(--accent); }
+.wa-fold:not([open]) #waGraphSummary .wa-graph-closed { display: inline-block; }
+.wa-fold:not([open]) #waGraphSummary .wa-seltitle-box { display: none; }
 .wa-seltitle-box.is-expanded {
   min-height: 0;
 }

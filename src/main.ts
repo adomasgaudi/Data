@@ -14583,7 +14583,9 @@ function renderWorkoutAnalysis(): void {
   if (graphSummary) {
     // Title = a count badge + the first 5 lift names (each a button that REMOVES it
     // from the graph — see the data-graphremove handler) + "… +N" when there are more.
-    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : liftSelectionTitle(waGraphSel, "graph");
+    // A "Graph" label rides along, shown by CSS ONLY when the fold is COLLAPSED (the
+    // picked exercises are noise when the chart isn't even open — owner request).
+    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
