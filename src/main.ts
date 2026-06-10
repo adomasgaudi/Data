@@ -15259,10 +15259,13 @@ function setupWorkoutAnalysis(): void {
       deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
       return;
     }
-    // "Per bodyweight (×BW)" lens (pill).
+    // "Per bodyweight (×BW)" lens (pill). Auto-Fit after the rescale so the data fills
+    // the view without a manual ⤢ — the rAF runs AFTER scheduleWaGraph's render (same
+    // frame, registered later), when the chart's own re-fit button (.svgc-center) exists.
     if (t.closest<HTMLElement>("[data-waperbw]")) {
       S.waPerBodyweight = !S.waPerBodyweight;
       scheduleWaGraph();
+      requestAnimationFrame(() => document.getElementById("waGraph")?.querySelector<HTMLElement>(".svgc-center")?.click());
       return;
     }
     // Prediction / Decay line modifiers (pills) — flip the config flag, redraw.
