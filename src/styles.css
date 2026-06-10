@@ -1141,7 +1141,7 @@ main { padding-bottom: 5rem; }
 .set-main { cursor: pointer; }
 .set-main:hover > td, .set-main.edit-open > td { background: var(--accent-soft); }
 /* A hand-edited set carries a gold stripe on the left (gold = edited) — see the rule
-   near .set-main.eff-* below, which layers it over the intensity outline. */
+   near .set-main.eff-* below, which layers it beside the intensity left bar. */
 .set-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; align-items: flex-end; padding: 0.3rem 0; }
 .set-edit-f { display: flex; flex-direction: column; gap: 2px; font-size: 0.72rem; color: var(--muted); }
 .set-edit-f input {
@@ -1212,27 +1212,20 @@ main { padding-bottom: 5rem; }
 .inc-unit { font-size: 0.62rem; margin-left: 1px; }
 .inc-prev { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: 0.68rem; margin: 0.25rem 0 0; }
 .inc-prev-item { white-space: nowrap; }
-/* Per-set intensity now colours the WHOLE set-row OUTLINE (was a Hard/Mid/Warm pill):
-   red = hard, orange = mid, grey = warm-up. The table is border-collapse, which eats real
-   borders, so the outline is INSET box-shadows on the cells — the same technique as the
-   is-edited gold bar (which composes on top via the --eff-col var, transparent when the
-   set has no class). */
+/* Per-set intensity colours a LEFT BAR on the set row (red = hard, orange = mid, grey =
+   warm-up). Was a full row OUTLINE; the owner wanted just the left side. The table is
+   border-collapse (it eats real borders), so the bar is an INSET box-shadow on the first
+   cell — the same technique as the is-edited gold bar, which composes on top via --eff-col. */
 .set-main { --eff-col: transparent; }
 .set-main.eff-hard { --eff-col: #c0392b; }
 .set-main.eff-mid { --eff-col: #e08a1e; }
 .set-main.eff-warmup { --eff-col: #aab0bb; }
-.set-main.eff-hard > td, .set-main.eff-mid > td, .set-main.eff-warmup > td {
-  box-shadow: inset 0 2px 0 var(--eff-col), inset 0 -2px 0 var(--eff-col);
-}
 .set-main.eff-hard > td:first-child, .set-main.eff-mid > td:first-child, .set-main.eff-warmup > td:first-child {
-  box-shadow: inset 0 2px 0 var(--eff-col), inset 0 -2px 0 var(--eff-col), inset 2px 0 0 var(--eff-col);
+  box-shadow: inset 3px 0 0 var(--eff-col);
 }
-.set-main.eff-hard > td:last-child, .set-main.eff-mid > td:last-child, .set-main.eff-warmup > td:last-child {
-  box-shadow: inset 0 2px 0 var(--eff-col), inset 0 -2px 0 var(--eff-col), inset -2px 0 0 var(--eff-col);
-}
-/* Edited sets keep their gold LEFT bar, layered over the eff outline's top/bottom. */
+/* Edited sets keep their gold LEFT bar; an intensity (if any) shows just inside it. */
 .set-main.is-edited > td:first-child {
-  box-shadow: inset 0 2px 0 var(--eff-col), inset 0 -2px 0 var(--eff-col), inset 3px 0 0 var(--gold);
+  box-shadow: inset 3px 0 0 var(--gold), inset 6px 0 0 var(--eff-col);
 }
 /* Machine-type tags on a set row (grey = info, not clickable; gold = needs review). */
 .set-grav { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--muted); background: var(--line); }
