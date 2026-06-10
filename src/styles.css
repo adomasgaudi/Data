@@ -114,6 +114,13 @@ html.signed-in .login-gate { display: none; }
   border: 1px solid var(--line); border-radius: 10px;
 }
 .login-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* The user picker is a <select> auto-enhanced to the custom .xdd dropdown. Make it
+   span the card like the other inputs, and keep its pop-up list inside the card
+   (it was overflowing out of bounds as a narrow inline-block). */
+.login-signin .xdd { display: block; width: 100%; margin: 0 0 0.6rem; }
+.login-signin .xdd-btn { padding: 0.6rem 0.75rem; font-size: 0.95rem; font-weight: 400; border-radius: 10px; background: var(--bg); }
+.login-signin .xdd-menu { left: 0; right: 0; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.login-signin .xdd-opt { white-space: normal; text-align: left; }
 .login-btn {
   width: 100%; padding: 0.7rem; font: inherit; font-weight: 700; font-size: 1rem;
   color: #fff; background: var(--accent); border: 0; border-radius: 10px; cursor: pointer;
