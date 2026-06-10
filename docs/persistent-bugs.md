@@ -13,6 +13,33 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-12 — The inline SET-EDIT panel closes when you press a button inside it
+
+- **Recurrences:** part of the long-running rule-24 CLASS ("tapping a setting closes the
+  menu" — see PB-4, the graph-options sections fix b.2.8.86/99, the picker-drawer fix
+  b.2.8.159/b.2.8.177). Same root, new surface.
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data). Workout
+  history → tap a set row to expand its edit panel (Weight/Reps/Bodyweight/Scale/Note +
+  ⇄ unilateral / ⌁ assisted ½ / ⊘ not comparable / 🗑 Delete). Pressing any of the toggle
+  buttons collapses the whole panel.
+- **Symptom:** the set-edit panel snaps shut the instant you press ⇄ unilateral, ⌁ assisted,
+  ⊘ not comparable (or edit a field) — so you can't make two changes without re-opening it.
+- **Root cause:** the panel's open state lived ONLY in the DOM — the `edit-open` class on the
+  set-main row + the `hidden` attribute toggled off the `.set-edit-row`. Every control in the
+  panel calls a FULL table re-render (`renderWorkoutsPage` / `renderAll` via `toggleAssisted‌Exercise`, `toggleUnilateralExercise`, `toggleSetNotComparable`, `onSetEditInput`…), which
+  rebuilds the rows fresh (hidden by default) — wiping the open state. Symptom-patching each
+  button would never end; the real flaw is "open state not preserved across the rebuild its
+  own controls trigger."
+- **Root fix (b.2.8.x, PB-12):** the open set is now an SSOT module var `openSetEditId`
+  (set/cleared by `toggleSetEdit`), and `renderWorkoutsPage` calls `reopenSetEdit()` at the
+  end of every rebuild — re-un-hiding that set's `.set-edit-row` (tagged `data-seteditid`) and
+  re-marking its set-main row. One fix covers ALL the panel's buttons. Cleared in
+  `deleteSetById` when that set is removed. Fix sites: `toggleSetEdit` / `reopenSetEdit` /
+  `renderWorkoutsPage` in `src/main.ts` (tagged `PB-12`).
+- **If it recurs:** a NEW set-table render path (e.g. the single-mode `setsByDateTableHtml`)
+  rebuilt the rows without calling `reopenSetEdit()`, or a new control re-renders via a path
+  that doesn't end in `renderWorkoutsPage`.
+
 ## PB-11 — "I added a set but it didn't add" — specifically when logging to a CUSTOM date
 
 - **Recurrences:** 3+ as a CLASS ("added a set, don't see it"). Each prior fix closed ONE

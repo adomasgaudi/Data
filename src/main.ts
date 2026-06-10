@@ -7075,6 +7075,7 @@ function renderWorkoutsPage() {
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
+  reopenSetEdit(); // PB-12: keep the set-edit panel open across the rebuild a control triggered
   renderHorizontalHistory(); // EXPERIMENTAL sideways view — reuses the same groups
 }
 
@@ -7885,7 +7886,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
     : efld("weight", "Weight (kg)", s.weight, 0.5);
   const editRow =
-    `<tr class="set-edit-row" hidden><td colspan="5"><div class="set-edit-grid">` +
+    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid">` +
     weightField +
     efld("reps", "Reps", s.reps, 1) +
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
@@ -8174,6 +8175,12 @@ function togglePrirFormula(target: HTMLElement): boolean {
  * Runs LAST in the click flow so the inner 1RM / pRIR / note / RIR controls keep
  * their own taps. Scans forward past the note/formula/prir sub-rows to this set's
  * edit row. Shared by both sets tables. */
+// PB-12: the open set-edit panel is tracked HERE (the SSOT), not just in the DOM —
+// every control inside it (assisted / unilateral / not-comparable / reset / field edits)
+// triggers a full table re-render that rebuilds the rows fresh (hidden), which used to
+// COLLAPSE the panel mid-edit (the recurring rule-24 "tapping a setting closes the menu").
+// renderWorkoutsPage re-applies this after each rebuild, so the panel stays put.
+let openSetEditId: string | null = null;
 function toggleSetEdit(target: HTMLElement): boolean {
   const row = target.closest<HTMLElement>("tr.set-main");
   if (!row) return false;
@@ -8183,10 +8190,23 @@ function toggleSetEdit(target: HTMLElement): boolean {
     sib = sib.nextElementSibling;
   }
   if (sib?.classList.contains("set-edit-row")) {
+    const willOpen = sib.hasAttribute("hidden"); // currently hidden → this tap opens it
     sib.toggleAttribute("hidden");
     row.classList.toggle("edit-open");
+    openSetEditId = willOpen ? ((sib as HTMLElement).dataset.seteditid ?? null) : null;
   }
   return true;
+}
+/** Re-open the set-edit panel that was open before a table rebuild (PB-12): un-hide its
+ * row and mark its set-main row, so a control tap inside it doesn't collapse the panel. */
+function reopenSetEdit(): void {
+  if (openSetEditId === null) return;
+  const editRow = document.querySelector<HTMLElement>(`.set-edit-row[data-seteditid="${CSS.escape(openSetEditId)}"]`);
+  if (!editRow) return;
+  editRow.hidden = false;
+  let p = editRow.previousElementSibling;
+  while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
+  p?.classList.add("edit-open");
 }
 
 /** Click "Reset set": drop all this set's on-device edits and re-render. */
@@ -8204,6 +8224,7 @@ function resetSetEdit(target: HTMLElement): boolean {
  * Restorable in Settings → Data health. */
 function deleteSetById(id: string): void {
   setDeleted(id, true);
+  if (openSetEditId === id) openSetEditId = null; // its panel is gone — don't try to reopen
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
