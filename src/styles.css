@@ -3417,12 +3417,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Underline is a text-decoration (not a border-bottom) so it hugs the text — a
    border-bottom sits at the font's content-box bottom (well below the descenders, a big
    gap that padding can't tighten); text-underline-offset pulls it ~3x closer. */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--text); background: var(--panel); border: none; border-radius: 4px; padding: 0 2px; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 2px; text-decoration-color: var(--line); cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--text); background: var(--panel); border: none; border-radius: 4px; padding: 0 2px; text-decoration: none; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
 /* While the finger is dragging the chip we follow it 1:1 — no transition lag. */
 .wa-title-lift.is-swiping { transition: none; will-change: transform; }
-/* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover lifts
-   the border to the accent. NO strike-through (legacy from when a tap deleted it). */
-.wa-title-lift:hover { text-decoration-color: var(--accent); }
+/* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover tints
+   the name accent as a desktop hint (no underline — names are plain text now). */
+.wa-title-lift:hover { color: var(--accent); }
 /* Explicit Remove: a terracotta line across the name (themed with the graph palette),
    fading out, then it's gone ~0.5s later. */
 .wa-title-lift.is-removing, .wa-sel-pill.is-removing {
@@ -4264,11 +4264,11 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wo-hidden-show { display: block; width: 100%; margin-top: 0.5rem; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 3px 8px; text-align: center; }
 .wo-hidden-show.is-on { color: var(--accent); border-color: var(--accent); }
 /* Lens state, themed with the graph palette (colour theory): combine = gold, compare =
-   teal, both = amethyst. The TITLE chip keeps BLACK text and shows its state only via the
-   bottom-outline colour; the picker PILL colours its text + border. */
-.wa-title-lift.lens-combined { color: var(--lens-combine); text-decoration-color: var(--lens-combine); }
-.wa-title-lift.lens-compared { color: var(--lens-compare); text-decoration-color: var(--lens-compare); }
-.wa-title-lift.lens-both { color: var(--lens-both); text-decoration-color: var(--lens-both); }
+   teal, both = amethyst. The TITLE chip (no underline now) shows its lens state via its
+   TEXT colour; the picker PILL colours its text + border. */
+.wa-title-lift.lens-combined { color: var(--lens-combine); }
+.wa-title-lift.lens-compared { color: var(--lens-compare); }
+.wa-title-lift.lens-both { color: var(--lens-both); }
 .wa-sel-pill.lens-combined { color: var(--lens-combine); }
 .wa-sel-pill.lens-compared { color: var(--lens-compare); }
 .wa-sel-pill.lens-both { color: var(--lens-both); }
