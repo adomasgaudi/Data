@@ -3555,6 +3555,11 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum { position: relative; }
 .wa-analysis-panel > .wa-fold-titled:not([open]) > .wa-fold-sum { padding-right: 1.3rem; }
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum::before { content: none; }
+/* Suppress the GLOBAL collapsed-caret (the right-aligned ::before added for all
+   wa-folds) on these four section folds — they use our own rotating ::after below,
+   so without this both would show (the "two triangles" bug). Higher specificity than
+   that rule so it wins regardless of source order. */
+.wa-analysis-panel > .wa-fold-titled:not([open]) > summary.wa-fold-sum::before { content: none; }
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum::after {
   content: "▾"; position: absolute; right: 0; top: 0.75rem;
   font-size: 0.8rem; line-height: 1; color: var(--accent); font-weight: 700;
