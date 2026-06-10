@@ -294,7 +294,14 @@ export interface WorkoutDay {
  * One athlete's training grouped into workout days (a day = one workout),
  * newest first. Each day lists what they did and holds every set.
  */
-export function workoutsForUser(records: readonly SetRecord[], username: string): WorkoutDay[] {
+export function workoutsForUser(
+  records: readonly SetRecord[],
+  username: string,
+  // How many sets each record COUNTS as (default 1). A unilateral set passes 2 (a
+  // right + a left set), so totalSets / per-exercise counts reflect both sides while
+  // the `sets` array stays ONE entry per logged set (rows never double).
+  unitsOf: (r: SetRecord) => number = () => 1,
+): WorkoutDay[] {
   const byDate = new Map<string, SetRecord[]>();
   for (const r of records) {
     if (r.username !== username) continue;
@@ -307,7 +314,7 @@ export function workoutsForUser(records: readonly SetRecord[], username: string)
     const counts = new Map<string, number>();
     for (const s of sets) {
       if (s.exerciseName === "") continue;
-      counts.set(s.exerciseName, (counts.get(s.exerciseName) ?? 0) + 1);
+      counts.set(s.exerciseName, (counts.get(s.exerciseName) ?? 0) + unitsOf(s));
     }
     const exercises = [...counts]
       .map(([exerciseName, count]) => ({ exerciseName, count }))
@@ -315,7 +322,7 @@ export function workoutsForUser(records: readonly SetRecord[], username: string)
     const ordered = [...sets].sort(
       (a, b) => a.exerciseName.localeCompare(b.exerciseName) || a.setNumber - b.setNumber,
     );
-    days.push({ date, totalSets: sets.length, exercises, sets: ordered });
+    days.push({ date, totalSets: sets.reduce((n, s) => n + unitsOf(s), 0), exercises, sets: ordered });
   }
   return days.sort((a, b) => (a.date > b.date ? -1 : a.date < b.date ? 1 : 0));
 }

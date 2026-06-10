@@ -74,3 +74,34 @@ export function divergenceEmpty(d: SideDivergence | undefined): boolean {
     !("lWeight" in d)
   );
 }
+
+/** How many sets one record contributes: a unilateral set is a right AND a left set,
+ * so it counts as 2; everything else counts as 1. */
+export function setUnits(unilateral: boolean): number {
+  return unilateral ? 2 : 1;
+}
+
+/** Project records for COUNTING / VOLUME: each unilateral record becomes its two sides
+ * (right then left), each carrying that side's reps/weight; non-unilateral records pass
+ * through unchanged. Use ONLY where sets are counted or volume summed — never for the
+ * history rows, which show one row per logged set. The caller supplies how to detect
+ * unilateral, the stored divergence, and how to clone a record with new per-side
+ * reps/weight (so it can keep setIds distinct). */
+export function explodeSides<T extends { reps: number | null; weight: number | null }>(
+  records: readonly T[],
+  uni: (r: T) => boolean,
+  divergence: (r: T) => SideDivergence | undefined,
+  clone: (r: T, reps: number | null, weight: number | null, side: "R" | "L") => T,
+): T[] {
+  const out: T[] = [];
+  for (const r of records) {
+    if (!uni(r)) {
+      out.push(r);
+      continue;
+    }
+    const b = sideValues(r.reps, r.weight, divergence(r));
+    out.push(clone(r, b.right.reps, b.right.weight, "R"));
+    out.push(clone(r, b.left.reps, b.left.weight, "L"));
+  }
+  return out;
+}

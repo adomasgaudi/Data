@@ -5,6 +5,8 @@ import {
   sideValues,
   sidesDiffer,
   divergenceEmpty,
+  setUnits,
+  explodeSides,
 } from "./unilateral";
 
 describe("unilateral name detection", () => {
@@ -63,5 +65,32 @@ describe("divergenceEmpty", () => {
   it("any stored side field makes it non-empty", () => {
     expect(divergenceEmpty({ lReps: 6 })).toBe(false);
     expect(divergenceEmpty({ rWeight: null })).toBe(false);
+  });
+});
+
+describe("setUnits", () => {
+  it("a unilateral set is 2 sets, others 1", () => {
+    expect(setUnits(true)).toBe(2);
+    expect(setUnits(false)).toBe(1);
+  });
+});
+
+describe("explodeSides", () => {
+  const clone = (r: { reps: number | null; weight: number | null; id: string }, reps: number | null, weight: number | null, side: "R" | "L") =>
+    ({ ...r, reps, weight, id: `${r.id}-${side}` });
+  it("passes non-unilateral records through unchanged", () => {
+    const recs = [{ reps: 5, weight: 100, id: "a" }];
+    expect(explodeSides(recs, () => false, () => undefined, clone)).toEqual(recs);
+  });
+  it("doubles a unilateral set into R then L, default equal", () => {
+    const out = explodeSides([{ reps: 8, weight: 20, id: "a" }], () => true, () => undefined, clone);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ reps: 8, weight: 20, id: "a-R" });
+    expect(out[1]).toMatchObject({ reps: 8, weight: 20, id: "a-L" });
+  });
+  it("carries each side's diverged reps/weight", () => {
+    const out = explodeSides([{ reps: 8, weight: 20, id: "a" }], () => true, () => ({ lReps: 6 }), clone);
+    expect(out[0]).toMatchObject({ reps: 8, id: "a-R" });
+    expect(out[1]).toMatchObject({ reps: 6, id: "a-L" });
   });
 });

@@ -76,7 +76,7 @@ import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclin
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
-import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, type SideDivergence, type BothSides } from "./unilateral";
+import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
@@ -1997,6 +1997,21 @@ function setSideDivergence(id: string, d: SideDivergence): void {
   else setSidesStore[id] = d;
   saveJson(SET_SIDES_KEY, setSidesStore);
   clearMachineCache();
+}
+/** How many sets a record counts as: 2 for a unilateral lift (a right + a left set). */
+function setUnitsForRecord(r: SetRecord): number {
+  return setUnits(isUni(r.exerciseName));
+}
+/** Explode unilateral records into their two sides (R then L) for COUNTING / VOLUME —
+ * never for rendering rows. Each side keeps the source set's identity but carries that
+ * side's reps/weight, with a distinct setNumber so setIds don't collide. */
+function explodeForCount(records: readonly SetRecord[]): SetRecord[] {
+  return explodeSides(
+    records,
+    (r) => isUni(r.exerciseName),
+    (r) => setSidesStore[setId(r)],
+    (r, reps, weight, side) => ({ ...r, reps, weight, setNumber: r.setNumber + (side === "L" ? 500000 : 0) }),
+  );
 }
 
 // ---- Machine type (gravity vs cable), e.g. Lat Pulldown ---------------------
@@ -4259,7 +4274,7 @@ function renderAthlete() {
   syncAthleteChips();
   S.workoutsPage = 0;
   selectedExercise = null;
-  athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value);
+  athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value, setUnitsForRecord);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
   // On a real athlete CHANGE (and first load), re-apply the DEFAULT analysis
   // selections for the new athlete — this replaces the old "↺ Default" button, which
@@ -5838,7 +5853,7 @@ function renderExerciseLevels(exName: string, username: string): void {
 /** Sets-per-week chips for the drilled-in exercise: the busiest week ever, this
  * week so far, and the trailing 1-month / 3-month average sets per week. */
 function renderExerciseWeekly(exName: string) {
-  const stats = weeklySetStats(setsForUserExercise(remapCombined(data.records), els.athlete.value, exName), todayIso());
+  const stats = weeklySetStats(explodeForCount(setsForUserExercise(remapCombined(data.records), els.athlete.value, exName)), todayIso());
   const chip = (label: string, value: string) =>
     `<div class="wk-chip"><span class="wk-val">${value}</span><span class="wk-lbl">${label}</span></div>`;
   els.exerciseWeekly.hidden = false;
@@ -6294,7 +6309,7 @@ function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
 function heatWorkoutDays(): WorkoutDay[] {
   if (!waHardOnly) return athleteWorkouts;
   const easy = easySetIds();
-  return workoutsForUser(activeRecords().filter((r) => !easy.has(setId(r))), els.athlete.value);
+  return workoutsForUser(activeRecords().filter((r) => !easy.has(setId(r))), els.athlete.value, setUnitsForRecord);
 }
 
 /** Map of this athlete's training dates (ISO) → total sets that day (respecting
@@ -7738,7 +7753,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const e1rm = addedWeight1RM(computed, formula);
   // "Not comparable" lifts keep their reps (shown in the W column) but get no
   // volume — it's as meaningless as their 1RM here.
-  const vol = computed.notComparable ? null : setVolume(s.weight, s.reps);
+  // Unilateral volume = BOTH sides summed (the set is a right + a left set).
+  const volSides = isUni(s.exerciseName) ? sidesForRecord(s) : null;
+  const vol = computed.notComparable
+    ? null
+    : volSides
+      ? (setVolume(volSides.right.weight, volSides.right.reps) ?? 0) + (setVolume(volSides.left.weight, volSides.left.reps) ?? 0)
+      : setVolume(s.weight, s.reps);
   // Predicted RIR: what your CURRENT (faded) strength for this lift says you
   // should manage at this (effective) load, minus the reps you did. Effective
   // frame on both sides so bodyweight lifts line up.
@@ -9691,7 +9712,7 @@ function workoutPlanItems(): PlanItem[] {
   const today = todayIso();
   const items: PlanItem[] = [];
   for (const { exerciseName } of exerciseCountsForUser(recs, username)) {
-    const stats = weeklySetStats(setsForUserExercise(recs, username, exerciseName), today);
+    const stats = weeklySetStats(explodeForCount(setsForUserExercise(recs, username, exerciseName)), today);
     if (stats.threeMonthAvgPerWeek < 0.5) continue; // not a regular lift recently
     const behind = Math.round(stats.threeMonthAvgPerWeek - stats.thisWeek);
     if (behind < 1) continue; // already kept up this week
@@ -13530,7 +13551,7 @@ function onInlineAddGo(form: HTMLElement) {
   );
   // The set just landed in data.records; rebuild this athlete's day cache so the
   // day view (week view reads activeRecords directly) reflects it too.
-  athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value);
+  athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value, setUnitsForRecord);
   // PB-11: a CUSTOM (often past) date lands on a different history PAGE than the one on
   // screen, so the set is logged but off-screen — the recurring "I added a set but don't
   // see it", now for the date dimension (the filter + selection hiders were closed in
