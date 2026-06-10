@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, naturalPotential, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, autoMuscleGroups, realPullupWeight, tagsForExercise, trainingCategories } from "./profile";
+import { bodyComposition, defaultBodyFatDist, normalizeBodyFatDist, nffmiRange, bodyMassRanges, naturalPotential, combinableGroupsFor, comparableGroupsFor, COMPARABLE_GROUPS, defaultBwCoeff, EXERCISE_REGISTRY, exerciseCategories, exerciseCategory, exerciseCode, exerciseCodesFor, exercisesForTag, exerciseTier, FUNCTIONAL_PATTERN_TAGS, isAssistablePullup, isStatic, LIST_CATEGORIES, MUSCLE_GROUP_TAGS, muscleGroup, autoMuscleGroups, realPullupWeight, assistedRealWeight, tagsForExercise, trainingCategories } from "./profile";
 
 describe("defaultBwCoeff", () => {
   it("gives high-leverage holds a small coefficient (added weight dominates)", () => {
@@ -518,5 +518,17 @@ describe("realPullupWeight", () => {
   it("does not touch other exercises, even when negative", () => {
     expect(realPullupWeight("Lat Pulldown", -30)).toBe(-30);
     expect(realPullupWeight("Assisted Dip", -40)).toBe(-40);
+  });
+});
+
+describe("assistedRealWeight (per-exercise override)", () => {
+  it("halves a negative weight only when assisted is on", () => {
+    expect(assistedRealWeight(-30, true)).toBe(-15);
+    expect(assistedRealWeight(-30, false)).toBe(-30);
+  });
+  it("leaves positive / zero / null untouched regardless of the toggle", () => {
+    expect(assistedRealWeight(20, true)).toBe(20);
+    expect(assistedRealWeight(0, true)).toBe(0);
+    expect(assistedRealWeight(null, true)).toBeNull();
   });
 });

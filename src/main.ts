@@ -120,7 +120,8 @@ import {
   bodyComposition,
   naturalPotential,
   defaultBwCoeff,
-  realPullupWeight,
+  assistedRealWeight,
+  isAssistablePullup,
   exerciseCategory,
   exerciseCategories,
   muscleGroup,
@@ -1886,6 +1887,34 @@ function setUnilateralOverride(exerciseName: string, state: boolean | undefined)
   clearMachineCache();
 }
 
+// ---- Assisted-machine lifts (halve a NEGATIVE logged weight) -----------------
+// An assisted pull-up/dip machine's counterweight dial reads ~2× the help it gives,
+// so a negative logged weight is halved for the strength maths (the logged value
+// stays as origWeight for display). Named pull-ups/chin-ups auto-detect; this
+// per-exercise override forces it on/off for ANY lift (e.g. a renamed/merged "Pull
+// Up", an assisted dip machine). undefined = fall back to the name auto-detect.
+const ASSIST_HALVE_KEY = "colosseum.assistedHalve.v1";
+const assistedHalveOverrides: Record<string, boolean> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(ASSIST_HALVE_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+/** Effective "assisted machine" state: per-exercise override, else the pull-up/chin-up
+ * name auto-detect. */
+function isAssistedMachine(exerciseName: string): boolean {
+  const o = assistedHalveOverrides[exerciseName];
+  return o === undefined ? isAssistablePullup(exerciseName) : o;
+}
+/** Real added weight after the assisted-machine rule (negative → halved when assisted). */
+function realAddedWeight(exerciseName: string, weight: number | null): number | null {
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+}
+function setAssistedOverride(exerciseName: string, state: boolean | undefined): void {
+  if (state === undefined) delete assistedHalveOverrides[exerciseName];
+  else assistedHalveOverrides[exerciseName] = state;
+  saveJson(ASSIST_HALVE_KEY, assistedHalveOverrides);
+  clearMachineCache();
+}
+
 const SET_SIDES_KEY = "colosseum.setSides.v1";
 const setSidesStore: Record<string, SideDivergence> = (() => {
   try { const o = JSON.parse(localStorage.getItem(SET_SIDES_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
@@ -2105,7 +2134,7 @@ function computeRecordBase(r: SetRecord): SetRecord {
   // reads ~2x. Use the halved real assistance for all strength maths, but keep
   // the logged value as origWeight so the displayed set still tells you what to
   // set on the machine.
-  const realAdded = realPullupWeight(r.exerciseName, r.weight);
+  const realAdded = realAddedWeight(r.exerciseName, r.weight);
   if (coeff <= 0) {
     const base = realAdded === r.weight ? r : { ...r, weight: realAdded, origWeight: r.weight };
     return applyMachineMode(base);
@@ -5969,6 +5998,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
+  if (toggleAssistedExercise(target)) return; // "⌁ assisted" — toggle negative-weight halving
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -7181,6 +7211,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
+  if (toggleAssistedExercise(target)) return; // "⌁ assisted" — toggle negative-weight halving
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -7754,6 +7785,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     : "";
   const uniToggle =
     `<button type="button" class="set-edit-uni${uni ? " is-on" : ""}" data-uniex="${escapeHtml(s.exerciseName)}" aria-pressed="${uni}" title="Unilateral — each set counts as a right + a left set (single-arm / single-leg). Toggles this for the whole exercise.">⇄ ${uni ? "unilateral" : "unilateral?"}</button>`;
+  // Assisted-machine toggle — shown when the set's logged weight is negative (a
+  // counterweight) or the lift is already flagged. ON → the negative weight counts
+  // at HALF in every strength calc (the machine dial over-reads ~2×). Per-exercise.
+  const assisted = isAssistedMachine(s.exerciseName);
+  const assistToggle = assisted || (s.weight !== null && s.weight < 0)
+    ? `<button type="button" class="set-edit-assist${assisted ? " is-on" : ""}" data-assistex="${escapeHtml(s.exerciseName)}" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~2× the real help), so it's counted at HALF for strength. The logged value still shows so you know what to dial. Toggles for the whole exercise.">⌁ ${assisted ? "assisted ½" : "assisted?"}</button>`
+    : "";
   const editRow =
     `<tr class="set-edit-row" hidden><td colspan="5"><div class="set-edit-grid">` +
     efld("weight", "Weight (kg)", s.weight, 0.5) +
@@ -7762,6 +7800,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
     uniToggle +
+    assistToggle +
     sideEdit +
     `<button type="button" class="set-edit-nc${notComparableSets.has(sid) ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${notComparableSets.has(sid)}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${notComparableSets.has(sid) ? "not comparable" : "not comparable?"}</button>` +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
@@ -8150,6 +8189,21 @@ function toggleUnilateralExercise(target: HTMLElement): boolean {
   const btn = target.closest<HTMLElement>(".set-edit-uni");
   if (!btn?.dataset.uniex) return false;
   setUnilateralOverride(btn.dataset.uniex, !isUni(btn.dataset.uniex));
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  window.scrollTo(0, y);
+  return true;
+}
+
+/** Click "⌁ assisted" in the set editor: flip the EXERCISE's assisted-machine
+ * override (negative logged weight then counts at half), then re-render. */
+function toggleAssistedExercise(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-assist");
+  if (!btn?.dataset.assistex) return false;
+  setAssistedOverride(btn.dataset.assistex, !isAssistedMachine(btn.dataset.assistex));
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
@@ -12716,7 +12770,7 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     // was logged. Recompute the named intermediates for full transparency.
     const logged = r.origWeight !== undefined ? r.origWeight : r.weight;
     const coeff = coeffFor(r.exerciseName);
-    const realAdded = realPullupWeight(r.exerciseName, logged);
+    const realAdded = realAddedWeight(r.exerciseName, logged);
     const perSet = r.bodyweight !== null && r.bodyweight !== undefined;
     const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
     const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)

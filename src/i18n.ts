@@ -188,6 +188,8 @@ const LT: Record<string, string> = {
   "shoulders": "pečiai",
   "⇄ unilateral": "⇄ vienpusis",
   "⇄ unilateral?": "⇄ vienpusis?",
+  "⌁ assisted ½": "⌁ su pagalba ½",
+  "⌁ assisted?": "⌁ su pagalba?",
   "0cm (wall)": "0cm (siena)",
   "blue 6cm": "mėlynas 6cm",
   "📷 photo": "📷 nuotrauka",

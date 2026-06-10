@@ -232,6 +232,18 @@ export function realPullupWeight(exerciseName: string, weight: number | null): n
 }
 
 /**
+ * Real assistance after a per-exercise override is taken into account. `assisted`
+ * is the caller's effective decision (a manual on/off toggle, defaulting to the
+ * name auto-detect). When the lift is assisted and the logged weight is negative
+ * (a machine counterweight that reads ~2× the real help), it's halved; otherwise
+ * the value passes through. Keeps the override logic out here so it's unit-tested.
+ */
+export function assistedRealWeight(weight: number | null, assisted: boolean): number | null {
+  if (weight === null || weight >= 0) return weight;
+  return assisted ? weight / 2 : weight;
+}
+
+/**
  * Scaling/“pattern” groups have been REMOVED at the owner's request — every
  * exercise stands on its own (Bench Press, Dumbbell Bench Press, Incline Bench
  * Press, Shoulder Press, Military Press, … are all separate lifts, never folded

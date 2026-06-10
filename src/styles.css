@@ -1200,6 +1200,13 @@ main { padding-bottom: 5rem; }
 }
 .set-edit-uni:hover { border-color: var(--accent); }
 .set-edit-uni.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* Assisted-machine toggle — same pill family. */
+.set-edit-assist {
+  align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
+}
+.set-edit-assist:hover { border-color: var(--accent); }
+.set-edit-assist.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 /* The ⇄ unilateral tag on a set row (counts as right + left). Subtle until sides differ. */
 .set-uni { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 0 5px; margin-right: 3px; }
 .set-uni.is-diff { color: #fff; background: var(--lens-compare, var(--accent)); }
