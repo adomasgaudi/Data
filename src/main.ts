@@ -14281,6 +14281,9 @@ function renderSelector(scope: SelScope): void {
         // period / metric, First-N, the ⚙ — AND the exercise chips, so the inline row
         // stays clean (owner request). The chips still render into #waChips-<scope>.
         `<div id="waPickCard-${scope}" class="wa-pick-card"${chipsFoldOpen ? "" : " hidden"}>` +
+        // Visible ONLY when this card is the slide-in drawer (CSS) — a back-to-the-graph
+        // handle, since swipe-right-to-close isn't obvious. Tap it or swipe the card right.
+        `<button type="button" class="wa-pick-close" data-pickclose title="Back to the graph (or swipe this card to the right)" aria-label="Close picker, back to the graph">›</button>` +
         `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
         `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` +
         `</div>` +
@@ -15483,7 +15486,10 @@ function setupWorkoutAnalysis(): void {
     document.addEventListener("pointermove", (e) => {
       if (!mode || e.pointerId !== ptr) return;
       const dx = e.clientX - x0, dy = e.clientY - y0;
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SLOP) { reset(); return; } // vertical → scroll
+      // Only bail to vertical scroll when vertical CLEARLY dominates — a slightly diagonal
+      // horizontal swipe should still claim, so the drawer is easy to swipe open/closed.
+      // (touch-action:pan-y already hands a true vertical drag to the browser anyway.)
+      if (Math.abs(dy) > SLOP && Math.abs(dy) > Math.abs(dx) * 1.6) { reset(); return; }
       // OPEN on a right→left (leftward) drag — pulling the drawer in from the right edge;
       // CLOSE on a left→right (rightward) drag — pushing it back out.
       if (mode === "open" ? dx < -THRESH : dx > THRESH) {
@@ -15498,6 +15504,11 @@ function setupWorkoutAnalysis(): void {
     document.addEventListener("click", (e) => {
       if (Date.now() - claimedAt < 350) { e.preventDefault(); e.stopPropagation(); }
     }, true);
+    // The drawer's visible "›" handle closes it (back to the graph) — for those who don't
+    // discover the swipe.
+    document.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest("[data-pickclose]")) closePickDrawer();
+    });
   }
   // (Exercise search moved to the always-on command bar — see setupCommandBar.)
   // Keep that command bar just above the on-screen keyboard as you scroll: the
