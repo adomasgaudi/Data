@@ -1070,23 +1070,64 @@ function setShortOverride(exerciseName: string, short: string) {
   saveShortOverrides();
 }
 
-// ---- GLOBAL exercise-name display mode (ONE switch for the WHOLE site) ----
-// Every place that prints an exercise name reads displayName(), which follows
-// this single setting: "code" = the tiny code (HS-PU), "short" = the owner's
-// short name, "full" = the full logged name. Default is "short". Changing it
-// re-labels every view in lockstep — no per-view name toggles.
+// ---- Exercise-name display mode: ONE GLOBAL default + per-AREA local overrides ----
+// "code" = the tiny code (HS-PU), "short" = the owner's short name, "full" = the
+// full logged name. `nameMode` is the GLOBAL default (the Settings picker) and the
+// app-wide fallback. Each "area" with its OWN name pill — the graph and the
+// workout-history (the two selector SCOPEs) — may carry a LOCAL override that wins
+// only inside that area; absent → it follows the global. Setting the GLOBAL picker
+// RESETS every local override (it re-applies everywhere). displayName() reads the
+// override for the scope currently being drawn (`nameScope`, set by the graph /
+// history / selector render paths), else the global. Default global is "short".
 type NameMode = "code" | "short" | "full";
 const NAME_MODE_KEY = "colosseum.nameMode.v1";
+const NAME_MODE_BY_SCOPE_KEY = "colosseum.nameModeByScope.v1";
 let nameMode: NameMode = (() => {
   try { const v = localStorage.getItem(NAME_MODE_KEY); return v === "code" || v === "full" ? v : "short"; } catch { return "short"; }
 })();
+// Per-area (graph / hist) local overrides. Empty → every area follows the global.
+const nameModeByScope: Partial<Record<SelScope, NameMode>> = (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem(NAME_MODE_BY_SCOPE_KEY) ?? "{}") as Record<string, unknown>;
+    const out: Partial<Record<SelScope, NameMode>> = {};
+    for (const k of ["graph", "hist"] as const)
+      if (o[k] === "code" || o[k] === "short" || o[k] === "full") out[k] = o[k];
+    return out;
+  } catch { return {}; }
+})();
+function persistNameOverrides(): void {
+  try { localStorage.setItem(NAME_MODE_BY_SCOPE_KEY, JSON.stringify(nameModeByScope)); } catch { /* ignore */ }
+}
+// The render scope currently being drawn — set by the graph / history / selector
+// render paths so displayName() uses that area's local override; null = global.
+let nameScope: SelScope | null = null;
+/** The effective name mode for an area: its local override, else the global. */
+function nameModeFor(scope: SelScope | null): NameMode {
+  return scope && nameModeByScope[scope] ? nameModeByScope[scope]! : nameMode;
+}
 function setNameMode(m: NameMode): void {
   nameMode = m;
+  // The GLOBAL picker is app-wide: it RESETS every local area to follow it.
+  for (const k of Object.keys(nameModeByScope) as SelScope[]) delete nameModeByScope[k];
   try { localStorage.setItem(NAME_MODE_KEY, m); } catch { /* ignore */ }
+  persistNameOverrides();
 }
-/** The exercise name to SHOW anywhere on the site, per the global name mode. */
-function displayName(exerciseName: string): string {
-  return nameMode === "code" ? codeFor(exerciseName) : nameMode === "full" ? exerciseName : shortFor(exerciseName);
+/** Set ONE area's local override (the in-selector name pill) — that area only. */
+function setNameModeForScope(scope: SelScope, m: NameMode): void {
+  nameModeByScope[scope] = m;
+  persistNameOverrides();
+}
+/** Run `fn` with the name scope temporarily set, then restore (synchronous). */
+function withNameScope<T>(scope: SelScope, fn: () => T): T {
+  const prev = nameScope;
+  nameScope = scope;
+  try { return fn(); } finally { nameScope = prev; }
+}
+/** The exercise name to SHOW: per the area being drawn (`scope`), else the global
+ * default. Pass a scope explicitly for callbacks fired after the render pass. */
+function displayName(exerciseName: string, scope: SelScope | null = nameScope): string {
+  const mode = nameModeFor(scope);
+  return mode === "code" ? codeFor(exerciseName) : mode === "full" ? exerciseName : shortFor(exerciseName);
 }
 /** Re-render every view after the global name mode changes — names appear across
  * all of them. Scroll preserved so the page doesn't jump. */
@@ -14605,6 +14646,10 @@ const TITLE_NAME_CAP = 5;
 const titleExpanded: Record<"graph" | "hist", boolean> = { graph: false, hist: false };
 function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | null = null): string {
   if (sel.length === 0) return "";
+  // The title names lifts for its area (graph / hist), so it shows that area's mode.
+  const prevNameScope = nameScope;
+  if (remove) nameScope = remove;
+  try {
   const sep = `<span class="wa-title-sep"> · </span>`;
   // Each name is a tap-to-REMOVE button (from the graph OR the history selection); the
   // capture handler (PB-5) removes it instead of collapsing the section. Tapping EMPTY
@@ -14666,6 +14711,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
   return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
+  } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
@@ -14738,7 +14784,7 @@ function renderWorkoutAnalysis(): void {
     // The More-info button moved next to the title, so the old stats slot is empty.
     if (stats) { stats.innerHTML = ""; stats.setAttribute("hidden", ""); }
     S.workoutsPage = 0; // the scoped list is shorter; start at the top
-    renderWorkoutsPage();
+    withNameScope("hist", renderWorkoutsPage); // the analysis history shows the HISTORY area's name mode
     } else {
     // Nothing selected: the history shows NOTHING (an empty selection is allowed —
     // no implicit "show everything"). A "Find in history" search still scopes to its
@@ -14750,7 +14796,7 @@ function renderWorkoutAnalysis(): void {
     const calHistTitle = document.getElementById("waCalHistSummary");
     if (calHistTitle) { calHistTitle.textContent = "Workout history"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
     stats?.setAttribute("hidden", "");
-    renderWorkoutsPage();
+    withNameScope("hist", renderWorkoutsPage); // the analysis history shows the HISTORY area's name mode
     }
   // An active search re-titles the history so it's clear it's showing matches, not
   // the selection (the history list is filtered to them by historyFilterWithSearch).
@@ -14793,9 +14839,10 @@ function renderWorkoutAnalysis(): void {
 }
 
 /** Render ONE exercise selector instance. `scope` chooses which selection it edits
- * and draws (graph vs the calendar/history). The two share the ancillary settings
- * (group-by, name mode, identities, search, show-missing); only the SELECTION is
- * per-scope. A "match" button copies the OTHER selector's picks into this one. */
+ * and draws (graph vs the calendar/history). The two share most ancillary settings
+ * (group-by, identities, search, show-missing); the SELECTION and the NAME MODE are
+ * per-scope (each area's label pill is a local override of the global default). A
+ * "match" button copies the OTHER selector's picks into this one. */
 // PB-10 (recurring "the ⚙ settings popout opens off-screen"): the popout is now
 // position:FIXED, and this places it under its cog and fully inside the viewport from
 // the cog's LIVE rect — so no ancestor's overflow/position can clip it and it no longer
@@ -14823,6 +14870,10 @@ function renderSelector(scope: SelScope): void {
   const sel = document.getElementById(scope === "graph" ? "waExerciseSelector" : "waExerciseSelectorHist");
   if (!sel) return;
   curSelScope = scope;
+  // This selector (and the chips/pills it draws) shows THIS area's name mode.
+  const prevNameScope = nameScope;
+  nameScope = scope;
+  try {
   sel.dataset.selscope = scope;
   const cur = selArr();
   // Identity-inclusion toggles (shared) — they filter the chips below.
@@ -14832,12 +14883,15 @@ function renderSelector(scope: SelScope): void {
   const toggles = idLabels
     .map(([id, label]) => `<button type="button" class="wa-name-opt wa-inc-btn${waIncludeIdentities.has(id) ? " is-on" : ""}" data-waident="${id}" aria-pressed="${waIncludeIdentities.has(id)}">${label}</button>`)
     .join("");
-  // Chip label mode (shared global name mode) — ONE compact cycling pill (code →
-  // short → full), like the history list's. data-waname carries the NEXT mode so a
-  // tap advances it (the existing .wa-name-opt handler sets it). No "Show as" label.
-  const nextName: NameMode = nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code";
+  // Chip label mode — ONE compact cycling pill (code → short → full). This is a
+  // LOCAL override for THIS area only (graph vs history); it follows the global
+  // Settings picker until tapped, then sticks for this scope. data-waname carries
+  // the NEXT mode so a tap advances it (the .wa-name-opt handler sets the override).
+  const curName = nameModeFor(scope);
+  const nextName: NameMode = curName === "code" ? "short" : curName === "short" ? "full" : "code";
+  const isLocal = !!nameModeByScope[scope]; // diverged from the global default
   const nameToggle =
-    `<button type="button" class="wa-name-opt name-mode-opt" data-waname="${nextName}" title="Lift labels — tap to cycle: code → short → full">${nameMode === "code" ? "Code" : nameMode === "short" ? "Short" : "Full"}</button>`;
+    `<button type="button" class="wa-name-opt name-mode-opt${isLocal ? " is-local" : ""}" data-waname="${nextName}" title="Lift labels here — tap to cycle: code → short → full (this area only; the Settings picker sets all areas)">${curName === "code" ? "Code" : curName === "short" ? "Short" : "Full"}</button>`;
   // Owner-chosen display order: Frequency · Best lifts · Discipline · Muscle group ·
   // Effectiveness · Function · Tier. (None was already removed from this menu.)
   const groupOptList: { value: string; label: string }[] = [
@@ -14982,6 +15036,7 @@ function renderSelector(scope: SelScope): void {
   // Keep the ⚙ settings popout on-screen when it's open (its anchor cog can wrap to
   // anywhere on the tools row), re-clamping after each re-render.
   if (cogOpen) clampMenuIntoView(sel.querySelector<HTMLElement>(".wa-sel-cog-menu"));
+  } finally { nameScope = prevNameScope; }
 }
 
 /** One chip for an exercise (selected state + identity). `missing` greys it out:
@@ -14992,7 +15047,7 @@ function waChipHtml(name: string, identity: ExerciseIdentity, missing = false): 
   // Tapping the chip selects/deselects; the trailing ⓘ opens its More-info overlay
   // (so you can check a lift that's buried in history without hunting for it).
   const title = missing ? `${name} — hidden (filtered out or never trained)` : `${name} (${identity})`;
-  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)}<span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
+  return `<button type="button" class="wa-ex-chip${nameModeFor(nameScope) !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)}<span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
 }
 
 /** An exercise chip for a special (ranked) group-by mode — like {@link waChipHtml}
@@ -15001,7 +15056,7 @@ function waSpecialChipHtml(name: string, identity: ExerciseIdentity, metric: str
   const on = selArr().includes(name);
   const label = displayName(name);
   const title = missing ? `${name} — hidden (filtered out or never trained)` : `${name} (${identity})`;
-  return `<button type="button" class="wa-ex-chip${nameMode !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)} <span class="wa-ex-metric">${escapeHtml(metric)}</span><span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
+  return `<button type="button" class="wa-ex-chip${nameModeFor(nameScope) !== "code" ? " is-full" : ""}${on ? " is-on" : ""}${missing ? " is-missing" : ""}" data-waex="${escapeHtml(name)}" data-waident="${identity}" aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)} <span class="wa-ex-metric">${escapeHtml(metric)}</span><span class="wa-ex-info" data-waexinfo="${escapeHtml(name)}" role="button" aria-label="More info about ${escapeHtml(name)}" title="More info">ⓘ</span></button>`;
 }
 
 /** The selector's current exercise list: identity-included, metadata-filtered
@@ -15094,6 +15149,9 @@ function renderWaChips(): void {
  * dimension. Re-rendered alone on search/group changes so typing keeps focus. */
 function renderWaChipsScope(scope: SelScope): void {
   curSelScope = scope;
+  const prevNameScope = nameScope; // chips show THIS area's name mode
+  nameScope = scope;
+  try {
   const box = document.getElementById(`waChips-${scope}`);
   if (!box) return;
   const list = waChipListBase(); // ALL groups (so an off group still shows its header)
@@ -15160,6 +15218,7 @@ function renderWaChipsScope(scope: SelScope): void {
       );
     })
     .join("");
+  } finally { nameScope = prevNameScope; }
 }
 
 // ---- Floating picker + settings drawer --------------------------------------------
@@ -15679,7 +15738,7 @@ function renderWaGraph(): void {
     records: athleteRecs,
     metrics: drawMetricIds,
     config: waGraphConfig,
-    codeOf: displayName, // legend uses the chosen name mode (short by default), not raw codes
+    codeOf: (ex: string) => displayName(ex, "graph"), // legend follows the GRAPH area's name mode (fired after the render pass)
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(els.athlete.value)?.weight ?? null,
     // WR (and per-bodyweight) are per-athlete when several are overlaid, so each
@@ -16588,10 +16647,13 @@ function setupWorkoutAnalysis(): void {
       deferRender(renderWorkoutAnalysis);
       return;
     }
-    // Chip label mode → set the GLOBAL name mode (code / short / full), site-wide.
+    // Chip label mode → set THIS area's LOCAL name mode (code / short / full).
+    // Only this selector's scope (graph vs history) changes; the global Settings
+    // picker is what re-applies a mode to every area at once.
     const nameOpt = t.closest<HTMLElement>(".wa-name-opt");
     if (nameOpt?.dataset.waname) {
-      setNameMode(nameOpt.dataset.waname as NameMode);
+      const scope = (nameOpt.closest<HTMLElement>("[data-selscope]")?.dataset.selscope as SelScope) ?? curSelScope;
+      setNameModeForScope(scope, nameOpt.dataset.waname as NameMode);
       applyNameModeChange();
       return;
     }

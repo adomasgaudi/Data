@@ -3781,6 +3781,10 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-name-opt { font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 1px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); white-space: nowrap; }
 .wa-name-opt:hover { border-color: var(--accent); color: var(--accent); }
 .wa-name-opt.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* This area's label mode is a LOCAL override (diverged from the global default): a
+   small accent dot marks that this pill no longer follows the Settings picker. */
+.wa-name-opt.is-local { border-color: var(--accent); color: var(--accent); }
+.wa-name-opt.is-local::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 4px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 /* Full-name chips can be long — let them wrap to their natural width. */
 .wa-ex-chip.is-full { white-space: normal; text-align: left; border-radius: 10px; }
 /* Collapsible exercise-chip grid. */
