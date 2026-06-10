@@ -425,6 +425,24 @@ function setViewMode(mode: ViewMode) {
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
   renderViewSwitch(); // reflect the new mode in the quick switcher
+  placeVersionLine(); // version·SP under the title in admin, else tucked under ⚙
+}
+
+/** The version · SP line (.title-ver) sits under the title in ADMIN view, but in a
+ * user / spectator view (incl. an admin previewing them) it's tucked under the ⚙
+ * settings button instead — meta info out of the way for non-admin views. */
+function placeVersionLine(): void {
+  const ver = document.querySelector<HTMLElement>(".title-ver");
+  const titleBlock = document.querySelector<HTMLElement>(".topbar-title");
+  const rightBlock = document.querySelector<HTMLElement>(".topbar-right");
+  if (!ver || !titleBlock || !rightBlock) return;
+  if (viewMode === "admin") {
+    titleBlock.appendChild(ver); // back under the title (after .title-row)
+    ver.classList.remove("title-ver--right");
+  } else {
+    rightBlock.appendChild(ver); // a second line under the top-right buttons
+    ver.classList.add("title-ver--right");
+  }
 }
 
 /** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
