@@ -2640,6 +2640,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Editable per-member scaling "weight" (comparable groups): "×[0.80]". */
 .ex-grp-ratio { display: inline-flex; align-items: center; gap: 1px; color: var(--muted); font-size: 0.78rem; }
 .ex-grp-ratioin { width: 3.2em; font: inherit; font-size: 0.78rem; padding: 1px 3px; border: 1px solid var(--line); border-radius: 4px; color: var(--lens-compare); background: var(--bg); -moz-appearance: textfield; }
+/* ★/☆ = the group's reference (étalon) toggle. Gold filled ★ = current reference; the
+   muted ☆ button makes its lift the reference (the others rescale onto its curve). */
+.ex-grp-star { font: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer; background: none; border: none; padding: 0 2px; color: var(--muted); min-height: var(--tap-min); }
+.ex-grp-star:hover { color: var(--gold, #b8902f); }
+.ex-grp-star.is-ref { cursor: default; color: var(--gold, #b8902f); }
 /* Inline exercise editors on the More-info page (code / short / bodyweight). */
 .ex-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; }
 .ex-edit-f { display: flex; flex-direction: column; gap: 2px; flex: 1 1 8rem; min-width: 0; }

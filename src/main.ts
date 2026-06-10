@@ -2314,8 +2314,29 @@ function toggleGroupMembership(groupId: string, exName: string): void {
 /** Set the comparable ratio for an owner-added member. */
 function setGroupRatio(groupId: string, exName: string, ratio: number): void {
   const ov = (groupMemberOverrides[groupId] ??= {});
-  (ov.add ??= {})[exName] = Math.min(2, Math.max(0.05, ratio));
+  (ov.add ??= {})[exName] = Math.min(20, Math.max(0.05, ratio));
   saveGroupMembers();
+}
+/** The current reference ("étalon") member of a comparable group, by group id: the
+ * member at ratio 1 (else the first). Mirrors referenceMemberFor, but keyed by id. */
+function groupReferenceEx(groupId: string): string | null {
+  const g = effectiveComparableGroups().find((x) => x.id === groupId);
+  const ms = g?.members ?? [];
+  return (ms.find((m) => Math.abs(m.ratio - 1) < 1e-6) ?? ms[0])?.exerciseName ?? null;
+}
+/** Make `exName` the reference (étalon) of a comparable group: set it to ratio 1 and
+ * RESCALE every other member by the chosen lift's current ratio, so the comparison is
+ * unchanged — it's just expressed on the new reference's curve (every synthetic value
+ * shifts by one constant factor). Works for built-in and user groups (overrides). */
+function setGroupReference(groupId: string, exName: string): void {
+  const g = effectiveComparableGroups().find((x) => x.id === groupId);
+  if (!g) return;
+  const members = g.members ?? [];
+  const target = members.find((m) => m.exerciseName === exName);
+  if (!target || !(target.ratio > 0) || Math.abs(target.ratio - 1) < 1e-9) return; // missing or already ref
+  const factor = target.ratio;
+  for (const m of members)
+    setGroupRatio(groupId, m.exerciseName, m.exerciseName === exName ? 1 : Math.round((m.ratio / factor) * 1000) / 1000);
 }
 
 // ---- Per-group DISPLAY mode (Combined / Members / Both), editable ----------
@@ -9361,19 +9382,26 @@ function exerciseInfoHtml(name: string): string {
     // withMemberOverrides / userComparableTag.
     const ratioInput = (gid: string, on: boolean): string =>
       on && kind === "compare"
-        ? `<span class="ex-grp-ratio" title="Scaling ratio for this lift in this group (1 = same as the reference, 0.8 = 80%). Edit to tune how it compares.">×<input class="ex-grp-ratioin" type="number" step="0.05" min="0.05" max="2" value="${ratioOf(gid)}" data-grpratio-id="${escapeHtml(gid)}" data-grpratio-ex="${escapeHtml(name)}" aria-label="Scaling ratio for ${escapeHtml(displayName(name))}" /></span>`
+        ? `<span class="ex-grp-ratio" title="Scaling ratio for this lift in this group (1 = same as the reference, 0.8 = 80%). Edit to tune how it compares.">×<input class="ex-grp-ratioin" type="number" step="0.05" min="0.05" max="20" value="${ratioOf(gid)}" data-grpratio-id="${escapeHtml(gid)}" data-grpratio-ex="${escapeHtml(name)}" aria-label="Scaling ratio for ${escapeHtml(displayName(name))}" /></span>`
         : "";
+    // ★/☆ to set THIS lift as the group's reference (étalon). ★ (gold) = it already is;
+    // ☆ = tap to make it the reference (the other members rescale onto its curve).
+    const refStar = (gid: string, on: boolean): string =>
+      !(on && kind === "compare") ? ""
+        : Math.abs(ratioOf(gid) - 1) < 1e-6
+          ? `<span class="ex-grp-star is-ref" title="${escapeHtml(displayName(name))} is the reference (étalon) of this group">★</span>`
+          : `<button type="button" class="ex-grp-star" data-grpref-id="${escapeHtml(gid)}" data-grpref-ex="${escapeHtml(name)}" title="Make ${escapeHtml(displayName(name))} the reference (étalon) of this group — rescales the others onto its curve">☆</button>`;
     return (
       `<span class="ex-meta-chips">` +
       all.map((g) => {
         const on = memberIds.has(g.id);
-        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratioInput(g.id, on)}${pillInfoEx(g.derivedName ?? g.label)}`;
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratioInput(g.id, on)}${refStar(g.id, on)}${pillInfoEx(g.derivedName ?? g.label)}`;
       }).join("") +
       // YOUR groups (created here) — toggle this lift in/out, and (comparable) tune its ratio.
       userGroupsOfKind(kind).map((d) => {
         const on = (d.members ?? []).includes(name);
         const id = `user.${kind}.${d.name}`; // matches userComparableTag's id for compare groups
-        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>${ratioInput(id, on)}${pillInfoEx(d.name)}`;
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>${ratioInput(id, on)}${refStar(id, on)}${pillInfoEx(d.name)}`;
       }).join("") +
       // ＋ New — create a brand-new group seeded with this lift.
       `<button type="button" class="ex-meta-chip ex-newgroup" data-newgroup="${kind}" data-newgroup-ex="${escapeHtml(name)}" title="Create a new ${kind === "combine" ? "combinable" : "comparable"} group from this lift">＋ New</button>` +
@@ -9483,12 +9511,20 @@ function exerciseInfoHtml(name: string): string {
       // moves 80% of the reference for the same effort. Combinable groups are 1:1 (no ratio).
       const ratioCtl = (m: { exerciseName: string; ratio: number }) =>
         isCompare
-          ? `<span class="ex-grp-ratio" title="Scaling weight — the lift is divided by this to compare on one curve (1 = same as the reference, 0.8 = 80%)">×<input class="ex-grp-ratioin" type="number" step="0.05" min="0.05" max="2" value="${m.ratio}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-name="${escapeHtml(gname)}" data-grpratio-ex="${escapeHtml(m.exerciseName)}" aria-label="Scaling weight for ${escapeHtml(displayName(m.exerciseName))}" /></span>`
+          ? `<span class="ex-grp-ratio" title="Scaling weight — the lift is divided by this to compare on one curve (1 = same as the reference, 0.8 = 80%)">×<input class="ex-grp-ratioin" type="number" step="0.05" min="0.05" max="20" value="${m.ratio}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-name="${escapeHtml(gname)}" data-grpratio-ex="${escapeHtml(m.exerciseName)}" aria-label="Scaling weight for ${escapeHtml(displayName(m.exerciseName))}" /></span>`
           : "";
+      // Star = the group's reference (étalon). The current reference shows a gold ★; tap
+      // another lift's ☆ to make IT the reference (the others rescale onto its curve).
+      const grpRef = isCompare ? groupReferenceEx(g.id) : null;
+      const refCtl = (m: { exerciseName: string; ratio: number }) =>
+        !isCompare ? ""
+          : m.exerciseName === grpRef
+            ? `<span class="ex-grp-star is-ref" title="Reference lift (étalon) — the others are scaled onto its curve">★</span>`
+            : `<button type="button" class="ex-grp-star" data-grpref-id="${escapeHtml(g.id)}" data-grpref-ex="${escapeHtml(m.exerciseName)}" title="Make ${escapeHtml(displayName(m.exerciseName))} the reference (étalon) — rescales the others onto its curve">☆</button>`;
       const memberChips = (g.members ?? []).length
         ? (g.members ?? [])
             .map((m) =>
-              `<span class="ex-grp-mchip">${escapeHtml(displayName(m.exerciseName))}${ratioCtl(m)}` +
+              `<span class="ex-grp-mchip">${refCtl(m)}${escapeHtml(displayName(m.exerciseName))}${ratioCtl(m)}` +
               `<button type="button" class="ex-grp-rm" data-grprm-id="${escapeHtml(g.id)}" data-grprm-name="${escapeHtml(gname)}" data-grprm-ex="${escapeHtml(m.exerciseName)}" title="Remove ${escapeHtml(displayName(m.exerciseName))} from this group" aria-label="Remove">✕</button></span>`,
             )
             .join("")
@@ -11445,6 +11481,17 @@ async function init() {
       if (gid2.startsWith("user.")) toggleUserGroupMember(gname2, ex2); else toggleGroupMembership(gid2, ex2);
       populateExercisePicker();
       scheduleRender(() => { reopenIndexDetail(gname2); refreshPoseViz(); });
+      return;
+    }
+    // ☆ → make this lift the group's reference (étalon): rescale the other members onto
+    // its curve. Works from a member's card OR a group's member list. Refresh the open
+    // card (stars + ratios move) and re-scale everything downstream.
+    const grpRef = t.closest<HTMLElement>(".ex-grp-star[data-grpref-id]");
+    if (grpRef?.dataset.grprefId && grpRef.dataset.grprefEx) {
+      setGroupReference(grpRef.dataset.grprefId, grpRef.dataset.grprefEx);
+      refreshExerciseInfo();
+      populateExercisePicker();
+      scheduleRender();
       return;
     }
     const chip = t.closest<HTMLElement>(".ex-meta-chip[data-grp-id]");
