@@ -70,8 +70,8 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // Back-to-wall gets a 15cm "grace" applied in code (the scale shifted down
       // 15cm), so against the wall the first 15cm of lean does nothing.
       lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
-      // Reps done unbroken (no pause at the bottom) reads slightly harder.
-      continuity: { paused: 1.0, uninterrupted: 1.05 },
+      // Uninterrupted (unbroken) is the DEFAULT and the ×1 reference; paused is easier.
+      continuity: { paused: 0.95, uninterrupted: 1.0 },
       // Hands down: both (×1 reference) or ONE hand. A one-hand handstand push-up
       // is far harder — placeholder ×1.8 (calibrate). Used by the scapular HSPU
       // variant the owner logs "one hand" on.
@@ -84,7 +84,7 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // are NEUTRAL for now (calibrate later — likely farther = slightly harder).
       shoulderDist: { "0cm": 1.0, blue: 1.0 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused", hands: "two", range: "full", shoulderDist: "0cm" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "uninterrupted", hands: "two", range: "full", shoulderDist: "0cm" },
   },
   PUSHUP: {
     // INCLINE (hands raised) is NOT a family dimension — it's how high the hands are,
