@@ -15500,6 +15500,11 @@ function setupWorkoutAnalysis(): void {
       if (e.button > 0) return;
       const t = e.target as HTMLElement;
       if (pickDrawerScope !== null && t.closest(".wa-pick-card.is-pick-drawer")) {
+        // Do NOT arm the close-swipe on an interactive / horizontally-scrolling control:
+        // dragging a slider, opening a select, tapping a button or swiping the chip strip
+        // must do THEIR job — a horizontal drag on a slider was being hijacked as a close,
+        // making the drawer "disappear". Arm close only from the drawer's neutral areas.
+        if (t.closest("input, select, textarea, button, a, label, .xdd, .wa-cfg, .wa-chips, .wa-chips-wrap, .wa-sel-pills, .wa-catstrip")) return;
         mode = "close"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId; return;
       }
       if (!t.closest(".wa-chips-fold-sum")) return;
