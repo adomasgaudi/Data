@@ -52,6 +52,10 @@ export interface GraphConfig {
   potentialLog?: boolean | undefined;
   /** The lifetime-potential ceiling (kg) the log view converges on. */
   potentialCeiling?: number | undefined;
+  /** EXPERIMENTAL "native log": instead of re-spacing the axis, transform each data
+   * POINT's value to −ln(ceiling − value) and plot THAT on a normal linear axis (so the
+   * plotted numbers themselves become the log values). Off / undefined = normal. */
+  potentialNativeLog?: boolean | undefined;
 }
 
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = {

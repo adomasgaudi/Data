@@ -361,6 +361,25 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
   let ry = { yMin: 0, yMax: 1 };
+  // "Potential (log)" AXIS-scale mode: the LEFT y-axis is spaced by −ln(ceiling − value),
+  // so an approach-to-ceiling reads straight. tY / tYinv are the data⇄transformed maps
+  // (identity when off); pan/zoom MUST operate in transformed space so the kg numbers move
+  // logarithmically, not linearly. (The "native log" mode instead transforms the DATA
+  // values upstream and leaves the axis linear, so this stays off there.)
+  const yLogCeil = (): number | null =>
+    cfg.potentialLog && typeof cfg.potentialCeiling === "number" && cfg.potentialCeiling > 0 ? cfg.potentialCeiling : null;
+  const tY = (v: number): number => { const L = yLogCeil(); return L === null ? v : -Math.log(Math.max(0.5, L - v)); };
+  const tYinv = (t: number): number => { const L = yLogCeil(); return L === null ? t : L - Math.exp(-t); };
+  /** Pan the left-y view by a screen fraction, in transformed space (linear when off). */
+  const panYView = (yMin: number, yMax: number, frac: number) => {
+    const T0 = tY(yMin), T1 = tY(yMax), dT = frac * (T1 - T0);
+    return { yMin: tYinv(T0 + dT), yMax: tYinv(T1 + dT) };
+  };
+  /** Zoom the left-y view about screen-fraction vfrac by factor ky, in transformed space. */
+  const zoomYView = (yMin: number, yMax: number, vfrac: number, ky: number) => {
+    const T0 = tY(yMin), T1 = tY(yMax), fy = T0 + (1 - vfrac) * (T1 - T0);
+    return { yMin: tYinv(fy - (fy - T0) * ky), yMax: tYinv(fy + (T1 - fy) * ky) };
+  };
   // True once the user has panned/zoomed: then a series UPDATE (e.g. toggling a graph
   // metric) keeps the current view instead of re-fitting, so adding/removing metrics
   // no longer resets the pan/zoom. Cleared by resetView (fitView / double-tap / mount).
@@ -429,19 +448,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const plotW = W - M.l - M.r;
     const plotH = h - M.t - M.b;
     const xPix = (x: number) => M.l + ((x - view.xMin) / (view.xMax - view.xMin)) * plotW;
-    // "Lifetime potential" log view: space the LEFT axis by −ln(ceiling − value) so an
-    // exponential approach to the ceiling reads as a straight line. niceTicks still makes
-    // nice kg ticks; yL just positions them non-linearly. Only when the ceiling sits ABOVE
-    // the data (else the transform is undefined) — otherwise the axis stays linear.
-    const potL = cfg.potentialCeiling;
-    const useLog = !!cfg.potentialLog && typeof potL === "number" && potL > view.yMin;
-    const tfm = (v: number) => -Math.log(Math.max(0.5, (potL as number) - v));
-    const yL = useLog
-      ? (y: number) => {
-          const t0 = tfm(view.yMin), t1 = tfm(view.yMax);
-          return M.t + (1 - (t1 === t0 ? 0 : (tfm(y) - t0) / (t1 - t0))) * plotH;
-        }
-      : (y: number) => M.t + (1 - (y - view.yMin) / (view.yMax - view.yMin)) * plotH;
+    // "Potential (log)" axis mode: position values via tY (−ln(ceiling − value)); niceTicks
+    // still makes nice kg ticks, yL just places them non-linearly. Identity when off.
+    const yL = (y: number) => {
+      const t0 = tY(view.yMin), t1 = tY(view.yMax);
+      return M.t + (1 - (t1 === t0 ? 0 : (tY(y) - t0) / (t1 - t0))) * plotH;
+    };
     const yR = (y: number) => M.t + (1 - (y - ry.yMin) / (ry.yMax - ry.yMin)) * plotH;
     const yOf = (s: SvgSeries) => (s.axis === "right" ? yR : yL);
 
@@ -1000,9 +1012,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     xMin = fx - (fx - xMin) * kx;
     xMax = fx + (xMax - fx) * kx;
     if (!panX()) {
-      const fyL = yMin + (1 - vfrac) * (yMax - yMin);
-      yMin = fyL - (fyL - yMin) * ky;
-      yMax = fyL + (yMax - fyL) * ky;
+      ({ yMin, yMax } = zoomYView(yMin, yMax, vfrac, ky)); // transformed-space when log axis on
       const fyR = ry.yMin + (1 - vfrac) * (ry.yMax - ry.yMin);
       ry = { yMin: fyR - (fyR - ry.yMin) * ky, yMax: fyR + (ry.yMax - fyR) * ky };
     }
@@ -1037,8 +1047,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // pan by midpoint movement (both y-axes shift together)
       const fracX = (mx - pinch.mx) / plotW;
       const fracY = panX() ? 0 : (my - pinch.my) / plotH;
-      const lr = view.yMax - view.yMin;
-      view = { xMin: view.xMin - fracX * (view.xMax - view.xMin), xMax: view.xMax - fracX * (view.xMax - view.xMin), yMin: view.yMin + fracY * lr, yMax: view.yMax + fracY * lr };
+      const py = panYView(view.yMin, view.yMax, fracY); // transformed-space when log axis on
+      view = { xMin: view.xMin - fracX * (view.xMax - view.xMin), xMax: view.xMax - fracX * (view.xMax - view.xMin), yMin: py.yMin, yMax: py.yMax };
       if (!panX()) { const rr = ry.yMax - ry.yMin; ry = { yMin: ry.yMin + fracY * rr, yMax: ry.yMax + fracY * rr }; }
       // per-axis zoom about the midpoint, gated by the spread on each axis
       const { fx, vfrac } = pixInfo(mx, my);
@@ -1057,8 +1067,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       if (Math.abs(e.clientX - pan.x) + Math.abs(e.clientY - pan.y) > 4) pan.moved = true;
       const dx = ((e.clientX - pan.x) / plotW) * (pan.v.xMax - pan.v.xMin);
       const fracY = panX() ? 0 : (e.clientY - pan.y) / plotH;
-      const dy = fracY * (pan.v.yMax - pan.v.yMin);
-      view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: pan.v.yMin + dy, yMax: pan.v.yMax + dy };
+      const py = panYView(pan.v.yMin, pan.v.yMax, fracY); // transformed-space when log axis on
+      view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: py.yMin, yMax: py.yMax };
       if (!panX()) { const rr = pan.r.yMax - pan.r.yMin; ry = { yMin: pan.r.yMin + fracY * rr, yMax: pan.r.yMax + fracY * rr }; }
       userAdjusted = true; // remember the user's pan across series updates
       hideTip();

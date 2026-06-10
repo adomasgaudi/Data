@@ -14801,9 +14801,10 @@ function renderWaGraph(): void {
   // plateaued on a linear axis. This spaces the strength axis by how far you are from a
   // lifetime-potential CEILING, so real (slowing) gains keep reading as a rising line.
   // One ceiling for now (single athlete). Set it above your current best.
-  const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `ceiling ${c.potentialCeiling ?? "—"} kg` : "",
-    onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength axis by distance to a lifetime-potential ceiling — so an approach-to-ceiling reads as a straight line and a true plateau still flattens. Set the ceiling below; ×BW turns off while this is on.") +
-    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) the log view converges on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
+  const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `axis · ceiling ${c.potentialCeiling ?? "—"}` : c.potentialNativeLog ? `native · ceiling ${c.potentialCeiling ?? "—"}` : "",
+    onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength AXIS by distance to a lifetime-potential ceiling — values stay in kg, the axis just compresses near the ceiling. An approach-to-ceiling reads straight; a true plateau still flattens.") +
+    onoff(!!c.potentialNativeLog, `data-wacfgtoggle="potentialNativeLog"`, "Native log (exp.)", "EXPERIMENTAL: transform each data POINT's value to its log-distance from the ceiling and plot THAT on a normal linear axis (the plotted numbers become the log values).") +
+    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
   // Two-column grid: Data | Lines & filter on top, metric groups | Bars & axes below,
   // the All-graphs toggle spanning the bottom.
   const cfgUi =
@@ -15761,10 +15762,12 @@ function setupWorkoutAnalysis(): void {
     // Prediction / Decay line modifiers (pills) — flip the config flag, redraw.
     const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
     if (cfgTog?.dataset.wacfgtoggle) {
-      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay" | "potentialLog";
+      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay" | "potentialLog" | "potentialNativeLog";
       waGraphConfig[key] = !waGraphConfig[key];
-      // The potential-log axis is in kg; it can't also be ×BW, so turn ×BW off when on.
-      if (key === "potentialLog" && waGraphConfig.potentialLog) S.waPerBodyweight = false;
+      // The two potential-log views are alternatives (axis-scale vs data-transform) and
+      // both are kg-based, so turning one on turns the other AND ×BW off.
+      if (key === "potentialLog" && waGraphConfig.potentialLog) { waGraphConfig.potentialNativeLog = false; S.waPerBodyweight = false; }
+      if (key === "potentialNativeLog" && waGraphConfig.potentialNativeLog) { waGraphConfig.potentialLog = false; S.waPerBodyweight = false; }
       scheduleWaGraph();
       return;
     }

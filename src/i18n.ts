@@ -269,6 +269,7 @@ const LT: Record<string, string> = {
   "Prediction": "Prognozė",
   "Potential (log)": "Potencialas (log)",
   "Log to potential": "Log iki potencialo",
+  "Native log (exp.)": "Natyvus log (eksp.)",
   "Ceiling (kg)": "Riba (kg)",
   "Decay": "Nykimas",
   "Hard sets only": "Tik sunkios serijos",

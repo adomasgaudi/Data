@@ -268,6 +268,25 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   const forceLeftRange = (input.perBodyweight && mainBw && mainBw > 0 && Number.isFinite(kgMax))
     ? { min: 0, max: (kgMax + (kgMax * 0.08 || 1)) / mainBw }
     : undefined;
+  // EXPERIMENTAL "native log": transform each LEFT-axis (strength/kg) point's VALUE to
+  // −ln(ceiling − value) and plot THAT on a normal linear axis. So the data itself becomes
+  // the log values (vs the axis-scale "potentialLog" which leaves the values in kg). The
+  // axis then stays linear, so pan/zoom is naturally correct.
+  const nativeCeil = input.config.potentialNativeLog && typeof input.config.potentialCeiling === "number" && input.config.potentialCeiling > 0
+    ? input.config.potentialCeiling : null;
+  if (nativeCeil !== null) {
+    const tf = (y: number) => -Math.log(Math.max(0.5, nativeCeil - y));
+    for (const s of series) {
+      if (s.axis === "right") continue; // volume/right axis stays as-is
+      s.points = s.points.map((p) => {
+        const q: typeof p = { ...p };
+        if (typeof p.y === "number") (q as { y: number }).y = tf(p.y);
+        if (typeof (p as { lo?: number }).lo === "number") (q as { lo?: number }).lo = tf((p as { lo: number }).lo);
+        if (typeof (p as { hi?: number }).hi === "number") (q as { hi?: number }).hi = tf((p as { hi: number }).hi);
+        return q;
+      });
+    }
+  }
   const config = {
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
     interactive: input.interactive ?? true,
