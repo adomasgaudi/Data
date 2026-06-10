@@ -48,7 +48,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.203</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.204</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -212,20 +212,29 @@
         <select id="athlete" class="athlete-select-hidden" aria-hidden="true" tabindex="-1"></select>
 
         <details id="athleteDetails" class="athlete-details">
-          <summary class="athlete-details-summary"><span class="ad-sum-row"><span class="ad-title">Stats</span> <span class="ad-caret">▾</span></span><span id="bodyStatsSummary" class="ad-summary-stats"></span></summary>
+          <!-- Collapsed = just the STATS title card + a ▾ triangle. Open it and the body
+               shows a MINI carousel of interesting facts (auto-rotating every 10s); its
+               "More" button swaps the carousel for the full stats view. -->
+          <summary class="athlete-details-summary"><span class="ad-sum-row"><span class="ad-title">Stats</span> <span class="ad-caret">▾</span></span></summary>
           <div class="athlete-details-body">
-            <div id="athleteStats" class="athlete-stats"></div>
-            <p id="athleteProfile" class="athlete-profile"></p>
-            <div id="momentum" class="momentum"></div>
-            <div id="trainBreakdown" class="train-breakdown"></div>
-            <!-- Lifts whose current (decayed) strength has slipped >2% below their
-                 peak — a "train these to maintain" list. Empty → hidden. -->
-            <div id="maintenance" class="maintenance"></div>
-            <!-- Front/back muscle map shaded by how much each region is trained. -->
-            <details id="muscleMap" class="muscle-map">
-              <summary class="muscle-map-summary">Muscle map <span class="mm-caret">▾</span></summary>
-              <div id="muscleMapBody" class="muscle-map-body"></div>
-            </details>
+            <!-- Mini stats: auto-rotating carousel of headline facts; JS-rendered. -->
+            <div id="miniStats" class="mini-stats"></div>
+            <!-- Full stats: hidden until "More" is pressed. -->
+            <div id="fullStats" class="full-stats" hidden>
+              <span id="bodyStatsSummary" class="full-stats-chips"></span>
+              <div id="athleteStats" class="athlete-stats"></div>
+              <p id="athleteProfile" class="athlete-profile"></p>
+              <div id="momentum" class="momentum"></div>
+              <div id="trainBreakdown" class="train-breakdown"></div>
+              <!-- Lifts whose current (decayed) strength has slipped >2% below their
+                   peak — a "train these to maintain" list. Empty → hidden. -->
+              <div id="maintenance" class="maintenance"></div>
+              <!-- Front/back muscle map shaded by how much each region is trained. -->
+              <details id="muscleMap" class="muscle-map">
+                <summary class="muscle-map-summary">Muscle map <span class="mm-caret">▾</span></summary>
+                <div id="muscleMapBody" class="muscle-map-body"></div>
+              </details>
+            </div>
           </div>
         </details>
 

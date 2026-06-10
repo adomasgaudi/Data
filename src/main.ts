@@ -4295,9 +4295,12 @@ function renderAthlete() {
     waGraphSel = defaultGraphSelection();
     titleExpanded.graph = false;
     titleExpanded.hist = false;
+    statsFullShown = false; // new athlete → lead with the mini facts again
+    miniIdx = 0;
   }
   initHeatYear();
   renderAthleteProfile();
+  applyStatsView(); // refresh the mini carousel for this athlete
   renderSAnalysis();
   renderAthleteStats();
   renderMomentum();
@@ -4501,6 +4504,99 @@ function renderAthleteProfile() {
 }
 
 // ===========================================================================
+// Mini stats — an auto-rotating carousel of headline "interesting facts" pulled
+// from the SAME pure derivations the full stats panel uses (no parallel copy of
+// state). Shown when the Stats title card is expanded; "More" swaps it for the
+// full panel. Facts rotate every 10s.
+// ===========================================================================
+type StatFact = { big: string; lbl: string; sub?: string };
+/** Build the headline facts for the carousel from the athlete's profile + training
+ * summary. Read-only projection of the same helpers the full panel uses. */
+function statsFacts(username: string): StatFact[] {
+  const facts: StatFact[] = [];
+  const f1s = (n: number) => (Math.round(n * 10) / 10).toString();
+  const p = athProfile(username);
+  const ts = athleteSummary(activeRecords(), username);
+  // nFFMI first — the surprising "muscle-for-height" hook with the natural ceiling.
+  if (p) {
+    const dist = bfDistFor(username);
+    const range = nffmiRange(p.weight, p.height, dist);
+    if (range) facts.push({ big: range.avg.toFixed(1), lbl: "nFFMI", sub: "~22 trained · ~25 natural ceiling" });
+    // Buildable muscle to the natural cap — the motivating "headroom" number.
+    const pot = p.sex ? naturalPotential(p.height, p.sex, ffmiCapFor(username)) : null;
+    const mass = bodyMassRanges(p.weight, dist);
+    if (pot) {
+      const build = pot.leanLimit.avg - mass.lean.avg;
+      if (build > 0.5) facts.push({ big: `+${f1s(build)} kg`, lbl: "muscle to your natural cap", sub: `lean ceiling ≈ ${f1s(pot.leanLimit.avg)} kg` });
+    }
+    facts.push({ big: `${f1s(mass.lean.avg)} kg`, lbl: "lean mass", sub: "muscle, bone, organs, water" });
+    facts.push({ big: `${p.weight} kg`, lbl: "bodyweight" });
+    facts.push({ big: `${Math.round(dist.avg * 100)}%`, lbl: "body fat" });
+    facts.push({ big: `${f1s(mass.fat.avg)} kg`, lbl: "fat mass" });
+    if (p.age != null) facts.push({ big: `${p.age}`, lbl: "years old" });
+    facts.push({ big: `${p.height} cm`, lbl: "height" });
+  }
+  // Training facts (work even with no body profile).
+  if (ts.sets > 0) {
+    if (ts.firstDate && ts.lastDate) {
+      const dur = trainingDuration(ts.firstDate, ts.lastDate); // "18 months"
+      const sp = dur.indexOf(" ");
+      facts.push(sp > 0 ? { big: dur.slice(0, sp), lbl: `${dur.slice(sp + 1)} training` } : { big: dur, lbl: "training" });
+    }
+    facts.push({ big: ts.sessionsPerWeek.toFixed(1), lbl: "sessions / week" });
+  }
+  return facts;
+}
+
+// Carousel state — module-level so the 10s timer can advance it across renders.
+let miniFacts: StatFact[] = [];
+let miniIdx = 0;
+let miniTimer: number | null = null;
+let statsFullShown = false; // mini carousel (false) vs full panel (true), within the open card
+function stopMiniRotate(): void { if (miniTimer != null) { clearInterval(miniTimer); miniTimer = null; } }
+function startMiniRotate(): void {
+  stopMiniRotate();
+  if (miniFacts.length > 1) miniTimer = window.setInterval(() => { miniIdx = (miniIdx + 1) % miniFacts.length; paintMiniFact(); }, 10000);
+}
+/** Paint just the current fact + active dot (cheap swap, no full rebuild). */
+function paintMiniFact(): void {
+  const stage = document.getElementById("msStage");
+  if (stage) {
+    const f = miniFacts[miniIdx];
+    stage.innerHTML = f
+      ? `<span class="ms-big">${escapeHtml(f.big)}</span><span class="ms-lbl">${escapeHtml(f.lbl)}</span>${f.sub ? `<span class="ms-sub">${escapeHtml(f.sub)}</span>` : ""}`
+      : "";
+    stage.classList.remove("ms-in"); void stage.offsetWidth; stage.classList.add("ms-in"); // restart fade
+  }
+  document.querySelectorAll<HTMLElement>(".ms-dot").forEach((d) => { d.classList.toggle("is-on", Number(d.dataset.msdot) === miniIdx); });
+}
+/** Rebuild the mini carousel (stage + dots + More) for the current athlete. */
+function renderMiniStats(): void {
+  const host = document.getElementById("miniStats");
+  if (!host) return;
+  miniFacts = statsFacts(els.athlete.value);
+  if (miniIdx >= miniFacts.length) miniIdx = 0;
+  if (miniFacts.length === 0) { host.innerHTML = `<p class="muted">No stats yet.</p>`; stopMiniRotate(); return; }
+  const dots = miniFacts.map((_, i) => `<button type="button" class="ms-dot${i === miniIdx ? " is-on" : ""}" data-msdot="${i}" aria-label="Fact ${i + 1}"></button>`).join("");
+  host.innerHTML =
+    `<div id="msStage" class="ms-stage" aria-live="polite"></div>` +
+    `<div class="ms-foot"><div class="ms-dots">${dots}</div>` +
+    `<button type="button" class="ms-more" data-msmore="1" title="Show the full stats">More ▾</button></div>`;
+  paintMiniFact();
+}
+/** Show mini OR full inside the (possibly open) Stats card, and drive the rotate timer. */
+function applyStatsView(): void {
+  const mini = document.getElementById("miniStats");
+  const full = document.getElementById("fullStats");
+  const details = document.getElementById("athleteDetails") as HTMLDetailsElement | null;
+  const open = !!details?.open && statsSectionShown;
+  if (mini) mini.hidden = !open || statsFullShown;
+  if (full) full.hidden = !open || !statsFullShown;
+  if (open && !statsFullShown) { renderMiniStats(); startMiniRotate(); }
+  else stopMiniRotate();
+}
+
+// ===========================================================================
 // Simplified analysis page (S-ANL). Built from scratch (CLAUDE.md rule 12) — it
 // uses the shared PURE data helpers (athProfile, workoutsForUser…) but none of
 // the full-ANL rendering code. Two sections so far: Body stats + Workouts.
@@ -4640,15 +4736,30 @@ function applyStatsSection(): void {
     btn.setAttribute("aria-pressed", String(statsSectionShown));
     btn.setAttribute("title", statsSectionShown ? "Hide the Stats section" : "Show the Stats section");
   }
+  applyStatsView(); // keep the mini carousel / timer in step with hide-show
 }
 function setupStatsToggle(): void {
   document.getElementById("statsToggleBtn")?.addEventListener("click", () => {
     statsSectionShown = !statsSectionShown;
     try { localStorage.setItem(STATS_SHOWN_KEY, statsSectionShown ? "1" : "0"); } catch { /* storage may be unavailable */ }
-    // Reveal it COLLAPSED — its own summary then expands it normally.
+    // Reveal it COLLAPSED — its own summary then expands it (into the mini carousel).
     const details = document.getElementById("athleteDetails") as HTMLDetailsElement | null;
     if (details && statsSectionShown) details.open = false;
     applyStatsSection();
+  });
+  // Expanding the card shows the mini carousel; collapsing resets it back to mini
+  // so the next open leads with the facts again.
+  const details = document.getElementById("athleteDetails") as HTMLDetailsElement | null;
+  details?.addEventListener("toggle", () => {
+    if (!details.open) statsFullShown = false;
+    applyStatsView();
+  });
+  // "More" swaps the carousel for the full panel; tapping a dot jumps to that fact.
+  document.getElementById("miniStats")?.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest(".ms-more")) { statsFullShown = true; applyStatsView(); return; }
+    const dot = t.closest<HTMLElement>(".ms-dot");
+    if (dot) { miniIdx = Number(dot.dataset.msdot) || 0; paintMiniFact(); startMiniRotate(); }
   });
   applyStatsSection();
 }

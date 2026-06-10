@@ -58,6 +58,18 @@ const LT: Record<string, string> = {
   // ---- Page titles (top bar shows the current page name) ----
   "Athlete": "Sportininkas",
   "Stats": "Statistika",
+  // ---- Mini stats carousel ----
+  "More ▾": "Daugiau ▾",
+  "~22 trained · ~25 natural ceiling": "~22 treniruotas · ~25 natūrali riba",
+  "muscle to your natural cap": "raumenų iki natūralios ribos",
+  "lean mass": "liesa masė",
+  "muscle, bone, organs, water": "raumenys, kaulai, organai, vanduo",
+  "bodyweight": "kūno svoris",
+  "fat mass": "riebalų masė",
+  "years old": "metų",
+  "height": "ūgis",
+  "sessions / week": "treniruotės / sav.",
+  "No stats yet.": "Kol kas nėra statistikos.",
   "Group": "Grupė",
   "Add": "Pridėti",
   "Exercise codes": "Pratimų kodai",

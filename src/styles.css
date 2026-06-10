@@ -875,6 +875,32 @@ main { padding-bottom: 5rem; }
 .bs-cell b { color: var(--text); font-weight: 700; }
 .bs-cell .bs-u { color: var(--muted); font-size: 0.66rem; font-weight: 600; }
 .athlete-details-body { margin-top: 0.85rem; }
+.full-stats-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.7rem; }
+.full-stats-chips:empty { display: none; }
+/* Mini stats carousel: one big headline fact at a time, dots + "More" below. */
+.mini-stats { display: flex; flex-direction: column; gap: 0.6rem; }
+.ms-stage {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 2px; min-height: 92px; padding: 0.4rem 0.5rem;
+}
+.ms-big { font-size: 1.9rem; font-weight: 800; line-height: 1.05; color: var(--text); letter-spacing: -0.01em; }
+.ms-lbl { font-size: 0.9rem; font-weight: 600; color: var(--accent); }
+.ms-sub { font-size: 0.74rem; font-weight: 500; color: var(--muted); margin-top: 1px; }
+.ms-in { animation: msFade 0.35s ease; }
+@keyframes msFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ms-foot { display: flex; align-items: center; gap: 0.6rem; }
+.ms-dots { display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: wrap; }
+.ms-dot {
+  width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s;
+}
+.ms-dot.is-on { background: var(--accent); transform: scale(1.25); }
+.ms-more {
+  flex: none; min-height: var(--tap-min); display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--accent); font-size: 0.8rem; font-weight: 700; cursor: pointer;
+}
+.ms-more:hover { border-color: var(--accent); }
 .athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
 .athlete-profile:empty { display: none; }
 .profile-specs { color: var(--text); }
