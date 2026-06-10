@@ -119,6 +119,10 @@ shed via CLN-1; duplicate graphs handled via CUT-2.
 ## 🧹 Prune sweeps (single-class hunts — see CLAUDE.md `#prune`)
 Each `#prune` run records its finds here so the sweep survives across sessions.
 
+### POSE — leftover dead handlers after the 3-D/pose engine was warehoused (b.2.8.187)
+The visual pose editor was warehoused (`warehouse/2026-06-10-pose-3d-engine/`) and its three.js + frames dropped, but the *handlers* that drove it remain in `main.ts` as dead code — they reference `.pose-ctl` / `.pose-scrub` / `.ex-var-pose` / `.pose-photo` containers that are emitted NOWHERE (the driving UI was removed earlier). They compile and never fire.
+- 🟢 **POSE-1** [Index] (SP:1) — remove the dormant pose handlers in `main.ts`: the `.pose-ctl` click handler, the `.pose-scrub` `onScrub` input + change handlers, the empty `.pose-photo-scrub` change handler, and the no-op `refreshPoseViz()` + its ~11 dormant call sites (e.g. `scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); })`). Verify by grepping that no `.pose-*`/`.ex-var-*` class is ever emitted before deleting. Left in place during the warehouse change to keep that diff focused on the load win.
+
 ### CRAMP — "roomy menu / labelled segmented control instead of a compact cycling pill" (rules 15 & 16)
 The class: an options menu that isn't as dense as the tightest shipped UI (the history-list ⚙ pill grid) — a mutually-exclusive choice rendered as a labelled segmented row ("Show as: Code | Short | Full") instead of ONE cycling pill, or a section header ("Settings") + roomy padding that eats vertical space.
 - ✅ **CRAMP-1** [Selector] — the exercise-selector menu (BOTH Graph & History via `renderSelector`): "Show as: Code|Short|Full name" segmented row → ONE cycling `Code/Short/Full` pill; dropped the "Settings" header; settings now a tight wrapping pill row; menu padding 0.7→0.45rem, pills 0.76→0.72rem. (b.2.7.x)

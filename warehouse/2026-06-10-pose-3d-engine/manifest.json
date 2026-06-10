@@ -1,0 +1,38 @@
+{
+  "id": "2026-06-10-pose-3d-engine",
+  "title": "Visual pose editor — 3-D three.js mannequin + 2-D drawn figure + photo frames",
+  "movedOn": "2026-06-10",
+  "movedAtVersion": "b.2.8.187",
+  "movedAtSp": 1835,
+  "expiresAtSp": 1935,
+  "removedInCommit": "<filled by the removal commit>",
+  "reason": "Dormant since the Stickman/Photo/3D mode UIs that drove it were removed: nothing emits a .pose3d/.pose-draw/.pose-photo-scrub container, so the figures could never mount. But it kept pulling ~1 MB of three.js (poseScene) + 170 KB of base64 frames (poseFrames) onto EVERY page's download + parse path, hurting load smoothness for code that could not run. Warehoused (not deleted) because it is parked for the 'visual variation picker' rebuild.",
+  "origin": [
+    "src/poseScene.ts (three.js scene, OrbitControls, GLTFLoader, SkeletonUtils)",
+    "src/poseDraw.ts (2-D canvas figure)",
+    "src/poseFrames.ts (POSE_FRAMES: inlined base64 handstand-pushup frames)"
+  ],
+  "provided": ["mountPoseScene", "PoseScene", "mountPoseDraw", "PoseDraw", "POSE_FRAMES"],
+  "dependencies": {
+    "imports": ["three", "three/addons/controls/OrbitControls.js", "three/addons/loaders/GLTFLoader.js", "three/addons/utils/SkeletonUtils.js"],
+    "npmPackages": ["three", "@types/three"],
+    "sharedState": ["(none — figures owned their own activePose3d/activeDrawn handles, also removed)"],
+    "domHandles": ["runtime .pose3d / .pose-draw / .pose-photo containers (never emitted today)"]
+  },
+  "wiredInto": [
+    "src/main.ts refreshPoseViz() — was refreshPose3d()+refreshDrawn(); now a no-op stub kept for its (dormant) callers",
+    "src/main.ts .pose-ctl click handler — removed the 2 live activePose3d/activeDrawn .update(vec) lines",
+    "src/main.ts onScrub (.pose-scrub input) — removed the activeDrawn .update/.scrub line + unused frac",
+    "src/main.ts .pose-scrub change handler — removed the activeDrawn.fig.scrub(null) line",
+    "src/main.ts .pose-photo-scrub input handler — deleted entirely (was the sole POSE_FRAMES reader)"
+  ],
+  "restoreSteps": [
+    "npm install three @types/three  (re-add to package.json dependencies).",
+    "Copy poseScene.ts, poseDraw.ts, poseFrames.ts back into src/.",
+    "In src/main.ts re-add the imports: mountPoseScene/PoseScene, mountPoseDraw/PoseDraw, POSE_FRAMES.",
+    "Restore the activePose3d/activeDrawn state + refreshPose3d()/refreshDrawn() and make refreshPoseViz() call them again (see git history of the removal commit for the verbatim bodies).",
+    "Restore the .pose-ctl / .pose-scrub live-figure update lines and the .pose-photo-scrub input handler.",
+    "Re-emit the .pose3d / .pose-draw / .pose-photo container markup from the variation editor (this is the parked 'visual variation picker' rebuild — that markup never existed in the live build, so it must be authored).",
+    "npm run typecheck && npm test && npm run build."
+  ]
+}

@@ -78,9 +78,12 @@ import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variatio
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
-import { mountPoseScene, type PoseScene } from "./poseScene";
-import { mountPoseDraw, type PoseDraw } from "./poseDraw";
-import { POSE_FRAMES } from "./poseFrames";
+// The visual pose editor (3-D three.js scene, 2-D drawn figure, photo frames) was
+// warehoused on 2026-06-10 — it is DORMANT (no .pose3d/.pose-draw/.pose-photo-scrub
+// container is emitted anywhere; the UI that drove it was removed earlier). It pulled
+// in ~1 MB of three.js + 170 KB of base64 frames that were parsed on every page load
+// for code that could not run. To revive it for the parked "visual variation picker"
+// rebuild, restore from warehouse/2026-06-10-pose-3d-engine/ (see its manifest.json).
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
@@ -10193,43 +10196,16 @@ function padSceneSvg(support: string): string {
   return `<svg class="ex-pad-scene" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${floor}${wall}${rungs}</svg>`;
 }
 
-// ---- Visual "pose" editor engine: a 3-D handstand mannequin (three.js) + a 2-D
-// drawn figure. Kept (dormant) for the parked "visual variation picker" rebuild;
-// the old Stickman/Photo/3D mode UIs that drove it were removed. ----
-/** The currently-mounted 3-D scene (one at a time). */
-let activePose3d: { scene: PoseScene; el: HTMLElement } | null = null;
-/** Mount/dispose the 3-D scene to match the visible `.pose3d` container (called
- * after any editor render). Idempotent: a still-mounted container is left alone. */
-function refreshPose3d(): void {
-  const el = Array.from(document.querySelectorAll<HTMLElement>(".pose3d")).find((c) => c.isConnected && !c.closest("[hidden]")) ?? null;
-  if (activePose3d && activePose3d.el === el) return;
-  if (activePose3d) { activePose3d.scene.dispose(); activePose3d = null; }
-  if (!el) return;
-  const ex = el.dataset.poseex ?? "";
-  const note = el.dataset.posenote ?? "";
-  const fam = familyOf(ex);
-  const vec = fam ? { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
-  activePose3d = { scene: mountPoseScene(el, vec), el };
-}
-/** The currently-mounted drawn (2-D) figure (one at a time). */
-let activeDrawn: { fig: PoseDraw; el: HTMLElement } | null = null;
-/** Mount/dispose the drawn figure to match the visible `.pose-draw` container. */
-function refreshDrawn(): void {
-  const el = Array.from(document.querySelectorAll<HTMLElement>(".pose-draw")).find((c) => c.isConnected && !c.closest("[hidden]")) ?? null;
-  if (activeDrawn && activeDrawn.el === el) return;
-  if (activeDrawn) { activeDrawn.fig.dispose(); activeDrawn = null; }
-  if (!el) return;
-  const ex = el.dataset.poseex ?? "";
-  const note = el.dataset.posenote ?? "";
-  const fam = familyOf(ex);
-  const vec = fam ? { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) } : {};
-  activeDrawn = { fig: mountPoseDraw(el, vec), el };
-}
-/** Sync both visual editors (3-D + drawn figure) after any editor render. */
-function refreshPoseViz(): void {
-  refreshPose3d();
-  refreshDrawn();
-}
+// ---- Visual "pose" editor engine (3-D three.js mannequin + 2-D drawn figure +
+// photo frames) WAREHOUSED 2026-06-10: warehouse/2026-06-10-pose-3d-engine/.
+// It was dormant — nothing emits a .pose3d/.pose-draw/.pose-photo container — yet it
+// pulled ~1 MB of three.js + 170 KB of frames onto every page's parse path. The
+// figures can no longer mount, so refreshPoseViz() is now a no-op kept only so its
+// (dormant) callers stay valid; the leftover dead .pose-ctl/.pose-scrub handlers are
+// logged for a follow-up #prune in docs/cleanup-backlog.md (CLN: dead-pose-handlers). ----
+/** No-op: the visual pose figures were warehoused (see above). Kept so the existing
+ * callers compile; restore the engine from the warehouse to make this live again. */
+function refreshPoseViz(): void {}
 /** The note-variation difficulty editor: every distinct note logged for this lift,
  * each with an editable relative difficulty (×1 = no effect). Notes that look like
  * a difficulty-changing variation but haven't been reviewed get a ⚠ flag. */
@@ -11720,9 +11696,7 @@ async function init() {
     if (!fam) return;
     setNoteVecDim(ex, note, dim, level);
     const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
-    // Update the live figure(s) without remounting (keep orbit / rep loop going).
-    if (activePose3d) activePose3d.scene.update(vec);
-    if (activeDrawn) activeDrawn.fig.update(vec);
+    // (Live figure update removed — the pose figures were warehoused 2026-06-10.)
     // Mark just this dimension's chips as selected.
     const row = b.closest(".ex-var-dim");
     row?.querySelectorAll<HTMLElement>(".pose-ctl").forEach((c) => c.classList.toggle("is-on", c === b));
@@ -11750,10 +11724,9 @@ async function init() {
     const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
     if (romKeys.length < 2) return;
     const idx = Math.max(0, Math.min(romKeys.length - 1, parseInt(sl.value, 10) || 0));
-    const frac = idx / (romKeys.length - 1);
     setNoteVecDim(ex, note, "rom", romKeys[idx]!);
     const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
-    if (activeDrawn) { activeDrawn.fig.update(vec); activeDrawn.fig.scrub(frac); } // hold at this depth
+    // (Live figure scrub removed — the pose figures were warehoused 2026-06-10.)
     const pose = sl.closest(".ex-var-pose");
     const prod = pose?.querySelector(".ex-var-product strong");
     if (prod) prod.textContent = `×${scalarFromVec(fam, vec)}`;
@@ -11769,36 +11742,14 @@ async function init() {
   // On release: resume the rep loop and do the deferred table/graph sync.
   document.addEventListener("change", (e) => {
     if (!(e.target as HTMLElement).closest?.(".pose-scrub")) return;
-    if (activeDrawn) activeDrawn.fig.scrub(null);
     if (scaleEditState) return; // popover syncs on close (scaleEditDirty already set)
     scaleEditDirty = false;
     refreshExerciseInfo();
     scheduleRender();
   });
-  // Photo scrubber: drag through the real video frames (top→bottom); swaps the
-  // shown frame live and maps the position onto the range-of-motion (depth).
-  document.addEventListener("input", (e) => {
-    const sl = (e.target as HTMLElement).closest<HTMLInputElement>(".pose-photo-scrub");
-    if (!sl?.dataset.scrubex || sl.dataset.scrubnote === undefined) return;
-    const ex = sl.dataset.scrubex, note = sl.dataset.scrubnote;
-    const fam = familyOf(ex);
-    if (!fam) return;
-    const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
-    const N = POSE_FRAMES.length;
-    const fIdx = Math.max(0, Math.min(N - 1, parseInt(sl.value, 10) || 0));
-    const pose = sl.closest(".ex-var-pose");
-    const img = pose?.querySelector<HTMLImageElement>(".pose-photo");
-    if (img) img.src = POSE_FRAMES[fIdx]!; // scrub the real frame
-    if (romKeys.length > 1) {
-      const romIdx = Math.round((fIdx / (N - 1)) * (romKeys.length - 1));
-      setNoteVecDim(ex, note, "rom", romKeys[romIdx]!);
-      const vec = { ...rNote(fam, note).vec, ...noteVecOverride(ex, note) };
-      const prod = pose?.querySelector(".ex-var-product strong");
-      if (prod) prod.textContent = `×${scalarFromVec(fam, vec)}`;
-      pose?.querySelectorAll<HTMLElement>('.pose-ctl[data-posectl-dim="rom"]').forEach((c) => c.classList.toggle("is-on", c.dataset.posectlLevel === romKeys[romIdx]));
-      scaleEditDirty = true;
-    }
-  });
+  // Photo scrubber removed — it read the warehoused POSE_FRAMES (170 KB of base64
+  // frames) and its .pose-photo-scrub container is emitted nowhere. Restore from
+  // warehouse/2026-06-10-pose-3d-engine/ to revive it.
   document.addEventListener("change", (e) => {
     if (!(e.target as HTMLElement).closest?.(".pose-photo-scrub")) return;
     if (scaleEditState) return;
