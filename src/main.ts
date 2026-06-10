@@ -1922,15 +1922,44 @@ function isAssistedMachine(exerciseName: string): boolean {
   const o = assistedHalveOverrides[exerciseName];
   return o === undefined ? isAssistablePullup(exerciseName) : o;
 }
-/** Real added weight after the assisted-machine rule (negative → halved when assisted). */
-function realAddedWeight(exerciseName: string, weight: number | null): number | null {
-  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
-}
 function setAssistedOverride(exerciseName: string, state: boolean | undefined): void {
   if (state === undefined) delete assistedHalveOverrides[exerciseName];
   else assistedHalveOverrides[exerciseName] = state;
   saveJson(ASSIST_HALVE_KEY, assistedHalveOverrides);
   clearMachineCache();
+}
+/** A "machine" set: an assisted lift logged with a NEGATIVE weight (a counterweight). */
+function isMachineSet(exerciseName: string, weight: number | null): boolean {
+  return weight !== null && weight < 0 && isAssistedMachine(exerciseName);
+}
+// Assist-weight VIEW (global): REAL (default) halves a machine set's counterweight
+// (−40 → −20) and uses normal bodyweight — the lifter's true effort. LOGGED keeps the
+// machine's reading (−40) AND doubles the bodyweight share, since the machine over-
+// reads everything ~2× — so every metric is exactly 2× the real one, self-consistently.
+const ASSIST_VIEW_KEY = "colosseum.assistLoggedView.v1";
+let assistLoggedView: boolean = (() => {
+  try { return localStorage.getItem(ASSIST_VIEW_KEY) === "1"; } catch { return false; }
+})();
+function setAssistLoggedView(on: boolean): void {
+  assistLoggedView = on;
+  try { localStorage.setItem(ASSIST_VIEW_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+  clearMachineCache();
+}
+/** The weight a machine set is COUNTED/SHOWN as under the current view: logged keeps it
+ * as-entered, real halves it. Non-machine weights pass through. */
+function viewAddedWeight(exerciseName: string, weight: number | null): number | null {
+  if (assistLoggedView) return weight;
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+}
+/** The REAL (half) assistance for a machine set, IGNORING the view flag — used by the
+ * set editor to show "= −12.5 real" beside the dialed counterweight. */
+function realAddedWeight(exerciseName: string, weight: number | null): number | null {
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+}
+/** Bodyweight multiplier for the current view: machine sets in LOGGED view fold 2× the
+ * bodyweight share (the machine's 2× scale), keeping the logged load = 2× the real one. */
+function viewBwMult(exerciseName: string, weight: number | null): number {
+  return assistLoggedView && isMachineSet(exerciseName, weight) ? 2 : 1;
 }
 
 const SET_SIDES_KEY = "colosseum.setSides.v1";
@@ -2148,20 +2177,22 @@ function computeRecordBase(r: SetRecord): SetRecord {
   // The exercise's base bodyweight-part — a squat-rack hole NO LONGER changes the
   // real load/1RM (it only scales a separate "effort" 1RM, see scaleForRecord).
   const coeff = coeffFor(r.exerciseName);
-  // Assisted pull-ups: the logged weight is the machine dial value, which over-
-  // reads ~2x. Use the halved real assistance for all strength maths, but keep
-  // the logged value as origWeight so the displayed set still tells you what to
-  // set on the machine.
-  const realAdded = realAddedWeight(r.exerciseName, r.weight);
+  // Assisted-machine sets (a NEGATIVE pull-up/dip weight): the machine dial over-reads
+  // ~2×. The current view decides how it's counted — REAL halves it (−40 → −20) with
+  // normal bodyweight; LOGGED keeps −40 and doubles the bodyweight share. origWeight is
+  // the value to DISPLAY (so the set shows what the chosen view treats it as).
+  const viewAdded = viewAddedWeight(r.exerciseName, r.weight);
+  const bwMult = viewBwMult(r.exerciseName, r.weight);
   if (coeff <= 0) {
-    const base = realAdded === r.weight ? r : { ...r, weight: realAdded, origWeight: r.weight };
+    const base = viewAdded === r.weight ? r : { ...r, weight: viewAdded, origWeight: viewAdded };
     return applyMachineMode(base);
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
   // default only when the set didn't record one.
-  const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
+  const bw0 = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
+  const bw = bw0 === null ? null : bw0 * bwMult;
   // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-  return applyMachineMode({ ...r, weight: effectiveLoad(realAdded, bw, coeff), origWeight: r.weight });
+  return applyMachineMode({ ...r, weight: effectiveLoad(viewAdded, bw, coeff), origWeight: viewAdded });
 }
 
 // ---- Owner-editable combinable/comparable membership ------------------------
@@ -7734,15 +7765,22 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
         ? `<span class="set-grav" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
   const edited = setOverrides[sid] !== undefined;
+  // Assisted MACHINE set (negative counterweight) — an auto tag. The weight shown +
+  // counted depends on the global Assist view (real ½ vs logged ×2, set on the graph).
+  const machineSet = isMachineSet(s.exerciseName, s.weight);
+  const assistTag = machineSet
+    ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default; switch the graph's Assist option to ‘logged’ to see the machine's reading (×2, bodyweight also ×2).">machine</span>`
+    : "";
   // The whole set row is the edit handle now — tap anywhere on it (except the
   // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
   // this set's edit panel. No separate ✎ pencil button.
   // The leading cell always carries the set's identity prefix (info button, variation /
   // scale / machine chips), whatever metric column 0 is set to show.
-  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${uniTag}`;
+  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
   const cellFor = (id: string): string => {
     switch (id) {
-      case "weight": return wr(s.weight, s.reps);
+      // Machine sets show the view's weight (real −20 / logged −40), not the raw log.
+      case "weight": return wr(machineSet ? (computed.origWeight ?? s.weight) : s.weight, s.reps);
       case "e1rm": return e1rmCell;
       case "volume": return vol === null ? "—" : fmt(vol);
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
@@ -11339,6 +11377,16 @@ async function init() {
     // Global "All graphs / Approved only" master toggle (in Graph options).
     const allGraphsBtn = t.closest<HTMLElement>("[data-allgraphs]");
     if (allGraphsBtn) { setAllGraphsAllowed(!allGraphsAllowed); return; }
+    // Assist weight view (real ½ vs logged ×2) — global, re-render everything.
+    if (t.closest<HTMLElement>("[data-assistview]")) {
+      setAssistLoggedView(!assistLoggedView);
+      const y = window.scrollY;
+      renderAll();
+      if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+      window.scrollTo(0, y);
+      return;
+    }
     // "Compare" toggle (graph bar, beside Graph options / Legend): show/hide the
     // other-athlete compare pill row, which is hidden by default to keep things clean.
     if (t.closest<HTMLElement>("[data-wacompare]")) {
@@ -12796,7 +12844,7 @@ function dataRows(): { header: string[]; rows: DataRow[] } {
     // was logged. Recompute the named intermediates for full transparency.
     const logged = r.origWeight !== undefined ? r.origWeight : r.weight;
     const coeff = coeffFor(r.exerciseName);
-    const realAdded = realAddedWeight(r.exerciseName, logged);
+    const realAdded = viewAddedWeight(r.exerciseName, logged);
     const perSet = r.bodyweight !== null && r.bodyweight !== undefined;
     const bw = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
     const effLoad = r.weight; // = effectiveLoad(realAdded, bw, coeff)
@@ -15335,6 +15383,13 @@ function renderWaGraph(): void {
         `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
     : "";
   const cfgAllGraphs = onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.");
+  // Assist weight VIEW (global): real (counterweight halved, normal bodyweight) vs logged
+  // (the machine's −40 reading, bodyweight ×2 → every value 2× the real). Affects machine
+  // (assisted, negative-weight) sets everywhere; lives here as the owner asked.
+  const cfgAssist = onoff(assistLoggedView, `data-assistview="1"`, assistLoggedView ? "Assist: logged ×2" : "Assist: real ½",
+    assistLoggedView
+      ? "Assisted-machine sets show the machine's LOGGED reading (e.g. −40) with bodyweight ×2 — every value is 2× the real one. Tap for REAL effort."
+      : "Assisted-machine sets show your REAL effort: the counterweight halved (−40 → −20) with normal bodyweight. Tap to see the machine's LOGGED reading (×2).");
   // "Potential (log)" view: strength gains are logarithmic, so a steady trainee LOOKS
   // plateaued on a linear axis. This spaces the strength axis by how far you are from a
   // lifetime-potential CEILING, so real (slowing) gains keep reading as a rising line.
@@ -15351,7 +15406,7 @@ function renderWaGraph(): void {
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
     `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
-    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}</div>` +
+    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
   if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open;

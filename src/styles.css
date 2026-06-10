@@ -1286,6 +1286,8 @@ main { padding-bottom: 5rem; }
 /* Machine-type tags on a set row (grey = info, not clickable; gold = needs review). */
 .set-grav { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--muted); background: var(--line); }
 .set-review { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.02em; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--gold); background: var(--gold-soft); }
+/* Assisted-machine (negative counterweight) auto tag on a set row. */
+.set-machine { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--accent); background: var(--accent-soft); }
 /* Machine-type toggle in the Analysis selector (single mode). */
 .wa-machine { margin: 0 0 0.5rem; }
 .wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
