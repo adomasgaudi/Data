@@ -3356,6 +3356,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-graph-closed { display: none; font-weight: 700; color: var(--accent); }
 .wa-fold:not([open]) #waGraphSummary .wa-graph-closed { display: inline-block; }
 .wa-fold:not([open]) #waGraphSummary .wa-seltitle-box { display: none; }
+/* Same for the history fold: collapsed, it reads a plain "Workout history" (like the
+   other section headers) instead of the picked-lift list + ✕ ≈ + Pick tab. */
+.wa-hist-closed { display: none; font-weight: 700; color: var(--accent); }
+.wa-fold:not([open]) #waCalHistSummary .wa-hist-closed { display: inline-block; }
+.wa-fold:not([open]) #waCalHistSummary .wa-seltitle-box { display: none; }
 .wa-seltitle-box.is-expanded {
   min-height: 0;
 }

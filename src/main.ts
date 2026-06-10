@@ -14637,8 +14637,9 @@ function renderWorkoutAnalysis(): void {
     const calHistTitle = document.getElementById("waCalHistSummary");
     if (calHistTitle) {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
-      // "Calendar & history" prefix, no member breakdown, no ℹ.
-      calHistTitle.innerHTML = waSelected.length ? liftSelectionTitle(waSelected, "hist") : "Calendar & history";
+      // "Workout history" prefix, no member breakdown, no ℹ. Collapsed, a plain
+      // "Workout history" shows instead (CSS swaps them on the fold's open state).
+      calHistTitle.innerHTML = waSelected.length ? `<span class="wa-hist-closed">Workout history</span>${liftSelectionTitle(waSelected, "hist")}` : "Workout history";
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -14654,7 +14655,7 @@ function renderWorkoutAnalysis(): void {
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
     const calHistTitle = document.getElementById("waCalHistSummary");
-    if (calHistTitle) { calHistTitle.textContent = "Calendar & history"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
+    if (calHistTitle) { calHistTitle.textContent = "Workout history"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
     stats?.setAttribute("hidden", "");
     renderWorkoutsPage();
     }

@@ -338,6 +338,7 @@ const LT: Record<string, string> = {
   "Block all": "Blokuoti visus",
   // ---- Workouts (incl. S-ANL history) ----
   "Workouts": "Treniruotės",
+  "Workout history": "Treniruočių istorija",
   "Horizontal history": "Horizontali istorija",
   "experimental": "eksperimentinis",
   "developing": "kuriama",
