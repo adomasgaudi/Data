@@ -273,6 +273,7 @@ const LT: Record<string, string> = {
   "Compare": "Palyginti",
   "Options": "Parinktys",
   "Picker & settings": "Rinkiklis ir nustatymai",
+  "all exercises": "visi pratimai",
   "Match history": "Atitikti istoriją",
   "Graph lifts": "Grafiko pratimai",
   "History lifts": "Istorijos pratimai",

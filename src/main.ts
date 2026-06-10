@@ -13676,6 +13676,16 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
       : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
   const count = `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>`;
+  // When EVERY selectable lift is picked, don't list the top 5 + "+N" — just say
+  // "all exercises" (owner request). Only when it would otherwise truncate (> the cap);
+  // tapping it still expands to the full list (so you can remove individual lifts).
+  const allNames = waSelectorExercises().map((e) => e.name);
+  const isAll = sel.length > TITLE_NAME_CAP && allNames.length > 0 && sel.length >= allNames.length && allNames.every((n) => sel.includes(n));
+  const allLabel = isAll && !expanded
+    ? (remove
+        ? `<button type="button" class="wa-title-more wa-title-all" data-titleexpand="${remove}" title="All ${sel.length} exercises selected — tap to list them">all exercises</button>`
+        : `<span class="wa-title-more wa-title-all">all exercises</span>`)
+    : "";
   // "Deselect all" lives here as a big ✕ at the END of the title list (owner's choice) —
   // not as a button in the tools row below. Clears the WHOLE selection for this scope.
   // It sits inside the graph's <summary>, so the capture handler (data-titledeselect)
@@ -13693,7 +13703,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span>${deselectX}${matchBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}</span>`;
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
