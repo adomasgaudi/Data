@@ -2706,6 +2706,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-dim-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; flex: 1 1 auto; min-width: 0; }
 /* Nested SUPPORT dropdowns (support → ladder grip + height). */
 .ex-var-selrow { display: flex; flex-wrap: wrap; gap: 0.3rem; flex: 1 1 auto; min-width: 0; }
+.ex-shd-lbl { font-size: 0.72rem; align-self: center; }
+/* Back-to-wall "blue block" shoulder-distance reference (SVG diagram or the photo). */
+.ex-shd-ref { margin: 0.4rem 0 0; }
+.ex-shd-cap { font-size: 0.74rem; margin: 0 0 0.25rem; }
+.ex-shd-media { display: inline-block; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 4px; }
+.ex-shd-svg { width: 9rem; height: 11.25rem; color: var(--text); display: block; }
+.ex-shd-img { display: block; max-width: min(15rem, 70vw); height: auto; border-radius: 4px; }
+.ex-shd-toggle { display: inline-flex; align-items: center; min-height: var(--tap-min); margin-top: 0.3rem; font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 10px; }
 /* Custom floating dropdowns (no native <select>) for the support pickers. */
 .ex-var-xdd .xdd-btn { font-size: 0.78rem; padding: 4px 8px; }
 .ex-var-xdd .xdd-menu { min-width: max(100%, 9rem); }

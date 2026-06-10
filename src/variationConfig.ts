@@ -79,8 +79,12 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // RANGE: a "low ROM" partial (only the short top portion — a more scapular,
       // shrug-like press) is an easier press → <1. full = the whole press (×1).
       range: { full: 1.0, low: 0.7 },
+      // BACK-TO-WALL ONLY: how far the shoulders sit OFF the wall, in cm. The "blue
+      // block" is 6cm thick (a named reference shown with a diagram/photo). Multipliers
+      // are NEUTRAL for now (calibrate later — likely farther = slightly harder).
+      shoulderDist: { "0cm": 1.0, blue: 1.0 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused", hands: "two", range: "full" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "paused", hands: "two", range: "full", shoulderDist: "0cm" },
   },
   PUSHUP: {
     // INCLINE (hands raised) is NOT a family dimension — it's how high the hands are,
@@ -201,7 +205,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 11;
+export const CONFIG_VERSION = 12;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many

@@ -75,6 +75,7 @@ import { hardSetWeight, warmupRamp, type HardSetTarget } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
+import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
@@ -1448,6 +1449,7 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     // The ladder grip / height only apply when the support is actually "ladder";
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
+    if (dim === "shoulderDist" && vec.support !== "back_to_wall") continue; // b2w-only
     if (dim === "band") continue; // band is a kg subtraction (assistKg), not a multiplier
     if (dim === "lean") {
       // Lean applies to ALL supports (most sets just use 0 = ×1). Its factor is
@@ -7720,6 +7722,9 @@ let scaleEditDirty = false; // an edit was made while the popover was open
 // Band is collapsed to "none + banded" until the user expands it (owner request — the
 // assist-level chips are rarely used and eat space). Reset each time the popover opens.
 let scaleBandExpanded = false;
+// The b2w "shoulder distance" reference shows a clean SVG by default; this flips it to
+// the owner's photo (both available, toggle in the picker). Reset when the popover opens.
+let shoulderRefPhoto = false;
 /** The INCLINE block for the popover: the set's smith-notch / squat-rack / cm level
  * (the real "incline" the owner logged) shown with its scale editable right here, so
  * it appears alongside the family variation (e.g. on-the-knees) it combines with —
@@ -7815,6 +7820,7 @@ function positionScaleEditor(anchor: HTMLElement): void {
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
   scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
   scaleBandExpanded = false; // band starts collapsed each time the popover opens
+  shoulderRefPhoto = false;  // shoulder-distance reference starts on the SVG diagram
   let pop = document.getElementById("scaleEditPop");
   if (!pop) {
     pop = document.createElement("div");
@@ -9681,11 +9687,12 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
   const vecSelect = (dim: string, labelMap: Record<string, string>): string => {
     const levels = famLevels(fam, dim);
     const cur = String(effVec[dim] ?? "");
-    const curLbl = `${labelMap[cur] ?? cur} ×${levels[cur] ?? 1}`;
+    const fac = (l: string) => (dim === "shoulderDist" ? "" : ` ×${levels[l] ?? 1}`); // shoulder distance is cm, neutral ×
+    const curLbl = `${labelMap[cur] ?? cur}${fac(cur)}`;
     const opts = Object.keys(levels)
       .map((l) => {
         const on = l === cur;
-        return `<button type="button" class="xdd-opt ex-vecopt${on ? " is-active" : ""}" role="option" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}">${escapeHtml(labelMap[l] ?? l)} ×${levels[l]}${on ? ' <span class="xdd-check">✓</span>' : ""}</button>`;
+        return `<button type="button" class="xdd-opt ex-vecopt${on ? " is-active" : ""}" role="option" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}">${escapeHtml(labelMap[l] ?? l)}${fac(l)}${on ? ' <span class="xdd-check">✓</span>' : ""}</button>`;
       })
       .join("");
     return (
@@ -9695,12 +9702,18 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
     );
   };
   const isLadder = (effVec.support ?? "free") === "ladder";
-  const supPicked = override.support !== undefined || override.ladderGrip !== undefined || override.ladderH !== undefined;
+  // Back-to-wall only: how far the shoulders sit off the wall (cm). "blue" = the 6cm block,
+  // which shows a reference diagram/photo (the owner stands on a known-thickness block).
+  const isB2W = (effVec.support ?? "free") === "back_to_wall" && Object.keys(famLevels(fam, "shoulderDist") ?? {}).length > 0;
+  const SHD_LBL: Record<string, string> = { "0cm": "0cm (wall)", blue: "blue 6cm" };
+  const shdRef = isB2W && String(effVec.shoulderDist ?? "0cm") === "blue" ? hspuShoulderRef() : "";
+  const supPicked = override.support !== undefined || override.ladderGrip !== undefined || override.ladderH !== undefined || override.shoulderDist !== undefined;
   const supportBlock =
     `<div class="ex-var-dim${supPicked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">support</span>` +
     `<div class="ex-var-selrow">${vecSelect("support", SUPPORT_LBL)}` +
     (isLadder ? vecSelect("ladderGrip", GRIP_LBL) + vecSelect("ladderH", HT_LBL) : "") +
-    `</div></div>`;
+    (isB2W ? `<span class="ex-shd-lbl muted">shoulders</span>${vecSelect("shoulderDist", SHD_LBL)}` : "") +
+    `</div>${shdRef}</div>`;
   // ROM (depth, ↓) × LEAN (forward, →) are two directions of one body position, set
   // with a VERTICAL depth slider + a HORIZONTAL lean slider (each step = a defined
   // level, so it scales to many levels without a giant grid). The multiplier is the
@@ -9758,7 +9771,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
   };
   const dims = Object.keys(FAMILIES[fam]!.dims)
     // ladderGrip/ladderH live in the support block; lean is folded into the rom grid.
-    .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH" && !(hasGrid && dim === "lean"))
+    .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH" && dim !== "shoulderDist" && !(hasGrid && dim === "lean"))
     .map((dim) => {
       if (dim === "support") return supportBlock;
       if (dim === "rom" && hasGrid) return romLeanGrid();
@@ -9787,6 +9800,39 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
   // above the picker in the popover), so it's the TRUE combined ×, not just the family.
   const finalMult = Math.round(scale * extraFactor * 1e6) / 1e6;
   return `${toggle}<div class="ex-var-picker">${dims}<div class="ex-var-product">= <strong>×${finalMult}</strong> <span class="muted">final multiplier</span></div></div>`;
+}
+
+/** Reference for the back-to-wall "blue block" (6cm) shoulder distance: a clean side-view
+ * SVG diagram by default, toggleable to the owner's hand-drawn photo. */
+function hspuShoulderRef(): string {
+  const media = shoulderRefPhoto
+    ? `<img class="ex-shd-img" src="${HSPU_BLUE_PHOTO}" alt="Back-to-wall handstand with shoulders on the 6cm blue block" />`
+    : hspuShoulderSvg();
+  return (
+    `<div class="ex-shd-ref">` +
+    `<div class="ex-shd-cap muted">Blue block = 6cm: the shoulders sit 6cm off the wall.</div>` +
+    `<div class="ex-shd-media">${media}</div>` +
+    `<button type="button" class="ex-shd-toggle" data-shdtoggle title="Switch between the diagram and the photo">${shoulderRefPhoto ? "✏️ diagram" : "📷 photo"}</button>` +
+    `</div>`
+  );
+}
+/** Clean side-view diagram: wall (left) + the blue 6cm block + an inverted figure whose
+ * shoulders rest on the block (back-to-wall handstand push-up). currentColor → themed. */
+function hspuShoulderSvg(): string {
+  return (
+    `<svg viewBox="0 0 120 150" class="ex-shd-svg" role="img" aria-label="Back-to-wall handstand: shoulders on a 6cm blue block">` +
+    `<line x1="14" y1="138" x2="112" y2="138" stroke="currentColor" stroke-width="2"/>` +
+    `<line x1="14" y1="12" x2="14" y2="138" stroke="currentColor" stroke-width="2"/>` +
+    `<rect x="14" y="58" width="9" height="48" fill="#3b6fe0" rx="1"/>` +
+    `<text x="26" y="54" font-size="8" fill="#3b6fe0" font-weight="700">6cm</text>` +
+    `<circle cx="60" cy="135" r="3" fill="currentColor"/>` +
+    `<path d="M60 135 L30 78" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+    `<circle cx="41" cy="119" r="7" fill="none" stroke="currentColor" stroke-width="2.5"/>` +
+    `<path d="M30 78 L46 34" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round"/>` +
+    `<path d="M46 34 L52 8" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+    `<path d="M46 34 L39 10" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+    `</svg>`
+  );
 }
 
 /** A little side-view scene for the depth × lean pad: the floor and the wall —
@@ -11100,6 +11146,12 @@ async function init() {
   document.addEventListener("click", (e) => {
     if (!(e.target as HTMLElement).closest("[data-bandexpand]")) return;
     scaleBandExpanded = true;
+    if (scaleEditState) renderScaleEditor();
+  });
+  // Toggle the b2w shoulder-distance reference between the SVG diagram and the photo.
+  document.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest("[data-shdtoggle]")) return;
+    shoulderRefPhoto = !shoulderRefPhoto;
     if (scaleEditState) renderScaleEditor();
   });
   // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
