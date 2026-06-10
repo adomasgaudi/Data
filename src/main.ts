@@ -412,6 +412,9 @@ function setViewMode(mode: ViewMode) {
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.hidden = mode !== "admin" && item.dataset.tab !== "guide";
   }
+  // Hide still-in-progress views (Horizontal history · Training calendar) outside
+  // admin — they're experimental/developing, not for a user/spectator.
+  document.body.classList.toggle("admin-only-hidden", mode !== "admin");
   // Outside admin, lock the athlete to the locked user (only their chip is
   // pressable, see syncAthleteChips) and force the selection there.
   if (mode !== "admin") {
