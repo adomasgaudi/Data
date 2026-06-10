@@ -12888,13 +12888,6 @@ const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
 };
 /** Readable label for a dimension level (cm levels like "+23cm" are left as-is). */
 function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level] ?? level; }
-/** A short readable phrase for a chosen non-default level, used to build the note. */
-function afNotePart(dim: string, level: string): string {
-  if (dim === "rom") return level;            // "+23cm"
-  if (dim === "lean") return `lean ${level}`; // "lean 15cm"
-  return afLevelText(dim, level);             // "back-to-wall", "uninterrupted", "band 5"…
-}
-
 /** The variation field for the inline add form. For a lift with a VARIATION MODEL
  * (a family), it's a row of structured pickers — the real variables (support, ROM,
  * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
@@ -13106,17 +13099,19 @@ function onInlineAddGo(form: HTMLElement) {
   const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
   const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
   const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
-  // Chosen variation. Structured pickers (a modelled lift) → build a readable note
-  // from the non-default levels AND pin those exact levels as the set's vec, so the
-  // chosen variables are authoritative. Otherwise fall back to the free-text note.
+  // Chosen variation. Structured pickers (a modelled lift) → the picked levels are
+  // TAGS, not a note: we pin them straight onto each created set's per-set vec (the
+  // __set:<id> synthetic key) below and DON'T fabricate a note from them — tags are
+  // inferred FROM notes, but when you pick tags directly there's no note to create.
+  // Otherwise fall back to the free-text note the owner typed.
   const dimEls = [...form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")];
   let note: string;
-  let chosenDims: [string, string][] = [];
+  const chosenDims: [string, string][] = [];
   if (dimEls.length) {
     const fam = familyOf(exerciseName);
     const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
     for (const s of dimEls) { const dim = s.dataset.dim!; const lvl = s.value; if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]); }
-    note = chosenDims.map(([d, l]) => afNotePart(d, l)).join(", ");
+    note = ""; // picked tags carry the variation per-set; no auto-note text
   } else {
     note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
   }
@@ -13128,6 +13123,7 @@ function onInlineAddGo(form: HTMLElement) {
     form.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
     return;
   }
+  const startIdx = manualEntries.length; // setNumber for entry n is 100000+n (see mergeManualSets)
   for (let i = 0; i < sets; i++) {
     manualEntries.push({
       id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -13140,9 +13136,16 @@ function onInlineAddGo(form: HTMLElement) {
       ...(note ? { notes: note } : {}),
     });
   }
-  // Pin the chosen variables to this note so they're authoritative (the note text
-  // doesn't have to round-trip through the parser).
-  if (note && chosenDims.length) for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, note, dim, lvl);
+  // Pin the picked tags to EACH created set's per-set vec (the __set:<id> synthetic
+  // key that variationNote() returns for a noteless model-lift set), so the chosen
+  // attributes are authoritative without inventing a note. Mirrors the setId formula
+  // (username|exercise|date|setNumber) used at read time.
+  if (chosenDims.length && familyOf(exerciseName)) {
+    for (let i = 0; i < sets; i++) {
+      const synthNote = `__set:${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
+      for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
+    }
+  }
   saveManual();
   mergeManualSets();
   // You just logged a set — GUARANTEE the lift is visible, so "I added a set but don't see
