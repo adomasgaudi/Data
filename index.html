@@ -105,17 +105,11 @@
           <button type="button" id="modelBtn" class="settings-link">
             ✎ Difficulty multipliers
           </button>
-          <button type="button" id="healthBtn" class="settings-link">
-            Data health <span id="healthBadge" class="muted"></span>
-          </button>
           <button type="button" id="changelogBtn" class="settings-link">
             Version history <span id="changelogVer" class="muted"></span>
           </button>
           <button type="button" id="backlogBtn" class="settings-link">
             Tasks &amp; roadmap
-          </button>
-          <button type="button" id="testingBtn" class="settings-link">
-            🧪 Testing
           </button>
         </div>
       </div>
@@ -1187,6 +1181,8 @@
           <button class="other-item" data-tab="sitemap" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3 3 5.5v15l6-2.5 6 2.5 6-2.5v-15L15 5.5 9 3z"/><path d="M9 3v15M15 5.5v15"/></svg> Site map</button>
           <button class="other-item" data-tab="changelog" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Version history</button>
         </div>
+        <!-- Data health is an OVERLAY page (not a top tab): data-open opens it via openHealth(). Moved here from Settings. -->
+        <button class="other-item" data-open="health" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2 6 3-12 2 9 1.5-3H21"/></svg> Data health <span id="healthBadge" class="muted"></span></button>
         <button class="other-item" data-tab="guide" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Guide</button>
       </div>
     </div>
@@ -1240,21 +1236,6 @@
         </div>
         <p class="muted">The cleanup backlog and feature roadmap, shown straight from the docs/ files.</p>
         <div id="backlog" class="md-doc"></div>
-      </div>
-    </div>
-
-    <div id="testingPage" class="overlay-page" hidden>
-      <div class="overlay-inner">
-        <div class="overlay-head">
-          <h2>🧪 Testing</h2>
-          <button type="button" id="testingClose" class="overlay-close" aria-label="Close">✕</button>
-        </div>
-        <p class="muted">Scroll test. The chart is a <b>from-scratch SCATTER plot</b> (pure inline SVG — no charting library, no touch/pointer handlers). It's sandwiched between two screen-tall gaps. Put your finger anywhere — including ON the chart — and swipe: you should be able to reach BOTH the ⬆ TOP and ⬇ BOTTOM markers. Tell me which markers you can reach.</p>
-        <div class="test-marker">⬆ TOP marker</div>
-        <div class="test-spacer">↑ this is the top gap — swipe DOWN to reach the chart ↑</div>
-        <div id="testGraphChart" class="wa-graph-chart"></div>
-        <div class="test-spacer">↓ keep swiping (finger on the chart too) to reach the bottom ↓</div>
-        <div class="test-marker">⬇ BOTTOM marker — reached this? then scrolling WORKS</div>
       </div>
     </div>
 

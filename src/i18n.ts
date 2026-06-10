@@ -225,7 +225,7 @@ const LT: Record<string, string> = {
   "band 6": "guma 6",
   "floor (on feet)": "ant kojų",
   "on knees": "ant kelių",
-  "🧪 Testing": "🧪 Testavimas",
+  "Data health": "Duomenų būklė",
   "The cleanup backlog and feature roadmap, shown straight from the docs/ files.": "Tvarkymo darbų sąrašas ir funkcijų planas, rodomi tiesiai iš docs/ failų.",
   "Language": "Kalba",
   "Back to Colosseum": "Atgal į Colosseum",

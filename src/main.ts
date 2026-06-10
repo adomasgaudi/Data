@@ -92,7 +92,6 @@ import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } fr
 import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
-import { renderTestGraph, type TestPoint } from "./testGraph";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
@@ -207,7 +206,6 @@ const els = {
   restoreFile: $<HTMLInputElement>("restoreFile"),
   autoBackupToggle: $<HTMLInputElement>("autoBackupToggle"),
   autoBackupHint: $("autoBackupHint"),
-  healthBtn: $<HTMLButtonElement>("healthBtn"),
   healthBadge: $("healthBadge"),
   healthPage: $("healthPage"),
   healthClose: $<HTMLButtonElement>("healthClose"),
@@ -218,10 +216,6 @@ const els = {
   backlogPage: $("backlogPage"),
   backlogClose: $<HTMLButtonElement>("backlogClose"),
   backlog: $("backlog"),
-  testingBtn: $<HTMLButtonElement>("testingBtn"),
-  testingPage: $("testingPage"),
-  testingClose: $<HTMLButtonElement>("testingClose"),
-  testGraphChart: $("testGraphChart"),
   modelBtn: $<HTMLButtonElement>("modelBtn"),
   modelPage: $("modelPage"),
   modelClose: $<HTMLButtonElement>("modelClose"),
@@ -3250,30 +3244,6 @@ function openBacklog() {
     renderTaskDoc(parseTaskDoc(cleanupBacklogMd)) +
     renderTaskDoc(parseTaskDoc(roadmapMd));
   els.backlogPage.hidden = false;
-}
-
-/** Settings → 🧪 Testing: render the current exercise selection as a NON-interactive
- * graph (no drag-pan / pinch-zoom gesture capture) so the owner can check whether a
- * static old-style chart lets the page scroll freely on a phone. Same data + engine
- * as the main analysis graph, just `interactive: false`. */
-const TEST_GRAPH_COLORS = ["#5ab0ff", "#ff7a59", "#5fd17a", "#ffc24b", "#c08bff", "#4fd6d6", "#ff6fae", "#9bd14f"];
-function openTesting() {
-  setSettingsOpen(false);
-  const ath = els.athlete.value;
-  const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === ath));
-  const formula = currentFormula();
-  // Build plain {x,y} series here (DATA only) and hand them to the brand-new,
-  // listener-free renderTestGraph — no svgChart/analyticsGraph involved.
-  const series = waSelected.slice(0, 8).map((ex, i) => {
-    const points = recs
-      .filter((r) => r.exerciseName === ex)
-      .map((r) => ({ x: Date.parse(r.date), y: effectiveE1RM(r, formula) }))
-      .filter((p): p is TestPoint => Number.isFinite(p.x) && p.y != null && Number.isFinite(p.y))
-      .sort((a, b) => a.x - b.x);
-    return { label: displayName(ex), color: TEST_GRAPH_COLORS[i % TEST_GRAPH_COLORS.length]!, points };
-  });
-  renderTestGraph(els.testGraphChart, series);
-  els.testingPage.hidden = false;
 }
 
 // ---- Exercise "More info" — now an inline, expandable dropdown on the Index
@@ -11285,9 +11255,9 @@ async function init() {
       setSettingsOpen(false);
   });
 
-  // Data health lives on its own overlay page, opened from Settings or by
-  // tapping a parse-issues / sanity-warnings badge in the status bar.
-  els.healthBtn.addEventListener("click", openHealth);
+  // Data health lives on its own overlay page, opened from the "More views" pages
+  // menu (data-open="health", handled in the otherSheet wiring) or by tapping a
+  // parse-issues / sanity-warnings badge in the status bar.
   els.status.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".badge-link")) openHealth();
   });
@@ -11306,10 +11276,6 @@ async function init() {
   els.backlogBtn.addEventListener("click", openBacklog);
   els.backlogClose.addEventListener("click", () => {
     els.backlogPage.hidden = true;
-  });
-  els.testingBtn.addEventListener("click", openTesting);
-  els.testingClose.addEventListener("click", () => {
-    els.testingPage.hidden = true;
   });
   // Exercise-settings overlay: ✕ closes it; Esc closes it; the per-exercise
   // active-set force-in/out buttons live inside it, so handle them here too.
@@ -17142,6 +17108,8 @@ function setupBottomNav() {
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
     item.addEventListener("click", () => {
       setOtherSheetOpen(false);
+      // Some items open an OVERLAY page (data-open) instead of switching a top tab.
+      if (item.dataset.open === "health") { openHealth(); return; }
       switchTopTab(item.dataset.nav === "analysis" ? analysisTabName() : item.dataset.tab ?? "");
     });
   }
