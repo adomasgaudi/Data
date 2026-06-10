@@ -3798,6 +3798,11 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   /* pan-y: scroll the chips vertically; a horizontal drag closes the drawer. */
   touch-action: pan-y;
 }
+/* While a finger is dragging the drawer we move it 1:1 with no transition (the JS sets the
+   transform every pointermove); the transition comes back on release for the snap-to-end. */
+.wa-pick-card.is-pick-drawer.is-dragging { transition: none; }
+/* No text selection / grabbing cursor while a drawer drag is in progress. */
+html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user-select: none; cursor: grabbing !important; }
 /* A peeled "dog-ear" at the free (bottom-left) corner of the note. */
 .wa-pick-card.is-pick-drawer::after {
   content: ""; position: absolute; left: 0; bottom: 0; width: 22px; height: 22px;

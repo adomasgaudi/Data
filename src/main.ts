@@ -15072,8 +15072,8 @@ function closePickDrawer(): void {
   for (const s of ["graph", "hist"] as SelScope[]) {
     const box = document.getElementById(`waPickCard-${s}`);
     if (!box) continue;
-    box.classList.remove("is-pick-drawer", "is-entering");
-    box.style.transform = "";
+    box.classList.remove("is-pick-drawer", "is-entering", "is-dragging");
+    box.style.transform = ""; box.style.transition = "";
     // Back to its inline state: visible only if its (inline) fold is open.
     box.hidden = !box.closest(".wa-chips-fold")?.classList.contains("is-open");
   }
@@ -16066,24 +16066,89 @@ function setupCommandBar(): void {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
-  // Floating exercise-picker drawer gestures, matched to its right-edge motion: swipe the
-  // picker's settings line (.wa-chips-fold-sum) RIGHT-TO-LEFT to pull the drawer IN from the
-  // right edge; swipe the open drawer left-to-right to push it back OUT. Delegated (survives
-  // re-renders); claims only on a clear horizontal drag so taps on the group select / pills /
-  // ⚙ / chips still work, and pan-y (CSS) keeps vertical scrolling. A claim swallows the tap.
+  // Floating exercise-picker drawer — an INTERACTIVE drag that tracks the finger 1:1 (not a
+  // threshold swipe that fires a fixed animation). Drag the right-edge "Pick" tab LEFT and the
+  // drawer follows the thumb in from the right exactly; let go past halfway (or fling) and it
+  // snaps open, otherwise it snaps back. Dragging the OPEN drawer's neutral area RIGHT pushes it
+  // back out the same 1:1 way. Delegated (survives re-renders); claims only on a clear
+  // horizontal drag so taps on the group select / pills / ⚙ / chips still work; pan-y (CSS)
+  // keeps vertical scrolling. A real drag swallows the trailing synthetic tap.
   {
-    const SLOP = 8, THRESH = 45;
+    const SLOP = 6; // px of clear horizontal travel before we claim & start tracking
     let mode: "open" | "close" | null = null, scope: SelScope = "hist";
     let x0 = 0, y0 = 0, ptr = -1, claimedAt = 0;
-    const reset = () => { mode = null; ptr = -1; };
+    let active = false;            // claimed → we're tracking the drawer to the finger
+    let box: HTMLElement | null = null, width = 0, curTx = 0;
+    let lastX = 0, lastT = 0, vx = 0; // px/ms, for fling detection
+    const drawerWidth = (el: HTMLElement) =>
+      el.getBoundingClientRect().width || Math.min(window.innerWidth * 0.82, 352);
+    const setTx = (tx: number) => {
+      curTx = Math.max(0, Math.min(width, tx));        // 0 = fully open, width = fully closed
+      box!.style.transform = `translateX(${curTx}px)`;
+      const bd = document.getElementById("waPickBackdrop");
+      if (bd) bd.style.opacity = String(1 - curTx / width); // fade the dim with the slide
+    };
+    const begin = () => {
+      active = true;
+      claimedAt = Date.now();
+      document.documentElement.classList.add("wa-pick-dragging");
+      if (mode === "open") {
+        // Become the drawer NOW, but track the finger — no entry animation.
+        pickDrawerScope = scope; curSelScope = scope;
+        ensurePickBackdrop();
+        box = document.getElementById(`waPickCard-${scope}`);
+        if (!box) { active = false; mode = null; return; }
+        box.hidden = false;
+        box.classList.add("is-pick-drawer", "is-dragging");
+        box.classList.remove("is-entering");
+        width = drawerWidth(box);
+        setTx(width); // start fully off-screen, then follow the thumb in (all before paint)
+      } else {
+        box = document.getElementById(`waPickCard-${pickDrawerScope}`);
+        if (!box) { active = false; mode = null; return; }
+        box.classList.add("is-dragging");
+        width = drawerWidth(box);
+        setTx(0); // start fully open, then follow the thumb out
+      }
+      const bd = document.getElementById("waPickBackdrop");
+      if (bd) bd.style.transition = "none"; // dim tracks the finger instantly while dragging
+    };
+    const reset = () => {
+      active = false; mode = null; ptr = -1; box = null; vx = 0;
+      document.documentElement.classList.remove("wa-pick-dragging");
+    };
+    // Snap to the nearest end on release: past halfway OR a clear fling decides it.
+    const settle = () => {
+      if (!active || !box) { reset(); return; }
+      const openIt = vx < -0.45 ? true : vx > 0.45 ? false : curTx < width / 2;
+      const el = box;
+      el.classList.remove("is-dragging"); // re-enable the CSS transition for the snap
+      const bd = document.getElementById("waPickBackdrop");
+      if (bd) bd.style.transition = "opacity 0.2s ease";
+      if (openIt) {
+        el.style.transform = "translateX(0px)";
+        if (bd) bd.style.opacity = "1";
+        pickDrawerScope = scope; curSelScope = scope;
+      } else {
+        el.style.transform = `translateX(${width}px)`;
+        if (bd) bd.style.opacity = "0";
+        const finish = () => {
+          el.removeEventListener("transitionend", finish);
+          closePickDrawer(); // hides + strips the drawer classes/inline styles
+          el.style.transform = ""; el.style.transition = "";
+        };
+        el.addEventListener("transitionend", finish);
+        window.setTimeout(finish, 300); // fallback if transitionend is missed
+      }
+      reset();
+    };
     document.addEventListener("pointerdown", (e) => {
       if (e.button > 0) return;
       const t = e.target as HTMLElement;
       if (pickDrawerScope !== null && t.closest(".wa-pick-card.is-pick-drawer")) {
-        // Do NOT arm the close-swipe on an interactive / horizontally-scrolling control:
+        // Do NOT arm the close-drag on an interactive / horizontally-scrolling control:
         // dragging a slider, opening a select, tapping a button or swiping the chip strip
-        // must do THEIR job — a horizontal drag on a slider was being hijacked as a close,
-        // making the drawer "disappear". Arm close only from the drawer's neutral areas.
+        // must do THEIR job. Arm close only from the drawer's neutral areas.
         if (t.closest("input, select, textarea, button, a, label, summary, details, .xdd, .wa-cfg, .wa-chips, .wa-chips-wrap, .wa-pick-controls, .wa-sel-tools, .wa-sel-cog, .wa-chips-tools, .wa-fold-settings, .wa-group, .wa-subgroup, .wa-sel-pills, .wa-catstrip")) return;
         mode = "close"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId; return;
       }
@@ -16091,25 +16156,29 @@ function setupWorkoutAnalysis(): void {
       if (!opener) return;
       scope = (opener.dataset.titlepicker as SelScope) ?? "hist";
       mode = "open"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId;
+      lastX = e.clientX; lastT = e.timeStamp;
     });
     document.addEventListener("pointermove", (e) => {
       if (!mode || e.pointerId !== ptr) return;
       const dx = e.clientX - x0, dy = e.clientY - y0;
-      // Only bail to vertical scroll when vertical CLEARLY dominates — a slightly diagonal
-      // horizontal swipe should still claim, so the drawer is easy to swipe open/closed.
-      // (touch-action:pan-y already hands a true vertical drag to the browser anyway.)
-      if (Math.abs(dy) > SLOP && Math.abs(dy) > Math.abs(dx) * 1.6) { reset(); return; }
-      // OPEN on a right→left (leftward) drag — pulling the drawer in from the right edge;
-      // CLOSE on a left→right (rightward) drag — pushing it back out.
-      if (mode === "open" ? dx < -THRESH : dx > THRESH) {
-        claimedAt = Date.now();
-        if (mode === "open") openPickDrawer(scope); else closePickDrawer();
-        reset();
+      if (!active) {
+        // Decide whether to claim. Vertical-dominant → release to page scroll.
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SLOP) { reset(); return; }
+        if (Math.abs(dx) <= SLOP) return;
+        // Wrong direction (open wants leftward, close wants rightward) → ignore this gesture.
+        if (mode === "open" ? dx > 0 : dx < 0) { reset(); return; }
+        begin();
+        if (!active) return;
       }
+      // Track velocity, then move the drawer to match the finger exactly.
+      if (e.timeStamp > lastT) vx = (e.clientX - lastX) / (e.timeStamp - lastT);
+      lastX = e.clientX; lastT = e.timeStamp;
+      setTx(mode === "open" ? width + dx : dx); // dx<0 pulls in; dx>0 pushes out
+      e.preventDefault();
     });
-    document.addEventListener("pointerup", reset);
-    document.addEventListener("pointercancel", reset);
-    // Eat the synthetic tap that follows a claimed swipe (so it doesn't toggle a control).
+    document.addEventListener("pointerup", settle);
+    document.addEventListener("pointercancel", settle);
+    // Eat the synthetic tap that follows a real drag (so it doesn't re-trigger open/close).
     document.addEventListener("click", (e) => {
       if (Date.now() - claimedAt < 350) { e.preventDefault(); e.stopPropagation(); }
     }, true);
