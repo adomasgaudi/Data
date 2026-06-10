@@ -2037,9 +2037,14 @@ function withMemberOverrides(g: RegistryTag): RegistryTag {
   const ov = groupMemberOverrides[g.id];
   if (!ov || (!ov.add && !ov.remove)) return g;
   const removed = new Set(ov.remove ?? []);
-  const base = (g.members ?? []).filter((m) => !removed.has(m.exerciseName));
+  const adds = ov.add ?? {};
+  // ov.add also carries a RATIO OVERRIDE for a BASE member (the owner edited its scaling
+  // "weight"), so apply it to base members too — not just to newly-added ones.
+  const base = (g.members ?? [])
+    .filter((m) => !removed.has(m.exerciseName))
+    .map((m) => (adds[m.exerciseName] !== undefined ? { ...m, ratio: adds[m.exerciseName]! } : m));
   const baseNames = new Set(base.map((m) => m.exerciseName));
-  const added = Object.entries(ov.add ?? {})
+  const added = Object.entries(adds)
     .filter(([ex]) => !removed.has(ex) && !baseNames.has(ex))
     .map(([exerciseName, ratio]) => ({ exerciseName, ratio }));
   return { ...g, members: [...base, ...added] };
@@ -2251,13 +2256,17 @@ function userGroupsOfKind(kind: "combine" | "compare"): UserExerciseDef[] {
  * ratios default to 1 (user groups don't store ratios yet); the Separated view doesn't
  * use them anyway. id is namespaced so it never clashes with a built-in group id. */
 function userComparableTag(d: UserExerciseDef): RegistryTag {
+  const id = `user.compare.${d.name}`;
+  // Per-member scaling ratios for a USER group live in groupMemberOverrides[id].add
+  // (the owner edits the "weight" on the group card); default 1 if not set.
+  const ratios = groupMemberOverrides[id]?.add ?? {};
   return {
-    id: `user.compare.${d.name}`,
+    id,
     kind: "comparable-group",
     label: d.name,
     why: `A comparable group you created from the exercise info page: ${(d.members ?? []).join(", ") || "no members yet"}.`,
     derivedName: d.name,
-    members: (d.members ?? []).map((exerciseName) => ({ exerciseName, ratio: 1 })),
+    members: (d.members ?? []).map((exerciseName) => ({ exerciseName, ratio: ratios[exerciseName] ?? 1 })),
   };
 }
 /** Add / remove a lift from a user-created group (edits the def's member list). */
@@ -9385,26 +9394,47 @@ function exerciseInfoHtml(name: string): string {
   const selfGroupHtml = selfGroups
     .map((g) => {
       const gname = g.derivedName ?? g.label;
+      const isCompare = g.kind === "comparable-group";
       const memberNames = (g.members ?? []).map((m) => m.exerciseName);
+      // For a COMPARABLE group each member carries an editable scaling "weight" (ratio):
+      // the lift's 1RM is divided by it to sit on one curve. 1 = the reference; 0.8 = it
+      // moves 80% of the reference for the same effort. Combinable groups are 1:1 (no ratio).
+      const ratioCtl = (m: { exerciseName: string; ratio: number }) =>
+        isCompare
+          ? `<span class="ex-grp-ratio" title="Scaling weight — the lift is divided by this to compare on one curve (1 = same as the reference, 0.8 = 80%)">×<input class="ex-grp-ratioin" type="number" step="0.05" min="0.05" max="2" value="${m.ratio}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-name="${escapeHtml(gname)}" data-grpratio-ex="${escapeHtml(m.exerciseName)}" aria-label="Scaling weight for ${escapeHtml(displayName(m.exerciseName))}" /></span>`
+          : "";
       const memberChips = (g.members ?? []).length
         ? (g.members ?? [])
             .map((m) =>
-              `<span class="ex-grp-mchip">${escapeHtml(displayName(m.exerciseName))}${m.ratio !== 1 ? ` <span class="muted">×${m.ratio}</span>` : ""}` +
+              `<span class="ex-grp-mchip">${escapeHtml(displayName(m.exerciseName))}${ratioCtl(m)}` +
               `<button type="button" class="ex-grp-rm" data-grprm-id="${escapeHtml(g.id)}" data-grprm-name="${escapeHtml(gname)}" data-grprm-ex="${escapeHtml(m.exerciseName)}" title="Remove ${escapeHtml(displayName(m.exerciseName))} from this group" aria-label="Remove">✕</button></span>`,
             )
             .join("")
         : `<span class="muted">No exercises in this group yet.</span>`;
-      const addable = allExForAdd
-        .filter((n) => n !== name && !memberNames.includes(n))
-        .sort((a, b) => displayName(a).localeCompare(displayName(b)));
+      // Picker SUGGESTIONS + grouping (owner request): lifts that share a muscle group with
+      // the current members come FIRST under "Suggested", the rest under "All exercises".
+      const memberMuscles = new Set((g.members ?? []).flatMap((m) => mgsFor(m.exerciseName)));
+      const addable = allExForAdd.filter((n) => n !== name && !memberNames.includes(n));
+      const isSuggested = (n: string) => memberMuscles.size > 0 && mgsFor(n).some((mu) => memberMuscles.has(mu));
+      const byName = (a: string, b: string) => displayName(a).localeCompare(displayName(b));
+      const suggested = addable.filter(isSuggested).sort(byName);
+      const rest = addable.filter((n) => !isSuggested(n)).sort(byName);
+      const opt = (n: string) => `<option value="${escapeHtml(n)}">${escapeHtml(displayName(n))}</option>`;
+      const optgrp = (label: string, list: string[]) =>
+        list.length ? `<optgroup label="${escapeHtml(label)}">${list.map(opt).join("")}</optgroup>` : "";
       const addSel =
         `<select class="ex-grp-addsel" data-grpadd-id="${escapeHtml(g.id)}" data-grpadd-name="${escapeHtml(gname)}" aria-label="Add an exercise to this group">` +
         `<option value="">＋ Add exercise…</option>` +
-        addable.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(displayName(n))}</option>`).join("") +
+        optgrp("Suggested (same muscle)", suggested) +
+        optgrp("All exercises", rest) +
         `</select>`;
-      const kindNote = g.kind === "combinable-group" ? "merged 1:1 into this lift" : "scaled onto this lift's curve";
+      const kindNote = isCompare ? "scaled onto this lift's curve" : "merged 1:1 into this lift";
+      const scaleHint = isCompare
+        ? `<div class="ex-group-why muted">Set the reference lift to ×1 and each other lift to how much LESS it moves for the same effort (e.g. 0.8 = 80%). Each lift's 1RM is divided by its weight so they sit on one curve.</div>`
+        : "";
       return (
         `<div class="ex-group"><div class="ex-group-hd">Exercises in this group <span class="muted">— ${kindNote}</span></div>` +
+        scaleHint +
         `<div class="ex-group-members ex-grp-edit">${memberChips}</div>` +
         `<div class="ex-grp-add">${addSel}</div></div>`
       );
@@ -11344,12 +11374,23 @@ async function init() {
   // "＋ Add exercise…" dropdown in a GROUP's own card → add the picked exercise to the
   // group, then reopen the GROUP's card. (A <select>, auto-enhanced to the .xdd dropdown.)
   document.addEventListener("change", (e) => {
-    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-grp-addsel");
-    if (!sel?.dataset.grpaddId || !sel.dataset.grpaddName || !sel.value) return;
-    const gid3 = sel.dataset.grpaddId, gname3 = sel.dataset.grpaddName, ex3 = sel.value;
-    if (gid3.startsWith("user.")) toggleUserGroupMember(gname3, ex3); else toggleGroupMembership(gid3, ex3);
-    populateExercisePicker();
-    scheduleRender(() => { reopenIndexDetail(gname3); refreshPoseViz(); });
+    const tgt = e.target as HTMLElement;
+    const sel = tgt.closest<HTMLSelectElement>(".ex-grp-addsel");
+    if (sel?.dataset.grpaddId && sel.dataset.grpaddName && sel.value) {
+      const gid3 = sel.dataset.grpaddId, gname3 = sel.dataset.grpaddName, ex3 = sel.value;
+      if (gid3.startsWith("user.")) toggleUserGroupMember(gname3, ex3); else toggleGroupMembership(gid3, ex3);
+      populateExercisePicker();
+      scheduleRender(() => { reopenIndexDetail(gname3); refreshPoseViz(); });
+      return;
+    }
+    // Editing a member's scaling "weight" (ratio) — save it; the graph/index re-scale on
+    // their next render (no card reopen, so the number input keeps its place).
+    const rin = tgt.closest<HTMLInputElement>(".ex-grp-ratioin");
+    if (rin?.dataset.grpratioId && rin.dataset.grpratioEx) {
+      const v = parseFloat(rin.value);
+      if (Number.isFinite(v) && v > 0) { setGroupRatio(rin.dataset.grpratioId, rin.dataset.grpratioEx, v); populateExercisePicker(); }
+      return;
+    }
   });
   // Per-group display mode: cycle Combined only → Members only → Show both.
   document.addEventListener("click", (e) => {

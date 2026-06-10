@@ -2618,6 +2618,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-grp-rm { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--remove); background: none; border: none; padding: 0 2px; min-height: var(--tap-min); }
 .ex-grp-add { margin-top: 0.2rem; }
 .ex-grp-addsel { font: inherit; font-size: 0.8rem; }
+/* Editable per-member scaling "weight" (comparable groups): "×[0.80]". */
+.ex-grp-ratio { display: inline-flex; align-items: center; gap: 1px; color: var(--muted); font-size: 0.78rem; }
+.ex-grp-ratioin { width: 3.2em; font: inherit; font-size: 0.78rem; padding: 1px 3px; border: 1px solid var(--line); border-radius: 4px; color: var(--lens-compare); background: var(--bg); -moz-appearance: textfield; }
 /* Inline exercise editors on the More-info page (code / short / bodyweight). */
 .ex-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; }
 .ex-edit-f { display: flex; flex-direction: column; gap: 2px; flex: 1 1 8rem; min-width: 0; }
