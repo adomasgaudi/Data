@@ -6645,6 +6645,58 @@ function xrmInner(best: number): string {
   return `${Math.round(v * 10) / 10}<sup class="onerm-sup">${xrmReps}</sup>`;
 }
 
+// The golden per-exercise SUMMARY shown in the collapsed history (one value per lift per
+// day). Tap it to pick what it means — like the sets-table column headers, but a single
+// day-aggregate value. Persisted per device.
+const WO_SUMMARY_METRICS: { id: string; label: string; name: string }[] = [
+  { id: "e1rm", label: "RM", name: "Best rep-max (1RM)" },
+  { id: "volume", label: "Vol", name: "Total volume" },
+  { id: "topweight", label: "Top", name: "Top weight" },
+  { id: "reps", label: "Reps", name: "Total reps" },
+  { id: "sets", label: "Sets", name: "Set count" },
+];
+const WO_SUMMARY_KEY = "colosseum.woSummaryMetric.v1";
+let woSummaryMetric: string = (() => {
+  try { const v = localStorage.getItem(WO_SUMMARY_KEY); if (v && WO_SUMMARY_METRICS.some((m) => m.id === v)) return v; } catch { /* ignore */ }
+  return "e1rm";
+})();
+function saveWoSummaryMetric(): void { try { localStorage.setItem(WO_SUMMARY_KEY, woSummaryMetric); } catch { /* ignore */ } }
+/** The chosen day-summary value (inner HTML) for one lift's sets, or "" when it has none
+ * for the current metric (e.g. a bodyweight hold has no 1RM / top weight). */
+function woSummaryInner(sets: readonly SetRecord[], formula: OneRepMaxFormula): string {
+  const applied = sets.map((raw) => { const s = applySetOverride(raw); return { s, c: computeRecord(s) }; });
+  switch (woSummaryMetric) {
+    case "volume": {
+      const vol = applied.reduce((a, { s, c }) => a + (c.notComparable ? 0 : (setVolume(s.weight, s.reps) ?? 0)), 0);
+      return vol > 0 ? fmt(vol) : "";
+    }
+    case "topweight": {
+      const ws = applied.map(({ s }) => s.weight).filter((w): w is number => w !== null && Number.isFinite(w) && w !== 0);
+      return ws.length ? fmt(Math.max(...ws)) : "";
+    }
+    case "reps": {
+      const r = applied.reduce((a, { s }) => a + (s.reps ?? 0), 0);
+      return r > 0 ? String(r) : "";
+    }
+    case "sets": return sets.length ? String(sets.length) : "";
+    case "e1rm":
+    default: {
+      const e1rms = applied.map(({ c }) => addedWeight1RM(c, formula)).filter((v): v is number => v !== null && Number.isFinite(v));
+      const best = e1rms.length ? Math.max(...e1rms) : null;
+      return best === null ? "" : xrmInner(best);
+    }
+  }
+}
+/** The golden summary cell for the collapsed history: a tappable chip when it has a
+ * value (tap to change the metric), or the empty placeholder span (keeps the grid). */
+function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): string {
+  const inner = woSummaryInner(sets, formula);
+  const m = WO_SUMMARY_METRICS.find((x) => x.id === woSummaryMetric) ?? WO_SUMMARY_METRICS[0]!;
+  return inner === ""
+    ? `<span class="wo-1rm"></span>`
+    : `<button type="button" class="wo-1rm wo-summary" data-wosummary="1" title="${escapeHtml(m.name)} this day — tap to change what this column shows">${inner}</button>`;
+}
+
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
   const workoutFormula = currentFormula();
@@ -6710,17 +6762,10 @@ function renderWorkoutsPage() {
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
         const setsTxt = setListHtml(sets);
         const name = displayName(exerciseName);
-        const e1rms = sets
-          .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), workoutFormula))
-          .filter((v): v is number => v !== null && Number.isFinite(v));
-        const best = e1rms.length ? Math.max(...e1rms) : null;
-        // ALWAYS emit the 1RM cell — empty when a lift has no comparable 1RM (a
-        // bodyweight hold / not-comparable note). Without the placeholder element the
-        // grid's first column is unfilled and the NAME spills into the narrow 1RM
-        // column, so a note-only lift looked broken vs the others (PB).
-        const rmTxt = best === null
-          ? `<span class="wo-1rm"></span>`
-          : `<span class="wo-1rm" title="Best estimated ${xrmReps}RM this day${xrmReps > 1 ? " (from the 1RM)" : ""}">${xrmInner(best)}</span>`;
+        // The golden summary value is CUSTOMISABLE (tap it to pick 1RM / volume / top
+        // weight / reps / sets) — the collapsed-mode counterpart of the sets-table column
+        // pickers. Empty placeholder kept so a note-only lift's grid still lines up (PB).
+        const rmTxt = woSummaryCell(sets, workoutFormula);
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
@@ -6881,11 +6926,7 @@ function renderHorizontalHistory(): void {
         cells += `<div class="hh-cell hh-cell-empty" style="grid-column:${col};grid-row:${row}"><span class="hh-rm"></span><span class="wo-ex-body"><span class="wo-exname muted">${escapeHtml(displayName(exName))}</span></span></div>`;
         return;
       }
-      const e1rms = sets
-        .map((s) => addedWeight1RM(computeRecord(applySetOverride(s)), formula))
-        .filter((v): v is number => v !== null && Number.isFinite(v));
-      const best = e1rms.length ? Math.max(...e1rms) : null;
-      const rmTxt = best === null ? "" : `<span class="wo-1rm" title="Best estimated ${xrmReps}RM${xrmReps > 1 ? " (from the 1RM)" : ""}">${xrmInner(best)}</span>`;
+      const rmTxt = woSummaryCell(sets, formula);
       cells += `<div class="hh-cell" style="grid-column:${col};grid-row:${row}"><span class="hh-rm">${rmTxt}</span><span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exName)}">${escapeHtml(displayName(exName))}</span> <span class="wo-setlist">${setListHtml(sets)}</span></span></div>`;
     });
   });
@@ -7301,6 +7342,22 @@ function openSetColMenu(anchor: HTMLElement, colIndex: number): void {
   menu.id = "setColMenu";
   menu.className = "setcol-menu";
   menu.innerHTML = `<div class="setcol-menu-title muted">Show in this column</div>${rows}`;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 4)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
+}
+/** Popup opened by tapping the golden summary value in the collapsed history: pick what
+ * that per-lift day-summary shows. Reuses the column-picker styling. */
+function openWoSummaryMenu(anchor: HTMLElement): void {
+  closeSetColMenu();
+  const rows = WO_SUMMARY_METRICS
+    .map((m) => `<button type="button" class="setcol-opt${m.id === woSummaryMetric ? " is-on" : ""}" data-wosummarypick="${escapeHtml(m.id)}"><span class="setcol-opt-tag">${escapeHtml(m.label)}</span> ${escapeHtml(m.name)}</button>`)
+    .join("");
+  const menu = document.createElement("div");
+  menu.id = "setColMenu";
+  menu.className = "setcol-menu";
+  menu.innerHTML = `<div class="setcol-menu-title muted">Show in the history</div>${rows}`;
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.top = `${Math.round(r.bottom + 4)}px`;
@@ -11906,6 +11963,27 @@ async function init() {
       if (!open || open.dataset.col !== head.dataset.setcol) {
         openSetColMenu(head, Number(head.dataset.setcol));
         document.getElementById("setColMenu")?.setAttribute("data-col", head.dataset.setcol ?? "");
+      }
+      return;
+    }
+    // Collapsed-history golden summary value: pick what it shows (1RM / vol / …).
+    const sumPick = t.closest<HTMLElement>("[data-wosummarypick]");
+    if (sumPick) {
+      e.preventDefault(); e.stopPropagation();
+      const id = sumPick.dataset.wosummarypick;
+      if (id && WO_SUMMARY_METRICS.some((m) => m.id === id)) { woSummaryMetric = id; saveWoSummaryMetric(); }
+      closeSetColMenu();
+      rerenderSetsTables();
+      return;
+    }
+    const sumBtn = t.closest<HTMLElement>(".wo-summary");
+    if (sumBtn) {
+      e.preventDefault(); e.stopPropagation();
+      const open = document.getElementById("setColMenu");
+      closeSetColMenu();
+      if (!open || open.dataset.col !== "wosummary") {
+        openWoSummaryMenu(sumBtn);
+        document.getElementById("setColMenu")?.setAttribute("data-col", "wosummary");
       }
       return;
     }

@@ -135,6 +135,13 @@ const LT: Record<string, string> = {
   "Volume": "Apimtis",
   "Predicted RIR": "Numatomas RIR",
   "Logged RIR": "Įrašytas RIR",
+  // ---- Collapsed-history golden summary picker ----
+  "Show in the history": "Rodyti istorijoje",
+  "Best rep-max (1RM)": "Geriausias pakartojimų maks. (1RM)",
+  "Total volume": "Bendra apimtis",
+  "Top weight": "Didžiausias svoris",
+  "Total reps": "Iš viso pakartojimų",
+  "Set count": "Serijų skaičius",
   "Select all": "Pažymėti visus",
   "Deselect all": "Atžymėti visus",
   "OK": "Gerai",

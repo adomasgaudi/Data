@@ -1758,6 +1758,10 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* The day's record (best) estimated 1RM for a lift — its own left column, right-
    aligned so the digits sit next to the exercise name they belong to. */
 .wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; text-align: right; }
+/* The golden value is a button when it has a value (tap to pick the metric) — strip the
+   native chrome so it reads exactly like the old gold number, just tappable. */
+button.wo-summary { font: inherit; font-weight: 700; color: var(--gold); background: none; border: none; padding: 0; cursor: pointer; }
+button.wo-summary:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 /* COLOUR RULE (other half): editable values you type are blue. */
 .set-edit-input, .set-edit-note, .ex-var-input, .ex-var-rename, .fac-input { color: var(--accent); font-weight: 600; }
 /* A weightless set shows just its reps as a (slightly larger) superscript. */
