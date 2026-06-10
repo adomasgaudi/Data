@@ -211,12 +211,7 @@ const els = {
   healthBadge: $("healthBadge"),
   healthPage: $("healthPage"),
   healthClose: $<HTMLButtonElement>("healthClose"),
-  changelogBtn: $<HTMLButtonElement>("changelogBtn"),
-  changelogVer: $("changelogVer"),
   changelog: $("changelog"),
-  backlogBtn: $<HTMLButtonElement>("backlogBtn"),
-  backlogPage: $("backlogPage"),
-  backlogClose: $<HTMLButtonElement>("backlogClose"),
   backlog: $("backlog"),
   testingBtn: $<HTMLButtonElement>("testingBtn"),
   testingPage: $("testingPage"),
@@ -3242,14 +3237,13 @@ function renderTaskDoc(doc: TaskDoc): string {
     `</details>`;
 }
 
-/** Open the tasks/roadmap overlay from Settings (parsed from the docs/ md). */
-function openBacklog() {
-  setSettingsOpen(false);
+/** Fill the Tasks & roadmap dropdown inside the Version-history view (parsed from
+ * the docs/ md). Tasks & roadmap is no longer a separate Settings overlay — it
+ * lives as a fold in the version-history page, beside the release log. */
+function renderBacklog() {
   els.backlog.innerHTML =
-    `<p class="cl-summary muted">Cleanup backlog + roadmap, straight from the docs/ files. SP are AI estimates — open Version history to see what an SP actually buys.</p>` +
     renderTaskDoc(parseTaskDoc(cleanupBacklogMd)) +
     renderTaskDoc(parseTaskDoc(roadmapMd));
-  els.backlogPage.hidden = false;
 }
 
 /** Settings → 🧪 Testing: render the current exercise selection as a NON-interactive
@@ -3492,6 +3486,8 @@ function renderChangelog() {
   };
   const rows = CHANGELOG.map((r) => renderNode(r, 0)).join("");
   els.changelog.innerHTML = header + sections + rows;
+  // Tasks & roadmap now lives as a fold inside this version-history view.
+  renderBacklog();
 
   // SP-over-time line: cumulative story points across every release,
   // derived from the CHANGELOG tree -- updates automatically when a release is
@@ -11194,7 +11190,6 @@ async function init() {
     verEl.style.cursor = "pointer";
     verEl.addEventListener("click", openChangelog);
   }
-  els.changelogVer.textContent = displayVersion(CURRENT_VERSION);
   renderChangelog();
 
   const effortSummary = document.getElementById("effortSummary");
@@ -11301,11 +11296,6 @@ async function init() {
   });
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
-  });
-  els.changelogBtn.addEventListener("click", openChangelog);
-  els.backlogBtn.addEventListener("click", openBacklog);
-  els.backlogClose.addEventListener("click", () => {
-    els.backlogPage.hidden = true;
   });
   els.testingBtn.addEventListener("click", openTesting);
   els.testingClose.addEventListener("click", () => {
