@@ -13,6 +13,34 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-10 — The selector ⚙ settings popout opens off-screen ("out of bounds")
+
+- **Recurrences:** 2+ (each prior fix held only until the cog MOVED). Same FAMILY as PB-1
+  (a floating menu clipped/covered) and the `b.2.8.93` "menu off the LEFT edge" fix.
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data), Analysis
+  graph-selector ⚙ popout (Match / Show missing / Original·Combined·Comparison toggles).
+- **Symptom:** opening the ⚙ popout shows it half off the RIGHT edge of the screen — the
+  right column of options ("Match hi…", "Comparis…") is clipped and unreachable.
+- **The escalation war (why it kept coming back):** the popout was `position:absolute`
+  anchored to the cog, and each fix assumed WHERE the cog sits. `right:0` (opens left) broke
+  when the cog wrapped to the LEFT edge → `b.2.8.93`/ANL-33 switched to `left:0` + a JS
+  `--menu-shift` transform clamp, assuming the cog sits on the LEFT. Then the controls moved
+  INTO the picker header (`b.2.8.111/112`), putting the cog on the RIGHT → `left:0` opens
+  rightward off-screen again, and the transform-clamp didn't save it. Every fix chased the
+  cog's current position instead of being position-independent — the classic escalation war.
+- **REAL ROOT:** an absolute popout's on-screen-ness DEPENDS on its anchor's position in the
+  layout, which keeps changing as the toolbar is rearranged. Any anchor-relative scheme is
+  one refactor away from clipping again.
+- **ROOT FIX (b.2.8.x, PB-10):** the popout is now **`position:fixed`** and
+  `clampMenuIntoView()` PLACES its `left/top` from the cog's LIVE `getBoundingClientRect()`,
+  clamped to the viewport (flips above the cog if it'd run off the bottom). Fixed +
+  viewport-clamped = no ancestor's position/overflow can clip it and it no longer cares where
+  the cog wraps — the same proven pattern as `.lift-menu`. Fix sites: `clampMenuIntoView` and
+  `.wa-sel-cog-menu` CSS (both tagged `PB-10`).
+- **If it recurs:** check (1) a NEW ancestor gained a `transform`/`filter`/`will-change`
+  (that makes `position:fixed` resolve against the ancestor, not the viewport — re-clips it),
+  or (2) a new popout copied the OLD absolute+`--menu-shift` pattern instead of this one.
+
 ## PB-9 — Coming back from an exercise's info card wipes the analysis selection to just that one lift
 
 - **Recurrences:** 1 (logged now; owner reports it "always" happens — a standing behaviour, not a one-off).

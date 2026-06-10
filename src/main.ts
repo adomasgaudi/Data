@@ -13508,11 +13508,17 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const deselectX = remove
     ? `<button type="button" class="wa-title-deselect" data-titledeselect="${remove}" title="Deselect all — clear the whole selection" aria-label="Deselect all">✕</button>`
     : "";
+  // "Match" sits right next to the ✕ (owner request — moved out of the picker's ⚙ menu).
+  // It copies the OTHER selector's picks into this one; capture-handled so it doesn't
+  // toggle the fold it lives in. Graph title → "Match history"; history title → "Match graph".
+  const matchBtn = remove
+    ? `<button type="button" class="wa-clear wa-title-match" data-titlematch="${remove}" title="Copy the other selector's picks here">${remove === "graph" ? "Match history" : "Match graph"}</button>`
+    : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span>${deselectX}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${names}${more}</span>${deselectX}${matchBtn}</span>`;
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
@@ -13649,19 +13655,27 @@ function renderWorkoutAnalysis(): void {
  * and draws (graph vs the calendar/history). The two share the ancillary settings
  * (group-by, name mode, identities, search, show-missing); only the SELECTION is
  * per-scope. A "match" button copies the OTHER selector's picks into this one. */
-/** Nudge a floating popout horizontally (via --menu-shift) so it stays inside the
- * viewport. For menus whose anchor can wrap to anywhere on a row, neither a fixed
- * left:0 nor right:0 keeps them on-screen (the "settings out of bounds" bug); this
- * measures the rendered menu and shifts it just enough to fit. Idempotent. */
+// PB-10 (recurring "the ⚙ settings popout opens off-screen"): the popout is now
+// position:FIXED, and this places it under its cog and fully inside the viewport from
+// the cog's LIVE rect — so no ancestor's overflow/position can clip it and it no longer
+// depends on which way the cog wraps. Flips ABOVE the cog if it'd run off the bottom.
 function clampMenuIntoView(menu: HTMLElement | null | undefined): void {
   if (!menu) return;
-  menu.style.setProperty("--menu-shift", "0px");
+  const cog = menu.closest<HTMLElement>(".wa-sel-cog");
+  if (!cog) return;
   const m = 6;
-  const r = menu.getBoundingClientRect();
-  let shift = 0;
-  if (r.right > window.innerWidth - m) shift = -(r.right - (window.innerWidth - m));
-  if (r.left + shift < m) shift = m - r.left; // never push it off the LEFT either
-  if (shift) menu.style.setProperty("--menu-shift", `${Math.round(shift)}px`);
+  const mw = menu.offsetWidth, mh = menu.offsetHeight; // own size (left/top don't affect it)
+  const cr = cog.getBoundingClientRect();
+  let left = cr.left;
+  if (left + mw > window.innerWidth - m) left = window.innerWidth - m - mw;
+  if (left < m) left = m;
+  let top = cr.bottom + 4;
+  if (top + mh > window.innerHeight - m) {
+    const above = cr.top - 4 - mh;
+    top = above >= m ? above : Math.max(m, window.innerHeight - m - mh);
+  }
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
 }
 
 function renderSelector(scope: SelScope): void {
@@ -13712,10 +13726,8 @@ function renderSelector(scope: SelScope): void {
   const missingToggle = (missingCount > 0 || waShowMissing)
     ? `<button type="button" class="wa-showmissing wa-name-opt${waShowMissing ? " is-on" : ""}" title="${waShowMissing ? "Hide the greyed-out exercises this athlete hasn't done / are filtered out." : "Show greyed-out exercises that exist but aren't here — filtered out or never trained."}">${waShowMissing ? "Hide missing" : `Show missing <span class="wa-miss-n">(${missingCount})</span>`}</button>`
     : "";
-  // "Match" button: copy the OTHER selector's selection into this one.
-  const matchSrc = scope === "graph" ? "hist" : "graph";
-  const matchLabel = scope === "graph" ? "Match history" : "Match graph";
-  const matchBtn = `<button type="button" class="wa-clear wa-match" data-matchfrom="${matchSrc}" title="Copy the other selector's picks here">${matchLabel}</button>`;
+  // (The "Match" button moved OUT of the ⚙ menu to sit next to the title's ✕ — see the
+  // data-titlematch button in liftSelectionTitle — so the picker menu stays compact.)
   // These controls live at the TOP level (in the header, next to the button), not
   // buried in the menu: Group-by, Pills mode, Select all, Clear.
   const groupCtl = `<label class="wa-gcfg-f wa-sel-group" title="Group the picker by"><select class="wa-groupby">${groupOpts}</select></label>`;
@@ -13735,7 +13747,7 @@ function renderSelector(scope: SelScope): void {
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
   // keeps the "what / how many" context the old dropdown summary showed.
-  const foldTools = `<div class="wa-chips-tools">${matchBtn}${missingToggle}${searchActive}</div>`;
+  const foldTools = `<div class="wa-chips-tools">${missingToggle}${searchActive}</div>`;
   const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
   const prevChipScroll = sel.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
   // Collapse the (often long) exercise-chip picker under a fold so it doesn't fill the
@@ -15053,6 +15065,16 @@ function setupWorkoutAnalysis(): void {
       debounceWaRender();
       return;
     }
+    // "Match" next to the ✕ — copy the OTHER selector's picks into this scope (capture:
+    // it lives in the <summary>, so preventDefault stops the fold from toggling).
+    const tMatch = t.closest<HTMLElement>("[data-titlematch]");
+    if (tMatch?.dataset.titlematch) {
+      e.preventDefault(); e.stopPropagation();
+      const sc = tMatch.dataset.titlematch as "graph" | "hist";
+      if (sc === "graph") waGraphSel = [...waSelected]; else waSelected = [...waGraphSel];
+      debounceWaRender();
+      return;
+    }
   }, true);
   panel.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -15102,14 +15124,7 @@ function setupWorkoutAnalysis(): void {
       debounceWaRender();
       return;
     }
-    // "Match" — copy the OTHER selector's selection into this one.
-    const matchBtn = t.closest<HTMLElement>(".wa-match");
-    if (matchBtn?.dataset.matchfrom) {
-      const from = matchBtn.dataset.matchfrom as SelScope;
-      setSelArr([...(from === "graph" ? waGraphSel : waSelected)]);
-      debounceWaRender();
-      return;
-    }
+    // ("Match" moved to the title next to the ✕ — handled in the capture block above.)
     if (t.closest(".wa-selfirst")) {
       // Graph: select the first N shown lifts (N = the graph's plot budget, up to
       // WA_GRAPH_MAX), in the picker's current order — a one-tap "fill the graph".

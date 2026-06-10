@@ -3429,17 +3429,16 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-sel-cog-sum::-webkit-details-marker { display: none; }
 .wa-sel-cog[open] .wa-sel-cog-sum { color: var(--text); border-color: var(--accent); }
 .wa-sel-cog-menu {
-  /* LEFT-aligned: the ⚙ now wraps to the LEFT of the tools row (more tools pushed it
-     onto its own line), so opening RIGHTWARD from its left edge keeps the menu on
-     screen — right:0 ran it off the LEFT edge (out of bounds). Width is capped to the
-     viewport so it can't overflow the right either. z-index above the sticky selector. */
-  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: auto;
+  /* PB-10: the cog can wrap ANYWHERE on the row (top tools row, or — since the controls
+     moved into the picker header — the far right), so an absolute menu anchored to it
+     kept opening off-screen. It's now position:FIXED and clampMenuIntoView() places its
+     left/top from the cog's live rect, clamped to the viewport — no ancestor's position
+     or overflow can clip it, regardless of where the cog sits. (left/top set by JS.) */
+  position: fixed; z-index: 40; left: 0; top: 0;
   display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14);
   min-width: 12rem; max-width: 92vw; white-space: nowrap;
-  /* clampMenuIntoView() nudges --menu-shift to keep it inside the viewport. */
-  transform: translateX(var(--menu-shift, 0px));
 }
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
 .wa-inc input { cursor: pointer; }
