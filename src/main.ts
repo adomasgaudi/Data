@@ -4265,16 +4265,6 @@ function syncAthleteChips() {
     btn.classList.toggle("is-sexhidden", sex !== athleteSexFilter && !on);
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
-  syncSelectedAthletePill();
-}
-
-/** Mirror the chosen athlete as a pill BELOW the carousel (it also stays highlighted
- * in the carousel above), sitting next to the relocated Stats button. */
-function syncSelectedAthletePill(): void {
-  const pill = document.getElementById("waSelectedPill");
-  if (!pill) return;
-  const name = els.athlete.options[els.athlete.selectedIndex]?.text ?? els.athlete.value;
-  pill.innerHTML = name ? `<span class="athlete-chip is-active is-mirror">${escapeHtml(name)}</span>` : "";
 }
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
