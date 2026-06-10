@@ -7992,13 +7992,11 @@ function resetSetEdit(target: HTMLElement): boolean {
   return true;
 }
 
-/** Click "Delete set": hide this set everywhere (on-device only — the source CSV
- * is untouched). Confirm first; restorable in Data health. */
-function deleteSetEdit(target: HTMLElement): boolean {
-  const btn = target.closest<HTMLElement>(".set-edit-delete");
-  if (!btn?.dataset.setid) return false;
-  if (!window.confirm("Hide this set from the whole site? Your source data isn't changed, and you can restore it later in Settings → Data health.")) return true;
-  setDeleted(btn.dataset.setid, true);
+/** Hide a set everywhere (on-device only — the source CSV is untouched) and refresh
+ * every view, preserving scroll. Shared by the editor's 🗑 button and swipe-to-delete.
+ * Restorable in Settings → Data health. */
+function deleteSetById(id: string): void {
+  setDeleted(id, true);
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
@@ -8006,6 +8004,15 @@ function deleteSetEdit(target: HTMLElement): boolean {
   refreshExerciseInfo();
   renderHealth();
   window.scrollTo(0, y);
+}
+
+/** Click "Delete set": hide this set everywhere (on-device only — the source CSV
+ * is untouched). Confirm first; restorable in Data health. */
+function deleteSetEdit(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-delete");
+  if (!btn?.dataset.setid) return false;
+  if (!window.confirm("Hide this set from the whole site? Your source data isn't changed, and you can restore it later in Settings → Data health.")) return true;
+  deleteSetById(btn.dataset.setid);
   return true;
 }
 
@@ -11061,6 +11068,59 @@ async function init() {
     document.addEventListener("pointercancel", () => reset(true));
     document.addEventListener("click", (e) => { if (Date.now() - endedAt < 350) { e.preventDefault(); e.stopPropagation(); } }, true);
   }
+
+  // Swipe LEFT→RIGHT to DELETE a single SET ROW in the EXPANDED session tables (owner ask).
+  // Companion to the exercise-line swipe above (that drops a whole lift's day; this drops
+  // ONE set). Same mechanics, and it reuses deleteSetsWithUndo so it gets the same 10s undo
+  // toast. The trailing tap is eaten so a swipe doesn't open the set's edit panel.
+  const SS_SLOP = 8, SS_DELETE = 90;
+  let ssRow: HTMLElement | null = null, ssId = "", ssLabel = "";
+  let ssX0 = 0, ssY0 = 0, ssDx = 0, ssClaimed = false, ssPtr = -1, ssEndedAt = 0;
+  const ssReset = (snapBack: boolean): void => {
+    if (ssRow) { ssRow.classList.remove("is-swiping", "set-swipe-armed"); if (snapBack) { ssRow.style.transform = ""; ssRow.style.opacity = ""; } }
+    ssRow = null; ssClaimed = false; ssDx = 0; ssPtr = -1;
+  };
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button > 0) return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>("tr.set-main[data-setid]");
+    if (!row) return;
+    // Leave the row's own interactive controls (RIR dropdown, 1RM / pRIR buttons, ⓘ,
+    // scale chip) to their own taps — don't start a swipe from them.
+    if ((e.target as HTMLElement).closest("button, input, select, .xdd")) return;
+    ssRow = row; ssId = row.dataset.setid!; ssX0 = e.clientX; ssY0 = e.clientY; ssDx = 0; ssClaimed = false; ssPtr = e.pointerId;
+    // The exercise this set belongs to (the nearest header row above it) — for the toast label.
+    let h = row.previousElementSibling;
+    while (h && !h.classList.contains("set-ex-row")) h = h.previousElementSibling;
+    ssLabel = h?.querySelector<HTMLElement>(".wo-exlink")?.dataset.exname ?? "set";
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!ssRow || e.pointerId !== ssPtr) return;
+    const dx = e.clientX - ssX0, dy = e.clientY - ssY0;
+    if (!ssClaimed) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SS_SLOP) { ssReset(true); return; } // vertical → page scroll
+      if (dx <= SS_SLOP) return; // not yet a clear rightward drag
+      ssClaimed = true;
+      ssRow.classList.add("is-swiping");
+      try { ssRow.setPointerCapture(ssPtr); } catch { /* not all engines */ }
+    }
+    ssDx = Math.max(0, dx);
+    ssRow.style.transform = `translateX(${ssDx}px)`;
+    ssRow.style.opacity = String(Math.max(0.3, 1 - ssDx / 220));
+    ssRow.classList.toggle("set-swipe-armed", ssDx >= SS_DELETE); // past threshold → red "will delete" hint
+    e.preventDefault();
+  });
+  const ssEnd = (): void => {
+    if (!ssRow) return;
+    const claimed = ssClaimed, dx = ssDx, id = ssId, label = ssLabel;
+    if (claimed) ssEndedAt = Date.now();
+    if (claimed && dx >= SS_DELETE) { ssReset(false); deleteSetsWithUndo([id], label); }
+    else ssReset(true);
+  };
+  document.addEventListener("pointerup", ssEnd);
+  document.addEventListener("pointercancel", () => ssReset(true));
+  document.addEventListener("click", (e) => {
+    if (Date.now() - ssEndedAt < 350) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
   // Index "↗" button: jump straight to this lift's workout history (Analysis, single
   // mode — its real logged sets are the example), with it selected on the graph too.
   document.addEventListener("click", (e) => {

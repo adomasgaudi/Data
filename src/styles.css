@@ -1158,6 +1158,12 @@ main { padding-bottom: 5rem; }
 /* Per-set edit: tap anywhere on a set's row to open its edit panel (no pencil
    button). The row shows it's tappable with a pointer cursor + hover tint. */
 .set-main { cursor: pointer; }
+/* Swipe LEFT→RIGHT to delete a set: pan-y hands horizontal drags to JS while keeping
+   vertical page-scroll; the row follows the finger and snaps back if released early. */
+.set-main { touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+.set-main.is-swiping { transition: none; will-change: transform; }
+/* Past the delete threshold the row turns red — "let go to delete". */
+.set-main.set-swipe-armed > td { background: color-mix(in srgb, var(--danger) 22%, transparent); }
 .set-main:hover > td, .set-main.edit-open > td { background: var(--accent-soft); }
 /* A hand-edited set carries a gold stripe on the left (gold = edited) — see the rule
    near .set-main.eff-* below, which layers it beside the intensity left bar. */

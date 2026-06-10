@@ -45,6 +45,19 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **If it recurs:** a set is logged but unseen → don't patch the new hider in isolation; ask
   "what's hiding it THIS time" (filter / selection / page / view / date range) and make the
   add path *land the user on the set* rather than enumerate hiders.
+- **Recurrence 4 (b.2.8.167 did NOT hold) — Android phone, Brave.** Owner reports the
+  custom-date add STILL doesn't show the set after the pagination jump. So pagination was
+  NOT the (only) cause. Inspection ruled out: the date-capture logic (`form.dataset.pickdate`
+  is set by `openDatePicker`'s callback and read by `onInlineAddGo` off the same element), the
+  picker z-index (`.dp-pop` z 60 > `.cmd-bar` 55, flips above the anchor), and the page window
+  (now jumped). REMAINING SUSPECTS, device-specific (Brave/Android touch): (a) the `.dp-day`
+  tap never fires `onPick` on this touch engine, so `pickdate`/`activate()` never run → the
+  📅 seg isn't `is-active` → `when` resolves to the session day, set logged THERE not the
+  picked date; (b) a synthetic touch→click closes the picker before a day registers. NEXT:
+  needs an owner diagnostic to localise (does the picker open? does the 📅 chip relabel to the
+  picked date after tapping a day? after Go, does the set appear on the SESSION day instead?).
+  Do NOT blind-patch again until the failing step is known (rule: stop guessing after a fix
+  fails — give the owner something testable).
 
 ## PB-10 — The selector ⚙ settings popout opens off-screen ("out of bounds")
 
