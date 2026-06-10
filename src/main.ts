@@ -9372,15 +9372,41 @@ function exerciseInfoHtml(name: string): string {
   // above never fires here (the group isn't a member of itself), so this is its own block.
   const selfGroups = [...effectiveCombinableGroups(), ...effectiveComparableGroups()]
     .filter((g) => (g.derivedName ?? g.label) === name);
+  // A big banner at the TOP of the card stating THIS lift IS a combinable / comparable
+  // group (owner request) — so its purpose is obvious the moment you open it.
+  const selfGroup = selfGroups[0];
+  const groupBanner = selfGroup
+    ? `<div class="ex-group-banner ${selfGroup.kind === "combinable-group" ? "is-combine" : "is-compare"}">${selfGroup.kind === "combinable-group" ? "⊕ Combinable group" : "⇄ Comparable group"}</div>`
+    : "";
+  // The group's member list is EDITABLE here (owner request: add exercises to it from the
+  // group's own card). Each member has a ✕ to drop it; the "＋ Add exercise…" dropdown adds
+  // one. Built-in groups go through toggleGroupMembership; user groups through the def.
+  const allExForAdd = selectableExercises(data.records);
   const selfGroupHtml = selfGroups
     .map((g) => {
-      const memberList = (g.members ?? [])
-        .map((m) => `${escapeHtml(m.exerciseName)} <span class="muted">×${m.ratio}</span>`)
-        .join(", ");
+      const gname = g.derivedName ?? g.label;
+      const memberNames = (g.members ?? []).map((m) => m.exerciseName);
+      const memberChips = (g.members ?? []).length
+        ? (g.members ?? [])
+            .map((m) =>
+              `<span class="ex-grp-mchip">${escapeHtml(displayName(m.exerciseName))}${m.ratio !== 1 ? ` <span class="muted">×${m.ratio}</span>` : ""}` +
+              `<button type="button" class="ex-grp-rm" data-grprm-id="${escapeHtml(g.id)}" data-grprm-name="${escapeHtml(gname)}" data-grprm-ex="${escapeHtml(m.exerciseName)}" title="Remove ${escapeHtml(displayName(m.exerciseName))} from this group" aria-label="Remove">✕</button></span>`,
+            )
+            .join("")
+        : `<span class="muted">No exercises in this group yet.</span>`;
+      const addable = allExForAdd
+        .filter((n) => n !== name && !memberNames.includes(n))
+        .sort((a, b) => displayName(a).localeCompare(displayName(b)));
+      const addSel =
+        `<select class="ex-grp-addsel" data-grpadd-id="${escapeHtml(g.id)}" data-grpadd-name="${escapeHtml(gname)}" aria-label="Add an exercise to this group">` +
+        `<option value="">＋ Add exercise…</option>` +
+        addable.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(displayName(n))}</option>`).join("") +
+        `</select>`;
       const kindNote = g.kind === "combinable-group" ? "merged 1:1 into this lift" : "scaled onto this lift's curve";
       return (
-        `<div class="ex-group"><div class="ex-group-hd">Composed of <span class="muted">— ${kindNote}</span></div>` +
-        `<div class="ex-group-members">${memberList || "—"}</div></div>`
+        `<div class="ex-group"><div class="ex-group-hd">Exercises in this group <span class="muted">— ${kindNote}</span></div>` +
+        `<div class="ex-group-members ex-grp-edit">${memberChips}</div>` +
+        `<div class="ex-grp-add">${addSel}</div></div>`
       );
     })
     .join("");
@@ -9418,7 +9444,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  return `<div class="ex-info">${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
@@ -11299,11 +11325,31 @@ async function init() {
       scheduleRender(() => { reopenIndexDetail(ug.dataset.usergrpEx!); refreshPoseViz(); });
       return;
     }
+    // ✕ on a member chip in a GROUP's own card → drop that exercise from the group, then
+    // reopen the GROUP's card (not the member's). Built-in vs user group by id prefix.
+    const grpRm = t.closest<HTMLElement>(".ex-grp-rm[data-grprm-id]");
+    if (grpRm?.dataset.grprmId && grpRm.dataset.grprmName && grpRm.dataset.grprmEx) {
+      const gid2 = grpRm.dataset.grprmId, gname2 = grpRm.dataset.grprmName, ex2 = grpRm.dataset.grprmEx;
+      if (gid2.startsWith("user.")) toggleUserGroupMember(gname2, ex2); else toggleGroupMembership(gid2, ex2);
+      populateExercisePicker();
+      scheduleRender(() => { reopenIndexDetail(gname2); refreshPoseViz(); });
+      return;
+    }
     const chip = t.closest<HTMLElement>(".ex-meta-chip[data-grp-id]");
     const ex = chip?.dataset.grpEx, gid = chip?.dataset.grpId;
     if (!ex || !gid) return;
     toggleGroupMembership(gid, ex);
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
+  });
+  // "＋ Add exercise…" dropdown in a GROUP's own card → add the picked exercise to the
+  // group, then reopen the GROUP's card. (A <select>, auto-enhanced to the .xdd dropdown.)
+  document.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>(".ex-grp-addsel");
+    if (!sel?.dataset.grpaddId || !sel.dataset.grpaddName || !sel.value) return;
+    const gid3 = sel.dataset.grpaddId, gname3 = sel.dataset.grpaddName, ex3 = sel.value;
+    if (gid3.startsWith("user.")) toggleUserGroupMember(gname3, ex3); else toggleGroupMembership(gid3, ex3);
+    populateExercisePicker();
+    scheduleRender(() => { reopenIndexDetail(gname3); refreshPoseViz(); });
   });
   // Per-group display mode: cycle Combined only → Members only → Show both.
   document.addEventListener("click", (e) => {

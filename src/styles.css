@@ -2608,6 +2608,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-group-hd { font-size: 0.82rem; font-weight: 700; }
 .ex-group-why { font-size: 0.76rem; margin: 0.2rem 0; }
 .ex-group-members { font-size: 0.8rem; }
+/* Big "Combinable / Comparable group" banner at the top of a synthetic group's card. */
+.ex-group-banner { font-size: 1.15rem; font-weight: 800; padding: 0.4rem 0.6rem; margin: 0 0 0.5rem; border-radius: 8px; }
+.ex-group-banner.is-combine { color: var(--lens-combine); background: color-mix(in srgb, var(--lens-combine) 12%, transparent); }
+.ex-group-banner.is-compare { color: var(--lens-compare); background: color-mix(in srgb, var(--lens-compare) 12%, transparent); }
+/* Editable group-member chips (each removable) + the "＋ Add exercise…" dropdown. */
+.ex-grp-edit { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
+.ex-grp-mchip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 4px 2px 8px; background: var(--panel); }
+.ex-grp-rm { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--remove); background: none; border: none; padding: 0 2px; min-height: var(--tap-min); }
+.ex-grp-add { margin-top: 0.2rem; }
+.ex-grp-addsel { font: inherit; font-size: 0.8rem; }
 /* Inline exercise editors on the More-info page (code / short / bodyweight). */
 .ex-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; }
 .ex-edit-f { display: flex; flex-direction: column; gap: 2px; flex: 1 1 8rem; min-width: 0; }
