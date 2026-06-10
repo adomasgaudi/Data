@@ -3489,7 +3489,14 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* Graph options + Legend sit side by side in one bar, each a floating dropdown
    (their menus overlay the chart, so opening either never pushes the layout). */
 .wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.25rem 0 0.5rem; position: relative; }
-.wa-graph-bar .svgc-legend { margin: 0; flex: 0 1 auto; }
+.wa-graph-bar .svgc-legend { margin: 0; flex: 0 0 auto; }
+/* The three graph controls (Graph options · Legend · Compare) share ONE row. Graph
+   options can shrink (its metric summary truncates with an ellipsis); Legend and
+   Compare keep their full width — so Compare never wraps to its own line. */
+.wa-graph-ctrls { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem 0.5rem; width: 100%; min-width: 0; }
+.wa-graph-ctrls .wa-graph-fold { flex: 0 1 auto; min-width: 4.5rem; }
+.wa-graph-ctrls .wa-graph-compare-btn { flex: 0 0 auto; }
+.wa-graph-fold-sum { max-width: 100%; overflow: hidden; }
 /* Per-athlete colour key above the chart (multi-athlete overlay): name + line colour,
    one sideways-scrolling row so it never pushes the chart down. */
 .wa-ath-key { display: flex; flex-wrap: nowrap; gap: 0.3rem 0.9rem; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 0.3rem; font-size: 0.74rem; font-weight: 600; color: var(--text); }
@@ -3548,7 +3555,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-gmenu-span { grid-column: 1 / -1; }
 /* Fullscreen has the whole width — cap the columns so they don't stretch comically wide. */
 body.wa-graph-full .wa-gmenu-grid { grid-template-columns: repeat(2, minmax(0, 22rem)); }
-.wa-graph-fold-cur { font-weight: 400; }
+.wa-graph-fold-cur { font-weight: 400; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ---- Fullscreen graph: the chart pins to the top and the Graph-options settings
    become an in-flow panel below it, so you can change settings while watching the
    graph update — no scrolling away (the ⛶ button toggles; ✕ exits). ---- */

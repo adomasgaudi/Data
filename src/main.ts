@@ -14395,11 +14395,15 @@ function renderWaGraph(): void {
   const graphBarHtml =
     `<div class="wa-graph-bar">` +
     (waCompareOpen ? graphAthletesPillsHtml() : "") +
+    // Graph options · Legend (relocated in below) · Compare share ONE row — the fold's
+    // metric summary truncates so Compare never wraps to its own line.
+    `<div class="wa-graph-ctrls">` +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu">${cfgUi}</div>` +
     `</details>` +
     compareBtn +
+    `</div>` +
     `</div>`;
   // In-chart overlay toolbar (top-right corner): kg unit toggle, ⤢ Fit (proxies the
   // chart's own re-fit), and ⛶ fullscreen. Compact icons over the plot so they don't
@@ -14493,16 +14497,16 @@ function renderWaGraph(): void {
   };
   // Relocate the chart's legend down into the bar below it so it sits beside Graph
   // options (the SVG engine keeps updating it in place wherever it lives in the DOM).
-  const graphBar = box.querySelector(".wa-graph-bar");
+  const ctrls = box.querySelector(".wa-graph-ctrls");
   // Fresh mount → the new legend sits inside chartBox; rebuild path → reuse the
   // node we rescued before the bar was replaced (the engine just updated it).
   const legendEl = preservedLegend ?? chartBox?.querySelector(".svgc-legend");
-  if (graphBar && legendEl && legendEl.parentElement !== graphBar) {
-    // Sit the legend dropdown right AFTER "Graph options" (before the kg/×BW button,
-    // which keeps its margin-left:auto and stays far right) so both share one line.
-    const fold = graphBar.querySelector(".wa-graph-fold");
+  if (ctrls && legendEl && legendEl.parentElement !== ctrls) {
+    // Sit the Legend dropdown between "Graph options" and "Compare" so all three
+    // controls share one row (the fold's summary truncates to make room).
+    const fold = ctrls.querySelector(".wa-graph-fold");
     if (fold) fold.insertAdjacentElement("afterend", legendEl);
-    else graphBar.appendChild(legendEl);
+    else ctrls.appendChild(legendEl);
   }
   const noteEl = document.getElementById("waGraphNote");
   if (noteEl) {
