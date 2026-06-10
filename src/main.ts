@@ -183,9 +183,6 @@ const els = {
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
-  showLegsAll: $<HTMLInputElement>("showLegsAll"),
-  showAloneRings: $<HTMLInputElement>("showAloneRings"),
-  decayStrength: $<HTMLInputElement>("decayStrength"),
   simplifiedToggle: $<HTMLInputElement>("simplifiedToggle"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
@@ -614,14 +611,11 @@ function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); 
 // dowLetter, isoWeekNumber, todayIso, trainingDuration) are pure and live in
 // ./format so they can be unit-tested without the DOM. Imported at the top.
 
-// "Current strength" mode: when on, 1RM achievements fade with time off the lift
-// (detraining model in metrics.ts) instead of showing the all-time peak. Toggled
-// in Settings and remembered on this device.
-let decayStrength = localStorage.getItem("colosseum.decayStrength") === "1";
-/** Reference date for the detraining model — today's date when "current
- * strength" is on, otherwise undefined (keep all-time peaks). Passed into the
- * leaderboard / personal-record aggregators. */
-const strengthAsOf = (): string | undefined => (decayStrength ? todayIso() : undefined);
+/** Reference date for the detraining model, passed into the leaderboard /
+ * personal-record aggregators. Always undefined: lists/leaderboards/PRs show
+ * the all-time peak 1RM. The faded "Current strength" view lives only in the
+ * graph (its own trend mode, via decayedStrengthSeries) — no global toggle. */
+const strengthAsOf = (): string | undefined => undefined;
 
 function currentFormula(): OneRepMaxFormula {
   const v = els.formula.value;
@@ -4026,8 +4020,8 @@ function syncWorkoutToggles(): void {
 // sets), and within each category still by sets.
 let exerciseSort: "sets" | "category" | "tier" = "category";
 // "Legs (all)" is a broad umbrella that overlaps the narrower leg splits, so it's
-// hidden from the By-category list by default; a Settings toggle brings it back.
-let showLegsAll = (() => { try { return localStorage.getItem("colosseum.legsAll") === "1"; } catch { return false; } })();
+// hidden by default — but it's a normal category like any other, shown/hidden via
+// the "Show:" chips (hiddenExCats), not a dedicated Settings toggle.
 // Simplified view: when on, the bottom "Analysis" button opens the S-ANL page.
 // Defaults ON outside admin (spectator/user), OFF for admin — until explicitly set.
 let simplifiedView = (() => {
@@ -4059,7 +4053,11 @@ const expandedExCats = new Set<string>();
 const expandedExTiers = new Set<string>();
 // Categories the owner has chosen to HIDE from the By-category list (picker chips).
 const hiddenExCats = new Set<string>((() => {
-  try { return JSON.parse(localStorage.getItem("colosseum.hiddenCats") ?? "[]") as string[]; } catch { return []; }
+  try {
+    const raw = localStorage.getItem("colosseum.hiddenCats");
+    if (raw == null) return ["Legs (all)"]; // first run: hide the overlapping umbrella by default
+    return JSON.parse(raw) as string[];
+  } catch { return ["Legs (all)"]; }
 })());
 // Which exercise categories are expanded in the Exercises tab. null = first paint
 // (open them all); a Set afterwards = the user's remembered open/closed choices.
@@ -5307,7 +5305,6 @@ function orderedExerciseCounts<T extends ExerciseCount>(counts: T[]): (T & { _ca
   const buckets = new Map<string, (T & { _cat?: string })[]>();
   for (const c of counts)
     for (const cat of exerciseCategories(c.exerciseName)) {
-      if (cat === "Legs (all)" && !showLegsAll) continue; // hidden unless toggled on in Settings
       if (hiddenExCats.has(cat)) continue; // hidden via the category picker
       (buckets.get(cat) ?? buckets.set(cat, []).get(cat)!).push({ ...c, _cat: cat });
     }
@@ -5665,10 +5662,8 @@ function renderExercisesPage() {
   if (exerciseSort === "category") {
     const present = new Set<string>();
     for (const it of items)
-      for (const cat of exerciseCategories(it.exerciseName)) {
-        if (cat === "Legs (all)" && !showLegsAll) continue;
+      for (const cat of exerciseCategories(it.exerciseName))
         present.add(cat);
-      }
     const cats = LIST_CATEGORIES.filter((c) => present.has(c));
     els.exCatBar.innerHTML =
       `<span class="ex-cat-bar-lbl muted">Show:</span>` +
@@ -6792,6 +6787,9 @@ function renderWorkoutCalendar() {
       `<button type="button" class="wo-dj-btn cal-mode-btn${S.heatScope === s ? " is-active" : ""}" data-heat-scope="${s}" ` +
       `title="${s === "ribbon" ? "Timeline — one continuous strip" : s === "single" ? "Single year" : "All years stacked"}">${l}</button>`)
     .join("");
+  const ringsDjBtn =
+    `<button type="button" class="wo-dj-btn cal-rings-btn${showAloneRings ? " is-active" : ""}" data-calrings="1" ` +
+    `title="${showAloneRings ? "Hide trained-alone day marks" : "Mark trained-alone days on the calendar"}">Solo</button>`;
   const tagDjBtn =
     `<button type="button" class="wo-dj-btn cal-tagmode${S.aloneTagMode ? " is-active" : ""}" data-tagmode="alone" ` +
     `title="${S.aloneTagMode ? "Done tagging" : "Tag days as trained-alone, then tap days"}">${S.aloneTagMode ? "Done" : "Tag"}</button>`;
@@ -6800,7 +6798,7 @@ function renderWorkoutCalendar() {
     `title="${calZoom ? "Back to normal size" : "Zoom calendar 2×"}">${calZoom ? "1×" : "2×"}</button>`;
   const calSettings =
     `<details class="wo-controls-fold cal-settings"${calSettingsOpen ? " open" : ""}><summary class="wo-controls-sum">⚙</summary>` +
-    `<div class="wo-controls wo-dj">${scopeBtns}${tagDjBtn}${zoomDjBtn}</div></details>`;
+    `<div class="wo-controls wo-dj">${scopeBtns}${ringsDjBtn}${tagDjBtn}${zoomDjBtn}</div></details>`;
   // Interactive pills (Group by · All · one pill per group) are the calendar's
   // slicer now — colour by body part by default, tap a part to see only it. The
   // ⚙ settings button rides on the same bottom row as the pills.
@@ -11230,33 +11228,10 @@ async function init() {
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
 
-  // "Legs (all)" category visibility in the By-category list (off by default).
-  els.showLegsAll.checked = showLegsAll;
-  els.showLegsAll.addEventListener("change", () => {
-    showLegsAll = els.showLegsAll.checked;
-    try { localStorage.setItem("colosseum.legsAll", showLegsAll ? "1" : "0"); } catch { /* ignore */ }
-    renderExercisesPage();
-  });
-
   // Simplified view ↔ Advanced. Switches the Analysis home (S-ANL ↔ full ANL) and
   // re-navigates immediately if you're already on an analysis page.
   els.simplifiedToggle.checked = simplifiedView;
   els.simplifiedToggle.addEventListener("change", () => setSimplified(els.simplifiedToggle.checked));
-
-  // The red "trained alone" rings on the calendar (off by default).
-  els.showAloneRings.checked = showAloneRings;
-  els.showAloneRings.addEventListener("change", () => {
-    showAloneRings = els.showAloneRings.checked;
-    try { localStorage.setItem("colosseum.showAloneRings", showAloneRings ? "1" : "0"); } catch { /* ignore */ }
-    renderWorkoutCalendar();
-  });
-
-  els.decayStrength.checked = decayStrength;
-  els.decayStrength.addEventListener("change", () => {
-    decayStrength = els.decayStrength.checked;
-    try { localStorage.setItem("colosseum.decayStrength", decayStrength ? "1" : "0"); } catch { /* ignore */ }
-    scheduleRender(); // every 1RM/leaderboard/PR view re-reads strengthAsOf()
-  });
 
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
@@ -12263,6 +12238,12 @@ async function init() {
     const nav = target.closest<HTMLElement>(".cal-nav");
     if (nav?.dataset.heat === "prev") return shiftHeatYear(-1); // older year
     if (nav?.dataset.heat === "next") return shiftHeatYear(1); // newer year
+    // "Solo": show/hide the trained-alone day marks on the calendar.
+    if (target.closest<HTMLElement>(".cal-rings-btn")) {
+      showAloneRings = !showAloneRings;
+      try { localStorage.setItem("colosseum.showAloneRings", showAloneRings ? "1" : "0"); } catch { /* ignore */ }
+      return renderWorkoutCalendar();
+    }
     // "Tag alone": arm/disarm paint mode so day taps toggle the alone tag.
     if (target.closest<HTMLElement>(".cal-tagmode")) {
       S.aloneTagMode = !S.aloneTagMode;
