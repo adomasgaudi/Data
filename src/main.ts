@@ -418,6 +418,7 @@ function setViewMode(mode: ViewMode) {
   }
   syncAthleteChips(); // lock the other athletes' chips outside admin (unlock in admin)
   renderViewSwitch(); // reflect the new mode in the quick switcher
+  syncNameModeButtons(); // picker highlight follows the view's default name mode
   placeVersionLine(); // version·SP under the title in admin, else tucked under ⚙
 }
 
@@ -494,6 +495,9 @@ function setupViewSwitch(): void {
     if (viewMode === "admin") setViewAs(els.athlete.value || adomasUsername() || "");
     else if (viewMode === "user") setViewAs("loggedout");
     else setViewAs("admin");
+    // The view's default name mode differs (user/spectator → full), so re-render
+    // every label unless the user has pinned a mode explicitly.
+    if (!nameModeExplicit) applyNameModeChange();
   });
 }
 
@@ -1063,10 +1067,23 @@ function setShortOverride(exerciseName: string, short: string) {
 // history / selector render paths), else the global. Default global is "short".
 type NameMode = "code" | "short" | "full";
 const NAME_MODE_KEY = "colosseum.nameMode.v1";
+const NAME_MODE_EXPLICIT_KEY = "colosseum.nameMode.explicit.v1";
 const NAME_MODE_BY_SCOPE_KEY = "colosseum.nameModeByScope.v1";
+// Has the user ACTIVELY picked a name mode (tapped the Settings picker)? Until they
+// do, the effective default follows the VIEW: admin sees compact "short" codes, but
+// a user/spectator (incl. an admin previewing them, and a fresh sign-in / changed
+// user) defaults to readable "full" names. An explicit pick is global and wins.
+let nameModeExplicit = (() => {
+  try { return localStorage.getItem(NAME_MODE_EXPLICIT_KEY) === "1"; } catch { return false; }
+})();
 let nameMode: NameMode = (() => {
   try { const v = localStorage.getItem(NAME_MODE_KEY); return v === "code" || v === "full" ? v : "short"; } catch { return "short"; }
 })();
+/** The default name mode before any explicit pick: full names for a user/spectator
+ * view, compact short codes for admin. */
+function defaultNameMode(): NameMode { return viewMode === "admin" ? "short" : "full"; }
+/** The GLOBAL effective name mode: an explicit pick wins, else the view-aware default. */
+function effectiveNameMode(): NameMode { return nameModeExplicit ? nameMode : defaultNameMode(); }
 // Per-area (graph / hist) local overrides. Empty → every area follows the global.
 const nameModeByScope: Partial<Record<SelScope, NameMode>> = (() => {
   try {
@@ -1085,13 +1102,14 @@ function persistNameOverrides(): void {
 let nameScope: SelScope | null = null;
 /** The effective name mode for an area: its local override, else the global. */
 function nameModeFor(scope: SelScope | null): NameMode {
-  return scope && nameModeByScope[scope] ? nameModeByScope[scope]! : nameMode;
+  return scope && nameModeByScope[scope] ? nameModeByScope[scope]! : effectiveNameMode();
 }
 function setNameMode(m: NameMode): void {
   nameMode = m;
+  nameModeExplicit = true; // an active pick is global and overrides the view default
   // The GLOBAL picker is app-wide: it RESETS every local area to follow it.
   for (const k of Object.keys(nameModeByScope) as SelScope[]) delete nameModeByScope[k];
-  try { localStorage.setItem(NAME_MODE_KEY, m); } catch { /* ignore */ }
+  try { localStorage.setItem(NAME_MODE_KEY, m); localStorage.setItem(NAME_MODE_EXPLICIT_KEY, "1"); } catch { /* ignore */ }
   persistNameOverrides();
 }
 /** Set ONE area's local override (the in-selector name pill) — that area only. */
@@ -1127,7 +1145,7 @@ function applyNameModeChange(): void {
 /** Light up the active name-mode button in the Settings picker. */
 function syncNameModeButtons(): void {
   for (const b of document.querySelectorAll<HTMLElement>("#nameModeRow .name-mode-opt"))
-    b.classList.toggle("is-on", b.dataset.namemode === nameMode);
+    b.classList.toggle("is-on", b.dataset.namemode === effectiveNameMode());
 }
 
 // ---- Per-LEVEL technique scaling factors (the squat-rack holes), editable ----
@@ -15915,7 +15933,7 @@ function commandList(): CmdSpec[] {
   return [
     { cmd: ".all", desc: "Show everything — clear the exercise selection", run: () => { waSelected = []; waGraphSel = []; goToAnalysis(); } },
     { cmd: ".clear", desc: "Clear the current exercise selection", run: () => { waSelected = []; waGraphSel = []; goToAnalysis(); } },
-    { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { setNameMode(nameMode === "code" ? "short" : nameMode === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
+    { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { const cur = effectiveNameMode(); setNameMode(cur === "code" ? "short" : cur === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
     { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true; } },
