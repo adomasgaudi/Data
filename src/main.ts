@@ -9334,21 +9334,30 @@ function exerciseInfoHtml(name: string): string {
   // Combinable / Comparable membership chips — tap to add/remove this lift from a
   // group (comparable also gets a ratio input when it's an owner-added member).
   const groupChips = (all: RegistryTag[], kind: "combine" | "compare") => {
-    const memberIds = new Set((kind === "combine" ? combinableGroupsForEx(name) : comparableGroupsForEx(name)).map((g) => g.id));
+    // The EFFECTIVE groups this lift is in (built-in + user, ratios applied), so each
+    // comparable chip can show — and edit — the scaling ratio THIS lift uses in it.
+    const effGroups = kind === "combine" ? combinableGroupsForEx(name) : comparableGroupsForEx(name);
+    const memberIds = new Set(effGroups.map((g) => g.id));
+    const ratioOf = (gid: string): number => effGroups.find((g) => g.id === gid)?.members?.find((m) => m.exerciseName === name)?.ratio ?? 1;
+    // Editable ×ratio next to a comparable chip the lift is IN — for EVERY such group
+    // (built-in base/added AND your own), not just owner-added members. Combine is 1:1,
+    // so no ratio there. Writes via setGroupRatio (groupMemberOverrides), applied by
+    // withMemberOverrides / userComparableTag.
+    const ratioInput = (gid: string, on: boolean): string =>
+      on && kind === "compare"
+        ? `<span class="ex-grp-ratio" title="Scaling ratio for this lift in this group (1 = same as the reference, 0.8 = 80%). Edit to tune how it compares.">×<input class="ex-grp-ratioin" type="number" step="0.05" min="0.05" max="2" value="${ratioOf(gid)}" data-grpratio-id="${escapeHtml(gid)}" data-grpratio-ex="${escapeHtml(name)}" aria-label="Scaling ratio for ${escapeHtml(displayName(name))}" /></span>`
+        : "";
     return (
       `<span class="ex-meta-chips">` +
       all.map((g) => {
         const on = memberIds.has(g.id);
-        const added = groupMemberOverrides[g.id]?.add?.[name];
-        const ratio = on && kind === "compare" && added !== undefined
-          ? `<input class="ex-grp-ratio" type="number" step="0.05" min="0.05" max="2" value="${added}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-ex="${escapeHtml(name)}" title="Ratio vs the reference lift" />`
-          : "";
-        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratio}${pillInfoEx(g.derivedName ?? g.label)}`;
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratioInput(g.id, on)}${pillInfoEx(g.derivedName ?? g.label)}`;
       }).join("") +
-      // YOUR groups (created here) — toggle this lift in/out the same way.
+      // YOUR groups (created here) — toggle this lift in/out, and (comparable) tune its ratio.
       userGroupsOfKind(kind).map((d) => {
         const on = (d.members ?? []).includes(name);
-        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>${pillInfoEx(d.name)}`;
+        const id = `user.${kind}.${d.name}`; // matches userComparableTag's id for compare groups
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>${ratioInput(id, on)}${pillInfoEx(d.name)}`;
       }).join("") +
       // ＋ New — create a brand-new group seeded with this lift.
       `<button type="button" class="ex-meta-chip ex-newgroup" data-newgroup="${kind}" data-newgroup-ex="${escapeHtml(name)}" title="Create a new ${kind === "combine" ? "combinable" : "comparable"} group from this lift">＋ New</button>` +
