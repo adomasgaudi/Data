@@ -227,6 +227,7 @@ const els = {
   exInfoPage: $("exInfoPage"),
   exInfoTitle: $("exInfoTitle"),
   exInfoBack: $<HTMLButtonElement>("exInfoBack"),
+  exInfoPillToggle: $<HTMLButtonElement>("exInfoPillToggle"),
   exInfoGotoIndex: $<HTMLButtonElement>("exInfoGotoIndex"),
   exInfoGotoAnl: $<HTMLButtonElement>("exInfoGotoAnl"),
   exInfoBody: $("exInfoBody"),
@@ -2976,6 +2977,10 @@ function openTesting() {
 // row that pushes the table down. So it's unmistakably "this one exercise's
 // settings, in the context of the Index". `currentExInfo` is the lift it shows.
 let currentExInfo: string | null = null;
+/** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
+ * to that subject — a group's own info card, or the Index filtered to that
+ * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
+let exInfoMode = false;
 /** Open one exercise's settings: bring the Index (the all-exercises list) up as
  * the backdrop, reveal + scroll to that lift's row, then float the settings card
  * on top — filled from the single-source `exerciseInfoHtml`. */
@@ -3002,6 +3007,11 @@ function indexRowFor(name: string): HTMLTableRowElement | null {
   }
   return null;
 }
+/** Reflect the current info-mode state on the header ⓘ toggle button. */
+function syncPillToggle(): void {
+  els.exInfoPillToggle.classList.toggle("is-on", exInfoMode);
+  els.exInfoPillToggle.setAttribute("aria-pressed", String(exInfoMode));
+}
 function openExerciseInfo(name: string): void {
   // Remember the view we came from (only on a fresh open — opening another lift
   // while the overlay is up keeps the original origin).
@@ -3015,6 +3025,7 @@ function openExerciseInfo(name: string): void {
   }
   els.exInfoTitle.textContent = name;
   els.exInfoBody.innerHTML = exerciseInfoHtml(name);
+  syncPillToggle();
   els.exInfoPage.hidden = false;
   refreshPoseViz();
   els.exInfoBody.parentElement?.scrollTo(0, 0); // reset the card's own scroll
@@ -3058,6 +3069,24 @@ function gotoAnlFromInfo(): void {
   // jumps to whoever's done it the most; locked views stay on their own data).
   if (name) openLiftExample(name);
   else openWorkoutAnalysis({});
+}
+/** A pill's ⓘ on a Discipline / Muscle group / Tier: close the card and open the
+ * Index grouped by that dimension, with just that category's bucket opened and
+ * scrolled to — "go see every lift in this category". */
+function gotoIndexCategory(mode: IndexGroupMode, key: string): void {
+  currentExInfo = null;
+  els.exInfoPage.hidden = true;
+  S.bwGroupMode = mode;
+  switchTopTab("bwparts");
+  renderBwParts();
+  requestAnimationFrame(() => {
+    const d = els.bwGroups.querySelector<HTMLDetailsElement>(`details.bw-cat[data-cat="${(window.CSS?.escape ?? ((s: string) => s))(key)}"]`);
+    if (!d) return;
+    d.open = true;
+    d.scrollIntoView({ behavior: "auto", block: "start" });
+    d.classList.add("wo-flash");
+    window.setTimeout(() => d.classList.remove("wo-flash"), 1200);
+  });
 }
 /** Re-render the open exercise-settings overlay (after an edit anywhere in it),
  * so it stays in sync without closing. No-op when the overlay is closed. */
@@ -9087,14 +9116,27 @@ function exerciseInfoHtml(name: string): string {
   const code = codeFor(name), short = shortFor(name);
   const codeInput = `<input class="ex-edit-code" type="text" maxlength="12" spellcheck="false" autocomplete="off" value="${escapeHtml(code)}" data-editex="${escapeHtml(name)}" aria-label="Code for ${escapeHtml(name)}" />`;
   const shortInput = `<input class="ex-edit-short" type="text" maxlength="40" spellcheck="false" autocomplete="off" value="${escapeHtml(short)}" data-editex="${escapeHtml(name)}" aria-label="Short name for ${escapeHtml(name)}" />`;
+  // Info-mode (header ⓘ toggle): each pill grows a small ⓘ that navigates to that
+  // subject — a category pill opens the Index grouped by that dimension at its bucket;
+  // a group pill opens that group's own info card. `data-pillinfo-*` is read by a
+  // delegated handler; the ⓘ is a SIBLING of the chip (never nested in the button).
+  const pillInfoCat = (mode: IndexGroupMode, key: string, human: string) =>
+    exInfoMode ? `<button type="button" class="ex-pill-info" data-pillinfo-cat="${escapeHtml(mode)}" data-pillinfo-key="${escapeHtml(key)}" title="See every lift in ${escapeHtml(human)}" aria-label="See lifts in ${escapeHtml(human)}">ⓘ</button>` : "";
+  const pillInfoEx = (target: string) =>
+    exInfoMode ? `<button type="button" class="ex-pill-info" data-pillinfo-ex="${escapeHtml(target)}" title="Open ${escapeHtml(target)} info" aria-label="More info about ${escapeHtml(target)}">ⓘ</button>` : "";
   // Discipline / Muscle group / Tier are MULTI-select: a lift can fit several at
   // once, so each is a row of toggle chips (tap to add/remove), highlighted =
   // selected. The ↺ chip clears the override back to the automatic guess.
-  const metaChips = (kind: MetaKind, all: readonly string[], labelOf: (v: string) => string, sel: readonly string[]) =>
-    `<span class="ex-meta-chips">` +
-    all.map((v) => `<button type="button" class="ex-meta-chip${sel.includes(v) ? " is-on" : ""}" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="${escapeHtml(v)}">${escapeHtml(labelOf(v))}</button>`).join("") +
-    (metaSet(kind, name) ? `<button type="button" class="ex-meta-reset" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
-    `</span>`;
+  const metaChips = (kind: MetaKind, all: readonly string[], labelOf: (v: string) => string, sel: readonly string[]) => {
+    const catMode: IndexGroupMode | null = kind === "disc" ? "discipline" : kind === "tier" ? "tier" : null;
+    return `<span class="ex-meta-chips">` +
+      all.map((v) =>
+        `<button type="button" class="ex-meta-chip${sel.includes(v) ? " is-on" : ""}" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="${escapeHtml(v)}">${escapeHtml(labelOf(v))}</button>` +
+        (catMode ? pillInfoCat(catMode, v, labelOf(v)) : "")
+      ).join("") +
+      (metaSet(kind, name) ? `<button type="button" class="ex-meta-reset" data-meta-ex="${escapeHtml(name)}" data-meta-kind="${kind}" data-meta-val="auto" title="Reset to the automatic guess">↺</button>` : "") +
+      `</span>`;
+  };
   const discChips = metaChips("disc", DISCIPLINES, (v) => v, discsFor(name));
   // Muscle group is now a per-muscle INVOLVEMENT LEVEL 0–4 (cycling pill, rule 15):
   // 0 none · 1 tendons · 2 maintain · 3 counts as exercise (shown in that category) ·
@@ -9105,7 +9147,8 @@ function exerciseInfoHtml(name: string): string {
     MUSCLE_GROUPS.map((m) => {
       const lv = mgLevelOf(name, m);
       const cls = lv >= 3 ? " is-on" : lv > 0 ? " is-partial" : "";
-      return `<button type="button" class="ex-meta-chip ex-mglvl-chip${cls}${lv === 4 ? " is-top" : ""}" data-mglvl-ex="${escapeHtml(name)}" data-mglvl-muscle="${escapeHtml(m)}" aria-label="${escapeHtml(m)} involvement level ${lv}" title="${escapeHtml(m)} — tap to cycle: ${mgLevelHint}. Now: ${lv}">${escapeHtml(m)}${lv ? `<span class="ex-mglvl-n">${lv}</span>` : ""}</button>`;
+      return `<button type="button" class="ex-meta-chip ex-mglvl-chip${cls}${lv === 4 ? " is-top" : ""}" data-mglvl-ex="${escapeHtml(name)}" data-mglvl-muscle="${escapeHtml(m)}" aria-label="${escapeHtml(m)} involvement level ${lv}" title="${escapeHtml(m)} — tap to cycle: ${mgLevelHint}. Now: ${lv}">${escapeHtml(m)}${lv ? `<span class="ex-mglvl-n">${lv}</span>` : ""}</button>` +
+        pillInfoCat("muscleGroup", m, m);
     }).join("") +
     (metaOverrides.mgLevel?.[name] ? `<button type="button" class="ex-meta-reset ex-mglvl-reset" data-mglvl-ex="${escapeHtml(name)}" title="Reset muscle levels to the automatic guess">↺</button>` : "") +
     `</span>`;
@@ -9126,12 +9169,12 @@ function exerciseInfoHtml(name: string): string {
         const ratio = on && kind === "compare" && added !== undefined
           ? `<input class="ex-grp-ratio" type="number" step="0.05" min="0.05" max="2" value="${added}" data-grpratio-id="${escapeHtml(g.id)}" data-grpratio-ex="${escapeHtml(name)}" title="Ratio vs the reference lift" />`
           : "";
-        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratio}`;
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-grp-id="${escapeHtml(g.id)}" data-grp-ex="${escapeHtml(name)}">${escapeHtml(g.label)}</button>${ratio}${pillInfoEx(g.derivedName ?? g.label)}`;
       }).join("") +
       // YOUR groups (created here) — toggle this lift in/out the same way.
       userGroupsOfKind(kind).map((d) => {
         const on = (d.members ?? []).includes(name);
-        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>`;
+        return `<button type="button" class="ex-meta-chip${on ? " is-on" : ""}" data-usergrp="${escapeHtml(d.name)}" data-usergrp-ex="${escapeHtml(name)}">${escapeHtml(d.name)}</button>${pillInfoEx(d.name)}`;
       }).join("") +
       // ＋ New — create a brand-new group seeded with this lift.
       `<button type="button" class="ex-meta-chip ex-newgroup" data-newgroup="${kind}" data-newgroup-ex="${escapeHtml(name)}" title="Create a new ${kind === "combine" ? "combinable" : "comparable"} group from this lift">＋ New</button>` +
@@ -10483,6 +10526,24 @@ async function init() {
   els.exInfoBack.addEventListener("click", closeExerciseInfo);
   els.exInfoGotoIndex.addEventListener("click", gotoIndexFromInfo);
   els.exInfoGotoAnl.addEventListener("click", gotoAnlFromInfo);
+  // ⓘ header toggle: flip info-mode and re-render the card so every pill gains/loses
+  // its small ⓘ. State persists across opening different lifts (synced on open).
+  els.exInfoPillToggle.addEventListener("click", () => {
+    exInfoMode = !exInfoMode;
+    syncPillToggle();
+    if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+  });
+  // Delegated: a pill's ⓘ navigates — group pill → that group's own info card;
+  // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
+  els.exInfoBody.addEventListener("click", (e) => {
+    const ex = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-ex]");
+    if (ex?.dataset.pillinfoEx) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(ex.dataset.pillinfoEx); return; }
+    const cat = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-cat]");
+    if (cat?.dataset.pillinfoCat && cat.dataset.pillinfoKey !== undefined) {
+      e.preventDefault(); e.stopPropagation();
+      gotoIndexCategory(cat.dataset.pillinfoCat as IndexGroupMode, cat.dataset.pillinfoKey);
+    }
+  });
   els.exInfoPage.addEventListener("click", (e) => {
     // Click on the dimmed backdrop (outside the floating card) closes it.
     if (e.target === els.exInfoPage) { closeExerciseInfo(); return; }

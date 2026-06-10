@@ -369,6 +369,7 @@ body.on-s-anl .appfoot { display: none; }
   border-radius: 8px; padding: 0 0.6rem; height: 34px; font-size: 0.85rem; cursor: pointer; line-height: 1; white-space: nowrap;
 }
 .ex-info-navbtn:hover { border-color: var(--accent); color: var(--accent); }
+.ex-info-navbtn.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 .overlay-head h2 { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ex-modal header stacks: title row on top (back + full-width title), then the
    Index / Analysis jump buttons on their OWN row below — so the title isn't
@@ -2452,6 +2453,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px; }
 .ex-meta-chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-meta-chip.is-on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* Info-mode ⓘ that follows each pill (header ⓘ toggle on): a small accent dot that
+   jumps to that subject. Sits tight after its pill; kept just big enough to tap. */
+.ex-pill-info {
+  flex: 0 0 auto; cursor: pointer; font: inherit; font-size: 0.9rem; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; min-height: 26px; margin: 0 6px 0 -1px; padding: 0;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid var(--accent); border-radius: var(--r-pill);
+}
+.ex-pill-info:hover { filter: brightness(1.06); }
 /* Muscle involvement levels: 1–2 (tendons/maintain) read as a faint tinted "partial"
    chip; ≥3 (counts) is the solid accent (.is-on); 4 (top) gets a gold ring. */
 .ex-mglvl-chip.is-partial { color: var(--accent); background: var(--accent-soft); border-color: var(--line); }
