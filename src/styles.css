@@ -853,6 +853,8 @@ main { padding-bottom: 5rem; }
   font-size: 0.85rem; font-weight: 600; color: var(--muted); list-style: none;
 }
 .ad-sum-row { display: flex; align-items: center; gap: 0.4rem; }
+/* "STATS" card title matches the "Analysis" page title: bold, UPPERCASE, same size. */
+.ad-title { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--text); }
 .ad-sum-row .ad-caret { margin-left: auto; }
 .athlete-details-summary::-webkit-details-marker { display: none; }
 .athlete-details-summary:hover,
@@ -3352,8 +3354,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-card-fold[open] { padding-bottom: 0.55rem; }
 .wa-fold > summary.wa-fold-sum {
   cursor: pointer; list-style: none; user-select: none;
-  padding: 0.6rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text);
+  padding: 0.6rem 0; font-size: 1.25rem; font-weight: 700; color: var(--text);
+  /* Section titles (Graph / Workout history / …) match the "Analysis" page title:
+     bold, UPPERCASE, same size + tracking. The picked-lift selection title opts out
+     (.wa-seltitle-box below) so exercise names keep their normal casing. */
+  letter-spacing: 0.3px; text-transform: uppercase;
 }
+/* Picked-lift names are data, not a section heading — keep their normal casing. */
+.wa-seltitle-box { text-transform: none; letter-spacing: normal; }
 .wa-fold-sum::-webkit-details-marker { display: none; }
 /* Big lift-name title: when 1–2 lifts are picked, the graph & history headers show
    the name(s) large at the top of the section. The open-state rules below are more
@@ -3379,12 +3387,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-seltitle-box.has-pick { padding-right: 2.1rem; }
 /* Collapsed GRAPH fold: show "Graph" big instead of the picked exercise names (the
    lifts are only relevant once the chart is open). CSS-toggled on the fold's [open]. */
-.wa-graph-closed { display: none; font-weight: 700; color: var(--accent); }
+.wa-graph-closed { display: none; font-weight: 700; color: var(--text); }
 .wa-fold:not([open]) #waGraphSummary .wa-graph-closed { display: inline-block; }
 .wa-fold:not([open]) #waGraphSummary .wa-seltitle-box { display: none; }
 /* Same for the history fold: collapsed, it reads a plain "Workout history" (like the
    other section headers) instead of the picked-lift list + ✕ ≈ + Pick tab. */
-.wa-hist-closed { display: none; font-weight: 700; color: var(--accent); }
+.wa-hist-closed { display: none; font-weight: 700; color: var(--text); }
 .wa-fold:not([open]) #waCalHistSummary .wa-hist-closed { display: inline-block; }
 .wa-fold:not([open]) #waCalHistSummary .wa-seltitle-box { display: none; }
 .wa-seltitle-box.is-expanded {
