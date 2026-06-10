@@ -376,9 +376,10 @@ let viewUser: string | null = (() => {
 })();
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
-// Both analysis pages are allowed in non-admin views; the Simplified-view toggle
-// (defaulting ON outside admin) decides which one the Analysis button opens.
-const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide"]);
+// Tabs a non-admin (locked user / spectator) may stay on — the Clients section of
+// the More menu: both analysis pages, the athlete view, plus Live, Colosseum,
+// Stats view (groups) and World records. (Coach pages bounce back to analysis.)
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "live", "leaderboards", "groups", "records"]);
 /** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
  * Simplified-view toggle is on, else the full ANL. */
 function analysisTabName(): string {
@@ -392,9 +393,11 @@ function setViewMode(mode: ViewMode) {
   // auth button mirror it.
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
   els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
-  // The "Other" sheet: non-admin keeps only the Guide; admin shows everything.
+  // The "Other" sheet: the Coach section is admin-only; the Clients section
+  // (Live, Analysis, Colosseum, Stats view, World records, Guide) shows in every
+  // view so a client can reach all their pages.
   for (const item of els.otherSheet.querySelectorAll<HTMLButtonElement>(".other-item")) {
-    item.hidden = mode !== "admin" && item.dataset.tab !== "guide";
+    item.hidden = mode !== "admin" && !!item.closest(".other-section--coach");
   }
   // Hide still-in-progress views (Horizontal history · Training calendar) outside
   // admin — they're experimental/developing, not for a user/spectator.
