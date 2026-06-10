@@ -13512,7 +13512,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // It copies the OTHER selector's picks into this one; capture-handled so it doesn't
   // toggle the fold it lives in. Graph title → "Match history"; history title → "Match graph".
   const matchBtn = remove
-    ? `<button type="button" class="wa-clear wa-title-match" data-titlematch="${remove}" title="Copy the other selector's picks here">${remove === "graph" ? "Match history" : "Match graph"}</button>`
+    ? `<button type="button" class="wa-title-match" data-titlematch="${remove}" title="Match — make this selection the same as the ${remove === "graph" ? "history" : "graph"} (copy its picks here)" aria-label="${remove === "graph" ? "Match history" : "Match graph"}">≈</button>`
     : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the

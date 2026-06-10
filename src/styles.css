@@ -3167,6 +3167,14 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   background: none; border: none; cursor: pointer; color: var(--danger);
 }
 .wa-title-deselect:hover, .wa-title-deselect:active { color: #c0392b; }
+/* "Match" (≈ = make this selection similar to the other) — a borderless icon button
+   sized like the ✕, in accent so it reads as the make-same action, not a destructive one. */
+.wa-title-match {
+  font-family: inherit; font-size: 1.4em; line-height: 1; font-weight: 800;
+  margin-left: 0.1em; padding: 0 0.18em; vertical-align: middle;
+  background: none; border: none; cursor: pointer; color: var(--accent);
+}
+.wa-title-match:hover, .wa-title-match:active { opacity: 0.7; }
 .wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; margin-right: 0.35em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
