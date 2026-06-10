@@ -61,6 +61,17 @@ const SOON: Release = {
         "Likely on a per-athlete overview, an exercise drill-in, and a workout recap — generated from your logged data.",
       ],
     },
+    {
+      version: "",
+      title: "Visual variation picker",
+      sp: 0,
+      soon: true,
+      note: "One proper visual way to set a set's variation — replacing the old Stickman / Photo / 3D-model experiments.",
+      details: [
+        "The half-built Stickman, Photo and 3D-model editor modes were removed; the per-set variation editor is chips-only for now.",
+        "Coming back as a single, finished visual picker: see the handstand setup (lean, depth, support) and drag it to set the difficulty, instead of three rough prototypes.",
+      ],
+    },
   ],
 };
 
@@ -69,6 +80,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.169", title: "Removed the half-built Stickman / Photo / 3D-model variation modes — the editor is chips-only", sp: 1, note: "The “This set's variation” editor had a mode toggle — Chips, 🧍 Stickman, 📷 Photo, 🧊 3D model — but the three visual modes were rough, unfinished experiments. Removed all three: the editor is now just the chips (the toggle row is gone), so there's one clear way to set a variation. The underlying figure engine (3-D mannequin + drawn figure) is kept in the code, dormant, because a single proper “Visual variation picker” is planned to replace them — it's now listed under Settings → Version history → Coming soon.", cat: "WO" },
   { version: "b.2.8.168", title: "Set-variation editor: Band collapses to \u201cnone + banded\u201d \u2014 levels show only when you tap \u201cbanded\u201d", sp: 0.5, note: "In the \u201cThis set\u2019s variation\u201d editor, the Band row used to lay out all six assist-level chips (1 \u22125kg \u2026 6 \u221228.3kg) plus none, taking two rows for something you rarely use. It now collapses to just \u201cnone\u201d + a \u201cbanded \u25be\u201d button; tap \u201cbanded\u201d to reveal the assist levels. If a band level is already set, the levels stay shown so you can change it.", cat: "WO" },
   { version: "b.2.8.167", title: "Fix: logging a set to a CUSTOM (past) date now jumps you to it — it's no longer “added but invisible” (PB-11)", sp: 2, note: "Adding a set via the inline form's 📅 custom-date picker looked like it did nothing — the set never appeared (Today / session-day adds worked). Root cause: the history list is paginated (~50 sessions per page), and a custom past date is a session on a DIFFERENT page than the one on screen — so the set was logged correctly but rendered off-screen. (Earlier fixes had only guaranteed a new set passes the Index filter and the Analysis selection — not the page window.) Now a custom-date add jumps the history straight to that date — its page, opened and scrolled to, with a brief highlight — the same as tapping the day in the calendar. The real invariant: after you log a set, that set is on screen. Logged as PB-11.", cat: "WO" },
   { version: "b.2.8.166", title: "Merged/comparable history rows now name the source lift in grey — e.g. “Bicep+ (BB Curl)”", sp: 1, note: "In a merged or comparable view (e.g. all your curls pooled as “Bicep+”), the workout-history row only showed the group name, so you couldn't tell which real lift each pooled run of sets came from. Each row now appends its distinct source lift(s) in smaller grey after the group name — “Bicep+ (BB Curl)” (or several, comma-separated) — using your chosen name style (code / short / full). Plain (un-merged) lifts are unchanged.", cat: "WO" },

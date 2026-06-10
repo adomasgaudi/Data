@@ -9652,13 +9652,6 @@ function graphPermsHtml(name: string): string {
  * (model lifts) that multiply to a final ×, or a single × number input (no model).
  * Reused by the More-info editor AND the floating set-row editor, so the same
  * `.ex-var-lvl` / `.ex-var-input` handlers drive both. */
-/** Chips vs Pose for the modifier editor (model lifts with a posable figure). */
-let noteEditMode: "chips" | "stickman" | "photo" | "pose" = "chips";
-/** A family is "posable" when it has the dimensions the stick-figure maps to. */
-function familyPosable(fam: string | null): boolean {
-  return !!fam && ["rom", "lean", "support"].every((d) => FAMILIES[fam]!.dims[d]);
-}
-
 function notePickerHtml(name: string, note: string, extraFactor = 1): string {
   const fam = familyOf(name);
   if (!fam) {
@@ -9668,18 +9661,11 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(name)}" data-var-note="${escapeHtml(note)}" aria-label="Difficulty for ${escapeHtml(note)}" /></label></div>`
     );
   }
-  // Chips / Stickman / 3D model toggle for posable lifts: three ways to set the
-  // same attributes. Chips = tap; Stickman = drag the 2-D figure; 3D model is a
-  // placeholder while a separate build creates the rotatable 3-D handstand.
-  const toggle = familyPosable(fam)
-    ? `<div class="ex-var-mode"><button type="button" class="ex-var-mode-btn${noteEditMode === "chips" ? " is-on" : ""}" data-notemode="chips">Chips</button>` +
-      `<button type="button" class="ex-var-mode-btn${noteEditMode === "stickman" ? " is-on" : ""}" data-notemode="stickman">🧍 Stickman</button>` +
-      `<button type="button" class="ex-var-mode-btn${noteEditMode === "photo" ? " is-on" : ""}" data-notemode="photo">📷 Photo</button>` +
-      `<button type="button" class="ex-var-mode-btn${noteEditMode === "pose" ? " is-on" : ""}" data-notemode="pose">🧊 3D model</button></div>`
-    : "";
-  if (familyPosable(fam) && noteEditMode === "stickman") return toggle + noteStickmanHtml(name, note);
-  if (familyPosable(fam) && noteEditMode === "photo") return toggle + notePhotoHtml(name, note);
-  if (familyPosable(fam) && noteEditMode === "pose") return toggle + notePoseHtml(name, note);
+  // Variation editing is chips-only. The Stickman / Photo / 3D-model mode UIs were
+  // removed (a single proper "visual variation picker" is parked in the version-
+  // history Soon list as their replacement); the underlying pose/draw engine
+  // (poseScene / poseDraw / poseFrames) is kept for that rebuild. No mode toggle.
+  const toggle = "";
   const override = noteVecOverride(name, note);
   const effVec = { ...rNote(fam, note).vec, ...override };
   const scale = scalarFromVec(fam, effVec);
@@ -9818,127 +9804,9 @@ function padSceneSvg(support: string): string {
   return `<svg class="ex-pad-scene" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${floor}${wall}${rungs}</svg>`;
 }
 
-// ---- Visual "pose" editor: a 3-D handstand mannequin (three.js) you orbit ----
-const SUPPORT_LBL: Record<string, string> = {
-  free: "free",
-  back_to_wall: "back to wall",
-  front_to_wall: "front to wall",
-  ladder: "ladder",
-  lsit: "L-sit",
-  tucked: "tucked",
-  hooked: "hooked",
-  lad3: "ladder 3",
-  lad5: "ladder 5",
-  lad6: "ladder 6",
-  lad9: "ladder 9",
-};
-/** The pose editor: a 3-D figure (mounted after render by refreshPose3d) plus
- * tap-to-pose control rows for the visual dimensions, and the live multiplier. */
-function notePoseHtml(name: string, note: string): string {
-  const fam = familyOf(name)!;
-  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
-  const scale = scalarFromVec(fam, effVec);
-  const ctlRow = (dim: string): string => {
-    const levels = famLevels(fam, dim);
-    if (!levels) return "";
-    const cur = effVec[dim];
-    const chips = Object.keys(levels)
-      .map((l) => {
-        const lbl = dim === "support" ? SUPPORT_LBL[l] ?? l : l;
-        return `<button type="button" class="pose-ctl${l === cur ? " is-on" : ""}" data-posectl-ex="${escapeHtml(name)}" data-posectl-note="${escapeHtml(note)}" data-posectl-dim="${escapeHtml(dim)}" data-posectl-level="${escapeHtml(l)}">${escapeHtml(lbl)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`;
-      })
-      .join("");
-    return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
-  };
-  return (
-    `<div class="ex-var-pose">` +
-    `<div class="pose3d" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"></div>` +
-    `<div class="pose-hint muted">Drag to rotate. Muscle groups are marked (the worked ones — shoulders &amp; triceps — in blue). Pick options below to pose it.</div>` +
-    ctlRow("support") +
-    ctlRow("rom") +
-    ctlRow("lean") +
-    `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
-    `</div>`
-  );
-}
-/** The 2-D "stickman" view: now an ANIMATED, drawn side-view athlete (mounted
- * after render by refreshDrawn) that loops the rep — elbows bend/extend, the body
- * leans, the hands sit on the block — plus the same tap-to-pick control rows. */
-function noteStickmanHtml(name: string, note: string): string {
-  const fam = familyOf(name)!;
-  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
-  const scale = scalarFromVec(fam, effVec);
-  const ctl = (dim: string): string => {
-    const levels = famLevels(fam, dim);
-    if (!levels) return "";
-    const cur = effVec[dim];
-    const chips = Object.keys(levels)
-      .map((l) => {
-        const lbl = dim === "support" ? SUPPORT_LBL[l] ?? l : l;
-        return `<button type="button" class="pose-ctl${l === cur ? " is-on" : ""}" data-posectl-ex="${escapeHtml(name)}" data-posectl-note="${escapeHtml(note)}" data-posectl-dim="${escapeHtml(dim)}" data-posectl-level="${escapeHtml(l)}">${escapeHtml(lbl)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`;
-      })
-      .join("");
-    return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
-  };
-  // Scrub slider: drag to "play" the figure down through the rep — where you stop
-  // sets the depth (range of motion). Left = shallow (top), right = deepest.
-  const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
-  const curIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
-  const scrubLbl = romKeys.length ? String(effVec.rom ?? romKeys[curIdx]) : "";
-  const scrub = romKeys.length > 1
-    ? `<div class="pose-scrub-row"><span class="pose-scrub-cap muted">shallow</span>` +
-      `<input type="range" class="pose-scrub" min="0" max="${romKeys.length - 1}" step="1" value="${curIdx}" data-scrubex="${escapeHtml(name)}" data-scrubnote="${escapeHtml(note)}" aria-label="Scrub depth" />` +
-      `<span class="pose-scrub-cap muted">deep</span><span class="pose-scrub-val">${escapeHtml(scrubLbl)}</span></div>`
-    : "";
-  return (
-    `<div class="ex-var-pose">` +
-    `<div class="pose-draw" data-poseex="${escapeHtml(name)}" data-posenote="${escapeHtml(note)}"></div>` +
-    `<div class="pose-hint muted">A drawn figure doing the rep — drag the slider to scrub it down to the depth you did. Worked muscles (shoulders &amp; triceps) in blue.</div>` +
-    scrub +
-    ctl("support") + ctl("rom") + ctl("lean") +
-    `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
-    `</div>`
-  );
-}
-/** The "Photo" view: scrub real frames from the owner's own handstand-push-up clip
- * (top → bottom). The slider moves through the frames (like scrubbing a video) and
- * maps its position onto the range-of-motion (depth). No mount needed — it's a
- * plain <img> whose src the slider swaps. */
-function notePhotoHtml(name: string, note: string): string {
-  const fam = familyOf(name)!;
-  const effVec = { ...rNote(fam, note).vec, ...noteVecOverride(name, note) };
-  const scale = scalarFromVec(fam, effVec);
-  const romKeys = Object.keys(FAMILIES[fam]!.dims.rom ?? {});
-  const N = POSE_FRAMES.length;
-  const romIdx = Math.max(0, romKeys.indexOf(String(effVec.rom)));
-  // Map the current depth (rom) onto the nearest frame (top→bottom).
-  const frameIdx = romKeys.length > 1 ? Math.round((romIdx / (romKeys.length - 1)) * (N - 1)) : 0;
-  const ctl = (dim: string): string => {
-    const levels = famLevels(fam, dim);
-    if (!levels) return "";
-    const cur = effVec[dim];
-    const chips = Object.keys(levels)
-      .map((l) => {
-        const lbl = dim === "support" ? SUPPORT_LBL[l] ?? l : l;
-        return `<button type="button" class="pose-ctl${l === cur ? " is-on" : ""}" data-posectl-ex="${escapeHtml(name)}" data-posectl-note="${escapeHtml(note)}" data-posectl-dim="${escapeHtml(dim)}" data-posectl-level="${escapeHtml(l)}">${escapeHtml(lbl)} <span class="ex-var-lvl-f">×${levels[l]}</span></button>`;
-      })
-      .join("");
-    return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
-  };
-  const slider =
-    `<div class="pose-scrub-row"><span class="pose-scrub-cap muted">top</span>` +
-    `<input type="range" class="pose-photo-scrub" min="0" max="${N - 1}" step="1" value="${frameIdx}" data-scrubex="${escapeHtml(name)}" data-scrubnote="${escapeHtml(note)}" aria-label="Scrub depth" />` +
-    `<span class="pose-scrub-cap muted">deep</span></div>`;
-  return (
-    `<div class="ex-var-pose">` +
-    `<img class="pose-photo" alt="Handstand push-up depth" src="${POSE_FRAMES[frameIdx]}" />` +
-    `<div class="pose-hint muted">Real frames from the clip — drag the slider to scrub down to the depth you did. It sets the range of motion.</div>` +
-    slider +
-    ctl("support") + ctl("rom") + ctl("lean") +
-    `<div class="ex-var-product">= <strong>×${scale}</strong> <span class="muted">final multiplier</span></div>` +
-    `</div>`
-  );
-}
+// ---- Visual "pose" editor engine: a 3-D handstand mannequin (three.js) + a 2-D
+// drawn figure. Kept (dormant) for the parked "visual variation picker" rebuild;
+// the old Stickman/Photo/3D mode UIs that drove it were removed. ----
 /** The currently-mounted 3-D scene (one at a time). */
 let activePose3d: { scene: PoseScene; el: HTMLElement } | null = null;
 /** Mount/dispose the 3-D scene to match the visible `.pose3d` container (called
@@ -11326,16 +11194,6 @@ async function init() {
     if (!padDrag) return;
     padDrag = null;
     if (!scaleEditState) refreshAfterDifficultyEdit(); // sync on release (More-info page)
-  });
-  // Chips / Stickman / 3D model toggle for the modifier editor.
-  document.addEventListener("click", (e) => {
-    const m = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-mode-btn");
-    if (!m?.dataset.notemode) return;
-    const mode = m.dataset.notemode;
-    noteEditMode = mode === "pose" ? "pose" : mode === "stickman" ? "stickman" : mode === "photo" ? "photo" : "chips";
-    renderScaleEditor();
-    refreshExerciseInfo();
-    refreshPoseViz();
   });
   // Visual pose editor: tap a control chip below the 3-D figure to set that
   // dimension (support / rom / lean). Updates the live scene + the multiplier in
