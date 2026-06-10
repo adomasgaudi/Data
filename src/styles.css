@@ -823,7 +823,6 @@ main { padding-bottom: 5rem; }
    "↺ Default" reset pushed to the far RIGHT, so two UNRELATED controls read as separate,
    not a pair (Gestalt). Sized clearly SMALLER than the chips (lighter weight, smaller
    font) so size says "secondary setting", but a comfortable ~34px tap height (Fitts). */
-.wa-top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0.2rem 0 0.5rem; }
 /* Below the athlete carousel: the moved Stats button beside a mirror of the chosen
    athlete pill (which also stays highlighted in the carousel above). */
 .wa-selected-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.1rem 0 0.55rem; flex-wrap: wrap; }
