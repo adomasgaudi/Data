@@ -1663,9 +1663,10 @@ select.subtle-select:hover, select.subtle-select:focus {
    variation tags (.wo-var-chip), so it reads as a tag — not another blue number. */
 .wo-scale {
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
-  color: var(--accent); background: var(--accent-soft); border-radius: 4px;
-  padding: 0 4px; line-height: 1.5; vertical-align: middle; margin: 0 1px 0 3px;
+  border-radius: 4px; padding: 0 4px; line-height: 1.5; vertical-align: middle; margin: 0 1px 0 3px;
+  color: var(--accent); background: var(--accent-soft); /* default / EASIER (×<1): cool */
 }
+.wo-scale-up { color: var(--gold); background: var(--gold-soft); } /* HARDER (×>1): warm/gold */
 .wo-uncmp { color: var(--muted); background: var(--line); } /* "UN" tag — muted, not blue */
 /* 1RM derivation — a readable, math-paper-style breakdown (one step per line). */
 .rm-derive { font-family: Georgia, "Times New Roman", serif; font-size: 0.82rem; color: var(--text); margin: 0.2rem 0; }

@@ -6548,9 +6548,14 @@ function setDisplay(raw: SetRecord): string {
   // lift it tags onto the real weight^reps.
   if (scaled) {
     const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
-    return bw
-      ? `${chips}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>${repsSup}`
-      : `${chips}${wr(s.weight, s.reps)}<span class="wo-scale">×${Math.round(scale * 100) / 100}</span>`;
+    // Colour ENCODES the direction (added info, not just a number): a HARDER variation
+    // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
+    // opposite meanings stop looking identical. Tooltip spells it out.
+    const harder = scale > 1;
+    const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
+    const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
+    const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
+    return bw ? `${chips}${tag}${repsSup}` : `${chips}${wr(s.weight, s.reps)}${tag}`;
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a

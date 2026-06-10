@@ -113,3 +113,45 @@ don't cite, to the owner.
   always-visible row; give the primary control its own room.
 - **Tap-target minimum — GRADE: High** (Apple 44pt / Material 48dp). The taste doc's 30px
   floor is the FLOOR; prefer ~36–44px for anything tapped often.
+
+## Toolbox — moves to reach for (owner's prompt, my repertoire)
+A palette of techniques to CONSIDER when a control/readout needs more, before defaulting
+to "add another button". They are tools, not a checklist — pick the one that fits, skip
+the rest. (Owner: "don't follow as gospel… some are rarely used… don't be sheep, think for
+yourself.") Default bias: encode info into what's already there before adding chrome.
+- **Encode info in COLOUR, not a new tag.** A hue/tint can carry a second dimension
+  (direction, state, group) on an existing element — cheaper than another widget. Stay in
+  the blue/gold/terracotta palette; reserve red(`--danger`) for destructive. *(Common.)*
+- **Outline / weight / font / dashed-vs-solid** to distinguish states without colour load
+  (e.g. solid = active, dashed = provisional/derived; heavier = primary). *(Common.)*
+- **Separate similar-looking, different-MEANING readouts.** If two things look alike but
+  mean different things (a rep count vs a multiplier vs a set count), give them distinct
+  form (pill vs plain, colour, position) so they stop reading as the same number. *(High value.)*
+- **Trim/ellipsise existing text to make room** before dropping a control or wrapping a
+  row (#cram: one row, never a wall). Truncate the label, keep the action. *(Common.)*
+- **Sorting + a visible grouping cue** (a divider, a tint band, a header) when a list has
+  structure — show the order/grouping, don't make them infer it. *(Sometimes.)*
+- **A custom `.xdd` dropdown** when a choice has >2–3 values (cycling a pill stops scaling).
+  *(Sometimes — toggles still win for 2–3 values.)*
+- **Sliding / swipe as an action** (drag to reveal, swipe a row) — powerful but LOW
+  discoverability on this app; only where a visible affordance also exists. *(Rare.)*
+- **A control that spawns controls/settings** (a "+ new" that creates a saved pill, a
+  settings panel that adds toggles) — for power features; keep behind a fold (reach ≥3).
+  *(Rare.)*
+
+## Design-decision log (what the owner accepted / adjusted / declined)
+Append one line per notable UI call (newest first): `vX.Y.Z — [✅ accepted | ✎ adjusted |
+✗ declined] — the choice — owner's reaction / what I learned`. Update the verdict when the
+owner reacts on the live site (rule 19: I can't see it, so these start UNCONFIRMED).
+- **b.2.8.x — (proposed, unconfirmed)** — `#ui add info to the tag UI`: chose to COLOUR-encode
+  the set ×difficulty tag by direction (harder ×>1 = gold/warm, easier ×<1 = blue/cool)
+  rather than add text or a widget — uses "colour instead of a tag" + "separate
+  similar-looking/different-meaning". Rationale: the number already gives magnitude; colour
+  adds the missing *direction* at zero width. Awaiting owner verdict.
+- **b.2.8.128 — ✅ accepted (owner asked for it)** — the set ×multiplier became a small pill
+  (matching the HSPU variation chips) so it reads as a tag, not another blue number.
+- **b.2.8.129 — ✅ accepted (owner asked for it)** — "Match history/graph" text button →
+  compact `≈` make-similar icon by the title ✕ (icon over text once meaning is learned).
+- **b.2.8.107 — ✗ declined** — twin equal-size "Stats + Default" pills: similar+adjacent read
+  as a false pair and hid that they're different tiers (panel-reveal vs selection-reset).
+  Lesson baked into the visual-grammar rule above.
