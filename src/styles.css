@@ -536,6 +536,10 @@ main { padding-bottom: 5rem; }
 }
 /* A whole section (label included) collapses when none of its items are shown. */
 .other-section:not(:has(.other-item:not([hidden]))) { display: none; }
+/* User/spectator (non-admin) view: the Coach section is admin-only — hide it
+   entirely, and drop the group labels so a locked client just sees their items. */
+body.admin-only-hidden .other-section--coach,
+body.admin-only-hidden .other-section-lbl { display: none; }
 /* Minimal line icons (inline SVG): muted by default, accent on hover. */
 .other-ico { width: 1.5rem; height: 1.5rem; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .other-ico svg, svg.other-ico { width: 1.35rem; height: 1.35rem; display: block; }
