@@ -10554,6 +10554,7 @@ async function init() {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    if (pickDrawerScope !== null) { closePickDrawer(); return; } // topmost overlay closes first
     if (!els.exInfoPage.hidden) closeExerciseInfo();
     else if (document.body.classList.contains("wa-graph-full")) { document.body.classList.remove("wa-graph-full"); renderWaGraph(); }
   });
@@ -13705,6 +13706,7 @@ function renderWorkoutAnalysis(): void {
   // calendar + workout history. See renderSelector.
   renderSelector("graph");
   renderSelector("hist");
+  applyPickDrawer(); // re-float the picker drawer if one is open (the selectors rebuilt)
   // Single-lift extras (machine-type cable/gravity toggle) follow the HISTORY
   // selector (waSelected), per the two-selector design.
   const assignBox = document.getElementById("waAssign");
@@ -14075,6 +14077,59 @@ function renderWaChipsScope(scope: SelScope): void {
       );
     })
     .join("");
+}
+
+// ---- Floating exercise-picker drawer ----------------------------------------------
+// Swipe the picker's settings line (the "▸ group · period · First N · ⚙" row) RIGHT to
+// slide the exercise chips in from the right as a FIXED overlay, so it never pushes the
+// page layout. It REUSES the inline chip grid (#waChips-<scope>) — just repositioned via
+// .is-pick-drawer — so every chip tap / ⓘ / group toggle keeps working through the
+// existing panel delegation, and a selection change re-renders it in place. Only one
+// scope's drawer is open at a time.
+let pickDrawerScope: SelScope | null = null;
+function ensurePickBackdrop(): void {
+  if (document.getElementById("waPickBackdrop")) return;
+  const bd = document.createElement("div");
+  bd.id = "waPickBackdrop";
+  bd.className = "wa-pick-backdrop";
+  bd.addEventListener("pointerdown", closePickDrawer); // tap the dimmed area to close
+  document.body.appendChild(bd);
+}
+function openPickDrawer(scope: SelScope): void {
+  if (pickDrawerScope === scope) return;
+  pickDrawerScope = scope;
+  curSelScope = scope; // chip taps in the drawer act on THIS selector's selection
+  ensurePickBackdrop();
+  const box = document.getElementById(`waChips-${scope}`);
+  if (!box) return;
+  box.hidden = false;
+  box.classList.add("is-pick-drawer", "is-entering"); // start off the right edge…
+  requestAnimationFrame(() => box.classList.remove("is-entering")); // …then slide in
+}
+function closePickDrawer(): void {
+  if (pickDrawerScope === null) return;
+  pickDrawerScope = null;
+  document.getElementById("waPickBackdrop")?.remove();
+  for (const s of ["graph", "hist"] as SelScope[]) {
+    const box = document.getElementById(`waChips-${s}`);
+    if (!box) continue;
+    box.classList.remove("is-pick-drawer", "is-entering");
+    box.style.transform = "";
+    // Back to its inline state: visible only if its (inline) fold is open.
+    box.hidden = !box.closest(".wa-chips-fold")?.classList.contains("is-open");
+  }
+}
+/** Re-apply the open drawer's overlay state after an analysis re-render (which rebuilds
+ * the selector, recreating #waChips-<scope> without the drawer class). No slide animation
+ * here — only the initial open animates; reapply is instant so a chip tap doesn't re-slide. */
+function applyPickDrawer(): void {
+  if (pickDrawerScope === null) return;
+  const box = document.getElementById(`waChips-${pickDrawerScope}`);
+  if (!box) return;
+  ensurePickBackdrop();
+  box.hidden = false;
+  box.classList.add("is-pick-drawer");
+  curSelScope = pickDrawerScope;
 }
 
 /** A finer "family" subgroup within a group — all handstand variants cluster under
@@ -15004,6 +15059,43 @@ function setupCommandBar(): void {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
+  // Swipe RIGHT to open / close the floating exercise-picker drawer: a rightward drag on
+  // the picker's settings line (.wa-chips-fold-sum) slides it IN; a rightward drag on the
+  // open drawer slides it back OUT. Delegated (survives re-renders); claims only on a clear
+  // rightward drag so taps on the group select / pills / ⚙ / chips still work, and pan-y
+  // (CSS) keeps vertical scrolling. A claim swallows the trailing synthetic tap.
+  {
+    const SLOP = 8, THRESH = 45;
+    let mode: "open" | "close" | null = null, scope: SelScope = "hist";
+    let x0 = 0, y0 = 0, ptr = -1, claimedAt = 0;
+    const reset = () => { mode = null; ptr = -1; };
+    document.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      const t = e.target as HTMLElement;
+      if (pickDrawerScope !== null && t.closest(".wa-chips.is-pick-drawer")) {
+        mode = "close"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId; return;
+      }
+      if (!t.closest(".wa-chips-fold-sum")) return;
+      scope = (t.closest<HTMLElement>("[data-selscope]")?.dataset.selscope as SelScope) ?? "hist";
+      mode = "open"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId;
+    });
+    document.addEventListener("pointermove", (e) => {
+      if (!mode || e.pointerId !== ptr) return;
+      const dx = e.clientX - x0, dy = e.clientY - y0;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SLOP) { reset(); return; } // vertical → scroll
+      if (dx > THRESH) { // a clear rightward swipe
+        claimedAt = Date.now();
+        if (mode === "open") openPickDrawer(scope); else closePickDrawer();
+        reset();
+      }
+    });
+    document.addEventListener("pointerup", reset);
+    document.addEventListener("pointercancel", reset);
+    // Eat the synthetic tap that follows a claimed swipe (so it doesn't toggle a control).
+    document.addEventListener("click", (e) => {
+      if (Date.now() - claimedAt < 350) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  }
   // (Exercise search moved to the always-on command bar — see setupCommandBar.)
   // Keep that command bar just above the on-screen keyboard as you scroll: the
   // VisualViewport shrinks when the keyboard opens, so the gap between it and the
@@ -15587,7 +15679,7 @@ function switchTopTab(name: string) {
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.
-  if (name !== "analysis") { restoreAnalysisPanels(); document.body.classList.remove("wa-graph-full"); }
+  if (name !== "analysis") { restoreAnalysisPanels(); document.body.classList.remove("wa-graph-full"); closePickDrawer(); }
   updateBottomNav();
 }
 

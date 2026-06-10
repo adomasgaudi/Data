@@ -3478,8 +3478,10 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* NB: no `overflow: hidden` — the group selector now lives in the header and its
    .xdd dropdown menu must be able to escape the fold box. */
 .wa-chips-fold { border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); margin: 0 0 0.3rem; }
-/* Header row: a caret toggle + the group-by selector (where "Pick exercises" used to be). */
-.wa-chips-fold-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.4rem; padding: 0.4rem 0.55rem; user-select: none; }
+/* Header row: a caret toggle + the group-by selector (where "Pick exercises" used to be).
+   touch-action:pan-y — a vertical drag still scrolls the page, a horizontal (rightward)
+   drag is handed to JS to slide the floating exercise-picker drawer in from the right. */
+.wa-chips-fold-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.4rem; padding: 0.4rem 0.55rem; user-select: none; touch-action: pan-y; }
 .wa-pick-toggle {
   cursor: pointer; border: none; background: none; padding: 2px 4px; margin: 0;
   color: var(--muted); font-size: 0.95rem; line-height: 1; flex: 0 0 auto;
@@ -3488,6 +3490,23 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-chips-fold.is-open .wa-pick-toggle::before { content: "▾"; }
 .wa-chips-fold .wa-sel-group { font-weight: 600; }
 .wa-chips-fold .wa-chips-wrap { padding: 0 0.5rem 0.5rem; }
+/* Floating exercise-picker drawer: the SAME chip grid (#waChips-<scope>) repositioned as
+   a fixed right-side sheet, so it overlays the page WITHOUT taking layout space. Opened by
+   swiping the picker's settings line right; closed by the backdrop / Escape / swiping it. */
+.wa-pick-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(20, 24, 38, 0.32); }
+.wa-chips.is-pick-drawer {
+  position: fixed; z-index: 61; top: 3rem; right: 0;
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--wa-kb-inset, 0px)) + 3.4rem);
+  width: min(82vw, 22rem); max-height: none; margin: 0;
+  padding: 0.7rem 0.75rem 0.9rem; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  background: var(--panel); border: 1px solid var(--line); border-right: none;
+  border-radius: 12px 0 0 12px; box-shadow: -8px 0 24px rgba(20, 24, 38, 0.24);
+  transform: translateX(0); transition: transform 0.22s ease;
+  /* pan-y: scroll the chips vertically; a horizontal (rightward) drag closes the drawer. */
+  touch-action: pan-y;
+}
+/* Initial off-screen state — removed on the next frame so it slides in. */
+.wa-chips.is-pick-drawer.is-entering { transform: translateX(100%); }
 /* Anchor for the in-chart overlay toolbar. */
 #waGraph { position: relative; }
 /* In-chart overlay toolbar (top-right corner of the plot): kg / ⤢ Fit / ⛶. The wrapper
