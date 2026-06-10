@@ -7810,9 +7810,17 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const assistToggle = assisted || (s.weight !== null && s.weight < 0)
     ? `<button type="button" class="set-edit-assist${assisted ? " is-on" : ""}" data-assistex="${escapeHtml(s.exerciseName)}" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~2× the real help), so it's counted at HALF for strength. The logged value still shows so you know what to dial. Toggles for the whole exercise.">⌁ ${assisted ? "assisted ½" : "assisted?"}</button>`
     : "";
+  // Assisted machine: the Weight field IS the machine's dialed counterweight
+  // ("machine assist"); show the REAL assistance (half) calculated right beside it.
+  const realW = realAddedWeight(s.exerciseName, s.weight);
+  const weightField = (assisted && s.weight !== null && s.weight < 0 && realW !== null)
+    ? `<label class="set-edit-f">Machine assist (kg)` +
+      `<span class="set-edit-wreal"><input class="set-edit-input" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" />` +
+      `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
+    : efld("weight", "Weight (kg)", s.weight, 0.5);
   const editRow =
     `<tr class="set-edit-row" hidden><td colspan="5"><div class="set-edit-grid">` +
-    efld("weight", "Weight (kg)", s.weight, 0.5) +
+    weightField +
     efld("reps", "Reps", s.reps, 1) +
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
