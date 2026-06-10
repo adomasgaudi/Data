@@ -76,7 +76,6 @@ const LT: Record<string, string> = {
   "Athletes": "Sportininkai",
   "Data": "Duomenys",
   "Formulas": "Formulės",
-  "Site map": "Svetainės žemėlapis",
   "World records": "Pasaulio rekordai",
   "Version history": "Versijų istorija",
   // ---- Coach calculator (Formulas tab) ----
