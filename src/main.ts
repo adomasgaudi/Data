@@ -6484,17 +6484,19 @@ function shiftHeatYear(delta: number) {
   }
 }
 
-/** Tapping a training day in the calendar: jump to that day in the list and open it. */
-function jumpToWorkoutDate(iso: string) {
+/** Tapping a training day in the calendar (or logging a set to a custom date):
+ * jump to that day in the list and open it. Returns whether the day was found —
+ * callers (e.g. after an add, PB-11) use it to confirm the row is now on screen. */
+function jumpToWorkoutDate(iso: string): boolean {
   if (S.workoutViewMode !== "day") { S.workoutViewMode = "day"; syncWorkoutToggles(); } // calendar is per-day
   const groups = buildWorkoutGroups();
   const idx = groups.findIndex((g) => g.date === iso && !g.rest);
-  if (idx < 0) return;
+  if (idx < 0) return false;
   S.workoutsPage = workoutPageOf(idx, workoutPageStarts(groups, S.workoutsPageSize));
   renderWorkoutsPage();
   const row = els.workoutsTable.querySelector<HTMLTableRowElement>(`tr.wo-row[data-index="${idx}"]`);
   const grp = workoutGroups[idx];
-  if (!row || !grp) return;
+  if (!row || !grp) return true; // page is set even if the row node isn't found this frame
   // Open any collapsed <details> ancestors (e.g. the Analysis "Workout history"
   // fold) so the jumped-to row is actually visible, then expand + flash it.
   for (let el: HTMLElement | null = row; el; el = el.parentElement)
@@ -6503,6 +6505,7 @@ function jumpToWorkoutDate(iso: string) {
   row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
+  return true;
 }
 
 /**
@@ -13069,8 +13072,18 @@ function onInlineAddGo(form: HTMLElement) {
   // The set just landed in data.records; rebuild this athlete's day cache so the
   // day view (week view reads activeRecords directly) reflects it too.
   athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value);
-  renderWorkoutsPage();
-  reopenWorkoutGroups(openDates);
+  // PB-11: a CUSTOM (often past) date lands on a different history PAGE than the one on
+  // screen, so the set is logged but off-screen — the recurring "I added a set but don't
+  // see it", now for the date dimension (the filter + selection hiders were closed in
+  // b.2.8.165). Invariant: after logging a set, that set is visible. Jump the history to
+  // the logged date (sets its page, opens + scrolls to it). Today / session-day adds are
+  // already on the visible page, so leave their view untouched.
+  if (when === "pick" && jumpToWorkoutDate(date)) {
+    reopenWorkoutGroups(openDates); // jump already rendered + opened the new day; restore the others
+  } else {
+    renderWorkoutsPage();
+    reopenWorkoutGroups(openDates);
+  }
   renderWorkoutCalendar();
   renderDataTab();
   // The Analysis GRAPH is a separate render from its workout list; when you're on that

@@ -13,6 +13,39 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-11 — "I added a set but it didn't add" — specifically when logging to a CUSTOM date
+
+- **Recurrences:** 3+ as a CLASS ("added a set, don't see it"). Each prior fix closed ONE
+  way the new set could be hidden; the next surfaced through a different hider.
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data), Workouts
+  history inline add — the 📅 "pick a date" (custom date) path. (HS-Push Up was the example
+  lift, but the cause is date-, not lift-, specific.)
+- **Symptom:** logging a set via the inline "+ set" / "+ exercise" form with the 📅 custom
+  date picker appears to do nothing — the set never shows. Logging to Today / the session
+  day works fine.
+- **Prior fixes that each only closed ONE hider:**
+  - b.2.8.165 — after an add, force-INCLUDE the lift past the app-wide Index filter
+    (`activeSet`) and add it to the Analysis SELECTION scope (`waSelected`). Closed the
+    *filter* and *selection* hiders, so a today-add always shows.
+  - …but the history list is also PAGINATED (`S.workoutsPage`, ~50 sessions/page). A custom
+    PAST date is a session on a DIFFERENT page than the one on screen, so the set was logged
+    correctly but rendered off-screen — invisible. The add path only called
+    `renderWorkoutsPage()`, which keeps the current page.
+- **REAL ROOT:** there are SEVERAL independent ways a freshly-logged set can be off-screen —
+  the Index filter, the Analysis selection scope, AND the history's page window / view mode.
+  Patching them one at a time is why it recurs. The true invariant is simply: **after
+  logging a set, that set is visible.** Today-adds happened to satisfy all three by luck
+  (current page, usually unfiltered), so only the custom-date case kept failing.
+- **ROOT FIX (b.2.8.x, PB-11):** route a custom-date add through `jumpToWorkoutDate(date)` —
+  the same helper the calendar uses — which sets `S.workoutsPage` to the page CONTAINING that
+  date, switches to day view, renders, then opens + scrolls + flashes the row. So the logged
+  set is guaranteed on screen regardless of how far back the date is. Fix site:
+  `onInlineAddGo` in `src/main.ts` (tagged `PB-11`); `jumpToWorkoutDate` now returns whether
+  the day was found.
+- **If it recurs:** a set is logged but unseen → don't patch the new hider in isolation; ask
+  "what's hiding it THIS time" (filter / selection / page / view / date range) and make the
+  add path *land the user on the set* rather than enumerate hiders.
+
 ## PB-10 — The selector ⚙ settings popout opens off-screen ("out of bounds")
 
 - **Recurrences:** 2+ (each prior fix held only until the cog MOVED). Same FAMILY as PB-1
