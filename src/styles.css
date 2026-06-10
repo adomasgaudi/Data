@@ -1290,6 +1290,11 @@ main { padding-bottom: 5rem; }
 .set-review { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.02em; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--gold); background: var(--gold-soft); }
 /* Assisted-machine (negative counterweight) auto tag on a set row. */
 .set-machine { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--accent); background: var(--accent-soft); }
+/* Compact machine tag for the COLLAPSED set list (grav / ⚠), same colours as the
+   expanded .set-grav/.set-review but tighter so it rides inline with the set chips. */
+.wo-mach { display: inline-block; font-size: 0.6em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 0 3px; vertical-align: middle; color: var(--muted); background: var(--line); }
+.wo-mach-review { text-transform: none; color: var(--gold); background: var(--gold-soft); }
+.wo-mach-asst { color: var(--accent); background: var(--accent-soft); }
 /* Machine-type toggle in the Analysis selector (single mode). */
 .wa-machine { margin: 0 0 0.5rem; }
 .wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

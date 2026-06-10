@@ -6778,10 +6778,21 @@ function setDisplay(raw: SetRecord): string {
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
   const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
+  // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
+  // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
+  // Empty for plain cable / free-weight sets.
+  const computedForMach = computeRecord(s);
+  const mach = isMachineSet(s.exerciseName, s.weight)
+    ? ` <span class="wo-mach wo-mach-asst" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default.">machine</span>`
+    : computedForMach.machineType === "review"
+      ? ` <span class="wo-mach wo-mach-review" title="Mixed machine: too ambiguous to trust — could be a light cable set or a gravity-machine warm-up. Check it.">⚠</span>`
+      : computedForMach.machineType === "gravity"
+        ? ` <span class="wo-mach" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
+        : "";
   // A "not comparable" note (e.g. a static hold) has no meaningful multiplier —
   // show "UN" with the reps instead of a ×number.
   if (note && isNoteNotComparable(s.exerciseName, note))
-    return `${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}`;
+    return `${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`;
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -6797,7 +6808,7 @@ function setDisplay(raw: SetRecord): string {
     const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
     const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
     const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return bw ? `${chips}${tag}${repsSup}` : `${chips}${wr(s.weight, s.reps)}${tag}`;
+    return bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`;
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -6805,9 +6816,9 @@ function setDisplay(raw: SetRecord): string {
     // expanded rows) — a long note used to dump inline and wrap into a huge block,
     // breaking the compact day line. Keep it the width of a normal weight^reps.
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
-    return `${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}`;
+    return `${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`;
   }
-  return `${chips}${wr(s.weight, s.reps)}`;
+  return `${chips}${wr(s.weight, s.reps)}${mach}`;
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
