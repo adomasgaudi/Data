@@ -2031,7 +2031,7 @@ function computeRecordBase(r: SetRecord): SetRecord {
 // the edits flow into grouping, the info panel AND the synthetic combine/compare
 // computation.
 const GROUP_MEMBER_KEY = "colosseum.groupMembers.v1";
-type GroupMemberOverride = { add?: Record<string, number>; remove?: string[] };
+type GroupMemberOverride = { add?: Record<string, number>; remove?: string[]; ref?: string };
 const groupMemberOverrides = loadJsonObject<Record<string, GroupMemberOverride>>(GROUP_MEMBER_KEY);
 function saveGroupMembers() { saveJson(GROUP_MEMBER_KEY, groupMemberOverrides); }
 /** A registry group with the owner's member add/remove overrides applied. */
@@ -2319,26 +2319,37 @@ function setGroupRatio(groupId: string, exName: string, ratio: number): void {
   (ov.add ??= {})[exName] = Math.min(20, Math.max(0.05, ratio));
   saveGroupMembers();
 }
-/** The current reference ("étalon") member of a comparable group, by group id: the
- * member at ratio 1 (else the first). Mirrors referenceMemberFor, but keyed by id. */
-function groupReferenceEx(groupId: string): string | null {
-  const g = effectiveComparableGroups().find((x) => x.id === groupId);
-  const ms = g?.members ?? [];
+/** The ONE designated reference ("étalon") member of a group: the owner's explicit pick
+ * (stored ref) if it's still a member, else the member at ratio 1, else the first. Exactly
+ * one per group — so an untuned group (every member at ratio 1) shows a single étalon. */
+function groupRefName(g: RegistryTag): string | null {
+  const ms = g.members ?? [];
+  const stored = g.id ? groupMemberOverrides[g.id]?.ref : undefined;
+  if (stored && ms.some((m) => m.exerciseName === stored)) return stored;
   return (ms.find((m) => Math.abs(m.ratio - 1) < 1e-6) ?? ms[0])?.exerciseName ?? null;
 }
-/** Make `exName` the reference (étalon) of a comparable group: set it to ratio 1 and
- * RESCALE every other member by the chosen lift's current ratio, so the comparison is
- * unchanged — it's just expressed on the new reference's curve (every synthetic value
- * shifts by one constant factor). Works for built-in and user groups (overrides). */
+/** The reference member of a comparable group, by group id. */
+function groupReferenceEx(groupId: string): string | null {
+  const g = effectiveComparableGroups().find((x) => x.id === groupId);
+  return g ? groupRefName(g) : null;
+}
+/** Make `exName` the reference (étalon) of a comparable group: record it as the explicit
+ * reference AND (if it isn't already at ratio 1) rescale every member by the chosen lift's
+ * current ratio, so the comparison is unchanged — just expressed on the new reference's
+ * curve (every synthetic value shifts by one constant factor). The explicit pick means you
+ * can also choose among members that are all at ratio 1. Works for built-in and user groups. */
 function setGroupReference(groupId: string, exName: string): void {
   const g = effectiveComparableGroups().find((x) => x.id === groupId);
   if (!g) return;
   const members = g.members ?? [];
   const target = members.find((m) => m.exerciseName === exName);
-  if (!target || !(target.ratio > 0) || Math.abs(target.ratio - 1) < 1e-9) return; // missing or already ref
+  if (!target || !(target.ratio > 0)) return;
+  (groupMemberOverrides[groupId] ??= {}).ref = exName;
   const factor = target.ratio;
-  for (const m of members)
-    setGroupRatio(groupId, m.exerciseName, m.exerciseName === exName ? 1 : Math.round((m.ratio / factor) * 1000) / 1000);
+  if (Math.abs(factor - 1) > 1e-9)
+    for (const m of members)
+      setGroupRatio(groupId, m.exerciseName, m.exerciseName === exName ? 1 : Math.round((m.ratio / factor) * 1000) / 1000);
+  saveGroupMembers();
 }
 
 // ---- Per-group DISPLAY mode (Combined / Members / Both), editable ----------
@@ -2799,10 +2810,7 @@ function syntheticMembers(name: string): string[] {
  * SAME lift so any works; falls back to the first member. null for a plain lift. */
 function referenceMemberFor(name: string): string | null {
   for (const t of [...effectiveCombinableGroups(), ...effectiveComparableGroups()])
-    if ((t.derivedName ?? t.label) === name) {
-      const refs = t.members ?? [];
-      return (refs.find((m) => m.ratio === 1) ?? refs[0])?.exerciseName ?? null;
-    }
+    if ((t.derivedName ?? t.label) === name) return groupRefName(t);
   return syntheticMembers(name)[0] ?? null;
 }
 /** Union of a synthetic lift's members' values for a list-valued property (so the
@@ -8279,7 +8287,7 @@ function renderBwParts() {
   const editLabel = INDEX_EDIT_ATTRS.find((a) => a.attr === indexEditAttr)!.label;
   const head = `<thead><tr><th>Exercise</th><th class="num">${escapeHtml(editLabel)}</th><th class="num">Sets</th></tr></thead>`;
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
-  const rowHtml = (r: IndexRow, hidden: boolean, ratioOf?: (name: string) => number | null) => {
+  const rowHtml = (r: IndexRow, hidden: boolean, ratioOf?: (name: string) => number | null, refEx?: string | null) => {
     // On a filtered-out row: show WHY (the failing filter + this lift's value) as a red
     // chip that opens the tag editor — most hidden lifts are mis-tagged, not unwanted,
     // so the fix is to correct the tag, not force an exception.
@@ -8290,9 +8298,11 @@ function renderBwParts() {
     // Comparable-mode: the lift's scaling ratio in THIS group; ratio 1 = the reference
     // ("étalon", the lift everything else is compared against — it stays the same).
     const ratio = ratioOf?.(r.name);
+    // ONLY the group's single designated reference is tagged "étalon"; every other member
+    // shows its ×ratio (incl. ×1 for an untuned member) — so a group can't show 4 étalons.
     const ratioChip = ratio == null ? ""
-      : Math.abs(ratio - 1) < 1e-6
-        ? ` <span class="bw-ratio bw-ratio-ref" title="Reference lift (étalon) — the others are scaled onto this one's curve (ratio 1).">★ étalon</span>`
+      : refEx != null && r.name === refEx
+        ? ` <span class="bw-ratio bw-ratio-ref" title="Reference lift (étalon) — the others are scaled onto this one's curve.">★ étalon</span>`
         : ` <span class="bw-ratio" title="Scaling ratio vs the group's reference lift — this lift's load is divided by it to compare on one curve.">×${ratio}</span>`;
     return `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
       `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
@@ -8312,8 +8322,8 @@ function renderBwParts() {
       `<td class="num">${indexEditCell(r)}</td>` +
       `<td class="num">${r.count.toLocaleString()}</td></tr>`;
   };
-  const table = (rs: IndexRow[], hidden: boolean, ratioOf?: (name: string) => number | null) =>
-    `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden, ratioOf)).join("")}</tbody></table>`;
+  const table = (rs: IndexRow[], hidden: boolean, ratioOf?: (name: string) => number | null, refEx?: string | null) =>
+    `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden, ratioOf, refEx)).join("")}</tbody></table>`;
 
   // "Review filtered-out": ONE place to see every lift the Great Filter is hiding
   // (greyed) and tap "＋ keep" to make an exception. Organised into the SAME groups as
@@ -8446,11 +8456,12 @@ function renderBwParts() {
     // Comparable groups (top level): each row gets its scaling ratio + the étalon tag.
     const compRatios = !sub ? compRatioByGroup?.get(b.key) : undefined;
     const ratioOf = compRatios ? (name: string) => compRatios.get(name) ?? null : undefined;
+    const refEx = compRatios ? groupReferenceEx(b.key) : null; // the ONE étalon for this group
     const flatBody = (shown.length
-      ? table(shown, false, ratioOf)
+      ? table(shown, false, ratioOf, refEx)
       : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`) +
       (hidden.length
-        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true, ratioOf)}</details>`
+        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true, ratioOf, refEx)}</details>`
         : "");
     const body = sm !== "none"
       ? indexBuckets(b.rows, sm as IndexGroupMode).map((s) => bucketHtml(s, true)).join("")
@@ -9409,7 +9420,7 @@ function exerciseInfoHtml(name: string): string {
     // ☆ = tap to make it the reference (the other members rescale onto its curve).
     const refStar = (gid: string, on: boolean): string =>
       !(on && kind === "compare") ? ""
-        : Math.abs(ratioOf(gid) - 1) < 1e-6
+        : groupReferenceEx(gid) === name
           ? `<span class="ex-grp-star is-ref" title="${escapeHtml(displayName(name))} is the reference (étalon) of this group">★</span>`
           : `<button type="button" class="ex-grp-star" data-grpref-id="${escapeHtml(gid)}" data-grpref-ex="${escapeHtml(name)}" title="Make ${escapeHtml(displayName(name))} the reference (étalon) of this group — rescales the others onto its curve">☆</button>`;
     return (
