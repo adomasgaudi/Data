@@ -183,7 +183,6 @@ const els = {
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
-  simplifiedToggle: $<HTMLInputElement>("simplifiedToggle"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -450,11 +449,10 @@ function placeVersionLine(): void {
 }
 
 /** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
- * label), keep the Settings checkbox + the quick switcher in sync. */
+ * label), keep the header quick switcher in sync. */
 function setSimplified(on: boolean): void {
   simplifiedView = on;
   try { localStorage.setItem("colosseum.simplifiedView", on ? "1" : "0"); } catch { /* ignore */ }
-  if (els.simplifiedToggle) els.simplifiedToggle.checked = on;
   const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
   if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
   updateBottomNav();
@@ -11268,11 +11266,6 @@ async function init() {
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
-
-  // Simplified view ↔ Advanced. Switches the Analysis home (S-ANL ↔ full ANL) and
-  // re-navigates immediately if you're already on an analysis page.
-  els.simplifiedToggle.checked = simplifiedView;
-  els.simplifiedToggle.addEventListener("change", () => setSimplified(els.simplifiedToggle.checked));
 
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
