@@ -14496,7 +14496,11 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
           : `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show all ${sel.length} — and hide the pills below">… +${sel.length - TITLE_NAME_CAP}</button>`)
       : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
-  const count = `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>`;
+  // The count badge is only useful when the title is TRUNCATED (names hidden behind
+  // "… +N" / "all exercises"). When every selected name fits on the line, drop it
+  // (owner request) — the names already say how many.
+  const truncated = sel.length > TITLE_NAME_CAP && !expanded;
+  const count = truncated ? `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>` : "";
   // When EVERY selectable lift is picked, don't list the top 5 + "+N" — just say
   // "all exercises" (owner request). Only when it would otherwise truncate (> the cap);
   // tapping it still expands to the full list (so you can remove individual lifts).
