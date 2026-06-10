@@ -3564,8 +3564,12 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* ── Section spacing rhythm: Stats and the Graph card sit CLOSE together (one tight
    group), while the Workout-history sits FURTHER below the Graph because it's a
    different kind of info (Gestalt separation). ── */
-.wa-stats-top .athlete-details { margin-bottom: 0.6rem; }      /* was 1.1rem — pull the Graph card up to Stats (~3× closer) */
+.wa-stats-top .athlete-details { margin-bottom: 0.3rem; }      /* tight gap to the Graph card just below */
 .wa-analysis-panel > #waGraphFold.wa-card-fold { margin-top: 0; margin-bottom: 0; }
+/* Match the closed Stats card's box to the Graph card so both one-line headers are
+   the SAME height: same vertical + horizontal padding as the .wa-card-fold (0.7rem
+   sides) and its closed summary (0.4rem top/bottom). */
+.wa-stats-top .athlete-details:not([open]) { padding: 0.4rem 0.7rem; }
 .wa-analysis-panel > #waHistFold { margin-top: 1.8rem; }       /* push history away from the Graph card */
 
 /* ── Align the non-card folds (Workout history + the experimental ones) to the
