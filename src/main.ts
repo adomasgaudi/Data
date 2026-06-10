@@ -13509,7 +13509,15 @@ let waGraphSel: string[] = [];
 type SelScope = "graph" | "hist";
 let curSelScope: SelScope = "hist";
 function selArr(): string[] { return curSelScope === "graph" ? waGraphSel : waSelected; }
-function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel = v; else waSelected = v; }
+/** Cap a GRAPH selection to WA_GRAPH_MAX (20): a graph of 30+ lines is unreadable, so any
+ * bulk pick (Match, Select all, a big group) that would exceed it is trimmed to the top 20
+ * by training frequency (most-trained first). The history selection is never capped. */
+function capGraphSel(list: string[]): string[] {
+  if (list.length <= WA_GRAPH_MAX) return list;
+  const counts = new Map(exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => [c.exerciseName, c.count]));
+  return [...list].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0)).slice(0, WA_GRAPH_MAX);
+}
+function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel = capGraphSel(v); else waSelected = v; }
 // ---- "Best lifts" + "Frequency" special group-by modes -------------------
 // Two extra Group-by options that aren't taxonomy buckets but RANKED flat lists:
 //   • frequency — the athlete's lifts sorted by set (or hard-set) count over a
@@ -15639,7 +15647,9 @@ function setupWorkoutAnalysis(): void {
     if (tMatch?.dataset.titlematch) {
       e.preventDefault(); e.stopPropagation();
       const sc = tMatch.dataset.titlematch as "graph" | "hist";
-      if (sc === "graph") waGraphSel = [...waSelected]; else waSelected = [...waGraphSel];
+      // Matching the graph to the history copies the history picks — but the graph caps at
+      // 20 (top by frequency), so a full "all exercises" history doesn't flood the graph.
+      if (sc === "graph") waGraphSel = capGraphSel([...waSelected]); else waSelected = [...waGraphSel];
       debounceWaRender();
       return;
     }
@@ -16032,7 +16042,7 @@ function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
   if (opts.exercises) {
     const ex = opts.exercises.filter((n) => n.length > 0);
     waSelected = ex;
-    waGraphSel = [...ex]; // an explicit "show this lift" focuses BOTH selectors
+    waGraphSel = capGraphSel([...ex]); // an explicit "show this lift" focuses BOTH selectors (graph caps at 20)
   }
   switchTopTab(analysisTabName()); // full or simplified per the detail flag (no drift)
 }
