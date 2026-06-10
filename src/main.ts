@@ -14221,11 +14221,18 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const matchBtn = remove
     ? `<button type="button" class="wa-title-match" data-titlematch="${remove}" title="Match — make this selection the same as the ${remove === "graph" ? "history" : "graph"} (copy its picks here)" aria-label="${remove === "graph" ? "Match history" : "Match graph"}">≈</button>`
     : "";
+  // "Pick" — a compact card on the title row that opens the slide-in picker & settings
+  // drawer (tap it, or drag/swipe it). Replaces the old full-width "▸ Picker & settings"
+  // bar below the title (owner request: move it up to the title level). Capture-handled so
+  // it doesn't toggle the fold it sits in.
+  const pickerBtn = remove
+    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Pick exercises &amp; settings — tap, or drag it open" aria-label="Open exercise picker &amp; settings">▦ Pick</button>`
+    : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
@@ -14530,14 +14537,11 @@ function renderSelector(scope: SelScope): void {
     // chip grid). A manual fold (not <details>) so the group dropdown's / ⚙'s own menus
     // aren't clipped by the fold and don't fight a <summary>'s toggle.
     (showGrid
+      // The opener moved UP to the title row (the "▦ Pick" pill in liftSelectionTitle); the
+      // old full-width "▸ Picker & settings" bar here is gone. The slide-in card (drawer when
+      // opened) still holds ALL the controls — group-by, period/metric, First-N, ⚙ — AND the
+      // exercise chips. Auto-shown inline only while searching (chipsFoldOpen).
       ? `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
-        `<div class="wa-chips-fold-sum">` +
-        `<button type="button" class="wa-pick-toggle" data-chipsfold aria-expanded="${chipsFoldOpen}" title="${chipsFoldOpen ? "Hide the picker &amp; settings" : "Show the picker &amp; settings"}" aria-label="Toggle picker and settings"></button>` +
-        `<span class="wa-pick-lbl">Picker &amp; settings</span>` +
-        `</div>` +
-        // The slide-in card (drawer when swiped in) holds ALL the controls — group-by,
-        // period / metric, First-N, the ⚙ — AND the exercise chips, so the inline row
-        // stays clean (owner request). The chips still render into #waChips-<scope>.
         `<div id="waPickCard-${scope}" class="wa-pick-card"${chipsFoldOpen ? "" : " hidden"}>` +
         // Visible ONLY when this card is the slide-in drawer (CSS) — a back-to-the-graph
         // handle, since swipe-right-to-close isn't obvious. Tap it or swipe the card right.
@@ -15772,11 +15776,12 @@ function setupWorkoutAnalysis(): void {
         // dragging a slider, opening a select, tapping a button or swiping the chip strip
         // must do THEIR job — a horizontal drag on a slider was being hijacked as a close,
         // making the drawer "disappear". Arm close only from the drawer's neutral areas.
-        if (t.closest("input, select, textarea, button, a, label, .xdd, .wa-cfg, .wa-chips, .wa-chips-wrap, .wa-sel-pills, .wa-catstrip")) return;
+        if (t.closest("input, select, textarea, button, a, label, summary, details, .xdd, .wa-cfg, .wa-chips, .wa-chips-wrap, .wa-pick-controls, .wa-sel-tools, .wa-sel-cog, .wa-chips-tools, .wa-fold-settings, .wa-group, .wa-subgroup, .wa-sel-pills, .wa-catstrip")) return;
         mode = "close"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId; return;
       }
-      if (!t.closest(".wa-chips-fold-sum")) return;
-      scope = (t.closest<HTMLElement>("[data-selscope]")?.dataset.selscope as SelScope) ?? "hist";
+      const opener = t.closest<HTMLElement>(".wa-title-picker[data-titlepicker]");
+      if (!opener) return;
+      scope = (opener.dataset.titlepicker as SelScope) ?? "hist";
       mode = "open"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId;
     });
     document.addEventListener("pointermove", (e) => {
@@ -15916,6 +15921,14 @@ function setupWorkoutAnalysis(): void {
       const sc = tExp.dataset.titleexpand as "graph" | "hist";
       titleExpanded[sc] = !titleExpanded[sc];
       deferRender(renderWorkoutAnalysis);
+      return;
+    }
+    // The "▦ Pick" pill on the title row opens that scope's slide-in picker drawer (it lives
+    // in the <summary>, so capture preventDefault stops the fold from toggling).
+    const tPick = t.closest<HTMLElement>("[data-titlepicker]");
+    if (tPick?.dataset.titlepicker) {
+      e.preventDefault(); e.stopPropagation();
+      openPickDrawer(tPick.dataset.titlepicker as SelScope);
       return;
     }
     // The big ✕ at the end of a selection title = Deselect all (capture: it lives in the
