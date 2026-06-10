@@ -14797,6 +14797,13 @@ function renderWaGraph(): void {
         `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
     : "";
   const cfgAllGraphs = onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.");
+  // "Potential (log)" view: strength gains are logarithmic, so a steady trainee LOOKS
+  // plateaued on a linear axis. This spaces the strength axis by how far you are from a
+  // lifetime-potential CEILING, so real (slowing) gains keep reading as a rising line.
+  // One ceiling for now (single athlete). Set it above your current best.
+  const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `ceiling ${c.potentialCeiling ?? "—"} kg` : "",
+    onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength axis by distance to a lifetime-potential ceiling — so an approach-to-ceiling reads as a straight line and a true plateau still flattens. Set the ceiling below; ×BW turns off while this is on.") +
+    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) the log view converges on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
   // Two-column grid: Data | Lines & filter on top, metric groups | Bars & axes below,
   // the All-graphs toggle spanning the bottom.
   const cfgUi =
@@ -14804,7 +14811,7 @@ function renderWaGraph(): void {
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
     `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
-    `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}</div>` +
+    `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
     `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}</div>` +
     `</div>`;
   const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
@@ -15469,6 +15476,7 @@ function setupWorkoutAnalysis(): void {
       else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
       else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
+      else if (key === "potentialCeiling") { const v = Number((el as HTMLInputElement).value); waGraphConfig.potentialCeiling = v > 0 ? v : undefined; }
       scheduleWaGraph();
     }
   });
@@ -15753,8 +15761,10 @@ function setupWorkoutAnalysis(): void {
     // Prediction / Decay line modifiers (pills) — flip the config flag, redraw.
     const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
     if (cfgTog?.dataset.wacfgtoggle) {
-      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay";
+      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay" | "potentialLog";
       waGraphConfig[key] = !waGraphConfig[key];
+      // The potential-log axis is in kg; it can't also be ×BW, so turn ×BW off when on.
+      if (key === "potentialLog" && waGraphConfig.potentialLog) S.waPerBodyweight = false;
       scheduleWaGraph();
       return;
     }

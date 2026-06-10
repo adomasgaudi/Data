@@ -129,6 +129,10 @@ export interface SvgChartConfig {
   // keeping the previous one (PB-8: BW→kg left the axis pinned to the BW range).
   forceLeftRange?: { min: number; max: number } | undefined;
   rightBeginAtZero?: boolean;
+  /** "Lifetime potential" log view: space the LEFT axis by −ln(ceiling − value) so an
+   * exponential approach to the ceiling straightens out. Off / ceiling≤data = linear. */
+  potentialLog?: boolean | undefined;
+  potentialCeiling?: number | undefined;
   /** Stretch the right y-axis by this factor so its series sit low/squished
    * (e.g. 3 = bars only fill the bottom third). Default 1. */
   rightHeadroom?: number;
@@ -425,7 +429,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const plotW = W - M.l - M.r;
     const plotH = h - M.t - M.b;
     const xPix = (x: number) => M.l + ((x - view.xMin) / (view.xMax - view.xMin)) * plotW;
-    const yL = (y: number) => M.t + (1 - (y - view.yMin) / (view.yMax - view.yMin)) * plotH;
+    // "Lifetime potential" log view: space the LEFT axis by −ln(ceiling − value) so an
+    // exponential approach to the ceiling reads as a straight line. niceTicks still makes
+    // nice kg ticks; yL just positions them non-linearly. Only when the ceiling sits ABOVE
+    // the data (else the transform is undefined) — otherwise the axis stays linear.
+    const potL = cfg.potentialCeiling;
+    const useLog = !!cfg.potentialLog && typeof potL === "number" && potL > view.yMin;
+    const tfm = (v: number) => -Math.log(Math.max(0.5, (potL as number) - v));
+    const yL = useLog
+      ? (y: number) => {
+          const t0 = tfm(view.yMin), t1 = tfm(view.yMax);
+          return M.t + (1 - (t1 === t0 ? 0 : (tfm(y) - t0) / (t1 - t0))) * plotH;
+        }
+      : (y: number) => M.t + (1 - (y - view.yMin) / (view.yMax - view.yMin)) * plotH;
     const yR = (y: number) => M.t + (1 - (y - ry.yMin) / (ry.yMax - ry.yMin)) * plotH;
     const yOf = (s: SvgSeries) => (s.axis === "right" ? yR : yL);
 

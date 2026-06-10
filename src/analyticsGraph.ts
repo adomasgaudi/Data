@@ -278,7 +278,11 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // range (0–1.4) and clipped the kg points off the top → empty graph. So every
     // toggleable key below is ALWAYS present (undefined when off), never conditionally
     // spread — undefined overwrites the stale value through the merge.
-    forceLeftRange, // undefined in kg mode → axis re-fits to the kg data
+    // The "potential log" view spaces the left axis non-linearly toward a kg ceiling, so
+    // it must NOT also be ×BW-pinned (a kg ceiling vs BW-unit data). Drop the pin when on.
+    forceLeftRange: input.config.potentialLog ? undefined : forceLeftRange,
+    potentialLog: input.config.potentialLog, // always present (undefined when off) — PB-8 rule
+    potentialCeiling: input.config.potentialCeiling,
     rightHeadroom: input.config.rightHeadroom,
     barGirth: input.config.barGirth,
     directLabels: true, // float each lift's name next to its records
