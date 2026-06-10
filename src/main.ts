@@ -4757,6 +4757,40 @@ function setupStatsToggle(): void {
   applyStatsSection();
 }
 
+// ---- Graph / History section show-hide toggles (next to the Stats button) ----
+// Like the Stats toggle, these make the WHOLE Graph or Workout-history fold disappear.
+// Both default to SHOWN (they're visible normally); the button just hides them. The
+// folds are static in the DOM (only their inner sections re-render), so a one-time
+// apply on init + on click keeps the hidden state — no per-render reapply needed.
+type SectionToggle = { btnId: string; foldId: string; key: string; label: string };
+const SECTION_TOGGLES: SectionToggle[] = [
+  { btnId: "graphToggleBtn", foldId: "waGraphFold", key: "colosseum.graphSectionShown", label: "Graph" },
+  { btnId: "histToggleBtn", foldId: "waHistFold", key: "colosseum.histSectionShown", label: "History" },
+];
+const sectionShown: Record<string, boolean> = {};
+function applySectionToggle(s: SectionToggle): void {
+  const shown = sectionShown[s.key] ?? true;
+  const fold = document.getElementById(s.foldId);
+  if (fold) fold.hidden = !shown;
+  const btn = document.getElementById(s.btnId);
+  if (btn) {
+    btn.classList.toggle("is-on", shown);
+    btn.setAttribute("aria-pressed", String(shown));
+    btn.setAttribute("title", shown ? `Hide the ${s.label} section` : `Show the ${s.label} section`);
+  }
+}
+function setupSectionToggles(): void {
+  for (const s of SECTION_TOGGLES) {
+    sectionShown[s.key] = (() => { try { return localStorage.getItem(s.key) !== "0"; } catch { return true; } })();
+    document.getElementById(s.btnId)?.addEventListener("click", () => {
+      sectionShown[s.key] = !(sectionShown[s.key] ?? true);
+      try { localStorage.setItem(s.key, sectionShown[s.key] ? "1" : "0"); } catch { /* storage may be unavailable */ }
+      applySectionToggle(s);
+    });
+    applySectionToggle(s);
+  }
+}
+
 function renderAthleteStats() {
   const s = athleteSummary(activeRecords(), els.athlete.value);
   if (s.sets === 0) {
@@ -11136,6 +11170,7 @@ async function init() {
   });
   setupTabs();
   setupStatsToggle(); // small Stats show/hide button by the athlete picker
+  setupSectionToggles(); // matching Graph / History show/hide buttons beside it
   // World-records page: the trio-lift selector pills (mutually-exclusive).
   document.getElementById("recordsBody")?.addEventListener("click", (e) => {
     const pill = (e.target as HTMLElement).closest<HTMLElement>(".rec-lift-pill");
