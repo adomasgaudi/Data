@@ -13,6 +13,30 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-13 — The exercise-picker OPENER keeps getting reworked (discoverability of "swipe to open")
+
+- **Recurrences (this is the pattern):** full-width "▸ Picker & settings" bar → title-row "▦ Pick"
+  pill (b.2.8.177) → slide-in white sticky-note DRAWER, no close button (b.2.8.179) → now a
+  white sticky-note TAB poking out the right edge you drag left to open (PB-13). The opener has
+  changed ~4× because each form hid HOW to open it.
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data), Analysis view,
+  graph + history selectors. Smartphone is the priority surface.
+- **Symptom (the real one):** the open gesture isn't DISCOVERABLE. A plain "Pick" pill doesn't
+  say "drag me"; the swipe-left-to-open was invisible. The owner keeps asking for a clearer
+  affordance — most recently "make it a white paper sticky note sticking out of the right side".
+- **Root cause:** the picker is a *drawer* (a right-edge slide-in), but its OPENER was styled as
+  an ordinary inline button, so the spatial metaphor (pull it in from the right) wasn't shown.
+  An affordance that doesn't look like its gesture gets re-requested forever.
+- **Root fix (b.2.8.x, PB-13):** the opener IS the drawer's visible edge — `.wa-title-picker` is
+  now a white paper sticky-note TAB pinned to the card's right edge (`position:absolute; right:
+  -0.7rem`), vertical "▦ Pick", peel-shadow on the free left side. Dragging it left (existing
+  swipe handler, `touch-action:pan-y`) or tapping pulls out the same drawer. The handle now
+  LOOKS like the thing it opens, so the gesture is implied. Fix site: `.wa-title-picker` /
+  `.wa-seltitle-box` in `src/styles.css` (tagged `PB-13`); opener swipe in `src/main.ts`.
+- **If it recurs:** the tab is still not obviously draggable (add a grip/animation hint), or it
+  collides with the title text / fold caret on a narrow screen — re-check the reserved
+  `padding-right` on `.wa-seltitle-box` and the tab's vertical extent vs the 2-line title clamp.
+
 ## PB-12 — The inline SET-EDIT panel closes when you press a button inside it
 
 - **Recurrences:** part of the long-running rule-24 CLASS ("tapping a setting closes the
