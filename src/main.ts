@@ -1779,6 +1779,53 @@ function setDeleted(id: string, on: boolean): void {
   saveDeletedSets();
 }
 
+// ---- Action log (in the cache) + a 10s undo toast ----------------------------
+// Destructive actions (and their undos) are appended to a localStorage log so there's
+// always a record of what changed, and surfaced briefly as an "Undo" toast.
+const ACTION_LOG_KEY = "colosseum.actionLog.v1";
+interface ActionLogEntry { t: number; kind: string; label: string; }
+let actionLog: ActionLogEntry[] = (() => {
+  try { const a = JSON.parse(localStorage.getItem(ACTION_LOG_KEY) ?? "[]"); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+})();
+function logAction(kind: string, label: string): void {
+  actionLog.push({ t: Date.now(), kind, label });
+  if (actionLog.length > 300) actionLog = actionLog.slice(-300); // keep the cache small
+  saveJson(ACTION_LOG_KEY, actionLog);
+}
+let toastTimer = 0;
+/** A transient bottom toast with a single action (e.g. Undo); auto-dismisses after
+ * `ms`. Re-callable — replaces any open toast. */
+function showToast(message: string, actionLabel: string, onAction: () => void, ms = 10000): void {
+  document.getElementById("appToast")?.remove();
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = 0; }
+  const el = document.createElement("div");
+  el.id = "appToast";
+  el.className = "app-toast";
+  el.innerHTML = `<span class="app-toast-msg">${escapeHtml(message)}</span><button type="button" class="app-toast-act">${escapeHtml(actionLabel)}</button>`;
+  el.querySelector(".app-toast-act")?.addEventListener("click", () => { el.remove(); if (toastTimer) clearTimeout(toastTimer); toastTimer = 0; onAction(); });
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("is-in"));
+  toastTimer = window.setTimeout(() => { el.remove(); toastTimer = 0; }, ms);
+}
+/** Soft-delete a set of sets (by id), log it, and offer a 10s undo. The sets stay
+ * recoverable in Settings → Data health → Hidden sets even after the toast is gone. */
+function deleteSetsWithUndo(ids: string[], label: string): void {
+  const real = ids.filter((id) => !deletedSets.has(id));
+  if (!real.length) return;
+  for (const id of real) deletedSets.add(id);
+  saveDeletedSets();
+  logAction("delete-sets", `Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`);
+  const rerender = () => { deferRender(renderWorkoutAnalysis); if (document.getElementById("workoutsTable")) renderWorkoutsPage(); };
+  rerender();
+  showToast(`Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`, "Undo", () => {
+    for (const id of real) deletedSets.delete(id);
+    saveDeletedSets();
+    logAction("undo-delete", `Restored ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`);
+    rerender();
+  });
+}
+
 // ---- Per-set "not comparable" ----. The variations editor marks a whole NOTE
 // not comparable; this marks ONE specific set (by id) — reachable right from the
 // in-workout set editor. Either path drops the set's 1RM & volume (reps/sets still
@@ -6813,7 +6860,10 @@ function renderWorkoutsPage() {
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        // Swipe the line left→right to delete this exercise's sets that day (with a 10s
+        // undo + cache log). The exact set ids ride along so the delete is precise.
+        const delIds = sets.map((s) => setId(s));
+        return `<div class="wo-ex-line" data-woexdel="${escapeHtml(name)}" data-wosetids="${escapeHtml(JSON.stringify(delIds))}">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -10967,6 +11017,50 @@ async function init() {
   document.addEventListener("click", (e) => {
     if (Date.now() - swEndedAt < 350) { e.preventDefault(); e.stopPropagation(); }
   }, true);
+  // Swipe a workout-history EXERCISE LINE left→right to delete that lift's sets that day
+  // (destructive → 10s undo toast + cache log; also recoverable in Data health). Same
+  // gesture pattern as the title chips. The line follows the finger; past the threshold a
+  // red "delete" tint shows and releasing commits.
+  {
+    const SLOP = 8, COMMIT = 90;
+    let row: HTMLElement | null = null, ids: string[] = [], label = "";
+    let x0 = 0, y0 = 0, dx = 0, claimed = false, ptr = -1, endedAt = 0;
+    const reset = (snap: boolean) => {
+      if (row) { row.classList.remove("wo-ex-swiping", "wo-ex-willdel"); if (snap) { row.style.transform = ""; row.style.opacity = ""; } }
+      row = null; claimed = false; dx = 0; ptr = -1;
+    };
+    document.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      const r = (e.target as HTMLElement).closest<HTMLElement>(".wo-ex-line[data-wosetids]");
+      if (!r) return;
+      row = r; label = r.dataset.woexdel ?? "";
+      try { ids = JSON.parse(r.dataset.wosetids ?? "[]"); } catch { ids = []; }
+      x0 = e.clientX; y0 = e.clientY; dx = 0; claimed = false; ptr = e.pointerId;
+    });
+    document.addEventListener("pointermove", (e) => {
+      if (!row || e.pointerId !== ptr) return;
+      const ddx = e.clientX - x0, ddy = e.clientY - y0;
+      if (!claimed) {
+        if (Math.abs(ddy) > Math.abs(ddx) && Math.abs(ddy) > SLOP) { reset(true); return; }
+        if (ddx <= SLOP) return;
+        claimed = true; row.classList.add("wo-ex-swiping"); try { row.setPointerCapture(ptr); } catch { /* ignore */ }
+      }
+      dx = Math.max(0, ddx);
+      row.style.transform = `translateX(${dx}px)`;
+      row.style.opacity = String(Math.max(0.3, 1 - dx / 240));
+      row.classList.toggle("wo-ex-willdel", dx >= COMMIT);
+    });
+    const end = () => {
+      if (!row) return;
+      const ok = claimed && dx >= COMMIT && ids.length;
+      if (claimed) endedAt = Date.now();
+      if (ok) { const d = ids, l = label; reset(false); deleteSetsWithUndo(d, l); }
+      else reset(true);
+    };
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", () => reset(true));
+    document.addEventListener("click", (e) => { if (Date.now() - endedAt < 350) { e.preventDefault(); e.stopPropagation(); } }, true);
+  }
   // Index "↗" button: jump straight to this lift's workout history (Analysis, single
   // mode — its real logged sets are the example), with it selected on the graph too.
   document.addEventListener("click", (e) => {

@@ -130,6 +130,7 @@ const LT: Record<string, string> = {
   "No sets logged in this period.": "Šiuo laikotarpiu serijų neįrašyta.",
   // ---- Command bar ----
   "Switch to this page": "Pereiti į šį puslapį",
+  "Undo": "Atšaukti",
   // ---- Customisable sets-table columns ----
   "Show in this column": "Rodyti šiame stulpelyje",
   "Weight × reps": "Svoris × pakartojimai",
