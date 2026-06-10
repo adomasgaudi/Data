@@ -1193,6 +1193,20 @@ main { padding-bottom: 5rem; }
 }
 .set-edit-nc:hover { border-color: var(--muted); }
 .set-edit-nc.is-on { color: #fff; background: var(--muted); border-color: var(--muted); }
+/* Unilateral toggle in the set editor — same pill family as ⊘ not-comparable. */
+.set-edit-uni {
+  align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
+}
+.set-edit-uni:hover { border-color: var(--accent); }
+.set-edit-uni.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* The ⇄ unilateral tag on a set row (counts as right + left). Subtle until sides differ. */
+.set-uni { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 0 5px; margin-right: 3px; }
+.set-uni.is-diff { color: #fff; background: var(--lens-compare, var(--accent)); }
+/* Per-side (R/L) editor row in the set edit panel: a tight inline group. */
+.set-side-grid { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; align-items: flex-end; width: 100%; padding-top: 0.2rem; border-top: 1px dashed var(--line); }
+.set-side-lbl { align-self: flex-end; font-weight: 700; font-size: 0.8rem; color: var(--muted); padding-bottom: 4px; }
+.set-side-f .set-side-input { width: 3.4rem; }
 .health-restore, .health-restore-all { font: inherit; font-size: 0.74rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; }
 .health-restore:hover, .health-restore-all:hover { border-color: var(--accent); }
 /* The squat-rack-hole tag shown in a set's weight cell (it stands in for weight).

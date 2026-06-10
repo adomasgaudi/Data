@@ -76,6 +76,7 @@ import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclin
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
+import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import { mountPoseScene, type PoseScene } from "./poseScene";
 import { mountPoseDraw, type PoseDraw } from "./poseDraw";
@@ -1862,6 +1863,47 @@ const saveSetOverrides = () => {
   saveJson(SET_OVR_KEY, setOverrides);
   clearMachineCache(); // per-set edits change a set's e1RM → mixed verdicts may shift
 };
+
+// ---- Unilateral (single-arm / single-leg) lifts -----------------------------
+// One logged set of a unilateral lift is done on BOTH sides, so it counts as a
+// Right set AND a Left set. Two on-device stores back it: a per-EXERCISE on/off
+// override (layered on the name auto-detect) and a per-SET "side divergence" (only
+// the values that differ from the logged set — both sides default EQUAL/linked).
+const UNILAT_EX_KEY = "colosseum.unilateralExercise.v1";
+const unilateralOverrides: Record<string, boolean> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(UNILAT_EX_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+/** Effective unilateral state for a lift: name auto-detect, overridden per-exercise. */
+function isUni(exerciseName: string): boolean {
+  return isUnilateralBase(exerciseName, unilateralOverrides[exerciseName]);
+}
+/** Force a lift unilateral on/off (clears the key to fall back to auto-detect). */
+function setUnilateralOverride(exerciseName: string, state: boolean | undefined): void {
+  if (state === undefined) delete unilateralOverrides[exerciseName];
+  else unilateralOverrides[exerciseName] = state;
+  saveJson(UNILAT_EX_KEY, unilateralOverrides);
+  clearMachineCache();
+}
+
+const SET_SIDES_KEY = "colosseum.setSides.v1";
+const setSidesStore: Record<string, SideDivergence> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(SET_SIDES_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+/** A unilateral set's two sides (right/left), from its EFFECTIVE (post-override) reps/
+ * weight plus any stored divergence. Both sides default to the logged value (linked). */
+function sidesForRecord(r: SetRecord): BothSides {
+  return sideValues(r.reps, r.weight, setSidesStore[setId(r)]);
+}
+/** Persist a per-set side divergence (dropping the key when nothing actually differs,
+ * so an unchanged unilateral set stays clean/linked). */
+function setSideDivergence(id: string, d: SideDivergence): void {
+  if (divergenceEmpty(d)) delete setSidesStore[id];
+  else setSidesStore[id] = d;
+  saveJson(SET_SIDES_KEY, setSidesStore);
+  clearMachineCache();
+}
 
 // ---- Machine type (gravity vs cable), e.g. Lat Pulldown ---------------------
 // Per-exercise choice saved on device: "cable" (default, weights as-logged),
@@ -5926,6 +5968,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
+  if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -7137,6 +7180,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
+  if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -7584,6 +7628,15 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       ? "—"
       : `<button type="button" class="e1rm-btn" title="Estimated ${xrmReps}RM — the weight you could do for ${xrmReps} rep${xrmReps === 1 ? "" : "s"}${xrmReps > 1 ? " (from the 1RM)" : ""}. Tap for the formula.">${fmt(rmShown)}<sup class="onerm-sup">${xrmReps}</sup></button>`;
   const sid = setId(s);
+  // Unilateral (single-arm/leg): this set was done on BOTH sides, so it reads as a
+  // Right + a Left set. Sides default EQUAL (linked); a per-set divergence records a
+  // difference. `both` resolves the two sides from the effective reps/weight.
+  const uni = isUni(s.exerciseName);
+  const both = uni ? sidesForRecord(s) : null;
+  const sidesDifferNow = both ? sidesDiffer(both) : false;
+  const uniTag = uni
+    ? `<span class="set-uni${sidesDifferNow ? " is-diff" : ""}" title="Unilateral — counts as a right + a left set${sidesDifferNow ? "; the sides differ (edit below)" : " (both sides, linked)"}">⇄${sidesDifferNow && both ? ` R${both.right.reps}/L${both.left.reps}` : ""}</span>`
+    : "";
   const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
@@ -7637,7 +7690,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // this set's edit panel. No separate ✎ pencil button.
   // The leading cell always carries the set's identity prefix (info button, variation /
   // scale / machine chips), whatever metric column 0 is set to show.
-  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}`;
+  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${uniTag}`;
   const cellFor = (id: string): string => {
     switch (id) {
       case "weight": return wr(s.weight, s.reps);
@@ -7680,6 +7733,27 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const noteFld =
     `<label class="set-edit-f set-edit-f-note">Note` +
     `<input class="set-edit-note" type="text" data-setid="${escapeHtml(sid)}" data-orig="${escapeHtml(raw.notes ?? "")}" value="${escapeHtml(s.notes ?? "")}" placeholder="${escapeHtml(raw.notes ?? "(no note)")}" /></label>`;
+  // Per-SIDE edit fields (unilateral only): each side defaults to the logged value
+  // (blank input = linked); fill one in to record a side that differs. Writes go to
+  // the per-set side store, not the set override. The "⇄ unilateral" toggle sets the
+  // whole EXERCISE's override (on top of the name auto-detect).
+  const sdStore = setSidesStore[sid] ?? {};
+  const sfld = (field: "rReps" | "rWeight" | "lReps" | "lWeight", label: string, val: number | null | undefined, step: number, ph: string) =>
+    `<label class="set-edit-f set-side-f">${label}<input class="set-side-input" type="number" step="${step}" inputmode="decimal" ` +
+    `data-setid="${escapeHtml(sid)}" data-sidefield="${field}" value="${val ?? ""}" placeholder="${escapeHtml(ph)}" /></label>`;
+  const repsPh = s.reps === null || s.reps === undefined ? "" : String(s.reps);
+  const wPh = s.weight === null || s.weight === undefined ? "" : String(s.weight);
+  const sideEdit = uni
+    ? `<div class="set-side-grid"><span class="set-side-lbl" title="Right side">R</span>` +
+      sfld("rReps", "reps", sdStore.rReps ?? null, 1, repsPh) +
+      sfld("rWeight", "kg", "rWeight" in sdStore ? sdStore.rWeight ?? null : null, 0.5, wPh) +
+      `<span class="set-side-lbl" title="Left side">L</span>` +
+      sfld("lReps", "reps", sdStore.lReps ?? null, 1, repsPh) +
+      sfld("lWeight", "kg", "lWeight" in sdStore ? sdStore.lWeight ?? null : null, 0.5, wPh) +
+      `</div>`
+    : "";
+  const uniToggle =
+    `<button type="button" class="set-edit-uni${uni ? " is-on" : ""}" data-uniex="${escapeHtml(s.exerciseName)}" aria-pressed="${uni}" title="Unilateral — each set counts as a right + a left set (single-arm / single-leg). Toggles this for the whole exercise.">⇄ ${uni ? "unilateral" : "unilateral?"}</button>`;
   const editRow =
     `<tr class="set-edit-row" hidden><td colspan="5"><div class="set-edit-grid">` +
     efld("weight", "Weight (kg)", s.weight, 0.5) +
@@ -7687,6 +7761,8 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
+    uniToggle +
+    sideEdit +
     `<button type="button" class="set-edit-nc${notComparableSets.has(sid) ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${notComparableSets.has(sid)}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${notComparableSets.has(sid) ? "not comparable" : "not comparable?"}</button>` +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
     `<button type="button" class="set-edit-delete" data-setid="${escapeHtml(sid)}" title="Hide this set everywhere on the site (the source data is never changed; restore in Settings → Data health)">🗑 Delete set</button>` +
@@ -8041,6 +8117,22 @@ function onSetEditInput(e: Event): void {
     scheduleRender();
     return;
   }
+  // Per-SIDE field (unilateral): records a side that differs from the logged value.
+  // Blank clears that side back to linked. Stored in the per-set side divergence.
+  const sideInp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-side-input");
+  if (sideInp?.dataset.setid && sideInp.dataset.sidefield) {
+    const f = sideInp.dataset.sidefield as "rReps" | "rWeight" | "lReps" | "lWeight";
+    const t = sideInp.value.trim();
+    let v: number | null = t === "" ? null : parseFloat(t);
+    if (v !== null && !Number.isFinite(v)) v = null;
+    if (v !== null && (f === "rReps" || f === "lReps")) v = Math.round(v);
+    const cur: SideDivergence = { ...(setSidesStore[sideInp.dataset.setid] ?? {}) };
+    if (t === "") delete cur[f];
+    else cur[f] = v as number; // weight may be null only via the weight inputs; "" already handled
+    setSideDivergence(sideInp.dataset.setid, cur);
+    scheduleRender();
+    return;
+  }
   const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-input");
   if (!inp?.dataset.setid || !inp.dataset.field) return;
   const field = inp.dataset.field as "weight" | "reps" | "bodyweight" | "scale";
@@ -8050,6 +8142,21 @@ function onSetEditInput(e: Event): void {
   if (v !== null && field === "reps") v = Math.round(v);
   setSetOverrideField(inp.dataset.setid, field, v);
   scheduleRender();
+}
+
+/** Click "⇄ unilateral" in the set editor: flip the EXERCISE's unilateral override
+ * (each set then counts as a right + a left set), then re-render. */
+function toggleUnilateralExercise(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-uni");
+  if (!btn?.dataset.uniex) return false;
+  setUnilateralOverride(btn.dataset.uniex, !isUni(btn.dataset.uniex));
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  window.scrollTo(0, y);
+  return true;
 }
 
 /**
@@ -12156,7 +12263,7 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
-    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note")) { onSetEditInput(e); return; }
+    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note, .set-side-input")) { onSetEditInput(e); return; }
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));

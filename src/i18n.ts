@@ -186,6 +186,8 @@ const LT: Record<string, string> = {
   "no band": "be gumos",
   "banded": "su guma",
   "shoulders": "pečiai",
+  "⇄ unilateral": "⇄ vienpusis",
+  "⇄ unilateral?": "⇄ vienpusis?",
   "0cm (wall)": "0cm (siena)",
   "blue 6cm": "mėlynas 6cm",
   "📷 photo": "📷 nuotrauka",
