@@ -2017,6 +2017,12 @@ function explodeForCount(records: readonly SetRecord[]): SetRecord[] {
     (r, reps, weight, side) => ({ ...r, reps, weight, setNumber: r.setNumber + (side === "L" ? 500000 : 0) }),
   );
 }
+/** Per-exercise set counts for an athlete, unilateral-aware: a single-arm/leg set
+ * counts as 2 (a right + a left set), so the per-exercise count + frequency tier match
+ * the workout-history totals. Thin units-passing wrapper over `exerciseCountsForUser`. */
+function exerciseCounts(records: readonly SetRecord[], username: string): ExerciseCount[] {
+  return exerciseCountsForUser(records, username, setUnitsForRecord);
+}
 
 // ---- Machine type (gravity vs cable), e.g. Lat Pulldown ---------------------
 // Per-exercise choice saved on device: "cable" (default, weights as-logged),
@@ -2967,7 +2973,7 @@ function availableSyntheticNames(presentNames: Iterable<string>): string[] {
 /** Per-athlete exercise list for the Compare picker: their logged lifts plus any
  * synthetic group lifts they have (≥1 member trained), so synthetics are pickable. */
 function compareExerciseNames(username: string): string[] {
-  const names = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
+  const names = exerciseCounts(activeRecords(), username).map((c) => c.exerciseName);
   return [...names, ...availableSyntheticNames(names)];
 }
 
@@ -4678,7 +4684,7 @@ function renderMomentum() {
   const formula = currentFormula();
   const recs = filterRecords(computedRecords(), { excludeDropsets: els.excludeDropsets.checked });
   // Consider the athlete's most-trained exercises, then keep those moving lately.
-  const top = exerciseCountsForUser(activeRecords(), username).slice(0, 24);
+  const top = exerciseCounts(activeRecords(), username).slice(0, 24);
   const windowStart = Date.now() - MO_PERIOD_WEEKS[momentumPeriod] * 7 * 86_400_000;
   // % change of the est. 1RM across the window: latest vs the value entering it.
   const chips: { name: string; pct: number }[] = [];
@@ -4936,7 +4942,7 @@ function renderMuscleMap() {
 function athleteContext(): string {
   const username = els.athlete.value;
   const p = athProfile(username);
-  const counts = exerciseCountsForUser(activeRecords(), username);
+  const counts = exerciseCounts(activeRecords(), username);
   const workouts = workoutsForUser(activeRecords(), username);
   const totalSets = counts.reduce((s, c) => s + c.count, 0);
   const prs = personalRecords(
@@ -5198,7 +5204,7 @@ const COMPARE_COLORS = [
  */
 function renderCompareSection() {
   const username = els.athlete.value;
-  const counts = exerciseCountsForUser(activeRecords(), username);
+  const counts = exerciseCounts(activeRecords(), username);
   const exercises = compareExerciseNames(username); // pure lifts + available synthetics
 
   // Drop any previous picks that this athlete doesn't have; seed with top 2.
@@ -5282,7 +5288,7 @@ function renderCompareChips() {
  * all already in, remove them; otherwise add the missing ones. Re-renders chips. */
 function compareToggleCategory(cat: string) {
   const username = els.athlete.value;
-  const members = exerciseCountsForUser(activeRecords(), username)
+  const members = exerciseCounts(activeRecords(), username)
     .map((c) => c.exerciseName)
     .filter((e) => exerciseCategories(e).includes(cat));
   const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
@@ -5296,7 +5302,7 @@ function compareToggleCategory(cat: string) {
 /** Toggle every exercise in a frequency tier in/out of the compare selection. */
 function compareToggleTier(tier: string) {
   const username = els.athlete.value;
-  const members = exerciseCountsForUser(activeRecords(), username)
+  const members = exerciseCounts(activeRecords(), username)
     .filter((c) => (frequencyTier(c.count)?.tier ?? null) === tier)
     .map((c) => c.exerciseName);
   const allOn = members.length > 0 && members.every((e) => compareSelected.has(e));
@@ -5434,7 +5440,7 @@ function selectExerciseTab(t: string) {
     // The drill-in needs an exercise: reopen the last one viewed, else the
     // most-trained lift.
     if (selectedExercise === null) {
-      const ranked = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+      const ranked = exerciseCounts(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
       const pick = lastSingleExercise && ranked.includes(lastSingleExercise) ? lastSingleExercise : ranked[0];
       if (pick) { selectedExercise = pick; combinedWith = []; }
     }
@@ -5499,9 +5505,9 @@ function renderExercisesPage() {
   // athlete has never logged, marked so the gaps are obvious instead of being
   // an empty search result.
   type ExItem = ExerciseCount & { trained: boolean };
-  let items: ExItem[] = exerciseCountsForUser(scoped, username).map((c) => ({ ...c, trained: true }));
+  let items: ExItem[] = exerciseCounts(scoped, username).map((c) => ({ ...c, trained: true }));
   if (exerciseShowNotTrained) {
-    const trainedEver = new Set(exerciseCountsForUser(base, username).map((c) => c.exerciseName));
+    const trainedEver = new Set(exerciseCounts(base, username).map((c) => c.exerciseName));
     for (const name of distinctExercises(base))
       if (!trainedEver.has(name)) items.push({ exerciseName: name, count: 0, trained: false });
   }
@@ -5658,7 +5664,7 @@ function renderExerciseDetail(exName: string) {
       : `<span class="ex-bwpart ex-bwpart--none">No bodyweight part (added weight only)</span>`;
   // The exercise name is a dropdown: tap it to switch to another of this
   // athlete's lifts without leaving the Single view (most-trained first).
-  const trainedForSwitch = exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
+  const trainedForSwitch = exerciseCounts(activeRecords(), els.athlete.value).map((c) => c.exerciseName);
   const switchMenu = (trainedForSwitch.includes(exName) ? trainedForSwitch : [exName, ...trainedForSwitch])
     .map((n) => `<button type="button" class="xdd-opt${n === exName ? " is-active" : ""}" role="option" data-switchex="${escapeHtml(n)}">${escapeHtml(n)}</button>`)
     .join("");
@@ -5714,7 +5720,7 @@ function renderExerciseDetail(exName: string) {
  * a picker to add another of this athlete's lifts, so e.g. Squat + Smith Machine
  * Squat are viewed as one. */
 function renderCombineBar(exName: string, username: string) {
-  const trained = exerciseCountsForUser(activeRecords(), username).map((c) => c.exerciseName);
+  const trained = exerciseCounts(activeRecords(), username).map((c) => c.exerciseName);
   const addable = trained.filter((n) => n !== exName && !combinedWith.includes(n));
   const chips = combinedWith
     .map((n) => `<button type="button" class="ex-combine-chip" data-remove="${escapeHtml(n)}" title="Remove">${escapeHtml(n)} ✕</button>`)
@@ -6371,7 +6377,7 @@ function exerciseGroupValue(name: string, dim: HeatColorDim): string | null {
 /** The current athlete's exercises that fall in one group value (a calendar pill).
  * Used to sync a pill tap with the analysis selection (waSelected). */
 function exercisesInGroup(dim: HeatColorDim, val: string): string[] {
-  return exerciseCountsForUser(activeRecords(), els.athlete.value)
+  return exerciseCounts(activeRecords(), els.athlete.value)
     .map((e) => e.exerciseName)
     .filter((n) => exerciseGroupValue(n, dim) === val);
 }
@@ -9715,7 +9721,7 @@ function workoutPlanItems(): PlanItem[] {
   const recs = activeRecords();
   const today = todayIso();
   const items: PlanItem[] = [];
-  for (const { exerciseName } of exerciseCountsForUser(recs, username)) {
+  for (const { exerciseName } of exerciseCounts(recs, username)) {
     const stats = weeklySetStats(explodeForCount(setsForUserExercise(recs, username, exerciseName)), today);
     if (stats.threeMonthAvgPerWeek < 0.5) continue; // not a regular lift recently
     const behind = Math.round(stats.threeMonthAvgPerWeek - stats.thisWeek);
@@ -10506,7 +10512,7 @@ function populateTestExercises(username: string) {
     els.testExercise.innerHTML = `<option value="">— pick an athlete first —</option>`;
     return;
   }
-  const exercises = exerciseCountsForUser(activeRecords(), username);
+  const exercises = exerciseCounts(activeRecords(), username);
   els.testExercise.innerHTML = exercises
     .map((e) => `<option value="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</option>`)
     .join("");
@@ -14102,7 +14108,7 @@ function selArr(): string[] { return curSelScope === "graph" ? waGraphSel : waSe
  * by training frequency (most-trained first). The history selection is never capped. */
 function capGraphSel(list: string[]): string[] {
   if (list.length <= WA_GRAPH_MAX) return list;
-  const counts = new Map(exerciseCountsForUser(activeRecords(), els.athlete.value).map((c) => [c.exerciseName, c.count]));
+  const counts = new Map(exerciseCounts(activeRecords(), els.athlete.value).map((c) => [c.exerciseName, c.count]));
   return [...list].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0)).slice(0, WA_GRAPH_MAX);
 }
 function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel = capGraphSel(v); else waSelected = v; }
@@ -14212,7 +14218,7 @@ function defaultSelection(): string[] {
   const has = new Set(waSelectorExercises().map((e) => e.name));
   const best = bestLiftExercises().map((b) => b.exercise).filter((n) => has.has(n));
   if (best.length) return best;
-  return exerciseCountsForUser(activeRecords(), user).map((c) => c.exerciseName);
+  return exerciseCounts(activeRecords(), user).map((c) => c.exerciseName);
 }
 /** Max SERIES plotted on the analysis graph at once (users × exercises) — past this
  * the SVG redraw lags, so extra selections are listed but not drawn (see
@@ -14348,7 +14354,7 @@ const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
 function waSelectorExercises(): { name: string; identity: ExerciseIdentity }[] {
   const username = els.athlete.value;
   const out = new Map<string, ExerciseIdentity>();
-  for (const c of exerciseCountsForUser(activeRecords(), username)) out.set(c.exerciseName, "original");
+  for (const c of exerciseCounts(activeRecords(), username)) out.set(c.exerciseName, "original");
   for (const r of computedRecords()) {
     if (r.username !== username || r.exerciseName === "") continue;
     const id = exerciseIdentity(r);
@@ -14585,7 +14591,7 @@ function defaultGraphSelection(): string[] {
   const has = new Set(waSelectorExercises().map((e) => e.name));
   const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
-  const byFreq = exerciseCountsForUser(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
+  const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
   return (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
 }
 function renderWorkoutAnalysis(): void {
@@ -15194,7 +15200,7 @@ function waCatPillsInner(list: readonly WaItem[]): string {
   // Sort: categories with a SELECTION lead (so you never scroll to find what you
   // picked), then by total SET COUNT (most-trained first), then alpha.
   const setCount = new Map<string, number>();
-  for (const c of exerciseCountsForUser(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
+  for (const c of exerciseCounts(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
   const groupSets = (items: readonly WaItem[]) => items.reduce((n, e) => n + (setCount.get(e.name) ?? 0), 0);
   return [...groups.entries()]
     .sort((a, b) =>
@@ -15271,7 +15277,7 @@ function sortCatMenuItems(items: readonly WaItem[], key: string): WaItem[] {
   const arr = [...items];
   if (waCatMenuSort === "name") return arr.sort((a, b) => displayName(a.name).localeCompare(displayName(b.name)));
   const setCount = new Map<string, number>();
-  for (const c of exerciseCountsForUser(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
+  for (const c of exerciseCounts(activeRecords(), els.athlete.value)) setCount.set(c.exerciseName, c.count);
   const sets = (n: string) => setCount.get(n) ?? 0;
   if (waCatMenuSort === "sets") return arr.sort((a, b) => sets(b.name) - sets(a.name) || a.name.localeCompare(b.name));
   if (waCatMenuSort === "tier") return arr.sort((a, b) => tierRank(a.name) - tierRank(b.name) || sets(b.name) - sets(a.name));

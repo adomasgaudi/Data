@@ -199,11 +199,15 @@ export interface ExerciseCount {
 export function exerciseCountsForUser(
   records: readonly SetRecord[],
   username: string,
+  // How many sets each record counts as (default 1). A unilateral set passes 2 (a
+  // right + a left set), so the per-exercise set count + frequency tier reflect both
+  // sides — consistent with the workout-history totals.
+  unitsOf: (r: SetRecord) => number = () => 1,
 ): ExerciseCount[] {
   const counts = new Map<string, number>();
   for (const r of records) {
     if (r.username !== username || r.exerciseName === "") continue;
-    counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + 1);
+    counts.set(r.exerciseName, (counts.get(r.exerciseName) ?? 0) + unitsOf(r));
   }
   return [...counts]
     .map(([exerciseName, count]) => ({ exerciseName, count }))
