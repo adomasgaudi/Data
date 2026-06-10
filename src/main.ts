@@ -16204,6 +16204,25 @@ function setEnhancedSelectHidden(sel: HTMLSelectElement, hidden: boolean): void 
   if (twin instanceof HTMLElement && twin.classList.contains("xdd")) twin.hidden = hidden;
 }
 
+/** Open an .xdd menu as a FIXED popup (positioned from its button, viewport-clamped) so
+ * it escapes any clipping scroll-container — used for the add-set variation pickers, which
+ * sit in the horizontally-scrolling .wo-af-dims row that otherwise squashes the absolute
+ * menu into a tiny strip. Same pattern as the PB-10 cog menu. */
+function placeXddFixed(btn: HTMLElement, menu: HTMLElement): void {
+  const r = btn.getBoundingClientRect();
+  const m = 6;
+  menu.style.position = "fixed";
+  menu.style.minWidth = `${Math.round(r.width)}px`;
+  menu.style.left = "0px"; menu.style.top = "0px"; // reset before measuring
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  let left = r.left;
+  if (left + mw > window.innerWidth - m) left = window.innerWidth - m - mw;
+  if (left < m) left = m;
+  let top = r.bottom + 4;
+  if (top + mh > window.innerHeight - m) { const above = r.top - 4 - mh; top = above >= m ? above : Math.max(m, window.innerHeight - m - mh); }
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
 function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   sel.classList.add("dd-native");
   const dd = document.createElement("div");
@@ -16237,7 +16256,10 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
 
   const close = () => {
     dd.classList.remove("open");
-    dd.querySelector<HTMLElement>(".xdd-menu")?.setAttribute("hidden", "");
+    const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+    menu?.setAttribute("hidden", "");
+    // Undo any fixed-popup placement so the default absolute CSS resumes next open.
+    if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.minWidth = ""; }
   };
   dd.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -16246,6 +16268,10 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       const opening = menu.hasAttribute("hidden");
       menu.toggleAttribute("hidden", !opening);
       dd.classList.toggle("open", opening);
+      // The add-set variation pickers live in a clipping scroll-row — open them as a fixed
+      // popup so the menu isn't squashed into a tiny scroll strip (else reset to absolute).
+      if (opening && dd.classList.contains("wo-af-dim")) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
+      else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.minWidth = ""; }
       return;
     }
     const opt = t.closest<HTMLElement>(".xdd-opt");
