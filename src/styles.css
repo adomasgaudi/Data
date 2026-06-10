@@ -27,6 +27,14 @@
   --gold-soft: rgba(184, 144, 47, 0.12);
   /* Muted terracotta for destructive actions — sits in the same warm palette. */
   --danger: #a23b3b;
+  /* Lens / action colours pulled straight from the GRAPH series palette so the lift
+     chips speak the same colour language as the chart (colour theory, not arbitrary):
+     combine = ochre gold, compare = sage green, both = amethyst, remove = terracotta.
+     Fixed across light/dark like the series colours (they read on both backgrounds). */
+  --lens-combine: #b8902f;
+  --lens-compare: #4e8059;
+  --lens-both: #5b4f96;
+  --remove: #9c463a;
   /* Chart structural colours (gridlines / axis / labels / label halo), themed so
      the SVG charts follow light/dark. Series colours stay fixed (data colours). */
   --chart-grid: #d4d9e2;
@@ -3189,15 +3197,19 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* touch-action:pan-y — a VERTICAL drag still scrolls the page, but a horizontal drag is
    handed to JS for swipe-RIGHT-to-remove (the chips wrap, so there's no sideways scroll
    to fight). The transition animates the snap-back when a swipe doesn't reach threshold. */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 7px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+/* Subtle chip: plain (white/card) background and ONLY a bottom outline — a light
+   underline that follows the small corner rounding — so the names read quietly, not as
+   filled buttons. The bottom border carries the lens colour when one is set (below). */
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--panel); border: none; border-bottom: 1.5px solid var(--line); border-radius: var(--r-pill); padding: 0 6px 2px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
 /* While the finger is dragging the chip we follow it 1:1 — no transition lag. */
 .wa-title-lift.is-swiping { transition: none; will-change: transform; }
 /* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover lifts
    the border to the accent. NO strike-through (legacy from when a tap deleted it). */
-.wa-title-lift:hover { border-color: var(--accent); }
-/* Explicit Remove: a red line across the name, fading out, then it's gone ~0.5s later. */
+.wa-title-lift:hover { border-bottom-color: var(--accent); }
+/* Explicit Remove: a terracotta line across the name (themed with the graph palette),
+   fading out, then it's gone ~0.5s later. */
 .wa-title-lift.is-removing, .wa-sel-pill.is-removing {
-  color: #c0392b !important; text-decoration: line-through; text-decoration-color: #c0392b;
+  color: var(--remove) !important; text-decoration: line-through; text-decoration-color: var(--remove);
   opacity: 0.45; transition: opacity 0.45s ease;
 }
 .wa-title-sep { color: var(--muted); font-weight: 400; }
@@ -3222,9 +3234,9 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-title-deselect {
   font-family: inherit; font-size: 1.5em; line-height: 1; font-weight: 800;
   margin-left: 0.35em; padding: 0 0.18em; vertical-align: middle;
-  background: none; border: none; cursor: pointer; color: var(--danger);
+  background: none; border: none; cursor: pointer; color: var(--remove);
 }
-.wa-title-deselect:hover, .wa-title-deselect:active { color: #c0392b; }
+.wa-title-deselect:hover, .wa-title-deselect:active { filter: brightness(0.85); }
 /* "Match" (≈ = make this selection similar to the other) — a borderless icon button
    sized like the ✕, in accent so it reads as the make-same action, not a destructive one. */
 .wa-title-match {
@@ -3911,12 +3923,18 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wo-hidden-show.is-on { color: var(--accent); border-color: var(--accent); }
 /* Selected-lift name COLOUR by lens state (menu closed): gold = combined, green =
    compared, purple = both, default = original. Set on the title names and the pills. */
-.wa-title-lift.lens-combined, .wa-sel-pill.lens-combined { color: var(--gold, #b8902f); }
-.wa-title-lift.lens-compared, .wa-sel-pill.lens-compared { color: #2e7d52; }
-.wa-title-lift.lens-both, .wa-sel-pill.lens-both { color: #6c4ab0; }
-.wa-sel-pill.lens-combined { border-color: var(--gold, #b8902f); }
-.wa-sel-pill.lens-compared { border-color: #2e7d52; }
-.wa-sel-pill.lens-both { border-color: #6c4ab0; }
+/* Lens state, themed with the graph palette (color theory): combine = gold, compare =
+   sage, both = amethyst. Text colour on both chip kinds; the title chip's bottom outline
+   and the sel-pill's border pick up the same colour so the state reads at a glance. */
+.wa-title-lift.lens-combined, .wa-sel-pill.lens-combined { color: var(--lens-combine); }
+.wa-title-lift.lens-compared, .wa-sel-pill.lens-compared { color: var(--lens-compare); }
+.wa-title-lift.lens-both, .wa-sel-pill.lens-both { color: var(--lens-both); }
+.wa-title-lift.lens-combined { border-bottom-color: var(--lens-combine); }
+.wa-title-lift.lens-compared { border-bottom-color: var(--lens-compare); }
+.wa-title-lift.lens-both { border-bottom-color: var(--lens-both); }
+.wa-sel-pill.lens-combined { border-color: var(--lens-combine); }
+.wa-sel-pill.lens-compared { border-color: var(--lens-compare); }
+.wa-sel-pill.lens-both { border-color: var(--lens-both); }
 /* Per-lift popup menu (Info / Combine / Compare / Remove). */
 .lift-menu { position: fixed; z-index: 90; min-width: 152px; max-width: 80vw; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; }
 .lift-menu-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); padding: 0.2rem 0.5rem 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
