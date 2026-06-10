@@ -13,6 +13,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-9 — Coming back from an exercise's info card wipes the analysis selection to just that one lift
+
+- **Recurrences:** 1 (logged now; owner reports it "always" happens — a standing behaviour, not a one-off).
+- **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data). Flow: Index → tap an exercise → its "More info" / metadata card (Discipline / Muscle group / Tier editor) → press Back (←).
+- **Symptom:** the Analysis graph + history selection (a curated multi-lift view, e.g. 5 lifts) collapses to JUST the single exercise whose card you opened. Opening a card merely to read/edit its metadata and pressing Back silently destroys the whole multi-lift view. "When coming back from index of exercise it always becomes just that one exercise."
+- **Root cause:** `closeExerciseInfo()` (the Back button) was hard-coded to ALWAYS call `openWorkoutAnalysis({ exercises: [name] })`, which overwrites BOTH `waSelected` and `waGraphSel` (the selection SSOT) with the inspected lift. Merely *viewing* a card mutated the persistent selection — the design flaw is that a transient "look at this lift" was implemented by destroying the multi-lift SSOT, with no snapshot/restore. The view-origin (`exInfoOrigin`, captured on open) was already tracked but only used in a dead fallback branch.
+- **Root fix (b.2.8.x, PB-9):** Back now returns to the view it was opened FROM (`switchTopTab(exInfoOrigin || "analysis")`) and **never touches the selection**. Viewing a card is read-only w.r.t. the SSOT. Deliberate single-lift focusing is still available via the header **"Analysis"** button (`gotoAnlFromInfo`) and the Index "↗" jump — those are explicit "show this lift" actions; Back is not. Fix site: `closeExerciseInfo` in `src/main.ts`, tagged `PB-9`.
+- **Invariant to keep:** simply opening/closing an exercise card must NOT mutate `waSelected`/`waGraphSel`. Only explicit focus actions (header "Analysis", Index ↗, deep-link `#single=`/`#compare=`) may set the selection.
+- **If it recurs:** check whether a NEW navigation/back path calls `openWorkoutAnalysis({ exercises })` on a non-deliberate action, or whether `exInfoOrigin` stopped being captured on open.
+
 ## PB-8 — Graph breaks when toggling kg ⇄ ×BW (BW→kg)
 
 - **Recurrences:** 2 (the b.2.8.96 padding fix below addressed only the small "jump"; the

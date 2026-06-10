@@ -3021,14 +3021,16 @@ function openExerciseInfo(name: string): void {
 }
 /** Back button: return to wherever the overlay was opened from. */
 function closeExerciseInfo(): void {
-  const name = currentExInfo;
   currentExInfo = null;
   els.exInfoPage.hidden = true;
-  // Back ALWAYS lands on the Analysis view scoped to JUST this lift (single-exercise
-  // view) — the lift you were inspecting becomes the whole selection, for both the
-  // graph and the history. (The header "Index" button is there if you want the Index.)
-  if (name) { openWorkoutAnalysis({ exercises: [name] }); return; }
-  switchTopTab(exInfoOrigin === "s-analysis" ? "s-analysis" : "analysis");
+  // PB-9: Back returns to the view you opened the card FROM (Index / Analysis / S-ANL)
+  // and leaves the analysis graph + history selection UNTOUCHED. It used to ALWAYS
+  // collapse both selectors to just the inspected lift, so opening a card merely to
+  // read or edit its metadata and pressing Back silently wiped a whole multi-lift
+  // analysis view (the recurring "coming back makes it just that one exercise" bug).
+  // Deliberate single-lift focusing is still available via the header "Analysis" button;
+  // simply viewing a card never mutates the selection SSOT now.
+  switchTopTab(exInfoOrigin || "analysis");
 }
 /** Overlay header "Index" button: close it and land on the Index, on this lift. */
 function gotoIndexFromInfo(): void {
