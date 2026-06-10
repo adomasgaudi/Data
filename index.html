@@ -48,7 +48,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.212</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.213</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -101,12 +101,6 @@
           </details>
           <button type="button" id="healthBtn" class="settings-link">
             Data health <span id="healthBadge" class="muted"></span>
-          </button>
-          <button type="button" id="changelogBtn" class="settings-link">
-            Version history <span id="changelogVer" class="muted"></span>
-          </button>
-          <button type="button" id="backlogBtn" class="settings-link">
-            Tasks &amp; roadmap
           </button>
           <button type="button" id="testingBtn" class="settings-link">
             🧪 Testing
@@ -1142,6 +1136,16 @@
       <div id="tab-changelog" class="tab-panel" hidden>
         <p class="muted">Every released version, newest first — the same log as the git history.</p>
         <div id="changelog"></div>
+        <details id="backlogFold" class="cl-row cl-d0 cl-backlog-fold">
+          <summary class="cl-sum">
+            <span class="cl-mid"><span class="cl-title">Tasks &amp; roadmap</span></span>
+            <span class="cl-caret">▾</span>
+          </summary>
+          <div class="cl-body">
+            <p class="cl-bodynote muted">The cleanup backlog and feature roadmap, shown straight from the docs/ files.</p>
+            <div id="backlog" class="md-doc"></div>
+          </div>
+        </details>
       </div>
     </main>
 
@@ -1210,17 +1214,6 @@
         </div>
         <p class="muted">What to train today — the exercises you're most behind on THIS week, ranked by how many sets short of your last-3-months weekly average you are (exercises you've kept up are dropped). Tap one to open it.</p>
         <div id="planBody"></div>
-      </div>
-    </div>
-
-    <div id="backlogPage" class="overlay-page" hidden>
-      <div class="overlay-inner">
-        <div class="overlay-head">
-          <h2>Tasks &amp; roadmap</h2>
-          <button type="button" id="backlogClose" class="overlay-close" aria-label="Close">✕</button>
-        </div>
-        <p class="muted">The cleanup backlog and feature roadmap, shown straight from the docs/ files.</p>
-        <div id="backlog" class="md-doc"></div>
       </div>
     </div>
 
