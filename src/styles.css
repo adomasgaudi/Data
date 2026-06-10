@@ -13,6 +13,10 @@
      button) gets at least this tap height. Compact horizontally is fine (rule
      #cram), but never a button so short it's hard to tap. One home for the floor. */
   --tap-min: 30px;
+  /* Strong "this is filtering the whole app" glow — matches the terracotta glow the
+     search/command bar uses when filtering (.cmd-input), so every app-wide filter
+     signals the same way. var(--danger) → adapts to dark mode for free. */
+  --filter-glow: 0 0 0 3px color-mix(in srgb, var(--danger) 30%, transparent);
   --panel: #ffffff;
   /* Page (body) is plain white — a flat white theme (was a warm cream); .panel cards
      read as cards via their borders/shadows, not a page tint. */
@@ -2913,13 +2917,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-cat-other > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
 .bw-cat-other > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 /* Per-group app-wide filter buttons (only / hide / show) in the group header. */
-.bw-cat-filter { display: inline-flex; gap: 3px; margin-left: 0.5rem; }
-.bw-filt { font: inherit; font-size: 0.7rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.bw-cat-filter { display: inline-flex; gap: 4px; margin-left: 0.5rem; }
+.bw-filt {
+  font: inherit; font-size: 0.7rem; font-weight: 600; cursor: pointer; color: var(--muted);
+  background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0 9px; white-space: nowrap;
+  min-height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center;
+}
 .bw-filt:hover { border-color: var(--accent); color: var(--accent); }
-/* The single cycling group toggle: lights up when it's restricting the app. */
-.bw-filt-toggle { min-width: 4.6rem; font-weight: 600; }
-.bw-filt-toggle.is-only { border-color: var(--accent); color: #fff; background: var(--accent); }
-.bw-filt-toggle.is-hide { border-color: var(--muted); color: var(--text); background: var(--accent-soft); }
+/* Each button is its OWN filter (only-these · hidden); both restrict the WHOLE app,
+   so an active one glows red (strong signal, same glow as the search bar). White =
+   not selected. */
+.bw-filt.is-on { color: #fff; background: var(--danger); border-color: var(--danger); box-shadow: var(--filter-glow); }
 /* Strength sub-grouping: the muscle/function picker + the nested sub-groups. */
 .bw-substrat-bar { font-size: 0.78rem; color: var(--muted); padding: 6px 12px; display: flex; align-items: center; gap: 6px; }
 /* "auto" tag by the sub-group picker: this group was auto-organized because it's large. */

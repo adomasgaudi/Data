@@ -2587,8 +2587,6 @@ function groupFilterState(names: string[]): "only" | "hide" | "off" {
   if (activeSolo && names.every((n) => activeSolo!.has(n))) return "only";
   return "off";
 }
-/** The next state in the cycle off → only → hide → off, as a grpfilter mode. */
-const GROUP_FILTER_NEXT: Record<"only" | "hide" | "off", string> = { off: "only", only: "hide", hide: "show" };
 
 /** Raw logged records, filtered to the active exercise set (or all, if off). The
  * single choke point every view/graph/list reads instead of data.records. */
@@ -8350,16 +8348,19 @@ function renderBwParts() {
     return;
   }
 
-  // Per-group app-wide filter: ONE cycling toggle (show all → only these →
-  // hidden → …) instead of three buttons. Its label shows the current state; the
-  // members are read from the group's rows in the DOM when clicked.
+  // Per-group app-wide filter: TWO independent buttons — "only these" and "hidden".
+  // Both substantially filter the WHOLE app, so the active one glows red (strong
+  // signal); white = off. They're mutually exclusive — turning one on clears the
+  // other; tapping the active one turns it off (back to show-all). Members are read
+  // from the group's rows in the DOM when clicked.
   const groupFilterToggle = (names: string[]): string => {
     const st = groupFilterState(names);
-    const label = st === "only" ? "only these" : st === "hide" ? "hidden" : "show all";
     return (
       `<span class="bw-cat-filter">` +
-      `<button type="button" class="bw-filt bw-filt-toggle is-${st}" data-grpcycle="1" ` +
-      `title="App-wide filter — tap to cycle: show all → only these → hidden">${label}</button>` +
+      `<button type="button" class="bw-filt bw-filt-only${st === "only" ? " is-on" : ""}" data-grpfilt="only" ` +
+      `aria-pressed="${st === "only"}" title="Show ONLY this category across the whole app — tap to toggle">only these</button>` +
+      `<button type="button" class="bw-filt bw-filt-hide${st === "hide" ? " is-on" : ""}" data-grpfilt="hide" ` +
+      `aria-pressed="${st === "hide"}" title="Hide this category across the whole app — tap to toggle">hidden</button>` +
       `</span>`
     );
   };
@@ -12178,13 +12179,16 @@ async function init() {
     // Group header "only / hide / show" — read the group's lifts from its rows and
     // apply the app-wide filter. preventDefault so the <summary> doesn't also toggle.
     const filt = (e.target as HTMLElement).closest<HTMLElement>(".bw-filt");
-    if (filt?.dataset.grpcycle) {
+    if (filt?.dataset.grpfilt) {
       e.preventDefault();
       const cat = filt.closest<HTMLElement>(".bw-cat");
       const names = [...new Set(cat
         ? [...cat.querySelectorAll<HTMLTableRowElement>("tr[data-exrow]")].map((tr) => tr.dataset.exrow).filter((n): n is string => !!n)
         : [])];
-      applyGroupFilter(GROUP_FILTER_NEXT[groupFilterState(names)], names);
+      const want = filt.dataset.grpfilt; // "only" | "hide"
+      // Tap the active button → turn it off (show all); else switch to that mode
+      // (applyGroupFilter makes "only" and "hide" mutually exclusive).
+      applyGroupFilter(groupFilterState(names) === want ? "show" : want, names);
       return;
     }
     const nameEl = (e.target as HTMLElement).closest<HTMLElement>(".bw-ex-name");
