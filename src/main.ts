@@ -2045,7 +2045,8 @@ function withMemberOverrides(g: RegistryTag): RegistryTag {
   return { ...g, members: [...base, ...added] };
 }
 const effectiveCombinableGroups = (): RegistryTag[] => COMBINABLE_GROUPS.map(withMemberOverrides);
-const effectiveComparableGroups = (): RegistryTag[] => COMPARABLE_GROUPS.map(withMemberOverrides);
+const effectiveComparableGroups = (): RegistryTag[] =>
+  [...COMPARABLE_GROUPS.map(withMemberOverrides), ...userGroupsOfKind("compare").map(userComparableTag)];
 const combinableGroupsForEx = (name: string): RegistryTag[] => effectiveCombinableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
 const comparableGroupsForEx = (name: string): RegistryTag[] => effectiveComparableGroups().filter((g) => g.members?.some((m) => m.exerciseName === name));
 
@@ -2242,6 +2243,22 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
 function userGroupsOfKind(kind: "combine" | "compare"): UserExerciseDef[] {
   const id = kind === "combine" ? "combined" : "comparison_group";
   return userExerciseDefs.filter((d) => d.identity === id && Array.isArray(d.members));
+}
+/** A user-created COMPARABLE group (a `comparison_group` def) as a RegistryTag, so it
+ * flows through the SAME effective-groups path as the built-in groups — into the per-lift
+ * lens menu AND the Index synthetic list (which both read effectiveComparableGroups).
+ * Without this, a comparable you make from the info page is saved but never shows. Member
+ * ratios default to 1 (user groups don't store ratios yet); the Separated view doesn't
+ * use them anyway. id is namespaced so it never clashes with a built-in group id. */
+function userComparableTag(d: UserExerciseDef): RegistryTag {
+  return {
+    id: `user.compare.${d.name}`,
+    kind: "comparable-group",
+    label: d.name,
+    why: `A comparable group you created from the exercise info page: ${(d.members ?? []).join(", ") || "no members yet"}.`,
+    derivedName: d.name,
+    members: (d.members ?? []).map((exerciseName) => ({ exerciseName, ratio: 1 })),
+  };
 }
 /** Add / remove a lift from a user-created group (edits the def's member list). */
 function toggleUserGroupMember(defName: string, exName: string): void {
