@@ -3699,28 +3699,36 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* The slide-in card holds the controls (group-by / period / First-N / ⚙) + the chips.
    Inline it's a plain block; swiped in, .is-pick-drawer makes it a fixed right panel. */
 .wa-pick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.4rem; margin: 0 0 0.4rem; }
+/* The drawer is a WHITE PAPER STICKY NOTE pulled out leftward from the right edge:
+   warm paper-white (in any theme — it's deliberately paper), squared-off at the
+   attached right edge, a soft peel-shadow + dog-ear at the free left edge. Swipe it
+   right to send it back; there's no close button. */
 .wa-pick-card.is-pick-drawer {
   position: fixed; z-index: 61; top: 3rem; right: 0;
   bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--wa-kb-inset, 0px)) + 3.4rem);
   width: min(82vw, 22rem); max-height: none; margin: 0;
   display: flex; flex-direction: column;
-  padding: 0.7rem 0.75rem 0.9rem; overflow: hidden; overscroll-behavior: contain;
-  background: var(--panel); border: 1px solid var(--line); border-right: none;
-  border-radius: 12px 0 0 12px; box-shadow: -8px 0 24px rgba(20, 24, 38, 0.24);
+  padding: 0.75rem 0.8rem 0.95rem; overflow: hidden; overscroll-behavior: contain;
+  color: #2c2a24;
+  background: linear-gradient(180deg, #fffef9 0%, #fdf8ec 100%);
+  border: none; border-radius: 3px 0 0 3px;
+  /* Layered shadows = a sheet of paper lifted off the screen, peeling at the left. */
+  box-shadow: -14px 0 28px rgba(20, 24, 38, 0.22), -2px 0 0 rgba(0, 0, 0, 0.05), inset 6px 0 12px -8px rgba(0, 0, 0, 0.12);
   transform: translateX(0); transition: transform 0.22s ease;
   /* pan-y: scroll the chips vertically; a horizontal drag closes the drawer. */
   touch-action: pan-y;
 }
-.wa-pick-card.is-pick-drawer .wa-pick-controls { flex: 0 0 auto; }
-/* "Back to the graph" handle — only when the card IS the slide-in drawer. A big ›
-   pinned at the top, so there's always an obvious way back even without the swipe. */
-.wa-pick-close { display: none; }
-.wa-pick-card.is-pick-drawer .wa-pick-close {
-  display: inline-flex; align-items: center; justify-content: center; align-self: flex-start;
-  flex: 0 0 auto; min-width: var(--tap-min); min-height: var(--tap-min); margin: -0.2rem 0 0.3rem -0.2rem;
-  font-size: 1.5rem; font-weight: 700; line-height: 1; color: var(--accent);
-  background: none; border: none; cursor: pointer;
+/* A peeled "dog-ear" at the free (bottom-left) corner of the note. */
+.wa-pick-card.is-pick-drawer::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: 22px; height: 22px;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0) 55%), #f1e9d6;
+  border-radius: 0 3px 0 3px; box-shadow: 1px -1px 2px rgba(0, 0, 0, 0.12);
 }
+/* On the paper, plain control text reads dark; keep the accent labels readable. */
+.wa-pick-card.is-pick-drawer .wa-pick-lbl,
+.wa-pick-card.is-pick-drawer .wa-group,
+.wa-pick-card.is-pick-drawer .wa-subgroup { color: #4a4636; }
+.wa-pick-card.is-pick-drawer .wa-pick-controls { flex: 0 0 auto; }
 /* In the drawer the chips fill the remaining height and scroll on their own. */
 .wa-pick-card.is-pick-drawer .wa-chips-wrap { flex: 1 1 auto; max-height: none; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 /* Initial off-screen state — removed on the next frame so it slides in. */

@@ -14650,9 +14650,8 @@ function renderSelector(scope: SelScope): void {
       // exercise chips. Auto-shown inline only while searching (chipsFoldOpen).
       ? `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
         `<div id="waPickCard-${scope}" class="wa-pick-card"${chipsFoldOpen ? "" : " hidden"}>` +
-        // Visible ONLY when this card is the slide-in drawer (CSS) — a back-to-the-graph
-        // handle, since swipe-right-to-close isn't obvious. Tap it or swipe the card right.
-        `<button type="button" class="wa-pick-close" data-pickclose title="Back to the graph (or swipe this card to the right)" aria-label="Close picker, back to the graph">›</button>` +
+        // The slide-in drawer is a white "sticky note": no close button — swipe it back
+        // to the right edge to dismiss (or tap the dimmed area / Escape).
         `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
         `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` +
         `</div>` +
@@ -15912,11 +15911,6 @@ function setupWorkoutAnalysis(): void {
     document.addEventListener("click", (e) => {
       if (Date.now() - claimedAt < 350) { e.preventDefault(); e.stopPropagation(); }
     }, true);
-    // The drawer's visible "›" handle closes it (back to the graph) — for those who don't
-    // discover the swipe.
-    document.addEventListener("click", (e) => {
-      if ((e.target as HTMLElement).closest("[data-pickclose]")) closePickDrawer();
-    });
   }
   // (Exercise search moved to the always-on command bar — see setupCommandBar.)
   // Keep that command bar just above the on-screen keyboard as you scroll: the
