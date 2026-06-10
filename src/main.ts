@@ -14000,10 +14000,16 @@ function renderSelector(scope: SelScope): void {
     (showGrid
       ? `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
         `<div class="wa-chips-fold-sum">` +
-        `<button type="button" class="wa-pick-toggle" data-chipsfold aria-expanded="${chipsFoldOpen}" title="${chipsFoldOpen ? "Hide the exercise picker" : "Show the exercise picker"}" aria-label="Toggle exercise picker"></button>` +
-        groupCtl + controls +
+        `<button type="button" class="wa-pick-toggle" data-chipsfold aria-expanded="${chipsFoldOpen}" title="${chipsFoldOpen ? "Hide the picker &amp; settings" : "Show the picker &amp; settings"}" aria-label="Toggle picker and settings"></button>` +
+        `<span class="wa-pick-lbl">Picker &amp; settings</span>` +
         `</div>` +
-        `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"${chipsFoldOpen ? "" : " hidden"}></div>` +
+        // The slide-in card (drawer when swiped in) holds ALL the controls — group-by,
+        // period / metric, First-N, the ⚙ — AND the exercise chips, so the inline row
+        // stays clean (owner request). The chips still render into #waChips-<scope>.
+        `<div id="waPickCard-${scope}" class="wa-pick-card"${chipsFoldOpen ? "" : " hidden"}>` +
+        `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
+        `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` +
+        `</div>` +
         `</div>`
       : "");
   if (showGrid) renderWaChipsScope(scope);
@@ -14192,12 +14198,12 @@ function renderWaChipsScope(scope: SelScope): void {
     .join("");
 }
 
-// ---- Floating exercise-picker drawer ----------------------------------------------
-// Swipe the picker's settings line (the "▸ group · period · First N · ⚙" row) RIGHT to
-// slide the exercise chips in from the right as a FIXED overlay, so it never pushes the
-// page layout. It REUSES the inline chip grid (#waChips-<scope>) — just repositioned via
-// .is-pick-drawer — so every chip tap / ⓘ / group toggle keeps working through the
-// existing panel delegation, and a selection change re-renders it in place. Only one
+// ---- Floating picker + settings drawer --------------------------------------------
+// Swipe the "▸ Picker & settings" line to slide the whole card (#waPickCard-<scope> — the
+// group-by / period / First-N / ⚙ controls AND the exercise chips) in from the right edge
+// as a FIXED overlay, so it never pushes the page layout. It REUSES the same inline card —
+// just repositioned via .is-pick-drawer — so every control / chip tap keeps working through
+// the existing panel delegation, and a selection change re-renders it in place. Only one
 // scope's drawer is open at a time.
 let pickDrawerScope: SelScope | null = null;
 function ensurePickBackdrop(): void {
@@ -14213,7 +14219,7 @@ function openPickDrawer(scope: SelScope): void {
   pickDrawerScope = scope;
   curSelScope = scope; // chip taps in the drawer act on THIS selector's selection
   ensurePickBackdrop();
-  const box = document.getElementById(`waChips-${scope}`);
+  const box = document.getElementById(`waPickCard-${scope}`);
   if (!box) return;
   box.hidden = false;
   box.classList.add("is-pick-drawer", "is-entering"); // start off the right edge…
@@ -14224,7 +14230,7 @@ function closePickDrawer(): void {
   pickDrawerScope = null;
   document.getElementById("waPickBackdrop")?.remove();
   for (const s of ["graph", "hist"] as SelScope[]) {
-    const box = document.getElementById(`waChips-${s}`);
+    const box = document.getElementById(`waPickCard-${s}`);
     if (!box) continue;
     box.classList.remove("is-pick-drawer", "is-entering");
     box.style.transform = "";
@@ -14237,7 +14243,7 @@ function closePickDrawer(): void {
  * here — only the initial open animates; reapply is instant so a chip tap doesn't re-slide. */
 function applyPickDrawer(): void {
   if (pickDrawerScope === null) return;
-  const box = document.getElementById(`waChips-${pickDrawerScope}`);
+  const box = document.getElementById(`waPickCard-${pickDrawerScope}`);
   if (!box) return;
   ensurePickBackdrop();
   box.hidden = false;
@@ -15185,7 +15191,7 @@ function setupWorkoutAnalysis(): void {
     document.addEventListener("pointerdown", (e) => {
       if (e.button > 0) return;
       const t = e.target as HTMLElement;
-      if (pickDrawerScope !== null && t.closest(".wa-chips.is-pick-drawer")) {
+      if (pickDrawerScope !== null && t.closest(".wa-pick-card.is-pick-drawer")) {
         mode = "close"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId; return;
       }
       if (!t.closest(".wa-chips-fold-sum")) return;
@@ -15357,8 +15363,8 @@ function setupWorkoutAnalysis(): void {
       const fold = chipsToggle.closest<HTMLElement>(".wa-chips-fold");
       const open = !fold?.classList.contains("is-open");
       fold?.classList.toggle("is-open", open);
-      const chips = fold?.querySelector<HTMLElement>(".wa-chips-wrap");
-      if (chips) chips.hidden = !open;
+      const card = fold?.querySelector<HTMLElement>(".wa-pick-card");
+      if (card) card.hidden = !open;
       chipsToggle.setAttribute("aria-expanded", String(open));
       return;
     }

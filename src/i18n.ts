@@ -272,6 +272,7 @@ const LT: Record<string, string> = {
   "Match graph": "Atitikti grafiką",
   "Compare": "Palyginti",
   "Options": "Parinktys",
+  "Picker & settings": "Rinkiklis ir nustatymai",
   "Match history": "Atitikti istoriją",
   "Graph lifts": "Grafiko pratimai",
   "History lifts": "Istorijos pratimai",
