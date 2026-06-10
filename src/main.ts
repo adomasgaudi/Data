@@ -208,6 +208,8 @@ const els = {
   healthBadge: $("healthBadge"),
   healthPage: $("healthPage"),
   healthClose: $<HTMLButtonElement>("healthClose"),
+  backupPage: $("backupPage"),
+  backupClose: $<HTMLButtonElement>("backupClose"),
   changelog: $("changelog"),
   backlog: $("backlog"),
   planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
@@ -3112,6 +3114,12 @@ function renderStatus() {
 function openHealth() {
   setSettingsOpen(false);
   els.healthPage.hidden = false;
+}
+
+/** Open the Backup & restore overlay (moved out of Settings into the ⋯ pages menu). */
+function openBackup() {
+  setSettingsOpen(false);
+  els.backupPage.hidden = false;
 }
 
 /** Open the version-history overlay from Settings. */
@@ -11149,6 +11157,9 @@ async function init() {
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
   });
+  els.backupClose.addEventListener("click", () => {
+    els.backupPage.hidden = true;
+  });
   // Exercise-settings overlay: ✕ closes it; Esc closes it; the per-exercise
   // active-set force-in/out buttons live inside it, so handle them here too.
   els.exInfoBack.addEventListener("click", closeExerciseInfo);
@@ -16970,6 +16981,7 @@ function setupBottomNav() {
       setOtherSheetOpen(false);
       // Some items open an OVERLAY page (data-open) instead of switching a top tab.
       if (item.dataset.open === "health") { openHealth(); return; }
+      if (item.dataset.open === "backup") { openBackup(); return; }
       switchTopTab(item.dataset.nav === "analysis" ? analysisTabName() : item.dataset.tab ?? "");
     });
   }

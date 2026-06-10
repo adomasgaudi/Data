@@ -48,7 +48,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.220</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.221</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -82,23 +82,6 @@
             <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
             <button type="button" id="authBtn" class="settings-link">Log out</button>
           </div>
-          <details class="settings-group">
-            <summary class="settings-group-sum">Backup &amp; restore</summary>
-            <div class="settings-group-body">
-              <p class="settings-hint">Everything you change here — code names, categories, notes, added sets, reps, tags — is saved <strong>only in this browser</strong>. Keep a backup file so a cleared cache (or a new phone/browser) can't lose it.</p>
-              <div class="settings-row">
-                <button type="button" id="backupNowBtn" class="settings-link">⬇ Back up everything</button>
-                <button type="button" id="restoreBtn" class="settings-link">⬆ Restore everything</button>
-                <input type="file" id="restoreFile" accept="application/json,.json" hidden />
-              </div>
-              <label class="check"><input type="checkbox" id="autoBackupToggle" /> Auto-save a live backup file</label>
-              <p class="settings-hint" id="autoBackupHint">When on, the site silently re-saves your backup file every time you change something. Pick the file once; it stays current after that.</p>
-              <div class="settings-row">
-                <button type="button" id="clearCacheBtn" class="settings-link">🧹 Clear cache (keep my data)</button>
-              </div>
-              <p class="settings-hint">Resets the throwaway stuff — settings, filters, who you're signed in as. Your hand-logged sets, body stats, renames and overrides are never touched.</p>
-            </div>
-          </details>
         </div>
       </div>
     </header>
@@ -1179,8 +1162,10 @@
             <button class="other-item" data-tab="changelog" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Version history</button>
           </div>
           <div class="other-row">
-            <!-- Data health is an OVERLAY page (not a top tab): data-open opens it via openHealth(). Moved here from Settings. -->
+            <!-- Data health + Backup & restore are OVERLAY pages (data-open opens them
+                 via openHealth()/openBackup()). Both moved here from Settings. -->
             <button class="other-item" data-open="health" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2 6 3-12 2 9 1.5-3H21"/></svg> Data health <span id="healthBadge" class="muted"></span></button>
+            <button class="other-item" data-open="backup" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg> Backup &amp; restore</button>
           </div>
         </div>
       </div>
@@ -1200,6 +1185,27 @@
         </div>
         <p class="muted">Validation issues and out-of-range values found while loading the sheet.</p>
         <div id="health"></div>
+      </div>
+    </div>
+
+    <div id="backupPage" class="overlay-page" hidden>
+      <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Backup &amp; restore</h2>
+          <button type="button" id="backupClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
+        <p class="settings-hint">Everything you change here — code names, categories, notes, added sets, reps, tags — is saved <strong>only in this browser</strong>. Keep a backup file so a cleared cache (or a new phone/browser) can't lose it.</p>
+        <div class="settings-row">
+          <button type="button" id="backupNowBtn" class="settings-link">⬇ Back up everything</button>
+          <button type="button" id="restoreBtn" class="settings-link">⬆ Restore everything</button>
+          <input type="file" id="restoreFile" accept="application/json,.json" hidden />
+        </div>
+        <label class="check"><input type="checkbox" id="autoBackupToggle" /> Auto-save a live backup file</label>
+        <p class="settings-hint" id="autoBackupHint">When on, the site silently re-saves your backup file every time you change something. Pick the file once; it stays current after that.</p>
+        <div class="settings-row">
+          <button type="button" id="clearCacheBtn" class="settings-link">🧹 Clear cache (keep my data)</button>
+        </div>
+        <p class="settings-hint">Resets the throwaway stuff — settings, filters, who you're signed in as. Your hand-logged sets, body stats, renames and overrides are never touched.</p>
       </div>
     </div>
 
