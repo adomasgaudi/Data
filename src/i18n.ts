@@ -183,6 +183,7 @@ const LT: Record<string, string> = {
   "paused": "su pauze",
   "uninterrupted": "be pauzės",
   "no band": "be gumos",
+  "banded": "su guma",
   "band 1": "guma 1",
   "band 2": "guma 2",
   "band 3": "guma 3",

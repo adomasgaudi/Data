@@ -7717,6 +7717,9 @@ function openSetInfo(target: HTMLElement): boolean {
 // ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
 let scaleEditState: { ex: string; note: string; setId?: string; rawNote?: string; level?: { dim: LevelDim; value: number; label: string } } | null = null;
 let scaleEditDirty = false; // an edit was made while the popover was open
+// Band is collapsed to "none + banded" until the user expands it (owner request — the
+// assist-level chips are rarely used and eat space). Reset each time the popover opens.
+let scaleBandExpanded = false;
 /** The INCLINE block for the popover: the set's smith-notch / squat-rack / cm level
  * (the real "incline" the owner logged) shown with its scale editable right here, so
  * it appears alongside the family variation (e.g. on-the-knees) it combines with —
@@ -7811,6 +7814,7 @@ function positionScaleEditor(anchor: HTMLElement): void {
 }
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
   scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
+  scaleBandExpanded = false; // band starts collapsed each time the popover opens
   let pop = document.getElementById("scaleEditPop");
   if (!pop) {
     pop = document.createElement("div");
@@ -9777,6 +9781,13 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       const picked = override[dim] !== undefined;
       // Band assists in kg (subtracted), so its chips read "−Xkg"; other dims are ×factors.
       const facLabel = (l: string) => (dim === "band" ? (l === "none" ? "0kg" : `−${bandAssistKg(fam, l)}kg`) : `×${levels[l]}`);
+      // Band collapses to "none + banded" until expanded (or a band level is already on) —
+      // its 6 assist-level chips are rarely used and eat space (owner request).
+      if (dim === "band" && (cur === "none" || cur === undefined) && !scaleBandExpanded) {
+        const noneChip = `<button type="button" class="ex-var-lvl is-on" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="band" data-vecdim-level="none" aria-pressed="true">none <span class="ex-var-lvl-f">0kg</span></button>`;
+        const bandedBtn = `<button type="button" class="ex-var-lvl ex-band-expand" data-bandexpand title="Show the band-assist levels">banded <span class="ex-var-lvl-f">▾</span></button>`;
+        return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">band</span><div class="ex-var-dim-chips">${noneChip}${bandedBtn}</div></div>`;
+      }
       const chips = Object.keys(levels)
         .map(
           (l) =>
@@ -11215,6 +11226,13 @@ async function init() {
     scaleEditState.level = { dim, value, label: levelLabel(dim, value) };
     scaleEditDirty = true;
     renderScaleEditor();
+  });
+  // "banded ▾" — reveal the band-assist level chips (band starts collapsed). Just expands
+  // the popover's band row; does NOT pick anything or close.
+  document.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest("[data-bandexpand]")) return;
+    scaleBandExpanded = true;
+    if (scaleEditState) renderScaleEditor();
   });
   // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
   document.addEventListener("click", (e) => {
