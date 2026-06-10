@@ -221,11 +221,6 @@ const els = {
   testingPage: $("testingPage"),
   testingClose: $<HTMLButtonElement>("testingClose"),
   testGraphChart: $("testGraphChart"),
-  modelBtn: $<HTMLButtonElement>("modelBtn"),
-  modelPage: $("modelPage"),
-  modelClose: $<HTMLButtonElement>("modelClose"),
-  modelEditor: $("modelEditor"),
-  modelResetAll: $<HTMLButtonElement>("modelResetAll"),
   planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
   uploadDataBtn: $<HTMLButtonElement>("uploadDataBtn"),
   planPage: $("planPage"),
@@ -9879,12 +9874,6 @@ function worldRecordEditorHtml(name: string): string {
   );
 }
 
-/** The global "Difficulty multipliers" overlay: every family's editable factors. */
-function renderModelEditor(): void {
-  els.modelEditor.innerHTML = Object.keys(FAMILIES)
-    .map((fam) => `<details class="model-fam ex-model-fold" open><summary class="ex-group-hd">“${escapeHtml(fam)}” model</summary>${familyFactorTableHtml(fam)}</details>`)
-    .join("");
-}
 // ---- "Plan workout" — suggest what to train today ----------------------------------
 // For the current athlete, score every exercise trained in the last 3 months by its
 // WEEKLY SET DEFICIT: (avg sets/week over the last 90 days) − (sets done THIS week). A
@@ -9931,11 +9920,6 @@ function openWorkoutPlan(): void {
   renderWorkoutPlan();
   els.planPage.hidden = false;
 }
-function openModelEditor(): void {
-  renderModelEditor();
-  els.modelPage.hidden = false;
-}
-
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   // The info card shows THIS lift's real data — unfiltered, so a lift hidden by the
@@ -11353,16 +11337,6 @@ async function init() {
   els.planBody.addEventListener("click", (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>("[data-planopen]");
     if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen); }
-  });
-  // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
-  els.modelBtn.addEventListener("click", openModelEditor);
-  els.modelClose.addEventListener("click", () => { els.modelPage.hidden = true; });
-  els.modelResetAll.addEventListener("click", () => {
-    if (!window.confirm("Reset every difficulty multiplier back to its default?")) return;
-    for (const k of Object.keys(famFactorOverrides)) delete famFactorOverrides[k];
-    saveFamFactors();
-    renderModelEditor();
-    refreshAfterDifficultyEdit();
   });
   // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
   // exercise's settings in the floating overlay.
