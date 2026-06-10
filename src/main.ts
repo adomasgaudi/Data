@@ -6781,6 +6781,14 @@ function renderWorkoutsPage() {
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
         const setsTxt = setListHtml(sets);
         const name = displayName(exerciseName);
+        // In a merged / comparable view the row name is the GROUP (e.g. "Bicep+") but
+        // each set keeps its real source lift in originalExerciseName. Show the distinct
+        // sources in smaller grey after the name — "Bicep+ (BB Curl)" — so it's clear
+        // which real lifts the pooled sets came from. (Empty for a plain lift.)
+        const srcNames = [...new Set(sets.map((s) => s.originalExerciseName).filter((o): o is string => !!o && o !== exerciseName))];
+        const srcTxt = srcNames.length
+          ? ` <span class="wo-exname-src" title="Source lift${srcNames.length === 1 ? "" : "s"}: ${escapeHtml(srcNames.join(", "))}">(${escapeHtml(srcNames.map((s) => displayName(s)).join(", "))})</span>`
+          : "";
         // The golden summary value is CUSTOMISABLE (tap it to pick 1RM / volume / top
         // weight / reps / sets) — the collapsed-mode counterpart of the sets-table column
         // pickers. Empty placeholder kept so a note-only lift's grid still lines up (PB).
@@ -6788,7 +6796,7 @@ function renderWorkoutsPage() {
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span><button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
