@@ -2033,7 +2033,7 @@ sup.wr-bw { font-size: 0.85em; }
    Body-stats block and athlete picker above it keep their cards. */
 .wa-analysis-panel {
   background: none; border: none; box-shadow: none; border-radius: 0;
-  padding-left: 0; padding-right: 0;
+  padding-left: 0; padding-right: 0; padding-top: 0.5rem;
 }
 .muted { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
 .chart-wrap { position: relative; height: 260px; margin-bottom: 1rem; }
@@ -3503,6 +3503,13 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 }
 .wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; margin-right: 0.35em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
+/* COLLAPSED section header: the caret is a right-aligned ▾ dropdown — like the Stats
+   card — instead of a ▸ on the left. (Open state keeps its own caret behaviour.) */
+.wa-fold:not([open]) > summary.wa-fold-sum { display: flex; align-items: center; padding: 0.4rem 0; }
+.wa-fold:not([open]) > summary.wa-fold-sum::before { content: "▾"; order: 1; width: auto; margin: 0 0 0 auto; }
+/* Closed sections stack TIGHTLY (small gaps); expanded keeps its roomier spacing. */
+.athlete-details:not([open]) { margin-bottom: 0.4rem; }
+.wa-card-fold:not([open]) { margin: 0.3rem 0; }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }
 .wa-fold .wa-section-title { display: none; } /* the summary is the title now */
 /* A section's title is only needed when it's COLLAPSED — once open the content
