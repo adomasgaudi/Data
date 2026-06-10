@@ -14,7 +14,28 @@ Every entry groups the contents into two tiers (the same split the app's
 
 ---
 
-## 2026-06-07 · app b.2.7.53 · exported 19:44
+## 2026-06-10 · app b.2.8.144 · exported 06:20 — **seeded into `defaultCache.json`**
+
+Refreshed the bundled default seed (`src/data/defaultCache.json`) from this backup so a
+fresh / no-cache device shows the owner's current state. **Verbatim refresh: ALL 53 backup
+keys copied exactly** (owner's request — including the UI-open-state keys), so a no-cache
+page matches the device exactly. The ONLY deviation: `lastAthlete`/`viewUser` pinned to
+**adomasgaudi** so a fresh visitor lands on the owner. Seeding is fill-only — no existing
+device is overwritten.
+
+### 🆕 since the last seed (what changed)
+- **4 new authored keys added:** `exerciseLens` (per-lift Combine/Compare picks — Squat/Belt Squat→squat-pattern, Deadlift/slRDL→dl-pattern, Pull/Push-mix, SQ mix…), `manualAthletes` (hand-made athlete "IndreB"), `variationScales` (slRDL landmine ×1.3), `tierSeed`.
+- **Manual sets** grew to ~22 (HSPU 2026-06-08 session, Plate lifts, v-squat/Squat, Indre & Marija squats/DL/pulls).
+- **Set notes / overrides** expanded (HSPU 06-08 fknuckle/ROM notes, Plate-lift cm, marijasenkus Pull Ups −35), and `metaOverrides` widened (more tier/discipline/muscle reclassifications + mgLevel weights).
+- **Code/short-name renames** extended; **athleteStats** now adomasgaudi + indreb; display: nameMode "short", hard-sets-only on, dataTags on.
+
+### 🟢 KEEP — authored data in this snapshot
+World records (Bench 200/140, Pull Ups 100/60, Squat 360/260); body stats (adomasgaudi 29 m 90.5 kg 180 cm; indreb 29 f 70 kg 160 cm); exercise codes + short names; muscle/tier/discipline overrides incl. mgLevel; user groups (Shoulder mix, Single leg RDL +) + group-member ratios; world-record approvals (allowedGraphs); HSPU difficulty tuning (famFactors, variationVecs); ~22 manual sets; 3 deleted sets; not-comparable "HSPU | static from bottom"; new exerciseLens / manualAthletes / variationScales / tierSeed.
+
+### ⚙️ CACHE — settings / session
+signedIn 1, viewMode admin, viewUser/lastAthlete pinned to adomasgaudi (public default); lang en, theme light, nameMode short, hard-sets-only on, simplified off; active-set cutoff "none", no include/exclude/solo.
+
+
 
 **🆕 since the 13:18 snapshot** (what you added/changed):
 - **App-wide filter is now SOLO (only-these)** — cutoff "S" plus a big hand-picked list of ~250 lifts pinned as the active set (was empty before).
