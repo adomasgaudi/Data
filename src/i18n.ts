@@ -128,6 +128,8 @@ const LT: Record<string, string> = {
   "all time": "visą laiką",
   "None of the three powerlifting lifts are logged for this athlete.": "Šiam sportininkui neįrašytas nė vienas iš trijų jėgos trikovės kėlimų.",
   "No sets logged in this period.": "Šiuo laikotarpiu serijų neįrašyta.",
+  // ---- Command bar ----
+  "Switch to this page": "Pereiti į šį puslapį",
   // ---- Customisable sets-table columns ----
   "Show in this column": "Rodyti šiame stulpelyje",
   "Weight × reps": "Svoris × pakartojimai",

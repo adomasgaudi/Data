@@ -15323,6 +15323,22 @@ function parseCreateQuery(raw: string): { hit: boolean; name: string } {
   if (ql.length >= 1 && "create".startsWith(ql)) return { hit: true, name: "" }; // typing toward "create" (c, cr, cre…)
   return { hit: false, name: "" };
 }
+// Pages the command bar can jump to by name (typing part of the name offers "↪ <page>").
+const NAV_PAGES: { tab: string; label: string }[] = [
+  { tab: "analysis", label: "Analysis" },
+  { tab: "bwparts", label: "Index" },
+  { tab: "live", label: "Live" },
+  { tab: "records", label: "World records" },
+  { tab: "leaderboards", label: "Colosseum" },
+  { tab: "groups", label: "Stats" },
+  { tab: "team", label: "Group" },
+  { tab: "statsedit", label: "Athletes" },
+  { tab: "data", label: "Data" },
+  { tab: "test", label: "Formulas" },
+  { tab: "guide", label: "Guide" },
+  { tab: "sitemap", label: "Site map" },
+  { tab: "changelog", label: "Version history" },
+];
 /** The plain-text search popup (like the "." command palette): choose whether the
  * query FILTERS the picker (default) or FINDS matching sets in the workout history,
  * plus one-shot Select-all / Clear. Reuses #cmdPalette + the .cmd-opt styling. */
@@ -15349,7 +15365,15 @@ function renderSearchPalette(value: string): void {
     return;
   }
   const n = waChipListBase().length;
+  // Page navigation: typing a page name (e.g. "index", "live", "world") offers to
+  // SWITCH to it — shown first, so the bar doubles as a go-to-page jump, not just a
+  // lift search. Matches the page's name (case-insensitive substring).
+  const ql = q.toLowerCase();
+  const navOpts = NAV_PAGES
+    .filter((p) => p.label.toLowerCase().includes(ql))
+    .map((p) => ({ act: `goto:${p.tab}`, label: `↪ ${p.label}`, desc: "Switch to this page", on: false }));
   const opts = [
+    ...navOpts,
     { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
     { act: "find", label: "📜 Find in workout history", desc: "Show every matching set in the history below", on: searchFindHistory },
     { act: "index", label: "📇 Find in index", desc: n === 1 ? "Open it on the Index page" : "Open the first match on the Index page", on: false },
@@ -15374,6 +15398,15 @@ function renderPaletteFor(value: string): void {
 /** Run a chosen search action, then full-refresh the Analysis view. */
 function runSearchAction(act: string): void {
   const input = document.getElementById("cmdInput") as HTMLInputElement | null;
+  // "↪ <page>" — jump to that page (the bar doubles as a page switcher).
+  if (act.startsWith("goto:")) {
+    const tab = act.slice("goto:".length);
+    hideCmdPalette();
+    if (input) input.value = "";
+    input?.blur();
+    switchTopTab(tab === "analysis" ? analysisTabName() : tab);
+    return;
+  }
   // "Find in index" → jump straight to the matching lift on the Index page (opens its
   // info card). Leaves the Analysis view rather than re-rendering it, so return early.
   if (act === "index") {
