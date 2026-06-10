@@ -7013,11 +7013,16 @@ function onWorkoutRowClick(e: MouseEvent) {
     if (target.closest(".wo-af-go")) onInlineAddGo(inForm);
     else if (target.closest(".wo-af-cancel")) removeInlineAddForm(inForm);
     else {
-      // Day / Today toggle — light up the tapped option.
+      // Day / Today / 📅 chooser — light up the tapped option. The 📅 opens a custom
+      // calendar; picking a day stamps the form's date and labels the button.
       const seg = target.closest<HTMLElement>(".wo-af-when .seg-btn");
-      if (seg)
-        for (const b of inForm.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn"))
-          b.classList.toggle("is-active", b === seg);
+      if (seg) {
+        const activate = () => { for (const b of inForm.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn")) b.classList.toggle("is-active", b === seg); };
+        if (seg.dataset.when === "pick") {
+          const cur = inForm.dataset.pickdate || inForm.dataset.daydate || todayIso();
+          openDatePicker(seg, cur, (iso) => { inForm.dataset.pickdate = iso; seg.textContent = shortDate(iso); seg.title = `Logging to ${shortDate(iso)} — tap to change`; activate(); });
+        } else activate();
+      }
     }
     return;
   }
@@ -12486,15 +12491,71 @@ function afVariationField(exerciseName: string): string {
   );
 }
 
-/** Day / Today chooser — only worth showing when the session you're viewing
- * isn't today (so you can log to a past day or to today). */
+// ---- Custom calendar date-picker popup (NOT the native picker, rule 20) ----
+// A small floating month grid: ‹ ›  month nav, Monday-start week, tap a day to pick it.
+// Reusable: openDatePicker(anchor, currentIso, onPick). Outside-click / Esc closes it.
+let datePickerClose: (() => void) | null = null;
+function closeDatePicker(): void { datePickerClose?.(); }
+function datePickerGridHtml(y: number, m: number, selIso: string): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const lead = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7; // Monday = 0
+  const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const today = todayIso();
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<span class="dp-pad"></span>`;
+  for (let d = 1; d <= days; d++) {
+    const iso = `${y}-${pad(m + 1)}-${pad(d)}`;
+    cells += `<button type="button" class="dp-day${iso === selIso ? " is-sel" : ""}${iso === today ? " is-today" : ""}" data-dpday="${iso}">${d}</button>`;
+  }
+  return `<div class="dp-head">` +
+    `<button type="button" class="dp-nav" data-dpnav="-1" aria-label="Previous month">‹</button>` +
+    `<span class="dp-title">${MONTH_ABBR[m]} ${y}</span>` +
+    `<button type="button" class="dp-nav" data-dpnav="1" aria-label="Next month">›</button></div>` +
+    `<div class="dp-dow">${["M", "T", "W", "T", "F", "S", "S"].map((w) => `<span>${w}</span>`).join("")}</div>` +
+    `<div class="dp-grid">${cells}</div>`;
+}
+function openDatePicker(anchor: HTMLElement, currentIso: string, onPick: (iso: string) => void): void {
+  closeDatePicker();
+  const sel = /^\d{4}-\d\d-\d\d$/.test(currentIso) ? currentIso : todayIso();
+  let y = Number(sel.slice(0, 4)), m = Number(sel.slice(5, 7)) - 1; // displayed month
+  const pop = document.createElement("div");
+  pop.className = "dp-pop";
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const w = pop.offsetWidth || 230, h = pop.offsetHeight || 250;
+    let left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4); // flip above if no room below
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const render = () => { pop.innerHTML = datePickerGridHtml(y, m, sel); place(); };
+  pop.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const nav = t.closest<HTMLElement>("[data-dpnav]");
+    if (nav) { m += Number(nav.dataset.dpnav); if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } render(); return; }
+    const day = t.closest<HTMLElement>("[data-dpday]");
+    if (day?.dataset.dpday) { const iso = day.dataset.dpday; closeDatePicker(); onPick(iso); }
+  });
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== anchor) closeDatePicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeDatePicker(); };
+  datePickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); datePickerClose = null;
+  };
+  document.body.appendChild(pop);
+  render();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
+}
+
+/** Date chooser for the inline add form: the session day, Today, and a 📅 that opens a
+ * custom calendar to log to ANY date. (Always shown now — the 📅 needs a home even when
+ * you're viewing today.) When the session IS today, the redundant day chip is dropped. */
 function afWhenToggle(date: string, today: string): string {
-  return date === today
-    ? ""
-    : `<span class="wo-af-when seg-toggle">` +
-        `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>` +
-        `<button type="button" class="seg-btn" data-when="today">Today</button>` +
-        `</span>`;
+  const dayBtn = date === today ? "" : `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>`;
+  const todayBtn = `<button type="button" class="seg-btn${date === today ? " is-active" : ""}" data-when="today">Today</button>`;
+  const pickBtn = `<button type="button" class="seg-btn wo-af-pick" data-when="pick" title="Pick any date (calendar)" aria-label="Pick a date">📅</button>`;
+  return `<span class="wo-af-when seg-toggle">${dayBtn}${todayBtn}${pickBtn}</span>`;
 }
 
 /** Compact inline "add set" form shown right under an exercise in the Workouts
@@ -12601,7 +12662,8 @@ function onInlineAddGo(form: HTMLElement) {
   // toggle (session already is today) both are the same.
   const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
   const date =
-    (when === "today" ? form.dataset.todaydate : form.dataset.daydate) || form.dataset.daydate || todayIso();
+    (when === "pick" ? form.dataset.pickdate : when === "today" ? form.dataset.todaydate : form.dataset.daydate) ||
+    form.dataset.daydate || todayIso();
   const msg = form.querySelector<HTMLElement>(".wo-af-msg");
   if (exInput && !exerciseName) {
     if (msg) msg.textContent = "Pick or type an exercise.";

@@ -1593,6 +1593,33 @@ select.subtle-select:hover, select.subtle-select:focus {
 .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
 .seg-btn:hover { color: var(--text); }
 .seg-btn.is-active { color: #fff; background: var(--accent); }
+.seg-btn.wo-af-pick { font-size: 0.95rem; padding: 4px 9px; } /* 📅 — pick any date */
+/* Custom calendar date-picker popup (rule 20: not the native picker). A floating month
+   grid placed by JS (position-fixed, clamped to the viewport). */
+.dp-pop {
+  position: fixed; z-index: 60; width: 15rem; max-width: calc(100vw - 12px);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(20, 24, 38, 0.22); padding: 0.5rem; user-select: none;
+}
+.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem; }
+.dp-title { font-weight: 700; font-size: 0.86rem; color: var(--text); }
+.dp-nav {
+  font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; color: var(--accent);
+  background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 9px;
+}
+.dp-nav:hover { border-color: var(--accent); }
+.dp-dow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 2px; }
+.dp-dow span { text-align: center; font-size: 0.62rem; font-weight: 700; color: var(--muted); }
+.dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dp-pad { aspect-ratio: 1; }
+.dp-day {
+  aspect-ratio: 1; min-height: 30px; display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 0.82rem; cursor: pointer; color: var(--text);
+  background: var(--bg); border: 1px solid transparent; border-radius: 6px;
+}
+.dp-day:hover { border-color: var(--accent); }
+.dp-day.is-today { border-color: var(--gold); color: var(--gold); font-weight: 700; }
+.dp-day.is-sel { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* Workouts session line: each set written as weight^reps. */
 .wo-exname { font-weight: 600; }
 .wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
