@@ -16167,10 +16167,13 @@ function setupWorkoutAnalysis(): void {
       if (e.button > 0) return;
       const t = e.target as HTMLElement;
       if (pickDrawerScope !== null && t.closest(".wa-pick-card.is-pick-drawer")) {
-        // Do NOT arm the close-drag on an interactive / horizontally-scrolling control:
-        // dragging a slider, opening a select, tapping a button or swiping the chip strip
-        // must do THEIR job. Arm close only from the drawer's neutral areas.
-        if (t.closest("input, select, textarea, button, a, label, summary, details, .xdd, .wa-cfg, .wa-chips, .wa-chips-wrap, .wa-pick-controls, .wa-sel-tools, .wa-sel-cog, .wa-chips-tools, .wa-fold-settings, .wa-group, .wa-subgroup, .wa-sel-pills, .wa-catstrip")) return;
+        // Do NOT arm the close-drag on an interactive control or a HORIZONTALLY-scrolling
+        // strip (a slider, a select, a button, the category strip) — those need the drag.
+        // But the chips-wrap (which FILLS the empty drawer body and only scrolls VERTICALLY)
+        // MUST allow the close-drag, else there's nowhere to grab to swipe it shut (the bug:
+        // "can't drag the open menu back closed"). A vertical drag there still scrolls (the
+        // move handler bails to scroll when vertical dominates); only a horizontal one closes.
+        if (t.closest("input, select, textarea, button, a, label, summary, details, .xdd, .wa-cfg, .wa-sel-tools, .wa-sel-cog, .wa-chips-tools, .wa-fold-settings, .wa-group, .wa-subgroup, .wa-sel-pills, .wa-catstrip")) return;
         mode = "close"; x0 = e.clientX; y0 = e.clientY; ptr = e.pointerId; return;
       }
       const opener = t.closest<HTMLElement>(".wa-title-picker[data-titlepicker]");
