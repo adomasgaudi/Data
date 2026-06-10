@@ -48,7 +48,7 @@ export const CACHE_KEYS: ReadonlySet<string> = new Set<string>([
   "colosseum.lang", "colosseum.theme", "colosseum.nameMode.v1", "colosseum.simplifiedView",
   "colosseum.bcShowRange", "colosseum.timeCompact.v1", "colosseum.hardSetsOnly",
   "colosseum.showAddSets", "colosseum.showAloneRings", "colosseum.showAloneTags",
-  "colosseum.machineMode.v1", "colosseum.decayStrength", "colosseum.legsAll", "colosseum.hiddenCats",
+  "colosseum.machineMode.v1", "colosseum.hiddenCats",
 ]);
 
 /**
