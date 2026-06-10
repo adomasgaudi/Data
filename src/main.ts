@@ -7377,12 +7377,14 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     : Math.abs(scaleVal - 1) > 1e-6
       ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
       : "";
-  // Effort tag from RIR (logged, else predicted): hard / mid / warm-up. Big leg
-  // lifts get a wider "mid" band (see effortClass).
+  // Effort from RIR (logged, else predicted): hard / mid / warm-up. Big leg lifts get a
+  // wider "mid" band (see effortClass). It no longer shows as a tag — it colours the
+  // WHOLE set-row OUTLINE (red = hard, orange = mid, grey = warm-up; .set-main.eff-* CSS).
   const eff = setEffortClass(s, predRir);
-  const effTag = eff
-    ? `<span class="set-eff eff-${eff}" title="${eff === "hard" ? "Hard set — RIR under 3" : eff === "mid" ? `Mid set — RIR 3–${isBigLegsLift(s.exerciseName) ? 8 : 6} (working, not to failure)` : "Warm-up — well short of failure"}">${eff === "warmup" ? "Warm" : eff === "hard" ? "Hard" : "Mid"}</span>`
-    : "";
+  const effClass = eff ? ` eff-${eff}` : "";
+  const effTitle = eff === "hard" ? " · Hard set (RIR under 3)"
+    : eff === "mid" ? " · Mid set (working, not to failure)"
+    : eff === "warmup" ? " · Warm-up" : "";
   // Machine-type tag (gravity-or-cable lifts in gravity/mixed mode): "grav" means
   // this set's STRENGTH was counted at ×0.6 of the logged weight; "review" flags an
   // ambiguous mixed-mode set (a light value that might be a gravity warm-up).
@@ -7397,9 +7399,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
   // this set's edit panel. No separate ✎ pencil button.
   const main =
-    `<tr class="set-main${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
-    `title="Tap to edit this set (weight, reps, bodyweight, scale)">` +
-    `<td class="num wcell"><button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${effTag}${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
+    `<tr class="set-main${effClass}${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
+    `title="Tap to edit this set (weight, reps, bodyweight, scale)${effTitle}">` +
+    `<td class="num wcell"><button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
     `<td class="num">${e1rmCell}</td>` +
     `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
     `<td class="num">${prirCell}</td>` +
