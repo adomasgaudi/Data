@@ -48,34 +48,24 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.210</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.211</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
         <button id="moreBtn" class="icon-btn" aria-label="More views" aria-haspopup="true"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false">⚙</button>
         <div id="settingsPanel" class="settings-panel" hidden>
-          <!-- Calculation & display settings, tucked under a collapsible to keep the menu short. -->
-          <details class="settings-group">
-            <summary class="settings-group-sum">Calculations &amp; display</summary>
-            <div class="settings-group-body">
-              <label>1RM formula
-                <select id="formula">
-                  <option value="epley">Epley</option>
-                  <option value="brzycki">Brzycki</option>
-                  <option value="nuzzo" selected>Nuzzo (bench curve)</option>
-                </select>
-              </label>
-              <p class="settings-hint">1RM includes bodyweight for movements like pull-ups, dips and squats — using the bodyweight recorded with each set, or your profile weight when a set didn't record one.</p>
-              <div class="name-mode-field">Exercise names shown as
-                <div class="name-mode-row" id="nameModeRow">
-                  <button type="button" class="settings-link name-mode-opt" data-namemode="code">Code</button>
-                  <button type="button" class="settings-link name-mode-opt" data-namemode="short">Short</button>
-                  <button type="button" class="settings-link name-mode-opt" data-namemode="full">Full</button>
-                </div>
-              </div>
+          <!-- Exercise-name display mode: the GLOBAL default for the whole site (each
+               Graph/History area can locally override it). Shown by itself — no longer
+               under a collapsible — now that the 1RM-formula picker moved to the
+               Formulas view ("see the maths"). -->
+          <div class="name-mode-field">Exercise names shown as
+            <div class="name-mode-row" id="nameModeRow">
+              <button type="button" class="settings-link name-mode-opt" data-namemode="code">Code</button>
+              <button type="button" class="settings-link name-mode-opt" data-namemode="short">Short</button>
+              <button type="button" class="settings-link name-mode-opt" data-namemode="full">Full</button>
             </div>
-          </details>
+          </div>
           <!-- Language: English ↔ Lithuanian (whole site). Reloads on switch. -->
           <div class="settings-row lang-row">
             <span class="lang-lbl">Language</span>
@@ -432,6 +422,17 @@
             Pick an athlete and exercise to load their top set, or just type your own numbers —
             either way each formula recomputes live. This is the exact code the leaderboards use.
           </p>
+          <!-- Dashboard-wide 1RM formula (moved here from Settings). Sets the formula the
+               whole app uses for leaderboards, PRs and the history; same #formula id, so its
+               existing wiring + custom .xdd dropdown are unchanged. -->
+          <label class="formula-field">Dashboard-wide 1RM formula
+            <select id="formula">
+              <option value="epley">Epley</option>
+              <option value="brzycki">Brzycki</option>
+              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
+            </select>
+          </label>
+          <p class="muted" style="margin: -0.4rem 0 1rem; font-size: 0.8rem">1RM includes bodyweight for movements like pull-ups, dips and squats — using the bodyweight recorded with each set, or your profile weight when a set didn't record one.</p>
           <div class="calc-picker">
             <label>Athlete
               <select id="testAthlete"></select>
@@ -485,7 +486,7 @@
               <a href="reps-1rm.html" target="_blank" rel="noopener">research curve</a> built from real
               bench data: your reps tell us what % of 1RM the load was, then <code>1RM = load ÷ %</code>.
               On bench people do fewer reps per %1RM, so it gives a more conservative max than Epley.
-              Pick it as the dashboard-wide formula in ⚙ Settings.</p>
+              Pick it as the dashboard-wide formula at the top of this view.</p>
             <p><strong>5. Volume:</strong> <code>weight × reps</code> — total load moved in the set.</p>
             <p><strong>6. Per bodyweight</strong> (the relative leaderboard): <code>1RM ÷ bodyweight</code>,
               shown as ×BW, so people of different sizes compare fairly.</p>
