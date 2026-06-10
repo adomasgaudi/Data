@@ -228,6 +228,7 @@ const els = {
   modelEditor: $("modelEditor"),
   modelResetAll: $<HTMLButtonElement>("modelResetAll"),
   planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
+  uploadDataBtn: $<HTMLButtonElement>("uploadDataBtn"),
   planPage: $("planPage"),
   planClose: $<HTMLButtonElement>("planClose"),
   planBody: $("planBody"),
@@ -11216,6 +11217,11 @@ async function init() {
   });
   // "Plan workout" — suggest what to train today (top of the workout history).
   els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
+  // "⬆ Upload" — import another device's exported backup file and DEEP-MERGE it in, so
+  // edits another user made on their phone show up here (you can't see their on-device
+  // data otherwise — there's no live server sync). Reuses the Settings restore input +
+  // restoreFromFile (parse → confirm → deep merge → reload); your local edits are kept.
+  els.uploadDataBtn.addEventListener("click", () => els.restoreFile.click());
   els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
   els.planBody.addEventListener("click", (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>("[data-planopen]");

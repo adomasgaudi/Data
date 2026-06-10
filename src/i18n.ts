@@ -131,6 +131,7 @@ const LT: Record<string, string> = {
   // ---- Command bar ----
   "Switch to this page": "Pereiti į šį puslapį",
   "Undo": "Atšaukti",
+  "⬆ Upload": "⬆ Įkelti",
   // ---- Customisable sets-table columns ----
   "Show in this column": "Rodyti šiame stulpelyje",
   "Weight × reps": "Svoris × pakartojimai",
