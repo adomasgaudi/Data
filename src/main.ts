@@ -15110,11 +15110,11 @@ function setupCommandBar(): void {
 function setupWorkoutAnalysis(): void {
   const panel = document.getElementById("tab-analysis");
   if (!panel) return;
-  // Swipe RIGHT to open / close the floating exercise-picker drawer: a rightward drag on
-  // the picker's settings line (.wa-chips-fold-sum) slides it IN; a rightward drag on the
-  // open drawer slides it back OUT. Delegated (survives re-renders); claims only on a clear
-  // rightward drag so taps on the group select / pills / ⚙ / chips still work, and pan-y
-  // (CSS) keeps vertical scrolling. A claim swallows the trailing synthetic tap.
+  // Floating exercise-picker drawer gestures, matched to its right-edge motion: swipe the
+  // picker's settings line (.wa-chips-fold-sum) RIGHT-TO-LEFT to pull the drawer IN from the
+  // right edge; swipe the open drawer left-to-right to push it back OUT. Delegated (survives
+  // re-renders); claims only on a clear horizontal drag so taps on the group select / pills /
+  // ⚙ / chips still work, and pan-y (CSS) keeps vertical scrolling. A claim swallows the tap.
   {
     const SLOP = 8, THRESH = 45;
     let mode: "open" | "close" | null = null, scope: SelScope = "hist";
@@ -15134,7 +15134,9 @@ function setupWorkoutAnalysis(): void {
       if (!mode || e.pointerId !== ptr) return;
       const dx = e.clientX - x0, dy = e.clientY - y0;
       if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SLOP) { reset(); return; } // vertical → scroll
-      if (dx > THRESH) { // a clear rightward swipe
+      // OPEN on a right→left (leftward) drag — pulling the drawer in from the right edge;
+      // CLOSE on a left→right (rightward) drag — pushing it back out.
+      if (mode === "open" ? dx < -THRESH : dx > THRESH) {
         claimedAt = Date.now();
         if (mode === "open") openPickDrawer(scope); else closePickDrawer();
         reset();
