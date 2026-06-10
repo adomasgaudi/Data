@@ -225,6 +225,10 @@ const els = {
   modelClose: $<HTMLButtonElement>("modelClose"),
   modelEditor: $("modelEditor"),
   modelResetAll: $<HTMLButtonElement>("modelResetAll"),
+  planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
+  planPage: $("planPage"),
+  planClose: $<HTMLButtonElement>("planClose"),
+  planBody: $("planBody"),
   exInfoPage: $("exInfoPage"),
   exInfoTitle: $("exInfoTitle"),
   exInfoBack: $<HTMLButtonElement>("exInfoBack"),
@@ -9323,6 +9327,52 @@ function renderModelEditor(): void {
     .map((fam) => `<details class="model-fam ex-model-fold" open><summary class="ex-group-hd">“${escapeHtml(fam)}” model</summary>${familyFactorTableHtml(fam)}</details>`)
     .join("");
 }
+// ---- "Plan workout" — suggest what to train today ----------------------------------
+// For the current athlete, score every exercise trained in the last 3 months by its
+// WEEKLY SET DEFICIT: (avg sets/week over the last 90 days) − (sets done THIS week). A
+// positive deficit means you're behind your own recent norm on that lift; we rank by it
+// so the biggest gaps lead. Pure-ish: reads activeRecords()/weeklySetStats only.
+interface PlanItem { name: string; behind: number; thisWeek: number; avg: number; }
+function workoutPlanItems(): PlanItem[] {
+  const username = els.athlete.value;
+  const recs = activeRecords();
+  const today = todayIso();
+  const items: PlanItem[] = [];
+  for (const { exerciseName } of exerciseCountsForUser(recs, username)) {
+    const stats = weeklySetStats(setsForUserExercise(recs, username, exerciseName), today);
+    if (stats.threeMonthAvgPerWeek < 0.5) continue; // not a regular lift recently
+    const behind = Math.round(stats.threeMonthAvgPerWeek - stats.thisWeek);
+    if (behind < 1) continue; // already kept up this week
+    items.push({ name: exerciseName, behind, thisWeek: stats.thisWeek, avg: stats.threeMonthAvgPerWeek });
+  }
+  return items.sort((a, b) => (b.behind - a.behind) || (b.avg - a.avg) || a.name.localeCompare(b.name));
+}
+function renderWorkoutPlan(): void {
+  const items = workoutPlanItems();
+  if (items.length === 0) {
+    els.planBody.innerHTML = `<p class="muted plan-empty">You're on track — every regular exercise has hit its weekly average. Nice. 💪</p>`;
+    return;
+  }
+  const maxBehind = items[0]!.behind;
+  els.planBody.innerHTML =
+    `<div class="plan-list">` +
+    items.map((it) => {
+      const mg = mgsFor(it.name)[0];
+      const bar = Math.max(6, Math.round((it.behind / maxBehind) * 100));
+      return `<button type="button" class="plan-row" data-planopen="${escapeHtml(it.name)}" title="Open ${escapeHtml(displayName(it.name))}">` +
+        `<span class="plan-bar" style="width:${bar}%"></span>` +
+        `<span class="plan-main"><span class="plan-name">${escapeHtml(displayName(it.name))}</span>` +
+        `${mg ? `<span class="plan-mg muted">${escapeHtml(mg)}</span>` : ""}</span>` +
+        `<span class="plan-nums"><span class="plan-behind">+${it.behind} set${it.behind === 1 ? "" : "s"}</span>` +
+        `<span class="plan-sub muted">${it.thisWeek}/${it.avg.toFixed(1)} per wk</span></span>` +
+        `</button>`;
+    }).join("") +
+    `</div>`;
+}
+function openWorkoutPlan(): void {
+  renderWorkoutPlan();
+  els.planPage.hidden = false;
+}
 function openModelEditor(): void {
   renderModelEditor();
   els.modelPage.hidden = false;
@@ -10784,8 +10834,16 @@ async function init() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (pickDrawerScope !== null) { closePickDrawer(); return; } // topmost overlay closes first
+    if (!els.planPage.hidden) { els.planPage.hidden = true; return; }
     if (!els.exInfoPage.hidden) closeExerciseInfo();
     else if (document.body.classList.contains("wa-graph-full")) { document.body.classList.remove("wa-graph-full"); renderWaGraph(); }
+  });
+  // "Plan workout" — suggest what to train today (top of the workout history).
+  els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
+  els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
+  els.planBody.addEventListener("click", (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>("[data-planopen]");
+    if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen); }
   });
   // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
   els.modelBtn.addEventListener("click", openModelEditor);

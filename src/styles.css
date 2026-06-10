@@ -2149,6 +2149,21 @@ sup.wr-bw { font-size: 0.85em; }
    warning when the Index filter is hiding lifts, accent when revealing them. */
 .wo-hidden-toggle { font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--gold); background: rgba(184,144,47,0.14); color: #8a6d1f; }
 .wo-hidden-toggle:hover { filter: brightness(0.97); }
+/* "Plan workout" button at the top of the history. */
+.wo-plan-btn { font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 4px 12px; border-radius: var(--r-pill); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min); }
+.wo-plan-btn:hover { background: var(--accent); color: #fff; }
+/* Plan-workout overlay: one tappable row per suggested lift, a bar showing how far behind. */
+.plan-empty { padding: 1rem 0; font-size: 0.95rem; }
+.plan-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.plan-row { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.plan-row:hover { border-color: var(--accent); }
+.plan-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-soft); z-index: 0; }
+.plan-main, .plan-nums { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.plan-nums { align-items: flex-end; text-align: right; flex: 0 0 auto; }
+.plan-name { font-weight: 700; color: var(--text); }
+.plan-mg { font-size: 0.7rem; }
+.plan-behind { font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.plan-sub { font-size: 0.7rem; }
 .wo-hidden-toggle.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 /* A grayed "another exercise line" under a day/week that has filter-hidden lifts. */
 .wo-hidden-line { display: block; margin-top: 2px; }
