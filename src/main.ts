@@ -14480,12 +14480,18 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // per-lift Combine / Compare lens toggles appended to each.
   const expanded = remove ? titleExpanded[remove] : false;
   const shown = expanded ? sel.length : TITLE_NAME_CAP;
-  const names = sel.slice(0, shown).map((n) => {
+  const shownSel = sel.slice(0, shown);
+  // Longest visible name → the grid's min column width, so long names fall to 2 columns
+  // and short ones fit 3 (auto-fit), all vertically aligned (owner request).
+  const maxNameLen = Math.max(4, ...shownSel.map((n) => displayName(n).length));
+  const names = shownSel.map((n) => {
     // The name opens a small popup menu (Info / Combine / Compare / Remove) and is
     // COLOURED by its lens state — replaces the old inline ⓘ ⊕ ⇄ button cluster.
     if (!remove) return escapeHtml(displayName(n));
     return `<button type="button" class="wa-title-lift${lensClass(remove, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${remove}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
-  }).join(sep);
+    // Grid layout (CSS) handles the spacing/alignment, so no inline " · " separator for
+    // the button form; the plain-text form keeps it.
+  }).join(remove ? "" : sep);
   // The "… +N" trailer is a TOGGLE: tap to expand the title to ALL names (which hides
   // the redundant picked-lift pills below), tap again ("less") to collapse it.
   let more = "";
@@ -14537,7 +14543,13 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
+  // The picked-lift names lay out as a vertically-aligned GRID (2–3 columns by name
+  // length) when they're tappable buttons; the "all exercises" / plain-text forms stay inline.
+  const grid = !!remove && !allLabel;
+  const seltitleAttrs = grid
+    ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 1.1rem)"`
+    : ` class="wa-seltitle"`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */

@@ -3396,6 +3396,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-seltitle-box.is-expanded {
   min-height: 0;
 }
+/* Picked-lift names as a vertically-aligned GRID: equal auto-fit columns whose width
+   tracks the longest name (--gcols-min, set per render) — so long names give 2 columns
+   and short ones 3, with the names lining up in columns instead of free-flowing text.
+   max(…,5.5rem) caps it at ~3 columns; the names list is full-width so the ✕/≈ actions
+   sit just below it. */
+.wa-seltitle--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(var(--gcols-min, 6rem), 5.5rem), 1fr));
+  gap: 0.15rem 0.6rem; align-items: baseline; width: 100%;
+}
+.wa-seltitle--grid > .wa-title-lift, .wa-seltitle--grid > .wa-title-more { justify-self: start; }
 /* A bigger caret with clear margin from the title, so there's an obvious "empty"
    spot (the caret) to COLLAPSE — distinct from the lift names, which REMOVE. */
 .wa-fold-titled[open] > .wa-fold-sum.is-bigtitle::before { font-size: 1.4rem; margin-right: 0.5em; opacity: 0.55; }
