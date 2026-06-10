@@ -3577,7 +3577,10 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 0.25rem;
   padding: 5px 12px; font-size: 0.82rem; font-weight: 600; color: var(--accent);
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  white-space: nowrap; min-width: 0; /* ONE line: the label never wraps; the metrics
+    summary (.wa-graph-fold-cur) truncates with an ellipsis when it doesn't fit. */
 }
+.wa-graph-fold-lbl { flex: 0 0 auto; } /* "Options" stays whole; only the metrics shrink */
 .wa-graph-fold-sum::-webkit-details-marker { display: none; }
 .wa-graph-fold-sum::after { content: " ▾"; color: var(--muted); }
 .wa-graph-fold[open] .wa-graph-fold-sum { border-color: var(--accent); background: var(--accent-soft); }

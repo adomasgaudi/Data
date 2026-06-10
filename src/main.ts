@@ -14553,7 +14553,7 @@ function renderWaGraph(): void {
     // metric summary truncates so Compare never wraps to its own line.
     `<div class="wa-graph-ctrls">` +
     `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
-    `<summary class="wa-graph-fold-sum">Graph options <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
+    `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
     `<div class="wa-graph-menu">${cfgUi}</div>` +
     `</details>` +
     compareBtn +

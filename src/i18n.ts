@@ -271,6 +271,7 @@ const LT: Record<string, string> = {
   "Approved only": "Tik patvirtinti",
   "Match graph": "Atitikti grafiką",
   "Compare": "Palyginti",
+  "Options": "Parinktys",
   "Match history": "Atitikti istoriją",
   "Graph lifts": "Grafiko pratimai",
   "History lifts": "Istorijos pratimai",
