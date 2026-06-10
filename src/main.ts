@@ -14545,9 +14545,12 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // out of the clamp to show every name.
   // The picked-lift names lay out as a vertically-aligned GRID (2–3 columns by name
   // length) when they're tappable buttons; the "all exercises" / plain-text forms stay inline.
+  // --gcols-min tracks the longest name; the +pad is kept SMALL so a column is only as
+  // wide as the name needs — otherwise the over-pad nudged it past half the row and
+  // auto-fit collapsed to ONE column even when two fit (owner: "if two columns fit, use 2").
   const grid = !!remove && !allLabel;
   const seltitleAttrs = grid
-    ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 1.1rem)"`
+    ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 0.4rem)"`
     : ` class="wa-seltitle"`;
   return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
