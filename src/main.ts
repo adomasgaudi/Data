@@ -7103,7 +7103,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
       : "";
     const header =
       `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-      `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)} <span class="muted">${e.count}</span>` +
+      `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
       `${addBtn}</td></tr>`;
     // Newest-first: reverse the date-sorted sets so the latest DAY (and within a day
     // the latest SET) leads, matching the history's newest→oldest order — so a
