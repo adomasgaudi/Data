@@ -3346,8 +3346,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    ones wrap to a 3rd line rather than clipping the count. Expanding drops the floor. */
 .wa-seltitle-box {
   display: block; min-height: 2.6em; line-height: 1.7;
-  position: relative; padding-right: 1.9rem; /* anchor + clear the right-edge ▦ Pick tab */
+  position: relative; /* anchor for the right-edge sticky-note Pick tab */
 }
+/* Reserve room at the right edge ONLY when the Pick tab is present, so the inline ✕ / ≈ /
+   names never slide UNDER it. (When there's no selection there's no tab and no reserve.) */
+.wa-seltitle-box.has-pick { padding-right: 2.1rem; }
 .wa-seltitle-box.is-expanded {
   min-height: 0;
 }
@@ -3421,25 +3424,45 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   background: none; border: none; cursor: pointer; color: var(--accent);
 }
 .wa-title-match:hover, .wa-title-match:active { opacity: 0.7; }
-/* "▦ Pick" — a compact card on the title row that opens the slide-in picker drawer (tap or
-   drag it). touch-action:pan-y lets a horizontal drag reach the swipe-to-open handler while
-   a vertical drag still scrolls the page. */
-/* The exercise-picker opener is a WHITE PAPER STICKY-NOTE TAB poking out of the card's
-   right edge (≈ the screen edge on a phone) — drag it LEFT (or tap) to pull out the
-   pick-exercise menu. Vertical "▦ Pick" so it's a thin tab, square at the attached
-   right edge with a peel-shadow on the free left edge. (PB-13: the picker opener keeps
-   getting reworked — this is the right-edge sticky-note form.) */
+/* The exercise-picker opener is a WHITE PAPER STICKY-NOTE TAB poking out of the right edge
+   (≈ the screen edge on a phone) — DRAG it LEFT (or tap) to pull out the pick-exercise menu.
+   The handle now LOOKS like the drawer it opens, and a "‹" pull-hint + a peel-out hover make
+   the drag obvious — the open concern logged in PB-13. Square at the attached right edge, a
+   soft peel-shadow + folded dog-ear at the free left edge. Bled to the page edge with
+   --wa-pick-bleed (0.7rem inside the graph's padded card, 0 in the unpadded history fold) so
+   BOTH selectors' tabs sit flush with the same edge. touch-action:pan-y: a vertical drag still
+   scrolls; a horizontal drag is claimed by JS. (PB-13 — fix site; drag wiring in src/main.ts.) */
+.wa-card-fold { --wa-pick-bleed: 0.7rem; }
 .wa-title-picker {
-  position: absolute; right: -0.7rem; top: 0.05rem; z-index: 3;
-  writing-mode: vertical-rl; text-orientation: mixed;
-  font: inherit; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; line-height: 1;
-  padding: 8px 4px; cursor: grab; white-space: nowrap;
-  color: #3a372f; background: linear-gradient(90deg, #fffef9 0%, #fdf6e6 100%);
-  border: none; border-radius: 4px 0 0 4px;
-  box-shadow: -4px 3px 9px rgba(20, 24, 38, 0.22), -1px 0 0 rgba(0, 0, 0, 0.05);
-  min-width: var(--tap-min); touch-action: pan-y;
+  position: absolute; top: 50%; right: calc(-1 * var(--wa-pick-bleed, 0px)); transform: translateY(-50%); z-index: 4;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  width: 30px; height: 56px; padding: 6px 0; margin: 0;
+  cursor: grab; white-space: nowrap; -webkit-user-select: none; user-select: none;
+  color: #8a7f63; font-family: inherit;
+  background: linear-gradient(90deg, #fbf4e4 0%, #fffef9 65%);
+  border: none; border-radius: 8px 0 0 8px;
+  /* Layered shadows = a paper tab lifted off the screen, peeling at the left. */
+  box-shadow: -6px 2px 13px rgba(20, 24, 38, 0.20), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
+  touch-action: pan-y; transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
-.wa-title-picker:hover, .wa-title-picker:active { background: linear-gradient(90deg, #ffffff 0%, #fbefd2 100%); }
+/* A peeled "dog-ear" at the free (bottom-left) corner of the tab. */
+.wa-title-picker::after {
+  content: ""; position: absolute; left: 0; bottom: 0; width: 11px; height: 11px;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0) 55%), #f1e9d6;
+  border-radius: 0 2px 0 8px;
+}
+/* Hover/active: the note peels out a touch further to invite the pull-left drag. */
+.wa-title-picker:hover, .wa-title-picker:active {
+  transform: translateY(-50%) translateX(-3px);
+  box-shadow: -10px 3px 18px rgba(20, 24, 38, 0.26), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
+}
+/* "‹" pull-hint at the top of the tab — points the way to drag it open. */
+.wa-pick-pull { font-size: 1rem; line-height: 1; font-weight: 700; color: #b8902f; }
+/* Vertical "Pick" label, reading bottom→top up the tab. */
+.wa-pick-tab-txt {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;
+}
 .wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; margin-right: 0.35em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
 .wa-fold > .wa-section { margin: 0 0 0.7rem; border-bottom: none; }

@@ -14529,18 +14529,20 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const matchBtn = remove
     ? `<button type="button" class="wa-title-match" data-titlematch="${remove}" title="Match — make this selection the same as the ${remove === "graph" ? "history" : "graph"} (copy its picks here)" aria-label="${remove === "graph" ? "Match history" : "Match graph"}">≈</button>`
     : "";
-  // "Pick" — a compact card on the title row that opens the slide-in picker & settings
-  // drawer (tap it, or drag/swipe it). Replaces the old full-width "▸ Picker & settings"
-  // bar below the title (owner request: move it up to the title level). Capture-handled so
-  // it doesn't toggle the fold it sits in.
+  // "Pick" — a thin WHITE PAPER sticky-note TAB peeking from the right screen edge of the
+  // title row (the visible edge of the picker note). DRAG it left (or tap) to pull the full
+  // drawer out — the handle now LOOKS like the drawer it opens (PB-13). A "‹" pull-hint +
+  // grip make the drag obvious (the open concern logged in PB-13). The drag/tap handlers key
+  // off `.wa-title-picker[data-titlepicker]`, so the gesture wiring is unchanged. Capture-
+  // handled so it doesn't toggle the fold it sits in.
   const pickerBtn = remove
-    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Pick exercises &amp; settings — tap, or drag it open" aria-label="Open exercise picker &amp; settings">▦ Pick</button>`
+    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">Pick</span></button>`
     : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
   // out of the clamp to show every name.
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span class="wa-seltitle">${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {

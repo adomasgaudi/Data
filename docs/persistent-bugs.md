@@ -33,9 +33,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   swipe handler, `touch-action:pan-y`) or tapping pulls out the same drawer. The handle now
   LOOKS like the thing it opens, so the gesture is implied. Fix site: `.wa-title-picker` /
   `.wa-seltitle-box` in `src/styles.css` (tagged `PB-13`); opener swipe in `src/main.ts`.
-- **If it recurs:** the tab is still not obviously draggable (add a grip/animation hint), or it
-  collides with the title text / fold caret on a narrow screen — re-check the reserved
-  `padding-right` on `.wa-seltitle-box` and the tab's vertical extent vs the 2-line title clamp.
+- **Follow-up (b.2.8.194):** acted on the "if it recurs" notes *proactively*, before a re-report.
+  Added the missing drag affordance — a "‹" pull-hint + a peel-out hover animation — so the tab
+  visibly says "drag me left". Also fixed a real cross-selector bug: the flat `right:-0.7rem`
+  was correct only in the graph's padded card; in the unpadded history fold it pushed the tab
+  ~0.7rem PAST the screen edge. Now bled per-fold via `--wa-pick-bleed` (0.7rem on `.wa-card-fold`,
+  0 elsewhere) so BOTH tabs sit flush with the same edge. Tab content moved to child spans
+  (`.wa-pick-pull` + `.wa-pick-tab-txt`); right-edge reserve gated behind `.wa-seltitle-box.has-pick`.
+- **If it recurs:** the tab still isn't read as draggable (consider a one-time nudge animation),
+  or it collides with the title text / fold caret on a narrow screen — re-check the reserved
+  `padding-right` on `.wa-seltitle-box.has-pick` and the tab's vertical extent vs the 2-line clamp.
 
 ## PB-12 — The inline SET-EDIT panel closes when you press a button inside it
 
