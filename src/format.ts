@@ -50,6 +50,34 @@ export const dowLetter = (iso: string): string => {
   return Number.isNaN(t) ? "" : (DOW_ABBR[new Date(t).getUTCDay()] ?? "");
 };
 
+/** Full weekday name for an ISO day (UTC). index = getUTCDay(). */
+export const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+/** Monday-start week index (whole weeks since the epoch's Monday) for an ISO date, so
+ * two dates in the SAME Mon–Sun week share an index. 1970-01-01 was a Thursday; +3
+ * shifts so a Monday starts each block. null on an unparseable date. */
+const mondayWeekIndex = (iso: string): number | null => {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const days = Math.floor(t / 86_400_000); // whole UTC days since epoch (Thursday)
+  return Math.floor((days + 3) / 7);
+};
+/** A friendly day label relative to `today` (both "YYYY-MM-DD"): today → "Today"; any
+ * OTHER day in this Mon–Sun week → its full weekday ("Monday"…); a day in LAST week →
+ * "Last Monday"…; anything older falls back to the compact "T Jun 2" form. Pure. */
+export const relativeDayLabel = (iso: string, today: string): string => {
+  if (iso === today) return "Today";
+  const wi = mondayWeekIndex(iso), tw = mondayWeekIndex(today);
+  const t = Date.parse(iso);
+  if (wi !== null && tw !== null && !Number.isNaN(t)) {
+    const wd = WEEKDAY_FULL[new Date(t).getUTCDay()] ?? "";
+    if (wd) {
+      if (wi === tw) return wd; // this week
+      if (wi === tw - 1) return `Last ${wd}`; // last week
+    }
+  }
+  return `${dowLetter(iso)} ${shortDate(iso)}`; // older — compact "T Jun 2"
+};
+
 /**
  * ISO-8601 week number (1–53) for a "YYYY-MM-DD" date: weeks start Monday and
  * week 1 is the one containing the year's first Thursday. Matches the app's

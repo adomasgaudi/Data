@@ -5,7 +5,7 @@
  */
 import { niceTicks } from "./chartAxis";
 import {
-  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, dowLetter,
+  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, relativeDayLabel,
   isoWeekNumber, todayIso, trainingDuration,
 } from "./format";
 import { hashHueHex, cellBgColor, cellBgGradient, heatLevel } from "./colorScale";
@@ -5946,7 +5946,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   return collapseRestRuns(scopeWorkoutGroups(
     days
       .map((d) => ({
-        label: d.date === todayIso() ? "Today" : `${dowLetter(d.date)} ${shortDate(d.date)}`,
+        label: relativeDayLabel(d.date, todayIso()),
         date: d.date,
         totalSets: d.totalSets,
         exercises: d.exercises,

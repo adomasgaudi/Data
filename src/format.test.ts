@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   fmt, pct, bwMult, wr, shortDate, dowLetter, isoWeekNumber, todayIso, trainingDuration,
+  relativeDayLabel,
 } from "./format";
 
 describe("fmt", () => {
@@ -56,6 +57,16 @@ describe("dates", () => {
     expect(dowLetter("2021-01-04")).toBe("M");  // Monday
     expect(dowLetter("2021-01-03")).toBe("Su"); // Sunday
     expect(dowLetter("bad")).toBe("");
+  });
+  it("relativeDayLabel: Today / this-week weekday / Last weekday / older fallback", () => {
+    const today = "2026-06-04"; // Thursday; this Mon–Sun week is 2026-06-01 … 2026-06-07
+    expect(relativeDayLabel(today, today)).toBe("Today");
+    expect(relativeDayLabel("2026-06-01", today)).toBe("Monday");   // this week (Mon)
+    expect(relativeDayLabel("2026-06-02", today)).toBe("Tuesday");  // this week
+    expect(relativeDayLabel("2026-06-07", today)).toBe("Sunday");   // this week (Sun end)
+    expect(relativeDayLabel("2026-05-31", today)).toBe("Last Sunday");   // last week (Sun end)
+    expect(relativeDayLabel("2026-05-25", today)).toBe("Last Monday");   // last week (Mon start)
+    expect(relativeDayLabel("2026-05-24", today)).toBe(`${dowLetter("2026-05-24")} May 24`); // older → compact
   });
   it("isoWeekNumber matches Monday-start ISO weeks", () => {
     expect(isoWeekNumber("2021-01-04")).toBe(1); // first Monday of 2021
