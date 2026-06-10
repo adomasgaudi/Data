@@ -123,7 +123,6 @@ const LT: Record<string, string> = {
   "Code": "Kodas",
   "Short": "Trumpas",
   "Full": "Pilnas",
-  "Simplified view (S-Analysis)": "Supaprastintas rodinys (S-Analizė)",
   "Backup & restore": "Atsarginė kopija ir atkūrimas",
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",

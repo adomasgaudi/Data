@@ -182,7 +182,6 @@ const els = {
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
-  simplifiedToggle: $<HTMLInputElement>("simplifiedToggle"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -209,18 +208,8 @@ const els = {
   healthBadge: $("healthBadge"),
   healthPage: $("healthPage"),
   healthClose: $<HTMLButtonElement>("healthClose"),
-  changelogBtn: $<HTMLButtonElement>("changelogBtn"),
-  changelogVer: $("changelogVer"),
   changelog: $("changelog"),
-  backlogBtn: $<HTMLButtonElement>("backlogBtn"),
-  backlogPage: $("backlogPage"),
-  backlogClose: $<HTMLButtonElement>("backlogClose"),
   backlog: $("backlog"),
-  modelBtn: $<HTMLButtonElement>("modelBtn"),
-  modelPage: $("modelPage"),
-  modelClose: $<HTMLButtonElement>("modelClose"),
-  modelEditor: $("modelEditor"),
-  modelResetAll: $<HTMLButtonElement>("modelResetAll"),
   planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
   uploadDataBtn: $<HTMLButtonElement>("uploadDataBtn"),
   planPage: $("planPage"),
@@ -444,11 +433,10 @@ function placeVersionLine(): void {
 }
 
 /** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
- * label), keep the Settings checkbox + the quick switcher in sync. */
+ * label), keep the header quick switcher in sync. */
 function setSimplified(on: boolean): void {
   simplifiedView = on;
   try { localStorage.setItem("colosseum.simplifiedView", on ? "1" : "0"); } catch { /* ignore */ }
-  if (els.simplifiedToggle) els.simplifiedToggle.checked = on;
   const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
   if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
   updateBottomNav();
@@ -3236,14 +3224,13 @@ function renderTaskDoc(doc: TaskDoc): string {
     `</details>`;
 }
 
-/** Open the tasks/roadmap overlay from Settings (parsed from the docs/ md). */
-function openBacklog() {
-  setSettingsOpen(false);
+/** Fill the Tasks & roadmap dropdown inside the Version-history view (parsed from
+ * the docs/ md). Tasks & roadmap is no longer a separate Settings overlay — it
+ * lives as a fold in the version-history page, beside the release log. */
+function renderBacklog() {
   els.backlog.innerHTML =
-    `<p class="cl-summary muted">Cleanup backlog + roadmap, straight from the docs/ files. SP are AI estimates — open Version history to see what an SP actually buys.</p>` +
     renderTaskDoc(parseTaskDoc(cleanupBacklogMd)) +
     renderTaskDoc(parseTaskDoc(roadmapMd));
-  els.backlogPage.hidden = false;
 }
 
 // ---- Exercise "More info" — now an inline, expandable dropdown on the Index
@@ -3462,6 +3449,8 @@ function renderChangelog() {
   };
   const rows = CHANGELOG.map((r) => renderNode(r, 0)).join("");
   els.changelog.innerHTML = header + sections + rows;
+  // Tasks & roadmap now lives as a fold inside this version-history view.
+  renderBacklog();
 
   // SP-over-time line: cumulative story points across every release,
   // derived from the CHANGELOG tree -- updates automatically when a release is
@@ -9851,12 +9840,6 @@ function worldRecordEditorHtml(name: string): string {
   );
 }
 
-/** The global "Difficulty multipliers" overlay: every family's editable factors. */
-function renderModelEditor(): void {
-  els.modelEditor.innerHTML = Object.keys(FAMILIES)
-    .map((fam) => `<details class="model-fam ex-model-fold" open><summary class="ex-group-hd">“${escapeHtml(fam)}” model</summary>${familyFactorTableHtml(fam)}</details>`)
-    .join("");
-}
 // ---- "Plan workout" — suggest what to train today ----------------------------------
 // For the current athlete, score every exercise trained in the last 3 months by its
 // WEEKLY SET DEFICIT: (avg sets/week over the last 90 days) − (sets done THIS week). A
@@ -9903,11 +9886,6 @@ function openWorkoutPlan(): void {
   renderWorkoutPlan();
   els.planPage.hidden = false;
 }
-function openModelEditor(): void {
-  renderModelEditor();
-  els.modelPage.hidden = false;
-}
-
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   // The info card shows THIS lift's real data — unfiltered, so a lift hidden by the
@@ -11164,7 +11142,6 @@ async function init() {
     verEl.style.cursor = "pointer";
     verEl.addEventListener("click", openChangelog);
   }
-  els.changelogVer.textContent = displayVersion(CURRENT_VERSION);
   renderChangelog();
 
   const effortSummary = document.getElementById("effortSummary");
@@ -11239,11 +11216,6 @@ async function init() {
   // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
   els.authBtn.addEventListener("click", showLoginPage);
 
-  // Simplified view ↔ Advanced. Switches the Analysis home (S-ANL ↔ full ANL) and
-  // re-navigates immediately if you're already on an analysis page.
-  els.simplifiedToggle.checked = simplifiedView;
-  els.simplifiedToggle.addEventListener("change", () => setSimplified(els.simplifiedToggle.checked));
-
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -11271,11 +11243,6 @@ async function init() {
   });
   els.healthClose.addEventListener("click", () => {
     els.healthPage.hidden = true;
-  });
-  els.changelogBtn.addEventListener("click", openChangelog);
-  els.backlogBtn.addEventListener("click", openBacklog);
-  els.backlogClose.addEventListener("click", () => {
-    els.backlogPage.hidden = true;
   });
   // Exercise-settings overlay: ✕ closes it; Esc closes it; the per-exercise
   // active-set force-in/out buttons live inside it, so handle them here too.
@@ -11326,16 +11293,6 @@ async function init() {
   els.planBody.addEventListener("click", (e) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>("[data-planopen]");
     if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen); }
-  });
-  // Global "Difficulty multipliers" editor (Settings → ✎ Difficulty multipliers).
-  els.modelBtn.addEventListener("click", openModelEditor);
-  els.modelClose.addEventListener("click", () => { els.modelPage.hidden = true; });
-  els.modelResetAll.addEventListener("click", () => {
-    if (!window.confirm("Reset every difficulty multiplier back to its default?")) return;
-    for (const k of Object.keys(famFactorOverrides)) delete famFactorOverrides[k];
-    saveFamFactors();
-    renderModelEditor();
-    refreshAfterDifficultyEdit();
   });
   // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
   // exercise's settings in the floating overlay.

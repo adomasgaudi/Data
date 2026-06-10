@@ -3217,6 +3217,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-sections-lbl { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-bottom: 0.4rem; }
 .cl-sections-row { display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem; }
 .cl-row { border-bottom: 1px solid var(--line); }
+/* Tasks & roadmap fold: sits below the release list in the version-history view,
+   set apart with a top rule + spacing so it reads as its own separate section. */
+.cl-backlog-fold { margin-top: 1.1rem; border-top: 2px solid var(--line); }
+.cl-backlog-fold > .cl-sum .cl-title { font-weight: 700; }
 .cl-sum {
   display: flex; align-items: center; gap: 0.75rem; cursor: pointer;
   padding: 9px 2px; list-style: none; user-select: none;
