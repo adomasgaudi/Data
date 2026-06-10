@@ -370,6 +370,21 @@ let viewMode: ViewMode = (() => {
   try { const v = localStorage.getItem("colosseum.viewMode"); return v === "user" || v === "loggedout" ? v : "admin"; }
   catch { return "admin"; }
 })();
+// The REAL identity (set at login), separate from the view mode an admin is PREVIEWING.
+// Only a real admin gets the freely-switch toggle — so the profiles are admin-admin /
+// admin-user / admin-spectator vs a locked user / spectator, the only difference being
+// that top switch. (Auth here is soft / decorative, so an unset role defaults admin.)
+type ActualRole = "admin" | "user" | "spectator";
+let actualRole: ActualRole = (() => {
+  try { const v = localStorage.getItem("colosseum.role.v1"); if (v === "admin" || v === "user" || v === "spectator") return v; } catch { /* ignore */ }
+  return "admin";
+})();
+function setActualRole(r: ActualRole): void {
+  actualRole = r;
+  try { localStorage.setItem("colosseum.role.v1", r); } catch { /* ignore */ }
+}
+/** True only for a REAL admin — the only role that may freely switch view modes. */
+function isAdminRole(): boolean { return actualRole === "admin"; }
 /** In user view, which athlete the dashboard is locked to (their username), as
  * chosen in Settings → "View as". null = not yet chosen → falls back to Adomas. */
 let viewUser: string | null = (() => {
@@ -432,8 +447,11 @@ function renderViewSwitch(): void {
   if (!box) return;
   const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spec";
   const detailLabel = simplifiedView ? "Simple" : "Adv";
+  // Only a REAL admin gets the Admin/User/Spectator switch — a logged-in user or
+  // spectator is locked to their view (no toggle). The detail (Simple/Adv) toggle
+  // stays for everyone.
   box.innerHTML =
-    `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` +
+    (isAdminRole() ? `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` : "") +
     `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: Simplified · Advanced">${detailLabel}</button>`;
 }
 
@@ -561,11 +579,11 @@ function logIn(): void {
   }
   if (err) err.hidden = true;
   hideLoginPage();
-  if (choice === "admin") setViewMode("admin");
-  else setViewAs(choice); // lock the dashboard to that athlete's user view
+  if (choice === "admin") { setActualRole("admin"); setViewMode("admin"); }
+  else { setActualRole("user"); setViewAs(choice); } // lock the dashboard to that athlete's user view
 }
 /** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
-function viewAsSpectator(): void { hideLoginPage(); setViewMode("loggedout"); }
+function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
 
 // Number / date / weekday display helpers (fmt, pct, bwMult, wr, shortDate,
 // dowLetter, isoWeekNumber, todayIso, trainingDuration) are pure and live in
