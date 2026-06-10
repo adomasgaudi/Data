@@ -8219,6 +8219,11 @@ function renderBwParts() {
   // Slice the same rows into the chosen grouping (category / muscle / function /
   // combinable / comparable).
   const buckets = indexBuckets(rows, S.bwGroupMode);
+  // When grouped by COMPARABLE, each group's rows show their scaling ratio in that group
+  // (and the reference lift, ratio 1, is tagged "étalon"). Build a per-group lookup once.
+  const compRatioByGroup = S.bwGroupMode === "comparable"
+    ? new Map(effectiveComparableGroups().map((g) => [g.id, new Map((g.members ?? []).map((m) => [m.exerciseName, m.ratio] as const))]))
+    : null;
 
   // Remember which groups the user has opened, so editing/re-rendering keeps them
   // as they were. Groups start collapsed by default (empty set on first paint);
@@ -8234,7 +8239,7 @@ function renderBwParts() {
   const editLabel = INDEX_EDIT_ATTRS.find((a) => a.attr === indexEditAttr)!.label;
   const head = `<thead><tr><th>Exercise</th><th class="num">${escapeHtml(editLabel)}</th><th class="num">Sets</th></tr></thead>`;
   // One row's <tr>, reused for both shown and (greyed) hidden-by-filter lists.
-  const rowHtml = (r: IndexRow, hidden: boolean) => {
+  const rowHtml = (r: IndexRow, hidden: boolean, ratioOf?: (name: string) => number | null) => {
     // On a filtered-out row: show WHY (the failing filter + this lift's value) as a red
     // chip that opens the tag editor — most hidden lifts are mis-tagged, not unwanted,
     // so the fix is to correct the tag, not force an exception.
@@ -8242,9 +8247,16 @@ function renderBwParts() {
     const whyChip = reasons.length
       ? ` <button type="button" class="bw-why" data-moreinfoex="${escapeHtml(r.name)}" title="Filtered out — ${escapeHtml(reasons.map((x) => `${x.label}: ${x.detail || "—"}`).join("; "))}. Tap to open &amp; fix its tags.">✗ ${escapeHtml(reasons.map((x) => x.detail || x.label).join(" · "))}</button>`
       : "";
+    // Comparable-mode: the lift's scaling ratio in THIS group; ratio 1 = the reference
+    // ("étalon", the lift everything else is compared against — it stays the same).
+    const ratio = ratioOf?.(r.name);
+    const ratioChip = ratio == null ? ""
+      : Math.abs(ratio - 1) < 1e-6
+        ? ` <span class="bw-ratio bw-ratio-ref" title="Reference lift (étalon) — the others are scaled onto this one's curve (ratio 1).">★ étalon</span>`
+        : ` <span class="bw-ratio" title="Scaling ratio vs the group's reference lift — this lift's load is divided by it to compare on one curve.">×${ratio}</span>`;
     return `<tr data-exrow="${escapeHtml(r.name)}"${hidden ? ' class="bw-row-hidden"' : ""}><td>` +
       `<span class="bw-ex-name" data-exname="${escapeHtml(r.name)}"><span class="caret">▸</span>${escapeHtml(r.name)}</span>` +
-      ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}` +
+      ` <span class="bw-ex-code" title="Short code">${escapeHtml(codeFor(r.name))}</span>${originBadge(r.name)}${ratioChip}` +
       ` <button type="button" class="bw-moreinfo" data-moreinfoex="${escapeHtml(r.name)}" title="More info &amp; note-variation difficulty">ℹ</button>` +
       // Example-jump shows on EVERY lift; admin falls back to whoever's done it the most.
       ` <button type="button" class="bw-moreinfo bw-history" data-histex="${escapeHtml(r.name)}" title="See an example in this lift's workout history${lockedUsername() === null ? " — falls back to whoever's done it the most" : ""}">↗</button>` +
@@ -8260,8 +8272,8 @@ function renderBwParts() {
       `<td class="num">${indexEditCell(r)}</td>` +
       `<td class="num">${r.count.toLocaleString()}</td></tr>`;
   };
-  const table = (rs: IndexRow[], hidden: boolean) =>
-    `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden)).join("")}</tbody></table>`;
+  const table = (rs: IndexRow[], hidden: boolean, ratioOf?: (name: string) => number | null) =>
+    `<table class="data-table bw-table">${head}<tbody>${rs.map((r) => rowHtml(r, hidden, ratioOf)).join("")}</tbody></table>`;
 
   // "Review filtered-out": ONE place to see every lift the Great Filter is hiding
   // (greyed) and tap "＋ keep" to make an exception. Organised into the SAME groups as
@@ -8388,11 +8400,14 @@ function renderBwParts() {
     const meta = activeSet
       ? `${shown.length}${hidden.length ? ` <span class="bw-cat-hidden">${hidden.length} hidden</span>` : ""}`
       : `${b.rows.length}`;
+    // Comparable groups (top level): each row gets its scaling ratio + the étalon tag.
+    const compRatios = !sub ? compRatioByGroup?.get(b.key) : undefined;
+    const ratioOf = compRatios ? (name: string) => compRatios.get(name) ?? null : undefined;
     const flatBody = (shown.length
-      ? table(shown, false)
+      ? table(shown, false, ratioOf)
       : `<p class="bw-allhidden muted">All ${b.rows.length} hidden by the active filter.</p>`) +
       (hidden.length
-        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true)}</details>`
+        ? `<details class="bw-hidden"><summary class="bw-hidden-sum">Show ${hidden.length} hidden by filter</summary>${table(hidden, true, ratioOf)}</details>`
         : "");
     const body = sm !== "none"
       ? indexBuckets(b.rows, sm as IndexGroupMode).map((s) => bucketHtml(s, true)).join("")

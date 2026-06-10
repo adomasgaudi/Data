@@ -2521,6 +2521,11 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 .bw-ex-name { cursor: pointer; user-select: none; }
 /* The short code shown beside the full exercise name in the Index list. */
 .bw-ex-code { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 1px 7px; white-space: nowrap; }
+/* Comparable-mode scaling ratio per lift: the ×ratio in the group's compare colour
+   (teal), and the reference lift (ratio 1) flagged "étalon" in gold so the one that
+   stays the same stands out. */
+.bw-ratio { font-size: 0.72rem; font-weight: 700; color: var(--lens-compare); background: color-mix(in srgb, var(--lens-compare) 12%, transparent); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.bw-ratio-ref { color: var(--gold); background: var(--gold-soft); }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info { display: flex; flex-direction: column; gap: 0; padding: 0.3rem 0.2rem; }
