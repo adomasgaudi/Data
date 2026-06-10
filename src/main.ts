@@ -7239,13 +7239,63 @@ const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): 
 // The "1RM" column header is an editable rep-max INPUT: type a rep count (1 = 1RM, 2 =
 // 2RM, …) and the whole golden column switches to that X-rep max, computed from each
 // set's 1RM. So it's a function (reads the live xrmReps), not a const.
+// The sets table has FIVE customizable columns: tap any header to pick what it shows.
+// Each metric knows its header label + tooltip; the per-set VALUE is rendered in
+// setRowsHtml (cellFor), which has the computed numbers in scope.
+const SET_COL_METRICS: { id: string; label: string; name: string; title: string }[] = [
+  { id: "weight", label: "W", name: "Weight × reps", title: "Weight × reps — what you actually lifted." },
+  { id: "e1rm", label: "RM", name: "Rep-max (1RM)", title: "Estimated rep-max — type how many reps in the header (1 = the 1RM, higher = that-many-rep max, computed from the 1RM). Tap a value for the formula." },
+  { id: "volume", label: "Vol", name: "Volume", title: "Volume = weight × reps." },
+  { id: "reps", label: "Reps", name: "Reps", title: "Reps done in the set." },
+  { id: "prir", label: "pRIR", name: "Predicted RIR", title: "Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. Tap a number for the maths." },
+  { id: "rir", label: "RIR", name: "Logged RIR", title: "Reps In Reserve — your logged how-many-left grade (low = near failure)." },
+];
+const SET_COLS_KEY = "colosseum.setColumns.v1";
+const SET_COLS_DEFAULT = ["weight", "e1rm", "volume", "prir", "rir"];
+let setColumns: string[] = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(SET_COLS_KEY) ?? "null");
+    if (Array.isArray(v) && v.length === SET_COLS_DEFAULT.length && v.every((x) => typeof x === "string" && SET_COL_METRICS.some((m) => m.id === x))) return v;
+  } catch { /* ignore */ }
+  return [...SET_COLS_DEFAULT];
+})();
+function setColMetric(id: string) { return SET_COL_METRICS.find((m) => m.id === id) ?? SET_COL_METRICS[0]!; }
 function setsHead(): string {
-  return `<thead><tr><th class="num">W</th>` +
-    `<th class="num"><label class="rm-head" title="Rep-max shown in this column — type how many reps: 1 = the 1RM, higher = that-many-rep max (computed from the 1RM).">` +
-    `<input type="number" class="rm-head-input" min="1" max="20" inputmode="numeric" value="${xrmReps}" aria-label="Rep max (reps)" />RM</label></th>` +
-    `<th class="num">Vol</th>` +
-    `<th class="num" title="Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. High = the set was easy (many left); ~0 = near failure. Tap a number to see the maths.">pRIR</th>` +
-    `<th class="num" title="Reps In Reserve — how many more reps you could have done (low = near failure)">RIR</th></tr></thead>`;
+  const th = (id: string, i: number): string => {
+    const m = setColMetric(id);
+    // The "RM" column carries a live rep-max input; tapping the input edits the rep
+    // count, tapping elsewhere on the header opens the metric picker (guarded below).
+    const inner = id === "e1rm"
+      ? `<label class="rm-head"><input type="number" class="rm-head-input" min="1" max="20" inputmode="numeric" value="${xrmReps}" aria-label="Rep max (reps)" />RM</label>`
+      : escapeHtml(m.label);
+    return `<th class="num setcol-th" data-setcol="${i}" title="${escapeHtml(m.title)} — tap the header to change this column">${inner}<span class="setcol-caret" aria-hidden="true">▾</span></th>`;
+  };
+  return `<thead><tr>${setColumns.map(th).join("")}</tr></thead>`;
+}
+function saveSetColumns(): void { try { localStorage.setItem(SET_COLS_KEY, JSON.stringify(setColumns)); } catch { /* ignore */ } }
+function closeSetColMenu(): void { document.getElementById("setColMenu")?.remove(); }
+/** Re-render whichever sets tables are on screen (Workouts + Analysis) — shared by the
+ * rep-max input and the column-metric picker. */
+function rerenderSetsTables(): void {
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+}
+/** Popup opened by tapping a sets-table column header: pick which metric that column
+ * shows. Choice persists per device and applies to both sets tables. */
+function openSetColMenu(anchor: HTMLElement, colIndex: number): void {
+  closeSetColMenu();
+  const cur = setColumns[colIndex];
+  const rows = SET_COL_METRICS
+    .map((m) => `<button type="button" class="setcol-opt${m.id === cur ? " is-on" : ""}" data-setcolpick="${colIndex}" data-setcolid="${escapeHtml(m.id)}" title="${escapeHtml(m.title)}"><span class="setcol-opt-tag">${escapeHtml(m.label)}</span> ${escapeHtml(m.name)}</button>`)
+    .join("");
+  const menu = document.createElement("div");
+  menu.id = "setColMenu";
+  menu.className = "setcol-menu";
+  menu.innerHTML = `<div class="setcol-menu-title muted">Show in this column</div>${rows}`;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 4)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
 }
 
 
@@ -7425,14 +7475,26 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // The whole set row is the edit handle now — tap anywhere on it (except the
   // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
   // this set's edit panel. No separate ✎ pencil button.
+  // The leading cell always carries the set's identity prefix (info button, variation /
+  // scale / machine chips), whatever metric column 0 is set to show.
+  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}`;
+  const cellFor = (id: string): string => {
+    switch (id) {
+      case "weight": return wr(s.weight, s.reps);
+      case "e1rm": return e1rmCell;
+      case "volume": return vol === null ? "—" : fmt(vol);
+      case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
+      case "prir": return prirCell;
+      case "rir": return rpeCell;
+      default: return "—";
+    }
+  };
+  const tds = setColumns
+    .map((id, i) => `<td class="num${id === "rir" ? " rpe-cell" : ""}${i === 0 ? " wcell" : ""}">${i === 0 ? prefix : ""}${cellFor(id)}</td>`)
+    .join("");
   const main =
     `<tr class="set-main${effClass}${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
-    `title="Tap to edit this set (weight, reps, bodyweight, scale)${effTitle}">` +
-    `<td class="num wcell"><button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${wr(s.weight, s.reps)}</td>` +
-    `<td class="num">${e1rmCell}</td>` +
-    `<td class="num">${vol === null ? "—" : fmt(vol)}</td>` +
-    `<td class="num">${prirCell}</td>` +
-    `<td class="num rpe-cell">${rpeCell}</td></tr>`;
+    `title="Tap to edit this set (weight, reps, bodyweight, scale)${effTitle}">${tds}</tr>`;
   // Show the WHOLE note on its own line under the set (no truncation) — in the
   // expanded set views readability beats compactness.
   const noteRow = note
@@ -11731,8 +11793,36 @@ async function init() {
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-head-input");
     if (!inp) return;
     setXrmReps(Number(inp.value));
-    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    rerenderSetsTables();
+  });
+  // Sets-table column customisation: tap a header (not its rep-max input) to open a
+  // picker of what that column shows; tap a metric to set it. Persists + re-renders.
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const pick = t.closest<HTMLElement>("[data-setcolpick]");
+    if (pick) {
+      e.preventDefault(); e.stopPropagation();
+      const i = Number(pick.dataset.setcolpick);
+      const id = pick.dataset.setcolid;
+      if (id && SET_COL_METRICS.some((m) => m.id === id) && i >= 0 && i < setColumns.length) {
+        setColumns[i] = id; saveSetColumns();
+      }
+      closeSetColMenu();
+      rerenderSetsTables();
+      return;
+    }
+    const head = t.closest<HTMLElement>(".setcol-th");
+    if (head && !t.closest(".rm-head-input")) { // the rep input keeps its own taps
+      e.preventDefault(); e.stopPropagation();
+      const open = document.getElementById("setColMenu");
+      closeSetColMenu();
+      if (!open || open.dataset.col !== head.dataset.setcol) {
+        openSetColMenu(head, Number(head.dataset.setcol));
+        document.getElementById("setColMenu")?.setAttribute("data-col", head.dataset.setcol ?? "");
+      }
+      return;
+    }
+    if (!t.closest("#setColMenu")) closeSetColMenu(); // tap outside closes it
   });
   // Category picker bar: tap a category chip to show/hide it in the list.
   els.exCatBar.addEventListener("click", (e) => {

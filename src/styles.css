@@ -1302,6 +1302,32 @@ main { padding-bottom: 5rem; }
 .rm-head-input::-webkit-outer-spin-button,
 .rm-head-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .rm-head-input { -moz-appearance: textfield; }
+/* Customisable sets-table column headers: tap one to pick what it shows. The ▾ caret
+   hints it's a chooser; the whole header is the hit area (the rep-max input keeps its
+   own taps). */
+.setcol-th { cursor: pointer; -webkit-user-select: none; user-select: none; white-space: nowrap; }
+.setcol-th:hover { color: var(--accent); }
+.setcol-caret { font-size: 0.7em; color: var(--muted); margin-left: 1px; vertical-align: middle; }
+.setcol-th:hover .setcol-caret { color: var(--accent); }
+/* The picker popup. */
+.setcol-menu {
+  position: fixed; z-index: 90; min-width: 168px; max-width: 80vw;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.22); padding: 0.3rem;
+}
+.setcol-menu-title { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem 0.3rem; }
+.setcol-opt {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left;
+  font: inherit; font-size: 0.85rem; cursor: pointer; background: none; border: none;
+  border-radius: 6px; padding: 7px 8px; color: var(--text);
+}
+.setcol-opt:hover { background: var(--accent-soft); }
+.setcol-opt.is-on { color: var(--accent); font-weight: 700; }
+.setcol-opt-tag {
+  flex: 0 0 auto; min-width: 2.2em; text-align: center; font-size: 0.74rem; font-weight: 700;
+  color: var(--muted); background: var(--accent-soft); border-radius: 4px; padding: 1px 5px;
+}
+.setcol-opt.is-on .setcol-opt-tag { color: var(--accent); }
 .tier-S { background: #b8902f; }
 .tier-A { background: #284e86; }
 .tier-B { background: #2e7d52; }
