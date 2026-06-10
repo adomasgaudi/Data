@@ -48,7 +48,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.204</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.205</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1080,10 +1080,10 @@
              5 lifts of the last 3 months, history = all exercises) re-applies automatically
              on every load / refresh and whenever you pick a different athlete. -->
         <div id="waAthleteHost" class="wa-athlete-top"></div>
-        <!-- Below the athlete carousel: the Stats button beside a mirror of the
-             CHOSEN athlete pill (it also stays highlighted in the carousel above). -->
+        <!-- Below the athlete carousel: just the Stats toggle. The chosen athlete is
+             already shown (highlighted in the admin carousel, the lone solo chip in a
+             locked user/spectator view), so no duplicate name pill here. -->
         <div id="waSelectedRow" class="wa-selected-row">
-          <div id="waSelectedPill" class="wa-selected-pill" aria-live="polite"></div>
           <button type="button" id="statsToggleBtn" class="wa-topact-btn" aria-pressed="false" title="Show the Stats section">Stats</button>
         </div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,

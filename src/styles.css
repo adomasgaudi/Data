@@ -823,12 +823,9 @@ main { padding-bottom: 5rem; }
    "↺ Default" reset pushed to the far RIGHT, so two UNRELATED controls read as separate,
    not a pair (Gestalt). Sized clearly SMALLER than the chips (lighter weight, smaller
    font) so size says "secondary setting", but a comfortable ~34px tap height (Fitts). */
-/* Below the athlete carousel: the moved Stats button beside a mirror of the chosen
-   athlete pill (which also stays highlighted in the carousel above). */
+/* Below the athlete carousel: the moved Stats button on its own thin row (the chosen
+   athlete already shows in the carousel above, so no duplicate name pill here). */
 .wa-selected-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.1rem 0 0.55rem; flex-wrap: wrap; }
-.wa-selected-pill { display: inline-flex; }
-/* The mirror pill reuses the active-chip look but is a non-interactive label. */
-.athlete-chip.is-mirror { pointer-events: none; }
 .wa-topact-btn {
   flex: 0 0 auto; box-sizing: border-box;
   display: inline-flex; align-items: center; min-height: 34px;
