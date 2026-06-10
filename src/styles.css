@@ -27,14 +27,15 @@
   --gold-soft: rgba(184, 144, 47, 0.12);
   /* Muted terracotta for destructive actions — sits in the same warm palette. */
   --danger: #a23b3b;
-  /* Lens / action colours pulled straight from the GRAPH series palette so the lift
-     chips speak the same colour language as the chart (colour theory, not arbitrary):
-     combine = ochre gold, compare = sage green, both = amethyst, remove = terracotta.
-     Fixed across light/dark like the series colours (they read on both backgrounds). */
-  --lens-combine: #b8902f;
-  --lens-compare: #4e8059;
-  --lens-both: #5b4f96;
-  --remove: #9c463a;
+  /* Lens / action colours — ONE harmonious set (colour theory, #design): a split-
+     complementary scheme on the theme. gold + terracotta are warm & analogous; teal is
+     their shared cool complement; amethyst the tertiary. No clashing yellow-green/red mix.
+     All muted, medium-toned (Vermeer palette), so they MATCH while staying distinct.
+     Fixed across light/dark like the chart series colours (they read on both). */
+  --lens-combine: #b8902f; /* ochre gold (warm) — merge into one */
+  --lens-compare: #34786f; /* pine teal (cool) — split into members; gold's complement */
+  --lens-both: #5b4f96;    /* amethyst — the tertiary (has both lenses) */
+  --remove: #9c463a;       /* terracotta (warm red) — analogous to gold, complements teal */
   /* Chart structural colours (gridlines / axis / labels / label halo), themed so
      the SVG charts follow light/dark. Series colours stay fixed (data colours). */
   --chart-grid: #d4d9e2;
@@ -3200,7 +3201,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Subtle chip: plain (white/card) background and ONLY a bottom outline — a light
    underline that follows the small corner rounding — so the names read quietly, not as
    filled buttons. The bottom border carries the lens colour when one is set (below). */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--accent); background: var(--panel); border: none; border-bottom: 1.5px solid var(--line); border-radius: var(--r-pill); padding: 0 6px 2px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+/* Subtle chip: BLACK text, plain background, only a light bottom outline; tight padding
+   and 4px corners. The lens state is carried by the bottom-outline COLOUR (text stays
+   black), so the names read as quiet labels, not filled buttons. */
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--text); background: var(--panel); border: none; border-bottom: 1.5px solid var(--line); border-radius: 4px; padding: 0 2px 1px; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
 /* While the finger is dragging the chip we follow it 1:1 — no transition lag. */
 .wa-title-lift.is-swiping { transition: none; will-change: transform; }
 /* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover lifts
@@ -3929,17 +3933,15 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wo-hidden-empty { font-size: 0.8rem; padding: 0.2rem 0; }
 .wo-hidden-show { display: block; width: 100%; margin-top: 0.5rem; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 3px 8px; text-align: center; }
 .wo-hidden-show.is-on { color: var(--accent); border-color: var(--accent); }
-/* Selected-lift name COLOUR by lens state (menu closed): gold = combined, green =
-   compared, purple = both, default = original. Set on the title names and the pills. */
-/* Lens state, themed with the graph palette (color theory): combine = gold, compare =
-   sage, both = amethyst. Text colour on both chip kinds; the title chip's bottom outline
-   and the sel-pill's border pick up the same colour so the state reads at a glance. */
-.wa-title-lift.lens-combined, .wa-sel-pill.lens-combined { color: var(--lens-combine); }
-.wa-title-lift.lens-compared, .wa-sel-pill.lens-compared { color: var(--lens-compare); }
-.wa-title-lift.lens-both, .wa-sel-pill.lens-both { color: var(--lens-both); }
+/* Lens state, themed with the graph palette (colour theory): combine = gold, compare =
+   teal, both = amethyst. The TITLE chip keeps BLACK text and shows its state only via the
+   bottom-outline colour; the picker PILL colours its text + border. */
 .wa-title-lift.lens-combined { border-bottom-color: var(--lens-combine); }
 .wa-title-lift.lens-compared { border-bottom-color: var(--lens-compare); }
 .wa-title-lift.lens-both { border-bottom-color: var(--lens-both); }
+.wa-sel-pill.lens-combined { color: var(--lens-combine); }
+.wa-sel-pill.lens-compared { color: var(--lens-compare); }
+.wa-sel-pill.lens-both { color: var(--lens-both); }
 .wa-sel-pill.lens-combined { border-color: var(--lens-combine); }
 .wa-sel-pill.lens-compared { border-color: var(--lens-compare); }
 .wa-sel-pill.lens-both { border-color: var(--lens-both); }
