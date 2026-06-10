@@ -4251,6 +4251,16 @@ function renderAthlete() {
   selectedExercise = null;
   athleteWorkouts = workoutsForUser(remapRegistryCombined(activeRecords()), els.athlete.value);
   els.summaryOut.textContent = ""; // clear last athlete's AI summary
+  // On a real athlete CHANGE (and first load), re-apply the DEFAULT analysis
+  // selections for the new athlete — this replaces the old "↺ Default" button, which
+  // now runs automatically. Guarded so ordinary re-renders don't wipe the selection.
+  if (els.athlete.value !== lastAnalysisAthlete) {
+    lastAnalysisAthlete = els.athlete.value;
+    waSelected = defaultHistorySelection();
+    waGraphSel = defaultGraphSelection();
+    titleExpanded.graph = false;
+    titleExpanded.hist = false;
+  }
   initHeatYear();
   renderAthleteProfile();
   renderSAnalysis();
@@ -14005,6 +14015,9 @@ type WaMode = "all" | "single" | "compare";
 // `waGraphSel` drives ONLY the graph. Match buttons copy one into the other.
 let waSelected: string[] = [];
 let waGraphSel: string[] = [];
+// The athlete the analysis selections were last defaulted for. Switching athlete
+// re-applies the default selections (replacing the old "↺ Default" button).
+let lastAnalysisAthlete: string | null = null;
 // Which selection the SELECTOR rendering / handlers currently act on. Set per
 // selector instance while rendering, and from the clicked container's
 // data-selscope in handlers. Consumers outside the selector (calendar pills,
@@ -14500,16 +14513,6 @@ function defaultGraphSelection(): string[] {
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
   const byFreq = exerciseCountsForUser(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
   return (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
-}
-/** "Default" button (next to the athlete bar): reset BOTH selections to their defaults
- * for the CURRENTLY-selected athlete, then re-render. (Normally the selection persists
- * across athlete switches; this is the explicit "give me the sensible default" reset.) */
-function resetAnalysisToDefault(): void {
-  waSelected = defaultHistorySelection();
-  waGraphSel = defaultGraphSelection();
-  titleExpanded.graph = false;
-  titleExpanded.hist = false;
-  deferRender(renderWorkoutAnalysis);
 }
 function renderWorkoutAnalysis(): void {
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
@@ -16276,11 +16279,6 @@ function setupWorkoutAnalysis(): void {
       // picker's group / search / show-missing filters (unlike "Select all" = shown only).
       setSelArr(waSelectorExercises().map((e) => e.name));
       debounceWaRender();
-      return;
-    }
-    // "Default" button (next to the athlete bar): reset graph + history to the defaults.
-    if (t.closest(".wa-topact-default")) {
-      resetAnalysisToDefault();
       return;
     }
     // "Trim to N" — drop the graph-selection lifts past the graph's plot budget.
