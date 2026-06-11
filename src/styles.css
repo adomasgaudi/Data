@@ -931,7 +931,9 @@ body.admin-only-hidden .other-section-lbl { display: none; }
 }
 :root[data-theme="dark"] .gmini-overlay .svgc-legend { background: rgba(30, 34, 48, 0.82); }
 .gmini-stage { min-height: 220px; }
-.gmini-foot { display: flex; align-items: center; gap: 0.5rem; }
+/* The foot squeezes onto ONE row: ‹ · dots · › · Options ▾ · Multi ▾. The dots shrink
+   (and clip if there are many) so the Options graph-settings dropdown and Multi fit. */
+.gmini-foot { display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap; }
 .gmini-nav {
   flex: none; min-width: var(--tap-min); min-height: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
@@ -939,7 +941,11 @@ body.admin-only-hidden .other-section-lbl { display: none; }
   background: var(--bg); color: var(--accent); font-size: 1.1rem; font-weight: 700; line-height: 1; cursor: pointer;
 }
 .gmini-nav:hover { border-color: var(--accent); }
-.gmini-dots { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; flex-wrap: wrap; }
+.gmini-dots { display: flex; align-items: center; justify-content: center; gap: 5px; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+/* The shared "Options ▾" graph-settings dropdown, compact in the carousel foot — just the
+   label (the long metric-summary readout is hidden here to save room). */
+.gmini-foot .wa-graph-fold { flex: 0 0 auto; }
+.gmini-foot .wa-graph-fold-cur { display: none; }
 .gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s; }
 .gmini-dot.is-on { background: var(--accent); transform: scale(1.25); }
 .athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }

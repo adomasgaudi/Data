@@ -15475,6 +15475,101 @@ function stepGraphSlide(d: number): void {
   graphCarIdx = (graphCarIdx + d + graphCarLifts.length) % graphCarLifts.length;
   paintGraphSlide();
 }
+/** The shared "Options ▾" graph dropdown — the metric chips + every config group
+ * (Data / Lines & filter / Bars & axes / Set spread / Potential / All-graphs / Assist).
+ * Built from the GLOBAL graph state (waGraphConfig, waMetrics, …) scoped to
+ * `scopeExercises` (the multi-graph's picked lifts, or the carousel's single lift), reading
+ * the open state of its sub-folds from `container` so a tap doesn't snap them shut (rule 24).
+ * Used by BOTH the full multi-graph bar and the single-lift carousel foot. */
+function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null): string {
+  const scopeAllowed = allGraphsAllowed
+    ? new Set(ALL_GRAPH_METRIC_IDS)
+    : metricsAllowedForScope(graphPerms, scopeExercises);
+  const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  const hasBarMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "bars" || m.axis === "right"); });
+  const hasSetMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "range" || m.type === "scatter"); });
+  const METRIC_GROUPS: { label: string; ids: string[] }[] = [
+    { label: "Weight", ids: ["e1rm", "weightRange"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted"] },
+    { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
+  ];
+  const openMetricGroups = new Set<string>();
+  if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-metric-group"))
+    if (d.open) { const lbl = d.querySelector(".wa-metric-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openMetricGroups.add(lbl); }
+  const metricChips = METRIC_GROUPS.map((g) => {
+    const chips = g.ids
+      .map((id) => GRAPH_METRICS.find((x) => x.id === id))
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .map((m) => {
+        const blocked = scopeExercises.length > 0 && !scopeAllowed.has(m.id);
+        const blockers = blocked ? exercisesBlockingMetric(graphPerms, scopeExercises, m.id) : [];
+        const title = blocked ? ` title="Needs review for: ${escapeHtml(blockers.join(", "))}"` : "";
+        return `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}${blocked ? " is-blocked" : ""}" data-wametric="${m.id}"${title}>${escapeHtml(m.label)}</button>`;
+      })
+      .join("");
+    const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
+    return (
+      `<details class="wa-metric-group"${nOn || openMetricGroups.has(g.label) ? " open" : ""}>` +
+      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
+      `<div class="wa-metric-chips">${chips}</div></details>`
+    );
+  }).join("");
+  const c = waGraphConfig;
+  const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
+  const compact = getTimeCompact();
+  const onoff = (on: boolean, attr: string, label: string, title: string) =>
+    `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
+  const lensCount = [c.prediction, c.decay, waHardOnly].filter(Boolean).length;
+  const openCfgGroups = new Set<string>();
+  if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
+    if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
+  const cfgGroup = (label: string, sub: string, body: string) =>
+    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
+  const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
+    `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
+    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
+    `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
+    onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."));
+  const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
+    onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
+    onoff(c.prediction, `data-wacfgtoggle="prediction"`, "Prediction", "Add a logarithmic strength forecast line.") +
+    onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."));
+  const cfgBars = hasBarMetric
+    ? cfgGroup("Bars & axes", "",
+        `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
+        `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
+        `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
+        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`)
+    : "";
+  const cfgSpread = hasSetMetric
+    ? cfgGroup("Set spread", "",
+        `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
+    : "";
+  const cfgAllGraphs = onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.");
+  const cfgAssist = onoff(assistLoggedView, `data-assistview="1"`, assistLoggedView ? "Assist: logged ×2" : "Assist: real ½",
+    assistLoggedView
+      ? "Assisted-machine sets show the machine's LOGGED reading (e.g. −40) with bodyweight ×2 — every value is 2× the real one. Tap for REAL effort."
+      : "Assisted-machine sets show your REAL effort: the counterweight halved (−40 → −20) with normal bodyweight. Tap to see the machine's LOGGED reading (×2).");
+  const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `axis · ceiling ${c.potentialCeiling ?? "—"}` : c.potentialNativeLog ? `native · ceiling ${c.potentialCeiling ?? "—"}` : "",
+    onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength AXIS by distance to a lifetime-potential ceiling — values stay in kg, the axis just compresses near the ceiling. An approach-to-ceiling reads straight; a true plateau still flattens.") +
+    onoff(!!c.potentialNativeLog, `data-wacfgtoggle="potentialNativeLog"`, "Native log (exp.)", "EXPERIMENTAL: transform each data POINT's value to its log-distance from the ceiling and plot THAT on a normal linear axis (the plotted numbers become the log values).") +
+    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
+  const cfgUi =
+    `<div class="wa-gmenu-grid">` +
+    `<div class="wa-gmenu-cell">${cfgData}</div>` +
+    `<div class="wa-gmenu-cell">${cfgLines}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
+    `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
+    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
+    `</div>`;
+  if (container) { const prevGcfg = container.querySelector<HTMLDetailsElement>(".wa-graph-fold"); if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open; }
+  const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
+  const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
+  return `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
+    `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
+    `<div class="wa-graph-menu">${cfgUi}</div>` +
+    `</details>`;
+}
 /** Build the graph "min" carousel: title + ×BW quick-option + chart stage + prev/next +
  * dots + "More" (which expands to the full multi-exercise / multi-athlete graph). */
 function renderGraphMini(): void {
@@ -15485,6 +15580,9 @@ function renderGraphMini(): void {
   if (graphCarIdx >= graphCarLifts.length) graphCarIdx = 0;
   const dots = graphCarLifts.map((_, i) => `<button type="button" class="gmini-dot${i === graphCarIdx ? " is-on" : ""}" data-gmdot="${i}" aria-label="Lift ${i + 1}"></button>`).join("");
   const bw = `<button type="button" class="wa-gov-btn gmini-bw${S.waPerBodyweight ? " is-on" : ""}" data-gmbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>`;
+  // The SAME "Options ▾" graph-settings dropdown the multi-graph view has, scoped to the
+  // slide's lift — so the single view tweaks metrics/aggregation/etc. without leaving it.
+  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
   host.innerHTML =
     `<div class="gmini-head"><span class="gmini-title" id="gminiTitle"></span></div>` +
     `<div class="gmini-stagewrap">` +
@@ -15498,6 +15596,7 @@ function renderGraphMini(): void {
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
+      optionsFold +
       `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">Multi ▾</button>` +
     `</div>`;
   paintGraphSlide();
@@ -15554,138 +15653,9 @@ function renderWaGraph(): void {
     ? new Set(ALL_GRAPH_METRIC_IDS)
     : metricsAllowedForScope(graphPerms, graphExercises);
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
-  // The bar / right-axis sliders (opacity, bar girth, right-axis height, volume shift)
-  // only matter when a VOLUME-style metric is plotted (a bars metric, or anything on
-  // the right axis) — so they're shown only then, not cluttering a pure 1RM graph.
-  const hasBarMetric = drawMetricIds.some((id) => {
-    const m = GRAPH_METRICS.find((x) => x.id === id);
-    return !!m && (m.type === "bars" || m.axis === "right");
-  });
-  // The Spread knob only matters for the PER-SET views (scatter dots / Weight Range
-  // bars), where same-day sets fan across the day — so it's shown only then.
-  const hasSetMetric = drawMetricIds.some((id) => {
-    const m = GRAPH_METRICS.find((x) => x.id === id);
-    return !!m && (m.type === "range" || m.type === "scatter");
-  });
-  // The 15 metrics were one crowded wall of chips — split into a few collapsible
-  // sub-groups (a group opens when it has an active metric). A metric still
-  // blocked for the plotted lift(s) shows greyed-out with a needs-review tip.
-  const METRIC_GROUPS: { label: string; ids: string[] }[] = [
-    { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted"] },
-    { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
-  ];
-  // Preserve which metric groups (Weight / Strength / Volume & frequency) are OPEN
-  // across this re-render. Toggling a metric PILL rebuilds the whole panel; without
-  // this the group's open attr is derived from nOn alone, so UN-clicking the last pill
-  // (nOn→0) snaps the section shut — you couldn't then click another pill in it. Read
-  // the live DOM's open state first, keyed by label (same fix as the cfg groups, rule 24).
-  const openMetricGroups = new Set<string>();
-  for (const d of box.querySelectorAll<HTMLDetailsElement>(".wa-metric-group"))
-    if (d.open) { const lbl = d.querySelector(".wa-metric-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openMetricGroups.add(lbl); }
-  const metricChips = METRIC_GROUPS.map((g) => {
-    const chips = g.ids
-      .map((id) => GRAPH_METRICS.find((x) => x.id === id))
-      .filter((m): m is NonNullable<typeof m> => !!m)
-      .map((m) => {
-        const blocked = graphExercises.length > 0 && !scopeAllowed.has(m.id);
-        const blockers = blocked ? exercisesBlockingMetric(graphPerms, graphExercises, m.id) : [];
-        const title = blocked ? ` title="Needs review for: ${escapeHtml(blockers.join(", "))}"` : "";
-        return `<button type="button" class="wa-metric${waMetrics.has(m.id) ? " is-on" : ""}${blocked ? " is-blocked" : ""}" data-wametric="${m.id}"${title}>${escapeHtml(m.label)}</button>`;
-      })
-      .join("");
-    const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
-    return (
-      `<details class="wa-metric-group"${nOn || openMetricGroups.has(g.label) ? " open" : ""}>` +
-      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
-      `<div class="wa-metric-chips">${chips}</div></details>`
-    );
-  }).join("");
-  const c = waGraphConfig;
-  const opt = (v: string, cur: string, label: string) => `<option value="${v}"${v === cur ? " selected" : ""}>${label}</option>`;
-  // The app-wide "realistic ⇄ compacted time" toggle now lives HERE in Graph
-  // options (not on the chart's own legend row), so all the graph settings sit in
-  // one place. It flips the shared pref; every time chart redraws on change.
-  const compact = getTimeCompact();
-  // Config is split into THREE collapsible sub-sections (all collapsed by default, so
-  // the menu opens compact): Data (binning + time), Lines & filter (the on/off lenses,
-  // now PILLS not checkboxes — rule 15), and Bars & axes (the visual sliders). A
-  // section's summary shows a tiny readout of its current state.
-  const onoff = (on: boolean, attr: string, label: string, title: string) =>
-    `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
-  // ×BW now lives as a standalone toggle on the graph bar (below the chart), not in
-  // here — so it's excluded from the Lines & filter count.
-  const lensCount = [c.prediction, c.decay, waHardOnly].filter(Boolean).length;
-  // Preserve which config sub-sections (Data / Lines & filter / Bars & axes / Set spread)
-  // are OPEN across this re-render: changing a slider or toggle rebuilds this whole panel,
-  // which would otherwise snap every <details> shut — the recurring "the menu collapses
-  // the moment I change a setting" bug (rule 24). Read the live DOM's open state FIRST,
-  // keyed by the section label, and re-apply it below.
-  const openCfgGroups = new Set<string>();
-  for (const d of box.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
-    if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
-  const cfgGroup = (label: string, sub: string, body: string) =>
-    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
-  // Each config section built separately so the two-column menu can place them: Data +
-  // Lines & filter across the TOP, the metric groups in the LEFT column, Bars & axes in
-  // the RIGHT column, the global "All graphs" toggle spanning the bottom.
-  const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
-    `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
-    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
-    `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
-    onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."));
-  const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
-    onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
-    onoff(c.prediction, `data-wacfgtoggle="prediction"`, "Prediction", "Add a logarithmic strength forecast line.") +
-    onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."));
-  // Bars & axes only when a volume-style (bars / right-axis) metric is plotted — its
-  // four sliders do nothing otherwise, so the section is hidden for a plain line graph.
-  const cfgBars = hasBarMetric
-    ? cfgGroup("Bars & axes", "",
-        `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
-        `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
-        `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
-        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`)
-    : "";
-  // Set-spread knob (per-set / range views only) lives in its own little group.
-  const cfgSpread = hasSetMetric
-    ? cfgGroup("Set spread", "",
-        `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
-    : "";
-  const cfgAllGraphs = onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.");
-  // Assist weight VIEW (global): real (counterweight halved, normal bodyweight) vs logged
-  // (the machine's −40 reading, bodyweight ×2 → every value 2× the real). Affects machine
-  // (assisted, negative-weight) sets everywhere; lives here as the owner asked.
-  const cfgAssist = onoff(assistLoggedView, `data-assistview="1"`, assistLoggedView ? "Assist: logged ×2" : "Assist: real ½",
-    assistLoggedView
-      ? "Assisted-machine sets show the machine's LOGGED reading (e.g. −40) with bodyweight ×2 — every value is 2× the real one. Tap for REAL effort."
-      : "Assisted-machine sets show your REAL effort: the counterweight halved (−40 → −20) with normal bodyweight. Tap to see the machine's LOGGED reading (×2).");
-  // "Potential (log)" view: strength gains are logarithmic, so a steady trainee LOOKS
-  // plateaued on a linear axis. This spaces the strength axis by how far you are from a
-  // lifetime-potential CEILING, so real (slowing) gains keep reading as a rising line.
-  // One ceiling for now (single athlete). Set it above your current best.
-  const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `axis · ceiling ${c.potentialCeiling ?? "—"}` : c.potentialNativeLog ? `native · ceiling ${c.potentialCeiling ?? "—"}` : "",
-    onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength AXIS by distance to a lifetime-potential ceiling — values stay in kg, the axis just compresses near the ceiling. An approach-to-ceiling reads straight; a true plateau still flattens.") +
-    onoff(!!c.potentialNativeLog, `data-wacfgtoggle="potentialNativeLog"`, "Native log (exp.)", "EXPERIMENTAL: transform each data POINT's value to its log-distance from the ceiling and plot THAT on a normal linear axis (the plotted numbers become the log values).") +
-    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
-  // Two-column grid: Data | Lines & filter on top, metric groups | Bars & axes below,
-  // the All-graphs toggle spanning the bottom.
-  const cfgUi =
-    `<div class="wa-gmenu-grid">` +
-    `<div class="wa-gmenu-cell">${cfgData}</div>` +
-    `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
-    `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
-    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
-    `</div>`;
-  const prevGcfg = box.querySelector<HTMLDetailsElement>(".wa-graph-fold");
-  if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open;
-  // GRAPH-3: the metric chips + advanced options (formula/aggregation/interval/
-  // smoothing/prediction/decay) all live inside the collapsible "Graph options"
-  // disclosure, so the section stays compact — just the chart shows by default.
-  // The summary names what's currently plotted so you can see it while collapsed.
-  const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
-  const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
+  // The "Options ▾" dropdown (metric chips + every config group) is built by the shared
+  // graphOptionsFoldHtml() — so the single-lift carousel can show the SAME menu. It reads
+  // the sub-folds' open state from `box` and preserves S.waGraphFoldOpen itself.
   // Graph options + the chart's Legend sit SIDE BY SIDE in one bar BELOW the chart,
   // both as floating dropdowns (their menus overlay the chart, so opening either
   // never pushes the layout or needs a scroll). The legend element is rendered by
@@ -15705,10 +15675,7 @@ function renderWaGraph(): void {
     // Graph options · Legend (relocated in below) · Compare share ONE row — the fold's
     // metric summary truncates so Compare never wraps to its own line.
     `<div class="wa-graph-ctrls">` +
-    `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
-    `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
-    `<div class="wa-graph-menu">${cfgUi}</div>` +
-    `</details>` +
+    graphOptionsFoldHtml(graphExercises, box) +
     compareBtn +
     // "Single ▴" — mirror of the carousel's "Multi ▾": flips the full multi graph back
     // to the single-lift carousel. Sits bottom-right, the same spot "Multi" occupies.
