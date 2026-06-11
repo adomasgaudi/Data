@@ -3423,6 +3423,21 @@ function openLiftExample(name: string): void {
 /** Render the version-history list (newest first) into the overlay. Each release
  * is an expandable row: version + SP + one-line note collapsed; bullet details
  * when opened. */
+/** Open the Version-history tree straight down to the NEWEST released change, so opening
+ * the page lands on the latest version expanded (not a wall of collapsed chapters). Walks
+ * the first child <details> at each level — the tree is newest-first, so that path is the
+ * latest leaf — skipping the planned "soon" row at the top. (owner request) */
+function expandLatestChangelog(): void {
+  const root = els.changelog;
+  if (!root) return;
+  const tops = [...root.querySelectorAll<HTMLDetailsElement>(":scope > details.cl-row")];
+  let node: HTMLDetailsElement | undefined = tops.find((d) => !d.classList.contains("is-soon")) ?? tops[0];
+  while (node) {
+    node.open = true;
+    node = node.querySelector<HTMLDetailsElement>(":scope > .cl-body > details.cl-row") ?? undefined;
+  }
+}
+
 function renderChangelog() {
   // Show SP without a binary floating-point tail (e.g. 83.3, not 83.30000000001).
   const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
@@ -16917,7 +16932,7 @@ function switchTopTab(name: string) {
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
   if (name === "data") void pollRefreshStatus();
   if (name === "test") renderCoachRx();
-  if (name === "changelog") renderChangelog();
+  if (name === "changelog") { renderChangelog(); expandLatestChangelog(); }
   if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
