@@ -183,6 +183,9 @@ const els = {
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
+  syncUpBtn: $<HTMLButtonElement>("syncUpBtn"),
+  syncDownBtn: $<HTMLButtonElement>("syncDownBtn"),
+  syncStatus: $("syncStatus"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -11200,6 +11203,8 @@ async function init() {
   updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   els.authBtn.addEventListener("click", showLoginPage);
+  els.syncUpBtn.addEventListener("click", () => { void syncManualToSupabase(); });
+  els.syncDownBtn.addEventListener("click", () => { void loadManualFromSupabase(); });
   document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
   document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
@@ -13179,7 +13184,19 @@ function saveManual() {
   void syncManualToSupabase();
 }
 
-/** Push all local manual entries to the shared Supabase sets table. Fire-and-forget. */
+/** Show a brief status pill near the title. */
+function showSyncStatus(type: "up" | "down" | "err", msg: string): void {
+  const el = els.syncStatus;
+  if (!el) return;
+  el.hidden = false;
+  el.className = type === "err" ? "gh-sync gh-sync--err" : "gh-sync gh-sync--ok";
+  el.textContent = msg;
+  clearTimeout((el as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t);
+  (el as HTMLElement & { _t?: ReturnType<typeof setTimeout> })._t =
+    setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+/** Push all local manual entries to the shared Supabase sets table. */
 async function syncManualToSupabase(): Promise<void> {
   if (manualEntries.length === 0) return;
   try {
@@ -13198,8 +13215,11 @@ async function syncManualToSupabase(): Promise<void> {
         dropset: false,
         percentile: null as number | null,
       }));
-    if (rows.length > 0) await upsertSets(rows);
-  } catch { /* network failure — local copy is fine */ }
+    if (rows.length > 0) {
+      await upsertSets(rows);
+      showSyncStatus("up", `⬆ ${rows.length} uploaded`);
+    }
+  } catch { showSyncStatus("err", "⬆ failed"); }
 }
 
 /** Fetch all manual sets from Supabase and merge them into manualEntries (adds
@@ -13236,6 +13256,7 @@ async function loadManualFromSupabase(): Promise<void> {
       saveManualLocal();
       mergeManualSets();
       scheduleRender();
+      showSyncStatus("down", `⬇ ${added} new`);
     }
   } catch { /* Supabase unreachable — local data is fine */ }
 }
