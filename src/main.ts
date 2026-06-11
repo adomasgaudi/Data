@@ -575,9 +575,8 @@ function canEditCurrentAthlete(): boolean {
 }
 
 /* ---- Real auth via Supabase magic-link ----------------------------------------
- * Users enter their email → receive a one-click link → land back here signed in.
- * Admin (g@cool.lt) gets the full admin view; any other known username gets their
- * locked user view; unknown emails land in spectator view. */
+ * Select a username + password. Admin gets the full admin view;
+ * known athletes get their locked user view; others land in spectator view. */
 import { supabase, isAdmin } from "./supabase";
 import { fetchFromSupabase } from "./dataSource";
 
@@ -648,7 +647,7 @@ function applySession(email: string | undefined): void {
 }
 
 /** Extract a username from an auth email.
- *  "mantasp@col.app" → "mantasp";  "g@cool.lt" → null (handled as admin above). */
+ *  "mantasp@col.app" → "mantasp"; "admin@col.app" → null (handled as admin above). */
 function findUsernameByEmail(email: string): string | null {
   if (email.endsWith("@col.app")) return email.slice(0, email.indexOf("@"));
   return null;

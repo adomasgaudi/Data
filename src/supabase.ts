@@ -37,7 +37,7 @@ export interface DbProfile {
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
-export const ADMIN_EMAIL = "g@cool.lt";
+export const ADMIN_EMAIL = "admin@col.app";
 
 export async function getSession() {
   const { data } = await supabase.auth.getSession();

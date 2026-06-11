@@ -31,7 +31,7 @@ jobs:
           simonasputrius:si
           brigita_r:br
           monika:mo
-          g@cool.lt:ag
+          admin:ag
           "
           FAILED=0
           for pair in $PAIRS; do
