@@ -536,6 +536,44 @@ function nameForUsername(username: string | null): string {
   return [...els.athlete.options].find((o) => o.value === username)?.text ?? "User";
 }
 
+// ---- EDIT PERMISSIONS — the read-only invariant (SSOT) ----------------------------
+// This is a soft-auth viewer, but EDITS must respect the active view:
+//  • admin               → may edit anything.
+//  • user (locked)       → may edit ONLY their OWN athlete's per-athlete data
+//                          (sets, body stats, "trained alone" tags); never another
+//                          athlete, never app-wide exercise metadata.
+//  • spectator/logged-out → read-only everywhere.
+// These two predicates are the SINGLE place that answers "may this write happen?".
+// Every DATA setter checks the matching one, so enforcement lives at the writes —
+// not only the UI — and a missed button therefore can't leak an edit. (An admin
+// PREVIEWING a user/spectator view is gated too, for a faithful preview; switch back
+// to admin to edit.) Harmless local view/pref state — athlete selection, language,
+// name mode, view mode — is deliberately NOT gated; only athlete data + global
+// exercise metadata are.
+
+/** May the current view edit ATHLETE-SCOPED data (sets / body stats / tags) for
+ * `username`? Admin: any athlete. User: only the athlete their view is locked to.
+ * Spectator / logged-out: never. */
+function canEditAthlete(username: string | null): boolean {
+  if (viewMode === "admin") return true;
+  if (viewMode === "user") {
+    const own = userViewUsername();
+    return !!username && !!own && username === own;
+  }
+  return false; // logged-out / spectator
+}
+/** May the current view edit GLOBAL exercise metadata (renames, codes, short names,
+ * bodyweight coeffs, difficulty multipliers, tier/muscle tags, merges, graph perms…)?
+ * Admin only — it changes EVERY athlete's view, so a locked user/spectator never can. */
+function canEditGlobalMeta(): boolean {
+  return viewMode === "admin";
+}
+/** Per-athlete edits in the UI act on the CURRENTLY-selected athlete (locked to the
+ * user's own athlete in non-admin views), so this is the guard for set / tag edits. */
+function canEditCurrentAthlete(): boolean {
+  return canEditAthlete(els.athlete.value);
+}
+
 /* ---- Decorative auth (NOT enforced): log in / log out + the login page ----
  * Logging in just enters admin view; logging out drops to the logged-out view
  * (Adomas only). The login page (the gate) can be re-opened any time. The
@@ -706,6 +744,7 @@ function coeffRangeFor(exerciseName: string): { min: number; max: number } {
 }
 
 function setCoeff(exerciseName: string, value: number) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
   coeffOverrides[exerciseName] = value;
   delete coeffRanges[exerciseName]; // a single value supersedes any range
   saveCoeffs();
@@ -713,6 +752,7 @@ function setCoeff(exerciseName: string, value: number) {
 
 /** Set the bodyweight-part range (min/max). The average is what the 1RM uses. */
 function setCoeffRange(exerciseName: string, min: number, max: number) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
   const lo = Math.min(min, max), hi = Math.max(min, max);
   coeffRanges[exerciseName] = { min: lo, max: hi };
   delete coeffOverrides[exerciseName]; // a range supersedes a single pin
@@ -813,6 +853,7 @@ function mgsFor(name: string): MuscleGroup[] {
 }
 /** Set one muscle's involvement level (0–4); persists + keeps it in the backup. */
 function setMgLevel(name: string, muscle: MuscleGroup, level: number) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
   const all = metaOverrides.mgLevel ?? (metaOverrides.mgLevel = {});
   (all[name] ?? (all[name] = {}))[muscle] = level;
   saveMetaOverrides();
@@ -890,6 +931,7 @@ function metaDefault(kind: MetaKind, name: string): string {
 }
 /** Replace the whole override list for one dimension (empty → back to auto default). */
 function setMetaSet(kind: MetaKind, name: string, values: string[]) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
   const set = metaOverrides[`${kind}Set` as const]!, single = metaOverrides[kind]!;
   if (!values.length) { delete set[name]; delete single[name]; }
   else { set[name] = values; single[name] = values[0]!; }
@@ -1896,6 +1938,7 @@ function showToast(message: string, actionLabel: string, onAction: () => void, m
 /** Soft-delete a set of sets (by id), log it, and offer a 10s undo. The sets stay
  * recoverable in Settings → Data health → Hidden sets even after the toast is gone. */
 function deleteSetsWithUndo(ids: string[], label: string): void {
+  if (!canEditCurrentAthlete()) return; // read-only view / not your athlete
   const real = ids.filter((id) => !deletedSets.has(id));
   if (!real.length) return;
   for (const id of real) deletedSets.add(id);
@@ -1921,10 +1964,12 @@ const notComparableSets: Set<string> = (() => {
   catch { return new Set(); }
 })();
 function setSetNotComparable(id: string, on: boolean): void {
+  if (!canEditCurrentAthlete()) return;
   if (on) notComparableSets.add(id); else notComparableSets.delete(id);
   saveJson(NC_SETS_KEY, [...notComparableSets]);
 }
 function setRpe(id: string, v: string | null) {
+  if (!canEditCurrentAthlete()) return;
   if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
   else rpeGrades[id] = v;
   saveJson(RPE_STORE_KEY, rpeGrades);
@@ -2200,6 +2245,7 @@ function applySetOverride(r: SetRecord): SetRecord {
 /** Set or clear a per-set incline LEVEL override (the variation popup's editable
  * SQ/Smith/cm). Pass value=null to clear back to the note-parsed level. */
 function setSetOverrideLevel(id: string, dim: LevelDim, value: number | null): void {
+  if (!canEditCurrentAthlete()) return;
   const o = setOverrides[id] ?? {};
   if (value === null || !Number.isFinite(value)) { delete o.levelDim; delete o.levelValue; }
   else { o.levelDim = dim; o.levelValue = value; }
@@ -2210,6 +2256,7 @@ function setSetOverrideLevel(id: string, dim: LevelDim, value: number | null): v
 /** Set or clear the note-text override for a set (empty string clears it back to
  * the original CSV note). Kept separate from the numeric fields above. */
 function setSetOverrideNote(id: string, value: string, originalNote: string): void {
+  if (!canEditCurrentAthlete()) return;
   const o = setOverrides[id] ?? {};
   const trimmed = value.trim();
   // Storing the original verbatim is pointless — only keep a genuine change.
@@ -2221,6 +2268,7 @@ function setSetOverrideNote(id: string, value: string, originalNote: string): vo
 }
 /** Set or clear one numeric override field for a set (empty/NaN clears just it). */
 function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight" | "scale", value: number | null) {
+  if (!canEditCurrentAthlete()) return;
   const o = setOverrides[id] ?? {};
   if (value === null || !Number.isFinite(value)) delete o[field];
   else o[field] = value;
