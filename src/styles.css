@@ -184,6 +184,9 @@ body {
 .brand-title { cursor: pointer; display: inline-flex; align-items: center; }
 .brand-title:hover, .brand-title.is-back { color: var(--accent); }
 .brand-back { font-size: 1.4em; line-height: 0; margin-right: 0.1em; font-weight: 700; }
+/* Small grey "spectator" label beside the title in the logged-out (read-only) view. */
+.view-role-label { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.3px; color: var(--muted); white-space: nowrap; }
+.view-role-label[hidden] { display: none; }
 .view-badge {
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

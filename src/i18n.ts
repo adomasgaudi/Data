@@ -238,6 +238,7 @@ const LT: Record<string, string> = {
   "Admin": "Admin",
   "User": "Vart.",
   "Spec": "Žiūr.",
+  "spectator": "žiūrovas",
   "Simple": "Papr.",
   "Adv": "Išpl.",
   // ---- Athletes (stats editor) ----

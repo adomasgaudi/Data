@@ -17222,6 +17222,10 @@ function updateBrand() {
   // just the page name (no arrow). i18n translates the name via its text node.
   el.innerHTML = onHome ? name : `<span class="brand-back" aria-hidden="true">‹</span>${name}`;
   el.title = onHome ? name : "Back to home";
+  // Spectator (logged-out) view: a small grey "spectator" label beside the title so it's
+  // clear you're in the read-only public view (no admin/user controls).
+  const roleLbl = document.getElementById("viewRoleLabel");
+  if (roleLbl) roleLbl.hidden = viewMode !== "loggedout";
 }
 
 function setOtherSheetOpen(open: boolean) {
