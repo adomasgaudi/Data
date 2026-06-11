@@ -3487,11 +3487,11 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    Select all / Complete (.wa-deselect-btn, styled by .wa-clear) — no longer a big title ✕. */
 /* "Match" moved into the picker drawer's ⚙ menu as a text button (.wa-match-btn, styled
    by .wa-clear) — no longer a title-row icon. */
-/* The exercise-picker opener is a WHITE PAPER STICKY-NOTE TAB poking out of the right edge
+/* The exercise-picker opener is a plain WHITE TAB poking out of the right edge
    (≈ the screen edge on a phone) — DRAG it LEFT (or tap) to pull out the pick-exercise menu.
    The handle now LOOKS like the drawer it opens, and a "‹" pull-hint + a peel-out hover make
    the drag obvious — the open concern logged in PB-13. Square at the attached right edge, a
-   soft peel-shadow + folded dog-ear at the free left edge. Bled to the page edge with
+   soft lift-shadow at the free left edge (no sticky-note tint / dog-ear). Bled to the page edge with
    --wa-pick-bleed (0.7rem inside the graph's padded card, 0 in the unpadded history fold) so
    BOTH selectors' tabs sit flush with the same edge. touch-action:pan-y: a vertical drag still
    scrolls; a horizontal drag is claimed by JS. (PB-13 — fix site; drag wiring in src/main.ts.) */
@@ -3501,26 +3501,21 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   width: 30px; height: 56px; padding: 6px 0; margin: 0;
   cursor: grab; white-space: nowrap; -webkit-user-select: none; user-select: none;
-  color: #8a7f63; font-family: inherit;
-  background: linear-gradient(90deg, #fbf4e4 0%, #fffef9 65%);
+  color: var(--muted); font-family: inherit;
+  background: var(--panel);
   border: none; border-radius: 8px 0 0 8px;
-  /* Layered shadows = a paper tab lifted off the screen, peeling at the left. */
+  /* Plain white tab (no sticky-note tint / dog-ear) — kept lifted off the page with a
+     neutral shadow so it still reads as a pull-out handle. */
   box-shadow: -6px 2px 13px rgba(20, 24, 38, 0.20), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
   touch-action: pan-y; transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
-/* A peeled "dog-ear" at the free (bottom-left) corner of the tab. */
-.wa-title-picker::after {
-  content: ""; position: absolute; left: 0; bottom: 0; width: 11px; height: 11px;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0) 55%), #f1e9d6;
-  border-radius: 0 2px 0 8px;
-}
-/* Hover/active: the note peels out a touch further to invite the pull-left drag. */
+/* Hover/active: the tab peels out a touch further to invite the pull-left drag. */
 .wa-title-picker:hover, .wa-title-picker:active {
   transform: translateY(-50%) translateX(-3px);
   box-shadow: -10px 3px 18px rgba(20, 24, 38, 0.26), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
 }
 /* "‹" pull-hint at the top of the tab — points the way to drag it open. */
-.wa-pick-pull { font-size: 1rem; line-height: 1; font-weight: 700; color: #b8902f; }
+.wa-pick-pull { font-size: 1rem; line-height: 1; font-weight: 700; color: var(--accent); }
 /* Vertical "Pick" label, reading bottom→top up the tab. */
 .wa-pick-tab-txt {
   writing-mode: vertical-rl; transform: rotate(180deg);
@@ -3889,20 +3884,21 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* The slide-in card holds the controls (group-by / period / First-N / ⚙) + the chips.
    Inline it's a plain block; swiped in, .is-pick-drawer makes it a fixed right panel. */
 .wa-pick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.4rem; margin: 0 0 0.4rem; }
-/* The drawer is a WHITE PAPER STICKY NOTE pulled out leftward from the right edge:
-   warm paper-white (in any theme — it's deliberately paper), squared-off at the
-   attached right edge, a soft peel-shadow + dog-ear at the free left edge. Swipe it
-   right to send it back; there's no close button. */
+/* The drawer is a plain WHITE sheet pulled out leftward from the right edge:
+   the card colour (--panel), squared-off at the attached right edge, a soft lift-shadow
+   at the free left edge (no sticky-note tint / dog-ear). Swipe it right to send it back;
+   there's no close button. */
 .wa-pick-card.is-pick-drawer {
   position: fixed; z-index: 61; top: 3rem; right: 0;
   bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--wa-kb-inset, 0px)) + 3.4rem);
   width: min(82vw, 22rem); max-height: none; margin: 0;
   display: flex; flex-direction: column;
   padding: 0.75rem 0.8rem 0.95rem; overflow: hidden; overscroll-behavior: contain;
-  color: #2c2a24;
-  background: linear-gradient(180deg, #fffef9 0%, #fdf8ec 100%);
+  color: var(--text);
+  background: var(--panel);
   border: none; border-radius: 3px 0 0 3px;
-  /* Layered shadows = a sheet of paper lifted off the screen, peeling at the left. */
+  /* Plain white drawer (no sticky-note tint / dog-ear) — lifted off the page with a
+     neutral shadow so it still reads as a slide-out sheet. */
   box-shadow: -14px 0 28px rgba(20, 24, 38, 0.22), -2px 0 0 rgba(0, 0, 0, 0.05), inset 6px 0 12px -8px rgba(0, 0, 0, 0.12);
   transform: translateX(0); transition: transform 0.22s ease;
   /* pan-y: scroll the chips vertically; a horizontal drag closes the drawer. */
@@ -3913,12 +3909,6 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-pick-card.is-pick-drawer.is-dragging { transition: none; }
 /* No text selection / grabbing cursor while a drawer drag is in progress. */
 html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user-select: none; cursor: grabbing !important; }
-/* A peeled "dog-ear" at the free (bottom-left) corner of the note. */
-.wa-pick-card.is-pick-drawer::after {
-  content: ""; position: absolute; left: 0; bottom: 0; width: 22px; height: 22px;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0) 55%), #f1e9d6;
-  border-radius: 0 3px 0 3px; box-shadow: 1px -1px 2px rgba(0, 0, 0, 0.12);
-}
 /* On the paper, plain control text reads dark; keep the accent labels readable. */
 .wa-pick-card.is-pick-drawer .wa-pick-lbl,
 .wa-pick-card.is-pick-drawer .wa-group,
