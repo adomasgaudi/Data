@@ -15124,7 +15124,19 @@ function ensurePickBackdrop(): void {
   const bd = document.createElement("div");
   bd.id = "waPickBackdrop";
   bd.className = "wa-pick-backdrop";
-  bd.addEventListener("pointerdown", closePickDrawer); // tap the dimmed area to close
+  // Tap the dimmed film to close — DISMISS-ONLY. The tap must NOT fall through to the
+  // control beneath it (the "select with a bit of lag" bug): closePickDrawer() removes the
+  // backdrop on pointerdown, so the click this tap then generates would land on whatever is
+  // now under the pointer. So we swallow the pointerdown AND eat that follow-up click at
+  // document-capture (before it can reach any control). (owner request — popup backdrop.)
+  bd.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const eat = (ev: Event) => { ev.preventDefault(); ev.stopPropagation(); };
+    document.addEventListener("click", eat, { capture: true, once: true });
+    window.setTimeout(() => document.removeEventListener("click", eat, true), 500); // cleanup if no click follows
+    closePickDrawer();
+  });
   document.body.appendChild(bd);
 }
 function openPickDrawer(scope: SelScope): void {
