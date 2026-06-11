@@ -15,9 +15,9 @@
 export interface Release {
   version: string;
   /** 2–5 word label shown collapsed in the summary row. */
-  shortTitle?: string;
+  shortTitle: string;
   /** Task code e.g. "DATA-12" or "CHART-5" — shown beside the version. */
-  code?: string;
+  code: string;
   /** 5–15 word description, shown expanded in the body. */
   title: string;
   /** Story points. For a node with children this is the (auto-summed) total. */
@@ -38,6 +38,8 @@ export interface Release {
 /** Planned, not-yet-built work — pinned at the top with a "soon" tag. */
 const SOON: Release = {
   version: "next",
+  shortTitle: "Coming soon",
+  code: "",
   title: "Coming soon",
   sp: 0,
   soon: true,
