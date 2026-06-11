@@ -910,9 +910,13 @@ body.admin-only-hidden .other-section-lbl { display: none; }
    Stats carousel above). Each slide reuses the full chart engine, locked to one lift +
    the current athlete; "More" expands to the full multi-exercise / multi-athlete graph. ── */
 .wa-gmini { display: flex; flex-direction: column; gap: 0.5rem; }
-.gmini-head { display: flex; align-items: center; gap: 0.5rem; }
-.gmini-title { font-size: 1.1rem; font-weight: 700; color: var(--accent); flex: 1; min-width: 0; }
-.gmini-opts { display: flex; align-items: center; gap: 4px; flex: none; }
+/* Single-lift carousel header: the exercise name is the focus — show it LARGE and
+   CENTERED across the card (owner request), with the kg/×BW control tucked in the
+   right corner. A 1fr·auto·1fr grid centres the title against the full width while the
+   empty left column balances the right-hand opts, so the name stays truly centred. */
+.gmini-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.5rem; }
+.gmini-title { grid-column: 2; justify-self: center; text-align: center; min-width: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.2; color: var(--accent); }
+.gmini-opts { grid-column: 3; display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .gmini-stage { min-height: 220px; }
 .gmini-foot { display: flex; align-items: center; gap: 0.5rem; }
 .gmini-nav {
