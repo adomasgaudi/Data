@@ -450,3 +450,14 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **Root cause:** the three-step version update (bump `<span class="version">` in `index.html`, prepend entry to `RELEASES` in `src/changelog.ts`, rebuild `dist/`) is easy to forget in parts — especially when background agents rerun scripts or when the AI focuses only on the code change and not the version bookkeeping.
 - **Fix:** added as CLAUDE.md rule 29: every change MUST do all three steps before committing. Check with `grep 'span class="version"'` and `head RELEASES` before pushing.
 - **If it recurs:** before any commit, assert `index.html` version == newest `RELEASES[0].version` == `CURRENT_VERSION`.
+
+---
+
+## PB-15 — Manual sets with no `seq` are silently filtered out of every Supabase upload
+
+- **First seen:** 2026-06-11, Samsung Android, Brave (usual browser + incognito). No sync indicator, no data in incognito.
+- **Recurrence count:** 1 (but affected ALL legacy manual entries from the start).
+- **Symptom:** Upload/download buttons show in Settings but nothing is synced. Incognito browser shows no manually-added sets. No error shown.
+- **Root cause:** `syncManualToSupabase` filters `manualEntries.filter(m => m.seq !== undefined)`. Any entry added *before* the `seq` field was introduced (b.2.8.274) has `seq: undefined` and is silently dropped. Since ALL of the user's entries predate the seq field, zero rows are ever sent to Supabase.
+- **Fix (b.2.8.279):** Back-fill `seq` for entries missing it at upload time (`Date.now() % 2e9 + i`), then save to localStorage so they're stable on next call. Also show status for "nothing to upload" and "nothing new" so silent no-ops are visible.
+- **If it recurs:** check `manualEntries.filter(m => m.seq !== undefined).length` in the console — should equal `manualEntries.length`.

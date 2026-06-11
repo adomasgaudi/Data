@@ -13199,6 +13199,12 @@ function showSyncStatus(type: "up" | "down" | "err", msg: string): void {
 /** Push all local manual entries to the shared Supabase sets table. */
 async function syncManualToSupabase(): Promise<void> {
   if (manualEntries.length === 0) return;
+  // Back-fill seq for entries added before the seq field existed.
+  let seqDirty = false;
+  manualEntries.forEach((m, i) => {
+    if (m.seq === undefined) { m.seq = (Date.now() % 2000000000) + i + 1; seqDirty = true; }
+  });
+  if (seqDirty) saveManualLocal();
   try {
     const rows = manualEntries
       .filter((m) => m.seq !== undefined)
@@ -13217,7 +13223,9 @@ async function syncManualToSupabase(): Promise<void> {
       }));
     if (rows.length > 0) {
       await upsertSets(rows);
-      showSyncStatus("up", `⬆ ${rows.length} uploaded`);
+      showSyncStatus("up", `⬆ ${rows.length} synced`);
+    } else {
+      showSyncStatus("up", "⬆ nothing to upload");
     }
   } catch { showSyncStatus("err", "⬆ failed"); }
 }
@@ -13230,7 +13238,7 @@ async function loadManualFromSupabase(): Promise<void> {
       .from("sets")
       .select("*")
       .gte("set_number", 100000000);
-    if (error || !rows || rows.length === 0) return;
+    if (error || !rows || rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
     const localIds = new Set(manualEntries.map((m) => m.id));
     let added = 0;
     for (const r of rows as import("./supabase").DbSet[]) {
