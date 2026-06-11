@@ -16977,6 +16977,7 @@ function placeXddFixed(btn: HTMLElement, menu: HTMLElement): void {
   const r = btn.getBoundingClientRect();
   const m = 6;
   menu.style.position = "fixed";
+  menu.style.right = "auto"; // some menus (e.g. login) pin right:0 in CSS — clear it so left/width win
   menu.style.minWidth = `${Math.round(r.width)}px`;
   menu.style.left = "0px"; menu.style.top = "0px"; // reset before measuring
   const mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -17024,7 +17025,7 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     const menu = dd.querySelector<HTMLElement>(".xdd-menu");
     menu?.setAttribute("hidden", "");
     // Undo any fixed-popup placement so the default absolute CSS resumes next open.
-    if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.minWidth = ""; }
+    if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
   };
   dd.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -17033,10 +17034,12 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       const opening = menu.hasAttribute("hidden");
       menu.toggleAttribute("hidden", !opening);
       dd.classList.toggle("open", opening);
-      // The add-set variation pickers live in a clipping scroll-row — open them as a fixed
-      // popup so the menu isn't squashed into a tiny scroll strip (else reset to absolute).
-      if (opening && dd.classList.contains("wo-af-dim")) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
-      else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.minWidth = ""; }
+      // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow:
+      // the add-set pickers (squashed in a clipping scroll-row) and the login user
+      // picker (low on a centred card → its long list ran off the bottom of the screen).
+      const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("login-input");
+      if (opening && fixedPopup) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
+      else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
       return;
     }
     const opt = t.closest<HTMLElement>(".xdd-opt");
