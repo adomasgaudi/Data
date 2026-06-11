@@ -6932,6 +6932,13 @@ function setDisplay(raw: SetRecord): string {
   // Without it, editing a set's note (or that note's difficulty) updated the
   // expanded chip but left the collapsed compact line on the old, raw-note value.
   const s = applySetOverride(raw);
+  // Effort underline (collapsed view): red = a HARD set, orange = a MID set; warm-ups
+  // stay plain (owner request). Same effort classification (logged-or-predicted RIR) the
+  // expanded rows colour their left bar by; the strength sim is memoised so this is cheap.
+  const effFormula = currentFormula();
+  const effClass = setEffortClass(s, predictedRir(currentStrengthFor(currentStrengthByUserExercise(effFormula), s), s.weight, s.reps, effFormula));
+  const effCls = effClass === "hard" ? "wo-eff wo-eff-hard" : effClass === "mid" ? "wo-eff wo-eff-mid" : "";
+  const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
   const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
@@ -6949,7 +6956,7 @@ function setDisplay(raw: SetRecord): string {
   // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
   // show "UN" with the reps instead of a weight number.
   if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
-    return `${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`;
+    return effWrap(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`);
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -6965,7 +6972,7 @@ function setDisplay(raw: SetRecord): string {
     const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
     const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
     const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`;
+    return effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`);
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -6973,9 +6980,9 @@ function setDisplay(raw: SetRecord): string {
     // expanded rows) — a long note used to dump inline and wrap into a huge block,
     // breaking the compact day line. Keep it the width of a normal weight^reps.
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
-    return `${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`;
+    return effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`);
   }
-  return `${chips}${wr(s.weight, s.reps)}${mach}`;
+  return effWrap(`${chips}${wr(s.weight, s.reps)}${mach}`);
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -7656,7 +7663,12 @@ const dayNumber = (iso: string): number => Math.round(Date.parse(iso) / MS_PER_D
  * as the displayed 1RM, so it lines up with the per-set effective load fed into
  * predictedRir. Keyed "username exerciseName" → (dayNumber → level). Built once
  * per render. */
+let strengthByExCache: { formula: OneRepMaxFormula; map: Map<string, Map<number, number>> } | null = null;
 function currentStrengthByUserExercise(formula: OneRepMaxFormula): Map<string, Map<number, number>> {
+  // Memoised per synchronous pass (like computedRecords): the collapsed set tokens call
+  // this once each (for the effort underline), and the graph/effort code reuse it — so
+  // compute the whole fade-sim once and share it; cleared on the next microtask (no stale).
+  if (strengthByExCache && strengthByExCache.formula === formula) return strengthByExCache.map;
   // 1) Best effective 1RM reached on each day, per athlete+exercise.
   const byKeyDay = new Map<string, Map<number, number>>();
   for (const r of computedRecords()) {
@@ -7687,6 +7699,8 @@ function currentStrengthByUserExercise(formula: OneRepMaxFormula): Map<string, M
     }
     out.set(key, levels);
   }
+  strengthByExCache = { formula, map: out };
+  queueMicrotask(() => { strengthByExCache = null; });
   return out;
 }
 

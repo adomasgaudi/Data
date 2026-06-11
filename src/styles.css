@@ -1908,6 +1908,12 @@ select.subtle-select:hover, select.subtle-select:focus {
 }
 .wo-scale-up { color: var(--gold); background: var(--gold-soft); } /* HARDER (×>1): warm/gold */
 .wo-uncmp { color: var(--muted); background: var(--line); } /* "UN" tag — muted, not blue */
+/* Collapsed-view set effort underline: red = HARD set, orange = MID; warm-ups stay plain
+   (no class). Same colours as the expanded rows' effort bars (#c0392b / #e08a1e). A
+   border-bottom hugs the weight^reps token; the superscript reps stay inside it. */
+.wo-eff { border-bottom: 2px solid var(--eff-uline); padding-bottom: 1px; }
+.wo-eff-hard { --eff-uline: #c0392b; }
+.wo-eff-mid { --eff-uline: #e08a1e; }
 /* 1RM derivation — a readable, math-paper-style breakdown (one step per line). */
 .rm-derive { font-family: Georgia, "Times New Roman", serif; font-size: 0.82rem; color: var(--text); margin: 0.2rem 0; }
 .rm-step { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.12rem 0; border-bottom: 1px dotted var(--line); }
