@@ -417,3 +417,25 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   class — those need the same treatment, see the `.xdd`/RIR dropdowns), or its
   menu body isn't a direct `:scope > :not(summary)` child, or it's not
   `position:absolute`. Check those three before adding a one-off handler.
+
+## PB-5 — "everything is broken / no buttons work" (whole-app dead on load)
+
+- **Seen:** 2026-06-11, Samsung Android phone, Brave browser, live GitHub Pages site.
+- **Recurrence count:** 3 reports in one day (b.2.8.265 → b.2.8.268) before the root was found.
+- **Symptom:** the page renders but NOTHING responds — tabs, Settings, section
+  folds all dead. No visible error.
+- **Failed fixes (symptom-patching):** auth-gate tweaks (b.2.8.267 signed-in class,
+  b.2.8.268 no-forced-gate) — plausible-looking but NOT the cause.
+- **Real root cause:** the Data-tab HTML block (added in b.2.8.265) used CURLY
+  quotes for attributes (`id=”refreshStatusBtn”`), so `getElementById` found
+  nothing and the strict `$()` helper threw `missing #refreshStatusBtn` while
+  building the module-level `els` object → the WHOLE bundle died before any
+  event listener was attached. One bad character = total app failure.
+- **Fix (b.2.8.269):** straight quotes restored; swept the whole file for `=”`.
+- **How it was finally caught:** running the production bundle in jsdom and
+  reading the thrown error — NOT by guessing from screenshots.
+- **If it recurs (any "nothing works" report):** (1) FIRST reproduce: load
+  dist/index.html in jsdom (see the harness pattern in this entry's commit) and
+  read the actual exception; never guess. (2) Check `els` — any `$("id")` whose
+  element was removed/renamed in index.html kills the app at load. (3) Grep
+  `=”` for curly-quote attributes after any AI writes HTML.
