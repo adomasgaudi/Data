@@ -3849,6 +3849,12 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   background: var(--page);
 }
 .wa-selector-sticky .wa-sel-header { margin: 0; }
+/* While a pick drawer is open, drop the sticky selector to static so it stops creating a
+   stacking context — otherwise the fixed drawer (z-61) is TRAPPED inside this sticky bar's
+   z-35 context and renders UNDER the backdrop film (the History drawer looked "darker" than
+   the Graph one, whose selector isn't sticky). The drawer covers the inline selector anyway,
+   so losing stickiness while it's open is invisible; it reverts on close. */
+body.wa-pick-open .wa-selector-sticky { position: static; }
 #waAssign:empty { display: none; }
 .wa-sel-tools > .wa-filters, .wa-sel-tools > .wa-chips-fold {
   margin: 0; padding: 0; border: none; background: none; position: static; overflow: visible;

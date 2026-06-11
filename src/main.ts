@@ -15143,6 +15143,7 @@ function openPickDrawer(scope: SelScope): void {
   if (pickDrawerScope === scope) return;
   pickDrawerScope = scope;
   curSelScope = scope; // chip taps in the drawer act on THIS selector's selection
+  document.body.classList.add("wa-pick-open"); // free the drawer from the sticky selector's stacking context
   ensurePickBackdrop();
   const box = document.getElementById(`waPickCard-${scope}`);
   if (!box) return;
@@ -15153,6 +15154,7 @@ function openPickDrawer(scope: SelScope): void {
 function closePickDrawer(): void {
   if (pickDrawerScope === null) return;
   pickDrawerScope = null;
+  document.body.classList.remove("wa-pick-open");
   document.getElementById("waPickBackdrop")?.remove();
   for (const s of ["graph", "hist"] as SelScope[]) {
     const box = document.getElementById(`waPickCard-${s}`);
@@ -15170,6 +15172,7 @@ function applyPickDrawer(): void {
   if (pickDrawerScope === null) return;
   const box = document.getElementById(`waPickCard-${pickDrawerScope}`);
   if (!box) return;
+  document.body.classList.add("wa-pick-open"); // keep the drawer above the backdrop after a re-render
   ensurePickBackdrop();
   box.hidden = false;
   box.classList.add("is-pick-drawer");
