@@ -181,6 +181,7 @@ const els = {
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
+  authBtn: $<HTMLButtonElement>("authBtn"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -362,6 +363,10 @@ let actualRole: ActualRole = (() => {
   try { const v = localStorage.getItem("colosseum.role.v1"); if (v === "admin" || v === "user" || v === "spectator") return v; } catch { /* ignore */ }
   return "admin";
 })();
+function setActualRole(r: ActualRole): void {
+  actualRole = r;
+  try { localStorage.setItem("colosseum.role.v1", r); } catch { /* ignore */ }
+}
 /** True only for a REAL admin — the only role that may freely switch view modes. */
 function isAdminRole(): boolean { return actualRole === "admin"; }
 /** In user view, which athlete the dashboard is locked to (their username), as
@@ -380,6 +385,62 @@ const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "l
 function analysisTabName(): string {
   return simplifiedView ? "s-analysis" : "analysis";
 }
+// ── Local auth (no Supabase) ──────────────────────────────────────────────────
+// Passwords are the first 2 characters of each username; admin = "ag".
+// This is intentionally simple — the site is semi-private, not secure.
+const LOCAL_PASSWORDS: Record<string, string> = { admin: "ag" };
+(function buildPasswords() {
+  for (const username of Object.keys(ATHLETES)) {
+    LOCAL_PASSWORDS[username] = username.slice(0, 2);
+  }
+})();
+
+function showLoginPage(): void {
+  const gate = document.getElementById("loginGate");
+  if (gate) gate.hidden = false;
+  document.body.classList.add("locked");
+  const err = document.getElementById("loginErr") as HTMLElement | null;
+  if (err) { err.hidden = true; err.textContent = ""; }
+  (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
+}
+function hideLoginPage(): void {
+  const gate = document.getElementById("loginGate");
+  if (gate) gate.hidden = true;
+  document.body.classList.remove("locked");
+  try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
+}
+
+function signIn(): void {
+  const userEl = document.getElementById("loginUser") as HTMLSelectElement | null;
+  const passEl = document.getElementById("loginPass") as HTMLInputElement | null;
+  const err = document.getElementById("loginErr") as HTMLElement | null;
+  const username = userEl?.value.trim() ?? "";
+  const password = passEl?.value ?? "";
+  if (!username) {
+    if (err) { err.textContent = "Select a user."; err.hidden = false; }
+    return;
+  }
+  if (!password) {
+    if (err) { err.textContent = "Enter your password."; err.hidden = false; }
+    passEl?.focus();
+    return;
+  }
+  if (LOCAL_PASSWORDS[username] !== password) {
+    if (err) { err.textContent = "Wrong username or password."; err.hidden = false; }
+    passEl?.select();
+    return;
+  }
+  if (err) err.hidden = true;
+  if (username === "admin") {
+    setActualRole("admin"); setViewMode("admin");
+  } else {
+    setActualRole("user"); setViewAs(username);
+  }
+  hideLoginPage();
+}
+
+function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
+
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
@@ -387,6 +448,7 @@ function setViewMode(mode: ViewMode) {
   // The mode toggle in the header shows the current view; the Settings dropdown +
   // auth button mirror it.
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
+  els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
   // The "Other" sheet: the Coach section is admin-only; the Clients section
   // (Live, Analysis, Colosseum, Stats view, World records, Guide) shows in every
   // view so a client can reach all their pages.
@@ -11132,6 +11194,25 @@ async function init() {
   setViewMode(viewMode);
   updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
+  els.authBtn.addEventListener("click", showLoginPage);
+  document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
+  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
+  document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") signIn();
+  });
+  // Populate login dropdown from ATHLETES registry (admin option is static in HTML).
+  {
+    const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
+    const adminOpt = sel?.querySelector('option[value="admin"]');
+    if (sel && adminOpt) {
+      for (const username of Object.keys(ATHLETES)) {
+        const opt = document.createElement("option");
+        opt.value = username;
+        opt.textContent = username;
+        sel.insertBefore(opt, adminOpt);
+      }
+    }
+  }
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
