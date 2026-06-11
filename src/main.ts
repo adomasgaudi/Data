@@ -15567,7 +15567,18 @@ function paintGraphSlide(): void {
   const stage = document.getElementById("gminiStage");
   const titleEl = document.getElementById("gminiTitle");
   const ex = graphCarLifts[graphCarIdx];
-  if (titleEl) titleEl.textContent = ex ? displayName(ex, "graph") : "";
+  if (titleEl) {
+    titleEl.textContent = ex ? displayName(ex, "graph") : "";
+    if (ex) {
+      titleEl.dataset.liftmenu = ex;
+      titleEl.dataset.liftscope = "graph";
+      titleEl.className = `gmini-title wa-title-lift${lensClass("graph", ex)}`;
+      titleEl.title = `${displayName(ex, "graph")} — tap for Info / Combine / Compare / Remove`;
+    } else {
+      delete titleEl.dataset.liftmenu;
+      delete titleEl.dataset.liftscope;
+    }
+  }
   if (stage && ex) renderGraphSlideChart(stage, ex);
   // Move the chart engine's Legend + ⤢ Fit bar onto the top-right corner overlay (beside
   // the kg toggle), so the controls sit ON the graph edge like the multi-graph view. The
@@ -15696,7 +15707,7 @@ function renderGraphMini(): void {
   // slide's lift — so the single view tweaks metrics/aggregation/etc. without leaving it.
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
   host.innerHTML =
-    `<div class="gmini-head"><span class="gmini-title" id="gminiTitle"></span></div>` +
+    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button></div>` +
     `<div class="gmini-stagewrap">` +
       `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
       // On-chart corner toolbar (top-right edge), like the multi-graph view: the chart's
