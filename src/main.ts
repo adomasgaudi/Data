@@ -587,9 +587,8 @@ function showLoginPage(): void {
   if (gate) gate.hidden = false;
   const err = document.getElementById("loginErr") as HTMLElement | null;
   if (err) { err.hidden = true; err.textContent = ""; }
-  (document.getElementById("loginPass") as HTMLInputElement | null)?.valueOf(); // keep ref
   document.body.classList.add("locked");
-  (document.getElementById("loginUser") as HTMLInputElement | null)?.focus();
+  (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
 }
 function hideLoginPage(): void {
   const gate = document.getElementById("loginGate");
@@ -614,7 +613,7 @@ async function signIn(): Promise<void> {
   const username = userEl?.value.trim() ?? "";
   const password = passEl?.value ?? "";
   if (!username) {
-    if (err) { err.textContent = "Enter your username."; err.hidden = false; }
+    if (err) { err.textContent = "Select a user."; err.hidden = false; }
     userEl?.focus();
     return;
   }
@@ -17430,10 +17429,6 @@ function setupBottomNav() {
 
   document.getElementById("loginSendBtn")?.addEventListener("click", () => void signIn());
   document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
-  document.getElementById("loginUser")?.addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter")
-      (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
-  });
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") void signIn();
   });

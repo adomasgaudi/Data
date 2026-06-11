@@ -34,7 +34,13 @@
         <h1 class="login-title">Colosseum</h1>
         <div class="login-signin">
           <p class="login-signin-lbl">Sign in</p>
-          <input id="loginUser" class="login-input" type="text" placeholder="Username" autocomplete="username" autocapitalize="none" spellcheck="false" />
+          <select id="loginUser" class="login-input">
+            <option value="">— select user —</option>
+            <option value="mantasp">mantasp</option>
+            <option value="johannesschut">johannesschut</option>
+            <option value="andriusp">andriusp</option>
+            <option value="g@cool.lt">admin</option>
+          </select>
           <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
           <p id="loginErr" class="login-err" hidden></p>
           <button id="loginSendBtn" type="button" class="login-btn login-btn--admin">Log in</button>
