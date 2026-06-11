@@ -494,11 +494,14 @@ describe("deadlift pattern vs accessory (hand-curated include/exclude)", () => {
 });
 
 describe("realPullupWeight", () => {
-  it("identifies bar pull-up / chin-up movements (not pulldowns)", () => {
+  it("identifies bar pull-up / chin-up / dip movements (not pulldowns)", () => {
     expect(isAssistablePullup("Pull Ups")).toBe(true);
     expect(isAssistablePullup("Assisted Pull-up")).toBe(true);
     expect(isAssistablePullup("Pullup")).toBe(true);
     expect(isAssistablePullup("Chin Up")).toBe(true);
+    expect(isAssistablePullup("Dips")).toBe(true);
+    expect(isAssistablePullup("Dip")).toBe(true);
+    expect(isAssistablePullup("Assisted Dip")).toBe(true);
     expect(isAssistablePullup("Lat Pulldown")).toBe(false);
     expect(isAssistablePullup("Pullover")).toBe(false);
     expect(isAssistablePullup("Bench Press")).toBe(false);
@@ -517,7 +520,12 @@ describe("realPullupWeight", () => {
 
   it("does not touch other exercises, even when negative", () => {
     expect(realPullupWeight("Lat Pulldown", -30)).toBe(-30);
-    expect(realPullupWeight("Assisted Dip", -40)).toBe(-40);
+    expect(realPullupWeight("Bench Press", -40)).toBe(-40);
+  });
+
+  it("halves a negative (machine-assisted) dip weight", () => {
+    expect(realPullupWeight("Dips", -30)).toBe(-15);
+    expect(realPullupWeight("Assisted Dip", -40)).toBe(-20);
   });
 });
 

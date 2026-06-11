@@ -210,11 +210,11 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
 /** Exercises with no match contribute no bodyweight (treated as pure load). */
 export const DEFAULT_BW_COEFF = 0;
 
-/** True for bar pull-up / chin-up movements, where a *negative* logged weight
+/** True for bar pull-up / chin-up / dip movements, where a *negative* logged weight
  * means assistance from a machine (not added load). Excludes pulldowns, pull
  * overs and other cable "pull" work, which are always loaded positively. */
 export function isAssistablePullup(exerciseName: string): boolean {
-  return /pull[\s-]?ups?|chin[\s-]?ups?/.test(exerciseName.toLowerCase());
+  return /pull[\s-]?ups?|chin[\s-]?ups?|dips?/.test(exerciseName.toLowerCase());
 }
 
 /**
