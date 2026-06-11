@@ -3965,6 +3965,24 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
    (their menus overlay the chart, so opening either never pushes the layout). */
 .wa-graph-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.25rem 0 0.5rem; position: relative; }
 .wa-graph-bar .svgc-legend { margin: 0; flex: 0 0 auto; }
+/* Legend dropdown relocated INTO the on-chart overlay (top-right, left of kg): style
+   its summary like a .wa-gov-btn icon button — a ☰ legend glyph + the (N) count, no
+   "Legend" word, no ▾ caret. (Owner request: move the Legend button onto the chart.) */
+.wa-graph-overlay > .svgc-legend { margin: 0; pointer-events: auto; display: flex; }
+.wa-graph-overlay .svgc-legend-fold { display: flex; }
+.wa-graph-overlay .svgc-legend-sum {
+  min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 0.45rem; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+  font-size: 0; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+}
+.wa-graph-overlay .svgc-legend-sum::before { content: "\2630"; font-size: 0.95rem; } /* ☰ legend/list icon */
+.wa-graph-overlay .svgc-legend-sum::after { content: ""; } /* drop the ▾ — it's an icon button now */
+.wa-graph-overlay .svgc-legend-n { font-size: 0.6rem; color: var(--muted); margin-left: 1px; }
+.wa-graph-overlay .svgc-legend-fold[open] .svgc-legend-sum { color: #fff; background: var(--accent); border-color: var(--accent); }
+.wa-graph-overlay .svgc-legend-fold[open] .svgc-legend-n { color: #fff; }
 /* The three graph controls (Graph options · Legend · Compare) share ONE row. Graph
    options can shrink (its metric summary truncates with an ellipsis); Legend and
    Compare keep their full width — so Compare never wraps to its own line. */
