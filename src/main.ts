@@ -4219,6 +4219,7 @@ function renderAthlete() {
     titleExpanded.hist = false;
     statsFullShown = false; // new athlete → lead with the mini facts again
     miniIdx = 0;
+    graphCarOverride = null; // drop any search-chosen single-view reel for the old athlete
     // Restore this athlete's last-used picker "Group by" mode (default if none saved).
     waGroupBy = (waGroupByByUser[els.athlete.value] as WaGroupBy | undefined) ?? "bestlifts";
   }
@@ -15417,9 +15418,18 @@ function graphAthletesPillsHtml(): string {
 let graphFullShown = false;     // mini carousel (false) vs full graph (true), within the open card
 let graphCarIdx = 0;            // which slide (lift) is showing
 let graphCarLifts: string[] = [];
-/** The carousel reel: the current athlete's top lifts by frequency (last 90d). */
+// When the search "Graph → Plot on single view" action runs, the carousel cycles THESE
+// matched lifts instead of the default top-by-frequency reel. Cleared on athlete change.
+let graphCarOverride: string[] | null = null;
+/** The carousel reel: the search-chosen lifts if "plot on single view" set them, else the
+ * current athlete's top lifts by frequency (last 90d). */
 function graphCarouselLifts(): string[] {
   const has = new Set(waSelectorExercises().map((e) => e.name));
+  if (graphCarOverride) {
+    const kept = graphCarOverride.filter((n) => has.has(n));
+    if (kept.length) return kept.slice(0, 20);
+    graphCarOverride = null; // none of the override lifts exist for this athlete → fall back
+  }
   const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
   const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
@@ -15983,6 +15993,9 @@ function commandList(): CmdSpec[] {
 }
 
 let cmdActiveIdx = 0;
+// The search palette's "📈 Graph" row expands in place to its 3 plot choices (all / multi /
+// single) when tapped, instead of plotting straight away.
+let searchGraphExpanded = false;
 /** Is `q` a subsequence of `s` (fuzzy: letters in order, gaps allowed)? */
 function isSubseq(q: string, s: string): boolean {
   let i = 0;
@@ -16037,6 +16050,7 @@ function hideCmdPalette(): void {
   const pal = document.getElementById("cmdPalette");
   if (pal) { pal.hidden = true; pal.innerHTML = ""; }
   cmdActiveIdx = 0;
+  searchGraphExpanded = false; // next time the bar opens, the Graph row starts collapsed
 }
 /** Recognise a "create [name]" query (case-insensitive). `hit` is true while the
  * user is still typing the word "create" too (so we can prompt for a name early);
@@ -16102,7 +16116,16 @@ function renderSearchPalette(value: string): void {
     { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
     { act: "find", label: "📜 Find in workout history", desc: "Show every matching set in the history below", on: searchFindHistory },
     { act: "index", label: "📇 Find in index", desc: n === 1 ? "Open it on the Index page" : "Open the first match on the Index page", on: false },
-    { act: "graph", label: "📈 View on graph", desc: n === 1 ? "Plot it on the graph" : `Plot all ${n} on the graph`, on: false },
+    // "📈 Graph" expands in place to 3 plot choices (owner request); collapsed it just shows
+    // the count. The sub-rows are indented and each runs its own plot action.
+    { act: "graph", label: "📈 Graph", desc: n === 1 ? "Plot it…" : `Plot the ${n} matches…`, on: searchGraphExpanded },
+    ...(searchGraphExpanded
+      ? [
+          { act: "graph-all", label: "Plot all", desc: n === 1 ? "Replace the graph with it" : `Replace the graph with all ${n}`, on: false, sub: true },
+          { act: "graph-multi", label: "Plot on multi view", desc: "Add to the multi (overlaid) graph", on: false, sub: true },
+          { act: "graph-single", label: "Plot on single view", desc: "Flip through them one at a time", on: false, sub: true },
+        ]
+      : []),
     { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
     { act: "clear", label: "✕ Clear search", desc: "", on: false },
   ];
@@ -16111,7 +16134,7 @@ function renderSearchPalette(value: string): void {
   pal.innerHTML = opts
     .map(
       (o, i) =>
-        `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}${o.on ? " is-on" : ""}" data-searchact="${o.act}" role="option">` +
+        `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}${o.on ? " is-on" : ""}${"sub" in o && o.sub ? " cmd-opt-sub" : ""}" data-searchact="${o.act}" role="option">` +
         `<span class="cmd-opt-cmd">${escapeHtml(o.label)}</span><span class="cmd-opt-desc">${escapeHtml(o.desc)}</span></button>`,
     )
     .join("");
@@ -16152,15 +16175,30 @@ function runSearchAction(act: string): void {
     if (name) createExerciseInline(name);
     return;
   }
+  // "📈 Graph" — expand/collapse its 3 plot choices in place; don't plot or close the bar.
+  if (act === "graph") {
+    searchGraphExpanded = !searchGraphExpanded;
+    renderSearchPalette(input?.value ?? "");
+    return;
+  }
   if (act === "filter") searchFindHistory = false;
   else if (act === "find") searchFindHistory = true;
-  else if (act === "graph") {
-    // "View on graph" — plot exactly the matching lifts on the full multi-lift graph
-    // (replacing the graph selection), and make sure the Graph section is shown + open.
+  else if (act === "graph-all" || act === "graph-multi" || act === "graph-single") {
+    // Plot the matching lifts on the graph. all = replace the multi graph; multi = ADD to
+    // the existing multi graph; single = make the single-lift carousel cycle the matches.
     const matches = waChipListBase().map((e) => e.name);
     if (matches.length) {
-      waGraphSel = capGraphSel(matches);
-      graphFullShown = true; // the searched lifts plot together, not the single-lift carousel
+      if (act === "graph-single") {
+        graphCarOverride = matches; graphCarIdx = 0;
+        graphFullShown = false; // single-lift carousel of the matches
+      } else if (act === "graph-multi") {
+        const add = matches.filter((m) => !waGraphSel.includes(m));
+        waGraphSel = capGraphSel([...waGraphSel, ...add]); // add to what's already plotted
+        graphFullShown = true;
+      } else { // graph-all
+        waGraphSel = capGraphSel(matches); // replace the whole graph
+        graphFullShown = true;
+      }
       if (sectionShown["colosseum.graphSectionShown"] === false) {
         sectionShown["colosseum.graphSectionShown"] = true;
         try { localStorage.setItem("colosseum.graphSectionShown", "1"); } catch { /* ignore */ }
@@ -16170,6 +16208,7 @@ function runSearchAction(act: string): void {
       const gFold = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
       if (gFold) gFold.open = true; // reveal the graph if it was collapsed
     }
+    searchGraphExpanded = false;
   } else if (act === "select") {
     const add = waChipListBase().map((e) => e.name).filter((n) => !waSelected.includes(n));
     if (add.length) waSelected = [...waSelected, ...add];
@@ -16179,7 +16218,7 @@ function runSearchAction(act: string): void {
     if (input) input.value = "";
   }
   hideCmdPalette();
-  if (act === "select" || act === "clear" || act === "graph") input?.blur();
+  if (act === "select" || act === "clear" || act.startsWith("graph")) input?.blur();
   deferRender(renderWorkoutAnalysis); // picker + history + graph all reflect the choice
 }
 /** Run a command by its "/name", then reset the bar. */
