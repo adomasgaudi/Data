@@ -3534,8 +3534,8 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-card-fold { --wa-pick-bleed: 0.7rem; }
 .wa-title-picker {
   position: absolute; top: 50%; right: calc(-1 * var(--wa-pick-bleed, 0px)); transform: translateY(-50%); z-index: 4;
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  width: 30px; height: 56px; padding: 6px 0; margin: 0;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  width: 30px; height: 28px; padding: 2px 0; margin: 0;
   cursor: grab; white-space: nowrap; -webkit-user-select: none; user-select: none;
   color: var(--muted); font-family: inherit;
   background: var(--panel);
@@ -3550,8 +3550,9 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   transform: translateY(-50%) translateX(-3px);
   box-shadow: -10px 3px 18px rgba(20, 24, 38, 0.26), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
 }
-/* "‹" pull-hint at the top of the tab — points the way to drag it open. */
-.wa-pick-pull { font-size: 1rem; line-height: 1; font-weight: 700; color: var(--accent); }
+/* "‹" pull-hint hidden so the tab can be HALF as tall (owner request); the hover
+   peel-out + tab shape still signal it's a draggable handle. */
+.wa-pick-pull { display: none; }
 /* Vertical "Pick" label, reading bottom→top up the tab. */
 .wa-pick-tab-txt {
   writing-mode: vertical-rl; transform: rotate(180deg);
