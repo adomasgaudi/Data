@@ -86,6 +86,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.276", shortTitle: "Group headings titled", code: "META-122", title: "Version history sub-groups and chapters now have proper titles and descriptions", sp: 3, note: "Auto-generated chapter groups (e.g. 'Auth, sync & polish') and sub-groups (e.g. 30-SP buckets) now each carry a 2–5 word shortTitle, a 5–15 word medium title, and a 15–50 word description. Chapter notes and short titles are hand-written per era; sub-group shortTitles come from the highest-SP leaf inside each bucket, and notes list the category breakdown.", cat: "META" },
   { version: "b.2.8.275", shortTitle: "Changelog code names", code: "META-121", title: "Version history: code name + 2-5 word title on every release", sp: 5, note: "Added shortTitle (2–5 words) and code (e.g. META-121, DATA-8) to all 956 release entries. The version history now shows the code tag below the version number, the short label as the collapsed summary, the previous longer title as a medium description when expanded, and the original long note below it. Renderer and styles updated to match.", cat: "META" },
   { version: "b.2.8.274.2", shortTitle: "Keep-alive cron", code: "META-120", title: "Keep-alive cron: Supabase free tier will never pause", sp: 1, note: "GitHub Actions cron pings Supabase twice a week (Mon + Thu). The free tier pauses projects after ~1 week of inactivity; this prevents that permanently with no manual intervention ever needed.", cat: "META" },
   { version: "b.2.8.274.1", shortTitle: "GitHub Actions workflow create sets", code: "META-119", title: "GitHub Actions workflow to create the sets table and disable RLS", sp: 2, note: "Automated the Supabase schema setup via a workflow using the Management API. Creates the sets table with the correct columns + unique constraint, and disables RLS so the anon key can read and write without auth. Triggered once by the owner adding SUPABASE_ACCESS_TOKEN secret.", cat: "META" },
@@ -1116,11 +1117,27 @@ function chapterKey(version: string): string {
   return "0.x";
 }
 
+/** 2–5 word label for each chapter era. */
+const CHAPTER_SHORT_TITLES: Record<string, string> = {
+  "b.2.8": "Auth, sync & polish",
+  "b.2.7": "Graphs & selector overhaul",
+  "b.2.6": "World records & i18n",
+  "b.2.5": "Pose models & difficulty",
+  "b.2.4": "Handstand & analysis",
+  "b.2.3": "Unified Analysis",
+  "b.2.2": "Graph & taxonomy",
+  "b.2.1": "Fades & per-set editing",
+  "b.2.0": "Combined lifts",
+  "b.1.hi": "Charts & live data",
+  "b.1.lo": "Bottom nav & Add",
+  "0.x": "Before the reset",
+};
+
 /** Descriptive chapter titles (the version "eras"). Unmapped chapters fall back
  *  to their biggest release's title, so new minors still read well. */
 const CHAPTER_TITLES: Record<string, string> = {
-  "b.2.8": "Version 2.8 milestone",
-  "b.2.7": "Graphs, selector & workout history",
+  "b.2.8": "Auth overhaul, Supabase data sync, security roles, and analysis polish",
+  "b.2.7": "Graphs, selector & workout history — the Arrogante era",
   "b.2.6": "Disciplines, world records & Lithuanian",
   "b.2.5": "Pose models & difficulty multipliers",
   "b.2.4": "Handstand modelling & analysis polish",
@@ -1133,10 +1150,20 @@ const CHAPTER_TITLES: Record<string, string> = {
   "0.x": "Before the reset",
 };
 
-/** Hand-written era summaries for chapters that deserve more than the auto
- *  "N releases." note. Unmapped chapters keep the auto count. */
+/** Hand-written era summaries (15–50 words). Unmapped chapters keep the auto count. */
 const CHAPTER_NOTES: Record<string, string> = {
-  "b.2.7": "The Arrogante era - the biggest run yet (200+ releases): a deep polish of the unified Analysis experience. Reworked the exercise selector (filters, group-by discipline, search by code/short name, removable pills), the graphs (volume/reps/sets bars, weight-range, per-lift labels, vertical volume shift), the workout-history list (sessions, dividers, period sorting), athlete stats and momentum, exercise name modes and push-up incline levels - and made taps snappier throughout.",
+  "b.2.8": "The Los Lobos era: replaced Supabase auth with local passwords, added cross-device manual-set sync via Supabase data tables, tightened security roles (admin/user/spectator), overhauled the version-history changelog, and shipped a continuous stream of graph, selector and UI polish.",
+  "b.2.7": "The Arrogante era — the biggest run yet (200+ releases): deep polish of the unified Analysis experience. Reworked the exercise selector, graphs, workout-history list, athlete stats and momentum, exercise name modes and push-up incline levels. Made taps snappier throughout.",
+  "b.2.6": "Added discipline filters, world-record leaderboards and full Lithuanian translation — the first major internationalisation pass. Also: exercise search by code, better group handling and a first cut of the athlete-stats panel.",
+  "b.2.5": "Introduced the 3-D pose editor and stick-figure variation picker (later warehoused), refined difficulty multipliers per exercise, and extended the graph with more metric options.",
+  "b.2.4": "Deep modelling of handstand push-up difficulty (lean angle, depth, elevation), combined with a round of Analysis section layout polish and early Stats card work.",
+  "b.2.3": "Merged the separate graph, history and stats pages into one unified Analysis view, added the training-calendar heatmap, and laid the groundwork for the picker drawer.",
+  "b.2.2": "Built the universal multi-exercise graph (Chart.js), introduced the exercise taxonomy (discipline, muscle, tier, function), and shipped the Index page.",
+  "b.2.1": "Added strength-decay fading, admin/user/spectator roles, per-set RIR and notes editing, and the first exercise-merge (comparable lifts) logic.",
+  "b.2.0": "Introduced current-strength tracking with time-decay, combined lifts (merged groups), and the first 1RM projection model.",
+  "b.1.hi": "Migrated to Chart.js for interactive graphs, wired up live Google Sheets data via the Apps Script endpoint, and added the athlete leaderboard.",
+  "b.1.lo": "Added the bottom navigation bar, the Add-a-set form, and a basic compare-two-athletes view.",
+  "0.x": "The pre-reset prototype: a static HTML page that read a hardcoded CSV and showed a simple strength table. No versioning, no graph, no navigation.",
 };
 
 /** Build the history tree from the flat, newest-first RELEASES list: one named
@@ -1155,14 +1182,23 @@ export function buildChangelogTree(releases: Release[]): Release[] {
     const chrono = [...rels].reverse();
     const subgroups: Release[] = bucketBySp(chrono, SUBGROUP_TARGET_SP).map((leaves) => {
       const kids = [...leaves].reverse();
-      return { version: spanLabel(kids), shortTitle: "", code: "", title: headlineTitle(kids), sp: 0,
-        note: `${kids.length} releases.`, children: kids };
+      // shortTitle: short label of the highest-SP leaf in this bucket
+      const topLeaf = leaves.reduce((best, r) => r.sp > best.sp ? r : best, leaves[0]!);
+      const sgShort = topLeaf.shortTitle || headlineTitle(kids).split(/\s+/).slice(0, 4).join(" ");
+      // title: the highest-SP leaf's full title (5–15 word medium description)
+      const sgTitle = headlineTitle(kids);
+      // note: cat breakdown + count
+      const cats = [...new Set(kids.map(r => r.cat).filter(Boolean))].slice(0, 5).join(", ");
+      const sgNote = `${kids.length} releases · ${cats || "mixed"}.`;
+      return { version: spanLabel(kids), shortTitle: sgShort, code: "", title: sgTitle, sp: 0,
+        note: sgNote, children: kids };
     });
     // bucketBySp walked chrono (oldest-first), so subgroups come out oldest-first;
     // flip to newest-first so children[0] is the newest era (what CURRENT_VERSION
     // and the version-history UI both assume). rels is already newest-first.
     const children = subgroups.length > 1 ? subgroups.reverse() : rels;
-    return { version: k, shortTitle: "", code: "", title: CHAPTER_TITLES[k] ?? headlineTitle(rels), sp: 0,
+    return { version: k, shortTitle: CHAPTER_SHORT_TITLES[k] ?? "", code: "",
+      title: CHAPTER_TITLES[k] ?? headlineTitle(rels), sp: 0,
       note: CHAPTER_NOTES[k] ?? `${rels.length} releases.`, children };
   });
 }
