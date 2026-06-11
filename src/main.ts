@@ -17351,4 +17351,4 @@ function setupBottomNav() {
 void init();
 // Fetch other users' manual sets from Supabase after the app loads.
 // Silent no-op if Supabase is unreachable or RLS blocks access.
-setTimeout(() => void loadManualFromSupabase(), 1500);
+setTimeout(async () => { await loadManualFromSupabase(); void syncManualToSupabase(); }, 1500);
