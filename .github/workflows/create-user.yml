@@ -1,0 +1,30 @@
+name: Create Supabase user
+
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: "Username (e.g. mantasp) — becomes username@col.app internally; use full email for admin"
+        required: true
+      password:
+        description: "Password for this user"
+        required: true
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create user via Supabase Admin API
+        run: |
+          EMAIL="${{ github.event.inputs.username }}"
+          # If username has no @, append @col.app
+          if [[ "$EMAIL" != *"@"* ]]; then
+            EMAIL="${EMAIL}@col.app"
+          fi
+          curl -sf -X POST \
+            "https://nbjgwqytwkkuarxlkmnj.supabase.co/auth/v1/admin/users" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"$EMAIL\",\"password\":\"${{ github.event.inputs.password }}\",\"email_confirm\":true}"
+          echo "User $EMAIL created."
