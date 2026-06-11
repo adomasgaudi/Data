@@ -461,3 +461,14 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **Root cause:** `syncManualToSupabase` filters `manualEntries.filter(m => m.seq !== undefined)`. Any entry added *before* the `seq` field was introduced (b.2.8.274) has `seq: undefined` and is silently dropped. Since ALL of the user's entries predate the seq field, zero rows are ever sent to Supabase.
 - **Fix (b.2.8.279):** Back-fill `seq` for entries missing it at upload time (`Date.now() % 2e9 + i`), then save to localStorage so they're stable on next call. Also show status for "nothing to upload" and "nothing new" so silent no-ops are visible.
 - **If it recurs:** check `manualEntries.filter(m => m.seq !== undefined).length` in the console — should equal `manualEntries.length`.
+
+---
+
+## PB-16 — Supabase anon key can't INSERT even with RLS disabled
+
+- **First seen:** 2026-06-11, upload fails ("⬆ failed") while download returns "nothing new" (SELECT works).
+- **Recurrence risk:** HIGH — this will bite every new Supabase table we create.
+- **Symptom:** `syncManualToSupabase` catches an error; download finds 0 rows (table is empty because nothing was ever written).
+- **Root cause:** `ALTER TABLE sets DISABLE ROW LEVEL SECURITY` bypasses RLS policies but does NOT grant Postgres-level permissions to the `anon` role. The anon key still gets a permission-denied on INSERT/UPDATE/DELETE because no explicit GRANT was issued.
+- **Fix (b.2.8.280.1):** Added `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.sets TO anon, authenticated;` to setup-db.yml and re-ran the workflow.
+- **Rule for future tables:** every new Supabase table needs BOTH `DISABLE ROW LEVEL SECURITY` AND `GRANT ... TO anon, authenticated` — neither alone is sufficient for the anon key to read and write.
