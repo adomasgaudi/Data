@@ -13227,7 +13227,11 @@ async function syncManualToSupabase(): Promise<void> {
     } else {
       showSyncStatus("up", "⬆ nothing to upload");
     }
-  } catch { showSyncStatus("err", "⬆ failed"); }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    showSyncStatus("err", "⬆ " + msg.slice(0, 40));
+    console.error("[sync upload]", e);
+  }
 }
 
 /** Fetch all manual sets from Supabase and merge them into manualEntries (adds
@@ -13238,7 +13242,8 @@ async function loadManualFromSupabase(): Promise<void> {
       .from("sets")
       .select("*")
       .gte("set_number", 100000000);
-    if (error || !rows || rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
+    if (error) { showSyncStatus("err", "⬇ " + (error.message ?? "error").slice(0, 40)); console.error("[sync download]", error); return; }
+    if (!rows || rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
     const localIds = new Set(manualEntries.map((m) => m.id));
     let added = 0;
     for (const r of rows as import("./supabase").DbSet[]) {
