@@ -3469,14 +3469,8 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   background: none; border: none; cursor: pointer; color: var(--remove);
 }
 .wa-title-deselect:hover, .wa-title-deselect:active { filter: brightness(0.85); }
-/* "Match" (≈ = make this selection similar to the other) — a borderless icon button
-   sized like the ✕, in accent so it reads as the make-same action, not a destructive one. */
-.wa-title-match {
-  font-family: inherit; font-size: 1.4em; line-height: 1; font-weight: 800;
-  margin-left: 0.1em; padding: 0 0.18em; vertical-align: middle;
-  background: none; border: none; cursor: pointer; color: var(--accent);
-}
-.wa-title-match:hover, .wa-title-match:active { opacity: 0.7; }
+/* "Match" moved into the picker drawer's ⚙ menu as a text button (.wa-match-btn, styled
+   by .wa-clear) — no longer a title-row icon. */
 /* The exercise-picker opener is a WHITE PAPER STICKY-NOTE TAB poking out of the right edge
    (≈ the screen edge on a phone) — DRAG it LEFT (or tap) to pull out the pick-exercise menu.
    The handle now LOOKS like the drawer it opens, and a "‹" pull-hint + a peel-out hover make

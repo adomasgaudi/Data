@@ -14524,12 +14524,8 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const deselectX = remove
     ? `<button type="button" class="wa-title-deselect" data-titledeselect="${remove}" title="Deselect all — clear the whole selection" aria-label="Deselect all">✕</button>`
     : "";
-  // "Match" sits right next to the ✕ (owner request — moved out of the picker's ⚙ menu).
-  // It copies the OTHER selector's picks into this one; capture-handled so it doesn't
-  // toggle the fold it lives in. Graph title → "Match history"; history title → "Match graph".
-  const matchBtn = remove
-    ? `<button type="button" class="wa-title-match" data-titlematch="${remove}" title="Match — make this selection the same as the ${remove === "graph" ? "history" : "graph"} (copy its picks here)" aria-label="${remove === "graph" ? "Match history" : "Match graph"}">≈</button>`
-    : "";
+  // "Match" is no longer in the title — it moved into the picker slide-in drawer as a
+  // text button (owner request). See `matchTool` in renderSelector.
   // "Pick" — a thin WHITE PAPER sticky-note TAB peeking from the right screen edge of the
   // title row (the visible edge of the picker note). DRAG it left (or tap) to pull the full
   // drawer out — the handle now LOOKS like the drawer it opens (PB-13). A "‹" pull-hint +
@@ -14552,7 +14548,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const seltitleAttrs = grid
     ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 0.4rem)"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${deselectX}${matchBtn}${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${deselectX}${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
@@ -14797,9 +14793,15 @@ function renderSelector(scope: SelScope): void {
   // survive the re-render every inner toggle triggers — otherwise tapping any option
   // rebuilds the menu closed (the recurring "clicking a setting closes the menu" bug).
   const cogOpen = sel.querySelector<HTMLDetailsElement>(".wa-sel-cog")?.open ?? false;
+  // "Match" lives here in the picker drawer's ⚙ menu now (moved out of the title) — a text
+  // button that copies the OTHER selector's picks into this scope. Same data-titlematch hook
+  // as before, so the existing capture handler drives it.
+  const otherScopeLabel = scope === "graph" ? "history" : "graph";
+  const matchTool =
+    `<div class="wa-chips-tools"><button type="button" class="wa-clear wa-match-btn" data-titlematch="${scope}" title="Copy the ${otherScopeLabel}'s exercise selection into this ${scope === "graph" ? "graph" : "history"}">≈ Match ${otherScopeLabel}</button></div>`;
   const settingsCog =
     `<details class="wa-sel-cog"${cogOpen ? " open" : ""}><summary class="wa-sel-cog-sum" title="Selector settings — pick mode, select all / clear, identities, name mode, match, show missing">⚙</summary>` +
-    `<div class="wa-sel-cog-menu">${modeToggle ? `<div class="wa-chips-tools">${modeToggle}</div>` : ""}${foldTools}${settingsBlock}</div></details>`;
+    `<div class="wa-sel-cog-menu">${matchTool}${modeToggle ? `<div class="wa-chips-tools">${modeToggle}</div>` : ""}${foldTools}${settingsBlock}</div></details>`;
   // Selected pills. For the GRAPH selector the first N are marked 📈 (the graph's
   // point budget, which SHRINKS as athletes are overlaid: 10 series ÷ athletes) with
   // a "Trim to N" button; the history selector has no cap.
