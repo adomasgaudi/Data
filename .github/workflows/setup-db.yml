@@ -1,0 +1,41 @@
+name: Setup Supabase database
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create sets table and disable RLS
+        run: |
+          SQL="
+          create table if not exists sets (
+            id uuid primary key default gen_random_uuid(),
+            user_id text not null,
+            username text not null,
+            date text not null,
+            bodyweight float8,
+            exercise_name text not null,
+            set_number int4 not null,
+            weight float8,
+            reps int4,
+            notes text not null default '',
+            dropset boolean not null default false,
+            percentile float8,
+            imported_at timestamptz not null default now(),
+            unique (user_id, date, exercise_name, set_number)
+          );
+          alter table sets disable row level security;
+          "
+          RESP=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            "https://api.supabase.com/v1/projects/nbjgwqytwkkuarxlkmnj/database/query" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": $(echo "$SQL" | jq -Rs .)}")
+          CODE=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "HTTP $CODE: $BODY"
+          if [[ "$CODE" != "200" && "$CODE" != "201" ]]; then exit 1; fi
+          echo "✓ sets table ready"
