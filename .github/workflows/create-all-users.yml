@@ -1,0 +1,59 @@
+name: Create all Supabase users
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create every athlete account + admin
+        run: |
+          # username:password pairs — password = first 2 letters of the name
+          # (admin = g@cool.lt with "ag"). Usernames map to user@col.app.
+          PAIRS="
+          mantasp:ma
+          johannesschut:jo
+          andriusp:an
+          adomasgaudi:ad
+          bebras:be
+          natali:na
+          agne_ram:ag
+          marijasenkus:ma
+          indre_ju:in
+          simona:si
+          sandrakri:sa
+          dzuljeta:dz
+          andromeda94:an
+          henrikas:he
+          karolisb:ka
+          t.urba:t.
+          simonasputrius:si
+          brigita_r:br
+          monika:mo
+          g@cool.lt:ag
+          "
+          FAILED=0
+          for pair in $PAIRS; do
+            USER="${pair%%:*}"
+            PASS="${pair#*:}"
+            EMAIL="$USER"
+            if [[ "$EMAIL" != *"@"* ]]; then EMAIL="${EMAIL}@col.app"; fi
+            RESP=$(curl -s -w "\n%{http_code}" -X POST \
+              "https://nbjgwqytwkkuarxlkmnj.supabase.co/auth/v1/admin/users" \
+              -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"email_confirm\":true}")
+            CODE=$(echo "$RESP" | tail -1)
+            BODY=$(echo "$RESP" | head -n -1)
+            if [[ "$CODE" == "200" || "$CODE" == "201" ]]; then
+              echo "OK   $EMAIL"
+            elif echo "$BODY" | grep -qi "already.*registered\|already.*exists"; then
+              echo "SKIP $EMAIL (already exists)"
+            else
+              echo "FAIL $EMAIL → HTTP $CODE: $BODY"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
