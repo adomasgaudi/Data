@@ -132,9 +132,9 @@ const LT: Record<string, string> = {
   "Import historical data": "Importuoti istorinius duomenis",
   "First time? Upload your StrengthLevel CSV export to seed your data into Supabase. Safe to re-run — duplicate sets are ignored.": "Pirmas kartas? Įkelkite StrengthLevel CSV failą — duomenys bus išsaugoti Supabase. Pakartotinis paleidimas saugus — dublikatai ignoruojami.",
   "⬆ Choose CSV": "⬆ Pasirinkti CSV",
-  "Send link": "Siųsti nuorodą",
-  "Check your email for a sign-in link.": "Patikrinkite el. paštą — siuntėme prisijungimo nuorodą.",
-  "Enter a valid email.": "Įveskite teisingą el. paštą.",
+  "Wrong username or password.": "Neteisingas vartotojo vardas arba slaptažodis.",
+  "Enter your username.": "Įveskite vartotojo vardą.",
+  "Enter your password.": "Įveskite slaptažodį.",
   "Tasks & roadmap": "Užduotys ir planas",
   // ---- Graph selector: group-by special modes ----
   "Best lifts": "Geriausi kėlimai",

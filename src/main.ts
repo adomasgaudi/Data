@@ -585,15 +585,11 @@ function showLoginPage(): void {
   try { localStorage.removeItem("colosseum.signedIn"); } catch { /* ignore */ }
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
-  // Reset state
   const err = document.getElementById("loginErr") as HTMLElement | null;
-  const sent = document.getElementById("loginSent") as HTMLElement | null;
-  const emailEl = document.getElementById("loginEmail") as HTMLInputElement | null;
   if (err) { err.hidden = true; err.textContent = ""; }
-  if (sent) sent.hidden = true;
-  if (emailEl) emailEl.value = "";
+  (document.getElementById("loginPass") as HTMLInputElement | null)?.valueOf(); // keep ref
   document.body.classList.add("locked");
-  emailEl?.focus();
+  (document.getElementById("loginUser") as HTMLInputElement | null)?.focus();
 }
 function hideLoginPage(): void {
   const gate = document.getElementById("loginGate");
@@ -603,30 +599,41 @@ function hideLoginPage(): void {
   document.documentElement.classList.add("signed-in");
 }
 
-/** Send a Supabase magic-link to the typed email. */
-async function sendMagicLink(): Promise<void> {
-  const emailEl = document.getElementById("loginEmail") as HTMLInputElement | null;
+/** Internal email from a username: "mantasp" → "mantasp@col.app".
+ *  Admin always uses their real email. */
+function usernameToEmail(u: string): string {
+  return u.includes("@") ? u : `${u.toLowerCase()}@col.app`;
+}
+
+/** Sign in with username + password via Supabase. */
+async function signIn(): Promise<void> {
+  const userEl = document.getElementById("loginUser") as HTMLInputElement | null;
+  const passEl = document.getElementById("loginPass") as HTMLInputElement | null;
   const err = document.getElementById("loginErr") as HTMLElement | null;
-  const sent = document.getElementById("loginSent") as HTMLElement | null;
   const btn = document.getElementById("loginSendBtn") as HTMLButtonElement | null;
-  const email = emailEl?.value.trim() ?? "";
-  if (!email || !email.includes("@")) {
-    if (err) { err.textContent = "Enter a valid email."; err.hidden = false; }
-    emailEl?.focus();
+  const username = userEl?.value.trim() ?? "";
+  const password = passEl?.value ?? "";
+  if (!username) {
+    if (err) { err.textContent = "Enter your username."; err.hidden = false; }
+    userEl?.focus();
+    return;
+  }
+  if (!password) {
+    if (err) { err.textContent = "Enter your password."; err.hidden = false; }
+    passEl?.focus();
     return;
   }
   if (err) err.hidden = true;
   if (btn) btn.disabled = true;
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: true },
+  const { error } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(username),
+    password,
   });
   if (btn) btn.disabled = false;
   if (error) {
-    if (err) { err.textContent = error.message; err.hidden = false; }
-    return;
+    if (err) { err.textContent = "Wrong username or password."; err.hidden = false; }
+    passEl?.select();
   }
-  if (sent) sent.hidden = false;
 }
 
 /** Apply the Supabase session to view mode (admin / user / spectator). */
@@ -640,12 +647,10 @@ function applySession(email: string | undefined): void {
   else { setActualRole("spectator"); setViewMode("loggedout"); hideLoginPage(); }
 }
 
-/** Match an email to a username heuristically (exact email in athlete_profiles,
- * or first-name match as a fallback). Extend when athlete accounts are properly
- * registered in the DB. */
-function findUsernameByEmail(_email: string): string | null {
-  // Future: look up athlete_profiles by email. For now non-admin users land in
-  // spectator view until their profile is registered in the DB.
+/** Extract a username from an auth email.
+ *  "mantasp@col.app" → "mantasp";  "g@cool.lt" → null (handled as admin above). */
+function findUsernameByEmail(email: string): string | null {
+  if (email.endsWith("@col.app")) return email.slice(0, email.indexOf("@"));
   return null;
 }
 
@@ -17423,10 +17428,14 @@ function setupBottomNav() {
     }
   });
 
-  document.getElementById("loginSendBtn")?.addEventListener("click", () => void sendMagicLink());
+  document.getElementById("loginSendBtn")?.addEventListener("click", () => void signIn());
   document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
-  document.getElementById("loginEmail")?.addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") void sendMagicLink();
+  document.getElementById("loginUser")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter")
+      (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
+  });
+  document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") void signIn();
   });
 }
 
