@@ -14681,6 +14681,19 @@ function renderWorkoutAnalysis(): void {
   // the selection (the history list is filtered to them by historyFilterWithSearch).
   if (waSearchQuery.trim() && contentTitle)
     contentTitle.textContent = `${athleteLabel()} — “${waSearchQuery.trim()}” in history`;
+  // A "Find in history" search FILTERS the shown sets to its matches, so the visible
+  // WORKOUTS section title must reflect the SEARCH — never wrongly claim "All Exercises"
+  // when the list is actually narrowed to one search (owner report).
+  if (searchFindHistory && waSearchQuery.trim()) {
+    const cht = document.getElementById("waCalHistSummary");
+    if (cht) {
+      const q = escapeHtml(waSearchQuery.trim());
+      cht.innerHTML =
+        `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>` +
+        `<span class="wa-seltitle-box"><span class="wa-seltitle">“${q}”</span></span>`;
+      cht.classList.add("is-bigtitle");
+    }
+  }
   // The lift name(s) live in the SECTION title now, so the inner "Workout history"
   // header is plain (never big-titled).
   contentTitle?.classList.remove("is-bigtitle");
