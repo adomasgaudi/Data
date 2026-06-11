@@ -2281,6 +2281,11 @@ sup.wr-bw { font-size: 0.85em; }
 .cal-settings { flex: none; margin: 0; }
 .cal-settings .wo-controls-sum { padding: 3px 9px; }
 .cal-settings.wo-controls-fold[open] .wo-controls { left: auto; right: 0; }
+/* In the relocated Analysis view the history ⚙ sits LEFT-of-centre, so its options
+   menu must open to the RIGHT (left-anchored). Anchoring it right:0 (the default, for
+   the right-corner cog in the standalone Workouts view) ran it off the LEFT edge —
+   "can't see menu settings". Clamp the width so it can't spill off the right either. */
+#waWorkoutsHost .wo-controls-fold[open] .wo-controls { left: 0; right: auto; max-width: calc(100vw - 24px); }
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
