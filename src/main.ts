@@ -15430,6 +15430,16 @@ function paintGraphSlide(): void {
   const ex = graphCarLifts[graphCarIdx];
   if (titleEl) titleEl.textContent = ex ? displayName(ex, "graph") : "";
   if (stage && ex) renderGraphSlideChart(stage, ex);
+  // Move the chart engine's Legend + ⤢ Fit bar onto the top-right corner overlay (beside
+  // the kg toggle), so the controls sit ON the graph edge like the multi-graph view. The
+  // engine keeps a live reference to the .svgc-legend node (it only rewrites its innerHTML
+  // on redraw) and its click handlers are bound to that node — so moving it is safe.
+  const overlay = stage?.parentElement?.querySelector<HTMLElement>(".gmini-overlay");
+  const legend = stage?.querySelector<HTMLElement>(".svgc-legend");
+  if (overlay && legend) {
+    overlay.querySelector(".svgc-legend")?.remove(); // drop the previous slide's relocated bar
+    overlay.insertBefore(legend, overlay.firstChild); // Legend + Fit first, then the kg toggle
+  }
   document.querySelectorAll<HTMLElement>(".gmini-dot").forEach((d) => d.classList.toggle("is-on", Number(d.dataset.gmdot) === graphCarIdx));
 }
 /** Step the carousel by `d` (wraps), then repaint the slide. */
@@ -15449,8 +15459,14 @@ function renderGraphMini(): void {
   const dots = graphCarLifts.map((_, i) => `<button type="button" class="gmini-dot${i === graphCarIdx ? " is-on" : ""}" data-gmdot="${i}" aria-label="Lift ${i + 1}"></button>`).join("");
   const bw = `<button type="button" class="wa-gov-btn gmini-bw${S.waPerBodyweight ? " is-on" : ""}" data-gmbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>`;
   host.innerHTML =
-    `<div class="gmini-head"><span class="gmini-title" id="gminiTitle"></span><span class="gmini-opts">${bw}</span></div>` +
-    `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
+    `<div class="gmini-head"><span class="gmini-title" id="gminiTitle"></span></div>` +
+    `<div class="gmini-stagewrap">` +
+      `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
+      // On-chart corner toolbar (top-right edge), like the multi-graph view: the chart's
+      // own Legend + ⤢ Fit get RELOCATED in here (paintGraphSlide), with the kg/×BW unit
+      // toggle beside them — so the controls ride the graph edge instead of a row above it.
+      `<div class="gmini-overlay">${bw}</div>` +
+    `</div>` +
     `<div class="gmini-foot">` +
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
