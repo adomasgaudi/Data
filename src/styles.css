@@ -3961,7 +3961,24 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 /* In-chart overlay toolbar (top-right corner of the plot): kg / ⤢ Fit / ⛶. The wrapper
    passes clicks THROUGH (pointer-events:none) so it never blocks the chart; only the
    buttons are interactive. Compact, translucent, so they don't hide data. */
-.wa-graph-overlay { position: absolute; top: 5px; right: 6px; z-index: 6; display: flex; gap: 4px; pointer-events: none; }
+/* The on-chart corner controls sit inside ONE casing (a tight rounded bar) so they
+   read as a single "line of settings", not separate floating buttons. The bar provides
+   the surface; the buttons inside drop their own background/border (below). */
+.wa-graph-overlay {
+  position: absolute; top: 5px; right: 6px; z-index: 6;
+  display: flex; gap: 1px; pointer-events: auto;
+  padding: 3px; border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  box-shadow: 0 1px 3px rgba(20, 24, 38, 0.10);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+/* Inside the casing the buttons are surface-less — the bar carries the background. */
+.wa-graph-overlay .wa-gov-btn,
+.wa-graph-overlay .svgc-legend-sum { background: transparent; border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+.wa-graph-overlay .wa-gov-btn:hover,
+.wa-graph-overlay .svgc-legend-sum:hover { color: var(--accent); border-color: transparent; background: color-mix(in srgb, var(--line) 28%, transparent); }
+.wa-graph-overlay .wa-gov-btn.is-on { color: #fff; background: var(--accent); border-color: transparent; }
 /* On-chart corner controls (kg / ⤢ Fit / ⛶). Comfortably sized icon buttons —
    ≥ --tap-min in both dimensions with bigger glyphs (owner ask: "bigger"); they're
    primary chart controls, so they get the no-super-small-buttons treatment too. */
@@ -3992,9 +4009,8 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
   min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 0.45rem; border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center; gap: 1px;
   font-size: 0; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--muted);
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  /* Surface-less — the .wa-graph-overlay casing provides the background (see above). */
+  background: transparent; border: 1px solid transparent;
 }
 .wa-graph-overlay .svgc-legend-sum::before { content: "\2630"; font-size: 0.95rem; } /* ☰ legend/list icon */
 .wa-graph-overlay .svgc-legend-sum::after { content: ""; } /* drop the ▾ — it's an icon button now */
