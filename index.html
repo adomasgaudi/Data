@@ -34,10 +34,10 @@
         <h1 class="login-title">Colosseum</h1>
         <div class="login-signin">
           <p class="login-signin-lbl">Sign in</p>
-          <select id="loginUser" class="login-input" aria-label="Choose your name"></select>
-          <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
-          <p id="loginErr" class="login-err" hidden>Wrong password.</p>
-          <button id="loginAdminBtn" type="button" class="login-btn login-btn--admin">Log in</button>
+          <input id="loginEmail" class="login-input" type="email" placeholder="your@email.com" autocomplete="email" inputmode="email" />
+          <p id="loginErr" class="login-err" hidden></p>
+          <p id="loginSent" class="login-sent" hidden>Check your email for a sign-in link.</p>
+          <button id="loginSendBtn" type="button" class="login-btn login-btn--admin">Send link</button>
           <button id="loginGuestBtn" type="button" class="login-spectate">spectate</button>
         </div>
       </div>

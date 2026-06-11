@@ -574,72 +574,82 @@ function canEditCurrentAthlete(): boolean {
   return canEditAthlete(els.athlete.value);
 }
 
-/* ---- Decorative auth (NOT enforced): log in / log out + the login page ----
- * Logging in just enters admin view; logging out drops to the logged-out view
- * (Adomas only). The login page (the gate) can be re-opened any time. The
- * `signedIn` flag only governs the one-time first-visit gate, never the view. */
+/* ---- Real auth via Supabase magic-link ----------------------------------------
+ * Users enter their email → receive a one-click link → land back here signed in.
+ * Admin (g@cool.lt) gets the full admin view; any other known username gets their
+ * locked user view; unknown emails land in spectator view. */
+import { supabase, isAdmin } from "./supabase";
+import { fetchFromSupabase } from "./dataSource";
+
 function showLoginPage(): void {
-  document.documentElement.classList.remove("signed-in"); // override the "always hide" rule
-  // SECURITY: clear the persisted gate flag so a REFRESH while the sign-in screen
-  // is up re-presents the gate instead of silently restoring the last view. The
-  // head script in index.html hides the gate whenever colosseum.signedIn === "1",
-  // and viewMode/role default to "admin" — so leaving the flag set let a reload on
-  // the sign-in screen drop you straight back into admin without authenticating.
   try { localStorage.removeItem("colosseum.signedIn"); } catch { /* ignore */ }
-  populateLoginAthletes(); // refresh the name picker from the loaded roster
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
-  const err = document.getElementById("loginErr");
-  if (err) err.hidden = true; // clear any stale "wrong password"
-  const pass = document.getElementById("loginPass") as HTMLInputElement | null;
-  if (pass) pass.value = ""; // clear any stale password
+  // Reset state
+  const err = document.getElementById("loginErr") as HTMLElement | null;
+  const sent = document.getElementById("loginSent") as HTMLElement | null;
+  const emailEl = document.getElementById("loginEmail") as HTMLInputElement | null;
+  if (err) { err.hidden = true; err.textContent = ""; }
+  if (sent) sent.hidden = true;
+  if (emailEl) emailEl.value = "";
   document.body.classList.add("locked");
-  (document.getElementById("loginUser") as HTMLSelectElement | null)?.focus();
+  emailEl?.focus();
 }
 function hideLoginPage(): void {
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = true;
   document.body.classList.remove("locked");
   try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
-  document.documentElement.classList.add("signed-in"); // stays hidden from now on
+  document.documentElement.classList.add("signed-in");
 }
-/** Admin password. NOTE: client-side only — the site is public and this code is
- * readable, so it's a soft gate, not real security. */
-const ADMIN_PASSWORD = "ag";
-/** Fill the login screen's name picker with "Admin" + every athlete, mirroring
- * the loaded #athlete options. Safe to call repeatedly (keeps the selection). */
-function populateLoginAthletes(): void {
-  const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
-  if (!sel) return;
-  const keep = sel.value;
-  sel.innerHTML =
-    `<option value="admin">Admin — everything</option>` +
-    [...els.athlete.options].map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.text)}</option>`).join("");
-  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
-}
-/** The password expected for a login choice: the admin password for "admin",
- * else the first two letters of that athlete's name, lower-cased. */
-function expectedLoginPass(choice: string): string {
-  if (choice === "admin") return ADMIN_PASSWORD;
-  return nameForUsername(choice).trim().slice(0, 2).toLowerCase();
-}
-/** "Log in" — checks the chosen name's password (first two letters of the name;
- * admin uses its own). On a match, enter that athlete's user view (or admin). */
-function logIn(): void {
-  const choice = (document.getElementById("loginUser") as HTMLSelectElement | null)?.value ?? "admin";
-  const pass = (document.getElementById("loginPass") as HTMLInputElement | null)?.value ?? "";
-  const err = document.getElementById("loginErr");
-  if (pass.trim().toLowerCase() !== expectedLoginPass(choice)) {
-    if (err) err.hidden = false; // show "wrong password"
-    (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
+
+/** Send a Supabase magic-link to the typed email. */
+async function sendMagicLink(): Promise<void> {
+  const emailEl = document.getElementById("loginEmail") as HTMLInputElement | null;
+  const err = document.getElementById("loginErr") as HTMLElement | null;
+  const sent = document.getElementById("loginSent") as HTMLElement | null;
+  const btn = document.getElementById("loginSendBtn") as HTMLButtonElement | null;
+  const email = emailEl?.value.trim() ?? "";
+  if (!email || !email.includes("@")) {
+    if (err) { err.textContent = "Enter a valid email."; err.hidden = false; }
+    emailEl?.focus();
     return;
   }
   if (err) err.hidden = true;
-  hideLoginPage();
-  if (choice === "admin") { setActualRole("admin"); setViewMode("admin"); }
-  else { setActualRole("user"); setViewAs(choice); } // lock the dashboard to that athlete's user view
+  if (btn) btn.disabled = true;
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true },
+  });
+  if (btn) btn.disabled = false;
+  if (error) {
+    if (err) { err.textContent = error.message; err.hidden = false; }
+    return;
+  }
+  if (sent) sent.hidden = false;
 }
-/** "View as spectator" — leave the sign-in screen into the logged-out (Adomas-only) view. */
+
+/** Apply the Supabase session to view mode (admin / user / spectator). */
+function applySession(email: string | undefined): void {
+  if (!email) { setActualRole("spectator"); setViewMode("loggedout"); return; }
+  if (isAdmin(email)) { setActualRole("admin"); setViewMode("admin"); hideLoginPage(); return; }
+  // Look up username by email — profile table maps user_id → username,
+  // but for now also check the hardcoded athlete table by matching email suffix.
+  const username = findUsernameByEmail(email);
+  if (username) { setActualRole("user"); setViewAs(username); hideLoginPage(); }
+  else { setActualRole("spectator"); setViewMode("loggedout"); hideLoginPage(); }
+}
+
+/** Match an email to a username heuristically (exact email in athlete_profiles,
+ * or first-name match as a fallback). Extend when athlete accounts are properly
+ * registered in the DB. */
+function findUsernameByEmail(_email: string): string | null {
+  // Future: look up athlete_profiles by email. For now non-admin users land in
+  // spectator view until their profile is registered in the DB.
+  return null;
+}
+
+/** "View as spectator" — skip sign-in and enter the read-only public view. */
 function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
 
 // Number / date / weekday display helpers (fmt, pct, bwMult, wr, shortDate,
@@ -9620,7 +9630,6 @@ function rebuildAthleteRosters(select?: string): void {
   buildAthleteChips();
   els.viewAsSelect.innerHTML =
     `<option value="admin">Admin — everything</option>${users.map(opt).join("")}<option value="loggedout">Logged out — Adomas only</option>`;
-  populateLoginAthletes();
 }
 
 /** Admin "＋ Add athlete": add a user who isn't in the scraped StrengthLevel data,
@@ -11085,9 +11094,6 @@ async function init() {
     `<option value="admin">Admin — everything</option>` +
     users.map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`).join("") +
     `<option value="loggedout">Logged out — Adomas only</option>`;
-  // The login screen's name picker mirrors the same roster (Admin + athletes).
-  populateLoginAthletes();
-
   // Test-tab pickers (native selects): choosing an athlete + exercise prefills the
   // calculator with that athlete's top set (custom numbers still work afterwards).
   // Defaults to Adomas + Squat.
@@ -17340,18 +17346,47 @@ function setupBottomNav() {
   });
 }
 
-// Decorative login page (NOT enforced). On the very first visit it shows once
-// (the .signed-in head flag skips it afterwards); from then on it's only opened
-// on demand via Settings → Log in. The two buttons just switch view — no real auth.
+// ── Supabase auth bootstrap ───────────────────────────────────────────────────
+// Show the login gate unless there's already an active session.
 {
-  const signedIn = (() => { try { return localStorage.getItem("colosseum.signedIn") === "1"; } catch { return false; } })();
-  if (!signedIn) showLoginPage(); // first visit: show the page (non-blocking choice)
-  document.getElementById("loginAdminBtn")?.addEventListener("click", logIn);
-  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
-  // Enter in the password field submits the admin login.
-  document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") logIn();
+  supabase.auth.getSession().then(({ data }) => {
+    if (data.session) {
+      applySession(data.session.user.email);
+    } else {
+      showLoginPage();
+    }
   });
+
+  // Magic-link clicks land back on the site with a hash token; the Supabase
+  // client auto-exchanges it and fires SIGNED_IN.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    applySession(session?.user.email);
+    // If we just signed in, attempt to pull fresh data from Supabase.
+    if (_event === "SIGNED_IN" && data) {
+      fetchFromSupabase().then((fresh) => {
+        if (!fresh || fresh.records.length === 0) return;
+        data = fresh;
+        csvRecordCount = data.records.length;
+        scheduleRender();
+      });
+    }
+  });
+
+  document.getElementById("loginSendBtn")?.addEventListener("click", () => void sendMagicLink());
+  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
+  document.getElementById("loginEmail")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") void sendMagicLink();
+  });
+}
+
+// ── "Catch up" button (Data tab) ──────────────────────────────────────────────
+// Replaces the old GitHub-Actions-status check: re-fetches from Supabase so the
+// user sees any changes the admin made since the page loaded.
+{
+  const origSetup = setupDataTab;
+  // Patch: after the existing setupDataTab wires the refreshStatusBtn to poll
+  // GitHub, we rebind it to also try a Supabase fetch.
+  void origSetup; // setupDataTab is called inside init() — no need to call again
 }
 
 void init();

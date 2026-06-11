@@ -127,6 +127,9 @@ const LT: Record<string, string> = {
   "Backup & restore": "Atsarginė kopija ir atkūrimas",
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",
+  "Send link": "Siųsti nuorodą",
+  "Check your email for a sign-in link.": "Patikrinkite el. paštą — siuntėme prisijungimo nuorodą.",
+  "Enter a valid email.": "Įveskite teisingą el. paštą.",
   "Tasks & roadmap": "Užduotys ir planas",
   // ---- Graph selector: group-by special modes ----
   "Best lifts": "Geriausi kėlimai",
