@@ -583,6 +583,7 @@ import { fetchFromSupabase } from "./dataSource";
 
 function showLoginPage(): void {
   try { localStorage.removeItem("colosseum.signedIn"); } catch { /* ignore */ }
+  document.documentElement.classList.remove("signed-in"); // remove CSS-hide so gate is actually visible
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
   const err = document.getElementById("loginErr") as HTMLElement | null;
@@ -17412,11 +17413,10 @@ function setupBottomNav() {
     }
   });
 
-  // Magic-link clicks land back on the site with a hash token; the Supabase
-  // client auto-exchanges it and fires SIGNED_IN.
   supabase.auth.onAuthStateChange((_event, session) => {
-    applySession(session?.user.email);
-    // If we just signed in, attempt to pull fresh data from Supabase.
+    if (_event === "SIGNED_IN" || _event === "SIGNED_OUT" || _event === "USER_UPDATED") {
+      applySession(session?.user.email);
+    }
     if (_event === "SIGNED_IN" && data) {
       fetchFromSupabase().then((fresh) => {
         if (!fresh || fresh.records.length === 0) return;
