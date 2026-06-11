@@ -80,6 +80,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.274", title: "Shared manual sets via Supabase — add a set, everyone sees it", sp: 3, note: "Manual sets added in the app now sync to Supabase (anon key, no auth). On load, the app fetches all users' manual sets and merges them with the bundled data. Requires anon read+write on the Supabase sets table.", cat: "DATA" },
   { version: "b.2.8.273", title: "Local login gate — select user + password, no Supabase, no emails", sp: 2, note: "Restored the sign-in gate with local password validation (first 2 letters of username, admin = ag). No Supabase auth, no email addresses anywhere. Password table is built from the ATHLETES registry at boot.", cat: "META" },
   { version: "b.2.8.272", title: "Remove Supabase auth — no login gate, no emails, no passwords", sp: 2, note: "Removed the Supabase authentication layer entirely. No login gate, no sign-in form, no email addresses, no passwords. The site works as a standalone app exactly as before — bundled CSV data, athlete selector for admin, spectator/user views all still work via the existing view-as controls.", cat: "META" },
   { version: "b.2.8.271", title: "Admin login uses username 'admin', no email anywhere", sp: 0.5, note: "Admin account now uses 'admin' as the username (maps to admin@col.app internally like all other accounts). No real email address is used or shown anywhere in the app.", cat: "META" },

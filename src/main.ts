@@ -152,6 +152,7 @@ import {
   type PowerLift,
 } from "./records";
 import { DEFAULT_FORMULA } from "./config";
+import { supabase, upsertSets } from "./supabase";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename, clearCache } from "./backup";
@@ -13140,6 +13141,7 @@ function setupDataTab() {
 // ---- Add tab: hand-logged sets, saved on-device and merged with the CSV data --
 interface ManualEntry {
   id: string;
+  seq?: number; // stable Supabase set_number (assigned at creation, never changes)
   user: string;
   username: string;
   date: string;
@@ -13170,6 +13172,72 @@ function saveManual() {
   } catch {
     /* storage unavailable (private mode) — entries still apply this session */
   }
+  void syncManualToSupabase();
+}
+
+/** Push all local manual entries to the shared Supabase sets table. Fire-and-forget. */
+async function syncManualToSupabase(): Promise<void> {
+  if (manualEntries.length === 0) return;
+  try {
+    const rows = manualEntries
+      .filter((m) => m.seq !== undefined)
+      .map((m) => ({
+        user_id: m.username,
+        username: m.username,
+        date: m.date,
+        bodyweight: null as number | null,
+        exercise_name: m.exerciseName,
+        set_number: m.seq!,
+        weight: m.weight,
+        reps: m.reps,
+        notes: (m.notes ?? "") + `||mid:${m.id}`,
+        dropset: false,
+        percentile: null as number | null,
+      }));
+    if (rows.length > 0) await upsertSets(rows);
+  } catch { /* network failure — local copy is fine */ }
+}
+
+/** Fetch all manual sets from Supabase and merge them into manualEntries (adds
+ *  entries from other users that aren't stored locally). */
+async function loadManualFromSupabase(): Promise<void> {
+  try {
+    const { data: rows, error } = await supabase
+      .from("sets")
+      .select("*")
+      .gte("set_number", 100000000);
+    if (error || !rows || rows.length === 0) return;
+    const localIds = new Set(manualEntries.map((m) => m.id));
+    let added = 0;
+    for (const r of rows as import("./supabase").DbSet[]) {
+      const midMatch = r.notes.match(/\|\|mid:(.+)$/);
+      const mid = midMatch?.[1] ?? `${r.username}-${r.set_number}`;
+      if (localIds.has(mid)) continue;
+      manualEntries.push({
+        id: mid,
+        seq: r.set_number,
+        user: r.user_id,
+        username: r.username,
+        date: r.date,
+        exerciseName: r.exercise_name,
+        weight: r.weight,
+        reps: r.reps,
+        ...(r.notes.replace(/\|\|mid:.+$/, "") ? { notes: r.notes.replace(/\|\|mid:.+$/, "") } : {}),
+        ...(r.notes.includes("||lvl:") ? {} : {}), // placeholder for future level sync
+      });
+      localIds.add(mid);
+      added++;
+    }
+    if (added > 0) {
+      saveManualLocal();
+      mergeManualSets();
+      scheduleRender();
+    }
+  } catch { /* Supabase unreachable — local data is fine */ }
+}
+
+function saveManualLocal() {
+  try { localStorage.setItem(MANUAL_KEY, JSON.stringify(manualEntries)); } catch { /* ignore */ }
 }
 
 /** Turn a stored entry into a SetRecord matching the CSV shape, so every view
@@ -13497,6 +13565,7 @@ function onInlineAddGo(form: HTMLElement) {
   for (let i = 0; i < sets; i++) {
     manualEntries.push({
       id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      seq: (Date.now() % 2000000000) + i, // stable unique key for Supabase
       user,
       username,
       date,
@@ -17276,3 +17345,6 @@ function setupBottomNav() {
 }
 
 void init();
+// Fetch other users' manual sets from Supabase after the app loads.
+// Silent no-op if Supabase is unreachable or RLS blocks access.
+setTimeout(() => void loadManualFromSupabase(), 1500);
