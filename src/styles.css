@@ -870,9 +870,11 @@ body.admin-only-hidden .other-section-lbl { display: none; }
   font-size: 0.85rem; font-weight: 600; color: var(--muted); list-style: none;
 }
 .ad-sum-row { display: flex; align-items: center; gap: 0.4rem; }
-/* "STATS" card title: the small grey all-caps eyebrow style, matching the history's
-   "WORKOUTS" / the graph's "GRAPH" labels (owner request). */
-.ad-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+/* The collapsed Stats card title matches the COLLAPSED GRAPH / WORKOUTS section titles:
+   big, bold, black, UPPERCASE — NOT the small grey "eyebrow" used above the lift names in
+   the expanded views (owner: "should not have been made small and gray"). Higher specificity
+   + display guard so no context can shrink/grey/hide it. */
+.athlete-details .ad-title { display: inline-block; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--text); }
 .ad-sum-row .ad-caret { margin-left: auto; }
 .athlete-details-summary::-webkit-details-marker { display: none; }
 .athlete-details-summary:hover,
