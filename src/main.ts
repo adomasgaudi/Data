@@ -20,7 +20,7 @@ import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { S, type HeatColorDim, type IndexGroupMode } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, buildLoaded, fetchLatestCsv, type LoadedData } from "./dataSource";
-import { parseCsvRows, parseCsv } from "./csv";
+import { parseCsvRows } from "./csv";
 import {
   distinctExercises,
   selectableExercises,
@@ -181,7 +181,6 @@ const els = {
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
-  authBtn: $<HTMLButtonElement>("authBtn"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
   exercise: $<HTMLSelectElement>("exercise"),
@@ -316,8 +315,6 @@ const els = {
   rxOut: $("rxOut"),
   dataTableWrap: $("dataTableWrap"),
   dataPager: $("dataPager"),
-  refreshStatus: $("refreshStatus"),
-  refreshStatusBtn: $<HTMLButtonElement>("refreshStatusBtn"),
   dataSearch: $<HTMLInputElement>("dataSearch"),
   dataExercise: $<HTMLSelectElement>("dataExercise"),
   dataUser: $<HTMLSelectElement>("dataUser"),
@@ -365,10 +362,6 @@ let actualRole: ActualRole = (() => {
   try { const v = localStorage.getItem("colosseum.role.v1"); if (v === "admin" || v === "user" || v === "spectator") return v; } catch { /* ignore */ }
   return "admin";
 })();
-function setActualRole(r: ActualRole): void {
-  actualRole = r;
-  try { localStorage.setItem("colosseum.role.v1", r); } catch { /* ignore */ }
-}
 /** True only for a REAL admin — the only role that may freely switch view modes. */
 function isAdminRole(): boolean { return actualRole === "admin"; }
 /** In user view, which athlete the dashboard is locked to (their username), as
@@ -394,7 +387,6 @@ function setViewMode(mode: ViewMode) {
   // The mode toggle in the header shows the current view; the Settings dropdown +
   // auth button mirror it.
   els.viewAsSelect.value = mode === "admin" ? "admin" : mode === "loggedout" ? "loggedout" : (locked ?? "admin");
-  els.authBtn.textContent = mode === "loggedout" ? "Log in" : "Log out";
   // The "Other" sheet: the Coach section is admin-only; the Clients section
   // (Live, Analysis, Colosseum, Stats view, World records, Guide) shows in every
   // view so a client can reach all their pages.
@@ -577,84 +569,6 @@ function canEditCurrentAthlete(): boolean {
 /* ---- Real auth via Supabase magic-link ----------------------------------------
  * Select a username + password. Admin gets the full admin view;
  * known athletes get their locked user view; others land in spectator view. */
-import { supabase, isAdmin } from "./supabase";
-import { fetchFromSupabase } from "./dataSource";
-
-function showLoginPage(): void {
-  try { localStorage.removeItem("colosseum.signedIn"); } catch { /* ignore */ }
-  document.documentElement.classList.remove("signed-in"); // remove CSS-hide so gate is actually visible
-  const gate = document.getElementById("loginGate");
-  if (gate) gate.hidden = false;
-  const err = document.getElementById("loginErr") as HTMLElement | null;
-  if (err) { err.hidden = true; err.textContent = ""; }
-  document.body.classList.add("locked");
-  (document.getElementById("loginPass") as HTMLInputElement | null)?.focus();
-}
-function hideLoginPage(): void {
-  const gate = document.getElementById("loginGate");
-  if (gate) gate.hidden = true;
-  document.body.classList.remove("locked");
-  try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
-  document.documentElement.classList.add("signed-in");
-}
-
-/** Internal email from a username: "mantasp" → "mantasp@col.app".
- *  Admin always uses their real email. */
-function usernameToEmail(u: string): string {
-  return u.includes("@") ? u : `${u.toLowerCase()}@col.app`;
-}
-
-/** Sign in with username + password via Supabase. */
-async function signIn(): Promise<void> {
-  const userEl = document.getElementById("loginUser") as HTMLInputElement | null;
-  const passEl = document.getElementById("loginPass") as HTMLInputElement | null;
-  const err = document.getElementById("loginErr") as HTMLElement | null;
-  const btn = document.getElementById("loginSendBtn") as HTMLButtonElement | null;
-  const username = userEl?.value.trim() ?? "";
-  const password = passEl?.value ?? "";
-  if (!username) {
-    if (err) { err.textContent = "Select a user."; err.hidden = false; }
-    userEl?.focus();
-    return;
-  }
-  if (!password) {
-    if (err) { err.textContent = "Enter your password."; err.hidden = false; }
-    passEl?.focus();
-    return;
-  }
-  if (err) err.hidden = true;
-  if (btn) btn.disabled = true;
-  const { error } = await supabase.auth.signInWithPassword({
-    email: usernameToEmail(username),
-    password,
-  });
-  if (btn) btn.disabled = false;
-  if (error) {
-    if (err) { err.textContent = "Wrong username or password."; err.hidden = false; }
-    passEl?.select();
-  }
-}
-
-/** Apply the Supabase session to view mode (admin / user / spectator). */
-function applySession(email: string | undefined): void {
-  if (!email) { setActualRole("spectator"); setViewMode("loggedout"); return; }
-  if (isAdmin(email)) { setActualRole("admin"); setViewMode("admin"); hideLoginPage(); return; }
-  // Look up username by email — profile table maps user_id → username,
-  // but for now also check the hardcoded athlete table by matching email suffix.
-  const username = findUsernameByEmail(email);
-  if (username) { setActualRole("user"); setViewAs(username); hideLoginPage(); }
-  else { setActualRole("spectator"); setViewMode("loggedout"); hideLoginPage(); }
-}
-
-/** Extract a username from an auth email.
- *  "mantasp@col.app" → "mantasp"; "admin@col.app" → null (handled as admin above). */
-function findUsernameByEmail(email: string): string | null {
-  if (email.endsWith("@col.app")) return email.slice(0, email.indexOf("@"));
-  return null;
-}
-
-/** "View as spectator" — skip sign-in and enter the read-only public view. */
-function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
 
 // Number / date / weekday display helpers (fmt, pct, bwMult, wr, shortDate,
 // dowLetter, isoWeekNumber, todayIso, trainingDuration) are pure and live in
@@ -11218,9 +11132,6 @@ async function init() {
   setViewMode(viewMode);
   updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
-  // Log in / Log out both take you to the sign-in screen (where you pick admin or spectator).
-  els.authBtn.addEventListener("click", showLoginPage);
-
   // Settings popover (holds the 1RM formula).
   els.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -13104,124 +13015,9 @@ function populateDataFilters() {
     users.map((u) => `<option value="${escapeHtml(u.user)}">${escapeHtml(u.user)}</option>`).join("");
 }
 
-// ---- "Refresh data" status -------------------------------------------------
-// The refresh runs as a GitHub Action (see the Data tab + fetch-data.yml). The
-// browser can read its status from the public GitHub API (api.github.com sends
-/** Human "x min ago" for an ISO timestamp. */
-function agoText(iso: string): string {
-  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
-  if (s < 60) return "just now";
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h} h ago`;
-  return `${Math.round(h / 24)} days ago`;
-}
-
-function setRefreshStatus(html: string, cls: string) {
-  els.refreshStatus.className = `refresh-status ${cls}`;
-  els.refreshStatus.innerHTML = html;
-}
-
-/** Re-fetch from Supabase and hot-swap the dataset in place.
- *  Silent no-op when not signed in or Supabase is unreachable — the app
- *  always falls back to the bundled CSV data. */
-async function catchUpFromSupabase(): Promise<void> {
-  const { data: session } = await supabase.auth.getSession();
-  if (!session.session) return; // not signed in — bundled data is fine
-  setRefreshStatus("Syncing…", "is-running");
-  try {
-    const fresh = await fetchFromSupabase();
-    if (!fresh || fresh.records.length === 0) {
-      setRefreshStatus("No data in Supabase yet — import your CSV below.", "is-idle");
-      return;
-    }
-    data = fresh;
-    csvRecordCount = data.records.length;
-    mergeManualSets();
-    scheduleRender();
-    const ts = fresh.updatedAt ? ` (${agoText(fresh.updatedAt)})` : "";
-    setRefreshStatus(`✓ Up to date${ts} — ${fresh.records.length} sets`, "is-ok");
-  } catch {
-    setRefreshStatus("Sync failed — using local data.", "is-unknown");
-  }
-}
-
-/** Parse a StrengthLevel CSV and upsert rows into Supabase for the current user. */
-async function importCsvToSupabase(csvText: string): Promise<void> {
-  const statusEl = document.getElementById("importStatus");
-  const setStatus = (msg: string) => { if (statusEl) statusEl.textContent = msg; };
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  const userEmail = sessionData.session?.user.email;
-  if (!userId || !userEmail) { setStatus("Sign in first."); return; }
-
-  setStatus("Parsing…");
-  const rawRows = parseCsv(csvText);
-  // Filter to rows belonging to the current user (by email), or keep all if admin.
-  const myRows = isAdminRole()
-    ? rawRows
-    : rawRows.filter((r) => (r["user"] ?? "").toLowerCase() === userEmail.toLowerCase());
-
-  if (myRows.length === 0) {
-    setStatus("No matching rows found for your email in this CSV.");
-    return;
-  }
-
-  // Map raw CSV row → DbSet shape (upsert conflict key: user_id+date+exercise_name+set_number).
-  const toDbSet = (r: Record<string, string>) => ({
-    user_id: userId,
-    username: r["username"] ?? "",
-    date: r["date"] ?? "",
-    bodyweight: r["bodyweight"] ? Number(r["bodyweight"]) || null : null,
-    exercise_name: r["exercise_name"] ?? "",
-    set_number: Number(r["set_number"]) || 1,
-    weight: r["weight"] ? Number(r["weight"]) || null : null,
-    reps: r["reps"] ? Number(r["reps"]) || null : null,
-    notes: r["notes"] ?? "",
-    dropset: r["dropset"] === "true" || r["dropset"] === "1",
-    percentile: r["percentile"] ? Number(r["percentile"]) || null : null,
-  });
-
-  // Batch upsert in chunks of 200 to stay within Supabase request limits.
-  const CHUNK = 200;
-  let done = 0;
-  for (let i = 0; i < myRows.length; i += CHUNK) {
-    const batch = myRows.slice(i, i + CHUNK).map(toDbSet);
-    const { error } = await supabase
-      .from("sets")
-      .upsert(batch, { onConflict: "user_id,date,exercise_name,set_number" });
-    if (error) { setStatus(`Error: ${error.message}`); return; }
-    done += batch.length;
-    setStatus(`Importing… ${done}/${myRows.length}`);
-  }
-
-  setStatus(`✓ ${done} sets imported. Catching up…`);
-  await catchUpFromSupabase();
-}
 
 function setupDataTab() {
   populateDataFilters();
-  els.refreshStatusBtn.addEventListener("click", () => void catchUpFromSupabase());
-
-  // Import CSV → Supabase
-  document.getElementById("importCsvInput")?.addEventListener("change", (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => void importCsvToSupabase(reader.result as string);
-    reader.readAsText(file);
-  });
-
-  // Auto-refresh when the Data tab becomes visible (re-fetch on each visit).
-  // Also schedule a background refresh every 5 minutes.
-  let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void catchUpFromSupabase();
-  });
-  autoRefreshTimer = setInterval(() => void catchUpFromSupabase(), 5 * 60 * 1000);
-  void autoRefreshTimer; // keep reference alive
   document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = btn.dataset.dataview === "original" ? "original" : "processed";
@@ -17173,7 +16969,6 @@ function switchTopTab(name: string) {
   document.body.classList.toggle("on-s-anl", name === "s-analysis");
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
-  if (name === "data") void catchUpFromSupabase();
   if (name === "test") renderCoachRx();
   if (name === "changelog") { renderChangelog(); expandLatestChangelog(); }
   if (name === "s-analysis") renderSAnalysis();
@@ -17397,59 +17192,6 @@ function setupBottomNav() {
   // Tapping the backdrop (or anything marked data-other-close) dismisses it.
   els.otherSheet.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("[data-other-close]")) setOtherSheetOpen(false);
-  });
-}
-
-// ── Supabase auth bootstrap ───────────────────────────────────────────────────
-// If there's an active Supabase session, apply it (sets role + hides gate).
-// If there's no session, leave the current localStorage state alone — the gate
-// is reachable via the Log in button in Settings. We don't force it on load
-// because the site is public (GitHub Pages) and users may not have accounts yet.
-{
-  supabase.auth.getSession().then(({ data }) => {
-    if (data.session) {
-      applySession(data.session.user.email);
-    }
-    // No session → keep whatever viewMode/role localStorage has (default: admin).
-  });
-
-  supabase.auth.onAuthStateChange((_event, session) => {
-    if (_event === "SIGNED_IN" || _event === "SIGNED_OUT" || _event === "USER_UPDATED") {
-      if (_event === "SIGNED_OUT") {
-        showLoginPage(); // user explicitly signed out → show gate
-      } else {
-        applySession(session?.user.email);
-      }
-    }
-    if (_event === "SIGNED_IN" && data) {
-      fetchFromSupabase().then((fresh) => {
-        if (!fresh || fresh.records.length === 0) return;
-        data = fresh;
-        csvRecordCount = data.records.length;
-        scheduleRender();
-      });
-    }
-  });
-
-  // Fill the user dropdown from the ATHLETES registry (admin option is static in
-  // the HTML); inserted before it so admin stays last.
-  {
-    const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
-    const adminOpt = sel?.querySelector('option[value="g@cool.lt"]');
-    if (sel && adminOpt) {
-      for (const username of Object.keys(ATHLETES)) {
-        const opt = document.createElement("option");
-        opt.value = username;
-        opt.textContent = username;
-        sel.insertBefore(opt, adminOpt);
-      }
-    }
-  }
-
-  document.getElementById("loginSendBtn")?.addEventListener("click", () => void signIn());
-  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
-  document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") void signIn();
   });
 }
 

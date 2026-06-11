@@ -8,45 +8,9 @@
     <!-- Apply the saved theme before first paint so there's no light-mode flash. -->
     <script>
       try { if (localStorage.getItem("colosseum.theme") === "dark") document.documentElement.setAttribute("data-theme", "dark"); } catch (e) {}
-      try { if (localStorage.getItem("colosseum.signedIn") === "1") document.documentElement.classList.add("signed-in"); } catch (e) {}
     </script>
   </head>
   <body>
-    <!-- Decorative login page (NOT enforced): log in as admin, or continue
-         logged out (Adomas only). Re-openable later from Settings → Log in. -->
-    <div id="loginGate" class="login-gate">
-      <div class="login-card">
-        <div class="login-logo" aria-hidden="true">
-          <svg viewBox="0 0 80 58" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 53 H75"/>
-            <path d="M9 48 V18 Q40 11 71 18 V48"/>
-            <path d="M9 31 H71"/>
-            <path d="M15 48 V38 a5 5 0 0 1 10 0 V48"/>
-            <path d="M29 48 V38 a5 5 0 0 1 10 0 V48"/>
-            <path d="M43 48 V38 a5 5 0 0 1 10 0 V48"/>
-            <path d="M57 48 V38 a5 5 0 0 1 10 0 V48"/>
-            <path d="M15 31 V24 a5 5 0 0 1 10 0 V31"/>
-            <path d="M29 31 V24 a5 5 0 0 1 10 0 V31"/>
-            <path d="M43 31 V24 a5 5 0 0 1 10 0 V31"/>
-            <path d="M57 31 V24 a5 5 0 0 1 10 0 V31"/>
-          </svg>
-        </div>
-        <h1 class="login-title">Colosseum</h1>
-        <div class="login-signin">
-          <p class="login-signin-lbl">Sign in</p>
-          <!-- Athlete options are filled from the ATHLETES registry at boot (single
-               source of truth) — only the placeholder and admin live here. -->
-          <select id="loginUser" class="login-input">
-            <option value="">— select user —</option>
-            <option value="admin">admin</option>
-          </select>
-          <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
-          <p id="loginErr" class="login-err" hidden></p>
-          <button id="loginSendBtn" type="button" class="login-btn login-btn--admin">Log in</button>
-          <button id="loginGuestBtn" type="button" class="login-spectate">spectate</button>
-        </div>
-      </div>
-    </div>
 
     <header class="topbar">
       <div class="topbar-title">
@@ -54,7 +18,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.271</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.272</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -86,7 +50,6 @@
           <select id="viewAsSelect" hidden></select>
           <div class="settings-row">
             <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
-            <button type="button" id="authBtn" class="settings-link">Log out</button>
           </div>
         </div>
       </div>
@@ -900,30 +863,7 @@
         </section>
       </div>
 
-      <div id="tab-data" class="tab-panel" hidden>
-        <section class="panel refresh-panel">
-          <h2>Sync with Supabase</h2>
-          <p class="muted" style="margin: 0 0 0.8rem">
-            Your training data lives in Supabase — available on any device instantly.
-            “Catch up” re-fetches anything added since this page loaded.
-          </p>
-          <button type="button" id="refreshStatusBtn" class="refresh-btn">↻ Catch up</button>
-          <div class="refresh-status-row">
-            <span id="refreshStatus" class="refresh-status"></span>
-          </div>
-        </section>
-        <section class="panel" id="importPanel">
-          <h2>Import historical data</h2>
-          <p class="muted" style="margin: 0 0 0.8rem">
-            First time? Upload your StrengthLevel CSV export to seed your data into Supabase.
-            Safe to re-run — duplicate sets are ignored.
-          </p>
-          <label class="refresh-btn" style="cursor:pointer">
-            ⬆ Choose CSV
-            <input type="file" id="importCsvInput" accept=".csv,text/csv" style="display:none" />
-          </label>
-          <span id="importStatus" class="refresh-status" style="margin-left:0.5rem"></span>
-        </section>
+      <div id=”tab-data” class=”tab-panel” hidden>
         <section class="panel">
           <h2>Data — raw vs processed</h2>
           <p class="muted" id="dataIntro" style="margin: 0 0 1rem">
