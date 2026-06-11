@@ -15677,11 +15677,11 @@ function renderWaGraph(): void {
       `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
-    // The legend node was relocated into the bar; the SVG engine keeps writing into
-    // THAT node and only makes a fresh one on a full chart re-mount (which we avoid
-    // here to preserve pan/zoom). So rescue it before the bar rebuild destroys it,
-    // and re-attach it to the new bar below — otherwise the legend vanishes.
-    preservedLegend = box.querySelector(".wa-graph-bar .svgc-legend");
+    // The legend node was relocated (into the chart overlay or the bar); the SVG
+    // engine keeps writing into THAT node and only makes a fresh one on a full chart
+    // re-mount (which we avoid here to preserve pan/zoom). So rescue it wherever it
+    // lives before the bar/overlay rebuilds destroy it, and re-attach it below.
+    preservedLegend = box.querySelector(".svgc-legend");
     const bar = box.querySelector(".wa-graph-bar");
     if (bar) bar.outerHTML = graphBarHtml;
     else chartBox.insertAdjacentHTML("afterend", graphBarHtml);
@@ -15750,15 +15750,18 @@ function renderWaGraph(): void {
     const cb = document.getElementById("waGraphChart");
     if (cb) renderAnalyticsGraph(cb, analyticsInput);
   };
-  // Relocate the chart's legend down into the bar below it so it sits beside Graph
-  // options (the SVG engine keeps updating it in place wherever it lives in the DOM).
+  // Relocate the chart's legend. When it's the DROPDOWN form ("Legend(N) ▾", > 6
+  // series) it moves UP into the in-chart overlay toolbar as the FIRST control — left
+  // of the kg/⤢/⛶ icons (owner request: a compact legend icon button on the chart).
+  // The INLINE-keys form (few series) stays in the bar below, beside Graph options.
+  // The SVG engine keeps updating the node in place wherever it lives.
   const ctrls = box.querySelector(".wa-graph-ctrls");
-  // Fresh mount → the new legend sits inside chartBox; rebuild path → reuse the
-  // node we rescued before the bar was replaced (the engine just updated it).
   const legendEl = preservedLegend ?? chartBox?.querySelector(".svgc-legend");
-  if (ctrls && legendEl && legendEl.parentElement !== ctrls) {
-    // Sit the Legend dropdown between "Graph options" and "Compare" so all three
-    // controls share one row (the fold's summary truncates to make room).
+  const legendIsDropdown = !!legendEl?.querySelector(".svgc-legend-fold");
+  if (legendEl && legendIsDropdown && overlayEl) {
+    if (legendEl.parentElement !== overlayEl) overlayEl.insertAdjacentElement("afterbegin", legendEl);
+  } else if (legendEl && ctrls && legendEl.parentElement !== ctrls) {
+    // Sit the inline legend between "Graph options" and "Compare" (shared row).
     const fold = ctrls.querySelector(".wa-graph-fold");
     if (fold) fold.insertAdjacentElement("afterend", legendEl);
     else ctrls.appendChild(legendEl);
