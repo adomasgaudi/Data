@@ -542,6 +542,12 @@ function nameForUsername(username: string | null): string {
  * `signedIn` flag only governs the one-time first-visit gate, never the view. */
 function showLoginPage(): void {
   document.documentElement.classList.remove("signed-in"); // override the "always hide" rule
+  // SECURITY: clear the persisted gate flag so a REFRESH while the sign-in screen
+  // is up re-presents the gate instead of silently restoring the last view. The
+  // head script in index.html hides the gate whenever colosseum.signedIn === "1",
+  // and viewMode/role default to "admin" — so leaving the flag set let a reload on
+  // the sign-in screen drop you straight back into admin without authenticating.
+  try { localStorage.removeItem("colosseum.signedIn"); } catch { /* ignore */ }
   populateLoginAthletes(); // refresh the name picker from the loaded roster
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
