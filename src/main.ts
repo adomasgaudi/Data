@@ -16826,9 +16826,20 @@ function setupWorkoutAnalysis(): void {
     const met = t.closest<HTMLElement>(".wa-metric");
     if (met?.dataset.wametric) {
       const id = met.dataset.wametric;
-      if (waMetrics.has(id)) waMetrics.delete(id);
-      else waMetrics.add(id);
-      met.classList.toggle("is-on"); // instant visual feedback; chart redraws deferred
+      // 1RM and Weight Range are two views of the same load → mutually exclusive: turning
+      // one ON turns the other OFF (owner request).
+      const WEIGHT_EXCLUSIVE = ["e1rm", "weightRange"];
+      if (waMetrics.has(id)) { waMetrics.delete(id); met.classList.remove("is-on"); }
+      else {
+        waMetrics.add(id); met.classList.add("is-on");
+        if (WEIGHT_EXCLUSIVE.includes(id)) {
+          for (const other of WEIGHT_EXCLUSIVE) {
+            if (other !== id && waMetrics.delete(other)) {
+              met.closest(".wa-metric-chips")?.querySelector(`[data-wametric="${other}"]`)?.classList.remove("is-on"); // clear sibling instantly
+            }
+          }
+        }
+      }
       scheduleWaGraph();
       return;
     }
