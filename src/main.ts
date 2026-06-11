@@ -16145,6 +16145,22 @@ const NAV_PAGES: { tab: string; label: string }[] = [
   { tab: "guide", label: "Guide" },
   { tab: "changelog", label: "Version history" },
 ];
+/** Rank matching exercise names by how well they fit the search query — BEST first: an
+ * exact (case-insensitive) name/short/code hit, then a prefix hit, then a plain substring;
+ * ties broken by the shorter display name (closest to the query), then alphabetically. So
+ * "Sq" ranks "Squat" above "V-SQ". Used to name the best match + order the single-view reel. */
+function rankMatchesByQuery(names: readonly string[], query: string): string[] {
+  const q = query.trim().toLowerCase();
+  const score = (name: string): number => {
+    const cands = [name.toLowerCase(), displayName(name).toLowerCase(), codeFor(name).toLowerCase(), shortFor(name).toLowerCase()];
+    if (cands.some((c) => c === q)) return 3;          // exact
+    if (cands.some((c) => c.startsWith(q))) return 2;  // prefix
+    return 1;                                          // substring (already filtered in)
+  };
+  return [...names].sort((a, b) =>
+    score(b) - score(a) || displayName(a).length - displayName(b).length || a.localeCompare(b),
+  );
+}
 /** The plain-text search popup (like the "." command palette): choose whether the
  * query FILTERS the picker (default) or FINDS matching sets in the workout history,
  * plus one-shot Select-all / Clear. Reuses #cmdPalette + the .cmd-opt styling. */
@@ -16170,7 +16186,12 @@ function renderSearchPalette(value: string): void {
       `<span class="cmd-opt-desc">${exists ? "Already exists — opens the inline add form" : "Opens the inline add form to log its first set"}</span></button>`;
     return;
   }
-  const n = waChipListBase().length;
+  const matchNames = waChipListBase().map((e) => e.name);
+  const n = matchNames.length;
+  // The single best match to the typed text (e.g. "Sq" → Squat) — names the "open in
+  // single view" suggestion and leads the carousel reel there.
+  const bestMatch = n ? rankMatchesByQuery(matchNames, q)[0]! : "";
+  const bestLabel = bestMatch ? displayName(bestMatch) : "";
   // Page navigation: typing a page name (e.g. "index", "live", "world") offers to
   // SWITCH to it — shown first, so the bar doubles as a go-to-page jump, not just a
   // lift search. Matches the page's name (case-insensitive substring).
@@ -16183,14 +16204,15 @@ function renderSearchPalette(value: string): void {
     { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
     { act: "find", label: "📜 Find in workout history", desc: "Show every matching set in the history below", on: searchFindHistory },
     { act: "index", label: "📇 Find in index", desc: n === 1 ? "Open it on the Index page" : "Open the first match on the Index page", on: false },
-    // "📈 Graph" expands in place to 3 plot choices (owner request); collapsed it just shows
-    // the count. The sub-rows are indented and each runs its own plot action.
-    { act: "graph", label: "📈 Graph", desc: n === 1 ? "Plot it…" : `Plot the ${n} matches…`, on: searchGraphExpanded },
+    // "📈 Graph" expands in place to its plot choices (owner request); collapsed it just
+    // shows the best match. The sub-rows are indented and each runs its own plot action.
+    // The single-view suggestion NAMES the best match; multi-view plots all the matches.
+    { act: "graph", label: "📈 Graph", desc: n === 1 ? `Open “${bestLabel}”…` : `Best: “${bestLabel}” · ${n} matches…`, on: searchGraphExpanded },
     ...(searchGraphExpanded
       ? [
-          { act: "graph-all", label: "Plot all", desc: n === 1 ? "Replace the graph with it" : `Replace the graph with all ${n}`, on: false, sub: true },
-          { act: "graph-multi", label: "Plot on multi view", desc: "Add to the multi (overlaid) graph", on: false, sub: true },
-          { act: "graph-single", label: "Plot on single view", desc: "Flip through them one at a time", on: false, sub: true },
+          { act: "graph-single", label: `Open “${bestLabel}” — single view`, desc: n === 1 ? "The single-lift graph view" : `Single-lift view, flip through all ${n} (from “${bestLabel}”)`, on: false, sub: true },
+          { act: "graph-all", label: n === 1 ? "Plot on multi view" : `All ${n} — multi view`, desc: "Replace the multi/overlaid graph with the matches", on: false, sub: true },
+          { act: "graph-multi", label: "Add to multi view", desc: "Keep what's plotted, add the matches", on: false, sub: true },
         ]
       : []),
     { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
@@ -16256,8 +16278,9 @@ function runSearchAction(act: string): void {
     const matches = waChipListBase().map((e) => e.name);
     if (matches.length) {
       if (act === "graph-single") {
-        graphCarOverride = matches; graphCarIdx = 0;
-        graphFullShown = false; // single-lift carousel of the matches
+        // Single-lift carousel of the matches, ordered BEST-match first so it opens there.
+        graphCarOverride = rankMatchesByQuery(matches, waSearchQuery.trim()); graphCarIdx = 0;
+        graphFullShown = false;
       } else if (act === "graph-multi") {
         const add = matches.filter((m) => !waGraphSel.includes(m));
         waGraphSel = capGraphSel([...waGraphSel, ...add]); // add to what's already plotted
@@ -16353,6 +16376,12 @@ function setupCommandBar(): void {
     else if (e.key === "Escape") { hideCmdPalette(); input.blur(); }
   });
   pal.addEventListener("click", (e) => {
+    // A click INSIDE the palette must NOT bubble to the document "close on outside click"
+    // handler below: an action that RE-RENDERS the menu (e.g. the "📈 Graph" expand toggle)
+    // detaches the clicked button, so by the time the document handler runs its
+    // `cmdBar.contains(e.target)` check reads false and it wrongly hides the palette —
+    // the recurring "clicking an option closes the menu" bug. Stop it here.
+    e.stopPropagation();
     const opt = (e.target as HTMLElement).closest<HTMLElement>(".cmd-opt");
     if (opt?.dataset.cmdmore) { input.value = "."; cmdActiveIdx = 0; renderCmdPalette("."); input.focus(); } // "did you mean…?" → all commands
     else if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
