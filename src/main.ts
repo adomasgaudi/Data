@@ -14999,27 +14999,26 @@ function renderSelector(scope: SelScope): void {
   // consolidate them with the exercises they act on, off the crowded top row). In the
   // category-STRIP mode there's no fold, so they fall back to a top tools row.
   const controls = `${freqCtl}${selAllToggle}${clearBtn}${settingsCog}`;
-  const topTools = showGrid ? trimBtn : `${groupCtl}${controls}${trimBtn}`;
+  // The WHOLE picker — group-by, First-N / Clear / ⚙, and the chip grid OR the category
+  // strip — now lives in the slide-out Pick drawer (.wa-pick-card), opened by the "▦ Pick"
+  // tab on the title. NOTHING of it sits inline between the title and the chart (owner
+  // request). Only the graph's "Trim to N" stays inline — a contextual action on the
+  // current selection, not part of the picker.
+  const pickBody = showGrid
+    // Exercise mode: controls + the chip grid (filled by renderWaChipsScope below).
+    ? `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
+      `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>`
+    // Category mode: controls + the whole-category strip (selPills = .wa-catstrip).
+    : `<div class="wa-pick-controls">${groupCtl}${controls}</div>${selPills}`;
   sel.innerHTML =
-    (topTools ? `<div class="wa-sel-header"><div class="wa-sel-tools">${topTools}</div></div>` : "") +
-    selPills +
-    // The picker header doubles as the collapse toggle (the caret expands/collapses the
-    // chip grid). A manual fold (not <details>) so the group dropdown's / ⚙'s own menus
-    // aren't clipped by the fold and don't fight a <summary>'s toggle.
-    (showGrid
-      // The opener moved UP to the title row (the "▦ Pick" pill in liftSelectionTitle); the
-      // old full-width "▸ Picker & settings" bar here is gone. The slide-in card (drawer when
-      // opened) still holds ALL the controls — group-by, period/metric, First-N, ⚙ — AND the
-      // exercise chips. Auto-shown inline only while searching (chipsFoldOpen).
-      ? `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
-        `<div id="waPickCard-${scope}" class="wa-pick-card"${chipsFoldOpen ? "" : " hidden"}>` +
-        // The slide-in drawer is a white "sticky note": no close button — swipe it back
-        // to the right edge to dismiss (or tap the dimmed area / Escape).
-        `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
-        `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>` +
-        `</div>` +
-        `</div>`
-      : "");
+    (trimBtn ? `<div class="wa-sel-header"><div class="wa-sel-tools">${trimBtn}</div></div>` : "") +
+    // A manual fold (not <details>) so the group dropdown's / ⚙'s own menus aren't clipped.
+    // The card is hidden inline (shown only while searching); the Pick tab slides it out.
+    `<div class="wa-chips-fold${chipsFoldOpen ? " is-open" : ""}">` +
+    `<div id="waPickCard-${scope}" class="wa-pick-card"${chipsFoldOpen ? "" : " hidden"}>` +
+    pickBody +
+    `</div>` +
+    `</div>`;
   if (showGrid) renderWaChipsScope(scope);
   const newWrap = sel.querySelector<HTMLElement>(".wa-chips-wrap");
   if (newWrap) newWrap.scrollTop = prevChipScroll;
