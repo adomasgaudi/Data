@@ -37,6 +37,7 @@ served their purpose; git has them).
 - 🟢 **FEAT-17** [Index] (SP:3) — Virtualised chip list (only needed if the library grows into the thousands).
 - 🟢 **FEAT-18** [Taxonomy] (SP:5) — Plane/joint mini-diagram illustrating an exercise's taxonomy.
 - 🟢 **FEAT-19** [Analysis] (SP:8) — AI summaries of an athlete / exercise / session.
+- 🟢 **FEAT-21** [Data] (SP:5) — Export the app's workout data as a StrengthLevel-importable CSV, so a user can view their data on strengthlevel.com too. *Distant-second priority after the backend/multi-device work.*
 
 ## Coach
 - 🟢 **FEAT-20** [Coach] (SP:13) — Roster-level **Coach Home digest**: scan all athletes at once (who PR'd this week, who's stalling, who vanished, team momentum) as an admin landing. *Parked idea from the `#CEO` "coach as primary user" review (`docs/ceo/coach-primary-user.md`) — deferred because the coach works one client at a time; revisit if the roster grows.*
