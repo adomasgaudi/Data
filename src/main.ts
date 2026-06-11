@@ -11090,10 +11090,11 @@ async function init() {
   setupTabs();
   setupStatsToggle(); // small Stats show/hide button by the athlete picker
   setupSectionToggles(); // matching Graph / History show/hide buttons beside it
-  // Graph card: closing it resets to the single-lift carousel, so reopening leads with the
-  // carousel again (mirrors the Stats card's mini→More behaviour). Opening (re)renders it.
-  document.getElementById("waGraphFold")?.addEventListener("toggle", (e) => {
-    if (!(e.currentTarget as HTMLDetailsElement).open) graphFullShown = false;
+  // Graph card: closing it REMEMBERS whether you were on the single-lift carousel or the
+  // full multi graph, so reopening returns to the same view (owner request — don't reset
+  // to single). The single ⇄ multi switch is the "Multi ▾" / "Single ▴" button. Opening
+  // (re)renders the current view.
+  document.getElementById("waGraphFold")?.addEventListener("toggle", () => {
     renderWaGraph();
   });
   // World-records page: the trio-lift selector pills (mutually-exclusive).
@@ -15507,11 +15508,10 @@ function renderWaGraph(): void {
   if (miniEl && fullEl) {
     miniEl.hidden = graphFullShown;
     fullEl.hidden = !graphFullShown;
-    if (!graphFullShown) {
-      const fold = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
-      if (fold?.open) renderGraphMini(); // skip the (hidden) chart work when collapsed
-      return;
-    }
+    const fold = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
+    if (!fold?.open) return;            // collapsed → skip the (hidden) chart work for either view
+    if (!graphFullShown) { renderGraphMini(); return; } // open + single → the carousel
+    // open + multi → fall through to the full multi-exercise / multi-athlete render.
   }
   const box = document.getElementById("waGraph");
   if (!box) return;
@@ -15698,6 +15698,9 @@ function renderWaGraph(): void {
     `<div class="wa-graph-menu">${cfgUi}</div>` +
     `</details>` +
     compareBtn +
+    // "Single ▴" — mirror of the carousel's "Multi ▾": flips the full multi graph back
+    // to the single-lift carousel. Sits bottom-right, the same spot "Multi" occupies.
+    `<button type="button" class="ms-more gmini-more wa-graph-single" data-gmsingle="1" title="Back to the single-lift carousel">Single ▴</button>` +
     `</div>` +
     `</div>`;
   // In-chart overlay toolbar (top-right corner): kg unit toggle, ⤢ Fit (proxies the
@@ -16698,8 +16701,10 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // ── Graph "min" carousel interactions ──────────────────────────────────────
-    // "More" → expand the single-lift carousel into the full multi-exercise graph.
+    // "Multi ▾" → expand the single-lift carousel into the full multi-exercise graph.
     if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
+    // "Single ▴" → flip the full multi graph back to the single-lift carousel.
+    if (t.closest<HTMLElement>("[data-gmsingle]")) { graphFullShown = false; renderWaGraph(); return; }
     // Prev / next lift in the carousel (manual rotation — no auto-rotate).
     const gmNav = t.closest<HTMLElement>("[data-gmnav]");
     if (gmNav?.dataset.gmnav) { stepGraphSlide(Number(gmNav.dataset.gmnav)); return; }

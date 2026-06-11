@@ -4006,6 +4006,9 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-ctrls { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem 0.5rem; width: 100%; min-width: 0; }
 .wa-graph-ctrls .wa-graph-fold { flex: 0 1 auto; min-width: 4.5rem; }
 .wa-graph-ctrls .wa-graph-compare-btn { flex: 0 0 auto; }
+/* "Single ▴" toggle sits at the FAR RIGHT of the bar — the same bottom-right spot the
+   carousel's "Multi ▾" button occupies, so the single ⇄ multi switch stays put. */
+.wa-graph-ctrls .wa-graph-single { flex: 0 0 auto; margin-left: auto; }
 .wa-graph-fold-sum { max-width: 100%; overflow: hidden; }
 /* Per-athlete colour key above the chart (multi-athlete overlay): name + line colour,
    one sideways-scrolling row so it never pushes the chart down. */
