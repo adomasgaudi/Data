@@ -439,3 +439,14 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   read the actual exception; never guess. (2) Check `els` — any `$("id")` whose
   element was removed/renamed in index.html kills the app at load. (3) Grep
   `=”` for curly-quote attributes after any AI writes HTML.
+
+---
+
+## PB-14 — Version number not updated when shipping a change
+
+- **First seen:** 2026-06-11, owner reported "i dont see it update to v.275" after multiple commits.
+- **Recurrence count:** 2+ times in one session (b.2.8.275 entry added but then wiped by a background agent; version bump forgotten or done inconsistently).
+- **Symptom:** the live site still shows an old version number, or the newest release entry is missing from the changelog.
+- **Root cause:** the three-step version update (bump `<span class="version">` in `index.html`, prepend entry to `RELEASES` in `src/changelog.ts`, rebuild `dist/`) is easy to forget in parts — especially when background agents rerun scripts or when the AI focuses only on the code change and not the version bookkeeping.
+- **Fix:** added as CLAUDE.md rule 29: every change MUST do all three steps before committing. Check with `grep 'span class="version"'` and `head RELEASES` before pushing.
+- **If it recurs:** before any commit, assert `index.html` version == newest `RELEASES[0].version` == `CURRENT_VERSION`.
