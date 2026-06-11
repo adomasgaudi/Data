@@ -3303,6 +3303,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   font-size: 0.82rem; color: var(--accent); font-style: italic;
   white-space: normal; word-break: break-word;
 }
+.cl-code {
+  display: block; font-style: normal; font-weight: 600; font-size: 0.72rem;
+  color: var(--muted); letter-spacing: 0.03em;
+}
 .cl-mid { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .cl-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
 .cl-note { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
@@ -3323,6 +3327,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-row[open] > .cl-sum .cl-caret { transform: rotate(180deg); color: var(--accent); }
 /* Expanded body: one-line note, optional bullets, then any nested rows. */
 .cl-body { padding: 0 0 0.4rem; }
+.cl-meddesc { font-size: 0.8rem; color: var(--text); font-weight: 500; margin: 0.2rem 0 0.3rem; }
 .cl-bodynote { font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.5rem; }
 .cl-details { margin: 0 0 0.6rem; padding: 0 0 0 1rem; }
 .cl-details li { font-size: 0.82rem; color: var(--muted); margin: 2px 0; }

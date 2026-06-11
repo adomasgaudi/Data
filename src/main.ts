@@ -3511,8 +3511,12 @@ function renderChangelog() {
     const spOrTag = r.soon
       ? `<span class="cl-soon">soon</span>`
       : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>`;
-    const body =
+    const displayTitle = r.shortTitle ?? r.title;
+    const codeTag = r.code ? `<span class="cl-code">${escapeHtml(r.code)}</span>` : "";
+    const medDesc = r.shortTitle && r.title ? `<p class="cl-meddesc">${escapeHtml(r.title)}</p>` : "";
+    const bodyWithMed =
       `<div class="cl-body">` +
+      medDesc +
       (r.note ? `<p class="cl-bodynote">${escapeHtml(r.note)}</p>` : "") +
       (r.details?.length
         ? `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
@@ -3527,12 +3531,12 @@ function renderChangelog() {
     return (
       `<details class="cl-row cl-d${depth}${r.soon ? " is-soon" : ""}">` +
       `<summary class="cl-sum">` +
-      `<span class="cl-ver">${escapeHtml(displayVersion(r.version))}</span>` +
-      `<span class="cl-mid"><span class="cl-title">${escapeHtml(r.title)}</span></span>` +
+      `<span class="cl-ver">${escapeHtml(displayVersion(r.version))}${codeTag}</span>` +
+      `<span class="cl-mid"><span class="cl-title">${escapeHtml(displayTitle)}</span></span>` +
       spOrTag +
       `<span class="cl-caret">▾</span>` +
       `</summary>` +
-      body +
+      bodyWithMed +
       `</details>`
     );
   };

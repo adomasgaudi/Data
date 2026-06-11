@@ -14,11 +14,15 @@
  */
 export interface Release {
   version: string;
-  /** 2–5 word title. */
+  /** 2–5 word label shown collapsed in the summary row. */
+  shortTitle?: string;
+  /** Task code e.g. "DATA-12" or "CHART-5" — shown beside the version. */
+  code?: string;
+  /** 5–15 word description, shown expanded in the body. */
   title: string;
   /** Story points. For a node with children this is the (auto-summed) total. */
   sp: number;
-  /** One-line plain-language summary, shown only when the row is expanded. */
+  /** Longer plain-language note, shown only when the row is expanded. */
   note: string;
   /** Optional extra bullet points, shown when expanded. */
   details?: string[];
