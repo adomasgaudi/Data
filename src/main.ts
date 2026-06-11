@@ -12298,20 +12298,34 @@ async function init() {
     b.textContent = `${show ? "hide" : "hidden"} ${b.dataset.hlabel ?? ""}`;
   });
   // Outside-click closes any open FLOATING popout <details> (a menu whose body is
-  // position:absolute — the ⚙ display options, Graph options, Exercises, Legend,
+  // position:absolute/fixed — the ⚙ display options, Graph options, Exercises, Legend,
   // ⚙ identity, Group, period & progress menus). Detected by computed position so
   // it covers EVERY such menu now and any added later — never per-menu wiring (the
   // recurring bug). Inline disclosures (graph/calendar sections, changelog rows)
   // push content (static position) so they're left alone. Capture phase so a
   // bubble-phase stopPropagation elsewhere can't suppress it. PB-4.
+  //
+  // BACKDROP BEHAVIOUR (owner request — Part 1): this capture-phase document listener IS
+  // the invisible full-screen backdrop. When a tap OUTSIDE an open floating menu dismisses
+  // it, we CONSUME the tap (preventDefault + stopPropagation) so it only closes the menu
+  // and never falls through to whatever control sat underneath. stopPropagation (NOT
+  // Immediate) so the other document-level closers on the same tap still run.
   document.addEventListener("click", (e) => {
     const t = e.target as Node;
-    for (const d of document.querySelectorAll<HTMLDetailsElement>("details[open]")) {
-      if (d.contains(t)) continue; // click inside the menu → leave it open
+    const openFloating = [...document.querySelectorAll<HTMLDetailsElement>("details[open]")].filter((d) => {
       const body = d.querySelector<HTMLElement>(":scope > :not(summary)");
       const pos = body ? getComputedStyle(body).position : "";
-      if (pos === "absolute" || pos === "fixed") d.open = false;
-    }
+      return pos === "absolute" || pos === "fixed";
+    });
+    if (openFloating.length === 0) return;
+    // A tap INSIDE any open floating menu acts normally (pick an option) — never consumed.
+    if (openFloating.some((d) => d.contains(t))) return;
+    for (const d of openFloating) d.open = false; // outside tap → close them all
+    // Consume the dismiss tap so it can't fall through to the control underneath — UNLESS
+    // it landed on another disclosure <summary>, so you can still switch menus / open the
+    // next one in a single tap (those aren't surprising "actions").
+    const el = t.nodeType === 1 ? (t as Element) : (t as Node).parentElement;
+    if (!el?.closest("summary")) { e.preventDefault(); e.stopPropagation(); }
   }, true);
   // When the selector ⚙ opens, clamp its popout into the viewport (its anchor cog can
   // wrap to anywhere on the row, so a static left/right would clip — "out of bounds").
