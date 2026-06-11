@@ -17432,6 +17432,21 @@ function setupBottomNav() {
     }
   });
 
+  // Fill the user dropdown from the ATHLETES registry (admin option is static in
+  // the HTML); inserted before it so admin stays last.
+  {
+    const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
+    const adminOpt = sel?.querySelector('option[value="g@cool.lt"]');
+    if (sel && adminOpt) {
+      for (const username of Object.keys(ATHLETES)) {
+        const opt = document.createElement("option");
+        opt.value = username;
+        opt.textContent = username;
+        sel.insertBefore(opt, adminOpt);
+      }
+    }
+  }
+
   document.getElementById("loginSendBtn")?.addEventListener("click", () => void signIn());
   document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
