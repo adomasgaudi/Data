@@ -13124,29 +13124,28 @@ function setRefreshStatus(html: string, cls: string) {
   els.refreshStatus.innerHTML = html;
 }
 
-/** Re-fetch from Supabase and hot-swap the dataset in place. */
+/** Re-fetch from Supabase and hot-swap the dataset in place.
+ *  Silent no-op when not signed in or Supabase is unreachable — the app
+ *  always falls back to the bundled CSV data. */
 async function catchUpFromSupabase(): Promise<void> {
   const { data: session } = await supabase.auth.getSession();
-  if (!session.session) {
-    setRefreshStatus("Sign in to sync.", "is-unknown");
-    return;
-  }
+  if (!session.session) return; // not signed in — bundled data is fine
   setRefreshStatus("Syncing…", "is-running");
-  const fresh = await fetchFromSupabase();
-  if (!fresh) {
-    setRefreshStatus("No data in Supabase yet — import your CSV below.", "is-idle");
-    return;
+  try {
+    const fresh = await fetchFromSupabase();
+    if (!fresh || fresh.records.length === 0) {
+      setRefreshStatus("No data in Supabase yet — import your CSV below.", "is-idle");
+      return;
+    }
+    data = fresh;
+    csvRecordCount = data.records.length;
+    mergeManualSets();
+    scheduleRender();
+    const ts = fresh.updatedAt ? ` (${agoText(fresh.updatedAt)})` : "";
+    setRefreshStatus(`✓ Up to date${ts} — ${fresh.records.length} sets`, "is-ok");
+  } catch {
+    setRefreshStatus("Sync failed — using local data.", "is-unknown");
   }
-  if (fresh.records.length === 0) {
-    setRefreshStatus("No data in Supabase yet — import your CSV below.", "is-idle");
-    return;
-  }
-  data = fresh;
-  csvRecordCount = data.records.length;
-  mergeManualSets();
-  scheduleRender();
-  const ts = fresh.updatedAt ? ` (${agoText(fresh.updatedAt)})` : "";
-  setRefreshStatus(`✓ Up to date${ts} — ${fresh.records.length} sets`, "is-ok");
 }
 
 /** Parse a StrengthLevel CSV and upsert rows into Supabase for the current user. */
