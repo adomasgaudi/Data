@@ -3412,6 +3412,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-graph-closed { display: none; font-weight: 700; color: var(--text); }
 .wa-fold:not([open]) #waGraphSummary .wa-graph-closed { display: inline-block; }
 .wa-fold:not([open]) #waGraphSummary .wa-seltitle-box { display: none; }
+/* Expanded (open) GRAPH: keep a small "GRAPH" eyebrow ABOVE the big picked-lift names,
+   mirroring the single-lift carousel's GRAPH-over-lift-name stack (owner request). The
+   0.95rem matches the carousel/section-title size; the names below stay the 1.4rem
+   accent big-title. */
+.wa-fold[open] #waGraphSummary.is-bigtitle .wa-graph-closed {
+  display: block; font-size: 0.95rem; line-height: 1.2; margin-bottom: 0.15rem;
+}
 /* Same for the history fold: collapsed, it reads a plain "Workout history" (like the
    other section headers) instead of the picked-lift list + ✕ ≈ + Pick tab. */
 .wa-hist-closed { display: none; font-weight: 700; color: var(--text); }
