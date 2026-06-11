@@ -10,8 +10,8 @@ jobs:
       - name: Create sets table, disable RLS, grant anon permissions
         run: |
           SQL="
-          create table if not exists sets (
-            id uuid primary key default gen_random_uuid(),
+          drop table if exists sets;
+          create table sets (
             user_id text not null,
             username text not null,
             date text not null,
@@ -24,7 +24,7 @@ jobs:
             dropset boolean not null default false,
             percentile float8,
             imported_at timestamptz not null default now(),
-            unique (user_id, date, exercise_name, set_number)
+            primary key (user_id, date, exercise_name, set_number)
           );
           alter table sets disable row level security;
           grant select, insert, update, delete on table public.sets to anon, authenticated;

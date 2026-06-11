@@ -9,7 +9,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ── Types matching the `sets` table ──────────────────────────────────────────
 
 export interface DbSet {
-  id: string;
   user_id: string;
   username: string;
   date: string;          // "yyyy-MM-dd"
@@ -63,7 +62,7 @@ export async function fetchSets(): Promise<DbSet[]> {
 }
 
 /** Upsert a batch of sets (insert or update on conflict). */
-export async function upsertSets(rows: Omit<DbSet, "id" | "imported_at">[]) {
+export async function upsertSets(rows: Omit<DbSet, "imported_at">[]) {
   const { error } = await supabase
     .from("sets")
     .upsert(rows, { onConflict: "user_id,date,exercise_name,set_number" });
