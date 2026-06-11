@@ -7,7 +7,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: Create sets table and disable RLS
+      - name: Create sets table, disable RLS, grant anon permissions
         run: |
           SQL="
           create table if not exists sets (
@@ -27,6 +27,7 @@ jobs:
             unique (user_id, date, exercise_name, set_number)
           );
           alter table sets disable row level security;
+          grant select, insert, update, delete on table public.sets to anon, authenticated;
           "
           RESP=$(curl -s -w "\n%{http_code}" \
             -X POST \
@@ -38,4 +39,4 @@ jobs:
           BODY=$(echo "$RESP" | head -n -1)
           echo "HTTP $CODE: $BODY"
           if [[ "$CODE" != "200" && "$CODE" != "201" ]]; then exit 1; fi
-          echo "✓ sets table ready"
+          echo "✓ sets table ready + anon granted"
