@@ -16099,6 +16099,7 @@ function renderSearchPalette(value: string): void {
     { act: "filter", label: "🔎 Filter the list", desc: `${n} lift${n === 1 ? "" : "s"} match “${q}”`, on: !searchFindHistory },
     { act: "find", label: "📜 Find in workout history", desc: "Show every matching set in the history below", on: searchFindHistory },
     { act: "index", label: "📇 Find in index", desc: n === 1 ? "Open it on the Index page" : "Open the first match on the Index page", on: false },
+    { act: "graph", label: "📈 View on graph", desc: n === 1 ? "Plot it on the graph" : `Plot all ${n} on the graph`, on: false },
     { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
     { act: "clear", label: "✕ Clear search", desc: "", on: false },
   ];
@@ -16150,7 +16151,23 @@ function runSearchAction(act: string): void {
   }
   if (act === "filter") searchFindHistory = false;
   else if (act === "find") searchFindHistory = true;
-  else if (act === "select") {
+  else if (act === "graph") {
+    // "View on graph" — plot exactly the matching lifts on the full multi-lift graph
+    // (replacing the graph selection), and make sure the Graph section is shown + open.
+    const matches = waChipListBase().map((e) => e.name);
+    if (matches.length) {
+      waGraphSel = capGraphSel(matches);
+      graphFullShown = true; // the searched lifts plot together, not the single-lift carousel
+      if (sectionShown["colosseum.graphSectionShown"] === false) {
+        sectionShown["colosseum.graphSectionShown"] = true;
+        try { localStorage.setItem("colosseum.graphSectionShown", "1"); } catch { /* ignore */ }
+        const gt = SECTION_TOGGLES.find((s) => s.foldId === "waGraphFold");
+        if (gt) applySectionToggle(gt);
+      }
+      const gFold = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
+      if (gFold) gFold.open = true; // reveal the graph if it was collapsed
+    }
+  } else if (act === "select") {
     const add = waChipListBase().map((e) => e.name).filter((n) => !waSelected.includes(n));
     if (add.length) waSelected = [...waSelected, ...add];
   } else if (act === "clear") {
@@ -16159,7 +16176,7 @@ function runSearchAction(act: string): void {
     if (input) input.value = "";
   }
   hideCmdPalette();
-  if (act === "select" || act === "clear") input?.blur();
+  if (act === "select" || act === "clear" || act === "graph") input?.blur();
   deferRender(renderWorkoutAnalysis); // picker + history + graph all reflect the choice
 }
 /** Run a command by its "/name", then reset the bar. */
