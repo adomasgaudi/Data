@@ -1,0 +1,22 @@
+name: Apply DB Migrations
+
+on:
+  push:
+    branches: [claude/strength-training-dashboard-SdAlT]
+    paths:
+      - supabase/migrations/**
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply migrations
+        run: |
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "→ $f"
+            psql "$DATABASE_URL" -f "$f" -v ON_ERROR_STOP=1
+          done
+        env:
+          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.nbjgwqytwkkuarxlkmnj.supabase.co:5432/postgres

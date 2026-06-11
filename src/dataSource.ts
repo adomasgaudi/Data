@@ -42,6 +42,50 @@ export function buildLoaded(csv: string): LoadedData {
   return { ...parsed, records, merges, updatedAt: null, warnings: sanityCheck(records), rawCsv: csv };
 }
 
+// ── Supabase fetch path ───────────────────────────────────────────────────────
+
+import { fetchSets, type DbSet } from "./supabase";
+
+/** Map a DB row to the shape parseRows expects, then run the same pipeline. */
+function dbSetToRawRow(row: DbSet): Record<string, string> {
+  return {
+    user: row.user_id,           // user field in SetRecord
+    username: row.username,
+    date: row.date,
+    bodyweight: row.bodyweight == null ? "" : String(row.bodyweight),
+    exercise_name: row.exercise_name,
+    set_number: String(row.set_number),
+    weight: row.weight == null ? "" : String(row.weight),
+    reps: row.reps == null ? "" : String(row.reps),
+    notes: row.notes,
+    dropset: row.dropset ? "true" : "false",
+    percentile: row.percentile == null ? "" : String(row.percentile),
+  };
+}
+
+/** Fetch the current user's sets from Supabase and run them through the same
+ *  pipeline as the bundled CSV, so all downstream compute is unchanged. */
+export async function fetchFromSupabase(): Promise<LoadedData | null> {
+  try {
+    const rows = await fetchSets();
+    if (rows.length === 0) return null;
+    const rawRows = rows.map(dbSetToRawRow);
+    const parsed = parseRows(rawRows);
+    const { records: canon, merges } = canonicalizeExerciseNames(parsed.records);
+    const records = canon.map(attachNoteLevel);
+    return {
+      ...parsed,
+      records,
+      merges,
+      updatedAt: rows[0]?.imported_at ?? null,
+      warnings: sanityCheck(records),
+      rawCsv: "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Raw URL of the live ud.csv on the deploy branch. The site is rebuilt from this
  * same file, but the Refresh-data Action can commit a newer CSV a minute before the
  * rebuild finishes — so fetching it lets the dashboard show fresh numbers sooner. */
