@@ -84,7 +84,12 @@
   --rest-fill: #2b3340; /* a shade lighter than the dark page, same visible-line intent */
   --sess-bg: rgba(255, 255, 255, 0.07); /* faint session band in the period history */
 }
-* { box-sizing: border-box; }
+/* No native tap-highlight anywhere: Android/Chrome fill a tapped element's bounds with a
+   translucent grey box (worst on the lift-name titles, where it lit up the whole header
+   band and lingered while the menu was open). We provide our own :hover/:active/.is-on
+   feedback, so kill the browser's grey flash globally. Keyboard focus rings are separate
+   (:focus-visible) and unaffected. (#design rule.) */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* The [hidden] attribute must always win — class rules like `.ex-period-bar
  * { display: flex }` otherwise override the UA default and keep hidden bars
  * visible (e.g. the period control lingering on the Compare graph). */
