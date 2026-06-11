@@ -4219,6 +4219,8 @@ function renderAthlete() {
     titleExpanded.hist = false;
     statsFullShown = false; // new athlete → lead with the mini facts again
     miniIdx = 0;
+    // Restore this athlete's last-used picker "Group by" mode (default if none saved).
+    waGroupBy = (waGroupByByUser[els.athlete.value] as WaGroupBy | undefined) ?? "bestlifts";
   }
   initHeatYear();
   renderAthleteProfile();
@@ -14261,7 +14263,15 @@ let searchFindHistory = false;
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
-let waGroupBy: "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness" = "bestlifts"; // default: rank the powerlifting trio by world-record %
+type WaGroupBy = "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness";
+let waGroupBy: WaGroupBy = "bestlifts"; // default: rank the powerlifting trio by world-record %
+// The picker's "Group by" mode is REMEMBERED PER ATHLETE (owner request): switching
+// to an athlete restores the last mode they used; a fresh athlete falls back to the default.
+const WA_GROUPBY_KEY = "colosseum.waGroupBy.byUser.v1";
+const waGroupByByUser = loadJsonObject<Record<string, string>>(WA_GROUPBY_KEY);
+function saveWaGroupByForUser(): void {
+  if (els.athlete.value) { waGroupByByUser[els.athlete.value] = waGroupBy; saveJson(WA_GROUPBY_KEY, waGroupByByUser); }
+}
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
 // toggle. Replaces the old separate Filter button.
@@ -16376,6 +16386,7 @@ function setupWorkoutAnalysis(): void {
     const grp = target.closest<HTMLSelectElement>(".wa-groupby");
     if (grp) {
       waGroupBy = (grp.value === "none" ? "none" : grp.value) as typeof waGroupBy;
+      saveWaGroupByForUser(); // remember this athlete's choice
       deferRender(renderWorkoutAnalysis); // rebuild both selectors so they stay in sync
       return;
     }
