@@ -244,7 +244,7 @@ const LT: Record<string, string> = {
   "average": "vidurkis",
   "auto": "automatiškai",
   // ---- Landing / login ----
-  "Enter": "Įeiti",
+  "spectate": "stebėti",
   "Sign in": "Prisijungimas",
   "Strength leaderboards for you and your friends — track every lift, see your estimated 1RMs, and climb the ranks.":
     "Jėgos lyderių lentelės tau ir tavo draugams — fiksuok kiekvieną pakėlimą, matyk apytiksles 1RM ir kopk lentelėje.",
