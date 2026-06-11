@@ -8403,7 +8403,7 @@ function resetSetEdit(target: HTMLElement): boolean {
   if (!btn?.dataset.setid) return false;
   delete setOverrides[btn.dataset.setid];
   saveSetOverrides();
-  scheduleRender();
+  scheduleRender(reopenSetEdit); // keep the editor open across the reset's deferred rebuild (PB-12)
   return true;
 }
 
@@ -8443,6 +8443,7 @@ function toggleSetNotComparable(target: HTMLElement): boolean {
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
+  reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
   window.scrollTo(0, y);
   return true;
 }
@@ -8495,6 +8496,7 @@ function toggleUnilateralExercise(target: HTMLElement): boolean {
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
+  reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
   window.scrollTo(0, y);
   return true;
 }
@@ -8510,6 +8512,7 @@ function toggleAssistedExercise(target: HTMLElement): boolean {
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
+  reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
   window.scrollTo(0, y);
   return true;
 }
