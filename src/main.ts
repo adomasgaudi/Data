@@ -14508,20 +14508,21 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
           : `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show all ${sel.length} — and hide the pills below">… +${sel.length - TITLE_NAME_CAP}</button>`)
       : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
-  // The count badge is only useful when the title is TRUNCATED (names hidden behind
-  // "… +N" / "all exercises"). When every selected name fits on the line, drop it
-  // (owner request) — the names already say how many.
-  const truncated = sel.length > TITLE_NAME_CAP && !expanded;
-  const count = truncated ? `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>` : "";
-  // When EVERY selectable lift is picked, don't list the top 5 + "+N" — just say
-  // "all exercises" (owner request). Only when it would otherwise truncate (> the cap);
-  // tapping it still expands to the full list (so you can remove individual lifts).
+  // When EVERY selectable lift is picked, show a single big "All Exercises" title
+  // instead of listing the top 5 + "+N" (owner request) — and drop the count with it.
   const allNames = waSelectorExercises().map((e) => e.name);
   const isAll = sel.length > TITLE_NAME_CAP && allNames.length > 0 && sel.length >= allNames.length && allNames.every((n) => sel.includes(n));
+  // The count badge is only useful when the title is TRUNCATED (names hidden behind
+  // "… +N"). When every name fits, or it's the "All Exercises" title, drop it
+  // (owner request) — the names (or "All Exercises") already say how many.
+  const truncated = sel.length > TITLE_NAME_CAP && !expanded;
+  const count = (truncated && !isAll) ? `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>` : "";
+  // "All Exercises" — a big, plain-BLACK title (not the small grey italic "all
+  // exercises"); tapping it still expands to the full list to remove individual lifts.
   const allLabel = isAll && !expanded
     ? (remove
-        ? `<button type="button" class="wa-title-more wa-title-all" data-titleexpand="${remove}" title="All ${sel.length} exercises selected — tap to list them">all exercises</button>`
-        : `<span class="wa-title-more wa-title-all">all exercises</span>`)
+        ? `<button type="button" class="wa-title-allbig" data-titleexpand="${remove}" title="All ${sel.length} exercises selected — tap to list them">All Exercises</button>`
+        : `<span class="wa-title-allbig">All Exercises</span>`)
     : "";
   // "Deselect all" and "Match" are no longer in the title — both moved into the picker
   // slide-in drawer as small text buttons beside Select all / Complete (their family),
@@ -14616,7 +14617,7 @@ function renderWorkoutAnalysis(): void {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
       // "Workout history" prefix, no member breakdown, no ℹ. Collapsed, a plain
       // "Workout history" shows instead (CSS swaps them on the fold's open state).
-      calHistTitle.innerHTML = waSelected.length ? `<span class="wa-hist-closed">Workout history</span>${liftSelectionTitle(waSelected, "hist")}` : "Workout history";
+      calHistTitle.innerHTML = waSelected.length ? `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle(waSelected, "hist")}` : "Workouts";
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -14632,7 +14633,7 @@ function renderWorkoutAnalysis(): void {
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
     const calHistTitle = document.getElementById("waCalHistSummary");
-    if (calHistTitle) { calHistTitle.textContent = "Workout history"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
+    if (calHistTitle) { calHistTitle.textContent = "Workouts"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
     stats?.setAttribute("hidden", "");
     withNameScope("hist", renderWorkoutsPage); // the analysis history shows the HISTORY area's name mode
     }

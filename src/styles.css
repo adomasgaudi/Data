@@ -3419,11 +3419,26 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-fold[open] #waGraphSummary.is-bigtitle .wa-graph-closed {
   display: block; font-size: 0.95rem; line-height: 1.2; margin-bottom: 0.15rem;
 }
-/* Same for the history fold: collapsed, it reads a plain "Workout history" (like the
+/* Same for the history fold: collapsed, it reads a plain "Workouts" (like the
    other section headers) instead of the picked-lift list + ✕ ≈ + Pick tab. */
 .wa-hist-closed { display: none; font-weight: 700; color: var(--text); }
 .wa-fold:not([open]) #waCalHistSummary .wa-hist-closed { display: inline-block; }
 .wa-fold:not([open]) #waCalHistSummary .wa-seltitle-box { display: none; }
+/* OPEN history mirrors the Graph card: a small grey "WORKOUTS" eyebrow label on its
+   own line, then the exercise selection big below it. The eyebrow only shows when the
+   fold is open (collapsed, the .wa-hist-closed title already reads "Workouts"). */
+.wa-hist-eyebrow { display: none; }
+.wa-fold[open] > #waCalHistSummary .wa-hist-eyebrow {
+  display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--muted); line-height: 1.2; margin-bottom: 0.15rem;
+}
+/* "All Exercises" history title: big (inherits the is-bigtitle size), bold and plain
+   BLACK (not the small grey italic), matching the picked-lift chips. Tap to expand. */
+.wa-title-allbig {
+  font: inherit; font-weight: 800; color: var(--text);
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.wa-title-allbig:hover { color: var(--accent); }
 .wa-seltitle-box.is-expanded {
   min-height: 0;
 }
@@ -3487,9 +3502,6 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    native button chrome so it reads as inline text, but stays tappable. */
 button.wa-title-more { font-family: inherit; background: none; border: none; padding: 0; cursor: pointer; }
 button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
-/* "all exercises" replaces the top-5 list when every lift is picked — readable label,
-   not the tiny "+N" size. */
-.wa-title-all { margin-left: 0; font-size: 0.92em; font-style: italic; }
 /* "Deselect all" moved into the picker drawer as a small "✕ Clear" text button next to
    Select all / Complete (.wa-deselect-btn, styled by .wa-clear) — no longer a big title ✕. */
 /* "Match" moved into the picker drawer's ⚙ menu as a text button (.wa-match-btn, styled

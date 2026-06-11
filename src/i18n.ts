@@ -331,6 +331,7 @@ const LT: Record<string, string> = {
   "Exercise picker — drag the note out, or tap": "Pratimų rinkiklis — ištempk lapelį arba bakstelėk",
   "Open exercise picker & settings": "Atidaryti pratimų rinkiklį ir nustatymus",
   "all exercises": "visi pratimai",
+  "All Exercises": "Visi pratimai",
   "⊕ Combinable group": "⊕ Sujungiama grupė",
   "⇄ Comparable group": "⇄ Palyginama grupė",
   "Exercises in this group": "Pratimai šioje grupėje",
