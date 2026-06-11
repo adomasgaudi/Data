@@ -15429,7 +15429,7 @@ function renderGraphMini(): void {
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
-      `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">More ▾</button>` +
+      `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">Multi ▾</button>` +
     `</div>`;
   paintGraphSlide();
 }
