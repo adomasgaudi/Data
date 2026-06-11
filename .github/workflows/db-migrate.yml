@@ -19,4 +19,6 @@ jobs:
             psql "$DATABASE_URL" -f "$f" -v ON_ERROR_STOP=1
           done
         env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.nbjgwqytwkkuarxlkmnj.supabase.co:5432/postgres
+          # Session-mode pooler (IPv4, port 5432) — avoids the IPv6 "unreachable" issue
+          # with the direct db.*.supabase.co host on GitHub Actions runners.
+          DATABASE_URL: postgresql://postgres.nbjgwqytwkkuarxlkmnj:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
