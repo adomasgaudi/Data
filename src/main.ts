@@ -11073,6 +11073,12 @@ async function init() {
   setupTabs();
   setupStatsToggle(); // small Stats show/hide button by the athlete picker
   setupSectionToggles(); // matching Graph / History show/hide buttons beside it
+  // Graph card: closing it resets to the single-lift carousel, so reopening leads with the
+  // carousel again (mirrors the Stats card's mini→More behaviour). Opening (re)renders it.
+  document.getElementById("waGraphFold")?.addEventListener("toggle", (e) => {
+    if (!(e.currentTarget as HTMLDetailsElement).open) graphFullShown = false;
+    renderWaGraph();
+  });
   // World-records page: the trio-lift selector pills (mutually-exclusive).
   document.getElementById("recordsBody")?.addEventListener("click", (e) => {
     const pill = (e.target as HTMLElement).closest<HTMLElement>(".rec-lift-pill");
@@ -15347,7 +15353,110 @@ function graphAthletesPillsHtml(): string {
   const cap = n > 1 ? `<span class="wa-ath-cap muted">${n}×${graphExerciseCap()} ≤ ${WA_GRAPH_MAX}</span>` : "";
   return `<div class="wa-ath-overlay"><span class="wa-ath-lbl muted">Compare</span><div class="wa-ath-pills">${pills}</div>${cap}</div>`;
 }
+// ── Graph "min" view: a manually-rotated carousel of SINGLE-exercise, single-athlete
+// graphs (top lifts by frequency), mirroring the Stats card's closed → carousel → More
+// progression. Each slide reuses the SAME chart engine + the SAME global graph options
+// (metric set, ×BW, formula, lenses), just locked to one lift + the current athlete (no
+// multi-exercise / multi-athlete). "More" expands to the full graph (renderWaGraph below).
+let graphFullShown = false;     // mini carousel (false) vs full graph (true), within the open card
+let graphCarIdx = 0;            // which slide (lift) is showing
+let graphCarLifts: string[] = [];
+/** The carousel reel: the current athlete's top lifts by frequency (last 90d). */
+function graphCarouselLifts(): string[] {
+  const has = new Set(waSelectorExercises().map((e) => e.name));
+  const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+  const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
+  const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
+  return (byFreq.length ? byFreq : defaultSelection()).slice(0, 8);
+}
+/** Draw ONE single-exercise, single-athlete chart into `container`, reusing the full
+ * graph engine + the current global options (so a slide looks like the full graph minus
+ * the multi-select). */
+function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
+  waGraphConfig.formula = currentFormula();
+  const fm = waGraphConfig.formula;
+  const sm = currentStrengthByUserExercise(fm);
+  waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+  const user = els.athlete.value;
+  const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
+  const exs = lensExpand("graph", [exercise]);
+  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
+  const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  renderAnalyticsGraph(container, {
+    exercises: exs,
+    records: recs,
+    metrics: drawMetricIds,
+    config: waGraphConfig,
+    codeOf: (ex: string) => displayName(ex, "graph"),
+    perBodyweight: S.waPerBodyweight,
+    bodyweight: athProfile(user)?.weight ?? null,
+    worldRecordKg: (ex: string, u?: string) => {
+      const uu = u ?? user;
+      return worldRecordKg(ex, athProfile(uu)?.sex ?? "m", athProfile(uu)?.weight ?? null);
+    },
+    emptyOnNoExercises: true,
+  });
+}
+/** Repaint just the current slide (chart + title + active dot) — no full rebuild. */
+function paintGraphSlide(): void {
+  const stage = document.getElementById("gminiStage");
+  const titleEl = document.getElementById("gminiTitle");
+  const ex = graphCarLifts[graphCarIdx];
+  if (titleEl) titleEl.textContent = ex ? displayName(ex, "graph") : "";
+  if (stage && ex) renderGraphSlideChart(stage, ex);
+  document.querySelectorAll<HTMLElement>(".gmini-dot").forEach((d) => d.classList.toggle("is-on", Number(d.dataset.gmdot) === graphCarIdx));
+}
+/** Step the carousel by `d` (wraps), then repaint the slide. */
+function stepGraphSlide(d: number): void {
+  if (graphCarLifts.length === 0) return;
+  graphCarIdx = (graphCarIdx + d + graphCarLifts.length) % graphCarLifts.length;
+  paintGraphSlide();
+}
+/** Build the graph "min" carousel: title + ×BW quick-option + chart stage + prev/next +
+ * dots + "More" (which expands to the full multi-exercise / multi-athlete graph). */
+function renderGraphMini(): void {
+  const host = document.getElementById("waGraphMini");
+  if (!host) return;
+  graphCarLifts = graphCarouselLifts();
+  if (graphCarLifts.length === 0) { host.innerHTML = `<p class="muted wa-placeholder">No lifts to graph yet — log some sets first.</p>`; return; }
+  if (graphCarIdx >= graphCarLifts.length) graphCarIdx = 0;
+  const dots = graphCarLifts.map((_, i) => `<button type="button" class="gmini-dot${i === graphCarIdx ? " is-on" : ""}" data-gmdot="${i}" aria-label="Lift ${i + 1}"></button>`).join("");
+  const bw = `<button type="button" class="wa-gov-btn gmini-bw${S.waPerBodyweight ? " is-on" : ""}" data-gmbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>`;
+  host.innerHTML =
+    `<div class="gmini-head"><span class="gmini-title" id="gminiTitle"></span><span class="gmini-opts">${bw}</span></div>` +
+    `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
+    `<div class="gmini-foot">` +
+      `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
+      `<div class="gmini-dots">${dots}</div>` +
+      `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
+      `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">More ▾</button>` +
+    `</div>`;
+  paintGraphSlide();
+}
+
 function renderWaGraph(): void {
+  // ROUTER: lead with the single-lift carousel ("min" view); "More" flips to the full
+  // multi-exercise / multi-athlete graph. All existing renderWaGraph() callers route here.
+  // The section title reads a plain "Graph" in carousel mode (the carousel has its own
+  // per-slide title); the multi-lift selection title shows only in the full view.
+  const summ = document.getElementById("waGraphSummary");
+  if (summ) {
+    if (graphFullShown && waGraphSel.length) {
+      summ.innerHTML = `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
+      summ.classList.add("is-bigtitle");
+    } else { summ.textContent = "Graph"; summ.classList.remove("is-bigtitle"); }
+  }
+  const miniEl = document.getElementById("waGraphMini");
+  const fullEl = document.getElementById("waGraphFull");
+  if (miniEl && fullEl) {
+    miniEl.hidden = graphFullShown;
+    fullEl.hidden = !graphFullShown;
+    if (!graphFullShown) {
+      const fold = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
+      if (fold?.open) renderGraphMini(); // skip the (hidden) chart work when collapsed
+      return;
+    }
+  }
   const box = document.getElementById("waGraph");
   if (!box) return;
   // Work out the plotted exercises FIRST, so the metric chips can reflect what's
@@ -16528,6 +16637,17 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
+    // ── Graph "min" carousel interactions ──────────────────────────────────────
+    // "More" → expand the single-lift carousel into the full multi-exercise graph.
+    if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
+    // Prev / next lift in the carousel (manual rotation — no auto-rotate).
+    const gmNav = t.closest<HTMLElement>("[data-gmnav]");
+    if (gmNav?.dataset.gmnav) { stepGraphSlide(Number(gmNav.dataset.gmnav)); return; }
+    // Jump straight to a lift via its dot.
+    const gmDot = t.closest<HTMLElement>("[data-gmdot]");
+    if (gmDot?.dataset.gmdot != null) { graphCarIdx = Number(gmDot.dataset.gmdot) || 0; paintGraphSlide(); return; }
+    // ×BW toggle on the carousel — shares the global per-bodyweight pref with the full graph.
+    if (t.closest<HTMLElement>("[data-gmbw]")) { S.waPerBodyweight = !S.waPerBodyweight; renderGraphMini(); return; }
     // Fullscreen the graph: the chart pins to the top and the Graph-options settings
     // become an in-flow panel below it, so you change settings while watching the graph
     // (no scrolling away). The same button (now ✕) exits.

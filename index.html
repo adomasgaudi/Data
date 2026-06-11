@@ -48,7 +48,7 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.233</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
+        <div class="title-ver"><span class="version">b.2.8.234</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1048,8 +1048,14 @@
                top-right caret would otherwise sit over the selector's buttons). -->
           <details class="wa-fold wa-fold-titled wa-card-fold" id="waGraphFold" open>
             <summary class="wa-fold-sum" id="waGraphSummary">Graph</summary>
-            <div id="waExerciseSelector" class="wa-section"></div>
-            <div id="waGraph" class="wa-section"></div>
+            <!-- MIN view: a manually-swiped carousel of SINGLE-exercise, single-athlete
+                 graphs (top lifts by frequency). "More" swaps it for the full graph below. -->
+            <div id="waGraphMini" class="wa-gmini"></div>
+            <!-- FULL view: the multi-exercise / multi-athlete graph + its picker & options. -->
+            <div id="waGraphFull" hidden>
+              <div id="waExerciseSelector" class="wa-section"></div>
+              <div id="waGraph" class="wa-section"></div>
+            </div>
           </details>
           <!-- CALENDAR + HISTORY: one JOINT collapsible. The calendar leads (collapsed
                by default); the history/calendar lift selector (drives both) sits BELOW

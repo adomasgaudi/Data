@@ -906,6 +906,25 @@ body.admin-only-hidden .other-section-lbl { display: none; }
   background: var(--bg); color: var(--accent); font-size: 0.8rem; font-weight: 700; cursor: pointer;
 }
 .ms-more:hover { border-color: var(--accent); }
+/* ── Graph "min" carousel: a manually-rotated reel of single-lift charts (mirrors the
+   Stats carousel above). Each slide reuses the full chart engine, locked to one lift +
+   the current athlete; "More" expands to the full multi-exercise / multi-athlete graph. ── */
+.wa-gmini { display: flex; flex-direction: column; gap: 0.5rem; }
+.gmini-head { display: flex; align-items: center; gap: 0.5rem; }
+.gmini-title { font-size: 1.1rem; font-weight: 700; color: var(--accent); flex: 1; min-width: 0; }
+.gmini-opts { display: flex; align-items: center; gap: 4px; flex: none; }
+.gmini-stage { min-height: 220px; }
+.gmini-foot { display: flex; align-items: center; gap: 0.5rem; }
+.gmini-nav {
+  flex: none; min-width: var(--tap-min); min-height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--accent); font-size: 1.1rem; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.gmini-nav:hover { border-color: var(--accent); }
+.gmini-dots { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; flex-wrap: wrap; }
+.gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s; }
+.gmini-dot.is-on { background: var(--accent); transform: scale(1.25); }
 .athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
 .athlete-profile:empty { display: none; }
 .profile-specs { color: var(--text); }
