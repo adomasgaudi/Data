@@ -17403,19 +17403,25 @@ function setupBottomNav() {
 }
 
 // ── Supabase auth bootstrap ───────────────────────────────────────────────────
-// Show the login gate unless there's already an active session.
+// If there's an active Supabase session, apply it (sets role + hides gate).
+// If there's no session, leave the current localStorage state alone — the gate
+// is reachable via the Log in button in Settings. We don't force it on load
+// because the site is public (GitHub Pages) and users may not have accounts yet.
 {
   supabase.auth.getSession().then(({ data }) => {
     if (data.session) {
       applySession(data.session.user.email);
-    } else {
-      showLoginPage();
     }
+    // No session → keep whatever viewMode/role localStorage has (default: admin).
   });
 
   supabase.auth.onAuthStateChange((_event, session) => {
     if (_event === "SIGNED_IN" || _event === "SIGNED_OUT" || _event === "USER_UPDATED") {
-      applySession(session?.user.email);
+      if (_event === "SIGNED_OUT") {
+        showLoginPage(); // user explicitly signed out → show gate
+      } else {
+        applySession(session?.user.email);
+      }
     }
     if (_event === "SIGNED_IN" && data) {
       fetchFromSupabase().then((fresh) => {
