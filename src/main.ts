@@ -11200,16 +11200,15 @@ async function init() {
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") signIn();
   });
-  // Populate login dropdown from ATHLETES registry (admin option is static in HTML).
+  // Populate login dropdown from ATHLETES registry — athletes go after admin.
   {
     const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
-    const adminOpt = sel?.querySelector('option[value="admin"]');
-    if (sel && adminOpt) {
+    if (sel) {
       for (const username of Object.keys(ATHLETES)) {
         const opt = document.createElement("option");
         opt.value = username;
         opt.textContent = username;
-        sel.insertBefore(opt, adminOpt);
+        sel.appendChild(opt);
       }
     }
   }
