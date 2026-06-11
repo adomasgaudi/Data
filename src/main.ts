@@ -14517,15 +14517,9 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
         ? `<button type="button" class="wa-title-more wa-title-all" data-titleexpand="${remove}" title="All ${sel.length} exercises selected — tap to list them">all exercises</button>`
         : `<span class="wa-title-more wa-title-all">all exercises</span>`)
     : "";
-  // "Deselect all" lives here as a big ✕ at the END of the title list (owner's choice) —
-  // not as a button in the tools row below. Clears the WHOLE selection for this scope.
-  // It sits inside the graph's <summary>, so the capture handler (data-titledeselect)
-  // preventDefaults the fold toggle, like the per-lift remove buttons.
-  const deselectX = remove
-    ? `<button type="button" class="wa-title-deselect" data-titledeselect="${remove}" title="Deselect all — clear the whole selection" aria-label="Deselect all">✕</button>`
-    : "";
-  // "Match" is no longer in the title — it moved into the picker slide-in drawer as a
-  // text button (owner request). See `matchTool` in renderSelector.
+  // "Deselect all" and "Match" are no longer in the title — both moved into the picker
+  // slide-in drawer as small text buttons beside Select all / Complete (their family),
+  // sized by tier (docs/ui-taste.md). See `clearBtn` / `matchTool` in renderSelector.
   // "Pick" — a thin WHITE PAPER sticky-note TAB peeking from the right screen edge of the
   // title row (the visible edge of the picker note). DRAG it left (or tap) to pull the full
   // drawer out — the handle now LOOKS like the drawer it opens (PB-13). A "‹" pull-hint +
@@ -14548,7 +14542,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const seltitleAttrs = grid
     ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 0.4rem)"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${deselectX}${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
@@ -14777,6 +14771,11 @@ function renderSelector(scope: SelScope): void {
     ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
     : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
       `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>`;
+  // "Deselect all" — the title's old oversized ✕, demoted into the drawer next to its
+  // family (Select all / Complete) and sized like them: a small text button, not a giant
+  // glyph (docs/ui-taste.md: a selection-reset sits with the other selection tools, scaled
+  // by tier). data-titledeselect reuses the existing capture handler; disabled when empty.
+  const clearBtn = `<button type="button" class="wa-clear wa-deselect-btn" data-titledeselect="${scope}"${cur.length ? "" : " disabled"} title="Deselect all — clear the whole ${scope === "graph" ? "graph" : "history"} selection">✕ Clear</button>`;
   // The exercise-selector DROPDOWN is gone: its picker chips now live inline (below
   // the controls) and its settings/tools moved into a small ⚙ popout. A plain label
   // keeps the "what / how many" context the old dropdown summary showed.
@@ -14852,7 +14851,7 @@ function renderSelector(scope: SelScope): void {
   // buttons and the ⚙ settings cog — now live in the picker HEADER (owner request:
   // consolidate them with the exercises they act on, off the crowded top row). In the
   // category-STRIP mode there's no fold, so they fall back to a top tools row.
-  const controls = `${freqCtl}${selAllToggle}${settingsCog}`;
+  const controls = `${freqCtl}${selAllToggle}${clearBtn}${settingsCog}`;
   const topTools = showGrid ? trimBtn : `${groupCtl}${controls}${trimBtn}`;
   sel.innerHTML =
     (topTools ? `<div class="wa-sel-header"><div class="wa-sel-tools">${topTools}</div></div>` : "") +
