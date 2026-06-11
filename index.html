@@ -895,26 +895,29 @@
         </section>
       </div>
 
-      <div id="tab-data" class="tab-panel" hidden>
-        <section class="panel refresh-panel">
-          <h2>Refresh data from StrengthLevel</h2>
-          <p class="muted" style="margin: 0 0 0.8rem">
-            Pulls everyone's newest workouts and updates the site for you. Click the button
-            below — it opens GitHub; there, press the green <strong>“Run workflow”</strong>
-            button (leave the mode on <em>sync</em>). Wait a minute or two, then come back here
-            and refresh the page — the new numbers will be in.
+      <div id=”tab-data” class=”tab-panel” hidden>
+        <section class=”panel refresh-panel”>
+          <h2>Sync with Supabase</h2>
+          <p class=”muted” style=”margin: 0 0 0.8rem”>
+            Your training data lives in Supabase — available on any device instantly.
+            “Catch up” re-fetches anything added since this page loaded.
           </p>
-          <a id="refreshDataBtn" class="refresh-btn"
-             href="https://github.com/adomasgaudi/data/actions/workflows/fetch-data.yml"
-             target="_blank" rel="noopener">↻ Refresh data on GitHub</a>
-          <div class="refresh-status-row">
-            <span id="refreshStatus" class="refresh-status">Checking last refresh…</span>
-            <button type="button" id="refreshStatusBtn" class="refresh-check">Check again</button>
+          <button type=”button” id=”refreshStatusBtn” class=”refresh-btn”>↻ Catch up</button>
+          <div class=”refresh-status-row”>
+            <span id=”refreshStatus” class=”refresh-status”></span>
           </div>
-          <p class="settings-hint" style="margin: 0.7rem 0 0">
-            “sync” grabs only new workouts (fast). “rebuild” re-fetches everything (slow) — only
-            needed if something looks wrong.
+        </section>
+        <section class=”panel” id=”importPanel”>
+          <h2>Import historical data</h2>
+          <p class=”muted” style=”margin: 0 0 0.8rem”>
+            First time? Upload your StrengthLevel CSV export to seed your data into Supabase.
+            Safe to re-run — duplicate sets are ignored.
           </p>
+          <label class=”refresh-btn” style=”cursor:pointer”>
+            ⬆ Choose CSV
+            <input type=”file” id=”importCsvInput” accept=”.csv,text/csv” style=”display:none” />
+          </label>
+          <span id=”importStatus” class=”refresh-status” style=”margin-left:0.5rem”></span>
         </section>
         <section class="panel">
           <h2>Data — raw vs processed</h2>

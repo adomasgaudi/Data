@@ -20,7 +20,7 @@ import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { S, type HeatColorDim, type IndexGroupMode } from "./appState";
 import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, buildLoaded, fetchLatestCsv, type LoadedData } from "./dataSource";
-import { parseCsvRows } from "./csv";
+import { parseCsvRows, parseCsv } from "./csv";
 import {
   distinctExercises,
   selectableExercises,
@@ -13103,12 +13103,6 @@ function populateDataFilters() {
 // ---- "Refresh data" status -------------------------------------------------
 // The refresh runs as a GitHub Action (see the Data tab + fetch-data.yml). The
 // browser can read its status from the public GitHub API (api.github.com sends
-// CORS headers, and public-repo run status needs no auth), so we can tell the
-// owner whether to keep waiting or that it failed — without leaving the page.
-const REFRESH_RUNS_API =
-  "https://api.github.com/repos/adomasgaudi/data/actions/workflows/fetch-data.yml/runs?per_page=1";
-let refreshPollTimer: number | null = null;
-
 /** Human "x min ago" for an ISO timestamp. */
 function agoText(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
@@ -13125,60 +13119,106 @@ function setRefreshStatus(html: string, cls: string) {
   els.refreshStatus.innerHTML = html;
 }
 
-/** Fetch the latest fetch-data run and show whether to keep waiting / it failed.
- * Re-polls itself every 12 s while a run is still going. */
-async function pollRefreshStatus(): Promise<void> {
-  if (refreshPollTimer !== null) { clearTimeout(refreshPollTimer); refreshPollTimer = null; }
-  let run: {
-    status: string; conclusion: string | null; html_url: string;
-    run_started_at?: string; updated_at: string; created_at: string;
-  } | null = null;
-  try {
-    const res = await fetch(REFRESH_RUNS_API, { headers: { Accept: "application/vnd.github+json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    run = data.workflow_runs?.[0] ?? null;
-  } catch {
-    setRefreshStatus(
-      `Couldn't reach GitHub to check status — <a href="https://github.com/adomasgaudi/data/actions/workflows/fetch-data.yml" target="_blank" rel="noopener">open it on GitHub</a>.`,
-      "is-unknown",
-    );
+/** Re-fetch from Supabase and hot-swap the dataset in place. */
+async function catchUpFromSupabase(): Promise<void> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    setRefreshStatus("Sign in to sync.", "is-unknown");
     return;
   }
-  if (!run) {
-    setRefreshStatus("No refresh has run yet. Click the button above to start one.", "is-idle");
+  setRefreshStatus("Syncing…", "is-running");
+  const fresh = await fetchFromSupabase();
+  if (!fresh) {
+    setRefreshStatus("No data in Supabase yet — import your CSV below.", "is-idle");
     return;
   }
-  const link = `<a href="${escapeHtml(run.html_url)}" target="_blank" rel="noopener">view on GitHub →</a>`;
-  if (run.status !== "completed") {
-    const started = run.run_started_at ?? run.created_at;
-    setRefreshStatus(
-      `⏳ <strong>Refresh is running…</strong> keep waiting (started ${agoText(started)}). This page will update the status by itself. ${link}`,
-      "is-running",
-    );
-    refreshPollTimer = window.setTimeout(pollRefreshStatus, 12_000);
+  if (fresh.records.length === 0) {
+    setRefreshStatus("No data in Supabase yet — import your CSV below.", "is-idle");
     return;
   }
-  // Completed.
-  if (run.conclusion === "success") {
-    setRefreshStatus(
-      `✓ <strong>Last refresh succeeded</strong> (${agoText(run.updated_at)}). If you just ran it, reload this page to see the new data. ${link}`,
-      "is-ok",
-    );
-  } else {
-    setRefreshStatus(
-      `✗ <strong>Last refresh failed</strong> (${run.conclusion ?? "stopped"}, ${agoText(run.updated_at)}). ${link}`,
-      "is-fail",
-    );
+  data = fresh;
+  csvRecordCount = data.records.length;
+  mergeManualSets();
+  scheduleRender();
+  const ts = fresh.updatedAt ? ` (${agoText(fresh.updatedAt)})` : "";
+  setRefreshStatus(`✓ Up to date${ts} — ${fresh.records.length} sets`, "is-ok");
+}
+
+/** Parse a StrengthLevel CSV and upsert rows into Supabase for the current user. */
+async function importCsvToSupabase(csvText: string): Promise<void> {
+  const statusEl = document.getElementById("importStatus");
+  const setStatus = (msg: string) => { if (statusEl) statusEl.textContent = msg; };
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  const userEmail = sessionData.session?.user.email;
+  if (!userId || !userEmail) { setStatus("Sign in first."); return; }
+
+  setStatus("Parsing…");
+  const rawRows = parseCsv(csvText);
+  // Filter to rows belonging to the current user (by email), or keep all if admin.
+  const myRows = isAdminRole()
+    ? rawRows
+    : rawRows.filter((r) => (r["user"] ?? "").toLowerCase() === userEmail.toLowerCase());
+
+  if (myRows.length === 0) {
+    setStatus("No matching rows found for your email in this CSV.");
+    return;
   }
+
+  // Map raw CSV row → DbSet shape (upsert conflict key: user_id+date+exercise_name+set_number).
+  const toDbSet = (r: Record<string, string>) => ({
+    user_id: userId,
+    username: r["username"] ?? "",
+    date: r["date"] ?? "",
+    bodyweight: r["bodyweight"] ? Number(r["bodyweight"]) || null : null,
+    exercise_name: r["exercise_name"] ?? "",
+    set_number: Number(r["set_number"]) || 1,
+    weight: r["weight"] ? Number(r["weight"]) || null : null,
+    reps: r["reps"] ? Number(r["reps"]) || null : null,
+    notes: r["notes"] ?? "",
+    dropset: r["dropset"] === "true" || r["dropset"] === "1",
+    percentile: r["percentile"] ? Number(r["percentile"]) || null : null,
+  });
+
+  // Batch upsert in chunks of 200 to stay within Supabase request limits.
+  const CHUNK = 200;
+  let done = 0;
+  for (let i = 0; i < myRows.length; i += CHUNK) {
+    const batch = myRows.slice(i, i + CHUNK).map(toDbSet);
+    const { error } = await supabase
+      .from("sets")
+      .upsert(batch, { onConflict: "user_id,date,exercise_name,set_number" });
+    if (error) { setStatus(`Error: ${error.message}`); return; }
+    done += batch.length;
+    setStatus(`Importing… ${done}/${myRows.length}`);
+  }
+
+  setStatus(`✓ ${done} sets imported. Catching up…`);
+  await catchUpFromSupabase();
 }
 
 function setupDataTab() {
   populateDataFilters();
-  els.refreshStatusBtn.addEventListener("click", () => {
-    setRefreshStatus("Checking…", "is-idle");
-    void pollRefreshStatus();
+  els.refreshStatusBtn.addEventListener("click", () => void catchUpFromSupabase());
+
+  // Import CSV → Supabase
+  document.getElementById("importCsvInput")?.addEventListener("change", (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => void importCsvToSupabase(reader.result as string);
+    reader.readAsText(file);
   });
+
+  // Auto-refresh when the Data tab becomes visible (re-fetch on each visit).
+  // Also schedule a background refresh every 5 minutes.
+  let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void catchUpFromSupabase();
+  });
+  autoRefreshTimer = setInterval(() => void catchUpFromSupabase(), 5 * 60 * 1000);
+  void autoRefreshTimer; // keep reference alive
   document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const v = btn.dataset.dataview === "original" ? "original" : "processed";
@@ -17130,7 +17170,7 @@ function switchTopTab(name: string) {
   document.body.classList.toggle("on-s-anl", name === "s-analysis");
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
-  if (name === "data") void pollRefreshStatus();
+  if (name === "data") void catchUpFromSupabase();
   if (name === "test") renderCoachRx();
   if (name === "changelog") { renderChangelog(); expandLatestChangelog(); }
   if (name === "s-analysis") renderSAnalysis();
@@ -17388,16 +17428,6 @@ function setupBottomNav() {
   document.getElementById("loginEmail")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") void sendMagicLink();
   });
-}
-
-// ── "Catch up" button (Data tab) ──────────────────────────────────────────────
-// Replaces the old GitHub-Actions-status check: re-fetches from Supabase so the
-// user sees any changes the admin made since the page loaded.
-{
-  const origSetup = setupDataTab;
-  // Patch: after the existing setupDataTab wires the refreshStatusBtn to poll
-  // GitHub, we rebind it to also try a Supabase fetch.
-  void origSetup; // setupDataTab is called inside init() — no need to call again
 }
 
 void init();
