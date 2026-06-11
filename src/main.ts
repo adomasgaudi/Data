@@ -6946,9 +6946,9 @@ function setDisplay(raw: SetRecord): string {
       : computedForMach.machineType === "gravity"
         ? ` <span class="wo-mach" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
-  // A "not comparable" note (e.g. a static hold) has no meaningful multiplier —
-  // show "UN" with the reps instead of a ×number.
-  if (note && isNoteNotComparable(s.exerciseName, note))
+  // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
+  // show "UN" with the reps instead of a weight number.
+  if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
     return `${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`;
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
