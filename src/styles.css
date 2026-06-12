@@ -605,10 +605,10 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .coach-ruler-lbl { position: absolute; bottom: calc(100% + 2px); font-size: 0.55rem; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
 .coach-ruler-units { display: flex; gap: 1.5rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--muted); }
 .coach-ruler-units span { font-weight: 600; color: var(--text); }
-.coach-refs { display: flex; flex-direction: column; gap: 0.35rem; }
-.coach-ref-row { display: flex; align-items: center; gap: 0.5rem; min-height: 1.4rem; }
-.coach-ref-bar { height: 12px; border-radius: 3px; flex-shrink: 0; max-width: 100%; }
-.coach-ref-lbl { font-size: 0.75rem; white-space: nowrap; }
+.coach-refs { display: flex; flex-direction: column; gap: 0.35rem; padding-top: 0.5rem; }
+.coach-ref-row { display: flex; align-items: center; gap: 0.5rem; min-height: 1.4rem; flex-shrink: 0; }
+.coach-ref-bar { height: 12px; border-radius: 3px; flex-shrink: 0; }
+.coach-ref-lbl { font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
 
 /* Coach site map */
 .csm-root { display: flex; flex-direction: column; gap: 0.5rem; }

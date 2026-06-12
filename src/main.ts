@@ -9424,25 +9424,28 @@ function renderCoachRuler(): void {
     ticks += `<div class="${cls}" style="left:${px}px">${lbl}</div>`;
   }
 
-  // Reference bars: each bar IS the actual size it labels, so you can see it on screen.
+  // Each reference bar is inside the SAME scrollable container as the ruler,
+  // left-aligned with the ruler's 0 mark — so the bar width visually matches
+  // the corresponding distance on the ruler above it.
   function refBar(label: string, desc: string, widthPx: number, colour: string): string {
-    return `<div class="coach-ref-row">
-      <div class="coach-ref-bar" style="width:${widthPx}px;background:${colour}" title="${label}"></div>
-      <span class="coach-ref-lbl"><strong>${label}</strong> = ${Math.round(widthPx)} px &nbsp;<span class="muted">${desc}</span></span>
-    </div>`;
+    return `<div class="coach-ref-row" style="width:${Math.max(rulerW, widthPx)}px">` +
+      `<div class="coach-ref-bar" style="width:${widthPx}px;background:${colour}"></div>` +
+      `<span class="coach-ref-lbl"><strong>${label}</strong> = ${Math.round(widthPx)} px <span class="muted">${escapeHtml(desc)}</span></span>` +
+    `</div>`;
   }
 
   el.innerHTML =
-    `<p class="muted" style="font-size:0.75rem;margin:0 0 0.4rem">Scroll right → ruler is ${rulerW} CSS px wide</p>` +
-    `<div class="coach-ruler-wrap"><div class="coach-ruler" style="width:${rulerW}px">${ticks}</div></div>` +
-    `<p class="muted" style="font-size:0.75rem;margin:0.8rem 0 0.3rem">Reference bars — each bar is drawn at its exact CSS size:</p>` +
-    `<div class="coach-refs">` +
-      refBar("1 rem", "base font size", remPx, "var(--accent)") +
-      refBar("1 vw", "1% of screen width", vwPx, "var(--gold)") +
-      refBar("10 vw", "10% of screen width", vwPx * 10, "var(--gold)") +
-      refBar("--tap-min (30 px)", "minimum tap target", 30, "var(--lens-compare)") +
-      refBar("100 px", "100 CSS px", 100, "var(--muted)") +
-      refBar("1 screen width", `100 vw = ${window.innerWidth} px`, window.innerWidth, "color-mix(in srgb, var(--accent) 30%, transparent)") +
+    `<p class="muted" style="font-size:0.75rem;margin:0 0 0.4rem">Scroll right → ruler is ${rulerW} CSS px wide. Bars below align with ruler marks.</p>` +
+    `<div class="coach-ruler-wrap">` +
+      `<div class="coach-ruler" style="width:${rulerW}px">${ticks}</div>` +
+      `<div class="coach-refs">` +
+        refBar("1 rem", "base font", remPx, "var(--accent)") +
+        refBar("1 vw", "1% screen width", vwPx, "var(--gold)") +
+        refBar("10 vw", "10% screen width", vwPx * 10, "var(--gold)") +
+        refBar("tap-min 30px", "min tap target", 30, "var(--lens-compare)") +
+        refBar("100 px", "", 100, "var(--muted)") +
+        refBar(`100 vw = ${window.innerWidth}px`, "full screen", window.innerWidth, "color-mix(in srgb, var(--accent) 30%, transparent)") +
+      `</div>` +
     `</div>`;
 }
 
