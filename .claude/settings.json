@@ -103,6 +103,13 @@
             "command": "python3 scripts/show-cost.py",
             "timeout": 10,
             "statusMessage": "Reporting token cost"
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "python3 scripts/gen-chart.py",
+            "timeout": 15,
+            "statusMessage": "Generating cost chart"
           }
         ]
       }
