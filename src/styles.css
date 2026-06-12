@@ -2289,10 +2289,10 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-controls-sum::after { content: ""; } /* clean cog — no caret */
 .wo-controls-fold[open] .wo-controls-sum { border-color: var(--accent); background: var(--accent-soft); }
 .wo-controls-fold[open] .wo-controls {
-  /* The cog sits in the right corner, so open the menu leftward from its RIGHT
-     edge — anchoring left:0 ran it off the right of the screen (clipped). */
-  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; left: auto;
-  max-width: 92vw; margin: 0; padding: 0.8rem;
+  /* PB-17: use position:fixed + JS clampMenuIntoView (same as PB-10 / .wa-sel-cog-menu)
+     so the popup is never clipped regardless of where the ⚙ sits on the row. */
+  position: fixed; z-index: 40; left: 0; top: 0;
+  max-width: calc(100vw - 12px); margin: 0; padding: 0.8rem;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
 }
@@ -2351,12 +2351,8 @@ sup.wr-bw { font-size: 0.85em; }
 .cal-bottom .hm-pills { flex: 1 1 auto; min-width: 0; margin: 0; }
 .cal-settings { flex: none; margin: 0; }
 .cal-settings .wo-controls-sum { padding: 3px 9px; }
-.cal-settings.wo-controls-fold[open] .wo-controls { left: auto; right: 0; }
-/* In the relocated Analysis view the history ⚙ sits LEFT-of-centre, so its options
-   menu must open to the RIGHT (left-anchored). Anchoring it right:0 (the default, for
-   the right-corner cog in the standalone Workouts view) ran it off the LEFT edge —
-   "can't see menu settings". Clamp the width so it can't spill off the right either. */
-#waWorkoutsHost .wo-controls-fold[open] .wo-controls { left: 0; right: auto; max-width: calc(100vw - 24px); }
+/* left/right no longer needed — position:fixed + clampMenuIntoView handles placement */
+/* Obsolete — position:fixed + clampMenuIntoView handles placement for all workout ⚙ menus */
 /* Athlete tab: prefer fitting the width over horizontal scrolling. */
 #tab-athlete .data-table { min-width: 0; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }

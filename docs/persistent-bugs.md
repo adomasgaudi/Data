@@ -11,6 +11,15 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-17 — Popup/floating menus go out of viewport bounds
+
+- **First seen:** 2026-06-12, mobile (Brave, Android), workout ⚙ console pill strip bleeding off left edge
+- **Prior cases:** PB-10 — same class of bug on `.wa-sel-cog-menu` (exercise selector ⚙); fixed with `position:fixed` + `clampMenuIntoView`. The workout ⚙ `.wo-controls` was still `position:absolute` with static `left`/`right` CSS, so it kept escaping bounds.
+- **Root cause:** `position:absolute` menus anchored with hardcoded `right:0` or `left:0` always fail when the anchor moves (e.g. ⚙ sitting left vs right on the row). Only `position:fixed` + JS clamping to viewport (`clampMenuIntoView`) is robust.
+- **Fix (b.2.8.285):** `.wo-controls` switched to `position:fixed; left:0; top:0` + toggle-event handler calls `clampMenuIntoView` — same as the PB-10 fix. Removed all the old `left`/`right` CSS overrides.
+- **Rule added:** CLAUDE.md — before shipping any floating/popout menu, verify it can't go out of bounds (use `position:fixed` + `clampMenuIntoView`).
+- **Recurrences:** 1
+
 ---
 
 ## PB-13 — The exercise-picker OPENER keeps getting reworked (discoverability of "swipe to open")

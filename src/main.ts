@@ -12415,8 +12415,11 @@ async function init() {
   // wrap to anywhere on the row, so a static left/right would clip — "out of bounds").
   document.addEventListener("toggle", (e) => {
     const d = e.target as HTMLElement;
-    if (d instanceof HTMLDetailsElement && d.classList.contains("wa-sel-cog") && d.open)
-      clampMenuIntoView(d.querySelector<HTMLElement>(".wa-sel-cog-menu"));
+    if (!(d instanceof HTMLDetailsElement) || !d.open) return;
+    if (d.classList.contains("wa-sel-cog"))
+      clampMenuIntoView(d.querySelector<HTMLElement>(".wa-sel-cog-menu"), d);
+    if (d.classList.contains("wo-controls-fold"))
+      clampMenuIntoView(d.querySelector<HTMLElement>(".wo-controls"), d);
   }, true);
   els.aloneFilter.addEventListener("click", () => {
     aloneFilter = ALONE_FILTER_NEXT[aloneFilter];
@@ -14843,9 +14846,9 @@ function renderWorkoutAnalysis(): void {
 // position:FIXED, and this places it under its cog and fully inside the viewport from
 // the cog's LIVE rect — so no ancestor's overflow/position can clip it and it no longer
 // depends on which way the cog wraps. Flips ABOVE the cog if it'd run off the bottom.
-function clampMenuIntoView(menu: HTMLElement | null | undefined): void {
+function clampMenuIntoView(menu: HTMLElement | null | undefined, anchor?: HTMLElement | null): void {
   if (!menu) return;
-  const cog = menu.closest<HTMLElement>(".wa-sel-cog");
+  const cog = anchor ?? menu.closest<HTMLElement>(".wa-sel-cog, .wo-controls-fold");
   if (!cog) return;
   const m = 6;
   const mw = menu.offsetWidth, mh = menu.offsetHeight; // own size (left/top don't affect it)
