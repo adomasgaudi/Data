@@ -102,11 +102,15 @@ if last_10_costs:
 else:
     sparkline = ""
 
-# Cache breakdown explanation
+# Cache breakdown
 cache_total = turn["cr"] + turn["cw"]
 cache_read_cost = (turn["cr"] / 1e6) * pin * 0.1
 cache_write_cost = (turn["cw"] / 1e6) * pin * 1.25
 cache_explain = f"read: {turn['cr']:,} (0.1×) + write: {turn['cw']:,} (1.25×) = {cache_total:,} total"
+
+# Format: 2 sig figs for costs (round to 2 decimals), 4 for session
+def fmt_cost(x):
+    return f"${x:.2f}"
 
 # Output
 print(f"""
@@ -116,14 +120,14 @@ print(f"""
   📊 Total cumul:     {sess['in']:>10,} tokens  (all prompts)
   
   💾 Cache breakdown: {cache_explain}
-     • read cost:     ${cache_read_cost:.6f}  (cheaper — reused context)
-     • write cost:    ${cache_write_cost:.6f}  (setup cost for future reads)
+     • read cost:     {fmt_cost(cache_read_cost)}  (cheaper — reused context)
+     • write cost:    {fmt_cost(cache_write_cost)}  (setup cost for future reads)
   
   📤 Output tokens:   {turn['out']:>10,} tokens
   
   🤖 Model:           {model}  (${pin:.2f}/Mtok input, ${pout:.2f}/Mtok output)
   
-  💰 This turn:       ${turn['usd']:.6f}
+  💰 This turn:       {fmt_cost(turn['usd'])}
   📈 Last 10 turns:   {sparkline}  (trend)
-  📊 Session total:   ${sess['usd']:.6f}
+  📊 Session total:   ${sess['usd']:.4f}
 """)
