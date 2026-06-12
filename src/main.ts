@@ -9226,10 +9226,117 @@ function liveExercises(username: string, todayD: number): LiveEx[] {
 
 function renderCoachPage(): void {
   renderCoachRuler();
+  renderCoachUiCatalogue();
   renderCoachPersistentBugs();
   renderCoachAppInfo();
   renderCoachTechStack();
 }
+
+function renderCoachUiCatalogue(): void {
+  const el = document.getElementById("coachUiCatalogue");
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = "1";
+
+  function sec(_title: string, promptName: string, cssClass: string, exampleHtml: string): string {
+    return `<div class="cui-item">
+      <div class="cui-meta">
+        <span class="cui-prompt">${escapeHtml(promptName)}</span>
+        <code class="cui-cls">${escapeHtml(cssClass)}</code>
+      </div>
+      <div class="cui-example">${exampleHtml}</div>
+    </div>`;
+  }
+
+  function group(title: string, items: string): string {
+    return `<details class="coach-section" style="margin-bottom:0.4rem">
+      <summary class="coach-sum">${escapeHtml(title)}</summary>
+      <div class="coach-body cui-group">${items}</div>
+    </details>`;
+  }
+
+  el.innerHTML = `
+    <p class="muted" style="font-size:0.8rem;margin:0 0 0.8rem">Live renders — tap an item to expand. Use the <strong>Prompt name</strong> when reporting problems.</p>
+
+    ${group("Buttons", [
+      sec("Nav tab", "nav tab / top tab", ".tab", `<button class="tab">Tab</button> <button class="tab is-active">Active tab</button>`),
+      sec("Bottom nav button", "bottom nav / subtab", ".subtab-btn", `<button class="subtab-btn">⌂ Home</button>`),
+      sec("Primary button", "primary button", ".primary-btn", `<button class="primary-btn">Primary</button>`),
+      sec("Settings link button", "settings button / settings row button", ".settings-link", `<button class="settings-link">⬆ Upload sets</button>`),
+      sec("Icon button (on-chart)", "on-chart button / graph corner button", ".wa-gov-btn", `<button class="wa-gov-btn">⤢</button> <button class="wa-gov-btn">kg</button> <button class="wa-gov-btn">⛶</button>`),
+      sec("Clear/action pill", "clear pill / action pill", ".wa-clear", `<button class="wa-clear">Select all</button> <button class="wa-clear">✕ Clear</button>`),
+      sec("Pagination button", "pagination button", ".page-btn", `<button class="page-btn">‹</button> <button class="page-btn is-active">2</button> <button class="page-btn">›</button>`),
+      sec("Guide button", "guide button", ".guide-btn", `<button class="guide-btn">Guide</button> <button class="guide-btn is-active">Active</button>`),
+    ].join(""))}
+
+    ${group("Pills & Chips", [
+      sec("Athlete chip", "athlete chip / athlete pill", ".athlete-chip", `<button class="athlete-chip is-active">Adomas</button> <button class="athlete-chip">Andrius</button>`),
+      sec("Lift title chip (graph)", "lift chip / exercise title chip", ".wa-title-lift", `<button class="wa-title-lift">Pull Ups</button> <button class="wa-title-lift lens-combine">Squat ⊕</button>`),
+      sec("Selected exercise pill", "selected exercise pill / lift pill", ".wa-sel-pill", `<button class="wa-sel-pill is-graphed">Bench Press</button> <button class="wa-sel-pill">Deadlift</button>`),
+      sec("Category pill", "category pill / muscle group pill", ".wa-cat-pill", `<button class="wa-cat-pill">Push</button> <button class="wa-cat-pill is-active">Pull</button>`),
+      sec("Exercise chip (picker)", "exercise chip / picker chip", ".wa-ex-chip", `<button class="wa-ex-chip">Pull Ups</button> <button class="wa-ex-chip is-on">Dips ✓</button>`),
+      sec("Metric toggle chip", "metric chip / graph metric pill", ".wa-metric", `<button class="wa-metric is-on">1RM</button> <button class="wa-metric">Vol</button>`),
+      sec("Set variation chip", "set scale chip / variation chip", ".set-scale", `<button class="set-scale is-editable">×1 ▾</button> <button class="set-scale is-editable is-uncmp">UN ▾</button>`),
+      sec("Machine tag", "machine tag / assisted tag", ".wo-mach", `<span class="wo-mach wo-mach-asst">machine</span> <span class="wo-mach wo-mach-review">⚠</span> <span class="wo-mach">grav</span>`),
+      sec("Sync status pill", "sync status pill / upload indicator", ".gh-sync", `<span class="gh-sync gh-sync--ok">⬆ 3 synced</span> <span class="gh-sync gh-sync--err">⬆ error</span>`),
+    ].join(""))}
+
+    ${group("Toggles (cycling pills)", [
+      sec("Sex toggle", "sex toggle / M/W toggle", ".ath-sex-toggle", `<button class="ath-sex-toggle is-on">M</button> <button class="ath-sex-toggle">W</button>`),
+      sec("Workout DJ button (on/off)", "DJ button / workout filter pill", ".wo-dj-btn", `<button class="wo-dj-btn is-active">10RM</button> <button class="wo-dj-btn">Rest</button> <button class="wo-dj-btn is-active">Sets+</button>`),
+      sec("Language toggle", "language toggle", ".lang-opt", `<button class="lang-opt is-active">EN</button> <button class="lang-opt">LT</button>`),
+      sec("Alone filter", "alone filter / session filter", ".alone-filter", `<button class="alone-filter wo-dj-btn">Both</button>`),
+    ].join(""))}
+
+    ${group("Folds / Expandable sections", [
+      sec("Coach section fold (this page)", "coach section / expandable section", ".coach-section", `<details class="coach-section" style="max-width:220px"><summary class="coach-sum">Section title</summary><div class="coach-body"><p class="muted" style="margin:0;font-size:0.8rem">Content inside.</p></div></details>`),
+      sec("Analysis section fold", "analysis fold / graph fold / history fold", ".wa-fold", `<details class="wa-fold"><summary class="wa-fold-sum"><span class="wa-fold-caret">▸</span> Graph</summary><div class="wa-fold-body" style="padding:0.5rem;font-size:0.8rem;color:var(--muted)">Graph content</div></details>`),
+      sec("Settings group fold", "settings group / settings fold", ".settings-group", `<details class="settings-group"><summary class="settings-group-sum">Settings group</summary><div style="padding:0.5rem;font-size:0.8rem;color:var(--muted)">Settings content</div></details>`),
+      sec("Guide section fold", "guide section", ".guide-section", `<details class="guide-section" style="max-width:220px"><summary class="guide-section-summary"><span class="guide-section-caret">▸</span>Guide topic</summary><p style="padding:0.5rem;font-size:0.8rem;color:var(--muted);margin:0">Guide content</p></details>`),
+      sec("Changelog row", "changelog entry / version row", ".cl-row", `<details class="cl-row"><summary class="cl-sum"><span class="cl-code">CHART-22</span><span class="cl-ver">b.2.8.282</span> <span class="cl-short">Graph title button</span></summary><div class="cl-body cl-meddesc">Graph title is now a tappable button</div></details>`),
+    ].join(""))}
+
+    ${group("Inputs & Search", [
+      sec("Command / search bar", "search bar / command bar", ".cmd-input", `<input class="cmd-input" type="text" placeholder="Search exercises… or type . for commands" style="max-width:260px" readonly>`),
+      sec("Inline number input", "number input / set weight input", ".set-edit-f input", `<input type="number" value="80" style="width:4rem;padding:4px 6px;border:1px solid var(--line);border-radius:var(--r-pill);font:inherit;background:var(--bg);color:var(--text)">`),
+      sec("Rep-max column input", "rep-max input / RM input", ".rm-col-input", `<input class="rm-col-input" type="number" value="5" style="width:3rem">`),
+    ].join(""))}
+
+    ${group("Dropdowns (custom .xdd)", [
+      sec("Custom select dropdown", "dropdown / custom select / xdd picker", ".xdd", `<div class="xdd" style="display:inline-block"><button class="xdd-btn" type="button">Athlete ▾</button></div>`),
+      sec("Period dropdown", "period picker / date range dropdown", ".period-dd .xdd", `<div class="xdd period-dd" style="display:inline-block"><button class="xdd-btn" type="button">3 months ▾</button></div>`),
+    ].join(""))}
+
+    ${group("Menus & Popups", [
+      sec("Selector ⚙ cog", "selector cog / picker settings cog", ".wa-sel-cog", `<details class="wa-sel-cog"><summary class="wa-sel-cog-sum">⚙</summary></details>`),
+      sec("Workout ⚙ console", "workout cog / DJ console / workout settings", ".wo-controls-fold", `<details class="wo-controls-fold"><summary class="wo-controls-sum">⚙</summary></details>`),
+      sec("Settings panel", "settings panel / gear menu", ".settings-panel", `<span class="muted" style="font-size:0.8rem">Opens from ⚙ top-right corner</span>`),
+      sec("Other sheet", "other menu / bottom sheet", ".other-sheet", `<span class="muted" style="font-size:0.8rem">Opens from ··· bottom nav</span>`),
+    ].join(""))}
+
+    ${group("Cards & Panels", [
+      sec("Main panel card", "panel / card", ".panel", `<div class="panel" style="padding:0.7rem;max-width:200px;font-size:0.82rem">Panel card content</div>`),
+      sec("Group card (Stats view)", "group card", ".gv-card", `<div class="gv-card" style="max-width:200px"><div class="gv-card-head"><h3 style="margin:0;font-size:0.85rem">Push</h3><span class="muted gv-count">4 lifts</span></div></div>`),
+    ].join(""))}
+
+    ${group("Tables", [
+      sec("Data table", "data table", ".data-table", `<table class="data-table" style="font-size:0.75rem"><thead><tr><th>Exercise</th><th class="num">1RM</th></tr></thead><tbody><tr><td>Pull Ups</td><td class="num">80</td></tr></tbody></table>`),
+      sec("Set detail table", "set table / detail table / workout table", ".detail-table", `<span class="muted" style="font-size:0.8rem">Inside expanded workout sessions</span>`),
+    ].join(""))}
+
+    ${group("Design tokens (CSS variables)", [
+      sec("Accent colour", "--accent", "--accent", `<span style="display:inline-block;width:2rem;height:1.5rem;background:var(--accent);border-radius:4px;vertical-align:middle"></span> <code style="font-size:0.75rem">var(--accent)</code>`),
+      sec("Gold / secondary", "--gold", "--gold", `<span style="display:inline-block;width:2rem;height:1.5rem;background:var(--gold);border-radius:4px;vertical-align:middle"></span> <code style="font-size:0.75rem">var(--gold)</code>`),
+      sec("Lens combine (gold)", "--lens-combine", "--lens-combine", `<span style="display:inline-block;width:2rem;height:1.5rem;background:var(--lens-combine);border-radius:4px;vertical-align:middle"></span>`),
+      sec("Lens compare (teal)", "--lens-compare", "--lens-compare", `<span style="display:inline-block;width:2rem;height:1.5rem;background:var(--lens-compare);border-radius:4px;vertical-align:middle"></span>`),
+      sec("Lens both (amethyst)", "--lens-both", "--lens-both", `<span style="display:inline-block;width:2rem;height:1.5rem;background:var(--lens-both);border-radius:4px;vertical-align:middle"></span>`),
+      sec("Remove / destructive", "--remove", "--remove", `<span style="display:inline-block;width:2rem;height:1.5rem;background:var(--remove);border-radius:4px;vertical-align:middle"></span>`),
+      sec("Min tap target", "--tap-min (30px)", "--tap-min", `<span style="display:inline-flex;align-items:center;justify-content:center;min-height:var(--tap-min);min-width:var(--tap-min);border:1px dashed var(--muted);border-radius:var(--r-pill);font-size:0.7rem;color:var(--muted);padding:0 6px">30px</span>`),
+      sec("Corner radius", "--r-pill", "--r-pill", `<span style="display:inline-block;width:3rem;height:1.5rem;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r-pill)"></span>`),
+    ].join(""))}
+  `;
+}
+
+
 
 function renderCoachRuler(): void {
   const el = document.getElementById("coachRuler");

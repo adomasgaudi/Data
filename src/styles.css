@@ -605,6 +605,15 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .coach-ruler-lbl { position: absolute; bottom: calc(100% + 2px); font-size: 0.55rem; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
 .coach-ruler-units { display: flex; gap: 1.5rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--muted); }
 .coach-ruler-units span { font-weight: 600; color: var(--text); }
+
+/* Coach UI catalogue */
+.cui-group { display: flex; flex-direction: column; gap: 0; }
+.cui-item { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+.cui-item:last-child { border-bottom: none; }
+.cui-meta { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.cui-prompt { font-weight: 700; font-size: 0.8rem; color: var(--text); }
+.cui-cls { font-size: 0.7rem; color: var(--muted); background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
+.cui-example { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem 0.5rem; background: var(--bg); border-radius: var(--r-pill); border: 1px solid var(--line); }
 /* Minimal line icons (inline SVG): muted by default, accent on hover. */
 .other-ico { width: 1.5rem; height: 1.5rem; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
 .other-ico svg, svg.other-ico { width: 1.35rem; height: 1.35rem; display: block; }
