@@ -11581,7 +11581,13 @@ async function init() {
 
   renderStatus();
   renderHealth();
-  renderAll();
+  try {
+    renderAll();
+  } catch (err) {
+    els.status.closest(".appfoot")?.removeAttribute("hidden");
+    els.status.innerHTML = `<span class="badge warn">Render crash: ${String(err)}</span>`;
+    console.error("renderAll crash:", err);
+  }
   // Momentum trend-period toggle (delegated; survives re-renders).
   els.momentum.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
