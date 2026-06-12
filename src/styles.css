@@ -57,6 +57,40 @@
      so the empty-day lines read on the light page (not a near-invisible tint). */
   --rest-fill: #ddd9cd;
   --sess-bg: rgba(40, 78, 134, 0.07); /* faint session band in the period history */
+
+  /* ── Design token scale (SSOT — edit here, propagates everywhere) ── */
+
+  /* Typography — 7-step scale covering all UI text sizes */
+  --fs-2xs: 0.68rem;  /* tiny captions, ruler labels */
+  --fs-xs:  0.75rem;  /* small labels, codes */
+  --fs-sm:  0.8rem;   /* most UI labels, notes */
+  --fs-md:  0.85rem;  /* standard small body */
+  --fs-base:0.9rem;   /* pills, body text (= --athpill-fs) */
+  --fs-lg:  1rem;     /* section titles, standard body */
+  --fs-xl:  1.1rem;   /* card headings */
+
+  /* Radius scale — small rounding only (rule 22, never 999px) */
+  --r-xs:   4px;   /* inner/tight elements, badges */
+  --r-sm:   6px;   /* compact controls */
+  /* --r-pill: 8px  already defined above — canonical pill */
+  --r-md:   10px;  /* panels, dropdowns */
+
+  /* Elevation — panel floats above page */
+  --shadow-focus: 0 0 0 3px var(--accent-soft);
+  --shadow-sm:    0 6px 18px rgba(20, 24, 38, 0.16);
+  --shadow-md:    0 8px 28px rgba(20, 24, 38, 0.22);
+
+  /* Layer (z-index) — semantic names, never raw numbers */
+  --z-drop:  40;   /* dropdowns / popout menus */
+  --z-modal: 60;   /* overlays / modals */
+  --z-top:   200;  /* login gate, above all */
+
+  /* Motion */
+  --dur-fast:   0.15s; /* button press, toggle flip */
+  --dur-normal: 0.18s; /* menu open, panel slide */
+
+  /* Component height */
+  --h-ctrl: 34px;  /* standard button/control height */
 }
 /* Dark theme — set on <html data-theme="dark">. A deep slate that keeps the
    lapis + ochre accents readable. */
@@ -116,19 +150,19 @@ html.signed-in .login-gate { display: none; }
 .login-input {
   width: 100%; box-sizing: border-box; margin: 0 0 0.6rem; padding: 0.6rem 0.75rem;
   font: inherit; font-size: 0.95rem; color: var(--text); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
 }
-.login-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.login-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* The user picker is a <select> auto-enhanced to the custom .xdd dropdown. Make it
    span the card like the other inputs, and keep its pop-up list inside the card
    (it was overflowing out of bounds as a narrow inline-block). */
 .login-signin .xdd { display: block; width: 100%; margin: 0 0 0.6rem; }
-.login-signin .xdd-btn { padding: 0.6rem 0.75rem; font-size: 0.95rem; font-weight: 400; border-radius: 10px; background: var(--bg); }
+.login-signin .xdd-btn { padding: 0.6rem 0.75rem; font-size: 0.95rem; font-weight: 400; border-radius: var(--r-md); background: var(--bg); }
 .login-signin .xdd-menu { left: 0; right: 0; min-width: 0; max-width: 100%; box-sizing: border-box; }
 .login-signin .xdd-opt { white-space: normal; text-align: left; }
 .login-btn {
   width: 100%; padding: 0.7rem; font: inherit; font-weight: 700; font-size: 1rem;
-  color: #fff; background: var(--accent); border: 0; border-radius: 10px; cursor: pointer;
+  color: #fff; background: var(--accent); border: 0; border-radius: var(--r-md); cursor: pointer;
 }
 .login-btn:hover { filter: brightness(1.08); }
 /* Sign-in is now the primary block (the spectator entry moved BELOW it as a small
@@ -140,17 +174,17 @@ html.signed-in .login-gate { display: none; }
    the secondary action, signing in is primary. */
 .login-spectate {
   display: block; width: 100%; margin: 0.7rem 0 0; padding: 0.25rem;
-  font: inherit; font-size: 0.8rem; color: var(--muted);
+  font: inherit; font-size: var(--fs-sm); color: var(--muted);
   background: none; border: 0; cursor: pointer; text-align: center;
 }
 .login-spectate:hover { color: var(--accent); text-decoration: underline; }
 .login-link {
-  width: 100%; margin: 0.7rem 0 0; padding: 0.3rem; font: inherit; font-size: 0.85rem;
+  width: 100%; margin: 0.7rem 0 0; padding: 0.3rem; font: inherit; font-size: var(--fs-md);
   color: var(--accent); background: none; border: 0; cursor: pointer; text-decoration: underline;
 }
 .login-link:hover { filter: brightness(1.1); }
 .login-note { margin: 0.9rem 0 0; font-size: 0.72rem; }
-.login-err { margin: 0 0 0.6rem; font-size: 0.8rem; font-weight: 600; color: #c0392b; }
+.login-err { margin: 0 0 0.6rem; font-size: var(--fs-sm); font-weight: 600; color: #c0392b; }
 .login-err[hidden] { display: none; }
 body {
   margin: 0;
@@ -191,7 +225,7 @@ body {
 .brand-title:hover, .brand-title.is-back { color: var(--accent); }
 .brand-back { font-size: 1.4em; line-height: 0; margin-right: 0.1em; font-weight: 700; }
 /* Small grey "spectator" label beside the title in the logged-out (read-only) view. */
-.view-role-label { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.3px; color: var(--muted); white-space: nowrap; }
+.view-role-label { font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.3px; color: var(--muted); white-space: nowrap; }
 .view-role-label[hidden] { display: none; }
 .view-badge {
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; min-width: 0;
@@ -221,7 +255,7 @@ body.on-s-anl .appfoot { display: none; }
 .cv-fib { color: var(--gold); font-weight: 700; margin-left: 0.25rem; font-size: 0.92em; }
 .cv-chip {
   display: inline-flex; align-items: baseline; gap: 0.3rem;
-  font-size: 0.68rem; padding: 2px 7px; border-radius: var(--r-pill);
+  font-size: var(--fs-2xs); padding: 2px 7px; border-radius: var(--r-pill);
   background: var(--accent-soft); border: 1px solid var(--line);
 }
 .cv-name { color: var(--muted); font-weight: 600; }
@@ -230,7 +264,7 @@ body.on-s-anl .appfoot { display: none; }
 .cv-chip--total { background: var(--gold-soft); border-color: var(--gold); }
 .cv-chip--total .cv-name { color: var(--text); }
 .cv-chip--total .cv-ver { color: var(--gold); }
-.status { color: var(--muted); font-size: 0.85rem; }
+.status { color: var(--muted); font-size: var(--fs-md); }
 .topbar-right { position: relative; display: flex; align-items: center; gap: 0.4rem; flex: none; }
 .topbar-title { flex: 0 1 auto; }
 /* version · SP relocated INSIDE the ⚙ settings dropdown (user / spectator views):
@@ -239,21 +273,21 @@ body.on-s-anl .appfoot { display: none; }
 .icon-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);
   font-size: 1rem; line-height: 1; cursor: pointer;
-  width: 32px; height: 32px; border-radius: 8px; padding: 0;
+  width: 32px; height: 32px; border-radius: var(--r-pill); padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
 .guide-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer;
-  height: 32px; padding: 0 0.75rem; border-radius: 8px;
+  font: inherit; font-size: var(--fs-md); line-height: 1; cursor: pointer;
+  height: 32px; padding: 0 0.75rem; border-radius: var(--r-pill);
   display: inline-flex; align-items: center;
 }
 .guide-btn:hover { color: var(--accent); border-color: var(--accent); }
 .guide-btn.is-active { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .settings-panel {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-modal);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 0.6rem 0.7rem; box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12);
   min-width: 200px; display: flex; flex-direction: column; gap: 0.45rem;
 }
@@ -271,23 +305,23 @@ body.on-s-anl .appfoot { display: none; }
 .settings-panel label.check input { margin-top: 1px; flex: none; }
 .settings-panel select {
   background: var(--bg); color: var(--text);
-  border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font-size: 0.9rem;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 5px 9px; font-size: var(--fs-base);
 }
-.settings-panel select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.settings-panel select:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .settings-link {
   display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
   background: var(--bg); border: 1px solid var(--line); color: var(--text);
-  border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 0.83rem; cursor: pointer;
+  border-radius: var(--r-pill); padding: 6px 10px; font: inherit; font-size: 0.83rem; cursor: pointer;
 }
 .settings-link:hover { border-color: var(--accent); color: var(--accent); }
 /* Collapsible group inside the Settings panel (calculation/display options). */
-.settings-group { border: 1px solid var(--line); border-radius: 8px; }
+.settings-group { border: 1px solid var(--line); border-radius: var(--r-pill); }
 .settings-group-sum {
   cursor: pointer; list-style: none; user-select: none;
   padding: 7px 10px; font-size: 0.82rem; font-weight: 600; color: var(--text);
 }
 .settings-group-sum::-webkit-details-marker { display: none; }
-.settings-group-sum::after { content: "▸"; float: right; color: var(--muted); font-size: 0.75rem; }
+.settings-group-sum::after { content: "▸"; float: right; color: var(--muted); font-size: var(--fs-xs); }
 .settings-group[open] > .settings-group-sum::after { content: "▾"; }
 .settings-group-body { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.1rem 10px 10px; }
 /* Night mode + Log in/out side by side. */
@@ -295,7 +329,7 @@ body.on-s-anl .appfoot { display: none; }
 .settings-row > .settings-link { flex: 1; justify-content: center; }
 /* Language EN/LT segmented toggle in Settings. */
 .lang-row { align-items: center; justify-content: space-between; margin: 0.2rem 0; }
-.lang-lbl { font-size: 0.85rem; font-weight: 600; }
+.lang-lbl { font-size: var(--fs-md); font-weight: 600; }
 .lang-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
 .lang-opt { font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; color: var(--muted); background: none; border: none; padding: 4px 12px; }
 .lang-opt.is-active { background: var(--accent); color: #fff; }
@@ -304,7 +338,7 @@ body.on-s-anl .appfoot { display: none; }
 .refresh-btn {
   display: inline-flex; align-items: center; gap: 0.4rem;
   background: var(--accent); color: #fff; text-decoration: none;
-  border-radius: 8px; padding: 10px 16px; font-weight: 700; font-size: 0.9rem;
+  border-radius: var(--r-pill); padding: 10px 16px; font-weight: 700; font-size: var(--fs-base);
 }
 .refresh-btn:hover { filter: brightness(1.08); }
 .refresh-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
@@ -323,7 +357,7 @@ body.on-s-anl .appfoot { display: none; }
    alert so it matches the app's theme on every device (cf. the native <select> ban).
    Themed via the same tokens, so dark mode works for free. */
 .ui-modal-back {
-  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  position: fixed; inset: 0; z-index: var(--z-top); display: flex; align-items: center; justify-content: center;
   background: rgba(20, 24, 38, 0.45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); padding: 1.25rem;
 }
 .ui-modal {
@@ -347,7 +381,7 @@ body.on-s-anl .appfoot { display: none; }
 .ui-modal-cancel:hover { border-color: var(--accent); color: var(--accent); }
 .ui-modal-ok:hover { filter: brightness(1.08); }
 .overlay-page {
-  position: fixed; inset: 0; z-index: 60; background: var(--bg);
+  position: fixed; inset: 0; z-index: var(--z-modal); background: var(--bg);
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; touch-action: pan-y;
   padding: 1.5rem 1.25rem 5rem;
 }
@@ -400,9 +434,9 @@ body.on-s-anl .appfoot { display: none; }
 .md-doc p { margin: 0.5rem 0; }
 .md-doc ul { margin: 0.4rem 0; padding-left: 1.2rem; }
 .md-doc li { margin: 0.2rem 0; }
-.md-doc code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.25rem; font-size: 0.85em; }
+.md-doc code { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-xs); padding: 0 0.25rem; font-size: 0.85em; }
 .md-doc hr { border: none; border-top: 1px solid var(--line); margin: 1.2rem 0; }
-.md-doc table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; font-size: 0.9rem; }
+.md-doc table { border-collapse: collapse; width: 100%; margin: 0.6rem 0; font-size: var(--fs-base); }
 .md-doc th, .md-doc td { border: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
 .md-doc th { background: var(--panel); }
 
@@ -412,19 +446,19 @@ body.on-s-anl .appfoot { display: none; }
 .bk-item .cl-bodynote { white-space: pre-wrap; }
 .overlay-close {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
+  border-radius: var(--r-pill); width: 34px; height: 34px; font-size: 1rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
 }
 .overlay-close:hover { border-color: var(--accent); color: var(--accent); }
 /* ex-modal header: ← back at the left, lift title, then Index / Analysis jumps. */
 .overlay-back {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; width: 34px; height: 34px; font-size: 1.2rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
+  border-radius: var(--r-pill); width: 34px; height: 34px; font-size: 1.2rem; cursor: pointer; line-height: 1; flex: 0 0 auto;
 }
 .overlay-back:hover { border-color: var(--accent); color: var(--accent); }
 .ex-info-nav { display: flex; gap: 0.35rem; flex: 0 0 auto; }
 .ex-info-navbtn {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; padding: 0 0.6rem; height: 34px; font-size: 0.85rem; cursor: pointer; line-height: 1; white-space: nowrap;
+  border-radius: var(--r-pill); padding: 0 0.6rem; height: 34px; font-size: var(--fs-md); cursor: pointer; line-height: 1; white-space: nowrap;
 }
 .ex-info-navbtn:hover { border-color: var(--accent); color: var(--accent); }
 .ex-info-navbtn.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
@@ -441,7 +475,7 @@ body.on-s-anl .appfoot { display: none; }
 .tabs { display: none; }
 .tab {
   background: none; border: none; color: var(--muted);
-  font: inherit; font-size: 0.9rem; cursor: pointer;
+  font: inherit; font-size: var(--fs-base); cursor: pointer;
   padding: 0.7rem 1rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .tab:hover { color: var(--text); }
@@ -490,7 +524,7 @@ main { padding-bottom: 5rem; }
   width: 100%; font: inherit; font-size: 0.92rem; padding: 8px 14px;
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text);
 }
-.cmd-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cmd-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* When the search bar HAS text the view is being filtered — glow it terracotta (the warm
    accent in the blue/gold palette) so you never forget a filter is on. Overrides the blue
    focus glow when both apply (the more-specific :focus:not rule). Pure CSS via
@@ -506,13 +540,13 @@ main { padding-bottom: 5rem; }
 .cmd-palette[hidden] { display: none; }
 .cmd-opt {
   display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left;
-  background: none; border: none; border-radius: 8px; padding: 9px 11px; cursor: pointer; font: inherit; color: var(--text);
+  background: none; border: none; border-radius: var(--r-pill); padding: 9px 11px; cursor: pointer; font: inherit; color: var(--text);
 }
 .cmd-opt:hover, .cmd-opt.is-active { background: var(--accent-soft); }
 /* The currently-active search mode (Filter vs Find in history) gets an accent edge. */
 .cmd-opt.is-on { box-shadow: inset 3px 0 0 var(--accent); }
 .cmd-opt-cmd { font-weight: 700; color: var(--accent); font-size: 0.86rem; white-space: nowrap; }
-.cmd-opt-desc { font-size: 0.8rem; color: var(--muted); }
+.cmd-opt-desc { font-size: var(--fs-sm); color: var(--muted); }
 /* The "📈 Graph" row's expanded plot choices: indented under it, with a small leading
    guide so they read as sub-items of Graph. */
 .cmd-opt-sub { padding-left: 2.1rem; }
@@ -529,15 +563,15 @@ main { padding-bottom: 5rem; }
   main { padding-bottom: 1rem; }
 }
 /* Selector's search readout (the input itself lives in the bottom command bar). */
-.wa-search-hint { font-size: 0.8rem; }
+.wa-search-hint { font-size: var(--fs-sm); }
 .wa-search-active {
-  font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--accent);
+  font: inherit; font-size: var(--fs-sm); cursor: pointer; color: var(--accent);
   background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 10px;
 }
 
 /* "Other" bottom-sheet: a dimmed backdrop + a card of secondary views that
    slides up from above the bottom nav. */
-.other-sheet { position: fixed; inset: 0; z-index: 60; }
+.other-sheet { position: fixed; inset: 0; z-index: var(--z-modal); }
 .other-sheet[hidden] { display: none; }
 .other-sheet-backdrop { position: absolute; inset: 0; background: rgba(20, 24, 38, 0.38); }
 .other-sheet-card {
@@ -554,7 +588,7 @@ main { padding-bottom: 5rem; }
 }
 .other-item {
   display: flex; align-items: center; gap: 0.7rem;
-  background: none; border: none; border-radius: 8px;
+  background: none; border: none; border-radius: var(--r-pill);
   color: var(--text); font: inherit; font-size: 1rem; text-align: left;
   padding: 0.7rem 0.8rem; cursor: pointer;
 }
@@ -570,7 +604,7 @@ main { padding-bottom: 5rem; }
 .other-section { display: flex; flex-direction: column; gap: 2px; }
 .other-section + .other-section { margin-top: 0.35rem; }
 .other-section-lbl {
-  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--muted); padding: 0.3rem 0.5rem 0.1rem;
 }
 /* A whole section (label included) collapses when none of its items are shown. */
@@ -588,7 +622,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .coach-section { border: 1px solid var(--line); border-radius: var(--r-pill); margin-bottom: 0.5rem; overflow: hidden; }
 .coach-sum {
   display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
-  padding: 0.6rem 0.9rem; font-weight: 600; font-size: 0.85rem; list-style: none;
+  padding: 0.6rem 0.9rem; font-weight: 600; font-size: var(--fs-md); list-style: none;
   user-select: none;
 }
 .coach-sum::-webkit-details-marker { display: none; }
@@ -597,26 +631,26 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 
 /* Pixel ruler */
 .coach-ruler-wrap { overflow-x: auto; }
-.coach-ruler { position: relative; height: 3rem; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+.coach-ruler { position: relative; height: 3rem; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-xs); }
 .coach-ruler-tick { position: absolute; bottom: 0; width: 1px; background: var(--muted); }
 .coach-ruler-tick--10 { height: 60%; }
 .coach-ruler-tick--50 { height: 80%; }
 .coach-ruler-tick--100 { height: 100%; background: var(--accent); }
 .coach-ruler-lbl { position: absolute; bottom: calc(100% + 2px); font-size: 0.55rem; color: var(--muted); transform: translateX(-50%); white-space: nowrap; }
-.coach-ruler-units { display: flex; gap: 1.5rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--muted); }
+.coach-ruler-units { display: flex; gap: 1.5rem; margin-top: 0.5rem; font-size: var(--fs-xs); color: var(--muted); }
 .coach-ruler-units span { font-weight: 600; color: var(--text); }
 .coach-refs { display: flex; flex-direction: column; gap: 0.35rem; padding-top: 0.5rem; }
 .coach-ref-row { display: flex; align-items: center; gap: 0.5rem; min-height: 1.4rem; flex-shrink: 0; }
 .coach-ref-bar { height: 12px; border-radius: 3px; flex-shrink: 0; }
-.coach-ref-lbl { font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+.coach-ref-lbl { font-size: var(--fs-xs); white-space: nowrap; flex-shrink: 0; }
 
 /* Coach site map */
 .csm-root { display: flex; flex-direction: column; gap: 0.5rem; }
 .csm-node { border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
-.csm-name { font-weight: 700; font-size: 0.85rem; padding: 0.45rem 0.75rem 0.1rem; }
-.csm-desc { font-size: 0.75rem; padding: 0 0.75rem 0.45rem; }
+.csm-name { font-weight: 700; font-size: var(--fs-md); padding: 0.45rem 0.75rem 0.1rem; }
+.csm-desc { font-size: var(--fs-xs); padding: 0 0.75rem 0.45rem; }
 .csm-children { border-top: 1px solid var(--line); padding: 0.4rem 0.75rem; display: flex; flex-direction: column; gap: 0.15rem; }
-.csm-sub { display: flex; gap: 0.4rem; font-size: 0.75rem; line-height: 1.5; }
+.csm-sub { display: flex; gap: 0.4rem; font-size: var(--fs-xs); line-height: 1.5; }
 .csm-sub::before { content: "╰"; color: var(--muted); flex-shrink: 0; }
 .csm-sub-name { font-weight: 600; color: var(--text); }
 .csm-sub-desc { color: var(--muted); }
@@ -626,7 +660,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .cui-item { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
 .cui-item:last-child { border-bottom: none; }
 .cui-meta { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-.cui-prompt { font-weight: 700; font-size: 0.8rem; color: var(--text); }
+.cui-prompt { font-weight: 700; font-size: var(--fs-sm); color: var(--text); }
 .cui-cls { font-size: 0.7rem; color: var(--muted); background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
 .cui-example { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.4rem 0.5rem; background: var(--bg); border-radius: var(--r-pill); border: 1px solid var(--line); }
 /* Minimal line icons (inline SVG): muted by default, accent on hover. */
@@ -646,7 +680,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 }
 .gv-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .gv-card-head h3 { margin: 0; font-size: 1rem; }
-.gv-count { font-size: 0.75rem; white-space: nowrap; }
+.gv-count { font-size: var(--fs-xs); white-space: nowrap; }
 .gv-head-num { display: flex; align-items: baseline; gap: 0.35rem; margin: 0.35rem 0 0.5rem; }
 .gv-big { font-size: 1.7rem; font-weight: 700; color: var(--accent); line-height: 1; }
 .gv-unit { font-size: 0.78rem; color: var(--muted); }
@@ -656,13 +690,13 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .gv-sub { display: block; font-size: 0.72rem; line-height: 1.1; }
 .gv-raw { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
 .gv-rank { color: var(--muted); width: 1.4rem; }
-.gv-empty { margin: 0.4rem 0 0; font-size: 0.85rem; }
+.gv-empty { margin: 0.4rem 0 0; font-size: var(--fs-md); }
 
 /* Group view (train people together): selectable people, then a column each. */
 .team-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .team-chip {
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel);
-  color: var(--text); font: inherit; font-size: 0.85rem; padding: 0.35rem 0.8rem; cursor: pointer;
+  color: var(--text); font: inherit; font-size: var(--fs-md); padding: 0.35rem 0.8rem; cursor: pointer;
 }
 .team-chip:hover { border-color: var(--accent); }
 .team-chip.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -675,9 +709,9 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-prog-wrap { position: relative; }
 .ex-prog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .ex-best-toggle {
-  padding: 5px 12px; font: inherit; font-size: 0.8rem; font-weight: 600;
+  padding: 5px 12px; font: inherit; font-size: var(--fs-sm); font-weight: 600;
   color: var(--muted); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill); cursor: pointer;
 }
 .ex-best-toggle:hover { color: var(--text); border-color: var(--accent); }
 .ex-best-toggle.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
@@ -685,16 +719,16 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-prog-settings { position: relative; }
 .ex-prog-settings-sum {
   list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
-  padding: 5px 12px; font-size: 0.8rem; font-weight: 600; color: var(--muted);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; user-select: none;
+  padding: 5px 12px; font-size: var(--fs-sm); font-weight: 600; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); user-select: none;
 }
 .ex-prog-settings-sum::-webkit-details-marker { display: none; }
 .ex-prog-settings[open] .ex-prog-settings-sum { color: var(--text); border-color: var(--accent); }
 .ex-prog-settings-menu {
   position: absolute; z-index: 30; top: calc(100% + 4px); left: 0;
   display: flex; flex-direction: column; gap: 6px; padding: 8px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14); min-width: 11rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm); min-width: 11rem;
 }
 .ex-prog-settings-menu .ex-best-toggle { text-align: left; }
 .svgc-plot { width: 100%; touch-action: pan-y; user-select: none; cursor: grab; }
@@ -732,13 +766,13 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .svgc-legend-sum::after { content: " ▾"; color: var(--muted); }
 .svgc-legend-fold[open] .svgc-legend-sum { border-color: var(--accent); background: var(--accent-soft); }
 .svgc-legend-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; left: auto;
+  position: absolute; z-index: var(--z-drop); top: calc(100% + 4px); right: 0; left: auto;
   display: flex; flex-direction: column; gap: 0.45rem; padding: 0.6rem 0.7rem;
   min-width: 12rem; max-width: 92vw; max-height: 60vh; overflow-y: auto;
   /* Quite see-through so the graph behind stays visible; a stronger blur keeps the keys legible. */
   background: color-mix(in srgb, var(--panel) 45%, transparent); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
-  border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
 }
 /* Open ABOVE the button when there's more room above (it then floats over the chart
    rather than pushing the page) — toggled by JS measuring the space. */
@@ -771,7 +805,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .svgc-compact:hover { border-color: var(--accent); color: var(--accent); }
 .svgc-compact.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 /* Two tiny style toggles in the legend row (faint lines · line tags). */
-.svgc-style-btn { cursor: pointer; font: inherit; font-size: 0.8rem; line-height: 1; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 7px; user-select: none; align-self: flex-start; }
+.svgc-style-btn { cursor: pointer; font: inherit; font-size: var(--fs-sm); line-height: 1; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 7px; user-select: none; align-self: flex-start; }
 .svgc-style-btn:hover { border-color: var(--accent); color: var(--accent); }
 .svgc-style-btn.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 /* "Fit" button — re-centre & fit the data in view (resets pan/zoom). Sits at the
@@ -798,12 +832,12 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   align-items: center;
   justify-content: center;
 }
-.svgc-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+.svgc-note { font-size: var(--fs-sm); color: var(--muted); margin-top: 0.25rem; }
 .svgc-note[hidden] { display: none; }
 .svgc-tip {
   position: absolute; top: 4px; z-index: 5; pointer-events: none;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(20, 24, 38, 0.14); padding: 0.4rem 0.6rem; font-size: 0.8rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill);
+  box-shadow: 0 2px 10px rgba(20, 24, 38, 0.14); padding: 0.4rem 0.6rem; font-size: var(--fs-sm);
   max-width: 70%;
 }
 .svgc-tip[hidden] { display: none; }
@@ -814,7 +848,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .svgc-tip-pinned { pointer-events: auto; padding-right: 1.4rem; }
 .svgc-tip-x {
   position: absolute; top: 2px; right: 4px; border: 0; background: none; cursor: pointer;
-  font-size: 0.85rem; line-height: 1; color: var(--muted); padding: 2px;
+  font-size: var(--fs-md); line-height: 1; color: var(--muted); padding: 2px;
 }
 .svgc-tip-x:hover { color: var(--text); }
 .svgc-tip-line { white-space: nowrap; }
@@ -828,7 +862,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .team-summaries { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin: 0 0 0.9rem; }
 .team-sumchip {
   display: flex; flex-direction: column; gap: 1px;
-  border: 1px solid var(--line); border-radius: 8px; padding: 0.4rem 0.7rem; font-size: 0.85rem;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 0.4rem 0.7rem; font-size: var(--fs-md);
 }
 .team-sumchip .muted { font-size: 0.74rem; }
 .team-shared-table { margin: 0.3rem 0 0; }
@@ -840,7 +874,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .team-col { border: 1px solid var(--line); border-radius: 12px; padding: 0.8rem 0.9rem; background: var(--panel); }
 .team-col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .team-col-head h3 { margin: 0; font-size: 1.05rem; }
-.team-bw { font-size: 0.8rem; white-space: nowrap; }
+.team-bw { font-size: var(--fs-sm); white-space: nowrap; }
 .team-stat { font-size: 0.78rem; margin: 0.15rem 0 0.6rem; }
 .team-sec-lbl {
   font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -890,7 +924,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   flex: 0 0 auto; white-space: nowrap; box-sizing: border-box;
   background: none; border: 1px solid var(--line); color: var(--muted);
   font: inherit; font-size: var(--athpill-fs); font-weight: 600; line-height: 1.2; cursor: pointer;
-  padding: var(--athpill-py) 1rem; border-radius: 4px; /* sharper than the default pill (owner ask) */
+  padding: var(--athpill-py) 1rem; border-radius: var(--r-xs); /* sharper than the default pill (owner ask) */
 }
 .athlete-chip:hover { color: var(--text); border-color: var(--accent); }
 .athlete-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
@@ -909,7 +943,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   flex: 0 0 auto; min-width: 2.2rem; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
   font: inherit; font-size: var(--athpill-fs); font-weight: 700; line-height: 1.2; cursor: pointer;
-  padding: var(--athpill-py) 0.7rem; border-radius: 4px; /* matches the sharper name chips */
+  padding: var(--athpill-py) 0.7rem; border-radius: var(--r-xs); /* matches the sharper name chips */
   border: 1px solid var(--accent); background: var(--accent); color: #fff;
 }
 .ath-sex-toggle.is-women { background: var(--gold); border-color: var(--gold); color: #1b212b; }
@@ -945,7 +979,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .athlete-details[open] { padding-bottom: 1rem; }
 .athlete-details-summary {
   display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer;
-  font-size: 0.85rem; font-weight: 600; color: var(--muted); list-style: none;
+  font-size: var(--fs-md); font-weight: 600; color: var(--muted); list-style: none;
 }
 .ad-sum-row { display: flex; align-items: center; gap: 0.4rem; }
 /* The collapsed Stats card title matches the COLLAPSED GRAPH / WORKOUTS section titles:
@@ -957,7 +991,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .athlete-details-summary::-webkit-details-marker { display: none; }
 .athlete-details-summary:hover,
 .athlete-details[open] > .athlete-details-summary { color: var(--accent); }
-.ad-caret { font-size: 0.8rem; color: var(--accent); font-weight: 700; transition: transform 0.15s; }
+.ad-caret { font-size: var(--fs-sm); color: var(--accent); font-weight: 700; transition: transform 0.15s ; }
 .athlete-details[open] .ad-caret { transform: rotate(180deg); color: var(--accent); }
 /* Collapsed: the "Body stats" title stays, with a tiny stat dashboard on the line
    below. Open: hide the dashboard (the full breakdown shows in the body). */
@@ -981,7 +1015,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   text-align: center; gap: 2px; min-height: 92px; padding: 0.4rem 0.5rem;
 }
 .ms-big { font-size: 1.9rem; font-weight: 800; line-height: 1.05; color: var(--text); letter-spacing: -0.01em; }
-.ms-lbl { font-size: 0.9rem; font-weight: 600; color: var(--accent); }
+.ms-lbl { font-size: var(--fs-base); font-weight: 600; color: var(--accent); }
 .ms-sub { font-size: 0.74rem; font-weight: 500; color: var(--muted); margin-top: 1px; }
 .ms-in { animation: msFade 0.35s ease; }
 @keyframes msFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -989,13 +1023,13 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ms-dots { display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: wrap; }
 .ms-dot {
   width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%;
-  background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s;
+  background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s ;
 }
 .ms-dot.is-on { background: var(--accent); transform: scale(1.25); }
 .ms-more {
   flex: none; min-height: var(--tap-min); display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--r-pill);
-  background: var(--bg); color: var(--accent); font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  background: var(--bg); color: var(--accent); font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
 }
 .ms-more:hover { border-color: var(--accent); }
 /* ── Graph "min" carousel: a manually-rotated reel of single-lift charts (mirrors the
@@ -1038,14 +1072,14 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
    label (the long metric-summary readout is hidden here to save room). */
 .gmini-foot .wa-graph-fold { flex: 0 0 auto; }
 .gmini-foot .wa-graph-fold-cur { display: none; }
-.gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s; }
+.gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s ; }
 .gmini-dot.is-on { background: var(--accent); transform: scale(1.25); }
-.athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: 0.9rem; font-weight: 600; }
+.athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: var(--fs-base); font-weight: 600; }
 .athlete-profile:empty { display: none; }
 .profile-specs { color: var(--text); }
 .nffmi-badge {
   display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 12px;
-  background: var(--accent); color: #fff; border-radius: 8px; cursor: help;
+  background: var(--accent); color: #fff; border-radius: var(--r-pill); cursor: help;
 }
 .nffmi-val { font-size: 1.1rem; font-weight: 800; line-height: 1; }
 .nffmi-lbl { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
@@ -1056,7 +1090,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .bc-masscol { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
 .bc-massbar {
   width: 88px; height: 200px; position: relative;
-  border-radius: 10px; overflow: hidden; border: 1px solid var(--line);
+  border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--line);
 }
 /* Every part of the bar is an absolutely-positioned block measured from the bottom. */
 .bc-blk { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; color: #fff; line-height: 1.05; }
@@ -1077,7 +1111,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .bc-seg-name { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.9; }
 .bc-seg-val { font-size: 0.82rem; font-weight: 800; }
 .bc-unit-toggle {
-  font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; min-width: 38px;
+  font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; min-width: 38px;
   padding: 3px 10px; border: 1px solid var(--accent); border-radius: var(--r-pill);
   background: var(--accent-soft); color: var(--accent);
 }
@@ -1086,7 +1120,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 /* Body composition (complex view): one compact line of "label value" chips, each
    with a ⓘ that expands its math panel below. No bars / ranges / ±. */
 .bodycomp { margin: 0.5rem 0 0.2rem; }
-.bc-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.4rem; font-size: 0.85rem; }
+.bc-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.4rem; font-size: var(--fs-md); }
 .bc-chip { display: inline-flex; align-items: baseline; gap: 0.25rem; white-space: nowrap; }
 .bc-c-lbl { font-size: 0.74rem; font-weight: 700; }
 .bc-c-val { font-weight: 800; }
@@ -1097,7 +1131,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   background: none; border: none; padding: 2px 4px; border-radius: 6px;
 }
 .bc-info:hover, .bc-info.is-open { color: var(--accent); background: var(--accent-soft); }
-.bc-panel { margin: 0.35rem 0 0.1rem; padding: 0.4rem 0.55rem; background: var(--accent-soft); border-radius: 8px; }
+.bc-panel { margin: 0.35rem 0 0.1rem; padding: 0.4rem 0.55rem; background: var(--accent-soft); border-radius: var(--r-pill); }
 .bodycomp-pot { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
 .bc-head { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; cursor: help; }
 /* Edit button sits on its own row ABOVE the stats (not beside them as a column). */
@@ -1119,15 +1153,15 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .s-bs-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .s-bs-name { font-weight: 700; }
 .s-bs-val { font-weight: 800; font-size: 1.1rem; color: var(--accent); }
-.s-bs-exp { margin: 0.2rem 0 0; font-size: 0.85rem; line-height: 1.4; }
+.s-bs-exp { margin: 0.2rem 0 0; font-size: var(--fs-md); line-height: 1.4; }
 /* S-ANL workouts history (built fresh, not from the full ANL). */
 .s-wo { margin-top: 0.8rem; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 0.9rem 1rem; }
 .s-wo-body { margin-top: 0.6rem; }
 .s-wo-search {
-  width: 100%; font: inherit; font-size: 0.9rem; padding: 7px 12px; margin-bottom: 0.5rem;
+  width: 100%; font: inherit; font-size: var(--fs-base); padding: 7px 12px; margin-bottom: 0.5rem;
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text);
 }
-.s-wo-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.s-wo-search:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .s-wo-day { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.4rem 0; border-top: 1px solid var(--line); }
 .s-wo-day:first-child { border-top: none; }
 .s-wo-date { flex: 0 0 4.2rem; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
@@ -1140,7 +1174,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .se-pick-row .se-add { flex: 0 0 auto; margin-bottom: 0.6rem; white-space: nowrap; }
 .se-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 0.6rem; min-width: 0; }
 .se-lbl { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
-.se-field input, .se-field select { width: 100%; min-width: 0; font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+.se-field input, .se-field select { width: 100%; min-width: 0; font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel); color: var(--text); }
 .se-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.8rem; }
 .se-bf { margin: 0.4rem 0 0.6rem; }
 .se-bf-lead { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
@@ -1149,24 +1183,24 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 /* The nFFMI each body-fat % implies, shown right under its input. */
 .se-bf-ffmi { display: block; margin-top: 2px; font-size: 0.66rem; font-weight: 700; color: var(--accent); text-align: center; font-variant-numeric: tabular-nums; }
 /* Auto-calculated average: read-only, visibly not an input. */
-.se-bf-avg-out { display: block; width: 100%; box-sizing: border-box; font: inherit; font-weight: 700; padding: 6px 9px; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); color: var(--muted); }
-.se-live { padding: 0.5rem 0.7rem; background: var(--accent-soft); border-radius: 8px; font-size: 0.86rem; margin-bottom: 0.7rem; }
+.se-bf-avg-out { display: block; width: 100%; box-sizing: border-box; font: inherit; font-weight: 700; padding: 6px 9px; border: 1px dashed var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
+.se-live { padding: 0.5rem 0.7rem; background: var(--accent-soft); border-radius: var(--r-pill); font-size: 0.86rem; margin-bottom: 0.7rem; }
 .se-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.se-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 7px 16px; }
-.se-reset { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; }
+.se-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: var(--r-pill); padding: 7px 16px; }
+.se-reset { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 14px; }
 .se-reset:disabled { opacity: 0.5; cursor: default; }
 .athlete-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
 .athlete-stats:empty { display: none; }
 .stat-chip {
   display: flex; flex-direction: column; gap: 1px; padding: 6px 12px;
-  background: var(--accent-soft); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill);
 }
 .stat-val { font-size: 0.95rem; font-weight: 700; color: var(--accent); }
 .stat-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 /* Momentum row: trend chips for the athlete's main lifts (▲/▼ kg/week). */
 .momentum { margin: 0 0 1.25rem; }
 .momentum:empty { display: none; }
-.mo-lead { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem; }
+.mo-lead { font-size: var(--fs-sm); font-weight: 600; margin-bottom: 0.4rem; }
 .mo-sub { font-weight: 400; }
 /* Trend-period toggle pill in the Momentum header. */
 .mo-period { font: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 0 7px; margin-left: 0.3rem; }
@@ -1174,7 +1208,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .mo-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .mo-chip {
   display: inline-flex; align-items: center; gap: 0.3rem;
-  font-size: 0.8rem; padding: 4px 10px; border-radius: var(--r-pill);
+  font-size: var(--fs-sm); padding: 4px 10px; border-radius: var(--r-pill);
   border: 1px solid var(--line); background: var(--panel);
 }
 .mo-arrow { font-size: 0.85em; }
@@ -1207,21 +1241,21 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .mnt-tier-sum::after { content: " ▸"; color: var(--muted); }
 .mnt-tier[open] > .mnt-tier-sum::after { content: " ▾"; }
 .mnt-tier[open] > .mnt-list { padding-bottom: 0.5rem; }
-.tb-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
+.tb-title { font-size: var(--fs-sm); font-weight: 600; margin-bottom: 0.35rem; }
 .tb-sub { font-weight: 400; }
 .tb-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--line); }
 .tb-seg { display: flex; align-items: center; justify-content: center; height: 100%; min-width: 0; overflow: hidden; }
 .tb-seg-lbl {
-  font-size: 0.68rem; font-weight: 600; color: #fff; white-space: nowrap;
+  font-size: var(--fs-2xs); font-weight: 600; color: #fff; white-space: nowrap;
   padding: 0 5px; overflow: hidden; text-overflow: ellipsis;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .ex-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.85rem; }
 .ex-filter[hidden] { display: none; }
 .ex-filter-lbl { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
-.ex-sort { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.ex-sort { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
 .ex-sort-btn {
-  padding: 6px 12px; font-size: 0.8rem; font-weight: 600; color: var(--muted);
+  padding: 6px 12px; font-size: var(--fs-sm); font-weight: 600; color: var(--muted);
   background: var(--bg); border: 0; cursor: pointer;
 }
 .ex-sort-btn + .ex-sort-btn { border-left: 1px solid var(--line); }
@@ -1229,12 +1263,12 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-sort-btn.is-active { color: #fff; background: var(--accent); }
 /* Search box spans the filter row so it sits on its own line above the controls. */
 .ex-search {
-  flex: 1 0 100%; font: inherit; font-size: 0.9rem; color: var(--text);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  flex: 1 0 100%; font: inherit; font-size: var(--fs-base); color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill);
   padding: 8px 12px;
 }
-.ex-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.ex-nottrained { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; color: var(--muted); font-weight: 600; cursor: pointer; }
+.ex-search:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.ex-nottrained { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; cursor: pointer; }
 /* Exercises in-page tab bar (List & stats | Compare graph) + kebab filters. */
 .ex-tabbar { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0 0 0.9rem; }
 .ex-tabs { display: flex; gap: 0.25rem; flex: 1 1 auto; }
@@ -1253,7 +1287,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   border-top-left-radius: 0; border-top-right-radius: 0; margin-top: 0;
 }
 .ex-tab {
-  background: none; border: none; color: var(--muted); font: inherit; font-size: 0.9rem;
+  background: none; border: none; color: var(--muted); font: inherit; font-size: var(--fs-base);
   cursor: pointer; padding: 0.6rem 0.9rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .ex-tab:hover { color: var(--text); }
@@ -1261,14 +1295,14 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-filters-wrap { position: relative; flex: none; }
 .ex-filters-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  width: 32px; height: 32px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; line-height: 1;
+  width: 32px; height: 32px; border-radius: var(--r-pill); cursor: pointer; font-size: 1.1rem; line-height: 1;
 }
 .ex-filters-btn[hidden] { display: none; }
 .ex-filters-btn:hover { color: var(--accent); border-color: var(--accent); }
 .ex-filters-menu {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-modal);
   display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 0.85rem 1rem; box-shadow: 0 6px 20px rgba(20, 24, 38, 0.12); min-width: 210px;
 }
 .ex-filters-menu[hidden] { display: none; }
@@ -1307,7 +1341,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .tier-badge {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.5rem; height: 1.5rem; border-radius: 6px; margin-right: 0.5rem;
-  font-weight: 800; color: #fff; font-size: 0.8rem;
+  font-weight: 800; color: #fff; font-size: var(--fs-sm);
 }
 
 /* By-category picker: chips above the list to choose which categories show. */
@@ -1325,7 +1359,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-levels { margin: 0 0 0.85rem; }
 .ex-levels[hidden] { display: none; }
 /* Collapsed "settings" disclosure so the hole-scaling config isn't inline in stats. */
-.exl-settings { border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); overflow: hidden; }
+.exl-settings { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--accent-soft); overflow: hidden; }
 .exl-settings-sum { cursor: pointer; list-style: none; padding: 0.5rem 0.7rem; font-size: 0.82rem; font-weight: 700; user-select: none; }
 .exl-settings-sum::-webkit-details-marker { display: none; }
 .exl-settings-sum::before { content: "▸ "; color: var(--muted); }
@@ -1344,7 +1378,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
    <tr>/<td> don't reliably honour touch-action on Chromium-on-Android anyway — a non-passive
    touchmove backstop in JS is the real fix for the swipe (PB-18). */
 .set-main, .set-main > td { touch-action: pan-y; }
-.set-main { transition: transform 0.18s ease, opacity 0.18s ease; }
+.set-main { transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
 .set-main.is-swiping { transition: none; will-change: transform; }
 /* Past the delete threshold the row turns red — "let go to delete". */
 .set-main.set-swipe-armed > td { background: color-mix(in srgb, var(--danger) 22%, transparent); }
@@ -1354,10 +1388,10 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .set-edit-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.7rem; align-items: flex-end; padding: 0.3rem 0; }
 .set-edit-f { display: flex; flex-direction: column; gap: 2px; font-size: 0.72rem; color: var(--muted); }
 .set-edit-f input {
-  width: 5.2rem; font: inherit; font-size: 0.9rem; color: var(--text); background: var(--bg);
+  width: 5.2rem; font: inherit; font-size: var(--fs-base); color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 7px; padding: 4px 7px; text-align: right;
 }
-.set-edit-f input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.set-edit-f input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* Assisted machine: editable dial value + the calculated real assistance beside it. */
 .set-edit-wreal { display: flex; align-items: center; gap: 0.4rem; }
 .set-edit-real { font-size: 0.78rem; font-weight: 700; color: var(--gold); white-space: nowrap; }
@@ -1399,7 +1433,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .set-uni.is-diff { color: #fff; background: var(--lens-compare, var(--accent)); }
 /* Per-side (R/L) editor row in the set edit panel: a tight inline group. */
 .set-side-grid { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; align-items: flex-end; width: 100%; padding-top: 0.2rem; border-top: 1px dashed var(--line); }
-.set-side-lbl { align-self: flex-end; font-weight: 700; font-size: 0.8rem; color: var(--muted); padding-bottom: 4px; }
+.set-side-lbl { align-self: flex-end; font-weight: 700; font-size: var(--fs-sm); color: var(--muted); padding-bottom: 4px; }
 .set-side-f .set-side-input { width: 3.4rem; }
 .health-restore, .health-restore-all { font: inherit; font-size: 0.74rem; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px; }
 .health-restore:hover, .health-restore-all:hover { border-color: var(--accent); }
@@ -1443,7 +1477,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .scale-edit-lvlmult { font-size: 0.78rem; white-space: nowrap; }
 /* Incline editor: cm-per-step conversions + a derived preview line. */
 .inc-unit { font-size: 0.62rem; margin-left: 1px; }
-.inc-prev { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: 0.68rem; margin: 0.25rem 0 0; }
+.inc-prev { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; font-size: var(--fs-2xs); margin: 0.25rem 0 0; }
 .inc-prev-item { white-space: nowrap; }
 /* Per-set intensity colours a LEFT BAR on the set row (red = hard, orange = mid, grey =
    warm-up). Was a full row OUTLINE; the owner wanted just the left side. The table is
@@ -1461,13 +1495,13 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   box-shadow: inset 3px 0 0 var(--gold), inset 6px 0 0 var(--eff-col);
 }
 /* Machine-type tags on a set row (grey = info, not clickable; gold = needs review). */
-.set-grav { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--muted); background: var(--line); }
-.set-review { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.02em; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--gold); background: var(--gold-soft); }
+.set-grav { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: var(--r-xs); padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--muted); background: var(--line); }
+.set-review { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.02em; border-radius: var(--r-xs); padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--gold); background: var(--gold-soft); }
 /* Assisted-machine (negative counterweight) auto tag on a set row. */
-.set-machine { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--accent); background: var(--accent-soft); }
+.set-machine { display: inline-block; font-size: 0.62em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: var(--r-xs); padding: 1px 4px; margin-right: 4px; vertical-align: middle; color: var(--accent); background: var(--accent-soft); }
 /* Compact machine tag for the COLLAPSED set list (grav / ⚠), same colours as the
    expanded .set-grav/.set-review but tighter so it rides inline with the set chips. */
-.wo-mach { display: inline-block; font-size: 0.6em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 4px; padding: 0 3px; vertical-align: middle; color: var(--muted); background: var(--line); }
+.wo-mach { display: inline-block; font-size: 0.6em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: var(--r-xs); padding: 0 3px; vertical-align: middle; color: var(--muted); background: var(--line); }
 .wo-mach-review { text-transform: none; color: var(--gold); background: var(--gold-soft); }
 .wo-mach-asst { color: var(--accent); background: var(--accent-soft); }
 /* Machine-type toggle in the Analysis selector (single mode). */
@@ -1475,7 +1509,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .wa-machine-note { margin: 0.35rem 0 0; font-size: 0.78rem; }
 .wa-machine-review { color: var(--gold); }
-.ex-combine-lbl { font-size: 0.75rem; }
+.ex-combine-lbl { font-size: var(--fs-xs); }
 .ex-combine-chip {
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
   color: var(--text); font: inherit; font-size: 0.76rem; font-weight: 600;
@@ -1493,7 +1527,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-merge-members { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
 .ex-merge-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft); font-size: 0.78rem; padding: 0.15rem 0.55rem; }
 .ex-merge-sep { border: none; background: none; color: var(--bad, #c0392b); font: inherit; font-weight: 700; cursor: pointer; padding: 0 0.1rem; }
-.ex-merge-dissolve { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0.25rem 0.6rem; cursor: pointer; }
+.ex-merge-dissolve { border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); font: inherit; font-size: 0.78rem; padding: 0.25rem 0.6rem; cursor: pointer; }
 .ex-merge-dissolve:hover { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
 /* The "+ combine with…" custom dropdown, sized to sit inline with the chips. */
 .ex-combine-dd .xdd-btn { font-size: 0.78rem; padding: 0.22rem 0.6rem; border-radius: var(--r-pill); }
@@ -1543,20 +1577,20 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 /* The picker popup. */
 .setcol-menu {
   position: fixed; z-index: 90; min-width: 168px; max-width: 80vw;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 8px 28px rgba(0,0,0,0.22); padding: 0.3rem;
 }
 .setcol-menu-title { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem 0.3rem; }
 .setcol-opt {
   display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left;
-  font: inherit; font-size: 0.85rem; cursor: pointer; background: none; border: none;
+  font: inherit; font-size: var(--fs-md); cursor: pointer; background: none; border: none;
   border-radius: 6px; padding: 7px 8px; color: var(--text);
 }
 .setcol-opt:hover { background: var(--accent-soft); }
 .setcol-opt.is-on { color: var(--accent); font-weight: 700; }
 .setcol-opt-tag {
   flex: 0 0 auto; min-width: 2.2em; text-align: center; font-size: 0.74rem; font-weight: 700;
-  color: var(--muted); background: var(--accent-soft); border-radius: 4px; padding: 1px 5px;
+  color: var(--muted); background: var(--accent-soft); border-radius: var(--r-xs); padding: 1px 5px;
 }
 .setcol-opt.is-on .setcol-opt-tag { color: var(--accent); }
 .tier-S { background: #b8902f; }
@@ -1571,7 +1605,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .period-dd-summary {
   cursor: pointer; list-style: none; user-select: none;
   display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--panel); color: var(--text); font-size: 0.82rem; font-weight: 600;
 }
 .period-dd-summary::-webkit-details-marker { display: none; }
@@ -1582,13 +1616,13 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .period-dd-menu {
   position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 100%;
   display: flex; flex-direction: column; gap: 1px; padding: 4px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.12);
 }
 .period-dd-opt {
   cursor: pointer; text-align: left; white-space: nowrap;
   padding: 7px 12px; border: none; border-radius: 6px; background: none;
-  font: inherit; font-size: 0.85rem; color: var(--text);
+  font: inherit; font-size: var(--fs-md); color: var(--text);
 }
 .period-dd-opt:hover { background: var(--accent-soft); color: var(--accent); }
 .period-dd-opt.is-active { color: var(--accent); font-weight: 700; }
@@ -1601,8 +1635,8 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .xdd[hidden] { display: none; } /* enhanced selects can be hidden via the [hidden] attr */
 .xdd-btn {
   cursor: pointer; display: inline-flex; align-items: center; justify-content: space-between; gap: 0.4rem;
-  width: 100%; padding: 6px 11px; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--bg); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600;
+  width: 100%; padding: 6px 11px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--text); font: inherit; font-size: var(--fs-md); font-weight: 600;
 }
 .xdd-btn:hover, .xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
 .xdd-caret { color: var(--muted); font-size: 0.7rem; }
@@ -1619,10 +1653,10 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ex-switch-btn .xdd-caret { font-size: 0.62em; }
 .ex-switch-dd .xdd-menu { font-weight: 400; }
 .xdd-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; min-width: 100%;
+  position: absolute; z-index: var(--z-drop); top: calc(100% + 4px); left: 0; min-width: 100%;
   max-height: 60vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 1px; padding: 4px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 6px 18px rgba(20, 24, 38, 0.12);
 }
 .xdd-menu[hidden] { display: none; }
@@ -1630,7 +1664,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .xdd-opt {
   cursor: pointer; text-align: left; white-space: nowrap;
   padding: 7px 12px; border: none; border-radius: 6px; background: none;
-  font: inherit; font-size: 0.85rem; color: var(--text);
+  font: inherit; font-size: var(--fs-md); color: var(--text);
 }
 .xdd-opt:hover { background: var(--accent-soft); color: var(--accent); }
 .xdd-opt.is-active { color: var(--accent); font-weight: 700; }
@@ -1641,7 +1675,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .record-item {
   display: flex; flex-direction: column; gap: 2px;
   background: var(--accent-soft); border: 1px solid var(--line);
-  border-radius: 8px; padding: 8px 14px; min-width: 130px;
+  border-radius: var(--r-pill); padding: 8px 14px; min-width: 130px;
 }
 .record-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .record-value { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
@@ -1651,12 +1685,12 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .exercise-stats { margin: 0 0 1rem; }
 .exercise-stats-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted); list-style: none;
 }
 .exercise-stats-summary::-webkit-details-marker { display: none; }
 .exercise-stats-summary:hover,
 .exercise-stats[open] > .exercise-stats-summary { color: var(--accent); }
-.es-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; }
+.es-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s ; }
 .exercise-stats[open] .es-caret { transform: rotate(180deg); color: var(--accent); }
 .exercise-stats-body { margin-top: 0.85rem; }
 /* Rep-max targets (5RM/10RM/15RM) derived from the best 1RM, under the record card. */
@@ -1667,7 +1701,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .target-chip {
   display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: 8px; padding: 6px 12px; min-width: 84px;
+  border-radius: var(--r-pill); padding: 6px 12px; min-width: 84px;
 }
 .target-reps { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .target-weight { font-size: 1.05rem; font-weight: 700; color: var(--text); }
@@ -1676,12 +1710,12 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .exercise-calc[hidden] { display: none; }
 .exercise-calc-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted); list-style: none;
 }
 .exercise-calc-summary::-webkit-details-marker { display: none; }
 .exercise-calc-summary:hover,
 .exercise-calc[open] > .exercise-calc-summary { color: var(--accent); }
-.ec-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; }
+.ec-caret { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s ; }
 .exercise-calc[open] .ec-caret { transform: rotate(180deg); color: var(--accent); }
 .exercise-calc-body { margin-top: 0.75rem; max-width: 360px; }
 .ecalc-table { width: 100%; }
@@ -1692,7 +1726,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 7px; padding: 6px 9px; text-align: right;
 }
-.ecalc-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ecalc-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .ecalc-del {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 1.1rem; line-height: 1; padding: 0 4px; border-radius: 6px;
@@ -1701,7 +1735,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ecalc-addrow {
   margin-top: 0.5rem; background: var(--accent-soft); border: 1px solid var(--line);
   color: var(--accent); font: inherit; font-size: 0.82rem; font-weight: 600;
-  cursor: pointer; border-radius: 8px; padding: 6px 12px;
+  cursor: pointer; border-radius: var(--r-pill); padding: 6px 12px;
 }
 .ecalc-addrow:hover { border-color: var(--accent); }
 .ecalc-note { font-size: 0.72rem; margin: 0.55rem 0 0; }
@@ -1715,7 +1749,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .wk-chip {
   display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: 8px; padding: 6px 12px; min-width: 70px;
+  border-radius: var(--r-pill); padding: 6px 12px; min-width: 70px;
 }
 .wk-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
 .wk-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
@@ -1728,35 +1762,35 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .ai-soon { margin-top: 1.5rem; }
 .ai-soon > summary {
   cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 0.5rem;
-  color: var(--muted); font-size: 0.85rem; font-weight: 600; padding: 6px 0;
+  color: var(--muted); font-size: var(--fs-md); font-weight: 600; padding: 6px 0;
 }
 .ai-soon > summary::-webkit-details-marker { display: none; }
 .ai-soon > summary::before { content: "▸"; font-size: 0.7rem; }
 .ai-soon[open] > summary::before { content: "▾"; }
 .soon-badge {
-  font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 8px;
 }
 .summary-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .primary-btn {
-  background: var(--accent); color: #fff; border: none; border-radius: 8px;
-  padding: 8px 14px; font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: #fff; border: none; border-radius: var(--r-pill);
+  padding: 8px 14px; font: inherit; font-size: var(--fs-base); font-weight: 600; cursor: pointer;
 }
 .primary-btn:hover { filter: brightness(1.06); }
 .primary-btn:disabled { opacity: 0.6; cursor: default; }
 .summary-out { margin: 0.75rem 0 0; line-height: 1.55; }
 .summary-out:empty { display: none; }
-.inline-label { display: inline-flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+.inline-label { display: inline-flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); margin-bottom: 1rem; }
 .inline-label select {
   background: var(--bg); color: var(--text);
-  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 0.95rem;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 10px; font-size: 0.95rem;
 }
-.inline-label select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.pager { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.85rem; font-size: 0.85rem; }
+.inline-label select:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.pager { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.85rem; font-size: var(--fs-md); }
 .pager:empty { display: none; }
 .page-btn {
   background: var(--bg); border: 1px solid var(--line); color: var(--text);
-  font: inherit; font-size: 0.85rem; cursor: pointer; padding: 5px 12px; border-radius: 8px;
+  font: inherit; font-size: var(--fs-md); cursor: pointer; padding: 5px 12px; border-radius: var(--r-pill);
 }
 .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .page-btn:disabled { opacity: 0.45; cursor: default; }
@@ -1776,12 +1810,12 @@ main { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
   border-top: 1px solid var(--line);
   text-align: center;
 }
-.appfoot .status { font-size: 0.85rem; color: var(--muted); }
+.appfoot .status { font-size: var(--fs-md); color: var(--muted); }
 .controls {
   display: flex; flex-wrap: wrap; gap: 1rem; align-items: end;
   margin-bottom: 1.5rem;
 }
-.controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.controls label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
 .controls label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
 /* Leaderboard exercise picker: a plain word with a small caret hinting it's tappable. */
 .lb-exercise-bar { margin-bottom: 0.4rem; }
@@ -1798,7 +1832,7 @@ select.plain-select:hover, select.plain-select:focus { color: var(--accent); out
 select.subtle-select {
   appearance: none; -webkit-appearance: none; -moz-appearance: none;
   border: 1px solid var(--line); background: var(--bg); color: var(--text);
-  font: inherit; font-size: 0.82rem; padding: 5px 26px 5px 10px; border-radius: 8px; cursor: pointer;
+  font: inherit; font-size: 0.82rem; padding: 5px 26px 5px 10px; border-radius: var(--r-pill); cursor: pointer;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
   background-repeat: no-repeat; background-position: right 8px center;
 }
@@ -1809,7 +1843,7 @@ select.subtle-select:hover, select.subtle-select:focus {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;
 }
-.lb-subtitle { margin: 0; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.lb-subtitle { margin: 0; font-size: var(--fs-md); color: var(--muted); font-weight: 600; }
 .lb-row { cursor: pointer; }
 .lb-detail { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; padding: 0.5rem 0.25rem; }
 .lb-detail-item { display: flex; flex-direction: column; gap: 1px; }
@@ -1819,7 +1853,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Compact inline filter groups (bodyweight range, chart-axis range). */
 .filter-group {
   display: inline-flex; align-items: center; gap: 4px;
-  border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 8px; background: var(--bg);
 }
 .filter-lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 600; }
 .filter-dash { color: var(--muted); }
@@ -1837,7 +1871,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 .calc-tabs { display: flex; gap: 4px; margin: 0 0 0.75rem; flex-wrap: wrap; }
 .calc-tab {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer;
+  border-radius: var(--r-pill); padding: 6px 12px; font: inherit; font-size: var(--fs-md); cursor: pointer;
 }
 .calc-tab:hover { border-color: var(--accent); color: var(--accent); }
 .calc-tab.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
@@ -1845,17 +1879,17 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-calendar { margin: 0 0 1.25rem; }
 /* Year-view controls: single/all toggle + the exercise/category filter. */
 .heat-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin-bottom: 0.7rem; }
-.cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.cal-mode-btn { padding: 5px 14px; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.cal-mode-btn { padding: 5px 14px; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
 .cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
 .cal-mode-btn:hover { color: var(--text); }
 .cal-mode-btn.is-active { color: #fff; background: var(--accent); }
 /* "Colour by" picker for the all-exercises calendar. */
-.cal-colorby { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); }
-.cal-colorby-sel { font: inherit; font-size: 0.8rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
+.cal-colorby { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--fs-sm); color: var(--muted); }
+.cal-colorby-sel { font: inherit; font-size: var(--fs-sm); padding: 4px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); cursor: pointer; }
 /* Segmented toggle (e.g. Workouts View: By day / By week). */
-.seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg-btn { padding: 6px 12px; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.seg-btn { padding: 6px 12px; font: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
 .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
 .seg-btn:hover { color: var(--text); }
 .seg-btn.is-active { color: #fff; background: var(--accent); }
@@ -1863,8 +1897,8 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Custom calendar date-picker popup (rule 20: not the native picker). A floating month
    grid placed by JS (position-fixed, clamped to the viewport). */
 .dp-pop {
-  position: fixed; z-index: 60; width: 15rem; max-width: calc(100vw - 12px);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  position: fixed; z-index: var(--z-modal); width: 15rem; max-width: calc(100vw - 12px);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 8px 24px rgba(20, 24, 38, 0.22); padding: 0.5rem; user-select: none;
 }
 .dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem; }
@@ -1891,7 +1925,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* The merged-group source lift(s) after the group name — smaller + grey so "Bicep+"
    stays the headline and "(BB Curl)" reads as the where-from footnote. */
 .wo-exname-src { font-size: 0.78em; font-weight: 400; color: var(--muted); }
-.wo-setlist { font-size: 0.85rem; color: var(--accent); } /* weights + reps in blue */
+.wo-setlist { font-size: var(--fs-md); color: var(--accent); } /* weights + reps in blue */
 /* Period buckets (week / month modes) tint each SESSION's run of sets with a
    faint rounded band, so distinct sessions read at a glance without loud dividers.
    box-decoration-break keeps the band tidy when the set list wraps to more lines. */
@@ -1917,17 +1951,17 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
    column (right-aligned), then the name + sets — so every exercise name lines up
    at the same x regardless of the 1RM's width (or its absence). */
-.wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr; align-items: baseline; column-gap: 0.45rem; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+.wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr; align-items: baseline; column-gap: 0.45rem; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
 /* Swipe an exercise line right to delete its sets that day. While dragging we follow the
    finger (no transition); past the commit threshold a red tint shows it'll delete. */
 .wo-ex-line.wo-ex-swiping { transition: none; will-change: transform; }
 .wo-ex-line.wo-ex-willdel { background: color-mix(in srgb, var(--remove) 16%, transparent); border-radius: 6px; }
 /* Bottom toast (e.g. "Deleted … · Undo"). */
 .app-toast {
-  position: fixed; left: 50%; bottom: 5.2rem; transform: translate(-50%, 1rem); z-index: 200;
+  position: fixed; left: 50%; bottom: 5.2rem; transform: translate(-50%, 1rem); z-index: var(--z-top);
   display: flex; align-items: center; gap: 0.8rem; max-width: 92vw;
-  background: var(--text); color: var(--bg); border-radius: 10px; padding: 0.6rem 0.9rem;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.3); font-size: 0.85rem; opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease;
+  background: var(--text); color: var(--bg); border-radius: var(--r-md); padding: 0.6rem 0.9rem;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.3); font-size: var(--fs-md); opacity: 0; transition: opacity var(--dur-normal) ease, transform var(--dur-normal) ease;
 }
 .app-toast.is-in { opacity: 1; transform: translate(-50%, 0); }
 .app-toast-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1956,14 +1990,14 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hh-grid { --hh-card-w: clamp(15rem, 86vw, 32rem); display: grid; gap: 0 0.6rem; overflow: auto; overscroll-behavior: contain; max-height: 72vh; -webkit-overflow-scrolling: touch; padding-bottom: 0.4rem; align-items: stretch; }
 /* Backing card per column (spans all rows) gives the bordered card look behind
    the transparent header + cells. */
-.hh-card { grid-row: 1 / -1; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); z-index: 0; }
+.hh-card { grid-row: 1 / -1; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); z-index: 0; }
 /* Date header sticks to the top of the scroll box (stays visible when a card's
    rows scroll vertically) but still moves sideways with its card. Opaque so the
    scrolling rows don't show through. */
-.hh-head { position: sticky; top: 0; z-index: 3; background: var(--panel); font-weight: 700; font-size: 0.9rem; padding: 0.5rem 0.6rem 0.35rem; border-bottom: 1px solid var(--line); }
+.hh-head { position: sticky; top: 0; z-index: 3; background: var(--panel); font-weight: 700; font-size: var(--fs-base); padding: 0.5rem 0.6rem 0.35rem; border-bottom: 1px solid var(--line); }
 .hh-cell { position: relative; z-index: 1; display: grid; grid-template-columns: 3.2rem 1fr; column-gap: 0.4rem; align-items: baseline; padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--line); }
 .hh-cell-empty { opacity: 0.4; }
-.hh-rm { text-align: right; font-weight: 700; color: var(--gold); font-size: 0.85rem; }
+.hh-rm { text-align: right; font-weight: 700; color: var(--gold); font-size: var(--fs-md); }
 /* Rest period = thin full-height sliver between cards; collapsed run = a dashed
    discontinuity (the >20-day gap), matching the vertical history. */
 .hh-card.hh-rest { background: var(--rest-fill); border: none; border-radius: 0; opacity: 0.7; }
@@ -1976,7 +2010,7 @@ select.subtle-select:hover, select.subtle-select:focus {
    variation tags (.wo-var-chip), so it reads as a tag — not another blue number. */
 .wo-scale {
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;
-  border-radius: 4px; padding: 0 4px; line-height: 1.5; vertical-align: middle; margin: 0 1px 0 3px;
+  border-radius: var(--r-xs); padding: 0 4px; line-height: 1.5; vertical-align: middle; margin: 0 1px 0 3px;
   color: var(--accent); background: var(--accent-soft); /* default / EASIER (×<1): cool */
 }
 .wo-scale-up { color: var(--gold); background: var(--gold-soft); } /* HARDER (×>1): warm/gold */
@@ -2003,7 +2037,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 .rm-frac .rm-den { padding: 0 0.3rem; }
 /* Variation chips (b2w / f2w / ladder / free / band …) shown per set. */
 .wo-var-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 4px; vertical-align: middle; }
-.wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: 4px; padding: 0 4px; line-height: 1.5; }
+.wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: var(--r-xs); padding: 0 4px; line-height: 1.5; }
 .wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
 .wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
@@ -2011,7 +2045,7 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
 /* The day's record (best) estimated 1RM for a lift — its own left column, right-
    aligned so the digits sit next to the exercise name they belong to. */
-.wo-1rm { font-size: 0.85rem; font-weight: 700; color: var(--gold); white-space: nowrap; text-align: right; }
+.wo-1rm { font-size: var(--fs-md); font-weight: 700; color: var(--gold); white-space: nowrap; text-align: right; }
 /* The golden value is a button when it has a value (tap to pick the metric) — strip the
    native chrome so it reads exactly like the old gold number, just tappable. */
 button.wo-summary { font: inherit; font-weight: 700; color: var(--gold); background: none; border: none; padding: 0; cursor: pointer; }
@@ -2022,7 +2056,7 @@ button.wo-summary:hover { text-decoration: underline; text-decoration-thickness:
 sup.wr-bw { font-size: 0.85em; }
 .heat-filter {
   font: inherit; font-size: 0.82rem; color: var(--text); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; max-width: 60vw;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 5px 10px; max-width: 60vw;
 }
 .heat-filter:focus { outline: none; border-color: var(--accent); }
 /* Year heatmap (GitHub-contribution style): one continuous grid of weeks (never
@@ -2040,7 +2074,7 @@ sup.wr-bw { font-size: 0.85em; }
   gap: 3px;
 }
 .hm-wrow { display: grid; gap: 3px; margin-top: 10px; }
-.hm-wcell { height: 36px; border-radius: 4px; } /* 2× day height, rounder corners */
+.hm-wcell { height: 36px; border-radius: var(--r-xs); } /* 2× day height, rounder corners */
 .hm-block + .hm-block { margin-top: 1rem; } /* stacked years in "All years" mode */
 /* Each square has a thin month-coloured outline (border-box keeps it 18px). Rest
    days alternate by month: white / very-light-gray (see --hm-rest-*). Active days
@@ -2081,7 +2115,7 @@ sup.wr-bw { font-size: 0.85em; }
 .xdd-check { margin-left: 4px; color: var(--accent); font-weight: 700; }
 .xdd-clear { font-style: italic; }
 /* Category chips in the heatmap legend */
-.hm-cat-chip { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.68rem; font-weight: 600; color: #fff; margin-right: 4px; }
+.hm-cat-chip { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: var(--fs-2xs); font-weight: 600; color: #fff; margin-right: 4px; }
 /* Odd months: very light gray rest squares + a slightly darker outline. */
 .hm-cell.hm-modd { border-color: var(--hm-bd-odd); }
 .hm-cell.hm-modd.lvl-0 { background: var(--hm-rest-odd); }
@@ -2100,7 +2134,7 @@ sup.wr-bw { font-size: 0.85em; }
    colour pill per group. Tap a pill to show only that group. */
 .hm-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.35rem; margin-top: 0.4rem; }
 .hm-groupby { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); margin-right: 0.2rem; }
-.hm-groupby-sel { font: inherit; font-size: 0.78rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
+.hm-groupby-sel { font: inherit; font-size: 0.78rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); cursor: pointer; }
 .hm-pill {
   display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer;
   font: inherit; font-size: 0.76rem; font-weight: 600; color: var(--text);
@@ -2115,21 +2149,21 @@ sup.wr-bw { font-size: 0.85em; }
 .cal-head strong { font-size: 0.95rem; min-width: 9.5rem; text-align: center; }
 .cal-nav {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; width: 30px; height: 30px; font-size: 1rem; cursor: pointer; line-height: 1;
+  border-radius: var(--r-pill); width: 30px; height: 30px; font-size: 1rem; cursor: pointer; line-height: 1;
 }
 .cal-nav:hover { border-color: var(--accent); color: var(--accent); }
-.cal-count { margin-left: auto; font-size: 0.8rem; }
+.cal-count { margin-left: auto; font-size: var(--fs-sm); }
 /* "Tag alone" paint-mode button: outlined when idle, solid red when armed. */
 .cal-tagmode {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; line-height: 1;
+  border-radius: var(--r-pill); padding: 0.3rem 0.7rem; font-size: var(--fs-sm); cursor: pointer; line-height: 1;
 }
 .cal-tagmode:hover { border-color: #e23b3b; color: #e23b3b; }
 .cal-tagmode.is-on { background: #e23b3b; border-color: #e23b3b; color: #fff; }
 /* Heatmap group/all quick toggle. */
 .heat-grp-toggle {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer; line-height: 1;
+  border-radius: var(--r-pill); padding: 0.3rem 0.7rem; font-size: var(--fs-sm); cursor: pointer; line-height: 1;
 }
 .heat-grp-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .heat-grp-toggle.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -2146,7 +2180,7 @@ sup.wr-bw { font-size: 0.85em; }
 .cal-cell {
   position: relative; aspect-ratio: 1 / 1; min-height: 34px;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--line); border-radius: 8px; font-size: 0.85rem; color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-pill); font-size: var(--fs-md); color: var(--text);
 }
 .cal-cell.empty { border: none; }
 .cal-cell.trained { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
@@ -2162,13 +2196,13 @@ sup.wr-bw { font-size: 0.85em; }
 /* Compact, top-aligned single control (e.g. the athlete picker). */
 .controls.compact { margin-bottom: 1rem; }
 .controls.compact label { flex: 0 0 auto; }
-.controls.compact select { font-size: 0.85rem; padding: 5px 8px; }
+.controls.compact select { font-size: var(--fs-md); padding: 5px 8px; }
 .controls select, .controls input[type="search"] {
   background: var(--bg); color: var(--text);
-  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 0.95rem;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 10px; font-size: 0.95rem;
 }
 .controls select:focus, .controls input[type="search"]:focus {
-  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus);
 }
 .panel {
   background: var(--panel); border: 1px solid var(--line);
@@ -2183,7 +2217,7 @@ sup.wr-bw { font-size: 0.85em; }
   background: none; border: none; box-shadow: none; border-radius: 0;
   padding-left: 0; padding-right: 0; padding-top: 0.5rem;
 }
-.muted { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+.muted { color: var(--muted); font-weight: 400; font-size: var(--fs-md); }
 .chart-wrap { position: relative; height: 260px; margin-bottom: 1rem; }
 /* Progress graphs get maximum real-estate: full panel width, tall canvas, and
    a floating "Center" button that snaps the pan/zoom back onto the data. */
@@ -2214,7 +2248,7 @@ sup.wr-bw { font-size: 0.85em; }
 /* The Exercises drill-in graph is shorter (~30%) so the page scrolls more easily;
    the standalone Progress tab keeps the taller full-height version. */
 .exercise-progress .chart-wrap--big { height: 49vh; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
 .data-table th, .data-table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .data-table th { color: var(--muted); font-weight: 600; cursor: default; }
 .data-table tbody tr:hover { background: var(--accent-soft); }
@@ -2249,7 +2283,7 @@ sup.wr-bw { font-size: 0.85em; }
 }
 /* "alone" tag toggle on each session — faint until tagged, accent when on. */
 .wo-alone {
-  margin-left: 0.5rem; font: inherit; font-size: 0.68rem; font-weight: 700;
+  margin-left: 0.5rem; font: inherit; font-size: var(--fs-2xs); font-weight: 700;
   border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 7px;
   background: var(--panel); color: var(--muted); cursor: pointer; vertical-align: middle;
 }
@@ -2335,9 +2369,9 @@ sup.wr-bw { font-size: 0.85em; }
 .ex-repmax-bar .ex-repmax-edit .muted { font-weight: 400; }
 .ex-repmax-edit input {
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  border-radius: 8px; padding: 6px 9px; font-size: 0.9rem; font-weight: 400; width: 9rem;
+  border-radius: var(--r-pill); padding: 6px 9px; font-size: var(--fs-base); font-weight: 400; width: 9rem;
 }
-.ex-repmax-edit input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ex-repmax-edit input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* Records table: keep the RM column headers/numbers on one line (don't wrap
    "1RM" → "1R / M"); let a long exercise name ellipsize instead of squeezing
    those columns. */
@@ -2364,10 +2398,10 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-controls-fold[open] .wo-controls {
   /* PB-17: use position:fixed + JS clampMenuIntoView (same as PB-10 / .wa-sel-cog-menu)
      so the popup is never clipped regardless of where the ⚙ sits on the row. */
-  position: fixed; z-index: 40; left: 0; top: 0;
+  position: fixed; z-index: var(--z-drop); left: 0; top: 0;
   max-width: calc(100vw - 12px); margin: 0; padding: 0.8rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
 }
 /* DJ-console display options: a tight grid of tiny toggle buttons (no labels),
    ~1/5th the size of the old labelled stack. Every control is one button that
@@ -2396,7 +2430,7 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-head-row .wo-dj-btn {
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  font-size: 0.9rem; min-width: 3.4rem; padding: 6px 8px; line-height: 1.05;
+  font-size: var(--fs-base); min-width: 3.4rem; padding: 6px 8px; line-height: 1.05;
 }
 .wo-head-row .wo-dj-btn::after {
   content: attr(data-sub);
@@ -2412,12 +2446,12 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-hidden-toggle { font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--gold); background: rgba(184,144,47,0.14); color: #8a6d1f; }
 .wo-hidden-toggle:hover { filter: brightness(0.97); }
 /* "Plan workout" button at the top of the history. */
-.wo-plan-btn { font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 4px 12px; border-radius: var(--r-pill); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min); }
+.wo-plan-btn { font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; white-space: nowrap; padding: 4px 12px; border-radius: var(--r-pill); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min); }
 .wo-plan-btn:hover { background: var(--accent); color: #fff; }
 /* Plan-workout overlay: one tappable row per suggested lift, a bar showing how far behind. */
 .plan-empty { padding: 1rem 0; font-size: 0.95rem; }
 .plan-list { display: flex; flex-direction: column; gap: 0.4rem; }
-.plan-row { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.plan-row { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
 .plan-row:hover { border-color: var(--accent); }
 .plan-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-soft); z-index: 0; }
 .plan-main, .plan-nums { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
@@ -2452,7 +2486,7 @@ sup.wr-bw { font-size: 0.85em; }
 #tab-athlete .data-table td, #tab-athlete .data-table th { overflow-wrap: anywhere; }
 .ex-row, .wo-row, .wo-ex-row, .wk-row, .rec-row { cursor: pointer; }
 .ex-row:hover, .wo-row:hover, .wo-ex-row:hover, .wk-row:hover, .rec-row:hover { background: var(--accent-soft); }
-.caret { display: inline-block; margin-right: 0.5rem; color: var(--accent); transition: transform 0.15s; }
+.caret { display: inline-block; margin-right: 0.5rem; color: var(--accent); transition: transform 0.15s ; }
 .ex-row.open, .wo-row.open, .wo-ex-row.open, .wk-row.open { background: var(--accent-soft); }
 .ex-row.open > td .caret, .wo-row.open > td .caret, .wo-ex-row.open > td .caret, .wk-row.open > td .caret { transform: rotate(90deg); }
 /* Weekly exercise drill-in: the date is a header row above that day's sets. */
@@ -2479,7 +2513,7 @@ sup.wr-bw { font-size: 0.85em; }
 .workout-sets { margin: 0 0 1rem; }
 .workout-sets-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted); list-style: none;
 }
 .workout-sets-summary::-webkit-details-marker { display: none; }
 .workout-sets-summary:hover, .workout-sets[open] > .workout-sets-summary { color: var(--accent); }
@@ -2491,13 +2525,13 @@ sup.wr-bw { font-size: 0.85em; }
 .exercise-compare[hidden] { display: none; }
 /* The sets behind the compare graph, listed under it. */
 .cmp-sets { margin-top: 0.6rem; }
-.cmp-sets-lbl { font-size: 0.75rem; margin-bottom: 0.3rem; }
-.cmp-sets-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.cmp-sets-lbl { font-size: var(--fs-xs); margin-bottom: 0.3rem; }
+.cmp-sets-scroll { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-pill); }
 .cmp-sets-scroll table { margin: 0; }
 .cmp-setdot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 0.4rem; vertical-align: middle; }
 .exercise-compare-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted); list-style: none;
 }
 .exercise-compare-summary::-webkit-details-marker { display: none; }
 .exercise-compare-summary:hover, .exercise-compare[open] > .exercise-compare-summary { color: var(--accent); }
@@ -2513,7 +2547,7 @@ sup.wr-bw { font-size: 0.85em; }
 .compare-group {
   background: none; border: 1px solid var(--line); color: var(--text);
   font: inherit; font-size: 0.78rem; cursor: pointer;
-  padding: 0.25rem 0.6rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.25rem 0.6rem; border-radius: var(--r-pill); display: inline-flex; align-items: center; gap: 0.3rem;
 }
 .compare-group:hover { border-color: var(--gc, var(--accent)); }
 .compare-group.is-active { background: var(--gc, var(--accent)); color: #fff; border-color: var(--gc, var(--accent)); font-weight: 600; }
@@ -2521,17 +2555,17 @@ sup.wr-bw { font-size: 0.85em; }
 .tier-pick { padding: 0.2rem 0.5rem; }
 .compare-clear {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  font: inherit; font-size: 0.75rem; cursor: pointer; padding: 0.25rem 0.6rem; border-radius: 8px; margin-left: auto;
+  font: inherit; font-size: var(--fs-xs); cursor: pointer; padding: 0.25rem 0.6rem; border-radius: var(--r-pill); margin-left: auto;
 }
 .compare-clear:hover { color: var(--danger); border-color: var(--danger); }
 /* Search + selected-count above the chips, so a long lift list stays manageable. */
 .compare-chips-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
 .compare-search {
-  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.85rem;
-  padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: 8px;
+  flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--fs-md);
+  padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--panel); color: var(--text);
 }
-.compare-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.compare-search:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .compare-selcount { flex: none; font-size: 0.78rem; white-space: nowrap; }
 /* Cap the chip area so even "show all" scrolls instead of pushing the graph down. */
 .compare-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem; max-height: 9.5rem; overflow-y: auto; }
@@ -2540,7 +2574,7 @@ sup.wr-bw { font-size: 0.85em; }
 #compareView { margin-bottom: 0.6rem; }
 .compare-chip {
   background: none; border: 1px solid var(--line); color: var(--muted);
-  font: inherit; font-size: 0.8rem; cursor: pointer;
+  font: inherit; font-size: var(--fs-sm); cursor: pointer;
   padding: 0.3rem 0.7rem; border-radius: var(--r-pill);
 }
 .compare-chip:hover { color: var(--text); }
@@ -2567,11 +2601,11 @@ sup.wr-bw { font-size: 0.85em; }
 .muscle-map { margin: 0.75rem 0 0; }
 .muscle-map-summary {
   display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-  font-size: 0.8rem; font-weight: 600; color: var(--muted); list-style: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted); list-style: none;
 }
 .muscle-map-summary::-webkit-details-marker { display: none; }
 .muscle-map-summary:hover, .muscle-map[open] > .muscle-map-summary { color: var(--accent); }
-.mm-caret { font-size: 0.7rem; transition: transform 0.15s; }
+.mm-caret { font-size: 0.7rem; transition: transform 0.15s ; }
 .muscle-map[open] .mm-caret { transform: rotate(180deg); color: var(--accent); }
 .muscle-map-body { margin-top: 0.75rem; }
 .mm-views { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; }
@@ -2599,8 +2633,8 @@ sup.wr-bw { font-size: 0.85em; }
 .data-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem; margin: 0.9rem 0; }
 .data-filters .inline-label { margin-bottom: 0; }
 .data-filters .ex-search { margin: 0; }
-.data-table-wrap { overflow-x: auto; touch-action: pan-x pan-y; border: 1px solid var(--line); border-radius: 8px; }
-.data-raw-table { font-size: 0.8rem; white-space: nowrap; }
+.data-table-wrap { overflow-x: auto; touch-action: pan-x pan-y; border: 1px solid var(--line); border-radius: var(--r-pill); }
+.data-raw-table { font-size: var(--fs-sm); white-space: nowrap; }
 .data-raw-table th, .data-raw-table td { padding: 4px 9px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .data-raw-table tbody tr:nth-child(even) { background: var(--accent-soft); }
 /* Group banner: user · exercise · date shown once above its set rows. */
@@ -2639,7 +2673,7 @@ sup.wr-bw { font-size: 0.85em; }
 .onerm-sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
 .e1rm-formula-row td { font-size: 0.82em; line-height: 1.4; padding: 4px 9px; }
 .set-note-cue {
-  flex: none; font-size: 0.95em; transition: transform 0.15s ease;
+  flex: none; font-size: 0.95em; transition: transform var(--dur-fast) ease ;
 }
 .set-row.is-open .set-note-cue { transform: rotate(90deg); }
 /* Drop the set row's bottom border only while its note is actually shown. */
@@ -2662,21 +2696,21 @@ sup.wr-bw { font-size: 0.85em; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }
 .calc-picker { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem; }
-.calc-picker > label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.calc-picker > label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
 .calc-inputs { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
-.calc-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.calc-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
 .calc-inputs input {
   width: 6rem; font: inherit; font-size: 16px; background: var(--bg); color: var(--text);
-  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 10px;
 }
-.calc-inputs input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.calc-inputs input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .calc-row { padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 0.86rem; line-height: 1.45; }
 .calc-row:last-child { border-bottom: none; }
 .calc-label { font-weight: 700; color: var(--text); }
 .calc-label::after { content: " — "; color: var(--muted); font-weight: 400; }
 .calc-expr { color: var(--muted); }
 .calc-result { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); white-space: nowrap; }
-.calc-explain p { margin: 0 0 0.7rem; font-size: 0.9rem; line-height: 1.5; }
+.calc-explain p { margin: 0 0 0.7rem; font-size: var(--fs-base); line-height: 1.5; }
 /* Coach prescription calculator (Formulas tab, top panel) — the working-weight
    + warm-up output. Mode is ONE cycling pill (rule 15); small rounding (rule 22). */
 .rx-mode {
@@ -2688,7 +2722,7 @@ sup.wr-bw { font-size: 0.85em; }
 .rx-work { font-size: 1rem; margin: 0.25rem 0 0.6rem; }
 .rx-work-lbl { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin-right: 0.4rem; }
 .rx-work b { font-variant-numeric: tabular-nums; color: var(--accent); font-size: 1.15rem; }
-table.rx-wu { border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+table.rx-wu { border-collapse: collapse; font-size: var(--fs-base); font-variant-numeric: tabular-nums; }
 table.rx-wu th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.9rem 2px 0; }
 table.rx-wu td { padding: 2px 0.9rem 2px 0; border-top: 1px solid var(--line); }
 table.rx-wu tr.rx-wu-general td { color: var(--muted); }
@@ -2709,8 +2743,8 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 .guide-section-summary::-webkit-details-marker { display: none; }
 .guide-section-summary:hover { color: var(--text); }
 .guide-section-caret {
-  flex: 0 0 auto; color: var(--muted); font-size: 0.8rem;
-  transition: transform 0.15s ease, color 0.15s ease;
+  flex: 0 0 auto; color: var(--muted); font-size: var(--fs-sm);
+  transition: transform var(--dur-fast) ease, color var(--dur-fast) ease ;
 }
 .guide-section[open] > .guide-section-summary .guide-section-caret {
   transform: rotate(90deg); color: var(--accent);
@@ -2718,7 +2752,7 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 .guide p { margin: 0 0 0.6rem; line-height: 1.6; }
 .guide-notes { margin: 0.25rem 0 0.5rem; padding-left: 1.1rem; }
 .guide-notes li { margin: 0 0 0.35rem; line-height: 1.55; font-size: 0.92rem; }
-.guide .guide-foot { margin-top: 1.75rem; font-size: 0.8rem; font-style: italic; }
+.guide .guide-foot { margin-top: 1.75rem; font-size: var(--fs-sm); font-style: italic; }
 /* Training checklists inside the guide */
 .checklist { margin: 0 0 0.5rem; }
 .checklist h4 {
@@ -2752,7 +2786,7 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 /* 2-D progress grid: feet support (rows) × wall distance (columns). */
 .grid-title { margin: 1.1rem 0 0.2rem; font-size: 0.92rem; color: var(--gold); }
 .grid-check-wrap { overflow-x: auto; }
-.grid-check { border-collapse: collapse; font-size: 0.8rem; }
+.grid-check { border-collapse: collapse; font-size: var(--fs-sm); }
 .grid-check th, .grid-check td {
   border: 1px solid var(--line); padding: 6px 9px; text-align: center;
 }
@@ -2771,14 +2805,14 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 .calc-links { margin: 1rem 0 0; }
 .link-btn {
   display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
-  border-radius: 8px; padding: 8px 14px; font-size: 0.9rem; font-weight: 600;
+  border-radius: var(--r-pill); padding: 8px 14px; font-size: var(--fs-base); font-weight: 600;
 }
 .link-btn:hover { filter: brightness(1.06); }
 .calc-explain code { background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; font-size: 0.85em; }
 .go-chevron { color: var(--muted); margin-left: 0.4rem; }
 .back-btn {
   background: none; border: none; color: var(--accent); cursor: pointer;
-  font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0; margin-right: 0.5rem;
+  font: inherit; font-size: var(--fs-md); font-weight: 600; padding: 0; margin-right: 0.5rem;
 }
 .back-btn:hover { text-decoration: underline; }
 /* Per-set difficulty (RIR — reps in reserve) picker in the sets tables — a custom
@@ -2807,7 +2841,7 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 /* Comparable-mode scaling ratio per lift: the ×ratio in the group's compare colour
    (teal), and the reference lift (ratio 1) flagged "étalon" in gold so the one that
    stays the same stands out. */
-.bw-ratio { font-size: 0.72rem; font-weight: 700; color: var(--lens-compare); background: color-mix(in srgb, var(--lens-compare) 12%, transparent); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.bw-ratio { font-size: 0.72rem; font-weight: 700; color: var(--lens-compare); background: color-mix(in srgb, var(--lens-compare) 12%, transparent); border-radius: var(--r-xs); padding: 1px 6px; white-space: nowrap; }
 .bw-ratio-ref { color: var(--gold); background: var(--gold-soft); }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
@@ -2821,7 +2855,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Editable controls folded straight into the info rows — blue = editable. */
 .ex-info-val > input, .ex-info-val > select { font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--accent); font-weight: 600; max-width: 100%; min-width: 0; }
 .ex-info-val > input[type="text"] { width: 100%; }
-.ex-info-val > input:focus, .ex-info-val > select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ex-info-val > input:focus, .ex-info-val > select:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* Multi-select chips for Category / Muscle group / Tier (tap to toggle membership). */
 .ex-meta-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px; }
@@ -2854,7 +2888,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Info-mode ⓘ that follows each pill (header ⓘ toggle on): a small accent dot that
    jumps to that subject. Sits tight after its pill; kept just big enough to tap. */
 .ex-pill-info {
-  flex: 0 0 auto; cursor: pointer; font: inherit; font-size: 0.9rem; line-height: 1;
+  flex: 0 0 auto; cursor: pointer; font: inherit; font-size: var(--fs-base); line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 26px; min-height: 26px; margin: 0 6px 0 -1px; padding: 0;
   color: var(--accent); background: var(--accent-soft);
@@ -2866,7 +2900,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-mglvl-chip.is-partial { color: var(--accent); background: var(--accent-soft); border-color: var(--line); }
 .ex-mglvl-chip.is-top { box-shadow: inset 0 0 0 2px var(--gold); }
 .ex-mglvl-n { display: inline-block; margin-left: 4px; font-size: 0.66rem; font-weight: 700; opacity: 0.85; }
-.ex-meta-reset { font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 7px; }
+.ex-meta-reset { font: inherit; font-size: var(--fs-md); line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 7px; }
 .ex-meta-reset:hover { border-color: var(--accent); color: var(--accent); }
 /* Bodyweight-part range: min – max inputs plus the gold (calculated) average. */
 .ex-coeff-range { display: inline-flex; align-items: center; gap: 5px; }
@@ -2878,18 +2912,18 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wr-editor .wr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; margin: 0.4rem 0; }
 .wr-sex { flex: 0 0 3rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; }
 .wr-field { display: inline-flex; align-items: center; gap: 0.25rem; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; background: var(--bg); }
-.wr-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.wr-field:focus-within { border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .wr-flbl { color: var(--muted); font-size: 0.72rem; }
 .wr-input { width: 3.4rem; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--accent); border: none; background: none; text-align: right; padding: 1px 0; }
 .wr-input::-webkit-outer-spin-button, .wr-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .wr-input:focus { outline: none; }
 .wr-input.is-guess { color: var(--muted); font-style: italic; }
-.wr-est { font-size: 0.68rem; font-weight: 700; color: var(--muted); }
+.wr-est { font-size: var(--fs-2xs); font-weight: 700; color: var(--muted); }
 .wr-calc { font-size: 0.76rem; font-weight: 700; color: var(--gold, #b8902f); margin-left: auto; }
 .wr-calc b { font-weight: 800; }
 .ex-info-btn {
   background: var(--accent-soft); border: 1px solid var(--line); color: var(--accent);
-  cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 600;
+  cursor: pointer; font: inherit; font-size: var(--fs-xs); font-weight: 600;
   padding: 2px 9px; border-radius: var(--r-pill); margin-left: 0.35rem; white-space: nowrap;
 }
 .ex-info-btn:hover { border-color: var(--accent); }
@@ -2905,7 +2939,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .group-browser { display: flex; flex-direction: column; gap: 6px; }
 .gb-dim > .gb-dim-sum {
   list-style: none; cursor: pointer; font-weight: 700; font-size: 0.95rem;
-  padding: 8px 10px; background: var(--accent-soft); border-radius: 8px;
+  padding: 8px 10px; background: var(--accent-soft); border-radius: var(--r-pill);
 }
 .gb-dim-sum::-webkit-details-marker { display: none; }
 .gb-dim[open] > .gb-dim-sum { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
@@ -2917,26 +2951,26 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .gb-sum .caret, .gb-dim-sum .caret { display: inline-block; transition: transform 0.12s ease; color: var(--muted); margin-right: 0.3rem; }
 .gb-group[open] > .gb-sum .caret, .gb-dim[open] > .gb-dim-sum .caret { transform: rotate(90deg); }
 .gb-count { font-weight: 600; }
-.gb-why { font-size: 0.8rem; color: var(--muted); padding: 0 8px 6px 22px; }
+.gb-why { font-size: var(--fs-sm); color: var(--muted); padding: 0 8px 6px 22px; }
 .gb-exlist { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 9px 22px; }
 .gb-ex { font-size: 0.74rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; }
-.ex-group { margin: 0.4rem 0 0; padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.ex-group { margin: 0.4rem 0 0; padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); }
 .ex-group-hd { font-size: 0.82rem; font-weight: 700; }
 .ex-group-why { font-size: 0.76rem; margin: 0.2rem 0; }
-.ex-group-members { font-size: 0.8rem; }
+.ex-group-members { font-size: var(--fs-sm); }
 /* Big "Combinable / Comparable group" banner at the top of a synthetic group's card. */
-.ex-group-banner { font-size: 1.15rem; font-weight: 800; padding: 0.4rem 0.6rem; margin: 0 0 0.5rem; border-radius: 8px; }
+.ex-group-banner { font-size: 1.15rem; font-weight: 800; padding: 0.4rem 0.6rem; margin: 0 0 0.5rem; border-radius: var(--r-pill); }
 .ex-group-banner.is-combine { color: var(--lens-combine); background: color-mix(in srgb, var(--lens-combine) 12%, transparent); }
 .ex-group-banner.is-compare { color: var(--lens-compare); background: color-mix(in srgb, var(--lens-compare) 12%, transparent); }
 /* Editable group-member chips (each removable) + the "＋ Add exercise…" dropdown. */
 .ex-grp-edit { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.35rem 0; }
-.ex-grp-mchip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 4px 2px 8px; background: var(--panel); }
+.ex-grp-mchip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--fs-sm); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 4px 2px 8px; background: var(--panel); }
 .ex-grp-rm { font: inherit; font-size: 0.82rem; line-height: 1; cursor: pointer; color: var(--remove); background: none; border: none; padding: 0 2px; min-height: var(--tap-min); }
 .ex-grp-add { margin-top: 0.2rem; }
-.ex-grp-addsel { font: inherit; font-size: 0.8rem; }
+.ex-grp-addsel { font: inherit; font-size: var(--fs-sm); }
 /* Editable per-member scaling "weight" (comparable groups): "×[0.80]". */
 .ex-grp-ratio { display: inline-flex; align-items: center; gap: 1px; color: var(--muted); font-size: 0.78rem; }
-.ex-grp-ratioin { width: 3.2em; font: inherit; font-size: 0.78rem; padding: 1px 3px; border: 1px solid var(--line); border-radius: 4px; color: var(--lens-compare); background: var(--bg); -moz-appearance: textfield; }
+.ex-grp-ratioin { width: 3.2em; font: inherit; font-size: 0.78rem; padding: 1px 3px; border: 1px solid var(--line); border-radius: var(--r-xs); color: var(--lens-compare); background: var(--bg); -moz-appearance: textfield; }
 /* ★/☆ = the group's reference (étalon) toggle. Gold filled ★ = current reference; the
    muted ☆ button makes its lift the reference (the others rescale onto its curve). */
 .ex-grp-star { font: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer; background: none; border: none; padding: 0 2px; color: var(--muted); min-height: var(--tap-min); }
@@ -2947,7 +2981,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-edit-f { display: flex; flex-direction: column; gap: 2px; flex: 1 1 8rem; min-width: 0; }
 .ex-edit-lbl { font-size: 0.74rem; font-weight: 600; color: var(--muted); }
 .ex-edit-f input, .ex-edit-f select { font: inherit; font-size: 0.86rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); min-width: 0; }
-.ex-edit-f input:focus, .ex-edit-f select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ex-edit-f input:focus, .ex-edit-f select:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .ex-edit-help { font-size: 0.74rem; margin: 0.35rem 0 0; }
 /* "Not comparable" toggle. */
 .ex-nc { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.5rem 0 0; }
@@ -2965,11 +2999,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-vars-fold[open] > .ex-vars-sum::before { content: "▾"; }
 .ex-vars-help { font-size: 0.76rem; margin: 0 0 0.5rem; }
 .ex-var-needbadge { font-size: 0.7rem; font-weight: 700; color: #fff; background: var(--warn, #c0603a); border-radius: var(--r-pill); padding: 1px 8px; vertical-align: middle; }
-.ex-var-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); margin: 0 0 0.35rem; }
+.ex-var-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); margin: 0 0 0.35rem; }
 .ex-var-row.needs-review { border-color: var(--warn, #c0603a); background: rgba(192, 96, 58, 0.07); }
 .ex-var-row.is-scaled { border-color: var(--accent); }
 /* Each note is a block: the difficulty row + a collapsible who-&-when list. */
-.ex-var-block { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); margin: 0 0 0.35rem; overflow: hidden; }
+.ex-var-block { border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); margin: 0 0 0.35rem; overflow: hidden; }
 .ex-var-block.needs-review { border-color: var(--warn, #c0603a); background: rgba(192, 96, 58, 0.07); }
 .ex-var-block.is-scaled { border-color: var(--accent); }
 .ex-var-block .ex-var-row { border: none; background: none; margin: 0; }
@@ -3004,9 +3038,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Back-to-wall "blue block" shoulder-distance reference (SVG diagram or the photo). */
 .ex-shd-ref { margin: 0.4rem 0 0; }
 .ex-shd-cap { font-size: 0.74rem; margin: 0 0 0.25rem; }
-.ex-shd-media { display: inline-block; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 4px; }
+.ex-shd-media { display: inline-block; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); padding: 4px; }
 .ex-shd-svg { width: 9rem; height: 11.25rem; color: var(--text); display: block; }
-.ex-shd-img { display: block; max-width: min(15rem, 70vw); height: auto; border-radius: 4px; }
+.ex-shd-img { display: block; max-width: min(15rem, 70vw); height: auto; border-radius: var(--r-xs); }
 .ex-shd-toggle { display: inline-flex; align-items: center; min-height: var(--tap-min); margin-top: 0.3rem; font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 10px; }
 /* Custom floating dropdowns (no native <select>) for the support pickers. */
 .ex-var-xdd .xdd-btn { font-size: 0.78rem; padding: 4px 8px; }
@@ -3016,7 +3050,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-grid { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .ex-grid-corner, .ex-grid-h, .ex-grid-rlabel { font-size: 0.58rem; color: var(--muted); display: flex; align-items: center; justify-content: center; text-align: center; }
 .ex-grid-rlabel { justify-content: flex-end; padding-right: 3px; white-space: nowrap; }
-.ex-grid-cell { font: inherit; font-size: 0.6rem; padding: 4px 1px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--muted); cursor: pointer; min-width: 0; }
+.ex-grid-cell { font: inherit; font-size: 0.6rem; padding: 4px 1px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--bg); color: var(--muted); cursor: pointer; min-width: 0; }
 .ex-grid-cell:hover { border-color: var(--accent); color: var(--accent); }
 .ex-grid-cell.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Depth × lean as a draggable SQUARE: drag the corner handle to set both. x = lean,
@@ -3027,7 +3061,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-pad-readout b { color: var(--accent); }
 .ex-pad {
   position: relative; aspect-ratio: 1; width: 100%; max-width: 15rem;
-  border: 2px solid var(--text); border-radius: 8px; overflow: hidden; background: var(--bg);
+  border: 2px solid var(--text); border-radius: var(--r-pill); overflow: hidden; background: var(--bg);
   touch-action: none; cursor: crosshair; user-select: none;
 }
 .ex-pad-scene { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -3074,23 +3108,23 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Visual pose editor (orbitable 3-D handstand figure + tap-to-pose chips). */
 .ex-var-pose { display: flex; flex-direction: column; gap: 0.35rem; }
 .pose3d { width: 100%; max-width: 360px; height: 300px; margin: 0 auto; display: block;
-  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden;
   background: linear-gradient(180deg, var(--bg) 0%, var(--accent-soft) 100%);
   touch-action: none; cursor: grab; }
 .pose3d:active { cursor: grabbing; }
 .pose3d canvas { display: block; }
 /* Drawn (2-D) animated figure (the "Stickman" mode). */
 .pose-draw { width: 100%; max-width: 320px; margin: 0 auto; display: block;
-  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden;
   background: linear-gradient(180deg, var(--bg) 0%, var(--accent-soft) 100%); }
 .pose-draw-svg { display: block; width: 100%; height: auto; }
 /* "Photo" mode: real video frames scrubbed by the slider. */
-.pose-photo { display: block; width: 100%; max-width: 300px; margin: 0 auto; border-radius: 10px;
+.pose-photo { display: block; width: 100%; max-width: 300px; margin: 0 auto; border-radius: var(--r-md);
   border: 1px solid var(--line); background: var(--bg); }
 .pose-scrub-row { display: flex; align-items: center; gap: 0.4rem; max-width: 320px; margin: 0 auto; }
 .pose-photo-scrub { flex: 1; accent-color: var(--accent); cursor: ew-resize; }
 .pose-scrub { flex: 1; accent-color: var(--accent); cursor: ew-resize; }
-.pose-scrub-cap { font-size: 0.68rem; }
+.pose-scrub-cap { font-size: var(--fs-2xs); }
 .pose-scrub-val { font-size: 0.72rem; font-weight: 700; min-width: 3.4em; text-align: right; }
 .pose-hint { font-size: 0.74rem; text-align: center; }
 /* Tap-to-pose control chips below the figure (one row per dimension). */
@@ -3118,24 +3152,24 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-count { font-weight: 400; }
 .ex-var-review { font-size: 0.7rem; font-weight: 700; color: var(--warn, #c0603a); white-space: nowrap; }
 .ex-var-edit { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: auto; }
-.ex-var-lbl { font-size: 0.85rem; color: var(--muted); font-weight: 700; }
-.ex-var-input { width: 4.6rem; font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }
-.ex-var-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.ex-var-reset { font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; }
+.ex-var-lbl { font-size: var(--fs-md); color: var(--muted); font-weight: 700; }
+.ex-var-input { width: 4.6rem; font: inherit; font-size: var(--fs-md); padding: 4px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }
+.ex-var-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
+.ex-var-reset { font: inherit; font-size: var(--fs-md); cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; }
 .ex-var-reset:hover { border-color: var(--accent); color: var(--accent); }
 /* "More info" button shown in Analysis single mode. */
-.wa-moreinfo { font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 5px 14px; }
+.wa-moreinfo { font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 5px 14px; }
 .wa-moreinfo:hover { filter: brightness(0.97); }
 /* The ℹ info icon beside the workout-history title — small, round, inline. */
 .wa-title-info {
   width: 1.45em; height: 1.45em; padding: 0; margin-left: 0.4rem;
-  font-size: 0.8rem; font-weight: 700; line-height: 1; vertical-align: middle;
+  font-size: var(--fs-sm); font-weight: 700; line-height: 1; vertical-align: middle;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); cursor: pointer;
 }
 .wa-title-info:hover { border-color: var(--accent); color: var(--accent); filter: none; }
 .ex-active { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0 0; }
-.ex-active-status { font-size: 0.8rem; font-weight: 700; }
+.ex-active-status { font-size: var(--fs-sm); font-weight: 700; }
 .ex-active-status.is-on { color: var(--accent); }
 .ex-active-status.is-hidden { color: var(--muted); }
 .ex-force {
@@ -3147,11 +3181,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-force.is-on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .ex-force.is-off { background: var(--muted); color: #fff; border-color: var(--muted); }
 .bw-input {
-  width: 4.5rem; text-align: right; font: inherit; font-size: 0.85rem;
+  width: 4.5rem; text-align: right; font: inherit; font-size: var(--fs-md);
   background: var(--bg); color: var(--text);
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
 }
-.bw-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.bw-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* Quick bulk-edit middle column — compact controls so a row stays one line and the
    Sets column isn't crushed. Tier, discipline & muscle group are all a narrow, no-wrap
    .xdd dropdown menu (the visible twin carries the .bw-attr-edit class; tier also keeps
@@ -3178,11 +3212,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
 /* Exercises tab: collapsible category dropdowns, one per muscle/movement group. */
 /* App-wide active-set control bar on the Index page. */
-.active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.active-set-bar { margin: 0 0 0.85rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
 .active-set-bar .as-title { font-size: 1.05rem; font-weight: 800; color: var(--accent); margin: 0 0 0.4rem; letter-spacing: 0.01em; }
 .active-set-bar .as-statusrow { margin: 0 0 0.2rem; }
 .active-set-bar .as-statusrow .as-status { margin-left: 0; }
-.active-set-bar .as-label { font-size: 0.85rem; font-weight: 600; }
+.active-set-bar .as-label { font-size: var(--fs-md); font-weight: 600; }
 .active-set-bar .as-status { margin-left: 0.5rem; font-size: 0.82rem; }
 .active-set-bar .as-status.is-on { color: var(--accent); font-weight: 700; }
 .active-set-bar .as-clear { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.82rem; text-decoration: underline; padding: 0; }
@@ -3195,7 +3229,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    of value pills, then a chip summary of every active filter (across dims). */
 .active-set-bar .as-filter-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.55rem; }
 .active-set-bar .as-fpills { display: flex; gap: 0.3rem; overflow-x: auto; flex: 1; min-width: 0; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
-.active-set-bar .as-fnone { font-size: 0.8rem; }
+.active-set-bar .as-fnone { font-size: var(--fs-sm); }
 .active-set-bar .as-fpill { flex: 0 0 auto; font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); white-space: nowrap; }
 .active-set-bar .as-fpill:hover { border-color: var(--accent); }
 .active-set-bar .as-fpill.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -3205,7 +3239,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-groups { display: flex; flex-direction: column; gap: 6px; }
 /* overflow stays visible (not hidden) so the group title + an expanded row can
    position:sticky. */
-.bw-cat { border: 1px solid var(--line); border-radius: 10px; }
+.bw-cat { border: 1px solid var(--line); border-radius: var(--r-md); }
 /* The group title (discipline / muscle header) sticks to the top while you scroll
    its list of exercises, then leaves as the next group's title takes over. */
 .bw-cat-summary {
@@ -3220,9 +3254,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    sibling rows (z-index 3, each its own stacking context) — otherwise its menu is
    painted THROUGH by, and taps pass to, the rows below it (transparent / click-
    through bug). Raise the whole row + its menu above everything while open. */
-#bwGroups tr:has(.xdd.open) { position: relative; z-index: 60; }
-#bwGroups tr:has(.xdd.open) > td { position: relative; z-index: 60; }
-#bwGroups .xdd.open .xdd-menu { z-index: 60; }
+#bwGroups tr:has(.xdd.open) { position: relative; z-index: var(--z-modal); }
+#bwGroups tr:has(.xdd.open) > td { position: relative; z-index: var(--z-modal); }
+#bwGroups .xdd.open .xdd-menu { z-index: var(--z-modal); }
 /* "Other" parent holds the minor disciplines as indented sub-groups. */
 .bw-cat-other > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-radius: 0; margin: 0 0 0 0.5rem; }
 .bw-cat-other > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
@@ -3247,14 +3281,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-cat > .bw-cat-sub { border: none; border-top: 1px solid var(--line); border-left: 3px solid var(--sub-color, var(--line)); border-radius: 0; margin: 0 0 0 0.5rem; }
 .bw-cat > .bw-cat-sub > .bw-cat-summary { font-size: 0.86rem; font-weight: 600; }
 .bw-cat-summary::-webkit-details-marker { display: none; }
-.bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: 0.75rem; }
+.bw-cat-summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: var(--fs-xs); }
 .bw-cat[open] > .bw-cat-summary::after { content: "▾"; }
 .bw-cat[open] > .bw-cat-summary { border-bottom: 1px solid var(--line); }
 .bw-cat-summary:hover { background: var(--accent-soft); }
 .bw-cat-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .bw-cat-name { letter-spacing: 0.01em; }
-.bw-cat-meta { font-weight: 500; font-size: 0.8rem; }
-.bw-cat-hidden { font-size: 0.68rem; opacity: 0.75; }
+.bw-cat-meta { font-weight: 500; font-size: var(--fs-sm); }
+.bw-cat-hidden { font-size: var(--fs-2xs); opacity: 0.75; }
 .bw-cat .data-table { min-width: 0; }
 /* AI-NOTE (Claude): Exercises tab must NOT scroll sideways — long exercise
    names should wrap. min-width:0 above + overflow-wrap below do this together.
@@ -3268,13 +3302,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 
 /* Index "Group by" picker. */
 .bw-groupby { margin: 0 0 0.6rem; }
-.bw-groupby .as-label { font-size: 0.85rem; font-weight: 600; }
+.bw-groupby .as-label { font-size: var(--fs-md); font-weight: 600; }
 
 /* Lifts the app-wide filter hides: greyed, tucked behind a "Show hidden" toggle. */
 .bw-hidden { border-top: 1px dashed var(--line); }
 .bw-hidden-sum {
   cursor: pointer; list-style: none; padding: 7px 12px;
-  font-size: 0.8rem; font-weight: 600; color: var(--muted); user-select: none;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--muted); user-select: none;
 }
 .bw-hidden-sum::-webkit-details-marker { display: none; }
 .bw-hidden-sum::before { content: "▸ "; font-size: 0.7rem; }
@@ -3288,7 +3322,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    and keep exceptions. Sits at the top of the Index, set apart with a soft accent tint. */
 .bw-review {
   margin: 0 0 0.6rem; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
-  border-radius: 10px; background: color-mix(in srgb, var(--accent) 5%, var(--panel)); overflow: hidden;
+  border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 5%, var(--panel)); overflow: hidden;
 }
 .bw-review-sum {
   cursor: pointer; list-style: none; padding: 8px 12px;
@@ -3324,7 +3358,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .bw-keep.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 /* "Why filtered out" reason chip on a hidden row — red, tap to open & fix the tags. */
 .bw-why {
-  font: inherit; font-size: 0.68rem; font-weight: 600; line-height: 1.1; white-space: nowrap; cursor: pointer;
+  font: inherit; font-size: var(--fs-2xs); font-weight: 600; line-height: 1.1; white-space: nowrap; cursor: pointer;
   color: #c0392b; background: color-mix(in srgb, #c0392b 10%, transparent);
   border: 1px solid color-mix(in srgb, #c0392b 35%, transparent);
   border-radius: var(--r-pill); padding: 1px 6px; margin-left: 2px; vertical-align: middle;
@@ -3359,11 +3393,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   letter-spacing: 0.04em; color: var(--muted);
 }
 .codes-input {
-  width: 6.5em; font: inherit; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.02em;
+  width: 6.5em; font: inherit; font-size: var(--fs-base); font-weight: 700; letter-spacing: 0.02em;
   background: var(--bg); color: var(--text);
   border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px;
 }
-.codes-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.codes-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .codes-input.is-custom { border-color: var(--accent); color: var(--accent); }
 /* "static" hold tag in the codes list (a tag, not a category). */
 .codes-static {
@@ -3371,11 +3405,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   color: #5b6b86; background: rgba(91, 107, 134, 0.12); border-radius: var(--r-pill); padding: 1px 6px; vertical-align: middle;
 }
 .codes-reset {
-  font: inherit; font-size: 0.75rem; cursor: pointer; color: var(--muted);
+  font: inherit; font-size: var(--fs-xs); cursor: pointer; color: var(--muted);
   background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px 8px;
 }
 .codes-reset:hover { border-color: var(--accent); color: var(--accent); }
-.codes-def { font-size: 0.75rem; }
+.codes-def { font-size: var(--fs-xs); }
 /* Category header rows splitting the codes list into groups. */
 .codes-cat > td {
   background: var(--accent-soft); font-weight: 700; font-size: 0.82rem;
@@ -3401,14 +3435,14 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   .codes-input { font-size: 0.82rem; padding: 3px 5px; }
   .codes-field { gap: 0.3rem; }
   .codes-reset { padding: 1px 6px; font-size: 0.7rem; }
-  .codes-def { font-size: 0.68rem; }
+  .codes-def { font-size: var(--fs-2xs); }
 }
 
-.health-item { font-size: 0.85rem; color: var(--muted); margin: 2px 0; }
+.health-item { font-size: var(--fs-md); color: var(--muted); margin: 2px 0; }
 .health-item.warn { color: var(--gold); }
 .health-item.dup { color: var(--text); }
 /* Version history list (Settings → Version history) — expandable rows. */
-.cl-summary { font-size: 0.8rem; margin: 0 0 0.5rem; }
+.cl-summary { font-size: var(--fs-sm); margin: 0 0 0.5rem; }
 .cl-spchart-wrap { margin: 0 0 1rem; padding: 0 0 0.85rem; border-bottom: 1px solid var(--line); }
 .cl-sections { margin: 0 0 1rem; padding: 0 0 0.85rem; border-bottom: 1px solid var(--line); }
 .cl-sections-lbl { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-bottom: 0.4rem; }
@@ -3435,7 +3469,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .cl-mid { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .cl-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
-.cl-note { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.cl-note { font-size: var(--fs-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .cl-sp {
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--gold);
   background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 8px;
@@ -3449,12 +3483,12 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .cl-row.is-soon .cl-ver { color: var(--muted); }
 .cl-row.is-soon .cl-title { color: var(--muted); }
-.cl-caret { flex: none; color: var(--muted); font-size: 0.75rem; transition: transform 0.15s; }
+.cl-caret { flex: none; color: var(--muted); font-size: var(--fs-xs); transition: transform 0.15s ; }
 .cl-row[open] > .cl-sum .cl-caret { transform: rotate(180deg); color: var(--accent); }
 /* Expanded body: one-line note, optional bullets, then any nested rows. */
 .cl-body { padding: 0 0 0.4rem; }
-.cl-meddesc { font-size: 0.8rem; color: var(--text); font-weight: 500; margin: 0.2rem 0 0.3rem; }
-.cl-bodynote { font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.5rem; }
+.cl-meddesc { font-size: var(--fs-sm); color: var(--text); font-weight: 500; margin: 0.2rem 0 0.3rem; }
+.cl-bodynote { font-size: var(--fs-sm); color: var(--muted); margin: 0.1rem 0 0.5rem; }
 .cl-details { margin: 0 0 0.6rem; padding: 0 0 0 1rem; }
 .cl-details li { font-size: 0.82rem; color: var(--muted); margin: 2px 0; }
 /* Nesting: each deeper level indents a little so the tree reads at a glance.
@@ -3481,7 +3515,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   .topbar { flex-wrap: nowrap; gap: 0.5rem; padding: 0.7rem 1rem; }
   main { padding: 1rem 1rem 5rem; } /* clearance for the bottom command bar */
   .appfoot { padding: 0.5rem 1rem 1rem; margin-bottom: 4rem; } /* clear the bottom command bar */
-  .panel { padding: 1rem; border-radius: 10px; }
+  .panel { padding: 1rem; border-radius: var(--r-md); }
   .wa-analysis-panel { padding-left: 0; padding-right: 0; }
   .chart-wrap { height: 220px; }
   /* Phone: fill the screen. dvh tracks the real viewport (browser chrome in/out);
@@ -3650,7 +3684,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Underline is a text-decoration (not a border-bottom) so it hugs the text — a
    border-bottom sits at the font's content-box bottom (well below the descenders, a big
    gap that padding can't tighten); text-underline-offset pulls it ~3x closer. */
-.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--text); background: var(--panel); border: none; border-radius: 4px; padding: 0 2px; text-decoration: none; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+.wa-title-lift { font: inherit; font-size: inherit; font-weight: 700; color: var(--text); background: var(--panel); border: none; border-radius: var(--r-xs); padding: 0 2px; text-decoration: none; cursor: pointer; white-space: nowrap; -webkit-box-decoration-break: clone; box-decoration-break: clone; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
 /* While the finger is dragging the chip we follow it 1:1 — no transition lag. */
 .wa-title-lift.is-swiping { transition: none; will-change: transform; }
 /* Tapping a lift name opens its menu (Info / Combine / Compare / Remove). Hover tints
@@ -3698,7 +3732,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
   cursor: grab; white-space: nowrap; -webkit-user-select: none; user-select: none;
   color: var(--muted); font-family: inherit;
   background: var(--panel);
-  border: none; border-radius: 8px 0 0 8px;
+  border: none; border-radius: var(--r-pill) 0 0 8px;
   /* Plain white tab (no sticky-note tint / dog-ear) — kept lifted off the page with a
      neutral shadow so it still reads as a pull-out handle. */
   box-shadow: -6px 2px 13px rgba(20, 24, 38, 0.20), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
@@ -3746,7 +3780,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-fold[open] > #waTableSummary {
   position: static; font-size: 0.95rem; color: var(--text); padding: 0.45rem 0;
 }
-.wa-fold[open] > #waTableSummary::before { font-size: 0.85rem; opacity: 1; }
+.wa-fold[open] > #waTableSummary::before { font-size: var(--fs-md); opacity: 1; }
 /* Titled section folds (Graph · Calendar & history): keep the header IN-FLOW when
    open — they hold a selector at the top, so the floating top-right caret would
    land on its buttons. The visible title also reads as "the selector under X". */
@@ -3757,7 +3791,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 /* Nested folds inside the joint "Calendar & history" fold: a touch smaller and
    inset, so the hierarchy (joint → calendar / history) reads at a glance. */
 .wa-subfold { border-top: 1px solid var(--line); border-bottom: none; }
-.wa-subfold > .wa-fold-sum { font-size: 0.9rem; }
+.wa-subfold > .wa-fold-sum { font-size: var(--fs-base); }
 
 /* ── Analysis section headers: ONE identical caret on Stats / Graph / Workout
    history (+ the experimental folds) — a small accent ▾ pinned to the TOP-RIGHT
@@ -3774,8 +3808,8 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-analysis-panel > .wa-fold-titled:not([open]) > summary.wa-fold-sum::before { content: none; }
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum::after {
   content: "▾"; position: absolute; right: 0; top: 0.75rem;
-  font-size: 0.8rem; line-height: 1; color: var(--accent); font-weight: 700;
-  transition: transform 0.15s; pointer-events: none;
+  font-size: var(--fs-sm); line-height: 1; color: var(--accent); font-weight: 700;
+  transition: transform 0.15s ; pointer-events: none;
 }
 .wa-analysis-panel > .wa-fold-titled[open] > .wa-fold-sum::after { transform: rotate(180deg); }
 
@@ -3801,7 +3835,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    the Graph / History section carets above. */
 
 /* Workout-analysis view: exercise-selector chips + mode readout (TASK 2). */
-.wa-mode { margin: 0.6rem 0 0; font-size: 0.9rem; }
+.wa-mode { margin: 0.6rem 0 0; font-size: var(--fs-base); }
 .wa-mode[data-wa-mode="single"] strong { color: var(--accent); }
 .wa-mode[data-wa-mode="compare"] strong { color: var(--gold); }
 .wa-ex-actions { margin: 0 0 0.5rem; }
@@ -3812,7 +3846,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-selall-toggle.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .wa-ex-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .wa-ex-chip {
-  font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
   padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--bg); color: var(--text);
 }
@@ -3833,7 +3867,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    above the category pills; tap one to drop it. */
 .wa-selex-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.45rem; }
 .wa-selex-pill {
-  display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 0.8rem; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: var(--fs-sm); font-weight: 600;
   cursor: pointer; padding: 3px 9px; border: 1px solid var(--accent); border-radius: var(--r-pill);
   background: var(--accent-soft); color: var(--accent);
 }
@@ -3869,7 +3903,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-group-h .wa-cat-umbrella { text-transform: none; letter-spacing: 0; }
 /* The floating per-category exercise dropdown (anchored under its pill). */
 .wa-cat-menu {
-  position: fixed; z-index: 60; max-height: 60vh; overflow-y: auto;
+  position: fixed; z-index: var(--z-modal); max-height: 60vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.18); padding: 0.6rem; box-sizing: border-box;
 }
@@ -3877,7 +3911,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-cat-menu-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem; }
 .wa-cat-menu-title { font-size: 0.82rem; font-weight: 700; flex: 1 1 7rem; min-width: 0; }
 .wa-catmenu-sort { font-size: 0.72rem; }
-.wa-catclose { font: inherit; font-size: 0.9rem; cursor: pointer; background: none; border: none; color: var(--muted); padding: 2px 6px; }
+.wa-catclose { font: inherit; font-size: var(--fs-base); cursor: pointer; background: none; border: none; color: var(--muted); padding: 2px 6px; }
 .wa-catclose:hover { color: var(--accent); }
 .wa-cat-menu-chips { max-height: 46vh; overflow-y: auto; }
 /* "Missing" chips: lifts that exist but aren't this athlete's (filtered out or
@@ -3923,7 +3957,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    above the selector controls, so what's plotted reads at a glance. */
 .wa-sel-big { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.1rem 0.5rem; margin: 0 0 0.45rem; }
 .wa-sel-bigcount { font-size: 1.7rem; font-weight: 800; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
-.wa-sel-biglabel { font-size: 0.8rem; }
+.wa-sel-biglabel { font-size: var(--fs-sm); }
 .wa-sel-bignames { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.15rem 0.55rem; line-height: 1.2; }
 /* Each picked lift's name IS its remove control — tap to drop it from the graph.
    Looks like big text (no pill/✕); hover hints removal (red strike-through). */
@@ -3954,13 +3988,13 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 }
 /* ---- World records page ---- */
 .rec-head { margin: 0 0 0.5rem; }
-.rec-lead { font-size: 0.8rem; }
+.rec-lead { font-size: var(--fs-sm); }
 .rec-src { font-size: 0.72rem; margin-top: 0.15rem; }
 .rec-src a { color: var(--accent); }
 .rec-provisional { color: var(--warn, #b8902f); font-weight: 600; }
 /* The trio-lift selector: one horizontally-scrolling row of pills (rule 16). */
 .rec-lift-row { display: flex; flex-wrap: nowrap; gap: 0.35rem; overflow-x: auto; margin: 0 0 0.6rem; padding-bottom: 2px; touch-action: pan-x pan-y; scrollbar-width: thin; }
-.rec-lift-pill { flex: 0 0 auto; white-space: nowrap; font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 12px; }
+.rec-lift-pill { flex: 0 0 auto; white-space: nowrap; font: inherit; font-size: var(--fs-sm); cursor: pointer; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 12px; }
 .rec-lift-pill:hover { border-color: var(--accent); }
 .rec-lift-pill.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .rec-table th, .rec-table td { white-space: nowrap; }
@@ -4015,7 +4049,7 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
 /* Filter / Exercises summaries become compact pill buttons like the ⚙/+ squares. */
 .wa-sel-tools .wa-filters-sum, .wa-sel-tools .wa-chips-fold-sum {
   display: inline-flex; align-items: center; gap: 0.25rem; height: 2rem; padding: 0 0.7rem;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg);
   color: var(--accent); font-size: 0.82rem; font-weight: 700;
 }
 .wa-sel-tools .wa-chips-fold-sum::before { content: none; }
@@ -4025,17 +4059,17 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
    small pill button), so the menu is exactly the panel's width and can never spill
    off the left or right edge of the screen. The chip grid inside just wraps. */
 .wa-sel-tools .wa-fe-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px); /* floating menu — above the sticky selector (z-index 35) */
+  position: absolute; z-index: var(--z-drop); top: calc(100% + 4px); /* floating menu — above the sticky selector (z-index 35) */
   left: 0; right: 0; width: auto; min-width: 0; max-width: none; padding: 0.45rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
 }
 .wa-sel-tools .wa-fe-menu .wa-chips-wrap { max-height: 60vh; overflow-y: auto; }
 .wa-sel-cog { position: relative; }
 .wa-sel-cog-sum {
   list-style: none; cursor: pointer; display: inline-flex; align-items: center;
   padding: 4px 10px; font-size: 1rem; color: var(--muted);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; user-select: none;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); user-select: none;
 }
 .wa-sel-cog-sum::-webkit-details-marker { display: none; }
 .wa-sel-cog[open] .wa-sel-cog-sum { color: var(--text); border-color: var(--accent); }
@@ -4045,10 +4079,10 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
      kept opening off-screen. It's now position:FIXED and clampMenuIntoView() places its
      left/top from the cog's live rect, clamped to the viewport — no ancestor's position
      or overflow can clip it, regardless of where the cog sits. (left/top set by JS.) */
-  position: fixed; z-index: 40; left: 0; top: 0;
+  position: fixed; z-index: var(--z-drop); left: 0; top: 0;
   display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.14);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
   min-width: 12rem; max-width: 92vw; white-space: nowrap;
 }
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
@@ -4062,11 +4096,11 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
 .wa-name-opt.is-local { border-color: var(--accent); color: var(--accent); }
 .wa-name-opt.is-local::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 4px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 /* Full-name chips can be long — let them wrap to their natural width. */
-.wa-ex-chip.is-full { white-space: normal; text-align: left; border-radius: 10px; }
+.wa-ex-chip.is-full { white-space: normal; text-align: left; border-radius: var(--r-md); }
 /* Collapsible exercise-chip grid. */
 /* NB: no `overflow: hidden` — the group selector now lives in the header and its
    .xdd dropdown menu must be able to escape the fold box. */
-.wa-chips-fold { border: 1px solid var(--line); border-radius: 10px; background: var(--accent-soft); margin: 0 0 0.3rem; }
+.wa-chips-fold { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--accent-soft); margin: 0 0 0.3rem; }
 /* Header row: a caret toggle + the group-by selector (where "Pick exercises" used to be).
    touch-action:pan-y — a vertical drag still scrolls the page, a horizontal (rightward)
    drag is handed to JS to slide the floating exercise-picker drawer in from the right. */
@@ -4082,7 +4116,7 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
 /* Floating exercise-picker drawer: the SAME chip grid (#waChips-<scope>) repositioned as
    a fixed right-side sheet, so it overlays the page WITHOUT taking layout space. Opened by
    swiping the picker's settings line right; closed by the backdrop / Escape / swiping it. */
-.wa-pick-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(20, 24, 38, 0.32); }
+.wa-pick-backdrop { position: fixed; inset: 0; z-index: var(--z-modal); background: rgba(20, 24, 38, 0.32); }
 /* The slide-in card holds the controls (group-by / period / First-N / ⚙) + the chips.
    Inline it's a plain block; swiped in, .is-pick-drawer makes it a fixed right panel. */
 .wa-pick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.4rem; margin: 0 0 0.4rem; }
@@ -4132,7 +4166,7 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-overlay {
   position: absolute; top: 5px; right: 6px; z-index: 6;
   display: flex; gap: 1px; pointer-events: auto;
-  padding: 3px; border-radius: 10px;
+  padding: 3px; border-radius: var(--r-md);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   box-shadow: 0 1px 3px rgba(20, 24, 38, 0.10);
@@ -4149,7 +4183,7 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
    primary chart controls, so they get the no-super-small-buttons treatment too. */
 .wa-gov-btn {
   pointer-events: auto; cursor: pointer; font: inherit; font-size: 1rem; font-weight: 600; line-height: 1;
-  min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 0.55rem; border-radius: 8px;
+  min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 0.55rem; border-radius: var(--r-pill);
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--muted); white-space: nowrap;
   background: color-mix(in srgb, var(--panel) 82%, transparent);
@@ -4171,7 +4205,7 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-overlay > .svgc-legend { margin: 0; pointer-events: auto; display: flex; }
 .wa-graph-overlay .svgc-legend-fold { display: flex; }
 .wa-graph-overlay .svgc-legend-sum {
-  min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 0.45rem; border-radius: 8px;
+  min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 0.45rem; border-radius: var(--r-pill);
   display: inline-flex; align-items: center; justify-content: center; gap: 1px;
   font-size: 0; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--muted);
   /* Surface-less — the .wa-graph-overlay casing provides the background (see above). */
@@ -4210,7 +4244,7 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-fold-sum {
   cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 0.25rem;
   padding: 5px 12px; font-size: 0.82rem; font-weight: 600; color: var(--accent);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill);
   white-space: nowrap; min-width: 0; /* ONE line: the label never wraps; the metrics
     summary (.wa-graph-fold-cur) truncates with an ellipsis when it doesn't fit. */
 }
@@ -4223,7 +4257,7 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-compare-btn {
   cursor: pointer; display: inline-flex; align-items: center; min-height: var(--tap-min);
   padding: 5px 12px; font-size: 0.82rem; font-weight: 600; color: var(--accent);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill);
 }
 .wa-graph-compare-btn.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
 .wa-graph-menu {
@@ -4260,7 +4294,7 @@ body.wa-graph-full .wa-gmenu-grid { grid-template-columns: repeat(2, minmax(0, 2
 .wa-graph-full-btn { flex: 0 0 auto; }
 body.wa-graph-full { overflow: hidden; }
 body.wa-graph-full #waGraph {
-  position: fixed; inset: 0; z-index: 200; background: var(--page);
+  position: fixed; inset: 0; z-index: var(--z-top); background: var(--page);
   overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0.5rem 0.7rem 2.5rem; margin: 0;
 }
 body.wa-graph-full #waGraphChart {
@@ -4285,7 +4319,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-sq-sum {
   list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.2rem;
   min-width: 2rem; height: 2rem; padding: 0 0.5rem; font-size: 1.05rem; font-weight: 700; color: var(--accent);
-  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; user-select: none;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); user-select: none;
 }
 .wa-sq-sum::-webkit-details-marker { display: none; }
 .wa-sq-caret { font-size: 0.62rem; color: var(--accent); line-height: 1; }
@@ -4294,10 +4328,10 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-sq-fold[open] .wa-sq-sum { border-color: var(--accent); background: var(--accent); color: #fff; }
 .wa-sq-fold[open] .wa-sq-sum .wa-sq-caret { color: #fff; }
 .wa-sq-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px); right: 0;
+  position: absolute; z-index: var(--z-drop); top: calc(100% + 4px); right: 0;
   display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16); min-width: 13rem; max-width: 86vw;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm); min-width: 13rem; max-width: 86vw;
 }
 .wa-sq-title { font-size: 0.78rem; font-weight: 700; color: var(--text); }
 
@@ -4310,11 +4344,11 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 }
 /* The floating menu body shared by Filter and Exercises. */
 .wa-fe-row .wa-fe-menu {
-  position: absolute; z-index: 40; top: calc(100% + 4px);
+  position: absolute; z-index: var(--z-drop); top: calc(100% + 4px);
   width: max-content; min-width: 100%; max-width: 92vw;
   margin-top: 0; padding: 0.7rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(20, 24, 38, 0.16);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
 }
 /* Spread outward: Filter anchors left, Exercises anchors right. */
 .wa-fe-row > .wa-filters .wa-fe-menu { left: 0; right: auto; }
@@ -4333,26 +4367,26 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-excluded[open] > summary::after { content: " ▾"; }
 .wa-excluded-list {
   margin-top: 0.35rem; max-height: 9rem; overflow-y: auto;
-  font-size: 0.8rem; line-height: 1.5; color: var(--muted);
+  font-size: var(--fs-sm); line-height: 1.5; color: var(--muted);
 }
 
 /* WorkoutAnalysis create-exercise form (TASKS 13–15). */
-.wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
-.wa-create-f input, .wa-create-f select { font: inherit; font-size: 0.85rem; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.wa-create-f { display: flex; flex-direction: column; gap: 0.2rem; font-size: var(--fs-sm); color: var(--muted); }
+.wa-create-f input, .wa-create-f select { font: inherit; font-size: var(--fs-md); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-create-act { display: flex; align-items: center; gap: 0.5rem; }
 /* Member picker (graph-selector design): chosen pills on top, a search box, then a
    scrollable wrap of tappable exercise chips — replaces the old native multi-select. */
 .wa-create-picker { display: flex; flex-direction: column; gap: 0.4rem; }
 .wa-create-picker .wa-sel-pills { margin: 0; } /* same 2-row strip as the graph selector */
-.wa-create-search { font: inherit; font-size: 0.85rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); }
+.wa-create-search { font: inherit; font-size: var(--fs-md); padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); }
 .wa-create-picker .wa-ex-chips { max-height: 13rem; overflow-y: auto; align-content: flex-start; padding: 2px; touch-action: pan-y; }
-.wa-create-empty { font-size: 0.8rem; }
+.wa-create-empty { font-size: var(--fs-sm); }
 /* The list of already-created defs, so they're visibly there with a ✕ to delete. */
 .wa-vdef-list { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
-.wa-vdef-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.wa-vdef-row { display: flex; align-items: center; gap: 0.5rem; font-size: var(--fs-md); }
 .wa-vdef-name { font-weight: 700; color: var(--text); }
 .wa-vdef-meta { font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wa-vdef-del { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: var(--r-pill); width: 22px; height: 22px; cursor: pointer; font-size: 0.8rem; line-height: 1; }
+.wa-vdef-del { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: var(--r-pill); width: 22px; height: 22px; cursor: pointer; font-size: var(--fs-sm); line-height: 1; }
 .wa-vdef-del:hover { border-color: #a23b3b; color: #a23b3b; }
 /* "Create variant / group" on the Index page (moved from the Analysis bar). */
 .idx-create-sum { cursor: pointer; font-weight: 700; font-size: 0.95rem; color: var(--accent); list-style: none; }
@@ -4369,8 +4403,8 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-chips-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0.2rem 0 0.35rem; }
 
 /* WorkoutAnalysis metadata filters + taxonomy editor (TASKS 19, 24). */
-.wa-filters, .wa-assign { margin: 0 0 0.6rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; }
-.wa-filters > summary, .wa-assign > summary { cursor: pointer; list-style: none; font-size: 0.85rem; font-weight: 600; color: var(--accent); }
+.wa-filters, .wa-assign { margin: 0 0 0.6rem; border: 1px solid var(--line); border-radius: var(--r-md); padding: 0.5rem 0.7rem; }
+.wa-filters > summary, .wa-assign > summary { cursor: pointer; list-style: none; font-size: var(--fs-md); font-weight: 600; color: var(--accent); }
 .wa-filters > summary::-webkit-details-marker { display: none; }
 .wa-filters-body { margin-top: 0.6rem; }
 .wa-assign-body { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem; align-items: flex-start; }
@@ -4378,7 +4412,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 /* Metadata filter: a labelled row of toggle chips per dimension (no native
    multi-selects — much cleaner, and tappable on mobile). */
 .wa-filter-dim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.5rem; margin: 0 0 0.5rem; }
-.wa-filter-lbl { flex: 0 0 5.5rem; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.wa-filter-lbl { flex: 0 0 5.5rem; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); }
 .wa-filter-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; flex: 1 1 auto; min-width: 0; }
 .wa-fchip { font: inherit; font-size: 0.74rem; cursor: pointer; padding: 2px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-fchip:hover { border-color: var(--accent); color: var(--accent); }
@@ -4394,7 +4428,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-metric-group-sum::before { content: "▸ "; }
 .wa-metric-group[open] > .wa-metric-group-sum::before { content: "▾ "; }
 .wa-metric-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 0 0.35rem 0.5rem; }
-.wa-metric { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
+.wa-metric { font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-metric:hover { border-color: var(--accent); color: var(--accent); }
 .wa-metric.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Blocked (not yet reviewed) metric: greyed + dashed, so it reads as "off-limits
@@ -4402,9 +4436,9 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-metric.is-blocked { opacity: 0.45; border-style: dashed; }
 .wa-metric.is-blocked.is-on { background: var(--line); border-color: var(--muted); color: var(--text); }
 /* The graph's "this isn't enabled — needs review" banner + its button. */
-.wa-graph-blocked { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.6rem 0.7rem; margin: 0.3rem 0; border: 1px dashed var(--line); border-radius: 10px; background: var(--accent-soft); color: var(--text); font-size: 0.82rem; }
+.wa-graph-blocked { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.6rem 0.7rem; margin: 0.3rem 0; border: 1px dashed var(--line); border-radius: var(--r-md); background: var(--accent-soft); color: var(--text); font-size: 0.82rem; }
 .wa-gb-icon { font-size: 1rem; }
-.wa-gb-btn { font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; padding: 4px 11px; border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent); color: #fff; }
+.wa-gb-btn { font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; padding: 4px 11px; border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent); color: #fff; }
 .wa-gb-btn:hover { filter: brightness(1.08); }
 .wa-gb-inline { white-space: nowrap; }
 .wa-gb-link { font: inherit; font-size: inherit; font-weight: 700; cursor: pointer; padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; }
@@ -4414,7 +4448,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .ex-gp-count { font-size: 0.78rem; }
 .ex-gp-hint { margin: 0.25rem 0 0.5rem; font-size: 0.78rem; }
 .ex-gp-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.gp-chip { font: inherit; font-size: 0.75rem; font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; gap: 0.3rem; }
+.gp-chip { font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); display: inline-flex; align-items: center; gap: 0.3rem; }
 .gp-chip:hover { border-color: var(--accent); }
 /* Cycling 4-level approval: no (grey) → 1 experimental (amber) → 2 confirmed
    (blue) → 3 certain (green). The little badge shows the level number. */
@@ -4435,12 +4469,12 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-cfg-group[open] > .wa-cfg-group-sum::before { content: "▾ "; }
 .wa-cfg-body { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; align-items: center; padding: 0.1rem 0 0.45rem 0.5rem; }
 .wa-gcfg-f { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); }
-.wa-gcfg-f select, .wa-gcfg-f input { font: inherit; font-size: 0.8rem; padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
+.wa-gcfg-f select, .wa-gcfg-f input { font: inherit; font-size: var(--fs-sm); padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-gcfg-f input[type="number"] { width: 3.2rem; }
 
 /* Unified selector: search + group-by + grouped chips (TASKS 43, 45). */
 .wa-sel-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.6rem; }
-.wa-search { flex: 1 1 12rem; font: inherit; font-size: 0.85rem; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+.wa-search { flex: 1 1 12rem; font: inherit; font-size: var(--fs-md); padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); }
 .wa-chips-wrap { max-height: 16rem; overflow-y: auto; }
 .wa-group { margin: 0 0 0.5rem; }
 /* Group header is a TAP-TO-FILTER toggle (replaces the old Filter button). */
@@ -4453,7 +4487,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 /* A nested family subgroup (e.g. Handstand) inside a group: indented, with a
    lighter sub-header and a guide line on the left. */
 .wa-subgroup { margin: 0.15rem 0 0.3rem 0.5rem; padding-left: 0.5rem; border-left: 2px solid var(--line); }
-.wa-subgroup-h { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; margin: 0.15rem 0 0.2rem; }
+.wa-subgroup-h { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; margin: 0.15rem 0 0.2rem; }
 
 /* ---- "Live" coaching page ---- */
 .live-body { display: flex; flex-direction: column; gap: 0.7rem; }
@@ -4467,7 +4501,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .live-tier-hd { font-size: 0.74rem; margin-bottom: 0.3rem; }
 .live-tier-lbl { font-weight: 700; color: var(--accent); }
 .live-ex-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.live-ex { display: inline-flex; align-items: baseline; gap: 0.35rem; font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 9px; }
+.live-ex { display: inline-flex; align-items: baseline; gap: 0.35rem; font: inherit; font-size: var(--fs-sm); cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px 9px; }
 .live-ex:hover { border-color: var(--accent); }
 .live-ex-name { font-weight: 600; }
 .live-ex-meta { font-size: 0.72rem; }
@@ -4492,25 +4526,25 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .live-editor-body { display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.3rem; }
 .live-edit-f { display: flex; flex-direction: column; gap: 0.2rem; }
 .live-edit-lbl { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
-.live-edit { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.82rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); resize: vertical; }
+.live-edit { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.82rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); resize: vertical; }
 .live-editor-actions { display: flex; align-items: center; gap: 0.6rem; }
-.live-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: 8px; padding: 6px 16px; }
+.live-save { font: inherit; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: none; border-radius: var(--r-pill); padding: 6px 16px; }
 .live-ss-toggle { align-self: flex-start; }
 .live-title { font-size: 1.8rem; font-weight: 800; color: var(--accent); margin: 0.1rem 0 0; line-height: 1.1; }
 .live-for { margin-top: 0.1rem; }
 /* "⚑ hidden H/T" → floating menu of hidden lifts, each tap-to-unhide, + Unhide all. */
 .wo-hidden-menu {
   position: fixed; z-index: 80; max-width: min(92vw, 320px); max-height: 60vh; overflow-y: auto;
-  background: var(--card, #fff); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.5rem 0.6rem;
 }
-.wo-hidden-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
+.wo-hidden-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: var(--fs-md); }
 .wo-hidden-all { margin-left: auto; font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; color: #fff; background: var(--accent); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 10px; }
 .wo-hidden-list { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .wo-hidden-item { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 8px; }
 .wo-hidden-item:hover { border-color: var(--accent); }
-.wo-hidden-x { font-size: 0.8rem; opacity: 0.8; }
-.wo-hidden-empty { font-size: 0.8rem; padding: 0.2rem 0; }
+.wo-hidden-x { font-size: var(--fs-sm); opacity: 0.8; }
+.wo-hidden-empty { font-size: var(--fs-sm); padding: 0.2rem 0; }
 .wo-hidden-show { display: block; width: 100%; margin-top: 0.5rem; font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 3px 8px; text-align: center; }
 .wo-hidden-show.is-on { color: var(--accent); border-color: var(--accent); }
 /* Lens state, themed with the graph palette (colour theory): combine = gold, compare =
@@ -4526,9 +4560,9 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-sel-pill.lens-compared { border-color: var(--lens-compare); }
 .wa-sel-pill.lens-both { border-color: var(--lens-both); }
 /* Per-lift popup menu (Info / Combine / Compare / Remove). */
-.lift-menu { position: fixed; z-index: 90; min-width: 152px; max-width: 80vw; background: var(--card, #fff); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; }
+.lift-menu { position: fixed; z-index: 90; min-width: 152px; max-width: 80vw; background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; }
 .lift-menu-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); padding: 0.2rem 0.5rem 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
-.lift-menu-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; font: inherit; font-size: 0.85rem; cursor: pointer; background: none; border: none; border-radius: 6px; padding: 6px 8px; color: var(--text); }
+.lift-menu-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; font: inherit; font-size: var(--fs-md); cursor: pointer; background: none; border: none; border-radius: 6px; padding: 6px 8px; color: var(--text); }
 .lift-menu-row:hover { background: var(--accent-soft); }
 .lift-menu-row.is-on { color: var(--accent); font-weight: 700; }
 .lift-menu-row.lift-menu-rm { color: #a23b3b; }
@@ -4540,7 +4574,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .lift-menu-ck { margin-left: auto; }
 /* Per-group block in the lift menu: name + grey members + two view-mode buttons. */
 .lift-menu-grp { padding: 6px 8px; border-top: 1px solid var(--line); }
-.lift-menu-grp-name { font-size: 0.85rem; font-weight: 700; }
+.lift-menu-grp-name { font-size: var(--fs-md); font-weight: 700; }
 .lift-menu-grp-sub { font-size: 0.7rem; line-height: 1.2; margin: 1px 0 4px; }
 .lift-menu-modes { display: flex; gap: 6px; }
 .lift-menu-mode { flex: 1 1 0; font: inherit; font-size: 0.78rem; cursor: pointer; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: none; color: var(--text); }
@@ -4558,9 +4592,9 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .bw-mergeflag.is-on { color: var(--gold); border-color: var(--gold); background: var(--gold-soft); font-weight: 700; }
 .bw-mergelist { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.4rem 0.2rem 0.2rem; }
 .bw-mergechip { display: inline-flex; align-items: stretch; border: 1px solid var(--gold); border-radius: var(--r-pill); overflow: hidden; background: var(--gold-soft); }
-.bw-mergechip-open { font: inherit; font-size: 0.8rem; cursor: pointer; color: var(--text); background: none; border: none; padding: 3px 8px; }
+.bw-mergechip-open { font: inherit; font-size: var(--fs-sm); cursor: pointer; color: var(--text); background: none; border: none; padding: 3px 8px; }
 .bw-mergechip-open:hover { color: var(--accent); }
-.bw-mergechip-x { font: inherit; font-size: 0.75rem; cursor: pointer; color: var(--muted); background: none; border: none; border-left: 1px solid var(--gold); padding: 0 7px; }
+.bw-mergechip-x { font: inherit; font-size: var(--fs-xs); cursor: pointer; color: var(--muted); background: none; border: none; border-left: 1px solid var(--gold); padding: 0 7px; }
 .bw-mergechip-x:hover { color: var(--danger); }
 /* "＋ New" chip in the Combinable/Comparable inspector sections (create a group). */
 .ex-newgroup { color: var(--accent); border-style: dashed !important; font-weight: 700; }
