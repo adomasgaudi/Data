@@ -9222,6 +9222,135 @@ function liveExercises(username: string, todayD: number): LiveEx[] {
   return out;
 }
 
+// ── Coach page ────────────────────────────────────────────────────────────────
+
+function renderCoachPage(): void {
+  renderCoachRuler();
+  renderCoachPersistentBugs();
+  renderCoachAppInfo();
+  renderCoachTechStack();
+}
+
+function renderCoachRuler(): void {
+  const el = document.getElementById("coachRuler");
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = "1";
+
+  // Build a 1000 px ruler with ticks at every 10 px.
+  const rulerW = 1000;
+  let ticks = "";
+  for (let px = 0; px <= rulerW; px += 10) {
+    const isMaj = px % 100 === 0;
+    const isMid = px % 50 === 0;
+    const cls = isMaj ? "coach-ruler-tick coach-ruler-tick--100"
+               : isMid ? "coach-ruler-tick coach-ruler-tick--50"
+               : "coach-ruler-tick coach-ruler-tick--10";
+    const lbl = isMaj ? `<span class="coach-ruler-lbl">${px}</span>` : "";
+    ticks += `<div class="${cls}" style="left:${px}px">${lbl}</div>`;
+  }
+
+  // 1 rem reference bar
+  const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+
+  el.innerHTML =
+    `<div class="coach-ruler-wrap"><div class="coach-ruler" style="width:${rulerW}px">${ticks}</div></div>` +
+    `<div class="coach-ruler-units">` +
+      `<div>CSS px · <span>${rulerW} px</span> wide ruler above</div>` +
+      `<div>1 rem = <span>${remPx} px</span></div>` +
+      `<div>100 vw = <span>${window.innerWidth} px</span> on this screen</div>` +
+      `<div>1 vw = <span>${(window.innerWidth / 100).toFixed(1)} px</span></div>` +
+    `</div>`;
+}
+
+function renderCoachPersistentBugs(): void {
+  const el = document.getElementById("coachPersistentBugs");
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = "1";
+  el.innerHTML = `
+    <p class="muted" style="font-size:0.8rem;margin:0 0 0.6rem">Live from <code>docs/persistent-bugs.md</code> — recurring bugs logged with <code>#persistent</code>.</p>
+    <div class="coach-pb-list">${PERSISTENT_BUGS_HTML}</div>`;
+}
+
+function renderCoachAppInfo(): void {
+  const el = document.getElementById("coachAppInfo");
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = "1";
+  el.innerHTML = `
+    <p class="muted" style="font-size:0.8rem;margin:0 0 0.6rem">Key rules &amp; architecture from <code>CLAUDE.md</code> and related docs.</p>
+    <div class="coach-appinfo">${APP_INFO_HTML}</div>`;
+}
+
+function renderCoachTechStack(): void {
+  const el = document.getElementById("coachTechStack");
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = "1";
+  el.innerHTML = TECH_STACK_HTML;
+}
+
+const PERSISTENT_BUGS_HTML = `
+  <details class="coach-section"><summary class="coach-sum">PB-10 · wa-sel-cog-menu goes off-screen</summary>
+  <div class="coach-body"><p>Exercise selector ⚙ popup escaped the viewport when the cog wrapped to a new row. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code>. <em>Recurrences: 1</em></p></div></details>
+  <details class="coach-section"><summary class="coach-sum">PB-13 · Exercise picker opener keeps changing</summary>
+  <div class="coach-body"><p>The opener UI has been redesigned multiple times: full-width bar → pill → slide-in drawer → sticky tab. Each redesign solved discoverability but broke another constraint. Root cause: tension between reach (always visible) and space (no room). Current: sticky tab on right edge, drag left to open.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">PB-14 · Version number not bumped on ship</summary>
+  <div class="coach-body"><p>AIs shipped commits without bumping the patch version or updating the changelog. Fixed: added CLAUDE.md rule 29 — version bump + changelog entry + index.html span are mandatory before any commit.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">PB-15 · Manual sets with no seq silently dropped from upload</summary>
+  <div class="coach-body"><p>Sets added before the <code>seq</code> field existed had <code>seq: undefined</code> and were filtered out of every Supabase upsert silently. Fixed: back-fill seq on first upload.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">PB-16 · Supabase anon key can't INSERT even with RLS disabled</summary>
+  <div class="coach-body"><p>RLS disable alone doesn't grant write access; <code>GRANT SELECT/INSERT/UPDATE/DELETE TO anon, authenticated</code> is also required. Table also had a uuid PK that caused PostgREST to cast the text user_id to uuid → 400. Fixed: rebuilt table with composite natural PK, added GRANT.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">PB-17 · Workout ⚙ menu out of viewport bounds</summary>
+  <div class="coach-body"><p>Same class as PB-10 — <code>position:absolute</code> with <code>right:0</code> / <code>left:0</code> always escapes bounds when the anchor moves. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code> on toggle event.</p></div></details>
+`;
+
+const APP_INFO_HTML = `
+  <details class="coach-section"><summary class="coach-sum">Data flow</summary>
+  <div class="coach-body"><p>StrengthLevel → Apps Script → Google Sheet "UD" → <code>doGet</code> JSON → site (validate → compute → render). Manual sets also stored in Supabase <code>sets</code> table (anon key, composite PK).</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">Key source files</summary>
+  <div class="coach-body"><ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
+    <li><code>src/main.ts</code> — all DOM glue, render functions, event handlers</li>
+    <li><code>src/metrics.ts</code> — pure 1RM / strength / percentile calculations</li>
+    <li><code>src/aggregate.ts</code> — data grouping, filtering, record selection</li>
+    <li><code>src/profile.ts</code> — athlete profile, assisted-machine logic, BW inclusion</li>
+    <li><code>src/exerciseMeta.ts</code> — exercise registry, joint data, variation rules</li>
+    <li><code>src/changelog.ts</code> — RELEASES flat list (source of truth for version history)</li>
+    <li><code>src/styles.css</code> — all styling, CSS tokens in <code>:root</code></li>
+    <li><code>src/i18n.ts</code> — EN/LT translation dictionary</li>
+    <li><code>src/supabase.ts</code> — Supabase client, set upload/download helpers</li>
+    <li><code>src/versionName.ts</code> — Bleach zanpakutō display names for version minors</li>
+  </ul></div></details>
+  <details class="coach-section"><summary class="coach-sum">Standing rules (key highlights)</summary>
+  <div class="coach-body"><ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
+    <li>Version: AIs bump ONLY the patch (3rd digit). Owner bumps minor/major.</li>
+    <li>Save = commit + push after every change (owner sees only the live site).</li>
+    <li>Every change: bump version + update changelog + update index.html span.</li>
+    <li>Floating menus: <code>position:fixed</code> + <code>clampMenuIntoView()</code> always.</li>
+    <li>Dropdowns: always use custom <code>.xdd</code>, never native <code>&lt;select&gt;</code>.</li>
+    <li>Translate all user-facing text into LT in <code>src/i18n.ts</code> same commit.</li>
+    <li>Popup menus must preserve their open state across re-renders (rule 24).</li>
+    <li>Supabase <code>sets</code> table: composite natural PK, no uuid, GRANT to anon.</li>
+    <li>No-code project: optimise for AI readability, not human conventions.</li>
+  </ul></div></details>
+`;
+
+const TECH_STACK_HTML = `
+  <div style="display:flex;flex-direction:column;gap:0.4rem">
+  <details class="coach-section"><summary class="coach-sum">TypeScript</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Typed superset of JavaScript. All <code>.ts</code> files compiled by Vite. Gives autocomplete + type errors at build time, not runtime.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">Vite</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Build tool: bundles TypeScript + CSS into a single <code>dist/index.html</code> + assets. Also runs the dev server (<code>npm run dev</code>).</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">Zod</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Schema validation library. Used at the data boundary (Google Sheet JSON → typed records) so bad data fails loudly instead of silently rendering wrong numbers.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">Vitest + fast-check</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Test runner (Vitest) + property-based testing (fast-check). Pure functions in <code>metrics.ts</code> / <code>aggregate.ts</code> / <code>profile.ts</code> are covered by ~494 tests.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">Chart.js</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Canvas-based charting library. Renders the strength-over-time graphs. Extended with custom plugins for the scatter + line combo used in the workout graph.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">Supabase (anon key)</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Backend-as-a-service. Used only for the <code>sets</code> table (manual workout entries). No auth — anon key with explicit GRANT. Composite natural PK: <code>(user_id, date, exercise_name, set_number)</code>.</p></div></details>
+  <details class="coach-section"><summary class="coach-sum">GitHub Pages</summary>
+  <div class="coach-body"><p style="font-size:0.82rem">Static hosting. The site deploys automatically on push to the canonical branch via a GitHub Actions workflow that runs <code>npm run build</code> and publishes <code>dist/</code>.</p></div></details>
+  </div>
+`;
+
 /** The "Live" training-plan page for the currently-selected athlete. */
 function renderLive(): void {
   const box = document.getElementById("liveBody");
@@ -17164,6 +17293,7 @@ function switchTopTab(name: string) {
   if (name === "statsedit") renderStatsEdit();
   if (name === "records") renderRecords();
   if (name === "live") renderLive();
+  if (name === "coach") renderCoachPage();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.

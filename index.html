@@ -52,7 +52,11 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
+<<<<<<< HEAD
         <div class="title-ver"><span class="version">b.2.8.291</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+=======
+        <div class="title-ver"><span class="version">b.2.8.286</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+>>>>>>> 20421cf (META-126 (SP:3) b.2.8.286 coach-page-scaffold)
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -100,6 +104,7 @@
       <button class="tab" data-tab="bwparts" role="tab">Index</button>
       <button class="tab" data-tab="test" role="tab">Test</button>
       <button class="tab" data-tab="data" role="tab">Data</button>
+      <button class="tab" data-tab="coach" role="tab">Coach</button>
     </nav>
     <!-- Shared exercise-name autocomplete for the inline "add new exercise" form in the
          workouts view (the standalone Add page was removed — sets are logged inline). -->
@@ -975,6 +980,52 @@
             </p>
           </div>
           <div id="statsEditBody" class="statsedit-body"></div>
+        </section>
+      </div>
+
+      <div id="tab-coach" class="tab-panel" hidden>
+        <section class="panel coach-panel">
+          <h2 class="coach-title">Coach</h2>
+
+          <!-- ① Pixel ruler -->
+          <details class="coach-section" open>
+            <summary class="coach-sum">Pixel ruler</summary>
+            <div class="coach-body" id="coachRuler"></div>
+          </details>
+
+          <!-- ② UI catalogue -->
+          <details class="coach-section">
+            <summary class="coach-sum">UI components</summary>
+            <div class="coach-body" id="coachUiCatalogue">
+              <p class="muted">Coming in Part 2.</p>
+            </div>
+          </details>
+
+          <!-- ③ Site map -->
+          <details class="coach-section">
+            <summary class="coach-sum">Site map</summary>
+            <div class="coach-body" id="coachSiteMap">
+              <p class="muted">Coming in Part 3.</p>
+            </div>
+          </details>
+
+          <!-- ④ Persistent bugs -->
+          <details class="coach-section">
+            <summary class="coach-sum">Persistent bugs</summary>
+            <div class="coach-body" id="coachPersistentBugs"></div>
+          </details>
+
+          <!-- ⑤ App info / stored rules -->
+          <details class="coach-section">
+            <summary class="coach-sum">App info &amp; rules</summary>
+            <div class="coach-body" id="coachAppInfo"></div>
+          </details>
+
+          <!-- ⑥ Tech stack -->
+          <details class="coach-section">
+            <summary class="coach-sum">Tech stack</summary>
+            <div class="coach-body" id="coachTechStack"></div>
+          </details>
         </section>
       </div>
 
