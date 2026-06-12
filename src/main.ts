@@ -16653,6 +16653,8 @@ function runSearchAction(act: string): void {
   if (act === "index") {
     const first = waChipListBase()[0]?.name;
     hideCmdPalette();
+    if (input) input.value = "";
+    waSearchQuery = "";
     input?.blur();
     if (first) openExerciseInfo(first);
     return;
@@ -16711,6 +16713,14 @@ function runSearchAction(act: string): void {
     if (input) input.value = "";
   }
   hideCmdPalette();
+  // A discrete action that CONSUMES the query (added the matches to the selection or
+  // plotted them on the graph) clears the bar afterwards — so the text doesn't linger,
+  // the bar is ready for the next search, and the picker un-filters back to the full list.
+  // Filter / Find stay (they're live-query modes that need the text to keep filtering).
+  if (act === "select" || act.startsWith("graph")) {
+    waSearchQuery = "";
+    if (input) input.value = "";
+  }
   if (act === "select" || act === "clear" || act.startsWith("graph")) input?.blur();
   deferRender(renderWorkoutAnalysis); // picker + history + graph all reflect the choice
 }
