@@ -2415,17 +2415,38 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-plan-btn { font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; padding: 4px 12px; border-radius: var(--r-pill); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min); }
 .wo-plan-btn:hover { background: var(--accent); color: #fff; }
 /* Plan-workout overlay: one tappable row per suggested lift, a bar showing how far behind. */
-.plan-empty { padding: 1rem 0; font-size: 0.95rem; }
-.plan-list { display: flex; flex-direction: column; gap: 0.4rem; }
-.plan-row { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 0.55rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
-.plan-row:hover { border-color: var(--accent); }
-.plan-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-soft); z-index: 0; }
-.plan-main, .plan-nums { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.plan-nums { align-items: flex-end; text-align: right; flex: 0 0 auto; }
-.plan-name { font-weight: 700; color: var(--text); }
-.plan-mg { font-size: 0.7rem; }
-.plan-behind { font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
-.plan-sub { font-size: 0.7rem; }
+/* ---- Athlete priorities (Plan-workout overlay) ---- */
+.prio-empty { padding: 0.8rem 0; font-size: 0.92rem; }
+.prio-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.prio-row {
+  display: grid; grid-template-columns: auto 1fr auto;
+  grid-template-areas: "name name remove" "level stats stats";
+  align-items: center; gap: 0.35rem 0.5rem;
+  padding: 0.5rem 0.6rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.prio-main { grid-area: name; display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; font: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; }
+.prio-name { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prio-mg { font-size: 0.7rem; flex: 0 0 auto; }
+.prio-remove { grid-area: remove; justify-self: end; min-height: var(--tap-min); min-width: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--muted); background: none; border: 0; cursor: pointer; border-radius: var(--r-pill); }
+.prio-remove:hover { color: var(--remove, #b5562f); }
+/* Level pill — one cycling button, coloured by level (max→maintain = hot→cool). */
+.prio-level { grid-area: level; justify-self: start; min-height: var(--tap-min); display: inline-flex; align-items: center; padding: 0 0.6rem; border-radius: var(--r-pill); border: 1px solid transparent; font-size: 0.74rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.prio-level-max { background: color-mix(in srgb, #c0392b 16%, transparent); color: #c0392b; }
+.prio-level-active { background: var(--accent-soft); color: var(--accent); }
+.prio-level-passive { background: color-mix(in srgb, #2f7d6b 15%, transparent); color: #2f7d6b; }
+.prio-level-maintain { background: color-mix(in srgb, var(--line) 60%, transparent); color: var(--muted); }
+.prio-stats { grid-area: stats; justify-self: end; display: flex; align-items: center; gap: 0.6rem; }
+.prio-avg { font-size: 0.72rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.prio-target { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 1px; }
+.prio-tgt-btn { min-width: var(--tap-min); min-height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 700; line-height: 1; color: var(--accent); background: none; border: 0; cursor: pointer; border-radius: var(--r-pill); }
+.prio-tgt-btn:hover { background: var(--accent-soft); }
+.prio-tgt-val { min-width: 3.1rem; text-align: center; font-size: 0.76rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+/* Add-a-priority suggestions: a wrapping row of compact "+ name" chips. */
+.prio-add { margin-top: 0.7rem; }
+.prio-add-lbl { font-size: 0.72rem; margin: 0 0 0.35rem; }
+.prio-add-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.prio-add-chip { font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; padding: 4px 9px; min-height: var(--tap-min); display: inline-flex; align-items: center; border: 1px dashed var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); }
+.prio-add-chip:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
 .wo-hidden-toggle.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 /* A grayed "another exercise line" under a day/week that has filter-hidden lifts. */
 .wo-hidden-line { display: block; margin-top: 2px; }

@@ -10156,48 +10156,74 @@ function worldRecordEditorHtml(name: string): string {
   );
 }
 
-// ---- "Plan workout" — suggest what to train today ----------------------------------
-// For the current athlete, score every exercise trained in the last 3 months by its
-// WEEKLY SET DEFICIT: (avg sets/week over the last 90 days) − (sets done THIS week). A
-// positive deficit means you're behind your own recent norm on that lift; we rank by it
-// so the biggest gaps lead. Pure-ish: reads activeRecords()/weeklySetStats only.
-interface PlanItem { name: string; behind: number; thisWeek: number; avg: number; }
-function workoutPlanItems(): PlanItem[] {
-  const username = els.athlete.value;
-  const recs = activeRecords();
-  const today = todayIso();
-  const items: PlanItem[] = [];
-  for (const { exerciseName } of exerciseCounts(recs, username)) {
-    const stats = weeklySetStats(explodeForCount(setsForUserExercise(recs, username, exerciseName)), today);
-    if (stats.threeMonthAvgPerWeek < 0.5) continue; // not a regular lift recently
-    const behind = Math.round(stats.threeMonthAvgPerWeek - stats.thisWeek);
-    if (behind < 1) continue; // already kept up this week
-    items.push({ name: exerciseName, behind, thisWeek: stats.thisWeek, avg: stats.threeMonthAvgPerWeek });
-  }
-  return items.sort((a, b) => (b.behind - a.behind) || (b.avg - a.avg) || a.name.localeCompare(b.name));
+// ---- Athlete training PRIORITIES (the "Plan workout" overlay) -----------------------
+// Per athlete: up to 10 priority exercises, each with a LEVEL (Max effort / Active /
+// Passive / Maintain) that drives BOTH the suggested weekly target sets AND the order
+// (max-effort first). The athlete adds them manually (starting from zero) from suggestions.
+// Each row also shows the avg weekly sets actually done over the trailing month. Store:
+// colosseum.priorities.v1 → { [username]: { [exerciseName]: { level, target } } }.
+type PriorityLevel = "max" | "active" | "passive" | "maintain";
+const PRIORITY_LEVELS: PriorityLevel[] = ["max", "active", "passive", "maintain"];
+const PRIORITY_LABEL: Record<PriorityLevel, string> = { max: "Max effort", active: "Active", passive: "Passive", maintain: "Maintain" };
+const PRIORITY_ORDER: Record<PriorityLevel, number> = { max: 0, active: 1, passive: 2, maintain: 3 };
+const PRIORITY_MAX = 10;
+interface PriorityEntry { level: PriorityLevel; target: number }
+const PRIORITIES_KEY = "colosseum.priorities.v1";
+const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEntry>>>(PRIORITIES_KEY);
+function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
+function athletePriorities(user: string): Record<string, PriorityEntry> { return prioritiesStore[user] ?? {}; }
+/** Weekly target sets a level SUGGESTS — Maintain ≈ keep your recent month average. */
+function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
+  if (level === "max") return 6;
+  if (level === "active") return 4;
+  if (level === "passive") return 2;
+  return Math.max(1, Math.round(monthAvg)); // maintain = match recent
+}
+/** Avg sets/week actually done over the trailing 30 days, for one athlete+exercise. */
+function exerciseMonthAvg(user: string, ex: string): number {
+  return weeklySetStats(explodeForCount(setsForUserExercise(activeRecords(), user, ex)), todayIso()).monthAvgPerWeek;
 }
 function renderWorkoutPlan(): void {
-  const items = workoutPlanItems();
-  if (items.length === 0) {
-    els.planBody.innerHTML = `<p class="muted plan-empty">You're on track — every regular exercise has hit its weekly average. Nice. 💪</p>`;
-    return;
-  }
-  const maxBehind = items[0]!.behind;
-  els.planBody.innerHTML =
-    `<div class="plan-list">` +
-    items.map((it) => {
-      const mg = mgsFor(it.name)[0];
-      const bar = Math.max(6, Math.round((it.behind / maxBehind) * 100));
-      return `<button type="button" class="plan-row" data-planopen="${escapeHtml(it.name)}" title="Open ${escapeHtml(displayName(it.name))}">` +
-        `<span class="plan-bar" style="width:${bar}%"></span>` +
-        `<span class="plan-main"><span class="plan-name">${escapeHtml(displayName(it.name))}</span>` +
-        `${mg ? `<span class="plan-mg muted">${escapeHtml(mg)}</span>` : ""}</span>` +
-        `<span class="plan-nums"><span class="plan-behind">+${it.behind} set${it.behind === 1 ? "" : "s"}</span>` +
-        `<span class="plan-sub muted">${it.thisWeek}/${it.avg.toFixed(1)} per wk</span></span>` +
-        `</button>`;
-    }).join("") +
-    `</div>`;
+  const user = els.athlete.value;
+  const pri = athletePriorities(user);
+  const names = Object.keys(pri).sort((a, b) =>
+    (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
+  // Suggestions to ADD — the athlete's most-trained lifts not already a priority (and not
+  // a synthetic group), top of the frequency order so their mains lead.
+  const has = new Set(names);
+  const suggestions = exerciseCounts(activeRecords(), user)
+    .map((c) => c.exerciseName)
+    .filter((n) => !has.has(n))
+    .slice(0, 12);
+  const rowHtml = (ex: string): string => {
+    const e = pri[ex]!;
+    const mg = mgsFor(ex)[0];
+    const avg = exerciseMonthAvg(user, ex);
+    return `<div class="prio-row" data-prioex="${escapeHtml(ex)}">` +
+      `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}">` +
+      `<span class="prio-name">${escapeHtml(displayName(ex))}</span>${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
+      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
+      `<span class="prio-stats">` +
+      `<span class="prio-avg muted" title="Average sets per week you've actually done over the last month">~${avg.toFixed(1)}/wk done</span>` +
+      `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
+        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
+        `<span class="prio-tgt-val">${e.target}/wk</span>` +
+        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
+      `</span></span>` +
+      `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
+      `</div>`;
+  };
+  const list = names.length
+    ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
+    : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
+  const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
+    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +
+      `<div class="prio-add-chips">${suggestions.map((ex) =>
+        `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(ex)}" title="Add ${escapeHtml(displayName(ex))} to your priorities">+ ${escapeHtml(displayName(ex))}</button>`).join("")}</div></div>`
+    : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
+  els.planBody.innerHTML = list + addBlock;
 }
+
 function openWorkoutPlan(): void {
   renderWorkoutPlan();
   els.planPage.hidden = false;
@@ -11626,7 +11652,43 @@ async function init() {
   els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
   els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
   els.planBody.addEventListener("click", (e) => {
-    const row = (e.target as HTMLElement).closest<HTMLElement>("[data-planopen]");
+    const t = e.target as HTMLElement;
+    const user = els.athlete.value;
+    const pri = prioritiesStore[user] ?? (prioritiesStore[user] = {});
+    // Cycle the priority LEVEL → re-suggest the target for the new level (re-renders: the
+    // order changes by level, by design).
+    const lvl = t.closest<HTMLElement>("[data-priolevel]");
+    if (lvl?.dataset.priolevel && pri[lvl.dataset.priolevel]) {
+      const ex = lvl.dataset.priolevel;
+      const next = PRIORITY_LEVELS[(PRIORITY_LEVELS.indexOf(pri[ex]!.level) + 1) % PRIORITY_LEVELS.length]!;
+      pri[ex] = { level: next, target: suggestedTarget(next, exerciseMonthAvg(user, ex)) };
+      savePriorities(); renderWorkoutPlan(); return;
+    }
+    // Target −/+ stepper — update IN PLACE (no re-sort, so the row doesn't jump as you tap).
+    const tgt = t.closest<HTMLElement>("[data-priotgt]");
+    if (tgt?.dataset.priotgt && pri[tgt.dataset.priotgt]) {
+      const ex = tgt.dataset.priotgt;
+      const v = Math.max(0, Math.min(20, pri[ex]!.target + (Number(tgt.dataset.d) || 0)));
+      pri[ex]!.target = v; savePriorities();
+      const val = tgt.closest(".prio-target")?.querySelector(".prio-tgt-val");
+      if (val) val.textContent = `${v}/wk`;
+      return;
+    }
+    // Remove a priority.
+    const rm = t.closest<HTMLElement>("[data-prioremove]");
+    if (rm?.dataset.prioremove) { delete pri[rm.dataset.prioremove]; savePriorities(); renderWorkoutPlan(); return; }
+    // Add a suggested exercise (default Active), up to the cap.
+    const add = t.closest<HTMLElement>("[data-prioadd]");
+    if (add?.dataset.prioadd) {
+      const ex = add.dataset.prioadd;
+      if (Object.keys(pri).length < PRIORITY_MAX && !pri[ex]) {
+        pri[ex] = { level: "active", target: suggestedTarget("active", exerciseMonthAvg(user, ex)) };
+        savePriorities(); renderWorkoutPlan();
+      }
+      return;
+    }
+    // Tap the name → open the exercise's info.
+    const row = t.closest<HTMLElement>("[data-planopen]");
     if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen); }
   });
   // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
