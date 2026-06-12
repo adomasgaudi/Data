@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stop hook: detailed token cost report with explanation."""
+"""Stop hook: token cost report."""
 import json, sys
 from pathlib import Path
 
@@ -64,8 +64,8 @@ prompt_idx = prompts[-1][2]
 
 words = prompt_text.split()[:5]
 prompt_preview = " ".join(words)
-if len(prompt_preview) > 35:
-    prompt_preview = prompt_preview[:32] + "..."
+if len(prompt_preview) > 40:
+    prompt_preview = prompt_preview[:37] + "..."
 
 def tally(items):
     t = {"in": 0, "cr": 0, "cw": 0, "out": 0, "usd": 0.0}
@@ -80,11 +80,10 @@ def tally(items):
 turn = tally(calls[prompt_idx:])
 sess = tally(calls)
 
-# Model info
 model = calls[-1][0] if calls else "unknown"
 pin, pout = price(model)
 
-# Build last 10 turn costs for sparkline
+# Last 10 turns sparkline
 sparkline_chars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 last_10_costs = []
 for i in range(max(0, len(prompts) - 10), len(prompts)):
@@ -102,32 +101,32 @@ if last_10_costs:
 else:
     sparkline = ""
 
-# Cache breakdown
-cache_total = turn["cr"] + turn["cw"]
+# Cache costs
 cache_read_cost = (turn["cr"] / 1e6) * pin * 0.1
 cache_write_cost = (turn["cw"] / 1e6) * pin * 1.25
-cache_explain = f"read: {turn['cr']:,} (0.1×) + write: {turn['cw']:,} (1.25×) = {cache_total:,} total"
 
-# Format: 2 sig figs for costs (round to 2 decimals), 4 for session
+# Format with appropriate sig figs (2-4 max)
 def fmt_cost(x):
-    return f"${x:.2f}"
+    if x < 0.001: return f"${x:.4f}"
+    elif x < 0.1: return f"${x:.4f}"
+    else: return f"${x:.2f}"
 
-# Output
 print(f"""
-  #️⃣  #{last_prompt_num} ({prompt_preview})
-  
-  📥 Fresh input:     {turn['in']:>10,} tokens
-  📊 Total cumul:     {sess['in']:>10,} tokens  (all prompts)
-  
-  💾 Cache breakdown: {cache_explain}
-     • read cost:     {fmt_cost(cache_read_cost)}  (cheaper — reused context)
-     • write cost:    {fmt_cost(cache_write_cost)}  (setup cost for future reads)
-  
-  📤 Output tokens:   {turn['out']:>10,} tokens
-  
-  🤖 Model:           {model}  (${pin:.2f}/Mtok input, ${pout:.2f}/Mtok output)
-  
-  💰 This turn:       {fmt_cost(turn['usd'])}
-  📈 Last 10 turns:   {sparkline}  (trend)
-  📊 Session total:   ${sess['usd']:.4f}
+prompt #{last_prompt_num}: {prompt_preview}
+
+input tokens:      {turn['in']:>8,}  (fresh input)
+cumulative input:  {sess['in']:>8,}  (all prompts)
+
+cache tokens:      {turn['cr'] + turn['cw']:>8,}  (total)
+  cache_read:      {turn['cr']:>8,}  @ 0.1x rate = {fmt_cost(cache_read_cost)}
+  cache_write:     {turn['cw']:>8,}  @ 1.25x rate = {fmt_cost(cache_write_cost)}
+
+output tokens:     {turn['out']:>8,}
+
+model:             {model}
+pricing:           ${pin:.2f}/Mtok input, ${pout:.2f}/Mtok output
+
+turn cost:         {fmt_cost(turn['usd'])}
+trend (10 turns):  {sparkline}
+session total:     ${sess['usd']:.4f}
 """)
