@@ -9227,9 +9227,74 @@ function liveExercises(username: string, todayD: number): LiveEx[] {
 function renderCoachPage(): void {
   renderCoachRuler();
   renderCoachUiCatalogue();
+  renderCoachSiteMap();
   renderCoachPersistentBugs();
   renderCoachAppInfo();
   renderCoachTechStack();
+}
+
+function renderCoachSiteMap(): void {
+  const el = document.getElementById("coachSiteMap");
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = "1";
+
+  function page(name: string, desc: string, children?: string): string {
+    return `<div class="csm-node">
+      <div class="csm-name">${escapeHtml(name)}</div>
+      <div class="csm-desc muted">${escapeHtml(desc)}</div>
+      ${children ? `<div class="csm-children">${children}</div>` : ""}
+    </div>`;
+  }
+  function sub(name: string, desc: string): string {
+    return `<div class="csm-sub"><span class="csm-sub-name">${escapeHtml(name)}</span><span class="csm-sub-desc muted">${escapeHtml(desc)}</span></div>`;
+  }
+
+  el.innerHTML = `
+    <p class="muted" style="font-size:0.75rem;margin:0 0 0.8rem">Every reachable view — tap name to navigate where possible.</p>
+    <div class="csm-root">
+
+      ${page("⌂ Home (bottom nav)", "Lands on Analysis view")}
+      ${page("Analysis", "Main training dashboard — Stats · Graph · History tabs",
+        sub("Stats", "1RM, volume, pRIR, percentile cards per exercise") +
+        sub("Graph", "Strength-over-time chart · single-lift carousel · multi-lift view") +
+        sub("History / Workouts", "Session log · per-set editing · manual entry")
+      )}
+      ${page("🔖 Bookmark (bottom nav)", "Saved exercises quick-access")}
+      ${page("🔍 Search (bottom nav)", "Command bar — search exercises, type . for commands")}
+
+      ${page("··· Other sheet (bottom nav)", "All pages not in the main nav",
+        sub("Live", "Coaching plan page — training targets for selected athlete") +
+        sub("Analysis", "Same as Home") +
+        sub("Colosseum", "Leaderboard — ranked 1RM across all athletes") +
+        sub("Stats view (Groups)", "Muscle-group grid across athletes") +
+        sub("World records", "PR table and WR editor") +
+        sub("Guide", "5-month training plan with tick-off checklists") +
+        sub("Version history", "Full release changelog") +
+        sub("── COACH ──", "Admin-only below") +
+        sub("Group view", "Per-group leaderboard cards") +
+        sub("Index (bwparts)", "Exercise index — BW ratios, hole scaling, tiers") +
+        sub("Athletes", "Edit height/weight/age/sex/body-fat per athlete") +
+        sub("Data", "Raw data table — all imported sets") +
+        sub("Formulas (Test/Coach Rx)", "Rep-max formula calculator") +
+        sub("Data health", "Overlay — flags missing/bad data (742 issues)") +
+        sub("Backup & restore", "Overlay — export/import localStorage snapshot") +
+        sub("UI & Coach (this page)", "Component catalogue, ruler, site map, docs")
+      )}
+
+      ${page("⚙ Settings panel (top-right)", "App-wide settings",
+        sub("Theme", "Dark / Light / System") +
+        sub("Language", "EN / LT") +
+        sub("Formula", "Epley / Brzycki / etc.") +
+        sub("View as", "Switch athlete (admin: any; user: own only)") +
+        sub("⬆ Upload / ⬇ Download", "Manual Supabase sync") +
+        sub("Version history link", "Opens changelog tab")
+      )}
+
+      ${page("Exercise info overlay", "Tap ⓘ on any exercise — full stats, merge/group editor, variation config")}
+      ${page("Scale edit popup", "Tap ×N chip on a set — edit variation difficulty")}
+      ${page("Plan workout overlay", "Tap 📋 Plan workout in history toolbar")}
+      ${page("Lift menu popup", "Tap a lift chip in graph/history title — Info / Combine / Compare / Remove")}
+    </div>`;
 }
 
 function renderCoachUiCatalogue(): void {
@@ -9343,8 +9408,11 @@ function renderCoachRuler(): void {
   if (!el || el.dataset.rendered) return;
   el.dataset.rendered = "1";
 
-  // Build a 1000 px ruler with ticks at every 10 px.
-  const rulerW = 1000;
+  const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const vwPx  = window.innerWidth / 100;
+
+  // Build a 500 px ruler with ticks every 10 px, major at 100.
+  const rulerW = 500;
   let ticks = "";
   for (let px = 0; px <= rulerW; px += 10) {
     const isMaj = px % 100 === 0;
@@ -9356,16 +9424,25 @@ function renderCoachRuler(): void {
     ticks += `<div class="${cls}" style="left:${px}px">${lbl}</div>`;
   }
 
-  // 1 rem reference bar
-  const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  // Reference bars: each bar IS the actual size it labels, so you can see it on screen.
+  function refBar(label: string, desc: string, widthPx: number, colour: string): string {
+    return `<div class="coach-ref-row">
+      <div class="coach-ref-bar" style="width:${widthPx}px;background:${colour}" title="${label}"></div>
+      <span class="coach-ref-lbl"><strong>${label}</strong> = ${Math.round(widthPx)} px &nbsp;<span class="muted">${desc}</span></span>
+    </div>`;
+  }
 
   el.innerHTML =
+    `<p class="muted" style="font-size:0.75rem;margin:0 0 0.4rem">Scroll right → ruler is ${rulerW} CSS px wide</p>` +
     `<div class="coach-ruler-wrap"><div class="coach-ruler" style="width:${rulerW}px">${ticks}</div></div>` +
-    `<div class="coach-ruler-units">` +
-      `<div>CSS px · <span>${rulerW} px</span> wide ruler above</div>` +
-      `<div>1 rem = <span>${remPx} px</span></div>` +
-      `<div>100 vw = <span>${window.innerWidth} px</span> on this screen</div>` +
-      `<div>1 vw = <span>${(window.innerWidth / 100).toFixed(1)} px</span></div>` +
+    `<p class="muted" style="font-size:0.75rem;margin:0.8rem 0 0.3rem">Reference bars — each bar is drawn at its exact CSS size:</p>` +
+    `<div class="coach-refs">` +
+      refBar("1 rem", "base font size", remPx, "var(--accent)") +
+      refBar("1 vw", "1% of screen width", vwPx, "var(--gold)") +
+      refBar("10 vw", "10% of screen width", vwPx * 10, "var(--gold)") +
+      refBar("--tap-min (30 px)", "minimum tap target", 30, "var(--lens-compare)") +
+      refBar("100 px", "100 CSS px", 100, "var(--muted)") +
+      refBar("1 screen width", `100 vw = ${window.innerWidth} px`, window.innerWidth, "color-mix(in srgb, var(--accent) 30%, transparent)") +
     `</div>`;
 }
 
