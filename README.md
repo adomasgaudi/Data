@@ -8,7 +8,7 @@ A website that shows StrengthLevel training data for a group of athletes:
 
 A browser extension that renders live HTML previews in Claude chat.
 
-**[📥 Download Extension](../../raw/claude/strength-training-dashboard-SdAlT/claude-html-renderer.zip)** or use the `ext/` folder
+**[📥 Download Extension](https://raw.githubusercontent.com/adomasgaudi/Data/claude/strength-training-dashboard-SdAlT/claude-html-renderer.zip)** or use the `ext/` folder
 
 <details>
 <summary><b>Quick install (Chrome/Edge)</b></summary>
