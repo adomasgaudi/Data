@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Stop hook: print exact token cost of this turn + session,
-parsed from the Claude Code session transcript JSONL (auto-discovered)."""
+"""Stop hook: print cost in owner's preferred format.
+Format: #N (first 5 words...) input: X | total: Y | cache: Z | output: W | turn: $U | session: $V"""
 import json, sys
 from pathlib import Path
 
-PRICING = {  # $/MTok: input, output. Cache: read 0.1x, 5m write 1.25x, 1h write 2x
+PRICING = {
     "claude-fable-5":    (10.0, 50.0),
     "claude-opus-4":     (5.0, 25.0),
     "claude-sonnet-4":   (3.0, 15.0),
@@ -26,7 +26,6 @@ def cost(u, model):
             + w5 * pin * 1.25 + w1 * pin * 2.0
             + u.get("output_tokens", 0) * pout) / 1e6
 
-# Find the most recent transcript JSONL for this project
 def find_transcript():
     projects_dir = Path.home() / ".claude" / "projects"
     if not projects_dir.exists(): return None
@@ -38,7 +37,10 @@ path = find_transcript()
 if not path: sys.exit(0)
 
 calls = []
+prompts = []  # (prompt_num, content, first_call_idx)
 turn_start = 0
+prompt_count = 0
+
 try:
     with open(path) as f:
         for line in f:
@@ -47,14 +49,27 @@ try:
             if d.get("type") == "user" and not d.get("isMeta"):
                 c = (d.get("message") or {}).get("content")
                 if isinstance(c, str):
+                    prompt_count += 1
                     turn_start = len(calls)
+                    prompts.append((prompt_count, c, turn_start))
             m = d.get("message") or {}
             if d.get("type") == "assistant" and m.get("usage"):
                 calls.append((m.get("model", ""), m["usage"]))
 except Exception:
     sys.exit(0)
 
-if not calls: sys.exit(0)
+if not calls or not prompts: sys.exit(0)
+
+# Find which prompt this turn started from
+last_prompt_num = prompts[-1][0]
+prompt_text = prompts[-1][1]
+prompt_idx = prompts[-1][2]
+
+# Truncate prompt to first ~30 chars / 5 words
+words = prompt_text.split()[:5]
+prompt_preview = " ".join(words)
+if len(prompt_preview) > 30:
+    prompt_preview = prompt_preview[:27] + "..."
 
 def tally(items):
     t = {"in": 0, "cr": 0, "cw": 0, "out": 0, "usd": 0.0}
@@ -66,12 +81,9 @@ def tally(items):
         t["usd"] += cost(u, model)
     return t
 
-turn, sess = tally(calls[turn_start:]), tally(calls)
-print(f"""
-  💰 THIS TURN ({len(calls) - turn_start} API calls, {calls[-1][0]})
-     fresh input   {turn['in']:>10,}
-     cache read    {turn['cr']:>10,}  (0.1×)
-     cache write   {turn['cw']:>10,}  (1.25–2×)
-     output        {turn['out']:>10,}
-     turn cost      ${turn['usd']:.4f}
-  📊 SESSION ({len(calls)} calls)  ${sess['usd']:.4f}""")
+turn = tally(calls[prompt_idx:])
+sess = tally(calls)
+turn_cache = turn["cr"] + turn["cw"]
+turn_total = turn["usd"]
+
+print(f"  #{last_prompt_num} ({prompt_preview}) input: {turn['in']:,} | total: {sess['in']:,} | cache: {turn_cache:,} | out: {turn['out']:,} | turn: ${turn_total:.4f} | session: ${sess['usd']:.4f}")
