@@ -2827,6 +2827,30 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-meta-chip { font: inherit; font-size: 0.76rem; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 9px; }
 .ex-meta-chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-meta-chip.is-on { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* Code + Short name share a row: two equal compact columns instead of two stacked
+   items (the two tiny name fields sit tighter side-by-side). */
+.ex-info-row2 { flex-direction: row; gap: 0.7rem; align-items: flex-start; }
+.ex-info-col { display: flex; flex-direction: column; gap: 0.3rem; flex: 1 1 0; min-width: 0; }
+/* Each taxonomy section is a collapsible fold: the label header doubles as the
+   tappable summary (caret flips when open), with a muted hint of the current pick. */
+.ex-meta-fold > .ex-info-val { margin-top: 0.4rem; }
+.ex-meta-fold-sum { cursor: pointer; list-style: none; user-select: none; display: flex; align-items: baseline; gap: 0.45rem; min-height: var(--tap-min); }
+.ex-meta-fold-sum::-webkit-details-marker { display: none; }
+.ex-meta-fold-sum::before { content: "▸"; color: var(--accent); font-weight: 700; align-self: center; }
+.ex-meta-fold[open] > .ex-meta-fold-sum::before { content: "▾"; }
+.ex-meta-fold-hint { color: var(--muted); font-size: 0.78rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-meta-fold[open] > .ex-meta-fold-sum > .ex-meta-fold-hint { display: none; }
+/* Editable spelling-merge sources: each spelling is a chip; folded ones carry a ✕ to
+   split them out, split-out siblings are "＋ name" chips to merge back. */
+.ex-spell-wrap { display: flex; flex-direction: column; gap: 0.3rem; }
+.ex-spell-chip { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 0.76rem; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 6px 2px 9px; }
+.ex-spell-name { font-weight: 600; }
+.ex-spell-main { color: var(--muted); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.ex-spell-split { display: inline-flex; align-items: center; justify-content: center; min-width: var(--tap-min); min-height: var(--tap-min); margin: -4px -4px -4px 0; padding: 0; font: inherit; font-size: 0.85rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: none; border-radius: var(--r-pill); }
+.ex-spell-split:hover { color: var(--remove, #b4543a); }
+.ex-spell-merge { cursor: pointer; min-height: var(--tap-min); color: var(--muted); }
+.ex-spell-merge:hover { border-color: var(--accent); color: var(--accent); }
+.ex-spell-help { font-size: 0.74rem; margin: 0.1rem 0 0; }
 /* Info-mode ⓘ that follows each pill (header ⓘ toggle on): a small accent dot that
    jumps to that subject. Sits tight after its pill; kept just big enough to tap. */
 .ex-pill-info {

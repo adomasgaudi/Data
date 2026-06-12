@@ -45,10 +45,12 @@ import {
   withSyntheticGroups,
   buildActiveExerciseSet,
   decayedStrengthSeries,
+  sameExerciseKey,
   type SyntheticGroupDef,
   type PersonalRecord,
   type WorkoutDay,
   type ExerciseCount,
+  type ExerciseMerge,
 } from "./aggregate";
 import {
   epley1RM,
@@ -10203,6 +10205,36 @@ function openWorkoutPlan(): void {
   renderWorkoutPlan();
   els.planPage.hidden = false;
 }
+// Remember which taxonomy sections (Discipline / Muscle group / Tier / Combinable /
+// Comparable) the owner has expanded, per exercise, so the card's re-render after a
+// chip tap doesn't snap the fold shut (the recurring "tapping a setting closes the
+// menu" class — rule). Key: `${name}|${section}`.
+const metaFoldOpen = new Set<string>();
+/** The editable SOURCES control for a spelling-merge: the canonical name (·main,
+ * fixed) plus each folded spelling as a chip with a ✕ to split it into its own lift,
+ * plus any split-out siblings as "＋ name" chips to merge them back. Falls back to a
+ * plain "Standalone" line when there's nothing to fold or split. */
+function spellingSourcesHtml(name: string, variants: string[]): string {
+  const key = sameExerciseKey(name);
+  // Split-out siblings: raw spellings the owner pulled out that belong to THIS lift's
+  // spelling cluster (so they can be merged back from here).
+  const siblings = [...spellingSplits].filter((s) => s !== name && sameExerciseKey(s) === key);
+  if (variants.length === 0 && siblings.length === 0)
+    return `Standalone — logged under one name only`;
+  const mainChip =
+    `<span class="ex-spell-chip is-on"><span class="ex-spell-name">${escapeHtml(name)}</span>` +
+    `<span class="ex-spell-main" title="The display name — the spelling shown everywhere">main</span></span>`;
+  const varChip = (v: string) =>
+    `<span class="ex-spell-chip is-on"><span class="ex-spell-name">${escapeHtml(v)}</span>` +
+    `<button type="button" class="ex-spell-split" data-splitsp="${escapeHtml(v)}" title="Split “${escapeHtml(v)}” out into its own lift" aria-label="Split out ${escapeHtml(v)}">✕</button></span>`;
+  const sibChip = (s: string) =>
+    `<button type="button" class="ex-spell-chip ex-spell-merge" data-mergesp="${escapeHtml(s)}" title="Merge “${escapeHtml(s)}” back into this lift">＋ ${escapeHtml(s)}</button>`;
+  return (
+    `<div class="ex-spell-wrap"><div class="ex-meta-chips">` +
+    mainChip + variants.map(varChip).join("") + siblings.map(sibChip).join("") +
+    `</div><p class="muted ex-spell-help">Tap ✕ to split a spelling into its own lift; tap ＋ to merge one back.</p></div>`
+  );
+}
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   // The info card shows THIS lift's real data — unfiltered, so a lift hidden by the
@@ -10342,14 +10374,39 @@ function exerciseInfoHtml(name: string): string {
     `<span class="ex-coeff-avg" title="Average of the range — this is what the 1RM uses">avg ${coeff}</span>` +
     `</span>`;
 
+  // Code + Short name share one row (two compact columns) — they're the two tiny
+  // name fields, so side-by-side reads tighter than two stacked rows.
+  const codeShortRow =
+    `<div class="ex-info-item ex-info-row2">` +
+    `<div class="ex-info-col"><span class="ex-info-lbl">Code</span><span class="ex-info-val">${codeInput}</span></div>` +
+    `<div class="ex-info-col"><span class="ex-info-lbl">Short name</span><span class="ex-info-val">${shortInput}</span></div>` +
+    `</div>`;
+  // Each taxonomy section (Discipline / Muscle group / Tier / Combinable / Comparable)
+  // is a collapsible fold — collapsed by default to keep the card short, with a muted
+  // hint of the current pick in the summary so you see the value without opening it.
+  // Open state is remembered per section (metaFoldOpen) across the card's re-render.
+  const foldSection = (sec: string, label: string, hint: string, body: string) => {
+    const open = metaFoldOpen.has(`${name}|${sec}`);
+    return (
+      `<details class="ex-info-item ex-meta-fold" data-metafold="${escapeHtml(name)}" data-metafoldsec="${escapeHtml(sec)}"${open ? " open" : ""}>` +
+      `<summary class="ex-meta-fold-sum"><span class="ex-info-lbl">${escapeHtml(label)}</span>` +
+      (hint ? `<span class="ex-meta-fold-hint">${escapeHtml(hint)}</span>` : "") + `</summary>` +
+      `<div class="ex-info-val">${body}</div></details>`
+    );
+  };
+  const discHint = discsFor(name).join(", ");
+  const mgHint = mgsFor(name).slice(0, 4).join(", ");
+  const tierHint = TIER_LABELS[tiersFor(name)[0] ?? "second"];
+  const combineHint = combinableGroupsForEx(name).map((g) => g.label).join(", ");
+  const compareHint = comparableGroupsForEx(name).map((g) => g.label).join(", ");
+
   const rows = [
-    item("Code", codeInput),
-    item("Short name", shortInput),
-    item("Discipline", discChips),
-    item("Muscle group", mgChips),
-    item("Tier", tierChips),
-    combineChips ? item("Combinable", combineChips) : "",
-    compareChips ? item("Comparable", compareChips) : "",
+    codeShortRow,
+    foldSection("disc", "Discipline", discHint, discChips),
+    foldSection("mg", "Muscle group", mgHint, mgChips),
+    foldSection("tier", "Tier", tierHint, tierChips),
+    combineChips ? foldSection("combine", "Combinable", combineHint, combineChips) : "",
+    compareChips ? foldSection("compare", "Comparable", compareHint, compareChips) : "",
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
     item("Total sets", setCount.toLocaleString()),
@@ -10360,14 +10417,14 @@ function exerciseInfoHtml(name: string): string {
     first && last ? item("Logged", `${shortDate(first)} → ${shortDate(last)}`) : "",
     // Always state merge status explicitly, so a standalone lift is confirmed as
     // such (not just silently lacking an "also logged as" line). A user-created
-    // merge, an auto spelling-merge, and a plain standalone all read clearly.
+    // merge, an auto spelling-merge, and a plain standalone all read clearly. For a
+    // spelling-merge the sources are EDITABLE — split a spelling into its own lift,
+    // or merge a split-out sibling back in (see spellingSourcesHtml).
     item(
       "Sources",
       userMergeDef?.members?.length
         ? `<strong>Merged lift</strong> — combines ${userMergeDef.members.length} exercises into one (see below to separate/dissolve)`
-        : spellingVariants.length
-          ? `<strong>Merged</strong> from ${spellingVariants.length + 1} spellings: ${escapeHtml([name, ...spellingVariants].join(", "))}`
-          : `Standalone — logged under one name only`,
+        : spellingSourcesHtml(name, spellingVariants),
     ),
   ].join("");
 
@@ -11354,7 +11411,7 @@ async function init() {
     return;
   }
   // Fold in any hand-logged sets saved on this device (the Add tab).
-  csvRecordCount = data.records.length;
+  loadedRecords = data.records; // immutable base for spelling-split re-derivation
   mergeManualSets();
   loadAlone(); // "trained alone" workout tags saved on this device
 
@@ -12408,6 +12465,27 @@ async function init() {
     const k = variationKey(ex, note);
     if ((d as HTMLDetailsElement).open) openVarNotes.add(k); else openVarNotes.delete(k);
   }, true);
+  // Remember which taxonomy section folds (Discipline / Muscle group / Tier / …) are
+  // open per exercise, so editing a chip inside (which re-renders the card) keeps the
+  // fold open instead of snapping it shut. Capture phase — `toggle` doesn't bubble.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!(d instanceof HTMLDetailsElement) || !d.classList.contains("ex-meta-fold")) return;
+    const ex = d.dataset.metafold, sec = d.dataset.metafoldsec;
+    if (!ex || !sec) return;
+    const k = `${ex}|${sec}`;
+    if (d.open) metaFoldOpen.add(k); else metaFoldOpen.delete(k);
+  }, true);
+  // Editable SOURCES (spelling-merge): split a folded spelling into its own lift, or
+  // merge a split-out sibling back in. Mutates the split set, rebuilds the records +
+  // merge report, then refreshes the picker + the open card.
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const split = t.closest<HTMLElement>(".ex-spell-split[data-splitsp]");
+    if (split?.dataset.splitsp) { spellingSplits.add(split.dataset.splitsp); afterSpellingEdit(); return; }
+    const mrg = t.closest<HTMLElement>(".ex-spell-merge[data-mergesp]");
+    if (mrg?.dataset.mergesp) { spellingSplits.delete(mrg.dataset.mergesp); afterSpellingEdit(); return; }
+  });
   // Merged-lift controls on the exercise info page: separate one member back out,
   // or dissolve the whole merge.
   document.addEventListener("click", (e) => {
@@ -13180,7 +13258,7 @@ async function syncFromGitHub(): Promise<void> {
     // Newer data than the build carries — rebuild the records and re-render the views.
     data = buildLoaded(fresh);
     clearMachineCache();
-    csvRecordCount = data.records.length;
+    loadedRecords = data.records; // immutable base for spelling-split re-derivation
     mergeManualSets();
     populateExercisePicker();
     renderAll();
@@ -13606,15 +13684,81 @@ function manualToRecord(m: ManualEntry, setNumber: number): SetRecord {
   };
 }
 
+// ---- Editable spelling-merges: which raw spellings the owner pulled OUT of their
+// auto-merge so each becomes its own standalone lift. The SSOT is this Set; the
+// active records (and the merge list) are re-derived from the immutable loaded CSV
+// records every rebuild, so splitting and re-merging are both lossless. ----
+const SPELLING_SPLIT_KEY = "colosseum.spellingSplits.v1";
+const spellingSplits: Set<string> = (() => {
+  try {
+    const a = JSON.parse(localStorage.getItem(SPELLING_SPLIT_KEY) ?? "[]");
+    return new Set(Array.isArray(a) ? (a as string[]) : []);
+  } catch { return new Set<string>(); }
+})();
+function saveSpellingSplits(): void {
+  try { localStorage.setItem(SPELLING_SPLIT_KEY, JSON.stringify([...spellingSplits])); } catch { /* quota */ }
+}
+/** Recompute the spelling-merge report from the (already-split) CSV records: group
+ * by canonical name, list the raw spellings folded into it, sum the sets. Faithful
+ * to canonicalizeExerciseNames' report, but reflects the owner's split-outs. */
+function mergesFromRecords(records: readonly SetRecord[]): ExerciseMerge[] {
+  const byCanon = new Map<string, { variants: Set<string>; sets: number }>();
+  for (const r of records) {
+    const canon = r.exerciseName;
+    if (!canon) continue;
+    let e = byCanon.get(canon);
+    if (!e) byCanon.set(canon, (e = { variants: new Set(), sets: 0 }));
+    e.sets++;
+    const raw = r.originalExerciseName ?? canon;
+    if (raw !== canon) e.variants.add(raw);
+  }
+  const merges: ExerciseMerge[] = [];
+  for (const [canonical, e] of byCanon)
+    if (e.variants.size) merges.push({ canonical, variants: [...e.variants], sets: e.sets });
+  merges.sort((a, b) => b.variants.length - a.variants.length || b.sets - a.sets);
+  return merges;
+}
+
 /** Append the hand-logged sets to the loaded dataset (called once after load and
- * after any add/delete, by rebuilding from data.csvRecords + manual). */
-let csvRecordCount = 0; // how many of data.records came from the CSV (the prefix)
+ * after any add/delete, by rebuilding from loadedRecords + the splits + manual). */
+let loadedRecords: SetRecord[] = []; // immutable CSV-canonical records, pre-split, pre-manual
 function mergeManualSets() {
-  // Keep the first csvRecordCount records (the CSV) and re-append manual ones.
-  data.records.length = csvRecordCount;
+  // Rebuild the CSV prefix from the immutable loaded records, applying the owner's
+  // spelling-splits (a split raw spelling reverts to its own name → standalone lift).
+  const csv = spellingSplits.size
+    ? loadedRecords.map((r) => {
+        const raw = r.originalExerciseName ?? r.exerciseName;
+        return raw !== r.exerciseName && spellingSplits.has(raw) ? { ...r, exerciseName: raw } : r;
+      })
+    : loadedRecords;
+  data.records = csv.slice();
   // A high, unique set number per entry → a stable, collision-free setId (so each
   // hand-logged set edits/tags independently and never clashes with a CSV set).
   manualEntries.forEach((m, i) => data.records.push(manualToRecord(m, 100000 + i)));
+  // Re-derive the spelling-merge report (CSV only) so it reflects any split-outs.
+  data.merges = mergesFromRecords(csv);
+  mergeVariantsCache = null;
+}
+/** Applied after the owner splits/merges a spelling in the SOURCES editor: persist
+ * the change, rebuild the records + merge report, refresh the picker, merge list and
+ * the open card, then re-render the app. If the open lift was folded away (a split
+ * sibling merged back over it), follow it to its new canonical name. */
+function afterSpellingEdit(): void {
+  saveSpellingSplits();
+  mergeManualSets();
+  clearMachineCache();
+  populateExercisePicker();
+  renderMergeList();
+  if (currentExInfo) {
+    const present = new Set(data.records.map((r) => r.exerciseName));
+    if (present.has(currentExInfo)) {
+      refreshExerciseInfo();
+    } else {
+      const rec = data.records.find((r) => (r.originalExerciseName ?? r.exerciseName) === currentExInfo);
+      if (rec) openExerciseInfo(rec.exerciseName);
+    }
+  }
+  scheduleRender();
 }
 
 /** Populate the Add form's athlete dropdown + exercise suggestions and the table. */

@@ -399,6 +399,7 @@ const LT: Record<string, string> = {
   "per week": "per savaitę",
   // ---- Index / groups ----
   "Merged exercises": "Sujungti pratimai",
+  "Tap ✕ to split a spelling into its own lift; tap ＋ to merge one back.": "Bakstelėkite ✕, kad atskirtumėte rašybą į atskirą pratimą; bakstelėkite ＋, kad sujungtumėte atgal.",
   "Bodyweight parts": "Kūno svorio dalys",
   "Shown as": "Rodoma kaip",
   "Combined from": "Sujungta iš",
