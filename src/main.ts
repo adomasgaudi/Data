@@ -11604,6 +11604,11 @@ async function init() {
 
   renderStatus();
   renderHealth();
+  // DEBUG: show init state on screen so we can diagnose blank page
+  const dbg = document.getElementById("waAthleteHost");
+  if (dbg) dbg.innerHTML = `<div style="background:#e74;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;margin:4px 0">
+    JS running · athlete="${els.athlete.value}" · records=${data?.records?.length ?? "?"} · v303
+  </div>`;
   try {
     renderAll();
   } catch (err) {
@@ -11611,6 +11616,7 @@ async function init() {
     els.status.innerHTML = `<span class="badge warn">Render crash: ${String(err)}</span>`;
     console.error("renderAll crash:", err);
   }
+  if (dbg) dbg.innerHTML = ""; // clear debug after renderAll (which repopulates it)
   // Momentum trend-period toggle (delegated; survives re-renders).
   els.momentum.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
