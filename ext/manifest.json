@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Claude HTML Renderer",
+  "description": "Render HTML code blocks in Claude chat",
+  "version": "1.0",
+  "permissions": ["scripting"],
+  "host_permissions": ["*://claude.ai/*", "*://www.anthropic.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://claude.ai/*", "*://www.anthropic.com/*"],
+      "js": ["content.js"],
+      "css": ["style.css"],
+      "run_at": "document_end"
+    }
+  ]
+}

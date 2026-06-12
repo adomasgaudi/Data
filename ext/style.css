@@ -1,0 +1,45 @@
+/**
+ * Claude HTML Renderer Extension - Styles
+ */
+
+.claude-html-render {
+  margin: 16px 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  overflow: hidden;
+}
+
+.claude-render-toggle {
+  width: 100%;
+  padding: 12px 16px;
+  background: #f3f4f6;
+  border: none;
+  border-bottom: 1px solid #d1d5db;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.claude-render-toggle:hover {
+  background: #e5e7eb;
+}
+
+.claude-render-preview {
+  display: none;
+  padding: 0;
+}
+
+.claude-render-preview.open {
+  display: block;
+}
+
+.claude-render-iframe {
+  width: 100%;
+  border: none;
+  min-height: 400px;
+  display: block;
+}
