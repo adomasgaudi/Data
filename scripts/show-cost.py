@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Stop hook: print cost in owner's preferred format.
-Format: #N (first 5 words...) input: X | total: Y | cache: Z | output: W | turn: $U | session: $V"""
+"""Stop hook with graph: cost report + ASCII visualizations."""
 import json, sys
 from pathlib import Path
 
@@ -37,8 +36,7 @@ path = find_transcript()
 if not path: sys.exit(0)
 
 calls = []
-prompts = []  # (prompt_num, content, first_call_idx)
-turn_start = 0
+prompts = []
 prompt_count = 0
 
 try:
@@ -50,8 +48,7 @@ try:
                 c = (d.get("message") or {}).get("content")
                 if isinstance(c, str):
                     prompt_count += 1
-                    turn_start = len(calls)
-                    prompts.append((prompt_count, c, turn_start))
+                    prompts.append((prompt_count, c, len(calls)))
             m = d.get("message") or {}
             if d.get("type") == "assistant" and m.get("usage"):
                 calls.append((m.get("model", ""), m["usage"]))
@@ -60,12 +57,10 @@ except Exception:
 
 if not calls or not prompts: sys.exit(0)
 
-# Find which prompt this turn started from
 last_prompt_num = prompts[-1][0]
 prompt_text = prompts[-1][1]
 prompt_idx = prompts[-1][2]
 
-# Truncate prompt to first ~30 chars / 5 words
 words = prompt_text.split()[:5]
 prompt_preview = " ".join(words)
 if len(prompt_preview) > 30:
@@ -84,6 +79,56 @@ def tally(items):
 turn = tally(calls[prompt_idx:])
 sess = tally(calls)
 turn_cache = turn["cr"] + turn["cw"]
-turn_total = turn["usd"]
 
-print(f"  #{last_prompt_num} ({prompt_preview}) input: {turn['in']:,} | total: {sess['in']:,} | cache: {turn_cache:,} | out: {turn['out']:,} | turn: ${turn_total:.4f} | session: ${sess['usd']:.4f}")
+# Build per-turn cost history for sparkline (last 15 turns)
+turn_costs = []
+for i in range(len(prompts) - min(15, len(prompts)), len(prompts)):
+    p_num, p_text, p_idx = prompts[i]
+    if i + 1 < len(prompts):
+        next_idx = prompts[i + 1][2]
+    else:
+        next_idx = len(calls)
+    t = tally(calls[p_idx:next_idx])
+    turn_costs.append(t["usd"])
+
+# Sparkline: scale costs to 0-8 (heights for ▁▂▃▄▅▆▇█)
+sparkline_chars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+if turn_costs:
+    max_cost = max(turn_costs) or 0.01
+    sparkline = "".join(
+        sparkline_chars[int(min(7, c / max_cost * 8))] if c > 0 else "▁"
+        for c in turn_costs
+    )
+else:
+    sparkline = ""
+
+# Token breakdown bar (proportion of this turn's tokens)
+total_turn_tokens = turn["in"] + turn["cr"] + turn["cw"] + turn["out"]
+if total_turn_tokens > 0:
+    in_w = max(1, int(turn["in"] / total_turn_tokens * 30))
+    cr_w = max(1, int(turn["cr"] / total_turn_tokens * 30))
+    cw_w = max(1, int(turn["cw"] / total_turn_tokens * 30))
+    out_w = max(1, int(turn["out"] / total_turn_tokens * 30))
+    # Normalize if over 30
+    total_w = in_w + cr_w + cw_w + out_w
+    if total_w > 30:
+        in_w = int(in_w * 30 / total_w)
+        cr_w = int(cr_w * 30 / total_w)
+        cw_w = int(cw_w * 30 / total_w)
+        out_w = 30 - in_w - cr_w - cw_w
+    token_bar = ("█" * in_w + "▓" * cr_w + "▒" * cw_w + "░" * out_w)[:30]
+else:
+    token_bar = ""
+
+# Summary line
+summary = f"  #{last_prompt_num} ({prompt_preview}) input: {turn['in']:,} | total: {sess['in']:,} | cache: {turn_cache:,} | out: {turn['out']:,} | turn: ${turn['usd']:.4f} | session: ${sess['usd']:.4f}"
+
+# Graph section
+graph = ""
+if token_bar:
+    graph += f"\n  tokens  {token_bar} "
+    graph += f"(in:{turn['in']:,} cr:{turn['cr']:,} cw:{turn['cw']:,} out:{turn['out']:,})"
+if sparkline:
+    graph += f"\n  cost ↗  {sparkline}"
+
+print(summary + graph)
