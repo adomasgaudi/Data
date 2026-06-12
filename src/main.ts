@@ -7185,10 +7185,10 @@ function renderWorkoutsPage() {
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
-        // Swipe the line left→right to delete this exercise's sets that day (with a 10s
-        // undo + cache log). The exact set ids ride along so the delete is precise.
-        const delIds = sets.map((s) => setId(s));
-        return `<div class="wo-ex-line" data-woexdel="${escapeHtml(name)}" data-wosetids="${escapeHtml(JSON.stringify(delIds))}">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        // NO swipe-to-delete on this collapsed day line (owner request): removing sets is
+        // done per-set INSIDE the expanded set table (swipe a set row there), never by
+        // dragging a whole exercise off the collapsed day view.
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -11432,55 +11432,11 @@ async function init() {
   document.addEventListener("click", (e) => {
     if (Date.now() - swEndedAt < 350) { e.preventDefault(); e.stopPropagation(); }
   }, true);
-  // Swipe a workout-history EXERCISE LINE left→right to delete that lift's sets that day
-  // (destructive → 10s undo toast + cache log; also recoverable in Data health). Same
-  // gesture pattern as the title chips. The line follows the finger; past the threshold a
-  // red "delete" tint shows and releasing commits.
-  {
-    const SLOP = 8, COMMIT = 90;
-    let row: HTMLElement | null = null, ids: string[] = [], label = "";
-    let x0 = 0, y0 = 0, dx = 0, claimed = false, ptr = -1, endedAt = 0;
-    const reset = (snap: boolean) => {
-      if (row) { row.classList.remove("wo-ex-swiping", "wo-ex-willdel"); if (snap) { row.style.transform = ""; row.style.opacity = ""; } }
-      row = null; claimed = false; dx = 0; ptr = -1;
-    };
-    document.addEventListener("pointerdown", (e) => {
-      if (e.button > 0) return;
-      const r = (e.target as HTMLElement).closest<HTMLElement>(".wo-ex-line[data-wosetids]");
-      if (!r) return;
-      row = r; label = r.dataset.woexdel ?? "";
-      try { ids = JSON.parse(r.dataset.wosetids ?? "[]"); } catch { ids = []; }
-      x0 = e.clientX; y0 = e.clientY; dx = 0; claimed = false; ptr = e.pointerId;
-    });
-    document.addEventListener("pointermove", (e) => {
-      if (!row || e.pointerId !== ptr) return;
-      const ddx = e.clientX - x0, ddy = e.clientY - y0;
-      if (!claimed) {
-        if (Math.abs(ddy) > Math.abs(ddx) && Math.abs(ddy) > SLOP) { reset(true); return; }
-        if (ddx <= SLOP) return;
-        claimed = true; row.classList.add("wo-ex-swiping"); try { row.setPointerCapture(ptr); } catch { /* ignore */ }
-      }
-      dx = Math.max(0, ddx);
-      row.style.transform = `translateX(${dx}px)`;
-      row.style.opacity = String(Math.max(0.3, 1 - dx / 240));
-      row.classList.toggle("wo-ex-willdel", dx >= COMMIT);
-    });
-    const end = () => {
-      if (!row) return;
-      const ok = claimed && dx >= COMMIT && ids.length;
-      if (claimed) endedAt = Date.now();
-      if (ok) { const d = ids, l = label; reset(false); deleteSetsWithUndo(d, l); }
-      else reset(true);
-    };
-    document.addEventListener("pointerup", end);
-    document.addEventListener("pointercancel", () => reset(true));
-    document.addEventListener("click", (e) => { if (Date.now() - endedAt < 350) { e.preventDefault(); e.stopPropagation(); } }, true);
-  }
 
-  // Swipe LEFT→RIGHT to DELETE a single SET ROW in the EXPANDED session tables (owner ask).
-  // Companion to the exercise-line swipe above (that drops a whole lift's day; this drops
-  // ONE set). Same mechanics, and it reuses deleteSetsWithUndo so it gets the same 10s undo
-  // toast. The trailing tap is eaten so a swipe doesn't open the set's edit panel.
+  // Swipe LEFT→RIGHT to DELETE a single SET ROW — ONLY in the EXPANDED session tables
+  // (owner ask: removing sets is done per-set INSIDE the expanded history, never from the
+  // collapsed day line, whose drag-to-delete was removed). Reuses deleteSetsWithUndo so it
+  // gets the same 10s undo toast. The trailing tap is eaten so a swipe doesn't open the editor.
   const SS_SLOP = 8, SS_DELETE = 90;
   let ssRow: HTMLElement | null = null, ssId = "", ssLabel = "";
   let ssX0 = 0, ssY0 = 0, ssDx = 0, ssClaimed = false, ssPtr = -1, ssEndedAt = 0;
