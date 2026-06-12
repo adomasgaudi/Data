@@ -382,6 +382,12 @@ const LT: Record<string, string> = {
   "No workouts.": "Treniruočių nėra.",
   "No workouts for that filter.": "Nėra treniruočių pagal šį filtrą.",
   "rest days": "poilsio dienų",
+  "period": "laikotarpis",
+  "vs group": "ar grupė",
+  "per page": "puslapyje",
+  "rep max": "kart. maks.",
+  "add set": "pridėti seriją",
+  "day tags": "dienų žymos",
   "Show all": "Rodyti visus",
   "Hide them": "Slėpti juos",
   "Hidden": "Paslėpti",
@@ -443,7 +449,7 @@ const LT: Record<string, string> = {
 };
 
 const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "CODE", "PRE"]);
-const ATTRS = ["placeholder", "title", "aria-label"];
+const ATTRS = ["placeholder", "title", "aria-label", "data-sub"];
 
 /** Translate one string if it's an exact (trimmed) dictionary hit, preserving the
  * node's surrounding whitespace. Returns null when there's nothing to change. */

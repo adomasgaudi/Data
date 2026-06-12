@@ -2312,6 +2312,27 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 .wo-dj-btn[hidden] { display: none; }
+/* History (⚙) DJ row only: 30% bigger pills, each with a small gray sub-label
+   under the toggle word so its job is clear ("Day" → period, "50" → per page…),
+   and forced to wrap into ~2 rows (4 per line) instead of one long line.
+   Scoped to .wo-head-row so the calendar / horizontal-history DJ rows (which have
+   no data-sub) stay untouched. */
+.wo-head-row .wo-controls-fold[open] .wo-dj {
+  display: grid; grid-template-columns: repeat(4, auto);
+  gap: 5px; padding: 6px; width: max-content; max-width: 88vw;
+}
+.wo-head-row .wo-dj-btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  font-size: 0.9rem; min-width: 3.4rem; padding: 6px 8px; line-height: 1.05;
+}
+.wo-head-row .wo-dj-btn::after {
+  content: attr(data-sub);
+  font-size: 0.62rem; font-weight: 500; color: var(--muted); line-height: 1;
+}
+.wo-head-row .wo-dj-btn:hover::after { color: var(--accent); }
+.wo-head-row .wo-dj-btn.is-active::after,
+.wo-head-row .wo-dj-btn[data-state="alone"]::after,
+.wo-head-row .wo-dj-btn[data-state="notAlone"]::after { color: rgba(255, 255, 255, 0.82); }
 /* Banner above the history list when the Index app-wide filter hides some lifts. */
 /* "Hidden lifts" warning toggle in the history head row (next to the ⚙): amber
    warning when the Index filter is hiding lifts, accent when revealing them. */
