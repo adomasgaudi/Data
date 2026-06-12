@@ -644,6 +644,17 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .coach-ref-bar { height: 12px; border-radius: 3px; flex-shrink: 0; }
 .coach-ref-lbl { font-size: var(--fs-xs); white-space: nowrap; flex-shrink: 0; }
 
+/* Design token editor */
+.dtok-grid { display: flex; flex-direction: column; gap: 1rem; }
+.dtok-group { }
+.dtok-group-title { font-size: var(--fs-xs); font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
+.dtok-row { display: flex; align-items: center; gap: 0.5rem; min-height: var(--tap-min); }
+.dtok-lbl { font-size: var(--fs-xs); color: var(--text); width: 6rem; flex-shrink: 0; }
+.dtok-color { width: 2rem; height: 1.6rem; border: 1px solid var(--line); border-radius: var(--r-xs); padding: 1px 2px; background: none; cursor: pointer; flex-shrink: 0; }
+.dtok-range { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.dtok-val { font-size: var(--fs-2xs); color: var(--muted); white-space: nowrap; }
+.dtok-reset:disabled { opacity: 0.4; pointer-events: none; }
+
 /* Coach site map */
 .csm-root { display: flex; flex-direction: column; gap: 0.5rem; }
 .csm-node { border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }

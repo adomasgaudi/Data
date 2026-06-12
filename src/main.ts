@@ -9341,11 +9341,192 @@ function liveExercises(username: string, todayD: number): LiveEx[] {
 
 function renderCoachPage(): void {
   renderCoachRuler();
+  renderCoachTokenEditor();
   renderCoachUiCatalogue();
   renderCoachSiteMap();
   renderCoachPersistentBugs();
   renderCoachAppInfo();
   renderCoachTechStack();
+}
+
+// ── Design-token live editor ──────────────────────────────────────────────────
+const TOKEN_OVERRIDE_KEY = "colosseum.designTokens.v1";
+
+interface TokenOverrides { [prop: string]: string }
+
+function loadTokenOverrides(): TokenOverrides {
+  return loadJsonObject<TokenOverrides>(TOKEN_OVERRIDE_KEY) ?? {};
+}
+
+function applyTokenOverrides(overrides: TokenOverrides): void {
+  const root = document.documentElement;
+  for (const [prop, val] of Object.entries(overrides)) {
+    root.style.setProperty(prop, val);
+  }
+}
+
+// Apply persisted overrides at startup
+applyTokenOverrides(loadTokenOverrides());
+
+type TokenKind = "color" | "px" | "rem" | "s";
+interface TokenDef { prop: string; label: string; kind: TokenKind; min?: number; max?: number; step?: number }
+
+const TOKEN_GROUPS: { title: string; tokens: TokenDef[] }[] = [
+  {
+    title: "Brand colours",
+    tokens: [
+      { prop: "--accent",       label: "Accent",       kind: "color" },
+      { prop: "--gold",         label: "Gold",         kind: "color" },
+      { prop: "--danger",       label: "Danger",       kind: "color" },
+      { prop: "--lens-combine", label: "Lens combine", kind: "color" },
+      { prop: "--lens-compare", label: "Lens compare", kind: "color" },
+      { prop: "--lens-both",    label: "Lens both",    kind: "color" },
+    ],
+  },
+  {
+    title: "Corner radii",
+    tokens: [
+      { prop: "--r-xs",   label: "r-xs",   kind: "px", min: 0, max: 20, step: 1 },
+      { prop: "--r-sm",   label: "r-sm",   kind: "px", min: 0, max: 20, step: 1 },
+      { prop: "--r-pill", label: "r-pill", kind: "px", min: 0, max: 24, step: 1 },
+      { prop: "--r-md",   label: "r-md",   kind: "px", min: 0, max: 24, step: 1 },
+    ],
+  },
+  {
+    title: "Tap / control sizes",
+    tokens: [
+      { prop: "--tap-min", label: "tap-min", kind: "px", min: 24, max: 56, step: 1 },
+      { prop: "--h-ctrl",  label: "h-ctrl",  kind: "px", min: 24, max: 56, step: 1 },
+    ],
+  },
+  {
+    title: "Font sizes",
+    tokens: [
+      { prop: "--fs-2xs",  label: "fs-2xs",  kind: "rem", min: 0.5, max: 1.2, step: 0.01 },
+      { prop: "--fs-xs",   label: "fs-xs",   kind: "rem", min: 0.5, max: 1.2, step: 0.01 },
+      { prop: "--fs-sm",   label: "fs-sm",   kind: "rem", min: 0.5, max: 1.2, step: 0.01 },
+      { prop: "--fs-md",   label: "fs-md",   kind: "rem", min: 0.5, max: 1.2, step: 0.01 },
+      { prop: "--fs-base", label: "fs-base", kind: "rem", min: 0.5, max: 1.4, step: 0.01 },
+      { prop: "--fs-lg",   label: "fs-lg",   kind: "rem", min: 0.6, max: 1.6, step: 0.01 },
+      { prop: "--fs-xl",   label: "fs-xl",   kind: "rem", min: 0.7, max: 1.8, step: 0.01 },
+    ],
+  },
+];
+
+/** Read the live computed value of a CSS custom property on :root */
+function readToken(prop: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
+}
+
+/** Convert a hex colour (#rrggbb) to the browser's native hex for <input type="color"> */
+function colourToHex(raw: string): string {
+  // Already #rrggbb — passthrough
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  // rgba(r,g,b,...) or rgb(r,g,b)
+  const m = raw.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+  if (m) {
+    const hex = (n: number) => Math.round(Math.clamp(n, 0, 255)).toString(16).padStart(2, "0");
+    return `#${hex(+(m[1]!))}${hex(+(m[2]!))}${hex(+(m[3]!))}`;
+  }
+  return "#000000";
+}
+
+// Math.clamp polyfill for the hex helper
+declare global { interface Math { clamp(v: number, lo: number, hi: number): number } }
+Math.clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+
+/** Parse a CSS value like "8px" → number, "0.9rem" → number */
+function parseTokenNum(raw: string): number {
+  return parseFloat(raw) || 0;
+}
+
+function renderCoachTokenEditor(): void {
+  const elRaw = document.getElementById("coachTokenEditor");
+  if (!elRaw || elRaw.dataset.rendered) return;
+  elRaw.dataset.rendered = "1";
+  const el: HTMLElement = elRaw;
+
+  const overrides: TokenOverrides = loadTokenOverrides();
+
+  function buildGroup(group: typeof TOKEN_GROUPS[0]): string {
+    const rows = group.tokens.map(tok => {
+      const live = readToken(tok.prop);
+      if (tok.kind === "color") {
+        const hex = colourToHex(live);
+        return `<div class="dtok-row">
+          <label class="dtok-lbl">${escapeHtml(tok.label)}</label>
+          <input class="dtok-color" type="color" value="${hex}" data-prop="${tok.prop}">
+          <code class="dtok-val" id="dtval-${tok.prop.slice(2)}">${escapeHtml(live)}</code>
+        </div>`;
+      } else {
+        const val = parseTokenNum(live);
+        const unit = tok.kind;
+        return `<div class="dtok-row">
+          <label class="dtok-lbl">${escapeHtml(tok.label)}</label>
+          <input class="dtok-range" type="range" min="${tok.min}" max="${tok.max}" step="${tok.step}" value="${val}" data-prop="${tok.prop}" data-unit="${unit}">
+          <code class="dtok-val" id="dtval-${tok.prop.slice(2)}">${escapeHtml(live)}</code>
+        </div>`;
+      }
+    }).join("");
+    return `<div class="dtok-group">
+      <div class="dtok-group-title">${escapeHtml(group.title)}</div>
+      ${rows}
+    </div>`;
+  }
+
+  const hasOverrides = Object.keys(overrides).length > 0;
+  el.innerHTML = `
+    <p class="muted" style="font-size:0.78rem;margin:0 0 0.8rem">Live-edit CSS custom properties on <code>:root</code>. Changes propagate instantly and persist across refreshes.</p>
+    <div class="dtok-grid">${TOKEN_GROUPS.map(buildGroup).join("")}</div>
+    <div style="margin-top:0.8rem;display:flex;gap:0.5rem;align-items:center">
+      <button class="wa-clear dtok-reset" ${hasOverrides ? "" : "disabled"}>↺ Reset all</button>
+      ${hasOverrides ? `<span class="dtok-badge muted" style="font-size:0.72rem">${Object.keys(overrides).length} override${Object.keys(overrides).length > 1 ? "s" : ""} active</span>` : ""}
+    </div>`;
+
+  // Wire up colour pickers
+  el.querySelectorAll<HTMLInputElement>(".dtok-color").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const prop = inp.dataset.prop!;
+      document.documentElement.style.setProperty(prop, inp.value);
+      const valEl = el.querySelector<HTMLElement>(`#dtval-${prop.slice(2)}`);
+      if (valEl) valEl.textContent = inp.value;
+      persistOverride(prop, inp.value);
+    });
+  });
+
+  // Wire up range sliders
+  el.querySelectorAll<HTMLInputElement>(".dtok-range").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const prop = inp.dataset.prop!;
+      const unit = inp.dataset.unit!;
+      const full = `${inp.value}${unit}`;
+      document.documentElement.style.setProperty(prop, full);
+      const valEl = el.querySelector<HTMLElement>(`#dtval-${prop.slice(2)}`);
+      if (valEl) valEl.textContent = full;
+      persistOverride(prop, full);
+    });
+  });
+
+  // Reset button
+  el.querySelector<HTMLButtonElement>(".dtok-reset")?.addEventListener("click", () => {
+    const overridesNow = loadTokenOverrides();
+    const root = document.documentElement;
+    for (const prop of Object.keys(overridesNow)) root.style.removeProperty(prop);
+    saveJson(TOKEN_OVERRIDE_KEY, {});
+    // Re-render so controls show live defaults
+    delete el.dataset.rendered;
+    el.innerHTML = "";
+    renderCoachTokenEditor();
+  });
+
+  function persistOverride(prop: string, val: string): void {
+    const cur = loadTokenOverrides();
+    cur[prop] = val;
+    saveJson(TOKEN_OVERRIDE_KEY, cur);
+    // Update reset button state
+    const btn = el.querySelector<HTMLButtonElement>(".dtok-reset");
+    if (btn) btn.disabled = false;
+  }
 }
 
 function renderCoachSiteMap(): void {
