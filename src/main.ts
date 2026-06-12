@@ -11624,31 +11624,7 @@ async function init() {
     els.status.innerHTML = `<span class="badge warn">Render crash: ${String(err)}</span>`;
     console.error("renderAll crash:", err);
   }
-  // PB-19 DEBUG: inject diagnostic info directly into the visible page
-  // Remove once blank-page root cause identified.
-  setTimeout(() => {
-    const host = document.getElementById("tab-analysis");
-    const dbg = document.getElementById("waAthleteHost");
-    const visible = host && !host.hidden;
-    const chips = dbg?.children.length ?? -1;
-    const msg = [
-      `v308`,
-      `athlete="${els.athlete.value}"`,
-      `records=${data?.records?.length ?? "?"}`,
-      `viewMode=${viewMode}`,
-      `simplified=${simplifiedView}`,
-      `tabVisible=${visible}`,
-      `chips=${chips}`,
-    ].join(" · ");
-    // Always inject — even when chips > 0 — so we can see the state
-    const banner = document.createElement("div");
-    banner.id = "pb19-debug";
-    banner.style.cssText = "position:fixed;bottom:6rem;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;font-size:10px;padding:6px 10px;line-height:1.5;word-break:break-all;pointer-events:none";
-    banner.textContent = msg;
-    document.body.appendChild(banner);
-    // Auto-remove after 10 seconds once we have the info
-    setTimeout(() => banner.remove(), 10000);
-  }, 500);
+
   // Momentum trend-period toggle (delegated; survives re-renders).
   els.momentum.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
