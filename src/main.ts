@@ -9250,19 +9250,18 @@ function renderCoachSiteMap(): void {
   }
 
   el.innerHTML = `
-    <p class="muted" style="font-size:0.75rem;margin:0 0 0.8rem">Every reachable view — tap name to navigate where possible.</p>
+    <p class="muted" style="font-size:0.75rem;margin:0 0 0.8rem">Every reachable view. Navigation: top title ‹ = back to Analysis · ··· top-right = Other sheet · ⚙ top-right = Settings.</p>
     <div class="csm-root">
 
-      ${page("⌂ Home (bottom nav)", "Lands on Analysis view")}
-      ${page("Analysis", "Main training dashboard — Stats · Graph · History tabs",
-        sub("Stats", "1RM, volume, pRIR, percentile cards per exercise") +
-        sub("Graph", "Strength-over-time chart · single-lift carousel · multi-lift view") +
-        sub("History / Workouts", "Session log · per-set editing · manual entry")
+      ${page("Analysis (home)", "Main training dashboard — default landing page",
+        sub("Stats tab", "1RM, volume, pRIR, percentile cards per exercise") +
+        sub("Graph tab", "Strength-over-time chart · single-lift carousel · multi-lift view") +
+        sub("History tab", "Session log · per-set editing · manual entry")
       )}
-      ${page("🔖 Bookmark (bottom nav)", "Saved exercises quick-access")}
-      ${page("🔍 Search (bottom nav)", "Command bar — search exercises, type . for commands")}
 
-      ${page("··· Other sheet (bottom nav)", "All pages not in the main nav",
+      ${page("Search bar (bottom of screen)", "Command bar — search exercises, type . for commands")}
+
+      ${page("··· Other sheet", "All pages — tap ··· top-right to open",
         sub("Live", "Coaching plan page — training targets for selected athlete") +
         sub("Analysis", "Same as Home") +
         sub("Colosseum", "Leaderboard — ranked 1RM across all athletes") +
