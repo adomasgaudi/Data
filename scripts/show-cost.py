@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stop hook with graph: cost report + ASCII visualizations."""
+"""Stop hook: detailed token cost report with explanation."""
 import json, sys
 from pathlib import Path
 
@@ -9,6 +9,7 @@ PRICING = {
     "claude-sonnet-4":   (3.0, 15.0),
     "claude-haiku-4":    (1.0, 5.0),
 }
+
 def price(model):
     for k, v in PRICING.items():
         if model.startswith(k): return v
@@ -63,8 +64,8 @@ prompt_idx = prompts[-1][2]
 
 words = prompt_text.split()[:5]
 prompt_preview = " ".join(words)
-if len(prompt_preview) > 30:
-    prompt_preview = prompt_preview[:27] + "..."
+if len(prompt_preview) > 35:
+    prompt_preview = prompt_preview[:32] + "..."
 
 def tally(items):
     t = {"in": 0, "cr": 0, "cw": 0, "out": 0, "usd": 0.0}
@@ -78,57 +79,51 @@ def tally(items):
 
 turn = tally(calls[prompt_idx:])
 sess = tally(calls)
-turn_cache = turn["cr"] + turn["cw"]
 
-# Build per-turn cost history for sparkline (last 15 turns)
-turn_costs = []
-for i in range(len(prompts) - min(15, len(prompts)), len(prompts)):
-    p_num, p_text, p_idx = prompts[i]
-    if i + 1 < len(prompts):
-        next_idx = prompts[i + 1][2]
-    else:
-        next_idx = len(calls)
-    t = tally(calls[p_idx:next_idx])
-    turn_costs.append(t["usd"])
+# Model info
+model = calls[-1][0] if calls else "unknown"
+pin, pout = price(model)
 
-# Sparkline: scale costs to 0-8 (heights for ▁▂▃▄▅▆▇█)
+# Build last 10 turn costs for sparkline
 sparkline_chars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-if turn_costs:
-    max_cost = max(turn_costs) or 0.01
+last_10_costs = []
+for i in range(max(0, len(prompts) - 10), len(prompts)):
+    p_idx = prompts[i][2]
+    next_idx = prompts[i + 1][2] if i + 1 < len(prompts) else len(calls)
+    t = tally(calls[p_idx:next_idx])
+    last_10_costs.append(t["usd"])
+
+if last_10_costs:
+    max_cost = max(last_10_costs) or 0.01
     sparkline = "".join(
         sparkline_chars[int(min(7, c / max_cost * 8))] if c > 0 else "▁"
-        for c in turn_costs
+        for c in last_10_costs
     )
 else:
     sparkline = ""
 
-# Token breakdown bar (proportion of this turn's tokens)
-total_turn_tokens = turn["in"] + turn["cr"] + turn["cw"] + turn["out"]
-if total_turn_tokens > 0:
-    in_w = max(1, int(turn["in"] / total_turn_tokens * 30))
-    cr_w = max(1, int(turn["cr"] / total_turn_tokens * 30))
-    cw_w = max(1, int(turn["cw"] / total_turn_tokens * 30))
-    out_w = max(1, int(turn["out"] / total_turn_tokens * 30))
-    # Normalize if over 30
-    total_w = in_w + cr_w + cw_w + out_w
-    if total_w > 30:
-        in_w = int(in_w * 30 / total_w)
-        cr_w = int(cr_w * 30 / total_w)
-        cw_w = int(cw_w * 30 / total_w)
-        out_w = 30 - in_w - cr_w - cw_w
-    token_bar = ("█" * in_w + "▓" * cr_w + "▒" * cw_w + "░" * out_w)[:30]
-else:
-    token_bar = ""
+# Cache breakdown explanation
+cache_total = turn["cr"] + turn["cw"]
+cache_read_cost = (turn["cr"] / 1e6) * pin * 0.1
+cache_write_cost = (turn["cw"] / 1e6) * pin * 1.25
+cache_explain = f"read: {turn['cr']:,} (0.1×) + write: {turn['cw']:,} (1.25×) = {cache_total:,} total"
 
-# Summary line
-summary = f"  #{last_prompt_num} ({prompt_preview}) input: {turn['in']:,} | total: {sess['in']:,} | cache: {turn_cache:,} | out: {turn['out']:,} | turn: ${turn['usd']:.4f} | session: ${sess['usd']:.4f}"
-
-# Graph section
-graph = ""
-if token_bar:
-    graph += f"\n  tokens  {token_bar} "
-    graph += f"(in:{turn['in']:,} cr:{turn['cr']:,} cw:{turn['cw']:,} out:{turn['out']:,})"
-if sparkline:
-    graph += f"\n  cost ↗  {sparkline}"
-
-print(summary + graph)
+# Output
+print(f"""
+  #️⃣  #{last_prompt_num} ({prompt_preview})
+  
+  📥 Fresh input:     {turn['in']:>10,} tokens
+  📊 Total cumul:     {sess['in']:>10,} tokens  (all prompts)
+  
+  💾 Cache breakdown: {cache_explain}
+     • read cost:     ${cache_read_cost:.6f}  (cheaper — reused context)
+     • write cost:    ${cache_write_cost:.6f}  (setup cost for future reads)
+  
+  📤 Output tokens:   {turn['out']:>10,} tokens
+  
+  🤖 Model:           {model}  (${pin:.2f}/Mtok input, ${pout:.2f}/Mtok output)
+  
+  💰 This turn:       ${turn['usd']:.6f}
+  📈 Last 10 turns:   {sparkline}  (trend)
+  📊 Session total:   ${sess['usd']:.6f}
+""")
