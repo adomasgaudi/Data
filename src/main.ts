@@ -11617,11 +11617,6 @@ async function init() {
 
   renderStatus();
   renderHealth();
-  // DEBUG: show init state on screen so we can diagnose blank page
-  const dbg = document.getElementById("waAthleteHost");
-  if (dbg) dbg.innerHTML = `<div style="background:#e74;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;margin:4px 0">
-    JS running · athlete="${els.athlete.value}" · records=${data?.records?.length ?? "?"} · v303
-  </div>`;
   try {
     renderAll();
   } catch (err) {
@@ -11629,7 +11624,17 @@ async function init() {
     els.status.innerHTML = `<span class="badge warn">Render crash: ${String(err)}</span>`;
     console.error("renderAll crash:", err);
   }
-  if (dbg) dbg.innerHTML = ""; // clear debug after renderAll (which repopulates it)
+  // DEBUG: permanent indicator after renderAll so we can see the actual state
+  {
+    const dbg = document.getElementById("waAthleteHost");
+    const host = document.getElementById("tab-analysis");
+    const visible = host && !host.hidden;
+    const msg = `v305-debug · athlete="${els.athlete.value}" · records=${data?.records?.length ?? "?"} · viewMode=${viewMode} · simplified=${simplifiedView} · tab-analysis visible=${visible} · waAthleteHost children=${dbg?.children.length ?? "?"}`;
+    if (dbg && (dbg.children.length === 0)) {
+      dbg.innerHTML = `<div style="background:#c0392b;color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;line-height:1.5;word-break:break-all">${msg}</div>`;
+    }
+    console.log("DEBUG:", msg);
+  }
   // Momentum trend-period toggle (delegated; survives re-renders).
   els.momentum.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
