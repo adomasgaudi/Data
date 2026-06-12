@@ -96,6 +96,13 @@
             "command": "n=$(git rev-list --count origin/claude/strength-training-dashboard-SdAlT..HEAD 2>/dev/null); if [ -n \"$n\" ] && [ \"$n\" -gt 0 ] 2>/dev/null; then printf '{\"systemMessage\":\"MERGE & DEPLOY (CLAUDE.md rule): this branch has %s commit(s) not yet on the deployed branch. Merge the working branch into claude/strength-training-dashboard-SdAlT and push so it goes live - do not wait to be asked.\"}' \"$n\"; fi",
             "timeout": 10,
             "statusMessage": "Checking branch is deployed"
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "python3 scripts/show-cost.py",
+            "timeout": 10,
+            "statusMessage": "Reporting token cost"
           }
         ]
       }
