@@ -500,3 +500,18 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **Root cause:** `ALTER TABLE sets DISABLE ROW LEVEL SECURITY` bypasses RLS policies but does NOT grant Postgres-level permissions to the `anon` role. The anon key still gets a permission-denied on INSERT/UPDATE/DELETE because no explicit GRANT was issued.
 - **Fix (b.2.8.280.1):** Added `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.sets TO anon, authenticated;` to setup-db.yml and re-ran the workflow.
 - **Rule for future tables:** every new Supabase table needs BOTH `DISABLE ROW LEVEL SECURITY` AND `GRANT ... TO anon, authenticated` — neither alone is sufficient for the anon key to read and write.
+
+---
+
+## PB-19 — Main content area blank / data page gone
+
+- **First seen:** 2026-06-12, Samsung Android, Brave. Version b.2.8.299+.
+- **Recurrence count:** 1 (ongoing — not yet resolved)
+- **Device/browser:** Android, Brave browser (same device as all other reports)
+- **Symptom:** The main page (Analysis tab) shows completely blank — only the topbar and the pinned search bar are visible. No athlete chips, no graph, no history. No error visible on screen. "No console data nothing."
+- **Prior fix attempts:** 
+  - (b.2.8.304) Added renderAll() try/catch to show on-screen crash message — no error displayed, confirming renderAll() completes without throwing
+  - (b.2.8.305) Added pre-renderAll red banner — not seen, suggesting renderAll runs fast and clears it, or JS runs but produces no visible content
+  - (b.2.8.307) Added PERMANENT post-renderAll debug banner (only shows if waAthleteHost has 0 children after render) — awaiting result
+- **Suspected root cause:** Unknown. Candidates: (a) els.athlete.value is empty/mismatched → activeRecords() returns [] → no content; (b) tab-analysis is hidden (switchTopTab called with wrong name); (c) CSS issue making content invisible. Debug banner will tell us.
+- **Data status:** ud.csv has 12618 rows — data is bundled and correct.
