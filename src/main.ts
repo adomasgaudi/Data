@@ -1981,7 +1981,7 @@ function setRpe(id: string, v: string | null) {
 // Level data: an override keyed by setId is layered on at load. Bodyweight here
 // is JUST for that set (overrides the profile default); scale is the per-set
 // technique factor (beats the per-hole one). RIR keeps its own store above.
-interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; }
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; }
 const SET_OVR_KEY = "colosseum.setOverrides.v1";
 let setOverrides: Record<string, SetOverride> = (() => {
   try {
@@ -2137,13 +2137,16 @@ function setMachineMode(exerciseName: string, mode: MachineMode) {
 }
 /** True for lifts that can be done on a cable AND a gravity machine (e.g. Lat
  * Pulldown), or that are already in a non-cable machine mode — i.e. the ones the
- * cable/gravity/mixed control applies to. */
+ * cable/gravity control applies to. */
 function machineModeEligible(exerciseName: string): boolean {
   const eq = equipmentForExercise(exerciseName);
   return (eq.includes("Cable") && eq.includes("Machine")) || machineModeFor(exerciseName) !== "cable";
 }
-/** Cable → gravity → mixed → cable, for the set-editor cycle pill. */
-const MACHINE_MODE_NEXT: Record<MachineMode, MachineMode> = { cable: "gravity", gravity: "mixed", mixed: "cable" };
+/** A single set's effective machine type for the set-editor pill: the manual per-set
+ * choice if any, else gravity when the whole lift is on "all gravity", else cable. */
+function setMachineTypeFor(s: SetRecord): "cable" | "gravity" {
+  return setOverrides[setId(s)]?.machine ?? (machineModeFor(s.exerciseName) === "gravity" ? "gravity" : "cable");
+}
 
 // ---- Per-exercise GRAPH PERMISSIONS (the "allowed graphs" review system) ----
 // Each exercise carries an allow-list of which graph metrics it may plot. Default
@@ -2224,9 +2227,14 @@ function mixedVerdictFor(r: SetRecord): MachineVerdict {
  * their cable-equivalent (×0.6) keeping the logged weight in origWeight; review
  * sets are flagged only. Cable / unconfigured exercises pass through untouched. */
 function applyMachineMode(out: SetRecord): SetRecord {
+  // A MANUAL per-set machine choice (set in the set editor) always wins; otherwise fall
+  // back to the per-exercise mode (cable default / all-gravity / mixed auto-classify).
+  const perSet = setOverrides[setId(out)]?.machine;
   const mode = machineModeFor(out.exerciseName);
-  if (mode === "cable") return out;
-  const verdict: MachineVerdict = mode === "gravity" ? "gravity" : mixedVerdictFor(out);
+  let verdict: MachineVerdict;
+  if (perSet) verdict = perSet;
+  else if (mode === "cable") return out;
+  else verdict = mode === "gravity" ? "gravity" : mixedVerdictFor(out);
   if (verdict === "gravity") {
     const logged = out.origWeight ?? out.weight; // preserve what to set on the machine
     return { ...out, weight: out.weight === null ? null : out.weight * GRAVITY_MULT, origWeight: logged, machineType: "gravity" };
@@ -6240,7 +6248,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
   if (toggleAssistedExercise(target)) return; // "⌁ assisted" — toggle negative-weight halving
-  if (cycleMachineModeExercise(target)) return; // "⚖ machine" — cycle cable/gravity/mixed
+  if (toggleSetMachineGravity(target)) return; // "⚖ machine" — per-set cable/gravity toggle
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -7476,7 +7484,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
   if (toggleAssistedExercise(target)) return; // "⌁ assisted" — toggle negative-weight halving
-  if (cycleMachineModeExercise(target)) return; // "⚖ machine" — cycle cable/gravity/mixed
+  if (toggleSetMachineGravity(target)) return; // "⚖ machine" — per-set cable/gravity toggle
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -8077,12 +8085,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const assistToggle = assisted || (s.weight !== null && s.weight < 0)
     ? `<button type="button" class="set-edit-assist${assisted ? " is-on" : ""}" data-assistex="${escapeHtml(s.exerciseName)}" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~2× the real help), so it's counted at HALF for strength. The logged value still shows so you know what to dial. Toggles for the whole exercise.">⌁ ${assisted ? "assisted ½" : "assisted?"}</button>`
     : "";
-  // Machine-type cycle pill — for gravity-or-cable lifts (e.g. Lat Pulldown) it lets
-  // you set the variant (cable → gravity → mixed) RIGHT HERE in the set editor, instead
-  // of having to open the single-lift graph view. Per-exercise, like ⇄ unilateral / ⌁ assisted.
-  const machMode = machineModeFor(s.exerciseName);
+  // Machine-type pill — for gravity-or-cable lifts (e.g. Lat Pulldown) it sets the
+  // variant for THIS SET ONLY (default cable; tap to flag it gravity). The first tap on
+  // a lift that's still on whole-exercise "all gravity" drops that mode to cable default,
+  // so from then on each set is gravity only if you flag it here.
+  const machSetType = setMachineTypeFor(s);
   const machineToggle = machineModeEligible(s.exerciseName)
-    ? `<button type="button" class="set-edit-mach${machMode !== "cable" ? " is-on" : ""}" data-machsetex="${escapeHtml(s.exerciseName)}" data-machnext="${MACHINE_MODE_NEXT[machMode]}" title="Machine type — tap to cycle cable → gravity → mixed. Gravity scales every set ×${GRAVITY_MULT} for strength; mixed auto-classifies each set. Applies to the whole exercise.">⚖ ${machMode}</button>`
+    ? `<button type="button" class="set-edit-mach${machSetType === "gravity" ? " is-on" : ""}" data-machsetid="${escapeHtml(sid)}" data-machsetex="${escapeHtml(s.exerciseName)}" title="Machine type for THIS set — tap to toggle cable ↔ gravity. Gravity scales this set ×${GRAVITY_MULT} for strength. Each set is set on its own (default cable).">⚖ ${machSetType}</button>`
     : "";
   // Assisted machine: the Weight field IS the machine's dialed counterweight
   // ("machine assist"); show the REAL assistance (half) calculated right beside it.
@@ -8537,13 +8546,27 @@ function toggleAssistedExercise(target: HTMLElement): boolean {
   return true;
 }
 
-/** Click the "⚖ machine" pill in the set editor: cycle the EXERCISE's machine mode
- * (cable → gravity → mixed), then re-render. Lets you set the gravity variant from
- * the history, not only the single-lift graph view. */
-function cycleMachineModeExercise(target: HTMLElement): boolean {
+/** Click the "⚖ machine" pill in the set editor: set THIS SET's machine type (cable ↔
+ * gravity), not the whole exercise. The first tap on a lift that's still on the
+ * per-exercise "all gravity" mode drops that mode back to the cable default (so the
+ * other sets become cable) and flags only the tapped set gravity — from then on each
+ * set is controlled on its own. */
+function toggleSetMachineGravity(target: HTMLElement): boolean {
   const btn = target.closest<HTMLElement>(".set-edit-mach");
-  if (!btn?.dataset.machsetex || !btn.dataset.machnext) return false;
-  setMachineMode(btn.dataset.machsetex, btn.dataset.machnext as MachineMode);
+  if (!btn?.dataset.machsetid || !btn.dataset.machsetex) return false;
+  const id = btn.dataset.machsetid;
+  const ex = btn.dataset.machsetex;
+  const o = setOverrides[id] ?? {};
+  if (machineModeFor(ex) !== "cable") {
+    // Leaving whole-exercise gravity/mixed: reset the lift to cable default, then flag
+    // just the tapped set gravity (the user picks the gravity ones from here on).
+    setMachineMode(ex, "cable");
+    o.machine = "gravity";
+  } else {
+    o.machine = o.machine === "gravity" ? "cable" : "gravity";
+  }
+  setOverrides[id] = o;
+  saveSetOverrides();
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
