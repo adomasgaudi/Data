@@ -6,3 +6,4 @@ Colosseum-dashboard.html
 *.log
 .DS_Store
 .userid-cache.json
+cost-report.html
