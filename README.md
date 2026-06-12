@@ -1,6 +1,30 @@
 # Colosseum — Strength Training Dashboard
 
 A website that shows StrengthLevel training data for a group of athletes:
+
+---
+
+### 🔧 Claude HTML Renderer Extension
+
+A browser extension that renders live HTML previews in Claude chat.
+
+**[📥 Download Extension](../../raw/claude/strength-training-dashboard-SdAlT/claude-html-renderer.zip)** or use the `ext/` folder
+
+<details>
+<summary><b>Quick install (Chrome/Edge)</b></summary>
+
+1. Download the extension from the link above or use `ext/` folder
+2. Extract the `.zip` file
+3. Go to `chrome://extensions`
+4. Enable **Developer mode** (top right)
+5. Click **Load unpacked** → select the extracted folder
+6. Done! When I output HTML with `<!-- RENDER -->` marker, you'll see a live preview
+
+</details>
+
+---
+
+
 leaderboards, personal records, and estimated 1RMs computed across everyone's
 full set log.
 
