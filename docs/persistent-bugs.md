@@ -66,9 +66,17 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ## PB-12 — The inline SET-EDIT panel closes when you press a button inside it
 
-- **Recurrences:** part of the long-running rule-24 CLASS ("tapping a setting closes the
-  menu" — see PB-4, the graph-options sections fix b.2.8.86/99, the picker-drawer fix
+- **Recurrences:** 2 (+ part of the long-running rule-24 CLASS — "tapping a setting closes
+  the menu", see PB-4, the graph-options sections fix b.2.8.86/99, the picker-drawer fix
   b.2.8.159/b.2.8.177). Same root, new surface.
+  - **Recurrence 2 (b.2.8.x):** the ⚖ machine pill, in the SINGLE-LIFT Analysis view, still
+    collapsed the panel even though it used the exact same synchronous render+`reopenSetEdit`
+    sequence as ⇄/⌁/⊘ (which held in the plain Workouts tab). Real cause: the Analysis view
+    rebuilds the history table AGAIN on the next frame (a deferred / Chart-driven re-render),
+    AFTER the synchronous `reopenSetEdit` — so the one-shot reopen lost the race. Fix: make
+    `reopenSetEdit` reopen EVERY matching row and re-assert once on the next animation frame
+    (`requestAnimationFrame`). Device: Android, Brave, adomasgaudi.github.io/Data, Analysis →
+    LAPD single-lift → expand a set → tap ⚖.
 - **Device/browser seen on:** Android phone, Brave (adomasgaudi.github.io/Data). Workout
   history → tap a set row to expand its edit panel (Weight/Reps/Bodyweight/Scale/Note +
   ⇄ unilateral / ⌁ assisted ½ / ⊘ not comparable / 🗑 Delete). Pressing any of the toggle

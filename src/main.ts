@@ -8415,15 +8415,28 @@ function toggleSetEdit(target: HTMLElement): boolean {
   return true;
 }
 /** Re-open the set-edit panel that was open before a table rebuild (PB-12): un-hide its
- * row and mark its set-main row, so a control tap inside it doesn't collapse the panel. */
+ * row and mark its set-main row, so a control tap inside it doesn't collapse the panel.
+ * PB-12 recurrence (b.2.8.x): the ⚖ machine pill in the single-lift Analysis view still
+ * collapsed it, because that view rebuilds the history table again on the NEXT frame
+ * (a deferred/Chart-driven re-render) AFTER the synchronous reopen — so a one-shot
+ * reopen lost the race. Fix: reopen EVERY matching row (the set can be in more than one
+ * rendered table) AND re-assert once on the next animation frame. Safe to over-call:
+ * `openSetEditId` only clears when the user actually closes/deletes the set, so the
+ * rAF bails if they closed it meanwhile. */
 function reopenSetEdit(): void {
   if (openSetEditId === null) return;
-  const editRow = document.querySelector<HTMLElement>(`.set-edit-row[data-seteditid="${CSS.escape(openSetEditId)}"]`);
-  if (!editRow) return;
-  editRow.hidden = false;
-  let p = editRow.previousElementSibling;
-  while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
-  p?.classList.add("edit-open");
+  const reopen = () => {
+    if (openSetEditId === null) return;
+    const rows = document.querySelectorAll<HTMLElement>(`.set-edit-row[data-seteditid="${CSS.escape(openSetEditId)}"]`);
+    for (const editRow of rows) {
+      editRow.hidden = false;
+      let p = editRow.previousElementSibling;
+      while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
+      p?.classList.add("edit-open");
+    }
+  };
+  reopen();
+  requestAnimationFrame(reopen);
 }
 
 /** Click "Reset set": drop all this set's on-device edits and re-render. */
