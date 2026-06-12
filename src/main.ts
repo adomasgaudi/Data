@@ -285,6 +285,7 @@ const els = {
   workoutRmCycle: $<HTMLButtonElement>("workoutRmCycle"),
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
+  variantToggle: $<HTMLButtonElement>("variantToggle"),
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   woShowAllToggle: $<HTMLButtonElement>("woShowAllToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
@@ -2144,8 +2145,21 @@ function machineModeEligible(exerciseName: string): boolean {
 }
 /** A single set's effective machine type for the set-editor pill: the manual per-set
  * choice if any, else gravity when the whole lift is on "all gravity", else cable. */
+function setMachineTypeById(exerciseName: string, sid: string): "cable" | "gravity" {
+  return setOverrides[sid]?.machine ?? (machineModeFor(exerciseName) === "gravity" ? "gravity" : "cable");
+}
 function setMachineTypeFor(s: SetRecord): "cable" | "gravity" {
-  return setOverrides[setId(s)]?.machine ?? (machineModeFor(s.exerciseName) === "gravity" ? "gravity" : "cable");
+  return setMachineTypeById(s.exerciseName, setId(s));
+}
+/** Toggle a single set's machine type cable↔gravity (the per-set override that wins).
+ * First use on a lift still in whole-exercise "all gravity" drops it to cable default
+ * and flags only this set. Shared by the set-editor ⚖ pill and the variant popover. */
+function flipSetMachineGravity(ex: string, sid: string): void {
+  const o = setOverrides[sid] ?? {};
+  if (machineModeFor(ex) !== "cable") { setMachineMode(ex, "cable"); o.machine = "gravity"; }
+  else { o.machine = o.machine === "gravity" ? "cable" : "gravity"; }
+  setOverrides[sid] = o;
+  saveSetOverrides();
 }
 
 // ---- Per-exercise GRAPH PERMISSIONS (the "allowed graphs" review system) ----
@@ -3975,6 +3989,7 @@ let workoutGroups: WorkoutGroup[] = [];
 // flags get their initial values right here so behaviour matches the previous
 // `let x = localStorage.getItem(…)` form.
 S.showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+S.showVariants = localStorage.getItem("colosseum.showVariants") === "1";
 S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 // When on, the workout history ignores the Index app-wide filter and shows EVERY
 // lift this athlete logged (the lifts the filter hides come back), so you can see
@@ -4002,6 +4017,8 @@ function syncWorkoutToggles(): void {
   els.restToggle.setAttribute("aria-pressed", S.showRestDays ? "true" : "false");
   els.addSetsToggle.classList.toggle("is-active", S.showAddSets);
   els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
+  els.variantToggle.classList.toggle("is-active", S.showVariants);
+  els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
   els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
   els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
   // The "Hidden" control sits in the head row next to the ⚙. Label shows the
@@ -6944,6 +6961,20 @@ function variationChipsHtml(r: SetRecord): string {
   return `<span class="wo-var-chips">${chips.join("")}</span>`;
 }
 
+/** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
+ * floating variant editor for a set — the SAME contract the expanded `.set-scale`
+ * chip uses. A note-less set passes a per-set synthetic key so the popover still
+ * opens (showing its machine / level controls). */
+function variantTriggerData(s: SetRecord, sid: string): string {
+  const scaleNote = (s.notes ?? "").trim();
+  const editNote = scaleNote || `__set:${sid}`;
+  const lvlAttrs =
+    s.levelDim !== undefined && s.levelValue !== undefined
+      ? ` data-scaleedit-leveldim="${escapeHtml(s.levelDim)}" data-scaleedit-levelvalue="${s.levelValue}" data-scaleedit-levellabel="${escapeHtml(s.levelLabel ?? levelLabel(s.levelDim, s.levelValue))}"`
+      : "";
+  return `data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${scaleNote ? ` data-scaleedit-rawnote="${escapeHtml(scaleNote)}"` : ""}${lvlAttrs}`;
+}
+
 function setDisplay(raw: SetRecord): string {
   // Apply the on-device per-set edits (note text, weight, reps…) FIRST, so the
   // compact line resolves the SAME effective note — and therefore the same
@@ -6960,6 +6991,16 @@ function setDisplay(raw: SetRecord): string {
   const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
+  // Quick-edit "Variant" mode (history ⚙ → Var): each set that HAS a variant — a
+  // machine cable/gravity choice, a difficulty family, an incline level, or a note —
+  // becomes a tappable chip that opens the floating variant editor for that one set,
+  // so you can flip it without expanding the full editor. `finish` wraps the token.
+  const sid = setId(raw);
+  const hasVariant = machineModeEligible(s.exerciseName) || !!familyOf(s.exerciseName) || !!note || s.levelDim !== undefined;
+  const finish = (h: string): string =>
+    S.showVariants && hasVariant
+      ? `<button type="button" class="wo-set-variant" ${variantTriggerData(s, sid)} title="Tap to edit this set's variant">${h}</button>`
+      : h;
   const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
@@ -6975,7 +7016,7 @@ function setDisplay(raw: SetRecord): string {
   // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
   // show "UN" with the reps instead of a weight number.
   if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
-    return effWrap(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`);
+    return finish(effWrap(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`));
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -6991,7 +7032,7 @@ function setDisplay(raw: SetRecord): string {
     const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
     const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
     const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`);
+    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`));
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -6999,9 +7040,9 @@ function setDisplay(raw: SetRecord): string {
     // expanded rows) — a long note used to dump inline and wrap into a huge block,
     // breaking the compact day line. Keep it the width of a normal weight^reps.
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
-    return effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`);
+    return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
   }
-  return effWrap(`${chips}${wr(s.weight, s.reps)}${mach}`);
+  return finish(effWrap(`${chips}${wr(s.weight, s.reps)}${mach}`));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -8276,9 +8317,20 @@ function renderScaleEditor(): void {
   const ncBtn = sid
     ? `<div class="scale-edit-foot"><button type="button" class="scale-edit-nc${nc ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${nc}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${nc ? "not comparable" : "not comparable?"}</button></div>`
     : "";
+  // Machine cable/gravity is ALSO a per-set variant (e.g. Lat Pulldown), so a machine-
+  // eligible lift gets the same cable↔gravity toggle here — letting the variant editor
+  // cover every kind of variant a lift has (machine / level / note), per the owner.
+  const machBlock = sid && machineModeEligible(scaleEditState.ex)
+    ? (() => {
+        const mt = setMachineTypeById(scaleEditState.ex, sid);
+        return `<div class="ex-var-dim scale-edit-mach-row"><span class="ex-var-dim-lbl">machine</span>` +
+          `<button type="button" class="set-edit-mach scale-edit-mach${mt === "gravity" ? " is-on" : ""}" data-machsetid="${escapeHtml(sid)}" data-machsetex="${escapeHtml(scaleEditState.ex)}" title="Machine type for this set — tap to toggle cable ↔ gravity (gravity scales it ×${GRAVITY_MULT} for strength).">⚖ ${mt}</button></div>`;
+      })()
+    : "";
   pop.innerHTML =
     `<div class="scale-edit-hd"><span class="scale-edit-title">${escapeHtml(title)}</span>` +
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
+    machBlock +
     scaleEditLevelBlock() +
     notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor) +
     ncBtn;
@@ -8334,7 +8386,9 @@ function closeScaleEditor(): void {
  * for that note. Returns true if it handled the click (so the row doesn't edit). */
 function toggleScaleEditor(target: HTMLElement): boolean {
   if (target.closest(".scale-edit-close")) { closeScaleEditor(); return true; }
-  const btn = target.closest<HTMLElement>(".set-scale.is-editable");
+  // `.set-scale.is-editable` = the expanded-row chip; `.wo-set-variant` = the
+  // collapsed-line quick-edit chip (history ⚙ → Var). Both carry the same data.
+  const btn = target.closest<HTMLElement>(".set-scale.is-editable, .wo-set-variant");
   if (!btn?.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return false;
   if (scaleEditState && scaleEditState.ex === btn.dataset.scaleeditEx && scaleEditState.note === btn.dataset.scaleeditNote)
     closeScaleEditor();
@@ -8567,19 +8621,7 @@ function toggleAssistedExercise(target: HTMLElement): boolean {
 function toggleSetMachineGravity(target: HTMLElement): boolean {
   const btn = target.closest<HTMLElement>(".set-edit-mach");
   if (!btn?.dataset.machsetid || !btn.dataset.machsetex) return false;
-  const id = btn.dataset.machsetid;
-  const ex = btn.dataset.machsetex;
-  const o = setOverrides[id] ?? {};
-  if (machineModeFor(ex) !== "cable") {
-    // Leaving whole-exercise gravity/mixed: reset the lift to cable default, then flag
-    // just the tapped set gravity (the user picks the gravity ones from here on).
-    setMachineMode(ex, "cable");
-    o.machine = "gravity";
-  } else {
-    o.machine = o.machine === "gravity" ? "cable" : "gravity";
-  }
-  setOverrides[id] = o;
-  saveSetOverrides();
+  flipSetMachineGravity(btn.dataset.machsetex, btn.dataset.machsetid);
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
@@ -12247,6 +12289,16 @@ async function init() {
     renderScaleEditor();
     refreshAfterDifficultyEdit();
   });
+  // "⚖ machine" toggle inside the floating variant popover — flip THIS set's cable/gravity
+  // (the per-set override), keep the popover open, and sync the views on close.
+  document.addEventListener("click", (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>(".scale-edit-mach");
+    if (!b?.dataset.machsetid || !b.dataset.machsetex) return;
+    flipSetMachineGravity(b.dataset.machsetex, b.dataset.machsetid);
+    scaleEditDirty = true;
+    renderScaleEditor();
+    refreshAfterDifficultyEdit();
+  });
   // Popover incline TOOL cycle (SQ hole → Smith notch → cm → rack box → ladder box):
   // keep the value, switch the tool, store the per-set level override, re-render.
   document.addEventListener("click", (e) => {
@@ -12830,6 +12882,13 @@ async function init() {
   els.addSetsToggle.addEventListener("click", () => {
     S.showAddSets = !S.showAddSets;
     localStorage.setItem("colosseum.showAddSets", S.showAddSets ? "1" : "0");
+    renderWorkoutsPage();
+  });
+  els.variantToggle.addEventListener("click", () => {
+    S.showVariants = !S.showVariants;
+    localStorage.setItem("colosseum.showVariants", S.showVariants ? "1" : "0");
+    els.variantToggle.classList.toggle("is-active", S.showVariants); // instant pill feedback
+    els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
     renderWorkoutsPage();
   });
   els.aloneTagToggle.addEventListener("click", () => {

@@ -396,6 +396,7 @@ const LT: Record<string, string> = {
   "per page": "puslapyje",
   "rep max": "kart. maks.",
   "add set": "pridėti seriją",
+  "edit variant": "keisti variantą",
   "day tags": "dienų žymos",
   "Show all": "Rodyti visus",
   "Hide them": "Slėpti juos",

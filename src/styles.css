@@ -1471,6 +1471,15 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 }
 .scale-edit-nc:hover { border-color: var(--muted); }
 .scale-edit-nc.is-on { color: #fff; background: var(--muted); border-color: var(--muted); }
+/* Machine cable/gravity row inside the variant popover — label + the ⚖ pill. */
+.scale-edit-mach-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0 0.4rem; }
+.scale-edit-mach { font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px; }
+.scale-edit-mach:hover { border-color: var(--accent); }
+.scale-edit-mach.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* Quick-edit "Variant" chip: a collapsed-line set token made tappable (history ⚙ → Var).
+   A faint pill background signals it opens the variant editor; the token reads as before. */
+.wo-set-variant { font: inherit; cursor: pointer; color: inherit; background: var(--accent-soft); border: 1px solid transparent; border-radius: var(--r-pill); padding: 0 4px; }
+.wo-set-variant:hover { border-color: var(--accent); }
 .scale-edit-hd { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
 .scale-edit-title { font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; }
 .scale-edit-close { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; line-height: 1.6; }

@@ -44,6 +44,7 @@ export const S: {
   workoutViewMode: "day" | "week" | "2week" | "month" | "3month";
   workoutShowMode: "exercises" | "groups";
   showAddSets: boolean;
+  showVariants: boolean;
   showAloneTags: boolean;
   showRestDays: boolean;
 } = {
@@ -68,6 +69,7 @@ export const S: {
   workoutShowMode: "exercises",
   // initialised from localStorage in main.ts after import.
   showAddSets: false,
+  showVariants: false,
   showAloneTags: false,
   showRestDays: true, // rest-day slivers shown by default (the gaps between sessions read as the timeline)
 };
