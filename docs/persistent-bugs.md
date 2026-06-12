@@ -515,3 +515,4 @@ recurrence count. Leave a `PB-n` comment at the fix site.
   - (b.2.8.307) Added PERMANENT post-renderAll debug banner (only shows if waAthleteHost has 0 children after render) — awaiting result
 - **Suspected root cause:** Unknown. Candidates: (a) els.athlete.value is empty/mismatched → activeRecords() returns [] → no content; (b) tab-analysis is hidden (switchTopTab called with wrong name); (c) CSS issue making content invisible. Debug banner will tell us.
 - **Data status:** ud.csv has 12618 rows — data is bundled and correct.
+- **RESOLVED (b.2.8.309):** Not a code bug. Debug banner at v.308 confirmed `records=12576, viewMode=admin, tabVisible=true, chips=1` — page renders correctly. Root cause was **stale browser cache** serving v.304 on the user's phone. Hard-refresh resolved it.
