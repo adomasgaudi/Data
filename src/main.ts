@@ -2133,6 +2133,15 @@ function setMachineMode(exerciseName: string, mode: MachineMode) {
   saveJson(MACHINE_MODE_KEY, machineModes);
   clearMachineCache();
 }
+/** True for lifts that can be done on a cable AND a gravity machine (e.g. Lat
+ * Pulldown), or that are already in a non-cable machine mode — i.e. the ones the
+ * cable/gravity/mixed control applies to. */
+function machineModeEligible(exerciseName: string): boolean {
+  const eq = equipmentForExercise(exerciseName);
+  return (eq.includes("Cable") && eq.includes("Machine")) || machineModeFor(exerciseName) !== "cable";
+}
+/** Cable → gravity → mixed → cable, for the set-editor cycle pill. */
+const MACHINE_MODE_NEXT: Record<MachineMode, MachineMode> = { cable: "gravity", gravity: "mixed", mixed: "cable" };
 
 // ---- Per-exercise GRAPH PERMISSIONS (the "allowed graphs" review system) ----
 // Each exercise carries an allow-list of which graph metrics it may plot. Default
@@ -6229,6 +6238,7 @@ function onExerciseRowClick(e: MouseEvent) {
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
   if (toggleAssistedExercise(target)) return; // "⌁ assisted" — toggle negative-weight halving
+  if (cycleMachineModeExercise(target)) return; // "⚖ machine" — cycle cable/gravity/mixed
   if (toggleE1rmFormula(target)) return; // a 1RM cell → show its formula
   if (togglePrirFormula(target)) return; // a pRIR cell → show how it was estimated
   if (toggleSetNote(target)) return; // a set's note toggle, deepest level
@@ -7464,6 +7474,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (toggleSetNotComparable(target)) return; // "⊘ not comparable" in the set editor
   if (toggleUnilateralExercise(target)) return; // "⇄ unilateral" — toggle the exercise unilateral
   if (toggleAssistedExercise(target)) return; // "⌁ assisted" — toggle negative-weight halving
+  if (cycleMachineModeExercise(target)) return; // "⚖ machine" — cycle cable/gravity/mixed
   // "alone" tag toggle — tag/untag this session as trained alone, then re-render
   // (so the chip + any active "Only alone" filter update). Doesn't expand the row.
   const tagBtn = target.closest<HTMLButtonElement>(".wo-alone");
@@ -8064,6 +8075,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const assistToggle = assisted || (s.weight !== null && s.weight < 0)
     ? `<button type="button" class="set-edit-assist${assisted ? " is-on" : ""}" data-assistex="${escapeHtml(s.exerciseName)}" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~2× the real help), so it's counted at HALF for strength. The logged value still shows so you know what to dial. Toggles for the whole exercise.">⌁ ${assisted ? "assisted ½" : "assisted?"}</button>`
     : "";
+  // Machine-type cycle pill — for gravity-or-cable lifts (e.g. Lat Pulldown) it lets
+  // you set the variant (cable → gravity → mixed) RIGHT HERE in the set editor, instead
+  // of having to open the single-lift graph view. Per-exercise, like ⇄ unilateral / ⌁ assisted.
+  const machMode = machineModeFor(s.exerciseName);
+  const machineToggle = machineModeEligible(s.exerciseName)
+    ? `<button type="button" class="set-edit-mach${machMode !== "cable" ? " is-on" : ""}" data-machsetex="${escapeHtml(s.exerciseName)}" data-machnext="${MACHINE_MODE_NEXT[machMode]}" title="Machine type — tap to cycle cable → gravity → mixed. Gravity scales every set ×${GRAVITY_MULT} for strength; mixed auto-classifies each set. Applies to the whole exercise.">⚖ ${machMode}</button>`
+    : "";
   // Assisted machine: the Weight field IS the machine's dialed counterweight
   // ("machine assist"); show the REAL assistance (half) calculated right beside it.
   const realW = realAddedWeight(s.exerciseName, s.weight);
@@ -8081,6 +8099,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     noteFld +
     uniToggle +
     assistToggle +
+    machineToggle +
     sideEdit +
     `<button type="button" class="set-edit-nc${notComparableSets.has(sid) ? " is-on" : ""}" data-setid="${escapeHtml(sid)}" aria-pressed="${notComparableSets.has(sid)}" title="Not comparable — keep this set's reps/sets but drop its 1RM &amp; volume (e.g. a static hold or an odd one-off)">⊘ ${notComparableSets.has(sid) ? "not comparable" : "not comparable?"}</button>` +
     `<button type="button" class="set-edit-reset" data-setid="${escapeHtml(sid)}"${edited ? "" : " hidden"}>↺ Reset set</button>` +
@@ -8506,6 +8525,23 @@ function toggleAssistedExercise(target: HTMLElement): boolean {
   const btn = target.closest<HTMLElement>(".set-edit-assist");
   if (!btn?.dataset.assistex) return false;
   setAssistedOverride(btn.dataset.assistex, !isAssistedMachine(btn.dataset.assistex));
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
+  window.scrollTo(0, y);
+  return true;
+}
+
+/** Click the "⚖ machine" pill in the set editor: cycle the EXERCISE's machine mode
+ * (cable → gravity → mixed), then re-render. Lets you set the gravity variant from
+ * the history, not only the single-lift graph view. */
+function cycleMachineModeExercise(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".set-edit-mach");
+  if (!btn?.dataset.machsetex || !btn.dataset.machnext) return false;
+  setMachineMode(btn.dataset.machsetex, btn.dataset.machnext as MachineMode);
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
@@ -16339,10 +16375,8 @@ function graphReviewPromptHtml(targetEx: string, scopeNames: readonly string[]):
  * shown for exercises that can be done on both a cable and a machine (e.g. Lat
  * Pulldown). In mixed mode it reports how many sets were auto-classified. */
 function machineModeControl(name: string): string {
-  const eq = equipmentForExercise(name);
   const mode = machineModeFor(name);
-  const eligible = (eq.includes("Cable") && eq.includes("Machine")) || mode !== "cable";
-  if (!eligible) return "";
+  if (!machineModeEligible(name)) return "";
   const btn = (m: MachineMode, label: string, title: string) =>
     `<button type="button" class="seg-btn${mode === m ? " is-active" : ""}" data-machinemode="${m}" data-machine-ex="${escapeHtml(name)}" title="${escapeHtml(title)}">${label}</button>`;
   let note = "";
