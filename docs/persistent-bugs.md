@@ -11,6 +11,17 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-18 — Swipe-to-delete a SET ROW drags a few mm then snaps back
+
+- **First seen / reported:** 2026-06-12, mobile (Brave, Android / Samsung), expanded-history set table: swiping a set row left→right to delete it moves a couple of mm then "loses the drag" and snaps back.
+- **Prior fixes that didn't hold:** the swipe handler relied on `.set-main { touch-action: pan-y }` to keep horizontal drags for JS while letting vertical scroll the page (same pattern the collapsed `.wo-ex-line` swipe uses — and THAT one works).
+- **Root cause:** `touch-action` is **not reliably honoured on `<tr>`/`<td>`** elements on Chromium-on-Android (Brave / Samsung Internet). The set rows are table rows, so the browser ignored `pan-y`, claimed the horizontal swipe as a scroll, fired **`pointercancel`** → the drag reset. The collapsed exercise line is a `<div>`, which DOES honour `touch-action`, so its swipe was fine — the difference was `<tr>` vs `<div>`.
+- **Fix (b.2.8.287):** a **non-passive `touchmove`** listener `preventDefault()`s a clearly-horizontal move while a set-row swipe is armed (touch started on a `.set-main`, not a control), BEFORE the browser commits to scrolling — so the gesture stays with our JS drag. Pointer-event logic unchanged; `touch-action: pan-y` also added to `.set-main > td` as belt-and-suspenders. Comment at the fix site points here.
+- **Watch:** any future swipe/drag built on a `<table>`/`<tr>`/`<td>` needs the same touchmove backstop — don't trust `touch-action` on table elements.
+- **Recurrences:** 1
+
+---
+
 ## PB-17 — Popup/floating menus go out of viewport bounds
 
 - **First seen:** 2026-06-12, mobile (Brave, Android), workout ⚙ console pill strip bleeding off left edge

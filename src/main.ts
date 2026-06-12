@@ -11473,6 +11473,20 @@ async function init() {
     ssRow.classList.toggle("set-swipe-armed", ssDx >= SS_DELETE); // past threshold → red "will delete" hint
     e.preventDefault();
   });
+  // PB-18 (ROOT): `touch-action: pan-y` is NOT honoured on <tr>/<td> on Chromium-on-Android
+  // (Brave/Samsung Internet), so a horizontal swipe on a set ROW got claimed by the browser
+  // as a scroll → it fired pointercancel and the drag "snapped back after a few mm". A
+  // NON-PASSIVE touchmove that preventDefaults a clearly-horizontal move — BEFORE the browser
+  // commits to scrolling — keeps the gesture for our JS drag. Only while a set-row swipe is
+  // armed (ssRow set, i.e. the touch started on a set row, not one of its controls); a
+  // vertical move never preventDefaults, so the page still scrolls. The collapsed .wo-ex-line
+  // swipe never needed this because a <div> DOES honour touch-action.
+  document.addEventListener("touchmove", (e) => {
+    if (!ssRow || e.touches.length !== 1) return;
+    const t = e.touches[0]!;
+    const dx = t.clientX - ssX0, dy = t.clientY - ssY0;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 4) e.preventDefault();
+  }, { passive: false });
   const ssEnd = (): void => {
     if (!ssRow) return;
     const claimed = ssClaimed, dx = ssDx, id = ssId, label = ssLabel;

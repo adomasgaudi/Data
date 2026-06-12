@@ -1290,7 +1290,11 @@ body.admin-only-hidden .other-section-lbl { display: none; }
 .set-main { cursor: pointer; }
 /* Swipe LEFT→RIGHT to delete a set: pan-y hands horizontal drags to JS while keeping
    vertical page-scroll; the row follows the finger and snaps back if released early. */
-.set-main { touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+/* touch-action on BOTH the row and its cells: the cells are the actual touch targets, and
+   <tr>/<td> don't reliably honour touch-action on Chromium-on-Android anyway — a non-passive
+   touchmove backstop in JS is the real fix for the swipe (PB-18). */
+.set-main, .set-main > td { touch-action: pan-y; }
+.set-main { transition: transform 0.18s ease, opacity 0.18s ease; }
 .set-main.is-swiping { transition: none; will-change: transform; }
 /* Past the delete threshold the row turns red — "let go to delete". */
 .set-main.set-swipe-armed > td { background: color-mix(in srgb, var(--danger) 22%, transparent); }
