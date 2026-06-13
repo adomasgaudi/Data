@@ -10622,8 +10622,20 @@ function renderWorkoutPlan(): void {
     : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
   const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
     ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +
-      `<div class="prio-add-chips">${suggestions.map((s) =>
-        `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a combinable/comparable group lift" : ""} to your priorities">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`).join("")}</div></div>`
+      `<div class="prio-add-chips">${suggestions.map((s) => {
+        // For real (non-synth) exercises that have a comparable group: show the chip with
+        // an extra ✦ button to add-as-pattern instead of add-as-specific.
+        const patternGroups = s.synth ? [] : comparableGroupsForEx(s.name);
+        const patternName = patternGroups[0] ? (patternGroups[0].derivedName ?? patternGroups[0].label) : null;
+        const patternAddable = patternName && !has.has(patternName) && !sameLiftBlocked.has(patternName);
+        if (!s.synth && patternAddable) {
+          return `<span class="prio-add-pair">` +
+            `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))} specifically">+ ${escapeHtml(displayName(s.name))}</button>` +
+            `<button type="button" class="prio-add-chip is-synth" data-prioadd="${escapeHtml(patternName!)}" title="Add as ${escapeHtml(displayName(patternName!))} (all related exercises)">✦</button>` +
+            `</span>`;
+        }
+        return `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a combinable/comparable group lift" : ""}">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`;
+      }).join("")}</div></div>`
     : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
   els.planBody.innerHTML = list + addBlock;
 }
