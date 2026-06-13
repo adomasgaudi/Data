@@ -2885,6 +2885,32 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info { display: flex; flex-direction: column; gap: 0; padding: 0.3rem 0.2rem; }
+/* "How to train" brief — the six panels prepended to a lift's info overlay. Compact,
+   tight labels, small rounding (rule #design / #cram). */
+.lt-wrap { display: flex; flex-direction: column; gap: 0.4rem; margin: 0 0 0.6rem; padding: 0 0 0.6rem; border-bottom: 2px solid var(--line); }
+.lt-empty { font-size: 0.82rem; margin: 0.2rem 0; }
+.lt-sec { display: flex; flex-direction: column; gap: 0.25rem; }
+.lt-sec-h { font-size: 0.68rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.lt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.lt-now { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-right: 2px; }
+.lt-pill { display: inline-flex; align-items: center; gap: 3px; background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 7px; font-size: 0.72rem; }
+.lt-pl { color: var(--muted); font-weight: 700; }
+.lt-pv { color: var(--gold); font-weight: 800; }
+.lt-setsug { font-size: 0.85rem; }
+.lt-mini { font-size: 0.78rem; margin: 0; }
+.lt-warm { display: flex; flex-wrap: wrap; gap: 4px; }
+.lt-wset { font-size: 0.74rem; background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 7px; white-space: nowrap; }
+.lt-note { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.82rem; resize: vertical; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 5px 7px; background: var(--bg); color: var(--text); }
+.lt-ant { display: flex; flex-wrap: wrap; gap: 4px; }
+.lt-antex { min-height: var(--tap-min); display: inline-flex; align-items: center; font-size: 0.74rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: none; border-radius: var(--r-pill); padding: 2px 9px; cursor: pointer; }
+.lt-antex:hover { background: var(--accent); color: #fff; }
+/* Nuzzo reps→%1RM mini-curve */
+.nz-svg { width: 100%; max-width: 280px; height: auto; }
+.nz-grid { stroke: var(--line); stroke-width: 1; }
+.nz-curve { stroke: var(--accent); stroke-width: 2; }
+.nz-dot { fill: var(--muted); opacity: 0.55; }
+.nz-mark { fill: var(--gold); stroke: #fff; stroke-width: 1; }
+.nz-axt { fill: var(--muted); font-size: 8px; }
 /* Each field is its own STACKED section (label header on top, controls full-width
    below) instead of a cramped label|value 2-column row — gives editing room. */
 .ex-info-item { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }

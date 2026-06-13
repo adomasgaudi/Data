@@ -70,6 +70,13 @@ const LT: Record<string, string> = {
   "Active": "Aktyvus",
   "Passive": "Pasyvus",
   "Maintain": "Palaikyti",
+  // ---- "How to train" lift brief ----
+  "Working weights": "Darbiniai svoriai",
+  "Set suggestion": "Serijos pasiūlymas",
+  "Warmup": "Apšilimas",
+  "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
+  "Setup notes": "Pasiruošimo užrašai",
+  "Antagonist lifts": "Antagonistų pratimai",
   // ---- Mini stats carousel ----
   "More ▾": "Daugiau ▾",
   "~22 trained · ~25 natural ceiling": "~22 treniruotas · ~25 natūrali riba",

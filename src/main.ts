@@ -10720,6 +10720,142 @@ function spellingSourcesHtml(name: string, variants: string[]): string {
     `</div><p class="muted ex-spell-help">Tap ✕ to split a spelling into its own lift; tap ＋ to merge one back.</p></div>`
   );
 }
+// ── "How to train" panel ───────────────────────────────────────────────────
+// The training brief shown at the TOP of a lift's info overlay (opened by tapping
+// a Focus-lift in the Priorities popup): warmup ramp, current working weights,
+// a hard-set suggestion, the Nuzzo reps↔%1RM curve, free-text setup notes, and
+// antagonist lifts. All numbers come from the SAME tested compute the rest of the
+// app trusts (prescription.ts / metrics.ts / the plan's decay model) — no new
+// strength model here, only presentation.
+
+// Per-lift free-text setup notes (e.g. "rack height 7, safeties at 4"). Net-new
+// store, same device-local layering pattern as codes/coeffs.
+const SETUP_NOTES_KEY = "colosseum.exerciseSetupNotes.v1";
+const setupNotes: Record<string, string> = loadJsonObject<Record<string, string>>(SETUP_NOTES_KEY) ?? {};
+function setupNoteFor(name: string): string { return setupNotes[name] ?? ""; }
+function setSetupNote(name: string, text: string): void {
+  const t = text.trim();
+  if (t) setupNotes[name] = t; else delete setupNotes[name];
+  saveJson(SETUP_NOTES_KEY, setupNotes);
+}
+
+/** This athlete's CURRENT (decay-faded) estimated 1RM for one lift — the same
+ *  per-day-best → decayingStrengthPoints model the live plan uses, so the brief
+ *  agrees with the plan. null when they've never logged it. */
+function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormula): number | null {
+  const byDay = new Map<number, number>();
+  for (const r of computedRecords()) {
+    if (r.username !== username || r.exerciseName !== name || !r.date) continue;
+    if (addedWeight1RM(r, formula) === null) continue; // skip un-scorable (e.g. >15-rep) sets
+    const e = estimate1RM(r.weight, r.reps, formula);
+    if (e === null) continue;
+    const d = dayNumber(r.date);
+    byDay.set(d, Math.max(byDay.get(d) ?? -Infinity, e));
+  }
+  if (!byDay.size) return null;
+  const pts = [...byDay.entries()].map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
+  const series = decayingStrengthPoints(pts);
+  return series.length ? series[series.length - 1]!.y : Math.max(...pts.map((p) => p.y));
+}
+
+/** Compact inline SVG of the Nuzzo bench reps↔%1RM curve (reps 1–20 on x, %1RM on
+ *  y), the study points as dots, and the suggested working set marked. Bench-derived
+ *  but the closest data-grounded rep curve we have, so shown for any lift. */
+function nuzzoSvg(markReps: number | null, markPct: number | null): string {
+  const W = 260, H = 132, padL = 26, padR = 8, padT = 8, padB = 18;
+  const xMax = 20; // reps
+  const x = (reps: number) => padL + ((Math.min(reps, xMax) - 1) / (xMax - 1)) * (W - padL - padR);
+  const y = (pct: number) => padT + (1 - pct / 100) * (H - padT - padB);
+  let curve = "";
+  for (let r = 1; r <= xMax; r++) {
+    curve += `${r === 1 ? "M" : "L"}${x(r).toFixed(1)},${y(benchPctForReps(r)).toFixed(1)} `;
+  }
+  const dots = BENCH_REPS_STUDY
+    .filter(([, reps]) => reps <= xMax)
+    .map(([pct, reps]) => `<circle cx="${x(reps).toFixed(1)}" cy="${y(pct).toFixed(1)}" r="2" class="nz-dot" />`)
+    .join("");
+  // y gridlines at 100/75/50/25 %
+  const grid = [100, 75, 50, 25].map((p) =>
+    `<line x1="${padL}" y1="${y(p).toFixed(1)}" x2="${W - padR}" y2="${y(p).toFixed(1)}" class="nz-grid" /><text x="2" y="${(y(p) + 3).toFixed(1)}" class="nz-axt">${p}</text>`).join("");
+  const xticks = [1, 5, 10, 15, 20].map((r) =>
+    `<text x="${x(r).toFixed(1)}" y="${H - 6}" class="nz-axt" text-anchor="middle">${r}</text>`).join("");
+  const marker = (markReps && markPct && markReps <= xMax)
+    ? `<circle cx="${x(markReps).toFixed(1)}" cy="${y(markPct).toFixed(1)}" r="3.5" class="nz-mark" />`
+    : "";
+  return `<svg class="nz-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Reps to %1RM curve">${grid}<path d="${curve}" class="nz-curve" fill="none" />${dots}${marker}${xticks}<text x="${W - padR}" y="${H - 6}" class="nz-axt" text-anchor="end">reps</text></svg>`;
+}
+
+/** The "How to train" brief for one lift — six panels, prepended to the info card. */
+function liftTrainingHtml(name: string): string {
+  const formula = currentFormula();
+  const user = els.athlete.value;
+  const e1rm = currentLiftE1RM(user, name, formula);
+  const fmt = (n: number) => String(Math.round(n * 10) / 10);
+  const sec = (title: string, body: string) =>
+    `<div class="lt-sec"><div class="lt-sec-h">${escapeHtml(title)}</div>${body}</div>`;
+  const pill = (label: string, value: string) =>
+    `<span class="lt-pill"><span class="lt-pl">${escapeHtml(label)}</span><span class="lt-pv">${value}</span></span>`;
+
+  if (e1rm === null || !(e1rm > 0)) {
+    // No data yet — still show setup notes (always editable) + a hint.
+    const note = setupNoteFor(name);
+    return `<div class="lt-wrap">` +
+      `<p class="muted lt-empty">No logged sets for ${escapeHtml(displayName(name))} yet — log a set to see warmup, working weights and a set suggestion.</p>` +
+      sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
+      `</div>`;
+  }
+
+  // Suggested hard set: 5 reps @ RIR 2 (a sensible default working set).
+  const hs = hardSetWeight(e1rm, { kind: "repsRIR", reps: 5, rir: 2 }, formula);
+  // Working weights: true rep-maxes for common targets (load to FAILURE at N reps).
+  const repTargets = [3, 5, 8, 12];
+  const workPills = repTargets.map((reps) => {
+    const w = weightForReps(e1rm, reps, formula);
+    return w === null ? "" : pill(`${reps}RM`, `${fmt(w)}kg`);
+  }).join("");
+  // Warmup ramp up to the suggested working weight.
+  const warm = hs ? warmupRamp({ oneRepMax: e1rm, workingWeightKg: hs.weightKg, formula }) : [];
+  const warmRows = warm.length
+    ? `<div class="lt-warm">` + warm.map((w) =>
+        `<span class="lt-wset"><b>${fmt(w.weightKg)}</b>kg × ${w.reps} <span class="muted">(${w.pctOfWorking}%)</span></span>`).join("") + `</div>`
+    : `<p class="muted lt-mini">—</p>`;
+  // Set suggestion.
+  const setSug = hs
+    ? `<div class="lt-setsug"><b>3 × ${hs.reps}</b> @ <b>${fmt(hs.weightKg)}kg</b> <span class="muted">· RIR ${hs.rir} · ${fmt(hs.pctOf1RM)}% of 1RM</span></div>`
+    : `<p class="muted lt-mini">—</p>`;
+
+  // Antagonist lifts: this lift's antagonist muscle(s) → the athlete's own trained
+  // lifts hitting them (good to superset). Uses the existing ANTAGONIST_PAIRS map.
+  const myMuscles = new Set(mgsFor(name));
+  const antMuscles = new Set<MuscleGroup>();
+  for (const [a, b] of ANTAGONIST_PAIRS) {
+    if (myMuscles.has(a)) antMuscles.add(b);
+    if (myMuscles.has(b)) antMuscles.add(a);
+  }
+  let antBody = `<p class="muted lt-mini">No opposing-muscle lift mapped.</p>`;
+  if (antMuscles.size) {
+    const todayD = dayNumber(todayIso());
+    const cands = liveExercises(user, todayD)
+      .filter((le) => le.name !== name && le.muscles.some((m) => antMuscles.has(m)))
+      .sort((p, q) => q.sets - p.sets)
+      .slice(0, 6);
+    antBody = cands.length
+      ? `<div class="lt-ant">` + cands.map((le) =>
+          `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="Open ${escapeHtml(displayName(le.name))}">${escapeHtml(shortFor(le.name))}</button>`).join("") + `</div>`
+      : `<p class="muted lt-mini">No ${[...antMuscles].join("/")} lift logged yet.</p>`;
+  }
+
+  const note = setupNoteFor(name);
+  return `<div class="lt-wrap">` +
+    sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
+    sec("Set suggestion", setSug) +
+    sec("Warmup", warmRows) +
+    sec("Reps → %1RM (Nuzzo)", nuzzoSvg(hs?.reps ?? null, hs?.pctOf1RM ?? null)) +
+    sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
+    sec("Antagonist lifts", antBody) +
+    `</div>`;
+}
+
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   // The info card shows THIS lift's real data — unfiltered, so a lift hidden by the
@@ -11041,7 +11177,7 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  return `<div class="ex-info">${liftTrainingHtml(name)}${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
@@ -12156,6 +12292,9 @@ async function init() {
   // Delegated: a pill's ⓘ navigates — group pill → that group's own info card;
   // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
   els.exInfoBody.addEventListener("click", (e) => {
+    // Antagonist lift chip in the "How to train" panel → open that lift's brief.
+    const trainex = (e.target as HTMLElement).closest<HTMLElement>("[data-trainex]");
+    if (trainex?.dataset.trainex) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(trainex.dataset.trainex); return; }
     const ex = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-ex]");
     if (ex?.dataset.pillinfoEx) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(ex.dataset.pillinfoEx); return; }
     const cat = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-cat]");
@@ -12883,6 +13022,10 @@ async function init() {
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
+    // "How to train" per-lift setup notes (rack height etc.) — save on blur, no
+    // re-render so the textarea keeps focus/scroll.
+    const note = t.closest<HTMLTextAreaElement>(".lt-note");
+    if (note?.dataset.setupnote) { setSetupNote(note.dataset.setupnote, note.value); return; }
     const code = t.closest<HTMLInputElement>(".ex-edit-code");
     if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); renderAll(); reopenIndexDetail(code.dataset.editex); return; }
     const short = t.closest<HTMLInputElement>(".ex-edit-short");
