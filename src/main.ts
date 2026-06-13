@@ -10576,9 +10576,9 @@ function renderWorkoutPlan(): void {
       const trackedSum = kids.reduce((s, k) => s + exerciseMonthAvg(user, k), 0);
       const others = Math.max(0, total - trackedSum);
       const parts = kids.map((k) => `${escapeHtml(displayName(k))} ${exerciseMonthAvg(user, k).toFixed(1)}`).join(" · ");
-      avgHtml = `<span class="prio-avg muted" title="Weekly sets across the WHOLE pattern — your tracked members listed, plus other variants (+N). The members' sets are included here, not additional.">~${total.toFixed(1)}/wk · ${parts}${others > 0.05 ? ` · +${others.toFixed(1)}` : ""}</span>`;
+      avgHtml = `<span class="prio-avg muted" title="Sets/wk you've done across the WHOLE pattern — tracked members listed, +N = other variants. Members are INCLUDED, not additional.">~${total.toFixed(1)} · ${parts}${others > 0.05 ? ` +${others.toFixed(1)}` : ""}</span>`;
     } else {
-      avgHtml = `<span class="prio-avg muted" title="Average sets per week you've actually done over the last month">~${exerciseMonthAvg(user, ex).toFixed(1)}/wk done</span>`;
+      avgHtml = `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${exerciseMonthAvg(user, ex).toFixed(1)}</span>`;
     }
     const parent = nested ? parentOf(ex) : undefined;
     const parentHint = parent
@@ -10593,7 +10593,7 @@ function renderWorkoutPlan(): void {
       avgHtml +
       `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
-        `<span class="prio-tgt-val">${e.target}/wk</span>` +
+        `<span class="prio-tgt-val" title="Weekly sets target">${e.target}</span>` +
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
       `</span></span>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
