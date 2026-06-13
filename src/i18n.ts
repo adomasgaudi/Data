@@ -49,7 +49,6 @@ const LT: Record<string, string> = {
   "Index": "Rodyklė",
   // ---- Live coaching page ----
   "Live": "Gyvai",
-  "Train today": "Šiandien treniruok",
   "Planned today": "Šiandienos planas",
   "Antagonist supersets": "Antagonistų supersetai",
   "Warm-ups": "Apšilimas",

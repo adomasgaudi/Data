@@ -9903,27 +9903,10 @@ function renderLive(): void {
     `<span class="live-ex-name">${escapeHtml(displayName(x.name))}</span>` +
     `<span class="live-ex-meta muted">${agoTxt(x)}</span>${dropTxt(x)}</button>`;
 
-  // 1) WHAT TO TRAIN — by tier, most-stale/slipped first. Primary & Secondary capped
-  //    at 6 (your focus lifts); Tertiary is the longer maintenance tail.
+  // 1) WHAT TO TRAIN — by tier, most-stale/slipped first. `byTier` still feeds the
+  //    warm-up and watch-out sections; the old "Train today" tier list was removed —
+  //    its per-lift cards live inside each Focus-lift now (tap a lift to open its brief).
   const byTier = (t: ExerciseTier) => list.filter((x) => x.tier === t).sort((a, b) => b.priority - a.priority);
-  const tierBlock = (t: ExerciseTier, cap: number, blurb: string) => {
-    const items = byTier(t);
-    if (!items.length) return "";
-    const shown = cap > 0 ? items.slice(0, cap) : items;
-    return (
-      `<div class="live-tier"><div class="live-tier-hd"><span class="live-tier-lbl">${TIER_LABELS[t]}</span> ` +
-      `<span class="muted">${blurb}${items.length > shown.length ? ` · top ${shown.length} of ${items.length}` : ""}</span></div>` +
-      `<div class="live-ex-row">${shown.map(exPill).join("")}</div></div>`
-    );
-  };
-  const trainSection =
-    `<section class="live-card"><h3 class="live-h">Train today</h3>` +
-    `<p class="live-sub muted">Your lifts by tier, the ones that have slipped most or that you've not trained in a while first.</p>` +
-    tierBlock("main", 6, "top priorities") +
-    tierBlock("second", 6, "secondary") +
-    tierBlock("third", 12, "maintenance") +
-    tierBlock("ugly", 12, "ugly — deprioritised") +
-    `</section>`;
 
   // 2) ANTAGONIST SUPERSETS — pair an opposing-muscle lift either side. Pick the
   //    highest-priority lift on each side; don't reuse a lift across pairs.
@@ -10039,8 +10022,8 @@ function renderLive(): void {
   // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
   // section right after the plan; otherwise it sits lower.
   const ordered = coach?.pushSupersets
-    ? coachSection + plannedSection + trainSection + ssSection + warmSection + watchSection
-    : coachSection + plannedSection + trainSection + warmSection + ssSection + watchSection;
+    ? coachSection + plannedSection + ssSection + warmSection + watchSection
+    : coachSection + plannedSection + warmSection + ssSection + watchSection;
 
   box.innerHTML =
     `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
