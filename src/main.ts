@@ -10530,8 +10530,8 @@ function renderWorkoutPlan(): void {
 }
 
 function openWorkoutPlan(): void {
-  renderLive(); // the training plan (relocated from the old Live tab) sits at the top
-  renderWorkoutPlan(); // the manual focus-lifts planner below it
+  renderWorkoutPlan(); // focus-lifts planner at the top
+  renderLive();        // training plan below
   els.planPage.hidden = false;
 }
 // Remember which taxonomy sections (Discipline / Muscle group / Tier / Combinable /
