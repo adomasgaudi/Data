@@ -10548,16 +10548,49 @@ function renderWorkoutPlan(): void {
     ...synthSug.map((name) => ({ name, synth: true })),
     ...realSug.map((name) => ({ name, synth: false })),
   ].slice(0, 16);
-  const rowHtml = (ex: string): string => {
+  // ---- Lift↔pattern overlap (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
+  // A lift and its movement-pattern group overlap: the lift's sets are PART OF the
+  // pattern's volume, not additive. So nest each tracked member UNDER its pattern and
+  // show the pattern's volume broken down, making the overlap honest instead of a
+  // confusing double-count.
+  const isPattern = (n: string) => syntheticMembers(n).length > 0;
+  const childrenOf = new Map<string, string[]>(); // pattern → its tracked member priorities
+  const claimed = new Set<string>();              // members nested under a pattern already
+  for (const p of names) {                        // sorted order ⇒ the first pattern claims a shared member
+    if (!isPattern(p)) continue;
+    const members = new Set(syntheticMembers(p));
+    const kids = names.filter((n) => n !== p && !isPattern(n) && members.has(n) && !claimed.has(n));
+    if (kids.length) { kids.forEach((k) => claimed.add(k)); childrenOf.set(p, kids); }
+  }
+  const parentOf = (n: string): string | undefined => names.find((p) => childrenOf.get(p)?.includes(n));
+
+  const rowHtml = (ex: string, nested = false): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
-    const avg = exerciseMonthAvg(user, ex);
-    return `<div class="prio-row" data-prioex="${escapeHtml(ex)}">` +
+    const kids = childrenOf.get(ex);
+    // A pattern with tracked members shows its volume broken down — "~2.3/wk · DL 0.9 · +1.4"
+    // — so it's clear the members' sets are INCLUDED in the total, not on top of it.
+    let avgHtml: string;
+    if (kids) {
+      const total = exerciseMonthAvg(user, ex);
+      const trackedSum = kids.reduce((s, k) => s + exerciseMonthAvg(user, k), 0);
+      const others = Math.max(0, total - trackedSum);
+      const parts = kids.map((k) => `${escapeHtml(displayName(k))} ${exerciseMonthAvg(user, k).toFixed(1)}`).join(" · ");
+      avgHtml = `<span class="prio-avg muted" title="Weekly sets across the WHOLE pattern — your tracked members listed, plus other variants (+N). The members' sets are included here, not additional.">~${total.toFixed(1)}/wk · ${parts}${others > 0.05 ? ` · +${others.toFixed(1)}` : ""}</span>`;
+    } else {
+      avgHtml = `<span class="prio-avg muted" title="Average sets per week you've actually done over the last month">~${exerciseMonthAvg(user, ex).toFixed(1)}/wk done</span>`;
+    }
+    const parent = nested ? parentOf(ex) : undefined;
+    const parentHint = parent
+      ? `<span class="prio-parent muted" title="Part of ${escapeHtml(displayName(parent))} — these sets count toward that pattern too">↳ ${escapeHtml(displayName(parent))}</span>`
+      : "";
+    return `<div class="prio-row${nested ? " is-nested" : ""}${kids ? " is-pattern" : ""}" data-prioex="${escapeHtml(ex)}">` +
       `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}">` +
-      `<span class="prio-name">${escapeHtml(displayName(ex))}</span>${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
+      `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
+      `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}${parentHint}</button>` +
       `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
       `<span class="prio-stats">` +
-      `<span class="prio-avg muted" title="Average sets per week you've actually done over the last month">~${avg.toFixed(1)}/wk done</span>` +
+      avgHtml +
       `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
         `<span class="prio-tgt-val">${e.target}/wk</span>` +
@@ -10566,8 +10599,15 @@ function renderWorkoutPlan(): void {
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
       `</div>`;
   };
+  // Top-level entries in sorted order; a pattern's tracked members indented right after it.
+  const rowsOut: string[] = [];
+  for (const name of names) {
+    if (claimed.has(name)) continue; // rendered nested under its pattern instead
+    rowsOut.push(rowHtml(name, false));
+    for (const k of childrenOf.get(name) ?? []) rowsOut.push(rowHtml(k, true));
+  }
   const list = names.length
-    ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
+    ? `<div class="prio-list">${rowsOut.join("")}</div>`
     : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
   const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
     ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +

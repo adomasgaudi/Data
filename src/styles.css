@@ -4575,6 +4575,11 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
   background: none; border: none; padding: 0;
 }
 .prio-name { font-size: 0.88rem; font-weight: 700; color: var(--accent); line-height: 1.15; }
+/* A lift and its pattern overlap: a pattern with tracked members gets a gold left edge,
+   and those members nest under it (indented, accent edge) with a ↳ link back. */
+.prio-row.is-pattern { border-left: 3px solid var(--lens-combine, #b8902f); }
+.prio-row.is-nested { margin-left: 1.2rem; border-left: 2px solid var(--accent); }
+.prio-parent { font-size: 0.66rem; font-weight: 600; color: var(--muted); }
 .prio-main:hover .prio-name { text-decoration: underline; }
 .prio-mg { font-size: 0.68rem; color: var(--muted); }
 /* Level pill — an intensity ladder: Max (filled) → Active (outline) → Passive →

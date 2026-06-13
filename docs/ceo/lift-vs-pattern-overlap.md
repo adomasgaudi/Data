@@ -1,6 +1,6 @@
 # CEO: a lift and its pattern (DL vs DL pattern) overlap — how to track both without double-counting
 
-- **Asked:** 2026-06-13  ·  **Status:** PLANNING
+- **Asked:** 2026-06-13  ·  **Status:** IN-PROGRESS (Phase 1)
 - **The point it serves:** the planner is the app's "what should I DO" engine (tier ④). If a lift and its pattern fight each other, the one actionable screen becomes confusing — kills trust for tiers ① and ②.
 
 ## The question (verbatim-ish)
@@ -38,11 +38,11 @@ One priority = the pattern, with a chosen spearhead variant carrying the intensi
 ## The plan (phased; not padded to 100 — this is ~4 phases of real work)
 
 ### Phase 1 — Make the overlap VISIBLE & honest (no schema change) — ships value under either path
-- [ ] 1. Helper: for a priority name, find which OTHER priorities are its pattern (member→patterns) or its members (pattern→members), via the existing group model.
-- [ ] 2. In the planner, NEST related entries: pattern as a light parent, its tracked members indented beneath (keep flat ordering for unrelated lifts).
-- [ ] 3. On a pattern row, show the volume breakdown: "2.3/wk done — DL 0.9 + 1.4 others", making clear the member's volume is included, not additive.
-- [ ] 4. A subtle link badge (↔) between a member and its pattern so the relationship is legible even when not adjacent.
-- [ ] 5. i18n + tests for the member↔pattern detection. Ship.
+- [x] 1. Helper: member→pattern / pattern→members detection among priorities (`isPattern`, `childrenOf`, `parentOf` in `renderWorkoutPlan`). — b.2.8.323
+- [x] 2. NEST tracked members under their pattern (indented, accent left edge); unrelated lifts stay flat. — b.2.8.323
+- [x] 3. Pattern row shows the volume breakdown ("~2.3/wk · DL 0.9 · +1.4"), with a title clarifying members are INCLUDED not additive. — b.2.8.323
+- [x] 4. Nested member shows a "↳ {pattern}" hint linking the relationship. — b.2.8.323
+- [x] 5. Build + 501 tests pass; no new standalone translatable strings (data + symbols only). — b.2.8.323
 
 ### Phase 2 — Intensity vs Volume facets (schema change) — Path B
 - [ ] 6. Extend the priority record: optional `intensity` (a spearhead variant + optional 1RM target) and `volume` (weekly sets across the pattern). Migrate existing entries losslessly.
@@ -60,9 +60,10 @@ One priority = the pattern, with a chosen spearhead variant carrying the intensi
 - [ ] 14. Final i18n, tests, docs. Ship.
 
 ## Decisions / open questions for the owner
-- **D1 (the fork):** Path A (keep separate, nest+reconcile) vs Path B (collapse into one pattern+spearhead entry)? Recommendation: B, but ship Phase 1 first regardless.
-- **D2:** Is the intensity goal a real **1RM target** (a kg you're chasing), or just a flag "this variant is the max-effort focus"? (Affects Phase 2 scope.)
-- **D3:** Scope for now — just Phase 1 (visibility), or commit to the full B?
+- **D1/D3 — DECIDED (2026-06-13):** "Phase 1 now, decide rest later." Phase 1 (visibility) shipped; Path A-vs-B still open for after the owner sees it live.
+- **D2 — DECIDED (2026-06-13):** "max effort but lets add goals too" → keep the max-effort LEVEL flag AND, in Phase 2, add an optional **1RM goal target** on the spearhead variant (a kg you chase). So intensity = level flag + optional kg goal.
+- **Open:** after Phase 1 lands on the owner's phone, confirm Path B (merge a lift+pattern into one entry) before building Phase 2.
 
 ## Log
-- 2026-06-13 — doc created (Opus 4.8 session); PLANNING, awaiting owner direction on D1–D3.
+- 2026-06-13 — doc created (Opus 4.8); PLANNING.
+- 2026-06-13 — owner approved "Phase 1 now"; D2 = max-effort flag + 1RM goals later. Phase 1 built & shipped (b.2.8.323, WO-144). Status IN-PROGRESS; awaiting owner check before Phase 2.
