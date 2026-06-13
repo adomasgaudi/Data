@@ -4654,6 +4654,10 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
    them apart from plain exercises, matching the lens-combine gold elsewhere. */
 .prio-add-chip.is-synth { color: var(--lens-combine, #b8902f); background: var(--gold-soft); border-color: var(--gold-soft); }
 .prio-add-chip.is-synth:hover { border-color: var(--lens-combine, #b8902f); }
+/* Pair: a specific chip + its ✦ pattern chip grouped together */
+.prio-add-pair { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.prio-add-pair .prio-add-chip { border: none; border-radius: 0; padding-right: 8px; }
+.prio-add-pair .prio-add-chip + .prio-add-chip { border-left: 1px solid var(--line); padding: 0 10px; }
 .live-for { font-size: 0.82rem; margin: 0 0 0.2rem; }
 .live-card { border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.8rem; background: var(--panel); }
 .live-card.live-goals { border-color: var(--accent); }
