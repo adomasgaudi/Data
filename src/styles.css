@@ -219,6 +219,11 @@ body {
 /* Bleach code-name (the minor) in small gold; the AI-bumped patch as a grey "v.N". */
 .title-ver .version .ver-name { font-size: 0.95em; color: var(--gold); font-weight: 700; font-style: italic; letter-spacing: 0.2px; }
 .title-ver .version .ver-patch { font-size: 0.8em; color: var(--muted); font-weight: 600; }
+/* The model working this branch (opus-4.8 → "Opus 4.8") — a small accent pill next
+   to the version, so each model's deploy says who built it. */
+.title-ver .model-tag { color: var(--accent); font-weight: 700; }
+.title-ver .model-tag[hidden] { display: none; }
+.title-ver .model-tag::before { content: "· "; color: var(--muted); font-weight: 400; }
 .topbar h1 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
 /* The title doubles as a Back-to-home button. */
 .brand-title { cursor: pointer; display: inline-flex; align-items: center; }

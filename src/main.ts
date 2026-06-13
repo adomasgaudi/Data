@@ -157,6 +157,9 @@ import { DEFAULT_FORMULA } from "./config";
 import { supabase, upsertSets } from "./supabase";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
+import { modelLabelFor } from "./modelName";
+// __BUILD_BRANCH__ (baked in by vite.config's define) names the MODEL working this
+// branch (opus-4.8 → "Opus 4.8") for the title tag — declared in build-env.d.ts.
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename, clearCache } from "./backup";
 import defaultCache from "./data/defaultCache.json";
 
@@ -11833,6 +11836,13 @@ async function init() {
     verEl.title = "Version history";
     verEl.style.cursor = "pointer";
     verEl.addEventListener("click", openChangelog);
+  }
+  // The model working this branch, shown next to the version (opus-4.8 → "Opus 4.8").
+  const modelTag = document.getElementById("modelTag");
+  if (modelTag) {
+    const label = modelLabelFor(typeof __BUILD_BRANCH__ === "string" ? __BUILD_BRANCH__ : "");
+    modelTag.textContent = label;
+    modelTag.hidden = !label;
   }
   renderChangelog();
 
