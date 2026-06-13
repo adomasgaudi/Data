@@ -125,7 +125,8 @@ const LT: Record<string, string> = {
   // ---- Settings ----
   "Calculations & display": "Skaičiavimai ir rodymas",
   "1RM formula": "1RM formulė",
-  "Dashboard-wide 1RM formula": "Viso skydelio 1RM formulė",
+  "App-wide 1RM formula": "Visos programos 1RM formulė",
+  "Compare formulas & breakdown": "Palyginti formules ir skaičiavimą",
   "Nuzzo (bench curve)": "Nuzzo (spaudimo kreivė)",
   "Exercise names shown as": "Pratimų pavadinimai rodomi kaip",
   "Code": "Kodas",

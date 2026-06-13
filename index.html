@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.311.14</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.8.312</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -395,16 +395,6 @@
         </section>
         <section class="panel">
           <h2>Formulas — see the maths</h2>
-          <!-- Dashboard-wide 1RM formula (moved here from Settings). Sets the formula the
-               whole app uses for leaderboards, PRs and the history; same #formula id, so its
-               existing wiring + custom .xdd dropdown are unchanged. -->
-          <label class="formula-field">Dashboard-wide 1RM formula
-            <select id="formula">
-              <option value="epley">Epley</option>
-              <option value="brzycki">Brzycki</option>
-              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
-            </select>
-          </label>
           <div class="calc-picker">
             <label>Athlete
               <select id="testAthlete"></select>
@@ -420,12 +410,17 @@
             <label>Bodyweight (kg)<input id="calcBw" type="number" value="80" step="1" /></label>
             <label>BW part (coeff)<input id="calcCoeff" type="number" value="0" step="0.05" min="0" max="2" /></label>
           </div>
-          <div class="calc-tabs" id="calcTabs" role="tablist">
-            <button type="button" class="calc-tab" data-formula="epley" role="tab">Epley</button>
-            <button type="button" class="calc-tab" data-formula="brzycki" role="tab">Brzycki</button>
-            <button type="button" class="calc-tab is-active" data-formula="nuzzo" role="tab">Nuzzo (bench)</button>
-          </div>
-          <div id="calcOut" class="calc-out"></div>
+          <!-- The per-formula comparison tabs + the step-by-step breakdown are the deep
+               dive, so they're folded away by default to keep the page short. -->
+          <details class="merge-fold calc-fold">
+            <summary class="merge-fold-sum calc-fold-sum">Compare formulas &amp; breakdown</summary>
+            <div class="calc-tabs" id="calcTabs" role="tablist">
+              <button type="button" class="calc-tab" data-formula="epley" role="tab">Epley</button>
+              <button type="button" class="calc-tab" data-formula="brzycki" role="tab">Brzycki</button>
+              <button type="button" class="calc-tab is-active" data-formula="nuzzo" role="tab">Nuzzo (bench)</button>
+            </div>
+            <div id="calcOut" class="calc-out"></div>
+          </details>
           <div id="calcCurveChart"></div>
           <p class="muted" id="calcCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
           <p class="calc-links">
@@ -433,6 +428,16 @@
               📊 Bench reps at % of 1RM — research data
             </a>
           </p>
+          <!-- App-wide 1RM formula (set-once app-wide setting — sets the formula the whole
+               app uses for leaderboards, PRs and the history). Kept at the BOTTOM since it's
+               rarely changed; same #formula id, so its wiring + .xdd dropdown are unchanged. -->
+          <label class="formula-field formula-field--foot">App-wide 1RM formula
+            <select id="formula">
+              <option value="epley">Epley</option>
+              <option value="brzycki">Brzycki</option>
+              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
+            </select>
+          </label>
         </section>
         <section class="panel">
           <h2>Strength fade — use it or lose it</h2>
