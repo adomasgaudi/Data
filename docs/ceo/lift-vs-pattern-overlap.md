@@ -6,6 +6,10 @@
 ## The question (verbatim-ish)
 "DL and DL pattern are related. You can train both — you might want max deadlift AND holistic DL-pattern strength. But doing deadlifts affects DL pattern and vice versa, so there's confusion. Even if we do them separately I still want to see them together, as I won't do both on the same day and volume also combines. Think hard of a solution."
 
+## Key distinction (owner, 2026-06-13): COMBINABLE ≠ COMPARABLE
+- **Combinable** (SQ mix ≡ Squat ≡ Smith Squat) = basically the SAME lift, different representations. You track only ONE — you wouldn't plan both in a program. In the dropdown these are SWAP chips (⇄, teal): tapping moves the priority to that representation (or dedupes if both are tracked). — done b.2.8.325
+- **Comparable** (DL pattern vs DL) = distinct-but-related lifts on one curve. These CAN coexist (push the lift + train the pattern). In the dropdown they just OPEN (✦ for a pattern). This is what Phase 2's intensity/volume merge is about.
+
 ## The core insight (the hard-thinking bit)
 A lift and its pattern are **not two priorities** — they are **two AXES of one training goal**:
 

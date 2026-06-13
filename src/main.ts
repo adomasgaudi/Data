@@ -10551,36 +10551,49 @@ function renderWorkoutPlan(): void {
     ...realSug.map((name) => ({ name, synth: false })),
   ].slice(0, 16);
   // ---- Lift↔pattern relations (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
-  // Every lift stays a FLAT row in its OWN effort order (DL max-effort up top, DL pattern
-  // passive lower) — NOT nested. Instead each row has an expandable dropdown of its
-  // related lifts: a lift lists the patterns it's in + their sibling members; a pattern
-  // lists its members. So Deadlift's dropdown shows "DL pattern" + variants, and DL
-  // pattern's dropdown shows Deadlift + the rest.
-  const relatedLifts = (name: string): string[] => {
-    const out = new Set<string>();
-    for (const m of syntheticMembers(name)) out.add(m); // a pattern → its members
-    for (const g of [...combinableGroupsForEx(name), ...comparableGroupsForEx(name)]) {
-      out.add(g.derivedName ?? g.label);                // the pattern/group it belongs to
-      for (const m of g.members ?? []) out.add(m.exerciseName); // sibling variants
-    }
-    out.delete(name);
-    return [...out];
+  // Every lift stays a FLAT row in its OWN effort order — NOT nested. Each row has a
+  // dropdown of related lifts, split by RELATION:
+  //   • COMBINABLE (same=true) — basically the SAME lift (SQ mix ≡ Squat ≡ Smith Squat);
+  //     you'd track only ONE, so its chip SWAPS the priority to that representation.
+  //   • COMPARABLE (same=false) — a distinct-but-related pattern (DL pattern vs DL) that
+  //     can coexist; its chip just OPENS the lift.
+  const relatedOf = (name: string): { name: string; same: boolean }[] => {
+    const map = new Map<string, boolean>(); // related name → same-lift (combinable)?
+    const add = (n: string, same: boolean) => {
+      if (n === name) return;
+      const prev = map.get(n);
+      map.set(n, prev === undefined ? same : prev || same); // combinable wins if both
+    };
+    // `name` is itself a synthetic group → its members (combinable members are "same").
+    for (const g of effectiveCombinableGroups()) if ((g.derivedName ?? g.label) === name) for (const m of g.members ?? []) add(m.exerciseName, true);
+    for (const g of effectiveComparableGroups()) if ((g.derivedName ?? g.label) === name) for (const m of g.members ?? []) add(m.exerciseName, false);
+    // `name` is a member → the groups it's in + their siblings.
+    for (const g of combinableGroupsForEx(name)) { add(g.derivedName ?? g.label, true); for (const m of g.members ?? []) add(m.exerciseName, true); }
+    for (const g of comparableGroupsForEx(name)) { add(g.derivedName ?? g.label, false); for (const m of g.members ?? []) add(m.exerciseName, false); }
+    // Same-lift (combinable) first, then related patterns.
+    return [...map].map(([n, same]) => ({ name: n, same })).sort((a, b) => Number(b.same) - Number(a.same));
   };
 
   const rowHtml = (ex: string): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
     const avg = exerciseMonthAvg(user, ex);
-    const related = relatedLifts(ex);
+    const related = relatedOf(ex);
     const open = prioExpanded.has(ex);
     const caret = related.length
       ? `<button type="button" class="prio-expand" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="${related.length} related lift${related.length === 1 ? "" : "s"} — tap to ${open ? "hide" : "show"}">${open ? "▾" : "▸"}<span class="prio-rel-n">${related.length}</span></button>`
       : `<span class="prio-expand is-empty"></span>`;
     const relPanel = open && related.length
-      ? `<div class="prio-related">` + related.map((r) => {
-          const isPat = syntheticMembers(r).length > 0;
+      ? `<div class="prio-related">` + related.map(({ name: r, same }) => {
+          const rAvg = exerciseMonthAvg(user, r).toFixed(1);
           const isPri = !!pri[r];
-          return `<button type="button" class="prio-rel-chip${isPat ? " is-synth" : ""}${isPri ? " is-pri" : ""}" data-planopen="${escapeHtml(r)}" title="${isPat ? "Pattern group" : "Related lift"}${isPri ? " · already a focus" : ""} — ~${exerciseMonthAvg(user, r).toFixed(1)}/wk. Tap to open.">${isPat ? "✦ " : ""}${escapeHtml(displayName(r))} <span class="prio-rel-avg">~${exerciseMonthAvg(user, r).toFixed(1)}</span></button>`;
+          if (same) {
+            // Combinable = the SAME lift → tap SWAPS this priority to that representation
+            // (you only track one). If it's already tracked too, the swap just dedupes.
+            return `<button type="button" class="prio-rel-chip is-same${isPri ? " is-pri" : ""}" data-prioswap="${escapeHtml(ex)}" data-prioswapto="${escapeHtml(r)}" title="“${escapeHtml(displayName(r))}” is basically the same lift — tap to track THIS one instead${isPri ? " (you're tracking both — removes the duplicate)" : ""}">⇄ ${escapeHtml(displayName(r))} <span class="prio-rel-avg">~${rAvg}</span></button>`;
+          }
+          const isPat = syntheticMembers(r).length > 0;
+          return `<button type="button" class="prio-rel-chip${isPat ? " is-synth" : ""}${isPri ? " is-pri" : ""}" data-planopen="${escapeHtml(r)}" title="Related${isPat ? " pattern" : ""}${isPri ? " · already a focus" : ""} — ~${rAvg}/wk. Tap to open.">${isPat ? "✦ " : ""}${escapeHtml(displayName(r))} <span class="prio-rel-avg">~${rAvg}</span></button>`;
         }).join("") + `</div>`
       : "";
     return `<div class="prio-row${open ? " is-open" : ""}" data-prioex="${escapeHtml(ex)}">` +
@@ -12118,6 +12131,19 @@ async function init() {
       const ex = exp.dataset.prioexpand;
       if (prioExpanded.has(ex)) prioExpanded.delete(ex); else prioExpanded.add(ex);
       renderWorkoutPlan(); return;
+    }
+    // Swap a COMBINABLE priority to one of its representations (same lift, track only one):
+    // move the level/target to the picked one (or just drop the current if it's already tracked).
+    const sw = t.closest<HTMLElement>("[data-prioswap]");
+    if (sw?.dataset.prioswap && sw.dataset.prioswapto) {
+      const from = sw.dataset.prioswap, to = sw.dataset.prioswapto;
+      if (pri[from]) {
+        if (!pri[to]) pri[to] = pri[from]!; // carry the level/target to the new representation
+        delete pri[from];
+        prioExpanded.delete(from); prioExpanded.delete(to);
+        savePriorities(); renderWorkoutPlan();
+      }
+      return;
     }
     // Cycle the priority LEVEL → re-suggest the target for the new level (re-renders: the
     // order changes by level, by design).
