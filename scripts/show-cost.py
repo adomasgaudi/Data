@@ -18,6 +18,24 @@ USD_TO_EUR = 0.92                  # rough USD -> EUR; nudge if the rate drifts
 MONTHLY_SUBSCRIPTION_EUR = 180.0   # the plan's monthly price (4x plan)
 WEEKLY_SUBSCRIPTION_EUR = MONTHLY_SUBSCRIPTION_EUR * 12 / 52  # ~= EUR 41.54 / week
 
+# REAL-USAGE calibration (the dollar figures above are API LIST price — a retail
+# ceiling, ~100x what a flat, never-maxed subscription actually spends). Anchored to a
+# measured data point (2026-06-13): ~18 min of heavy work output ~52k tokens and moved
+# the Max-20x 5-hour Opus limit by ~1%, and the WEEKLY limit by ~0%. OUTPUT tokens are
+# the honest meter — cache-reads inflate the raw count ~100x but barely touch limits.
+OUTPUT_TOKENS_PER_5H_WINDOW = 5_200_000   # 52k output ~= 1% of a 5h Opus window
+WEEKLY_WINDOWS = 168 / 5                   # ~33.6 rolling 5h windows in a week
+
+def real_eur(output_tokens):
+    """Honest cost: what share of the flat weekly fee this output represents, via the
+    measured 5h-window anchor (NOT API list price). ~52k output -> ~1% of a 5h window
+    -> ~0.03% of the week -> ~€0.01."""
+    frac_week = (output_tokens / OUTPUT_TOKENS_PER_5H_WINDOW) / WEEKLY_WINDOWS
+    return frac_week * WEEKLY_SUBSCRIPTION_EUR
+
+def pct_5h(output_tokens):
+    return output_tokens / OUTPUT_TOKENS_PER_5H_WINDOW * 100
+
 def price(model):
     for k, v in PRICING.items():
         if model.startswith(k): return v
@@ -122,11 +140,14 @@ def fmt_cost(x):
 def fmt_eur(x):
     return f"€{x:.4f}" if x < 0.1 else f"€{x:.2f}"
 
-# Theoretical € cost + share of the weekly subscription (flat-fee plan).
+# API LIST value (retail ceiling) ...
 turn_eur = turn["usd"] * USD_TO_EUR
 sess_eur = sess["usd"] * USD_TO_EUR
-turn_pct_week = (turn_eur / WEEKLY_SUBSCRIPTION_EUR * 100) if WEEKLY_SUBSCRIPTION_EUR else 0.0
-sess_pct_week = (sess_eur / WEEKLY_SUBSCRIPTION_EUR * 100) if WEEKLY_SUBSCRIPTION_EUR else 0.0
+# ... vs the REAL figures from the measured limit anchor (what actually moves).
+turn_real = real_eur(turn["out"])
+sess_real = real_eur(sess["out"])
+turn_5h = pct_5h(turn["out"])
+sess_5h = pct_5h(sess["out"])
 
 print(f"""
 prompt #{last_prompt_num}: {prompt_preview}
@@ -134,17 +155,18 @@ prompt #{last_prompt_num}: {prompt_preview}
 input tokens:      {turn['in']:>8,}  (fresh input)
 cumulative input:  {sess['in']:>8,}  (all prompts)
 
-cache tokens:      {turn['cr'] + turn['cw']:>8,}  (total)
-  cache_read:      {turn['cr']:>8,}  @ 0.1x rate = {fmt_cost(cache_read_cost)}
-  cache_write:     {turn['cw']:>8,}  @ 1.25x rate = {fmt_cost(cache_write_cost)}
-
-output tokens:     {turn['out']:>8,}
+cache tokens:      {turn['cr'] + turn['cw']:>8,}  (total, ~99% cache-reads — barely touch limits)
+output tokens:     {turn['out']:>8,}  (the honest meter)
 
 model:             {model}
-pricing:           ${pin:.2f}/Mtok input, ${pout:.2f}/Mtok output
 
-turn cost:         {fmt_cost(turn['usd'])}  =  {fmt_eur(turn_eur)} theoretical  ({turn_pct_week:.2f}% of weekly plan)
-trend (10 turns):  {sparkline}
-session total:     ${sess['usd']:.4f}  =  {fmt_eur(sess_eur)} theoretical  ({sess_pct_week:.1f}% of weekly plan)
-weekly plan:       {fmt_eur(WEEKLY_SUBSCRIPTION_EUR)}  (€{MONTHLY_SUBSCRIPTION_EUR:.0f}/mo subscription)
+REAL cost (vs the limits you actually pay for):
+  this turn:       {fmt_eur(turn_real)}   (~{turn_5h:.1f}% of a 5h Opus window · ~{turn_5h/WEEKLY_WINDOWS:.2f}% of weekly)
+  session so far:  {fmt_eur(sess_real)}   ({sess['out']:,} output tok over all prompts in this transcript)
+  trend (10):      {sparkline}
+
+API list value (retail CEILING — NOT what a flat plan costs; ~100x real):
+  this turn:       {fmt_cost(turn['usd'])} / {fmt_eur(turn_eur)}
+  session:         ${sess['usd']:.2f} / {fmt_eur(sess_eur)}
+  (Opus 4.8 list ${pin:.0f}/{pout:.0f} per Mtok; plan = €{MONTHLY_SUBSCRIPTION_EUR:.0f}/mo flat)
 """)
