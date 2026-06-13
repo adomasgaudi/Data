@@ -10561,6 +10561,11 @@ function renderWorkoutPlan(): void {
     // Same-lift (combinable) first, then related patterns.
     return [...map].map(([n, same]) => ({ name: n, same })).sort((a, b) => Number(b.same) - Number(a.same));
   };
+  // Which kind of synthetic GROUP a lift IS (for highlighting): combinable (same-lift
+  // mix) vs comparable (a pattern), or null for a plain lift.
+  const groupKind = (n: string): "combine" | "compare" | null =>
+    effectiveCombinableGroups().some((g) => (g.derivedName ?? g.label) === n) ? "combine"
+    : effectiveComparableGroups().some((g) => (g.derivedName ?? g.label) === n) ? "compare" : null;
   // A COMBINABLE representation of a lift you already track is the SAME lift, so it must
   // NOT be addable (can't plan SQ mix AND Squat). Block those from the suggestions.
   const sameLiftBlocked = new Set<string>();
@@ -10570,12 +10575,19 @@ function renderWorkoutPlan(): void {
   // then individual lifts. Exclude anything already a focus OR a same-lift duplicate.
   const has = new Set(names);
   const addable = (n: string) => !has.has(n) && !sameLiftBlocked.has(n);
+  // For a specific lift that belongs to a COMPARABLE pattern not yet tracked, offer to add
+  // it as that PATTERN ("compare") instead of the specific lift — the owner's "compare vs
+  // specific" choice. null when there's no such pattern (or it's already a focus).
+  const comparePatternFor = (n: string): string | null => {
+    for (const g of comparableGroupsForEx(n)) { const p = g.derivedName ?? g.label; if (!has.has(p)) return p; }
+    return null;
+  };
   const trained = exerciseCounts(activeRecords(), user).map((c) => c.exerciseName);
   const synthSug = availableSyntheticNames(trained).filter(addable);
   const realSug = trained.filter(addable);
-  const suggestions: { name: string; synth: boolean }[] = [
-    ...synthSug.map((name) => ({ name, synth: true })),
-    ...realSug.map((name) => ({ name, synth: false })),
+  const suggestions: { name: string; synth: boolean; cmp: string | null }[] = [
+    ...synthSug.map((name) => ({ name, synth: true, cmp: null })),
+    ...realSug.map((name) => ({ name, synth: false, cmp: comparePatternFor(name) })),
   ].slice(0, 16);
 
   const rowHtml = (ex: string): string => {
@@ -10600,9 +10612,11 @@ function renderWorkoutPlan(): void {
           return `<button type="button" class="prio-rel-chip${isPat ? " is-synth" : ""}${isPri ? " is-pri" : ""}" data-planopen="${escapeHtml(r)}" title="Related${isPat ? " pattern" : ""}${isPri ? " · already a focus" : ""} — ~${rAvg}/wk. Tap to open.">${isPat ? "✦ " : ""}${escapeHtml(displayName(r))} <span class="prio-rel-avg">~${rAvg}</span></button>`;
         }).join("") + `</div>`
       : "";
-    return `<div class="prio-row${open ? " is-open" : ""}" data-prioex="${escapeHtml(ex)}">` +
+    const gk = groupKind(ex); // combinable / comparable group → highlight the row
+    return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
       caret +
-      `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}">` +
+      `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
+      `${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
       `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
       `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
@@ -10622,8 +10636,15 @@ function renderWorkoutPlan(): void {
     : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
   const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
     ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +
-      `<div class="prio-add-chips">${suggestions.map((s) =>
-        `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a combinable/comparable group lift" : ""} to your priorities">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`).join("")}</div></div>`
+      `<div class="prio-add-chips">${suggestions.map((s) => {
+        const specific = `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a group lift" : ""} to your priorities">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`;
+        // A specific lift in a comparable pattern → a "⇄ pattern" button to add it as the
+        // COMPARE (whole pattern) instead of the SPECIFIC lift.
+        const compare = s.cmp
+          ? `<button type="button" class="prio-add-cmp" data-prioadd="${escapeHtml(s.cmp)}" title="Add the “${escapeHtml(displayName(s.cmp))}” pattern instead — train the whole movement (compare), not just this specific lift">⇄ ${escapeHtml(displayName(s.cmp))}</button>`
+          : "";
+        return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
+      }).join("")}</div></div>`
     : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
   els.planBody.innerHTML = list + addBlock;
 }
