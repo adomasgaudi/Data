@@ -3509,16 +3509,32 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-mid { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .cl-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
 .cl-note { font-size: var(--fs-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+/* Model · SP · price cluster — kept together at the row's end and wrapping among
+   themselves (not spilling across the row) when space is tight. */
+.cl-meta {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: flex-end; gap: 4px; max-width: 12rem;
+}
 .cl-sp {
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--gold);
   background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 8px;
 }
-/* Real € cost of a row (its SP share of actual project spend) — a muted accent pill
-   next to the SP, at every level (update · collection · era · full-page total). */
+/* Real € cost of a row (its model-weighted SP share of actual project spend) — a
+   muted accent pill, at every level (update · collection · era · full-page total). */
 .cl-cost {
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--accent);
-  background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 8px; margin-left: 4px;
+  background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 8px;
 }
+/* Which Claude model made this version — a small pill whose TEXT colour keys to
+   the model family (from the harmonious series palette), bg stays neutral. */
+.cl-model {
+  flex: none; font-size: 0.66rem; font-weight: 700; color: var(--muted);
+  background: var(--line); border-radius: var(--r-pill); padding: 2px 7px; white-space: nowrap;
+}
+.cl-model--opus { color: var(--accent); }
+.cl-model--haiku { color: var(--gold); }
+.cl-model--sonnet { color: var(--lens-both); }
+.cl-model--fable, .cl-model--mythos { color: var(--remove); }
 .cl-cost-total { color: var(--accent); }
 /* Planned (not-yet-built) entry: a "soon" pill in the accent colour, and a
    slightly dimmed row so it reads as upcoming rather than shipped. */

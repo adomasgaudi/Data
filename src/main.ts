@@ -155,7 +155,7 @@ import {
 } from "./records";
 import { DEFAULT_FORMULA } from "./config";
 import { supabase, upsertSets } from "./supabase";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForSp, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { modelLabelFor } from "./modelName";
 // __BUILD_BRANCH__ (baked in by vite.config's define) names the MODEL working this
@@ -3524,9 +3524,12 @@ function expandLatestChangelog(): void {
 function renderChangelog() {
   // Show SP without a binary floating-point tail (e.g. 83.3, not 83.30000000001).
   const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
-  // Realistic € cost of a node — its SP share of the project's actual spend (NOT API
-  // list price). Tiny leaves read "<€0.01"; everything else is €X.XX.
-  const fmtEur = (e: number): string => (e < 0.01 ? "<€0.01" : `€${e.toFixed(2)}`);
+  // Realistic € cost of a node — its model-weighted SP share of the project's
+  // actual spend (NOT API list price). Printed to 3 significant figures so tiny
+  // (e.g. Haiku) leaves read a real number, not a "<€0.01" floor.
+  const fmtEur = (e: number): string => (e <= 0 ? "€0" : `€${e.toPrecision(3)}`);
+  // Short model family for the chip's colour class ("Opus 4.8" -> "opus").
+  const modelClass = (m: string): string => (m.split(/\s+/)[0] ?? "").toLowerCase();
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + countReleases(r), 0);
@@ -3550,10 +3553,21 @@ function renderChangelog() {
   // nested groups/releases only show once you expand a row. `depth` drives the
   // left indent so the nesting reads at a glance.
   const renderNode = (r: Release, depth: number): string => {
+    // Model chip: which Claude model made this version (or "Mixed" for an era
+    // spanning several). Grouped with SP + price so the three read as one
+    // compact cluster that wraps together (see .cl-meta).
+    const models = modelsUnder(r);
+    const modelLabel = models.length === 1 ? models[0]! : models.length ? "Mixed" : "";
+    const modelTag = modelLabel
+      ? `<span class="cl-model cl-model--${modelClass(modelLabel)}" title="${models.length > 1 ? `Made across ${models.length} models: ${escapeHtml(models.join(", "))}` : `Made by ${escapeHtml(modelLabel)}`}">${escapeHtml(modelLabel)}</span>`
+      : "";
     const spOrTag = r.soon
-      ? `<span class="cl-soon">soon</span>`
-      : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>` +
-        `<span class="cl-cost" title="Real cost: this ${r.children?.length ? "collection's" : "update's"} SP share of the project's actual subscription spend (not API list price)">${fmtEur(costForSp(r.sp))}</span>`;
+      ? `<span class="cl-meta"><span class="cl-soon">soon</span></span>`
+      : `<span class="cl-meta">` +
+        modelTag +
+        `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>` +
+        `<span class="cl-cost" title="Real cost: this ${r.children?.length ? "collection's" : "update's"} share of the project's actual subscription spend, weighted by the model that made it (not API list price)">${fmtEur(costForNode(r))}</span>` +
+        `</span>`;
     const displayTitle = r.shortTitle ?? r.title;
     const codeTag = r.code ? `<span class="cl-code">${escapeHtml(r.code)}</span>` : "";
     const medDesc = r.shortTitle && r.title ? `<p class="cl-meddesc">${escapeHtml(r.title)}</p>` : "";

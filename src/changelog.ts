@@ -28,6 +28,11 @@ export interface Release {
   details?: string[];
   /** Task-code category (e.g. "EXR", "CHART"), used to auto-sum effort per part. */
   cat?: string;
+  /** The Claude model that MADE this version (e.g. "Opus 4.8", "Haiku 4.5"),
+   * shown as a chip and used to weight its € cost. Stamp every new release;
+   * unstamped historical ones fall back to a breakpoint default
+   * ({@link modelForRelease}). */
+  model?: string;
   /** Nested child nodes (groups, or the leaf releases). Built automatically. */
   children?: Release[];
   /** Planned/not-yet-built: shown at the top with a "soon" tag, excluded from
@@ -86,6 +91,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.319", shortTitle: "Model name + model-aware price per version", code: "META-163", title: "Version history shows which model made each version and weights its € cost by that model", sp: 3, note: "Each version row now carries a chip for the Claude model that made it, and the € cost is model-aware: the real total spend stays pinned to the same figure, but it's distributed across versions weighted by each model's output price (Opus ~5× Haiku), so an Opus version reads pricier than a Haiku one of the same size. History wasn't recorded per-version, so a breakpoint default applies — early work was almost all Opus, and from the 'default-model-haiku' rule (b.2.8.311.15) on, routine work defaults to Haiku; new releases stamp their own `model`. Prices now print to 3 significant figures instead of flooring at '<€0.01'. The model, SP and price pills are grouped into one compact cluster that wraps together. Verified the rates against the Claude catalog: Opus 4.8 $5/$25, Haiku 4.5 $1/$5 per MTok.", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.318", shortTitle: "No 4th-digit versions + focus lifts to top", code: "META-162", title: "Focus lifts moved to top of Priorities popup; 4th-digit version rule removed", sp: 1, note: "Focus lifts planner now appears at the TOP of the Priorities popup (above the Live plan), explanatory text removed, prio-* CSS added (colour-coded level pills, compact rows, dashed add-chips). Version rule updated: AIs bump patch digit only — no b.2.8.x.x ever again.", cat: "META" },
   { version: "b.2.8.317.1", shortTitle: "Cost hook calibrated to real limits", code: "META-160", title: "AI cost hook recalibrated to real usage — leads with the limit-based cost, not API list price", sp: 0.5, note: "The end-of-turn cost hook was overstating ~100x by reporting API LIST price as if it were spend. Recalibrated against a measured anchor (the owner watched ~18 min / a few prompts move the Max-20x 5-hour Opus limit ~1% and the weekly limit ~0%): ~52k OUTPUT tokens ≈ 1% of a 5h window. The hook now LEADS with the real cost (a turn ≈ €0.01, with its ~% of a 5h window and of weekly) and shows API list € only as a clearly-labelled retail ceiling. Output tokens are the meter — cache-reads inflate the raw count ~100x but barely touch limits. Constants in scripts/show-cost.py; rule 34 in CLAUDE.md updated.", cat: "META" },
   { version: "b.2.8.317", shortTitle: "Cost per version in the history", code: "META-159", title: "Version history now shows the real € cost of every update, collection, era and the full page", sp: 3, note: "Each row in the version history now carries a € cost next to its SP — at every level: a single update, a ~30-SP collection, a whole codename era (e.g. Los Lobos), and the full-page total in the header. The basis is the project's REAL consumed cost, not API list price: a shared, partially-used subscription (~3 weeks on the €90/mo plan at ~80% token use ≈ €36, plus a few % of this week's €180/mo plan ≈ €4 → ≈ €40 total), spread evenly across all logged story points (≈ €0.02/SP). Because cost = SP × a fixed rate, it rolls up the history tree exactly like SP and the full-page total always equals the spend. Constants PROJECT_COST_EUR / COST_PER_SP_EUR in changelog.ts — bump the first as more weeks accrue.", cat: "META" },
@@ -1293,10 +1299,76 @@ export const PROJECT_COST_EUR = 40;
  */
 export const COST_PER_SP_EUR = TOTAL_LOG_SP > 0 ? PROJECT_COST_EUR / TOTAL_LOG_SP : 0;
 
-/** A node's real € cost — its rolled-up SP × the per-SP rate. Works at every level
- * (one update, a ~30-SP collection, a whole codename era, the full page). */
+/** A node's flat € cost — rolled-up SP × the per-SP rate. Superseded for the
+ * version-history display by the MODEL-AWARE {@link costForNode} below; kept as
+ * the simple unweighted reference. */
 export function costForSp(sp: number): number {
   return sp * COST_PER_SP_EUR;
+}
+
+/**
+ * The MODEL that made each version — shown as a chip and used to WEIGHT its cost.
+ * History wasn't recorded per-version, so: an explicit `model` stamp wins;
+ * otherwise a breakpoint default — early work was almost all Opus, and Haiku
+ * became the default for routine work at the "default-model-haiku" rule
+ * (b.2.8.311.15), so versions from there on default to Haiku. New releases set
+ * `model` directly.
+ */
+export const DEFAULT_MODEL_EARLY = "Opus 4.8";
+export const DEFAULT_MODEL_RECENT = "Haiku 4.5";
+const HAIKU_DEFAULT_FROM = "b.2.8.311.15";
+
+/** Compare two b.MAJOR.MINOR.PATCH[.x] version strings; <0 if `a` is older. */
+function cmpVersion(a: string, b: string): number {
+  const pa = a.replace(/^b\./, "").split(".").map(Number);
+  const pb = b.replace(/^b\./, "").split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** The model label for a leaf release — explicit stamp, else breakpoint default. */
+export function modelForRelease(r: Release): string {
+  if (r.model) return r.model;
+  return cmpVersion(r.version, HAIKU_DEFAULT_FROM) >= 0 ? DEFAULT_MODEL_RECENT : DEFAULT_MODEL_EARLY;
+}
+
+/** Distinct models under a node — one entry for a leaf, the full set for a group
+ *  (so an era can read "Mixed" when its versions span more than one model). */
+export function modelsUnder(r: Release): string[] {
+  if (r.soon) return [];
+  if (!r.children?.length) return [modelForRelease(r)];
+  return [...new Set(r.children.flatMap(modelsUnder))];
+}
+
+/**
+ * Relative € weight per model, anchored to OUTPUT price ($/MTok — the dominant
+ * cost) and normalised to Opus = 1.0: Opus 25 · Sonnet 15 · Haiku 5 · Fable 50.
+ * So a Haiku version costs ~1/5 of an Opus one of equal SP. Only the
+ * DISTRIBUTION of cost across versions is model-weighted — the grand total stays
+ * pinned to PROJECT_COST_EUR. (Rates verified 2026-06-13: Opus 4.8 $5/$25,
+ * Haiku 4.5 $1/$5 per MTok.) */
+const MODEL_OUTPUT_PRICE: Record<string, number> = { Opus: 25, Sonnet: 15, Haiku: 5, Fable: 50, Mythos: 50 };
+function modelWeight(model: string): number {
+  const family = model.split(/\s+/)[0] ?? "Opus"; // "Opus 4.8" -> "Opus"
+  return (MODEL_OUTPUT_PRICE[family] ?? MODEL_OUTPUT_PRICE.Opus!) / MODEL_OUTPUT_PRICE.Opus!;
+}
+
+/** Σ over leaves of sp × model-weight — the denominator that keeps the weighted
+ *  total equal to PROJECT_COST_EUR. */
+const WEIGHTED_SP_TOTAL = RELEASES.reduce(
+  (s, r) => (r.soon ? s : s + r.sp * modelWeight(modelForRelease(r))), 0);
+/** € per weighted story-point, so Σ of every leaf's cost === PROJECT_COST_EUR. */
+export const EUR_PER_WEIGHTED_SP = WEIGHTED_SP_TOTAL > 0 ? PROJECT_COST_EUR / WEIGHTED_SP_TOTAL : 0;
+
+/** A node's MODEL-AWARE € cost: a leaf is sp × model-weight × rate; a group is
+ *  the sum of its children, so it rolls up the tree exactly like SP does. */
+export function costForNode(r: Release): number {
+  if (r.soon) return 0;
+  if (r.children?.length) return r.children.reduce((s, c) => s + costForNode(c), 0);
+  return r.sp * modelWeight(modelForRelease(r)) * EUR_PER_WEIGHTED_SP;
 }
 
 /** The on-screen version: the newest actual leaf — descend the first child of
