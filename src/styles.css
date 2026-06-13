@@ -4592,6 +4592,14 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
   background: none; border: none; padding: 0;
 }
 .prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.1; }
+/* Group/pattern priorities are HIGHLIGHTED: a ✦ mark + a coloured left edge — gold for
+   a combinable mix (same lift), teal for a comparable pattern. */
+.prio-row.is-group { background: color-mix(in srgb, var(--accent) 4%, var(--panel)); }
+.prio-row.is-combine { border-left: 3px solid var(--lens-combine, #b8902f); }
+.prio-row.is-compare { border-left: 3px solid var(--lens-compare, #1f8a8a); }
+.prio-grp-mark { flex: none; font-size: 0.7rem; align-self: center; }
+.prio-row.is-combine .prio-grp-mark { color: var(--lens-combine, #b8902f); }
+.prio-row.is-compare .prio-grp-mark { color: var(--lens-compare, #1f8a8a); }
 /* Each row's ▸ caret opens a dropdown of RELATED lifts (the patterns it's in + their
    variants; or, for a pattern, its members). Rows never reorder/nest — they stay in
    their own effort order. */
@@ -4667,6 +4675,18 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
   border: 1px solid var(--line); border-radius: var(--r-pill);
 }
 .prio-add-chip:hover { border-color: var(--accent); }
+/* "+ Belt Squat | ⇄ Squat pattern" — add the SPECIFIC lift or its COMPARE pattern. */
+.prio-add-pair { flex: none; display: inline-flex; align-items: stretch; }
+.prio-add-pair .prio-add-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.prio-add-cmp {
+  flex: none; white-space: nowrap; font: inherit; font-size: 0.7rem; font-weight: 600;
+  cursor: pointer; min-height: var(--tap-min); display: inline-flex; align-items: center;
+  padding: 2px 9px; margin-left: -1px; color: var(--lens-compare, #1f8a8a);
+  background: color-mix(in srgb, var(--lens-compare, #1f8a8a) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lens-compare, #1f8a8a) 30%, transparent);
+  border-top-right-radius: var(--r-pill); border-bottom-right-radius: var(--r-pill);
+}
+.prio-add-cmp:hover { border-color: var(--lens-compare, #1f8a8a); }
 /* Synthetic combinable/comparable GROUP lifts (✦ Squat pattern…) — a gold tint sets
    them apart from plain exercises, matching the lens-combine gold elsewhere. */
 .prio-add-chip.is-synth { color: var(--lens-combine, #b8902f); background: var(--gold-soft); border-color: var(--gold-soft); }
