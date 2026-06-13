@@ -10652,6 +10652,21 @@ function renderWorkoutPlan(): void {
       (open ? `<div class="prio-detail">${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
+  // Summary line on top: total weekly target sets + the per-level breakdown
+  // (Max effort / Active / Passive / Maintain), each chip in its level colour.
+  const summary = names.length
+    ? (() => {
+        const byLevel: Record<PriorityLevel, number> = { max: 0, active: 0, passive: 0, maintain: 0 };
+        let total = 0;
+        for (const ex of names) { const e = pri[ex]!; byLevel[e.level] += e.target; total += e.target; }
+        const chip = (lvl: PriorityLevel) =>
+          `<span class="prio-sum-chip prio-level-${lvl}" title="${escapeHtml(PRIORITY_LABEL[lvl])} — weekly target sets across these lifts">` +
+          `<span class="prio-sum-lbl">${PRIORITY_LABEL[lvl]}</span> <span class="prio-sum-n">${byLevel[lvl]}</span></span>`;
+        return `<div class="prio-summary">` +
+          `<span class="prio-sum-total" title="Total weekly target sets across all focus lifts">Σ ${total}<span class="prio-sum-unit">/wk</span></span>` +
+          PRIORITY_LEVELS.map(chip).join("") + `</div>`;
+      })()
+    : "";
   const list = names.length
     ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
     : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
@@ -10667,7 +10682,7 @@ function renderWorkoutPlan(): void {
         return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
       }).join("")}</div></div>`
     : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
-  els.planBody.innerHTML = list + addBlock;
+  els.planBody.innerHTML = summary + list + addBlock;
 }
 
 function openWorkoutPlan(): void {

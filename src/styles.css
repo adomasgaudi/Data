@@ -4560,6 +4560,23 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .plan-planner-hd { margin: 0 0 0.5rem; }
 .plan-modal #liveBody:not(:empty) { margin-top: 1.2rem; padding-top: 1.1rem; border-top: 2px solid var(--line); }
 
+/* ---- Focus-lifts planner: weekly-sets summary line (cram: one scrolling row) ---- */
+.prio-summary {
+  display: flex; align-items: center; gap: 0.3rem; margin: 0 0 0.45rem;
+  overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; -ms-overflow-style: none;
+}
+.prio-summary::-webkit-scrollbar { display: none; }
+.prio-sum-total {
+  flex: none; white-space: nowrap; font-size: 0.78rem; font-weight: 800; color: var(--text);
+}
+.prio-sum-unit { font-size: 0.6rem; font-weight: 600; color: var(--muted); margin-left: 1px; }
+.prio-sum-chip {
+  flex: none; white-space: nowrap; font-size: 0.66rem; font-weight: 700;
+  padding: 2px 7px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--muted);
+}
+.prio-sum-n { font-weight: 800; }
+
 /* ---- Focus-lifts planner rows (were completely unstyled) ------------------- */
 .prio-list { display: flex; flex-direction: column; gap: 0.25rem; }
 .prio-empty { padding: 0.6rem 0 0.9rem; color: var(--muted); font-size: 0.85rem; }
@@ -4684,6 +4701,10 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
    them apart from plain exercises, matching the lens-combine gold elsewhere. */
 .prio-add-chip.is-synth { color: var(--lens-combine, #b8902f); background: var(--gold-soft); border-color: var(--gold-soft); }
 .prio-add-chip.is-synth:hover { border-color: var(--lens-combine, #b8902f); }
+/* Pair: a specific chip + its ✦ pattern chip grouped together */
+.prio-add-pair { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.prio-add-pair .prio-add-chip { border: none; border-radius: 0; padding-right: 8px; }
+.prio-add-pair .prio-add-chip + .prio-add-chip { border-left: 1px solid var(--line); padding: 0 10px; }
 .live-for { font-size: 0.82rem; margin: 0 0 0.2rem; }
 .live-card { border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.8rem; background: var(--panel); }
 .live-card.live-goals { border-color: var(--accent); }
