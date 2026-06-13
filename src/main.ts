@@ -155,7 +155,7 @@ import {
 } from "./records";
 import { DEFAULT_FORMULA } from "./config";
 import { supabase, upsertSets } from "./supabase";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForSp, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { modelLabelFor } from "./modelName";
 // __BUILD_BRANCH__ (baked in by vite.config's define) names the MODEL working this
@@ -3524,11 +3524,15 @@ function expandLatestChangelog(): void {
 function renderChangelog() {
   // Show SP without a binary floating-point tail (e.g. 83.3, not 83.30000000001).
   const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
+  // Realistic € cost of a node — its SP share of the project's actual spend (NOT API
+  // list price). Tiny leaves read "<€0.01"; everything else is €X.XX.
+  const fmtEur = (e: number): string => (e < 0.01 ? "<€0.01" : `€${e.toFixed(2)}`);
   // Count actual released versions (a grouped minor counts its sub-versions;
   // planned "soon" entries aren't shipped yet, so they don't count).
   const releaseCount = CHANGELOG.reduce((n, r) => n + countReleases(r), 0);
   const header =
     `<p class="cl-summary muted">${releaseCount} releases · <strong>${fmtSp(TOTAL_LOG_SP)} SP</strong> logged in total ` +
+    `· <strong class="cl-cost-total" title="Real cost actually consumed so far — subscription value used (a shared, partially-used €90→€180/mo plan), NOT API list price. Each version below shows its SP share.">≈ €${PROJECT_COST_EUR.toFixed(2)} spent</strong> ` +
     `<span class="cl-effort-note">· whole-site effort grade ${WEBSITE_EXACT_SP} (≈ ${WEBSITE_SP})</span></p>` +
     `<div class="cl-spchart-wrap"><div class="cl-sections-lbl muted">Story points over time (cumulative, by day)</div>` +
     `<div id="spHistoryChart"></div></div>`;
@@ -3548,7 +3552,8 @@ function renderChangelog() {
   const renderNode = (r: Release, depth: number): string => {
     const spOrTag = r.soon
       ? `<span class="cl-soon">soon</span>`
-      : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>`;
+      : `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>` +
+        `<span class="cl-cost" title="Real cost: this ${r.children?.length ? "collection's" : "update's"} SP share of the project's actual subscription spend (not API list price)">${fmtEur(costForSp(r.sp))}</span>`;
     const displayTitle = r.shortTitle ?? r.title;
     const codeTag = r.code ? `<span class="cl-code">${escapeHtml(r.code)}</span>` : "";
     const medDesc = r.shortTitle && r.title ? `<p class="cl-meddesc">${escapeHtml(r.title)}</p>` : "";

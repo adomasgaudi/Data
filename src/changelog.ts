@@ -86,6 +86,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.317", shortTitle: "Cost per version in the history", code: "META-159", title: "Version history now shows the real € cost of every update, collection, era and the full page", sp: 3, note: "Each row in the version history now carries a € cost next to its SP — at every level: a single update, a ~30-SP collection, a whole codename era (e.g. Los Lobos), and the full-page total in the header. The basis is the project's REAL consumed cost, not API list price: a shared, partially-used subscription (~3 weeks on the €90/mo plan at ~80% token use ≈ €36, plus a few % of this week's €180/mo plan ≈ €4 → ≈ €40 total), spread evenly across all logged story points (≈ €0.02/SP). Because cost = SP × a fixed rate, it rolls up the history tree exactly like SP and the full-page total always equals the spend. Constants PROJECT_COST_EUR / COST_PER_SP_EUR in changelog.ts — bump the first as more weeks accrue.", cat: "META" },
   { version: "b.2.8.316", shortTitle: "Title shows the working model", code: "META-158", title: "The title version line now shows which MODEL works this branch (e.g. “Opus 4.8”)", sp: 1, note: "Each model has its own deploy branch (opus-4.8, sonnet-4.6, haiku-4.5, fable-5.0); the build now bakes that branch name in (vite.config `define` → __BUILD_BRANCH__, from the deploy env var or the local git HEAD) and a small accent tag next to the version turns it into a clean label (“· Opus 4.8”). Non-model branches (main, claude/*) show nothing. Pure display + build wiring; the mapping (modelName.ts) is unit-tested.", cat: "META" },
   { version: "b.2.8.315.1", shortTitle: "Cost in € and % of weekly plan", code: "META-157", title: "AI tooling: end-of-turn cost report now shows theoretical € and % of the weekly subscription", sp: 0.5, note: "The Stop hook (scripts/show-cost.py) already printed the per-turn / session token cost in theoretical dollars. It now also converts that to a theoretical € figure and — because the plan is a flat-fee subscription, not pay-per-token — shows each turn and the session total as a % of the WEEKLY share of the subscription (weekly = monthly ÷ 4.33). Constants USD_TO_EUR, MONTHLY_SUBSCRIPTION_EUR (currently €180/mo, the 4x plan) sit at the top of the script. Standing rule recorded in CLAUDE.md.", cat: "META" },
   { version: "b.2.8.315", shortTitle: "Live plan moved into Priorities popup", code: "WO-141", title: "Live training plan folded into the 📋 Priorities popup; the standalone Live tab removed", sp: 3, note: "Consolidated the two “what to train” homes into one. The Live training plan — Goals & cautions (with its editor), Train today by tier, antagonist supersets, warm-ups and watch-outs — now renders at the top of the 📋 Priorities popup (the button in the history bar), with the manual focus-lifts planner kept below it under a “Focus lifts” heading. The standalone Live tab is gone: removed from the ··· Other menu, the command-bar page list and the user-view tab set. Opening Priorities re-renders both parts for the selected athlete. Lithuanian added for the new heading.", cat: "WO" },
@@ -1270,6 +1271,31 @@ export function countReleases(r: Release): number {
 export const TOTAL_LOG_SP = Math.round(
   CHANGELOG.filter((r) => !r.soon).reduce((sum, r) => sum + r.sp, 0) * 10,
 ) / 10;
+
+/**
+ * Realistic € cost the project has ACTUALLY consumed so far — NOT the API list
+ * price (that's a retail ceiling, far above what a flat-fee, shared, partially-used
+ * subscription really spends). Derivation (owner's own estimate, 2026-06-13):
+ *   • First ~3 weeks on the €90/mo plan, used only ~half the month's value at ~80%
+ *     token utilisation and shared with others → ≈ €45 × 0.80 ≈ €36.
+ *   • This week on the €180/mo plan, only a few % used so far → ≈ €4.
+ *   → ≈ €40 total. Bump this as more weeks/usage accrue (and as the plan changes).
+ */
+export const PROJECT_COST_EUR = 40;
+
+/**
+ * € per story point: the whole project's real cost spread evenly across every
+ * logged SP. A version / collection / era cost is just its SP × this rate, so the
+ * numbers roll up the changelog tree exactly like SP does and the full-page total
+ * always equals PROJECT_COST_EUR. Auto-tracks as SP grows (re-tune PROJECT_COST_EUR).
+ */
+export const COST_PER_SP_EUR = TOTAL_LOG_SP > 0 ? PROJECT_COST_EUR / TOTAL_LOG_SP : 0;
+
+/** A node's real € cost — its rolled-up SP × the per-SP rate. Works at every level
+ * (one update, a ~30-SP collection, a whole codename era, the full page). */
+export function costForSp(sp: number): number {
+  return sp * COST_PER_SP_EUR;
+}
 
 /** The on-screen version: the newest actual leaf — descend the first child of
  * the newest shipped group until there are no more children. */

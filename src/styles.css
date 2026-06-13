@@ -3513,6 +3513,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--gold);
   background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 8px;
 }
+/* Real € cost of a row (its SP share of actual project spend) — a muted accent pill
+   next to the SP, at every level (update · collection · era · full-page total). */
+.cl-cost {
+  flex: none; font-size: 0.7rem; font-weight: 700; color: var(--accent);
+  background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 8px; margin-left: 4px;
+}
+.cl-cost-total { color: var(--accent); }
 /* Planned (not-yet-built) entry: a "soon" pill in the accent colour, and a
    slightly dimmed row so it reads as upcoming rather than shipped. */
 .cl-soon {
