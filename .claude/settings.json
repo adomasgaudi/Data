@@ -99,6 +99,12 @@
           },
           {
             "type": "command",
+            "command": "node scripts/rules-check.cjs",
+            "timeout": 10,
+            "statusMessage": "Checking HARD RULES (model stamp / version lockstep)"
+          },
+          {
+            "type": "command",
             "shell": "bash",
             "command": "python3 scripts/show-cost.py",
             "timeout": 10,
