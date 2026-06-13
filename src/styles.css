@@ -4575,11 +4575,30 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
   background: none; border: none; padding: 0;
 }
 .prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.1; }
-/* A lift and its pattern overlap: a pattern with tracked members gets a gold left edge,
-   and those members nest under it (indented, accent edge) with a ↳ link back. */
-.prio-row.is-pattern { border-left: 3px solid var(--lens-combine, #b8902f); }
-.prio-row.is-nested { margin-left: 0.9rem; border-left: 2px solid var(--accent); }
-.prio-parent { font-size: 0.66rem; font-weight: 600; color: var(--muted); }
+/* Each row's ▸ caret opens a dropdown of RELATED lifts (the patterns it's in + their
+   variants; or, for a pattern, its members). Rows never reorder/nest — they stay in
+   their own effort order. */
+.prio-expand {
+  flex: none; width: var(--tap-min); min-height: var(--tap-min); display: inline-flex;
+  align-items: center; justify-content: center; gap: 1px; font: inherit; font-size: 0.7rem;
+  cursor: pointer; color: var(--accent); background: none; border: none; padding: 0;
+}
+.prio-expand.is-empty { cursor: default; }
+.prio-rel-n { font-size: 0.58rem; font-weight: 700; opacity: 0.8; }
+.prio-related {
+  flex-basis: 100%; order: 99; display: flex; gap: 5px; margin-top: 0.3rem;
+  overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;
+}
+.prio-related::-webkit-scrollbar { display: none; }
+.prio-rel-chip {
+  flex: none; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 4px;
+  font: inherit; font-size: 0.7rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
+  padding: 2px 9px; color: var(--accent); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+}
+.prio-rel-chip.is-synth { color: var(--lens-combine, #b8902f); background: var(--gold-soft); border-color: var(--gold-soft); }
+.prio-rel-chip.is-pri { box-shadow: inset 0 0 0 1px var(--accent); }
+.prio-rel-avg { font-size: 0.6rem; font-weight: 600; color: var(--muted); }
 .prio-main:hover .prio-name { text-decoration: underline; }
 .prio-mg { font-size: 0.64rem; color: var(--muted); }
 /* Level pill — an intensity ladder: Max (filled) → Active (outline) → Passive →

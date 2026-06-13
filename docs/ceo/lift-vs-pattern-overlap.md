@@ -37,12 +37,15 @@ One priority = the pattern, with a chosen spearhead variant carrying the intensi
 
 ## The plan (phased; not padded to 100 — this is ~4 phases of real work)
 
-### Phase 1 — Make the overlap VISIBLE & honest (no schema change) — ships value under either path
-- [x] 1. Helper: member→pattern / pattern→members detection among priorities (`isPattern`, `childrenOf`, `parentOf` in `renderWorkoutPlan`). — b.2.8.323
-- [x] 2. NEST tracked members under their pattern (indented, accent left edge); unrelated lifts stay flat. — b.2.8.323
-- [x] 3. Pattern row shows the volume breakdown ("~2.3/wk · DL 0.9 · +1.4"), with a title clarifying members are INCLUDED not additive. — b.2.8.323
-- [x] 4. Nested member shows a "↳ {pattern}" hint linking the relationship. — b.2.8.323
-- [x] 5. Build + 501 tests pass; no new standalone translatable strings (data + symbols only). — b.2.8.323
+### Phase 1 — Show relations as a per-row DROPDOWN (no nesting, no reorder)
+> v1 NESTED a member under its pattern — WRONG: it pulled max-effort DL down under
+> passive DL pattern, breaking the effort sort. Owner: rows stay FLAT in their own
+> effort order; each lift gets a dropdown of its related lifts instead.
+- [x] 1. `relatedLifts(name)`: the patterns a lift is in + their sibling variants; for a pattern, its members. — b.2.8.324
+- [x] 2. Rows stay FLAT, sorted by effort (reverted the nesting/claim/reorder). — b.2.8.324
+- [x] 3. Each row gets a ▸ caret (with related-count) that toggles an expandable dropdown of related lifts. — b.2.8.324
+- [x] 4. Dropdown = one horizontally-scrolling row of chips (✦ marks a pattern, inset ring = already a focus, each shows ~/wk); tap opens the lift. Open state remembered (`prioExpanded`). — b.2.8.324
+- [x] 5. Build + 501 tests pass; data/symbols only (no new translatable strings). — b.2.8.324
 
 ### Phase 2 — Intensity vs Volume facets (schema change) — Path B
 - [ ] 6. Extend the priority record: optional `intensity` (a spearhead variant + optional 1RM target) and `volume` (weekly sets across the pattern). Migrate existing entries losslessly.
