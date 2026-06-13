@@ -68,7 +68,6 @@ const LT: Record<string, string> = {
   "Active": "Aktyvus",
   "Passive": "Pasyvus",
   "Maintain": "Palaikyti",
-  "Your training priorities — up to 10 exercises you want to focus on. Each has a level (Max effort · Active · Passive · Maintain) that sets a suggested weekly target and the order, the average sets/week you've actually done this past month, and a target you can tune. Tap a name to open it.": "Tavo treniruočių prioritetai — iki 10 pratimų, į kuriuos nori susitelkti. Kiekvienas turi lygį (Maks. pastanga · Aktyvus · Pasyvus · Palaikyti), kuris nustato siūlomą savaitės tikslą ir eilę, vidutinį serijų/sav. skaičių, kurį iš tikrųjų atlikai pastarąjį mėnesį, ir tikslą, kurį gali derinti. Bakstelėk pavadinimą, kad atidarytum.",
   // ---- Mini stats carousel ----
   "More ▾": "Daugiau ▾",
   "~22 trained · ~25 natural ceiling": "~22 treniruotas · ~25 natūrali riba",

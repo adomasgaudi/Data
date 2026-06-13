@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.317.2</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.8.318</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -1251,15 +1251,14 @@
           <h2>Priorities</h2>
           <button type="button" id="planClose" class="overlay-close" aria-label="Close">✕</button>
         </div>
+        <!-- The manual focus-lifts planner — at the top (owner request). -->
+        <div class="plan-planner">
+          <h3 class="live-h plan-planner-hd">Focus lifts</h3>
+          <div id="planBody"></div>
+        </div>
         <!-- The Live training plan (Goals & cautions, Train today, supersets, warm-ups,
              watch-outs) — relocated here from the old standalone Live tab. -->
         <div id="liveBody" class="live-body"></div>
-        <!-- The manual focus-lifts planner. -->
-        <div class="plan-planner">
-          <h3 class="live-h plan-planner-hd">Focus lifts</h3>
-          <p class="muted">Your training priorities — up to 10 exercises you want to focus on. Each has a level (Max effort · Active · Passive · Maintain) that sets a suggested weekly target and the order, the average sets/week you've actually done this past month, and a target you can tune. Tap a name to open it.</p>
-          <div id="planBody"></div>
-        </div>
       </div>
     </div>
 
