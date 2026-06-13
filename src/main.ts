@@ -10509,7 +10509,7 @@ const PRIORITY_LEVELS: PriorityLevel[] = ["max", "active", "passive", "maintain"
 const PRIORITY_LABEL: Record<PriorityLevel, string> = { max: "Max effort", active: "Active", passive: "Passive", maintain: "Maintain" };
 const PRIORITY_ORDER: Record<PriorityLevel, number> = { max: 0, active: 1, passive: 2, maintain: 3 };
 const PRIORITY_MAX = 10;
-interface PriorityEntry { level: PriorityLevel; target: number }
+interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number }
 const PRIORITIES_KEY = "colosseum.priorities.v1";
 const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEntry>>>(PRIORITIES_KEY);
 function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
@@ -10532,6 +10532,18 @@ function exerciseMonthAvg(user: string, ex: string): number {
     ? members.flatMap((m) => setsForUserExercise(activeRecords(), user, m))
     : setsForUserExercise(activeRecords(), user, ex);
   return weeklySetStats(explodeForCount(recs), todayIso()).monthAvgPerWeek;
+}
+/** The athlete's BEST estimated 1RM (kg) for a lift — across the members for a
+ * synthetic — or null if none. Used to show progress toward a priority's goal. */
+function bestE1rmFor(user: string, ex: string): number | null {
+  const formula = currentFormula();
+  const members = syntheticMembers(ex);
+  const recs = members.length
+    ? members.flatMap((m) => setsForUserExercise(activeRecords(), user, m))
+    : setsForUserExercise(activeRecords(), user, ex);
+  let best: number | null = null;
+  for (const r of recs) { const e = addedWeight1RM(r, formula); if (e !== null && (best === null || e > best)) best = e; }
+  return best;
 }
 function renderWorkoutPlan(): void {
   const user = els.athlete.value;
@@ -10596,9 +10608,18 @@ function renderWorkoutPlan(): void {
     const avg = exerciseMonthAvg(user, ex);
     const related = relatedOf(ex);
     const open = prioExpanded.has(ex);
-    const caret = related.length
-      ? `<button type="button" class="prio-expand" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="${related.length} related lift${related.length === 1 ? "" : "s"} — tap to ${open ? "hide" : "show"}">${open ? "▾" : "▸"}<span class="prio-rel-n">${related.length}</span></button>`
-      : `<span class="prio-expand is-empty"></span>`;
+    // The ▸ caret opens the row's detail: a 1RM GOAL setter + the related-lifts dropdown.
+    const caret = `<button type="button" class="prio-expand" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="${related.length ? `${related.length} related lift${related.length === 1 ? "" : "s"} + ` : ""}set a 1RM goal — tap to ${open ? "hide" : "show"}">${open ? "▾" : "▸"}${related.length ? `<span class="prio-rel-n">${related.length}</span>` : ""}</button>`;
+    // 1RM GOAL (owner's Phase-2 "add goals"): an optional target kg you chase, shown
+    // against the current best 1RM with a % progress.
+    const best = bestE1rmFor(user, ex);
+    const goal = e.goalKg;
+    const pct = goal && best != null && goal > 0 ? Math.min(100, Math.round((best / goal) * 100)) : null;
+    const goalHtml = open
+      ? `<div class="prio-goal"><span class="prio-goal-lbl">🎯 Goal</span>` +
+        `<input type="number" class="prio-goal-in" data-priogoal="${escapeHtml(ex)}" inputmode="numeric" step="2.5" min="0" value="${goal ?? ""}" placeholder="kg" aria-label="1RM goal (kg) for ${escapeHtml(displayName(ex))}" />` +
+        `<span class="prio-goal-cur muted">${best != null ? `now ~${fmt(best)}kg` : "no 1RM yet"}${goal && best != null ? ` · ${pct}%` : ""}</span></div>`
+      : "";
     const relPanel = open && related.length
       ? `<div class="prio-related">` + related.map(({ name: r, same }) => {
           const rAvg = exerciseMonthAvg(user, r).toFixed(1);
@@ -10628,7 +10649,7 @@ function renderWorkoutPlan(): void {
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
       `</span></span>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
-      relPanel +
+      (open ? `<div class="prio-detail">${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
   const list = names.length
@@ -12146,6 +12167,20 @@ async function init() {
   // "Plan workout" — suggest what to train today (top of the workout history).
   els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
   els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
+  // 1RM goal input (Phase 2): save the target kg (or clear it) on change, then re-render
+  // so the % progress updates. Input has already blurred, so re-rendering is fine.
+  els.planBody.addEventListener("change", (e) => {
+    const g = (e.target as HTMLElement).closest<HTMLInputElement>("[data-priogoal]");
+    if (!g?.dataset.priogoal) return;
+    const user = els.athlete.value;
+    const pri = prioritiesStore[user] ?? (prioritiesStore[user] = {});
+    const ex = g.dataset.priogoal;
+    if (!pri[ex]) return;
+    const v = Number(g.value);
+    if (Number.isFinite(v) && v > 0) pri[ex]!.goalKg = Math.round(v * 10) / 10;
+    else delete pri[ex]!.goalKg;
+    savePriorities(); renderWorkoutPlan();
+  });
   els.planBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const user = els.athlete.value;

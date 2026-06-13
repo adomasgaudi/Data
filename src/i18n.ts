@@ -64,6 +64,8 @@ const LT: Record<string, string> = {
   "📋 Priorities": "📋 Prioritetai",
   "Priorities": "Prioritetai",
   "Focus lifts": "Svarbiausi pratimai",
+  "🎯 Goal": "🎯 Tikslas",
+  "no 1RM yet": "dar nėra 1RM",
   "Max effort": "Maks. pastanga",
   "Active": "Aktyvus",
   "Passive": "Pasyvus",

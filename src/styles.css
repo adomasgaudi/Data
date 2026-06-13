@@ -4593,9 +4593,19 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 }
 .prio-expand.is-empty { cursor: default; }
 .prio-rel-n { font-size: 0.58rem; font-weight: 700; opacity: 0.8; }
+/* Expandable row detail: the 1RM goal setter + the related-lifts dropdown. */
+.prio-detail { flex-basis: 100%; order: 99; display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.35rem; }
+.prio-goal { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.prio-goal-lbl { font-size: 0.7rem; font-weight: 700; color: var(--lens-combine, #b8902f); white-space: nowrap; }
+.prio-goal-in {
+  width: 4.5rem; font: inherit; font-size: 0.78rem; font-weight: 600; min-height: var(--tap-min);
+  padding: 2px 7px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--accent);
+}
+.prio-goal-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.prio-goal-cur { font-size: 0.68rem; }
 .prio-related {
-  flex-basis: 100%; order: 99; display: flex; gap: 5px; margin-top: 0.3rem;
-  overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;
+  display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;
 }
 .prio-related::-webkit-scrollbar { display: none; }
 .prio-rel-chip {
