@@ -110,4 +110,5 @@ way (commit + push every change, rule 3). A CEO project will span many versions.
 
 *(newest first — add a line when you open a new `docs/ceo/<slug>.md`)*
 
+- 2026-06-13 — [`lift-vs-pattern-overlap.md`](./lift-vs-pattern-overlap.md) — a lift and its pattern (DL vs DL pattern) overlap; track both without double-counting volume. **Status: PLANNING.**
 - 2026-06-09 — [`coach-primary-user.md`](./coach-primary-user.md) — make the live page better for the coach as primary user. **Status: PLANNING.**
