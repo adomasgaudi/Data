@@ -8905,6 +8905,14 @@ function indexEditCell(r: IndexRow): string {
 }
 
 // ---- BW parts tab: every exercise and its bodyweight coefficient ----
+// Freeze the Index grouping so editing a lift's TAG (tier / discipline / muscle /
+// group) doesn't make its row JUMP to the new bucket mid-edit — disorienting when you're
+// retagging a few lifts in a row. The rendered layout is cached and reused, so the
+// order only re-sorts on a real refresh: a page reload, switching the grouping MODE
+// (cache is mode-keyed), or the set of lifts changing (count-keyed). Owner request.
+let indexLayoutFreeze:
+  | { mode: IndexGroupMode; total: number; buckets: { key: string; label: string; color: string; names: string[] }[] }
+  | null = null;
 function renderBwParts() {
   renderMergeList();
   const createBox = document.getElementById("idxCreate");
@@ -8932,8 +8940,19 @@ function renderBwParts() {
   renderBwGroupBar();
 
   // Slice the same rows into the chosen grouping (category / muscle / function /
-  // combinable / comparable).
-  const buckets = indexBuckets(rows, S.bwGroupMode);
+  // combinable / comparable). Frozen layout (see indexLayoutFreeze): reuse the cached
+  // bucket order/membership so a tag edit doesn't re-sort; recompute fresh (and re-cache)
+  // only when the mode or the lift set changed (or on reload).
+  let buckets: IndexBucket[];
+  if (indexLayoutFreeze && indexLayoutFreeze.mode === S.bwGroupMode && indexLayoutFreeze.total === rows.length) {
+    const rowByName = new Map(rows.map((r) => [r.name, r] as const));
+    buckets = indexLayoutFreeze.buckets
+      .map((b) => ({ key: b.key, label: b.label, color: b.color, rows: b.names.map((n) => rowByName.get(n)).filter((r): r is IndexRow => !!r) }))
+      .filter((b) => b.rows.length);
+  } else {
+    buckets = indexBuckets(rows, S.bwGroupMode);
+    indexLayoutFreeze = { mode: S.bwGroupMode, total: rows.length, buckets: buckets.map((b) => ({ key: b.key, label: b.label, color: b.color, names: b.rows.map((r) => r.name) })) };
+  }
   // When grouped by COMPARABLE, each group's rows show their scaling ratio in that group
   // (and the reference lift, ratio 1, is tagged "étalon"). Build a per-group lookup once.
   const compRatioByGroup = S.bwGroupMode === "comparable"
