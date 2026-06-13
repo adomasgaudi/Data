@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.311.14</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.8.312</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -365,34 +365,6 @@
       </div>
 
       <div id="tab-test" class="tab-panel" hidden>
-        <section class="panel rx-panel">
-          <h2>Coach — working weight &amp; warm-up</h2>
-          <p class="muted" style="margin: 0 0 0.75rem; font-size: 0.8rem">
-            From a client's 1RM: the hard-set load and a full warm-up ramp up to it.
-          </p>
-          <button type="button" id="rxModeBtn" class="rx-mode" data-mode="repsRIR">Target: reps + RIR</button>
-          <div class="calc-inputs">
-            <label>1RM (kg)<input id="rxOrm" type="number" value="100" step="2.5" min="1" /></label>
-            <label id="rxRepsField">Reps<input id="rxReps" type="number" value="5" min="1" /></label>
-            <label id="rxRirField">RIR<input id="rxRir" type="number" value="2" min="0" /></label>
-            <label id="rxPctField" hidden>% of 1RM<input id="rxPct" type="number" value="80" step="1" min="1" max="100" /></label>
-            <label>Formula
-              <select id="rxFormula">
-                <option value="epley" selected>Epley</option>
-                <option value="brzycki">Brzycki</option>
-                <option value="nuzzo">Nuzzo (bench)</option>
-              </select>
-            </label>
-            <label>Plates (kg)
-              <select id="rxInc">
-                <option value="1.25">1.25</option>
-                <option value="2.5" selected>2.5</option>
-                <option value="5">5</option>
-              </select>
-            </label>
-          </div>
-          <div id="rxOut" class="calc-out"></div>
-        </section>
         <section class="panel">
           <h2>Formulas — see the maths</h2>
           <!-- Dashboard-wide 1RM formula (moved here from Settings). Sets the formula the
@@ -433,6 +405,34 @@
               📊 Bench reps at % of 1RM — research data
             </a>
           </p>
+        </section>
+        <section class="panel rx-panel">
+          <h2>Coach — working weight &amp; warm-up</h2>
+          <p class="muted" style="margin: 0 0 0.75rem; font-size: 0.8rem">
+            From a client's 1RM: the hard-set load and a full warm-up ramp up to it.
+          </p>
+          <button type="button" id="rxModeBtn" class="rx-mode" data-mode="repsRIR">Target: reps + RIR</button>
+          <div class="calc-inputs">
+            <label>1RM (kg)<input id="rxOrm" type="number" value="100" step="2.5" min="1" /></label>
+            <label id="rxRepsField">Reps<input id="rxReps" type="number" value="5" min="1" /></label>
+            <label id="rxRirField">RIR<input id="rxRir" type="number" value="2" min="0" /></label>
+            <label id="rxPctField" hidden>% of 1RM<input id="rxPct" type="number" value="80" step="1" min="1" max="100" /></label>
+            <label>Formula
+              <select id="rxFormula">
+                <option value="epley" selected>Epley</option>
+                <option value="brzycki">Brzycki</option>
+                <option value="nuzzo">Nuzzo (bench)</option>
+              </select>
+            </label>
+            <label>Plates (kg)
+              <select id="rxInc">
+                <option value="1.25">1.25</option>
+                <option value="2.5" selected>2.5</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+          </div>
+          <div id="rxOut" class="calc-out"></div>
         </section>
         <section class="panel">
           <h2>Strength fade — use it or lose it</h2>
