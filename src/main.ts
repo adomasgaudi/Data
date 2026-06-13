@@ -10538,18 +10538,6 @@ function renderWorkoutPlan(): void {
   const pri = athletePriorities(user);
   const names = Object.keys(pri).sort((a, b) =>
     (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
-  // Suggestions to ADD. Synthetic combinable/comparable GROUP lifts (e.g. "Squat
-  // pattern", "Pull/Chin") are focusable too — you might want to train the whole squat
-  // pattern, not just "Squat" — so they're offered FIRST (marked ✦), then the most-
-  // trained individual lifts in frequency order.
-  const has = new Set(names);
-  const trained = exerciseCounts(activeRecords(), user).map((c) => c.exerciseName);
-  const synthSug = availableSyntheticNames(trained).filter((n) => !has.has(n));
-  const realSug = trained.filter((n) => !has.has(n));
-  const suggestions: { name: string; synth: boolean }[] = [
-    ...synthSug.map((name) => ({ name, synth: true })),
-    ...realSug.map((name) => ({ name, synth: false })),
-  ].slice(0, 16);
   // ---- Lift↔pattern relations (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
   // Every lift stays a FLAT row in its OWN effort order — NOT nested. Each row has a
   // dropdown of related lifts, split by RELATION:
@@ -10573,6 +10561,22 @@ function renderWorkoutPlan(): void {
     // Same-lift (combinable) first, then related patterns.
     return [...map].map(([n, same]) => ({ name: n, same })).sort((a, b) => Number(b.same) - Number(a.same));
   };
+  // A COMBINABLE representation of a lift you already track is the SAME lift, so it must
+  // NOT be addable (can't plan SQ mix AND Squat). Block those from the suggestions.
+  const sameLiftBlocked = new Set<string>();
+  for (const n of names) for (const r of relatedOf(n)) if (r.same) sameLiftBlocked.add(r.name);
+
+  // Suggestions to ADD. Synthetic GROUP lifts (e.g. "Squat pattern") offered FIRST (✦),
+  // then individual lifts. Exclude anything already a focus OR a same-lift duplicate.
+  const has = new Set(names);
+  const addable = (n: string) => !has.has(n) && !sameLiftBlocked.has(n);
+  const trained = exerciseCounts(activeRecords(), user).map((c) => c.exerciseName);
+  const synthSug = availableSyntheticNames(trained).filter(addable);
+  const realSug = trained.filter(addable);
+  const suggestions: { name: string; synth: boolean }[] = [
+    ...synthSug.map((name) => ({ name, synth: true })),
+    ...realSug.map((name) => ({ name, synth: false })),
+  ].slice(0, 16);
 
   const rowHtml = (ex: string): string => {
     const e = pri[ex]!;
