@@ -3357,6 +3357,10 @@ let currentExInfo: string | null = null;
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
 let exInfoMode = false;
+/** Whether the exercise card's editable "Index entry" fold (code/tags/groups/data) is
+ * expanded — the info brief shows by default, the index editing is opt-in. Remembered
+ * across the card's re-renders so editing a tag inside doesn't snap it shut. */
+let exIndexFoldOpen = false;
 /** Open one exercise's settings: bring the Index (the all-exercises list) up as
  * the backdrop, reveal + scroll to that lift's row, then float the settings card
  * on top — filled from the single-source `exerciseInfoHtml`. */
@@ -11177,7 +11181,14 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${liftTrainingHtml(name)}${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  // Two views in one card: the "How to train" INFO brief shows by default; the editable
+  // INDEX entry (code, tags, tier, groups, data) is folded away behind a tap — they're
+  // separate concerns (owner: "info ≠ index, two views"). Open state is remembered so
+  // editing a tag inside doesn't snap the fold shut.
+  const indexPart = `${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}`;
+  return `<div class="ex-info">${liftTrainingHtml(name)}` +
+    `<details class="ex-index-fold"${exIndexFoldOpen ? " open" : ""}><summary class="ex-index-sum">✎ Index entry — code, tags, groups &amp; data</summary>` +
+    `<div class="ex-index-body">${indexPart}</div></details></div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
@@ -13192,6 +13203,11 @@ async function init() {
     if (!ex || !sec) return;
     const k = `${ex}|${sec}`;
     if (d.open) metaFoldOpen.add(k); else metaFoldOpen.delete(k);
+  }, true);
+  // Remember the "Index entry" fold's open/closed state across the card's re-renders.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (d instanceof HTMLDetailsElement && d.classList.contains("ex-index-fold")) exIndexFoldOpen = d.open;
   }, true);
   // Editable SOURCES (spelling-merge): split a folded spelling into its own lift, or
   // merge a split-out sibling back in. Mutates the split set, rebuilds the records +

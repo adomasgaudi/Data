@@ -2885,6 +2885,17 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 .bw-ex-name .caret { transition: transform 0.12s ease; display: inline-block; margin-right: 0.3rem; color: var(--muted); }
 tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-info { display: flex; flex-direction: column; gap: 0; padding: 0.3rem 0.2rem; }
+/* The editable "Index entry" is a separate, collapsed view inside the card — the info
+   brief shows by default, this folds the code/tags/groups/data editing away. */
+.ex-index-fold { border-top: 1px solid var(--line); margin-top: 0.5rem; }
+.ex-index-sum {
+  cursor: pointer; list-style: none; user-select: none; display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.6rem 0.1rem; font-size: 0.86rem; font-weight: 700; color: var(--accent); min-height: var(--tap-min);
+}
+.ex-index-sum::-webkit-details-marker { display: none; }
+.ex-index-sum::before { content: "▸"; color: var(--accent); font-weight: 700; }
+.ex-index-fold[open] > .ex-index-sum::before { content: "▾"; }
+.ex-index-body { padding-top: 0.2rem; }
 /* "How to train" brief — the six panels prepended to a lift's info overlay. Compact,
    tight labels, small rounding (rule #design / #cram). */
 .lt-wrap { display: flex; flex-direction: column; gap: 0.4rem; margin: 0 0 0.6rem; padding: 0 0 0.6rem; border-bottom: 2px solid var(--line); }

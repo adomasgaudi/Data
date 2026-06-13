@@ -77,6 +77,7 @@ const LT: Record<string, string> = {
   "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
   "Setup notes": "Pasiruošimo užrašai",
   "Antagonist lifts": "Antagonistų pratimai",
+  "✎ Index entry — code, tags, groups & data": "✎ Rodyklės įrašas — kodas, žymos, grupės ir duomenys",
   // ---- Mini stats carousel ----
   "More ▾": "Daugiau ▾",
   "~22 trained · ~25 natural ceiling": "~22 treniruotas · ~25 natūrali riba",
