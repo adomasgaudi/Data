@@ -1129,6 +1129,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   });
   // iOS Safari: pointer capture alone sometimes still scrolls the page mid-drag.
   plotEl.addEventListener("touchmove", (e) => { if (pts.size > 0) e.preventDefault(); }, { passive: false });
+  // Chrome/Android: the browser commits to a scroll gesture at touchstart time, BEFORE
+  // touchmove fires. For freepan (2D) charts we must preventDefault at touchstart so
+  // the browser never starts a scroll — otherwise any slightly-vertical drag triggers
+  // page scroll + pointercancel, breaking chart panning. Only for svgc-freepan
+  // containers; other charts intentionally keep touch-action:pan-y so page scroll works.
+  plotEl.addEventListener("touchstart", (e) => {
+    if (interactive() && container.classList.contains("svgc-freepan")) e.preventDefault();
+  }, { passive: false });
   plotEl.addEventListener("pointermove", (e) => {
     if (pts.size > 0 || e.buttons !== 0 || pinned) return; // a pinned popup wins over hover
     if (e.pointerType === "mouse") showTip(e.clientX);
