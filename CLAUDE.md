@@ -47,6 +47,7 @@ line, never a paragraph** (that's how this file stays small as rules pile up).
 31. **`#design` — NO native tap-highlight: `* { -webkit-tap-highlight-color: transparent }` is set globally in `src/styles.css` — keep it. The browser's grey fill over a tapped element's bounds is the "ugly light-up behind the title" (and everywhere); use our OWN `:hover`/`:active`/`.is-on` feedback, never the native flash. Keyboard focus rings (`:focus-visible`) are separate — leave them.**
 34. **Cost hook format:** after every turn print: `#1 (first 5 words...) input: 234 | total: 12,345 | …rest`. Chat name, prompt number, prompt first words truncated, fresh input tokens, cumulative input tokens, then cost breakdown.
 35. **`#tokens` — analyse token/model efficiency:** look at the session transcript, then give a concrete verdict: new chat vs continue, right model for the task, cache hit rate, waste patterns, and one recommended action.
+36. **Default model is Haiku** (`claude-haiku-4-5-20251001`) for all routine work in this repo — only escalate to Sonnet if Haiku fails, never use Fable/Opus unless owner explicitly asks.
 
 ## Commands the owner types (act on these even with no other context)
 
