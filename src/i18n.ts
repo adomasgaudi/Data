@@ -63,6 +63,7 @@ const LT: Record<string, string> = {
   // ---- Priorities overlay ----
   "📋 Priorities": "📋 Prioritetai",
   "Priorities": "Prioritetai",
+  "Focus lifts": "Svarbiausi pratimai",
   "Max effort": "Maks. pastanga",
   "Active": "Aktyvus",
   "Passive": "Pasyvus",

@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.314</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.8.315</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -233,7 +233,7 @@
                   <button type="button" id="aloneTagToggle" class="wo-dj-btn" data-sub="day tags" aria-pressed="false" title="Show/hide the “alone” day tags">Tags</button>
                 </div>
             </details>
-            <button type="button" id="planWorkoutBtn" class="wo-plan-btn" title="Your training priorities — up to 10 focus exercises with a level, your last-month weekly sets, and a target">📋 Priorities</button>
+            <button type="button" id="planWorkoutBtn" class="wo-plan-btn" title="Your training plan — what to train today by tier, antagonist supersets, warm-ups and watch-outs, plus up to 10 manual focus lifts with a level and weekly target">📋 Priorities</button>
             <button type="button" id="woShowAllToggle" class="wo-hidden-toggle" aria-pressed="false" hidden title="Lifts hidden by the Index app-wide filter — tap to show them in this list">Hidden</button>
             </div>
             <!-- CUT-2: "Sets over time" chart warehoused (warehouse/2026-06-07-cut2-workout-sets-chart).
@@ -1031,19 +1031,6 @@
         </section>
       </div>
 
-      <div id="tab-live" class="tab-panel" hidden>
-        <section class="panel">
-          <div class="groups-head">
-            <h2>Live</h2>
-            <p class="muted" style="margin: 0.25rem 0 0">
-              Your training plan: what to train today (by tier), antagonist supersets,
-              warm-ups, and watch-outs from your goals &amp; injury cautions.
-            </p>
-          </div>
-          <div id="liveBody" class="live-body"></div>
-        </section>
-      </div>
-
       <div id="tab-records" class="tab-panel" hidden>
         <section class="panel">
           <div class="groups-head">
@@ -1182,7 +1169,6 @@
         <div class="other-section">
           <div class="other-section-lbl">Clients</div>
           <div class="other-row">
-            <button class="other-item" data-tab="live" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg> Live</button>
             <button class="other-item" data-nav="analysis" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> <span id="otherAnalysisLabel">Analysis</span></button>
           </div>
           <div class="other-row">
@@ -1265,8 +1251,15 @@
           <h2>Priorities</h2>
           <button type="button" id="planClose" class="overlay-close" aria-label="Close">✕</button>
         </div>
-        <p class="muted">Your training priorities — up to 10 exercises you want to focus on. Each has a level (Max effort · Active · Passive · Maintain) that sets a suggested weekly target and the order, the average sets/week you've actually done this past month, and a target you can tune. Tap a name to open it.</p>
-        <div id="planBody"></div>
+        <!-- The Live training plan (Goals & cautions, Train today, supersets, warm-ups,
+             watch-outs) — relocated here from the old standalone Live tab. -->
+        <div id="liveBody" class="live-body"></div>
+        <!-- The manual focus-lifts planner. -->
+        <div class="plan-planner">
+          <h3 class="live-h plan-planner-hd">Focus lifts</h3>
+          <p class="muted">Your training priorities — up to 10 exercises you want to focus on. Each has a level (Max effort · Active · Passive · Maintain) that sets a suggested weekly target and the order, the average sets/week you've actually done this past month, and a target you can tune. Tap a name to open it.</p>
+          <div id="planBody"></div>
+        </div>
       </div>
     </div>
 

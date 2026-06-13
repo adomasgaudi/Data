@@ -385,7 +385,7 @@ let viewUser: string | null = (() => {
 // Tabs a non-admin (locked user / spectator) may stay on — the Clients section of
 // the More menu: both analysis pages, the athlete view, plus Live, Colosseum,
 // Stats view (groups) and World records. (Coach pages bounce back to analysis.)
-const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "live", "leaderboards", "groups", "records"]);
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records"]);
 /** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
  * Simplified-view toggle is on, else the full ANL. */
 function analysisTabName(): string {
@@ -10522,7 +10522,8 @@ function renderWorkoutPlan(): void {
 }
 
 function openWorkoutPlan(): void {
-  renderWorkoutPlan();
+  renderLive(); // the training plan (relocated from the old Live tab) sits at the top
+  renderWorkoutPlan(); // the manual focus-lifts planner below it
   els.planPage.hidden = false;
 }
 // Remember which taxonomy sections (Discipline / Muscle group / Tier / Combinable /
@@ -16998,7 +16999,6 @@ function parseCreateQuery(raw: string): { hit: boolean; name: string } {
 const NAV_PAGES: { tab: string; label: string }[] = [
   { tab: "analysis", label: "Analysis" },
   { tab: "bwparts", label: "Index" },
-  { tab: "live", label: "Live" },
   { tab: "records", label: "World records" },
   { tab: "leaderboards", label: "Colosseum" },
   { tab: "groups", label: "Stats" },
@@ -17056,7 +17056,7 @@ function renderSearchPalette(value: string): void {
   // single view" suggestion and leads the carousel reel there.
   const bestMatch = n ? rankMatchesByQuery(matchNames, q)[0]! : "";
   const bestLabel = bestMatch ? displayName(bestMatch) : "";
-  // Page navigation: typing a page name (e.g. "index", "live", "world") offers to
+  // Page navigation: typing a page name (e.g. "index", "world", "formulas") offers to
   // SWITCH to it — shown first, so the bar doubles as a go-to-page jump, not just a
   // lift search. Matches the page's name (case-insensitive substring).
   const ql = q.toLowerCase();
@@ -18005,7 +18005,6 @@ function switchTopTab(name: string) {
   if (name === "team") renderTeamView();
   if (name === "statsedit") renderStatsEdit();
   if (name === "records") renderRecords();
-  if (name === "live") renderLive();
   if (name === "coach") renderCoachPage();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete

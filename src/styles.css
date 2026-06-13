@@ -4525,6 +4525,10 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 
 /* ---- "Live" coaching page ---- */
 .live-body { display: flex; flex-direction: column; gap: 0.7rem; }
+/* The manual focus-lifts planner, below the Live plan in the Priorities popup —
+   separated by a light divider so the two parts read as distinct sections. */
+.plan-planner { margin-top: 1.1rem; padding-top: 1rem; border-top: 2px solid var(--line); }
+.plan-planner-hd { margin-bottom: 0.2rem; }
 .live-for { font-size: 0.82rem; margin: 0 0 0.2rem; }
 .live-card { border: 1px solid var(--line); border-radius: 12px; padding: 0.7rem 0.8rem; background: var(--panel); }
 .live-card.live-goals { border-color: var(--accent); }
