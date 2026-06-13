@@ -10521,22 +10521,33 @@ function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
   if (level === "passive") return 2;
   return Math.max(1, Math.round(monthAvg)); // maintain = match recent
 }
-/** Avg sets/week actually done over the trailing 30 days, for one athlete+exercise. */
+/** Avg sets/week actually done over the trailing 30 days, for one athlete+exercise.
+ * A synthetic combinable/comparable lift (e.g. "Squat pattern") has nothing logged
+ * under its own name, so aggregate its member lifts' sets — that's its real volume. */
 function exerciseMonthAvg(user: string, ex: string): number {
-  return weeklySetStats(explodeForCount(setsForUserExercise(activeRecords(), user, ex)), todayIso()).monthAvgPerWeek;
+  const members = syntheticMembers(ex);
+  const recs = members.length
+    ? members.flatMap((m) => setsForUserExercise(activeRecords(), user, m))
+    : setsForUserExercise(activeRecords(), user, ex);
+  return weeklySetStats(explodeForCount(recs), todayIso()).monthAvgPerWeek;
 }
 function renderWorkoutPlan(): void {
   const user = els.athlete.value;
   const pri = athletePriorities(user);
   const names = Object.keys(pri).sort((a, b) =>
     (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
-  // Suggestions to ADD — the athlete's most-trained lifts not already a priority (and not
-  // a synthetic group), top of the frequency order so their mains lead.
+  // Suggestions to ADD. Synthetic combinable/comparable GROUP lifts (e.g. "Squat
+  // pattern", "Pull/Chin") are focusable too — you might want to train the whole squat
+  // pattern, not just "Squat" — so they're offered FIRST (marked ✦), then the most-
+  // trained individual lifts in frequency order.
   const has = new Set(names);
-  const suggestions = exerciseCounts(activeRecords(), user)
-    .map((c) => c.exerciseName)
-    .filter((n) => !has.has(n))
-    .slice(0, 12);
+  const trained = exerciseCounts(activeRecords(), user).map((c) => c.exerciseName);
+  const synthSug = availableSyntheticNames(trained).filter((n) => !has.has(n));
+  const realSug = trained.filter((n) => !has.has(n));
+  const suggestions: { name: string; synth: boolean }[] = [
+    ...synthSug.map((name) => ({ name, synth: true })),
+    ...realSug.map((name) => ({ name, synth: false })),
+  ].slice(0, 16);
   const rowHtml = (ex: string): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
@@ -10560,8 +10571,8 @@ function renderWorkoutPlan(): void {
     : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
   const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
     ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +
-      `<div class="prio-add-chips">${suggestions.map((ex) =>
-        `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(ex)}" title="Add ${escapeHtml(displayName(ex))} to your priorities">+ ${escapeHtml(displayName(ex))}</button>`).join("")}</div></div>`
+      `<div class="prio-add-chips">${suggestions.map((s) =>
+        `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a combinable/comparable group lift" : ""} to your priorities">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`).join("")}</div></div>`
     : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
   els.planBody.innerHTML = list + addBlock;
 }
