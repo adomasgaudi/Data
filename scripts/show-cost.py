@@ -10,6 +10,14 @@ PRICING = {
     "claude-haiku-4":    (1.0, 5.0),
 }
 
+# The plan is a flat-fee subscription, so the per-token dollar figure is THEORETICAL
+# (what these tokens would cost at API pricing). We also show it in € and as a % of
+# the weekly share of the subscription — the meaningful "fraction of my weekly plan
+# used" number for a flat-fee plan. Adjust these three constants if anything changes.
+USD_TO_EUR = 0.92                  # rough USD -> EUR; nudge if the rate drifts
+MONTHLY_SUBSCRIPTION_EUR = 180.0   # the plan's monthly price (4x plan)
+WEEKLY_SUBSCRIPTION_EUR = MONTHLY_SUBSCRIPTION_EUR * 12 / 52  # ~= EUR 41.54 / week
+
 def price(model):
     for k, v in PRICING.items():
         if model.startswith(k): return v
@@ -111,6 +119,15 @@ def fmt_cost(x):
     elif x < 0.1: return f"${x:.4f}"
     else: return f"${x:.2f}"
 
+def fmt_eur(x):
+    return f"€{x:.4f}" if x < 0.1 else f"€{x:.2f}"
+
+# Theoretical € cost + share of the weekly subscription (flat-fee plan).
+turn_eur = turn["usd"] * USD_TO_EUR
+sess_eur = sess["usd"] * USD_TO_EUR
+turn_pct_week = (turn_eur / WEEKLY_SUBSCRIPTION_EUR * 100) if WEEKLY_SUBSCRIPTION_EUR else 0.0
+sess_pct_week = (sess_eur / WEEKLY_SUBSCRIPTION_EUR * 100) if WEEKLY_SUBSCRIPTION_EUR else 0.0
+
 print(f"""
 prompt #{last_prompt_num}: {prompt_preview}
 
@@ -126,7 +143,8 @@ output tokens:     {turn['out']:>8,}
 model:             {model}
 pricing:           ${pin:.2f}/Mtok input, ${pout:.2f}/Mtok output
 
-turn cost:         {fmt_cost(turn['usd'])}
+turn cost:         {fmt_cost(turn['usd'])}  =  {fmt_eur(turn_eur)} theoretical  ({turn_pct_week:.2f}% of weekly plan)
 trend (10 turns):  {sparkline}
-session total:     ${sess['usd']:.4f}
+session total:     ${sess['usd']:.4f}  =  {fmt_eur(sess_eur)} theoretical  ({sess_pct_week:.1f}% of weekly plan)
+weekly plan:       {fmt_eur(WEEKLY_SUBSCRIPTION_EUR)}  (€{MONTHLY_SUBSCRIPTION_EUR:.0f}/mo subscription)
 """)
