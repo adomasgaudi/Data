@@ -9281,13 +9281,6 @@ function coachingSeed(username: string): CoachingProfile | null {
 function coachingFor(username: string): CoachingProfile | null {
   return coachingOverrides[username] ?? coachingSeed(username);
 }
-/** Muscle groups named within an athlete's "maintain" lines (e.g. "Adductors"), so
- * their lifts can be surfaced for injury care. */
-function maintainMusclesFor(coach: CoachingProfile | null): MuscleGroup[] {
-  if (!coach?.maintain?.length) return [];
-  const hay = coach.maintain.join(" ").toLowerCase();
-  return MUSCLE_GROUPS.filter((m) => hay.includes(m.toLowerCase()));
-}
 /** The athlete's recent top weighted set on any lift hitting a muscle group — the
  * heaviest set logged for it in the last ~60 days. Used to size a warm-up off recent
  * strength. Returns null if no weighted set is on record. */
@@ -9981,49 +9974,14 @@ function renderLive(): void {
     ? `<section class="live-card live-warn"><h3 class="live-h">Watch-outs</h3><ul class="live-list">${watchItems.join("")}</ul></section>`
     : "";
 
-  // 0) GOALS & CAUTIONS — the athlete's coaching profile (goals, injury cautions +
-  //    maintenance areas, style notes), the lifts they do that cover a caution muscle
-  //    (e.g. adductor work for adductor pain), and an editor to change any of it.
-  const careMuscles = maintainMusclesFor(coach);
-  const careLifts = careMuscles.length
-    ? list.filter((x) => x.muscles.some((m) => careMuscles.includes(m))).sort((a, b) => b.priority - a.priority).slice(0, 6)
-    : [];
-  const ta = (key: string, label: string, vals: string[] | undefined) =>
-    `<label class="live-edit-f"><span class="live-edit-lbl">${label}</span>` +
-    `<textarea class="live-edit" data-livefield="${key}" rows="3" placeholder="one per line…">${escapeHtml((vals ?? []).join("\n"))}</textarea></label>`;
-  const editor =
-    `<details class="live-editor"><summary class="live-editor-sum">✎ Edit plan</summary>` +
-    `<div class="live-editor-body">` +
-    ta("goals", "Goals", coach?.goals) +
-    ta("notes", "Style / preferences", coach?.notes) +
-    ta("cautions", "Cautions (injuries)", coach?.cautions) +
-    ta("maintain", "Keep maintaining (muscle names auto-detected)", coach?.maintain) +
-    `<button type="button" class="live-ss-toggle wa-name-opt${coach?.pushSupersets ? " is-on" : ""}" data-livesupersets="1" title="Lean on antagonist supersets (e.g. rushes rests)">Lean on supersets</button>` +
-    `<div class="live-editor-actions"><button type="button" class="live-save">Save</button><span class="live-edit-msg muted"></span></div>` +
-    `</div></details>`;
-  const li = (s: string) => `<li>${escapeHtml(s)}</li>`;
-  const hasProfile = !!(coach && (coach.goals?.length || coach.notes?.length || coach.cautions?.length || coach.maintain?.length));
-  const coachSection =
-    `<section class="live-card live-goals"><h3 class="live-h">Goals &amp; cautions</h3>` +
-    (hasProfile
-      ? (coach!.goals?.length ? `<div class="live-block"><div class="live-block-hd">Goals</div><ul class="live-list">${coach!.goals.map(li).join("")}</ul></div>` : "") +
-        (coach!.notes?.length ? `<div class="live-block"><div class="live-block-hd">Style</div><ul class="live-list">${coach!.notes.map(li).join("")}</ul></div>` : "") +
-        (coach!.cautions?.length || coach!.maintain?.length
-          ? `<div class="live-block live-block-warn"><div class="live-block-hd">⚠ Cautions — keep maintaining</div><ul class="live-list">` +
-            (coach!.cautions ?? []).map((c) => `<li>${escapeHtml(c)}</li>`).join("") +
-            (coach!.maintain?.length ? `<li>Keep training: <b>${coach!.maintain.map((m) => escapeHtml(m)).join(" · ")}</b></li>` : "") +
-            `</ul>` +
-            (careLifts.length ? `<div class="live-ex-row">${careLifts.map(exPill).join("")}</div>` : "") +
-            `</div>`
-          : "")
-      : `<p class="live-sub muted">No plan for ${escapeHtml(athleteLabel())} yet — add goals, cautions and preferences below.</p>`) +
-    editor +
-    `</section>`;
+  // GOALS & CAUTIONS card REMOVED from the plan (owner): goals now live per-lift (the
+  // 🎯 Goal in Focus lifts) and per-exercise style/cautions live in each lift's Setup
+  // notes — so the global card is redundant. (Warm-ups / supersets / watch-outs stay.)
   // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
   // section right after the plan; otherwise it sits lower.
   const ordered = coach?.pushSupersets
-    ? coachSection + plannedSection + ssSection + warmSection + watchSection
-    : coachSection + plannedSection + warmSection + ssSection + watchSection;
+    ? plannedSection + ssSection + warmSection + watchSection
+    : plannedSection + warmSection + ssSection + watchSection;
 
   box.innerHTML =
     `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
