@@ -3524,10 +3524,14 @@ function expandLatestChangelog(): void {
 function renderChangelog() {
   // Show SP without a binary floating-point tail (e.g. 83.3, not 83.30000000001).
   const fmtSp = (n: number): string => String(Math.round(n * 10) / 10);
-  // Realistic € cost of a node — its model-weighted SP share of the project's
-  // actual spend (NOT API list price). Printed to 3 significant figures so tiny
-  // (e.g. Haiku) leaves read a real number, not a "<€0.01" floor.
-  const fmtEur = (e: number): string => (e <= 0 ? "€0" : `€${e.toPrecision(3)}`);
+  // Realistic cost of a node — its model-weighted SP share of the project's
+  // actual spend (NOT API list price), shown in CENTS with a 0.01¢ floor so tiny
+  // (e.g. Haiku) leaves still read a real number rather than rounding to zero.
+  const fmtEur = (e: number): string => {
+    const c = e * 100; // euros → cents
+    if (c < 0.01) return "<0.01¢";
+    return `${Math.round(c * 100) / 100}¢`; // 0.01¢ granularity, no trailing zeros
+  };
   // Short model family for the chip's colour class ("Opus 4.8" -> "opus").
   const modelClass = (m: string): string => (m.split(/\s+/)[0] ?? "").toLowerCase();
   // Count actual released versions (a grouped minor counts its sub-versions;

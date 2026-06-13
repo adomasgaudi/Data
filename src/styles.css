@@ -3509,11 +3509,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .cl-mid { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .cl-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
 .cl-note { font-size: var(--fs-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-/* Model · SP · price cluster — kept together at the row's end and wrapping among
-   themselves (not spilling across the row) when space is tight. */
+/* Model · SP · price cluster — STACKED vertically at the row's end (one pill per
+   line), right-aligned so the three read as a tight column beside the title. */
 .cl-meta {
-  flex: none; display: flex; flex-wrap: wrap; align-items: center;
-  justify-content: flex-end; gap: 4px; max-width: 12rem;
+  flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
 }
 .cl-sp {
   flex: none; font-size: 0.7rem; font-weight: 700; color: var(--gold);
