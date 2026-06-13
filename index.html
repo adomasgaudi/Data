@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.311.3</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.8.311.14</span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -395,10 +395,6 @@
         </section>
         <section class="panel">
           <h2>Formulas — see the maths</h2>
-          <p class="muted" style="margin: 0 0 1rem">
-            Pick an athlete and exercise to load their top set, or just type your own numbers —
-            either way each formula recomputes live. This is the exact code the leaderboards use.
-          </p>
           <!-- Dashboard-wide 1RM formula (moved here from Settings). Sets the formula the
                whole app uses for leaderboards, PRs and the history; same #formula id, so its
                existing wiring + custom .xdd dropdown are unchanged. -->
@@ -409,7 +405,6 @@
               <option value="nuzzo" selected>Nuzzo (bench curve)</option>
             </select>
           </label>
-          <p class="muted" style="margin: -0.4rem 0 1rem; font-size: 0.8rem">1RM includes bodyweight for movements like pull-ups, dips and squats — using the bodyweight recorded with each set, or your profile weight when a set didn't record one.</p>
           <div class="calc-picker">
             <label>Athlete
               <select id="testAthlete"></select>

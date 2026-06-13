@@ -126,7 +126,6 @@ const LT: Record<string, string> = {
   "Calculations & display": "Skaičiavimai ir rodymas",
   "1RM formula": "1RM formulė",
   "Dashboard-wide 1RM formula": "Viso skydelio 1RM formulė",
-  "1RM includes bodyweight for movements like pull-ups, dips and squats — using the bodyweight recorded with each set, or your profile weight when a set didn't record one.": "1RM įskaito kūno svorį tokiems judesiams kaip prisitraukimai, atsispaudimai ant lygiagrečių ir pritūpimai — naudojant su kiekvienu setu užfiksuotą kūno svorį arba jūsų profilio svorį, kai setas jo neužfiksavo.",
   "Nuzzo (bench curve)": "Nuzzo (spaudimo kreivė)",
   "Exercise names shown as": "Pratimų pavadinimai rodomi kaip",
   "Code": "Kodas",
