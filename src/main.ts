@@ -10535,6 +10535,21 @@ function bestE1rmFor(user: string, ex: string): number | null {
 function renderWorkoutPlan(): void {
   const user = els.athlete.value;
   const pri = athletePriorities(user);
+  // Per-lift staleness for the rows: how many days since trained, and how far the lift
+  // has decayed below its all-time peak 1RM (the old "Train today" signal, now inline).
+  const todayD = dayNumber(todayIso());
+  const liveByName = new Map(liveExercises(user, todayD).map((x) => [x.name, x]));
+  const staleOf = (ex: string): { daysAgo: number; drop: number } => {
+    const members = syntheticMembers(ex);
+    if (!members.length) {
+      const lx = liveByName.get(ex);
+      return { daysAgo: lx && Number.isFinite(lx.lastDay) ? todayD - lx.lastDay : 999, drop: lx?.drop ?? 0 };
+    }
+    let lastDay = -Infinity;
+    for (const m of members) { const lx = liveByName.get(m); if (lx) lastDay = Math.max(lastDay, lx.lastDay); }
+    const ref = liveByName.get(referenceMemberFor(ex) ?? "");
+    return { daysAgo: Number.isFinite(lastDay) ? todayD - lastDay : 999, drop: ref?.drop ?? 0 };
+  };
   const names = Object.keys(pri).sort((a, b) =>
     (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
   // ---- Lift↔pattern relations (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
@@ -10593,6 +10608,10 @@ function renderWorkoutPlan(): void {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
     const avg = exerciseMonthAvg(user, ex);
+    const st = staleOf(ex);
+    const agoTxt = st.daysAgo >= 999 ? "never" : st.daysAgo === 0 ? "today" : `${st.daysAgo}d`;
+    const staleWarn = st.daysAgo >= 21 || st.drop >= 8;
+    const staleHtml = `<span class="prio-stale${staleWarn ? " is-warn" : ""}" title="Last trained ${st.daysAgo >= 999 ? "never" : `${st.daysAgo}d ago`} · ${st.drop >= 0.5 ? `${st.drop.toFixed(0)}% below your best 1RM (decayed)` : "at your best 1RM"}">${agoTxt}${st.drop >= 0.5 ? ` · ↓${st.drop.toFixed(0)}%` : ""}</span>`;
     const related = relatedOf(ex);
     const open = prioExpanded.has(ex);
     // The ▸ caret opens the row's detail: a 1RM GOAL setter + the related-lifts dropdown.
@@ -10629,6 +10648,7 @@ function renderWorkoutPlan(): void {
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
       `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
       `<span class="prio-stats">` +
+      staleHtml +
       `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${avg.toFixed(1)}</span>` +
       `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +

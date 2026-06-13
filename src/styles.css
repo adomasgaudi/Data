@@ -4690,6 +4690,10 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 /* Stats: avg done + the −/+ weekly-target stepper (cram: no unit words). */
 .prio-stats { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; }
 .prio-avg { font-size: 0.64rem; color: var(--muted); white-space: nowrap; }
+/* Staleness: last-trained age + drop below peak 1RM (the old Train-today signal). Goes
+   amber/red when a lift is stale (≥3wk) or has faded a lot. */
+.prio-stale { font-size: 0.64rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.prio-stale.is-warn { color: var(--remove, #b4543a); }
 .prio-target {
   display: inline-flex; align-items: center; gap: 1px; padding: 1px;
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg);
