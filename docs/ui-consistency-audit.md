@@ -34,7 +34,7 @@ to differ**. **Fixed:** `.cal-mode`/`.cal-mode-btn` now share the `.seg-toggle`/
 `.seg-btn` rules (single origin = the segmented-toggle component). Visible: the
 calendar toggle adopts the standard segmented size — *needs an eyeball on device.*
 
-### UIC-2 🟢 🔧 Column stat-chips — `.target-chip` ≡ `.wk-chip`, `.stat-chip` cousin
+### UIC-2 🟢 ✅ Column stat-chips — `.target-chip` ≡ `.wk-chip`, `.stat-chip` cousin
 `.target-chip` and `.wk-chip` are byte-identical except `.wk-chip` adds
 `min-width:70px` — both are `column / panel-bg / --r-pill` label-over-value chips.
 `.stat-chip` is the same shape but `accent-soft` bg + `gap:1px` (deliberate
