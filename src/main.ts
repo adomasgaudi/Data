@@ -9882,13 +9882,6 @@ function renderLive(): void {
     return;
   }
   const coach = coachingFor(username);
-  const daysAgo = (x: LiveEx) => (Number.isFinite(x.lastDay) ? todayD - x.lastDay : 999);
-  const agoTxt = (x: LiveEx) => { const n = daysAgo(x); return n >= 999 ? "never" : n === 0 ? "today" : `${n}d ago`; };
-
-  // 1) WHAT TO TRAIN — by tier. `byTier` feeds the watch-out section; the Train-today,
-  //    Warm-ups and Antagonist-supersets sections were removed — that info is redundant
-  //    with each Focus-lift's own card (its Warmup ramp + "Pair with" lifts).
-  const byTier = (t: ExerciseTier) => list.filter((x) => x.tier === t).sort((a, b) => b.priority - a.priority);
 
   // PLANNED TODAY — explicit planned work from the coaching profile (e.g. Marija's
   //      "2 sets of adductors"), with the working weight + a warm-up sized off her recent
@@ -9911,27 +9904,10 @@ function renderLive(): void {
       `<ul class="live-list">${plannedItems.join("")}</ul></section>`
     : "";
 
-  // WATCH-OUTS — neglected muscle groups (no set in 21+ days) and stale primaries.
-  const lastByMuscle = new Map<MuscleGroup, number>();
-  for (const x of list) for (const m of x.muscles) lastByMuscle.set(m, Math.max(lastByMuscle.get(m) ?? -Infinity, x.lastDay));
-  const neglected = [...lastByMuscle.entries()]
-    .filter(([, d]) => todayD - d >= 21)
-    .sort((a, b) => a[1] - b[1])
-    .map(([m, d]) => `${escapeHtml(m)} <span class="muted">(${todayD - d}d)</span>`);
-  const staleMain = byTier("main").filter((x) => daysAgo(x) >= 14).slice(0, 5);
-  const watchItems: string[] = [];
-  if (neglected.length) watchItems.push(`<li>Neglected muscles (3+ weeks): ${neglected.slice(0, 8).join(" · ")}.</li>`);
-  if (staleMain.length) watchItems.push(`<li>Top lifts going stale: ${staleMain.map((x) => `${escapeHtml(displayName(x.name))} <span class="muted">(${agoTxt(x)})</span>`).join(" · ")}.</li>`);
-  const watchSection = watchItems.length
-    ? `<section class="live-card live-warn"><h3 class="live-h">Watch-outs</h3><ul class="live-list">${watchItems.join("")}</ul></section>`
-    : "";
-
-  // The plan is now just any explicit Planned-today work + Watch-outs; Goals & cautions,
+  // The plan is now just any explicit Planned-today work; Watch-outs, Goals & cautions,
   // Train-today, Warm-ups and Antagonist-supersets were all removed as redundant with
-  // each Focus-lift's own card (owner).
-  const ordered = plannedSection + watchSection;
-
-  box.innerHTML = ordered;
+  // each Focus-lift's own card + the Focus-lifts list itself (owner).
+  box.innerHTML = plannedSection;
 }
 
 // ---- World records page ---------------------------------------------------
