@@ -639,6 +639,14 @@ export function categoryOverride(n: string): TrainingCategory | null {
   return null;
 }
 
+/** Shared keyword lists (DUP-1): extracted so the SAME list isn't copy-pasted across
+ * the category/muscle/discipline guessers and silently drift apart when one is edited.
+ * LEG_KW_ALL = everything leg-ish; LEG_KW_BIG3 = just quads/glutes/hams (no calves /
+ * abductors / Olympic); CHEST_KW = the chest/push pressers. */
+const LEG_KW_ALL = ["squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell"];
+const LEG_KW_BIG3 = ["squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "nordic", "wall sit"];
+const CHEST_KW = ["bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up"];
+
 /**
  * Best-guess muscle/movement category for an exercise, by keyword — so the athlete
  * page can show what someone has actually been training. Order matters: skills and
@@ -664,11 +672,11 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
     return "Shoulders";
   if (has("curl", "tricep", "triceps", "pushdown", "preacher", "hammer", "wrist", "forearm", "finger", "skull", "jm press", "kickback"))
     return "Arms";
-  if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up"))
+  if (has(...CHEST_KW))
     return "Chest";
   if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "lower back", "erector"))
     return "Back";
-  if (has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell"))
+  if (has(...LEG_KW_ALL))
     return "Legs";
   return "Other";
 }
@@ -921,13 +929,13 @@ export function exerciseCategories(exerciseName: string): string[] {
   if (tagMatches(n, pattern("pattern.deadlift-accessory"))) add("Deadlift accessory");
 
   // Leg splits: broad (everything leg-ish) vs the big three quads/glutes/hams.
-  const legBroad = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell");
+  const legBroad = has(...LEG_KW_ALL);
   if (legBroad) add("Legs (all)");
-  const legBig = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "nordic", "wall sit");
+  const legBig = has(...LEG_KW_BIG3);
   if (legBig) add("Legs (quads/glutes/hams)");
 
   // Muscle groups — independent keyword sets, so big compounds match several.
-  if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up")) add("Chest");
+  if (has(...CHEST_KW)) add("Chest");
   if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "deadlift", "shrug", "rack pull", "good morning", "lower back", "erector"))
     add("Back");
   if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military press", "behind the neck", "arnold", "shrug", "delt", "handstand push"))

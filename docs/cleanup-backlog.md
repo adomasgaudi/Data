@@ -83,7 +83,7 @@ Everything else is optional. A cleanup backlog regenerates itself — don't grin
 
 ## 🟡 Mid — dedup & helpers
 - 🟠 **TOOL-1** [Build] (SP:3) — Add ESLint + Prettier (machine guardrail for AI-written code).
-- 🟠 **DUP-1** [Data] (SP:2) — Collapse triplicated leg/chest/back keyword lists in `profile.ts`.
+- ✅ **DUP-1** [Data] (SP:2) — DONE (#co-work): extracted the duplicated leg list (`LEG_KW_ALL` / `LEG_KW_BIG3`) and chest list (`CHEST_KW`) in `profile.ts` to module constants — the verbatim copies at the category & muscle/discipline guessers now share one source (back lists genuinely differ, left inline). 501 tests unchanged.
 - 🟠 **DUP-2** [Code] (SP:5) — Auto-escaping `` html`` `` template to kill 227 manual `escapeHtml` calls.
 - 🟢 **CSS-1** [CSS] (SP:2) — CSS-token consolidation: `--shadow-menu`, `.chip` base, one `:focus-visible`, route reds through `--danger`/`--warn`. *(merged the old CSS-1+CSS-2.)*
 - ✅ Pure-helper extraction + `storage` dedup — DONE (REF rounds, b.2.6.50).
