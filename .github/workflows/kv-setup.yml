@@ -1,12 +1,10 @@
 name: Setup shared KV table
 
 # Creates the shared `kv` table (the multi-user browser-cache mirror, CLAUDE.md
-# rule 41) by running ONLY supabase/kv-table.sql — deliberately NOT the
-# supabase/migrations/** set, whose stale 0001 would re-enable RLS on `sets` and
-# break the live anon access. Idempotent: safe to re-run.
-#
-# Runs automatically when kv-table.sql or this workflow changes on opus-4.8, and
-# can be triggered manually. The owner never has to touch Supabase (rule 42).
+# rule 41) via the Supabase MANAGEMENT API — the same mechanism setup-db.yml used
+# to create `sets` (DDL needs elevated creds the anon key doesn't have). Runs the
+# DDL in supabase/kv-table.sql; idempotent (create table if not exists). The owner
+# never touches Supabase (rule 42).
 
 on:
   push:
@@ -22,8 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create kv table
-        run: psql "$DATABASE_URL" -f supabase/kv-table.sql -v ON_ERROR_STOP=1
-        env:
-          # Session-mode pooler (IPv4, port 5432) — same connection db-migrate uses.
-          DATABASE_URL: postgresql://postgres.nbjgwqytwkkuarxlkmnj:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
+      - name: Create kv table via Supabase Management API
+        run: |
+          SQL=$(cat supabase/kv-table.sql)
+          RESP=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            "https://api.supabase.com/v1/projects/nbjgwqytwkkuarxlkmnj/database/query" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": $(echo "$SQL" | jq -Rs .)}")
+          CODE=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "HTTP $CODE: $BODY"
+          if [[ "$CODE" != "200" && "$CODE" != "201" ]]; then exit 1; fi
+          echo "✓ kv table ready + anon granted"
