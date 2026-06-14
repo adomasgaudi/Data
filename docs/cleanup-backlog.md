@@ -12,6 +12,25 @@ committed `CAT-n` is derived at commit time (rule 8). Risky deletions go via the
 attic/warehouse tiers (rule 10). Keep this file updated — mark items done, add new
 ones, re-grade as the code changes.
 
+## UIC — UI consistency / single-origin (see docs/ui-consistency-audit.md)
+
+- **UIC-1 (DONE)** 🟠 `[styles]` (SP:2) — segmented toggle was duplicated as
+  `.seg-btn` + `.cal-mode-btn`; merged into one origin (the calendar mode toggle
+  now shares `.seg-toggle`/`.seg-btn`). *Visible — needs a device eyeball.*
+- **UIC-2** 🟢 `[styles]` (SP:1) — `.target-chip` ≡ `.wk-chip` (wk = +min-width);
+  give them a shared base (do inside the builder pass, UIC-7).
+- **UIC-5** 🟢 `[styles]` (SP:1) — `.vs-toggle` vs `.bc-unit-toggle` accent toggles
+  differ ~1px; align (low value, visible — defer to builder pass).
+- **UIC-7** 🔧 `[architecture]` (SP:80) — no single origin for component MARKUP;
+  extract `btn()`/`pill()`/`fold()`/`segToggle()` builders the catalogue + every
+  call site share. CEO-scale; greenlight per-family.
+- **UIC-8** 🟢 `[styles]` (SP:1) — `.wa-cat-pill { border-radius:12px }` literal →
+  `var(--r-pill)` token sweep (#design).
+- **UIC-9** 🟢 `[coach-page]` (SP:3) — UI catalogue lists ~40 of ~80 classes;
+  expand (or generate from builders once UIC-7 lands).
+- **UIC-3** 🟢 `[styles]` (SP:0.5) — dead `.tab` visual rules (top tab bar retired,
+  `display:none`) duplicate `.ex-tab`; safe to delete the `.tab` styling.
+
 ## ✅ Done sweeps (recent)
 
 - **Synthetic-lift inheritance prune (DONE)** `[exercises/grouping]` — synthetic

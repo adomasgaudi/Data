@@ -1911,20 +1911,19 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-calendar { margin: 0 0 1.25rem; }
 /* Year-view controls: single/all toggle + the exercise/category filter. */
 .heat-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin-bottom: 0.7rem; }
-.cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
-.cal-mode-btn { padding: 5px 14px; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
-.cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
-.cal-mode-btn:hover { color: var(--text); }
-.cal-mode-btn.is-active { color: #fff; background: var(--accent); }
+/* .cal-mode / .cal-mode-btn share the segmented-toggle component below (UIC-1 —
+   single origin; see docs/ui-consistency-audit.md). No standalone rules here. */
 /* "Colour by" picker for the all-exercises calendar. */
 .cal-colorby { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--fs-sm); color: var(--muted); }
 .cal-colorby-sel { font: inherit; font-size: var(--fs-sm); padding: 4px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); cursor: pointer; }
 /* Segmented toggle (e.g. Workouts View: By day / By week). */
-.seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
-.seg-btn { padding: 6px 12px; font: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
-.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
-.seg-btn:hover { color: var(--text); }
-.seg-btn.is-active { color: #fff; background: var(--accent); }
+/* Segmented toggle — the single origin for adjacent-button toggles (Workouts
+   View by day/week AND the year-calendar single/all mode, UIC-1). */
+.seg-toggle, .cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.seg-btn, .cal-mode-btn { padding: 6px 12px; font: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.seg-btn + .seg-btn, .cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover, .cal-mode-btn:hover { color: var(--text); }
+.seg-btn.is-active, .cal-mode-btn.is-active { color: #fff; background: var(--accent); }
 .seg-btn.wo-af-pick { font-size: 0.95rem; padding: 4px 9px; } /* 📅 — pick any date */
 /* Custom calendar date-picker popup (rule 20: not the native picker). A floating month
    grid placed by JS (position-fixed, clamped to the viewport). */

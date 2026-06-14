@@ -9690,6 +9690,7 @@ function renderCoachUiCatalogue(): void {
       sec("Workout DJ button (on/off)", "DJ button / workout filter pill", ".wo-dj-btn", `<button class="wo-dj-btn is-active">10RM</button> <button class="wo-dj-btn">Rest</button> <button class="wo-dj-btn is-active">Sets+</button>`),
       sec("Language toggle", "language toggle", ".lang-opt", `<button class="lang-opt is-active">EN</button> <button class="lang-opt">LT</button>`),
       sec("Alone filter", "alone filter / session filter", ".alone-filter", `<button class="alone-filter wo-dj-btn">Both</button>`),
+      sec("Segmented toggle", "segmented toggle / mode toggle", ".seg-toggle / .seg-btn", `<span class="seg-toggle"><button class="seg-btn is-active">By day</button><button class="seg-btn">By week</button></span>`),
     ].join(""))}
 
     ${group("Folds / Expandable sections", [
