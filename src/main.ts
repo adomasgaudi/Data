@@ -10374,7 +10374,6 @@ type PriorityLevel = "max" | "active" | "passive" | "maintain";
 const PRIORITY_LEVELS: PriorityLevel[] = ["max", "active", "passive", "maintain"];
 const PRIORITY_LABEL: Record<PriorityLevel, string> = { max: "Max effort", active: "Active", passive: "Passive", maintain: "Maintain" };
 const PRIORITY_ORDER: Record<PriorityLevel, number> = { max: 0, active: 1, passive: 2, maintain: 3 };
-const PRIORITY_MAX = 10;
 // How HARD each set is — the target sets number assumes HARD sets by default, but a
 // passive/maintenance lift may only need mid sets (3–8 RIR) or half-rep sets (the
 // maintenance minimum). Stored only when the owner overrides the level's default.
@@ -10594,9 +10593,9 @@ function renderWorkoutPlan(): void {
     : "";
   const list = names.length
     ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
-    : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
-  const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
-    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +
+    : `<p class="muted prio-empty">No priorities yet. Add the exercises you want to focus on — tap a suggestion below.</p>`;
+  const addBlock = suggestions.length
+    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length})</div>` +
       `<div class="prio-add-chips">${suggestions.map((s) => {
         const specific = `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a group lift" : ""} to your priorities">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`;
         // A specific lift in a comparable pattern → a "⇄ pattern" button to add it as the
@@ -10606,7 +10605,7 @@ function renderWorkoutPlan(): void {
           : "";
         return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
       }).join("")}</div></div>`
-    : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
+    : "";
   const planTitle = document.getElementById("planTitle");
   if (planTitle) planTitle.textContent = `${athleteLabel()} priorities`;
   els.planBody.innerHTML = summary + list + addBlock;
@@ -12377,11 +12376,11 @@ async function init() {
     // Remove a priority.
     const rm = t.closest<HTMLElement>("[data-prioremove]");
     if (rm?.dataset.prioremove) { delete pri[rm.dataset.prioremove]; savePriorities(); renderWorkoutPlan(); return; }
-    // Add a suggested exercise (default Active), up to the cap.
+    // Add a suggested exercise (default Active) — the priority list is unlimited.
     const add = t.closest<HTMLElement>("[data-prioadd]");
     if (add?.dataset.prioadd) {
       const ex = add.dataset.prioadd;
-      if (Object.keys(pri).length < PRIORITY_MAX && !pri[ex]) {
+      if (!pri[ex]) {
         pri[ex] = { level: "active", target: suggestedTarget("active", exerciseMonthAvg(user, ex)) };
         savePriorities(); renderWorkoutPlan();
       }

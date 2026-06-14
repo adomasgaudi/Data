@@ -91,6 +91,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.345", shortTitle: "Unlimited priority list", code: "WO-163", title: "Focus lifts: the priority list is now unlimited — no 10-exercise cap", sp: 0.5, note: "Removed the PRIORITY_MAX = 10 cap on the 📋 Priorities focus-lifts list. You can now add as many focus exercises as you like; the “Add another (N)” counter just shows how many you have (no /10), and the “Priority list full” message is gone. Suggestion chips still show a sensible batch at a time and refresh as you add.", cat: "WO", model: "Opus 4.8" },
   { version: "b.2.8.344", shortTitle: "Reply rules: token usage + branch/version", code: "META-166", title: "Two standing reply rules: end every reply with token usage, and with the branch + version bumped", sp: 0.5, note: "Owner #remember: every chat reply must end with (1) a token-usage line from scripts/show-cost.py (output tokens + real cost + session total), every prompt — not only when asked #tokens; and (2) when a version was bumped, the branch + version it went to (e.g. “Branch: opus-4.8 · Version: b.2.8.x”), so the owner sees where/what without scrolling. Added as HARD RULES 39 & 40 in CLAUDE.md. Docs-only.", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.343", shortTitle: "Refresh version-history date axis", code: "META-165", title: "Version history: recovered the recent commit dates so the SP timeline reaches today (the 14th)", sp: 1, note: "The version-history graph's date axis was stuck at June 7 — every release after b.2.7.x had no entry in RELEASE_DATES, so buildSpTimeline carried the last known date forward and the whole recent tail (incl. today's releases) plotted on the 7th. Recovered the actual commit dates from git for b.2.8.306–344 (June 12–14) and added them to the map, so the timeline now runs through June 14. Note: b.2.8.0–305 still carry forward — those commits aren't in this clone's history.", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.342", shortTitle: "Sub-1 targets + per-lift set intensity", code: "WO-162", title: "Focus lifts: weekly target can drop below 1 (e.g. one set / 2 weeks) and each lift gets a Hard/Mid/Half set-intensity in its detail panel", sp: 3, note: "Two additions to the 📋 Priorities focus-lifts planner. (1) The −/+ weekly target now steps in 0.5s below 2, so you can plan sub-1 frequencies like 0.5 = one set every 2 weeks (was whole sets only). (2) The set count assumed HARD sets; now each lift carries a set INTENSITY — Hard (near failure) · Mid (3–8 RIR) · Half (½ max reps, the maintenance minimum) — defaulting from the level (Max/Active→Hard, Passive→Mid, Maintain→Half) and overridable. The intensity pill lives in the lift's expanded detail panel (alongside the 1RM goal), so the collapsed row stays one line. Lithuanian added.", cat: "WO", model: "Opus 4.8" },
@@ -1889,6 +1890,7 @@ const RELEASE_DATES: Record<string, string> = {
   "b.2.8.342": "2026-06-14",
   "b.2.8.343": "2026-06-14",
   "b.2.8.344": "2026-06-14",
+  "b.2.8.345": "2026-06-14",
 };
 
 export interface SpTimelinePoint {
