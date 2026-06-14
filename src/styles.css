@@ -4633,11 +4633,11 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 }
 /* Lift name · muscle INLINE (cram) — a plain text button that opens the lift. */
 .prio-main {
-  flex: 1 1 6rem; min-width: 0; display: flex; flex-direction: row; flex-wrap: wrap;
+  flex: 1 1 6rem; min-width: 0; display: flex; flex-direction: row; flex-wrap: nowrap;
   align-items: baseline; gap: 0.3rem; text-align: left; font: inherit; cursor: pointer;
-  background: none; border: none; padding: 0;
+  background: none; border: none; padding: 0; overflow: hidden;
 }
-.prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.1; }
+.prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* Group/pattern priorities are marked only by the ✦ diamond (gold = combinable mix,
    teal = comparable pattern) — no row tint or coloured border (owner). */
 .prio-grp-mark { flex: none; font-size: 0.7rem; align-self: center; }
@@ -4680,7 +4680,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .prio-rel-chip.is-pri { box-shadow: inset 0 0 0 1px var(--accent); }
 .prio-rel-avg { font-size: 0.6rem; font-weight: 600; color: var(--muted); }
 .prio-main:hover .prio-name { text-decoration: underline; }
-.prio-mg { font-size: 0.64rem; color: var(--muted); }
+.prio-mg { font-size: 0.64rem; color: var(--muted); flex: none; white-space: nowrap; }
 /* Level pill — an intensity ladder: Max (filled) → Active (outline) → Passive →
    Maintain (faint). Tap to cycle. */
 .prio-level {
@@ -4694,8 +4694,11 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .prio-level-passive { color: var(--muted); background: var(--bg); }
 .prio-level-maintain { color: var(--muted); background: var(--bg); opacity: 0.75; }
 /* Stats: avg done + the −/+ weekly-target stepper (cram: no unit words). */
-.prio-stats { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; }
+/* Recency · avg · target now live inside the ▸ dropdown (so the row is one line) —
+   a left-aligned wrapping row, not the old right-pushed inline cluster. */
+.prio-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.5rem; }
 .prio-avg { font-size: 0.64rem; color: var(--muted); white-space: nowrap; }
+.prio-tgt-lbl { font-size: 0.64rem; white-space: nowrap; }
 /* Staleness: last-trained age + drop below peak 1RM (the old Train-today signal). Goes
    amber/red when a lift is stale (≥3wk) or has faded a lot. */
 .prio-stale { font-size: 0.64rem; font-weight: 600; color: var(--muted); white-space: nowrap; }

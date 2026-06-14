@@ -69,6 +69,7 @@ const LT: Record<string, string> = {
   "Active": "Aktyvus",
   "Passive": "Pasyvus",
   "Maintain": "Palaikyti",
+  "target": "tikslas",
   // ---- "How to train" lift brief ----
   "Working weights": "Darbiniai svoriai",
   "Set suggestion": "Serijos pasiūlymas",

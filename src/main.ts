@@ -10543,6 +10543,20 @@ function renderWorkoutPlan(): void {
         }).join("") + `</div>`
       : "";
     const gk = groupKind(ex); // combinable / comparable group → highlight the row
+    // The recency · avg · weekly-target stepper used to sit on the main row and pushed
+    // it onto a second line. They now live in the ▸ dropdown so the row is ONE line
+    // (caret · title · effort · ✕); the target also gets a label there since it's no
+    // longer self-evident from position.
+    const statsHtml =
+      `<div class="prio-stats">` +
+      staleHtml +
+      `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${avg.toFixed(1)}/wk</span>` +
+      `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
+        `<span class="prio-tgt-lbl muted">target</span>` +
+        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
+        `<span class="prio-tgt-val" title="Weekly sets target">${e.target}</span>` +
+        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
+      `</span></div>`;
     return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
       caret +
       `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
@@ -10550,16 +10564,8 @@ function renderWorkoutPlan(): void {
       `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
       `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
-      `<span class="prio-stats">` +
-      staleHtml +
-      `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${avg.toFixed(1)}</span>` +
-      `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
-        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
-        `<span class="prio-tgt-val" title="Weekly sets target">${e.target}</span>` +
-        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
-      `</span></span>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
-      (open ? `<div class="prio-detail">${goalHtml}${relPanel}</div>` : "") +
+      (open ? `<div class="prio-detail">${statsHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
   // Summary line on top: total weekly target sets + the per-level breakdown
