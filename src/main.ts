@@ -5202,6 +5202,17 @@ function athleteLabel(): string {
   return els.athlete.options[els.athlete.selectedIndex]?.text ?? els.athlete.value;
 }
 
+/** Single-origin prev/range/Next pager (UIC-7): the ONE place the `.page-btn`
+ * prev/next markup lives, so every pager AND the Coach catalogue render the same
+ * control and can't drift. `rangeLabel` is the middle "x–y of N" text. */
+function pagerNav(page: number, pages: number, rangeLabel: string): string {
+  return (
+    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
+    `<span class="muted">${rangeLabel}</span>` +
+    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
+  );
+}
+
 /** Prev / range / Next controls for a paginated list. `size` defaults to the
  * app-wide PAGE_SIZE but callers (e.g. the workouts list) can pass their own. */
 function pagerHtml(page: number, total: number, size: number = PAGE_SIZE): string {
@@ -5209,11 +5220,7 @@ function pagerHtml(page: number, total: number, size: number = PAGE_SIZE): strin
   const pages = Math.ceil(total / size);
   const from = page * size + 1;
   const to = Math.min(total, (page + 1) * size);
-  return (
-    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
-    `<span class="muted">${from}–${to} of ${total}</span>` +
-    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
-  );
+  return pagerNav(page, pages, `${from}–${to} of ${total}`);
 }
 
 /** Page boundaries for the workout list where REST-DAY slivers count only 1/10 of
@@ -5247,11 +5254,7 @@ function workoutsPagerHtml(page: number, starts: number[], groups: WorkoutGroup[
   const inPage = groups.slice(startIdx, endIdx).filter(isReal).length;
   const from = inPage ? before + 1 : before;
   const to = before + inPage;
-  return (
-    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
-    `<span class="muted">${from}–${to} of ${total} ${byPeriod ? "periods" : "sessions"}</span>` +
-    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
-  );
+  return pagerNav(page, pages, `${from}–${to} of ${total} ${byPeriod ? "periods" : "sessions"}`);
 }
 
 /** Period options for the exercises list. `days` of 0 means "all time"; every
@@ -9678,7 +9681,7 @@ function renderCoachUiCatalogue(): void {
       sec("Settings link button", "settings button / settings row button", ".settings-link", `<button class="settings-link">⬆ Upload sets</button>`),
       sec("Icon button (on-chart)", "on-chart button / graph corner button", ".wa-gov-btn", `<button class="wa-gov-btn">⤢</button> <button class="wa-gov-btn">kg</button> <button class="wa-gov-btn">⛶</button>`),
       sec("Clear/action pill", "clear pill / action pill", ".wa-clear", `<button class="wa-clear">Select all</button> <button class="wa-clear">✕ Clear</button>`),
-      sec("Pagination button", "pagination button", ".page-btn", `<button class="page-btn">‹</button> <button class="page-btn is-active">2</button> <button class="page-btn">›</button>`),
+      sec("Pagination pager", "pagination button / pager", ".page-btn", pagerNav(1, 5, "11–20 of 47")),
       sec("Guide button", "guide button", ".guide-btn", `<button class="guide-btn">Guide</button> <button class="guide-btn is-active">Active</button>`),
     ].join(""))}
 

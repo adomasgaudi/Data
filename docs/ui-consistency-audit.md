@@ -81,13 +81,19 @@ typecheck). **Slice 2 ✅ (coach fold):** added `coachSection()` builder; the
 persistent-bugs + app-info Coach-page docs (16 hand-typed `<details class="coach-section">`
 blocks) now build through it — 16 copy-pasted folds → one origin. Zero output change.
 
-**`#senior` note — diminishing returns past here:** a duplication scan showed the
-two genuinely copy-pasted components (the segmented toggle, the coach fold) are now
-done. `.wa-cat-pill`/`.athlete-chip` have only ONE real builder + a static catalogue
-example (no duplication to remove); the rest already have single builder functions.
-Forcing the data-coupled real builders to also drive the catalogue is impractical
-(they need live data). **Recommend pausing UIC-7** — the high-value single-origin
-work is complete; remaining "slices" would be low-value churn.
+typecheck). **Slice 3 ✅ (pager):** added `pagerNav()`; both pagers (`pagerHtml`,
+`workoutsPagerHtml`) had identical inline `.page-btn` prev/next markup — now one
+origin. Bonus: the Coach catalogue example had DRIFTED (showed numbered `‹/2/›`
+buttons, but the real pager is `‹ Prev / range / Next ›`) — the catalogue now
+renders the real `pagerNav`, so it can't lie about the component anymore.
+
+**`#senior` note — remaining slices are lower-value (owner chose to continue):** the
+duplication scan shows the clearly copy-pasted components (segmented toggle, coach
+fold, pager) are now done. `.wa-cat-pill`/`.athlete-chip` have ONE real builder + a
+static catalogue example (no duplication to remove); other components already have
+single builder functions, and forcing those data-coupled builders to also drive the
+catalogue is impractical (they need live data). Further slices = catalogue-accuracy
+fixes (like the pager drift) rather than dedup.
 
 ### UIC-8 🟢 ✅ Literal radius — `.wa-cat-pill { border-radius: 12px }`
 Used a magic `12px` instead of the `--r-pill` token (the `#design` rule). **Fixed:**
