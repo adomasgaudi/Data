@@ -9941,8 +9941,10 @@ function ordinal(n: number): string {
  * population bw-ratio curves, plus where each athlete of that sex lands on the gym curve.
  * Phase 2 of docs/ceo/strength-percentiles-benchmarks.md. */
 function recordsPercentileHtml(byLift: Map<PowerLift, Map<string, number>>, roster: { username: string; user: string }[]): string {
-  if (recordsLift === "total") return `<p class="rec-pct-note muted">Pick a single lift (not Total) to see strength percentiles.</p>`;
-  const ex = LIFT_EXERCISE[recordsLift as Exclude<PowerLift, "total">];
+  // No per-lift standard exists for the summed Total, so the panel falls back to Squat
+  // when Total is picked — the feature stays visible on load instead of hiding behind a note.
+  const panelLift: Exclude<PowerLift, "total"> = recordsLift === "total" ? "squat" : recordsLift;
+  const ex = LIFT_EXERCISE[panelLift];
   if (!hasStandards(ex)) return "";
   const s = recordsStdSex;
   const headCols = PERCENTILES.map((p) => `<th class="num">${ordinal(p)}</th>`).join("");
@@ -9952,18 +9954,22 @@ function recordsPercentileHtml(byLift: Map<PowerLift, Map<string, number>>, rost
   }).join("");
   const you = roster.filter((u) => athProfile(u.username)?.sex === s).map((u) => {
     const p = athProfile(u.username)!;
-    const best = byLift.get(recordsLift)?.get(u.username);
+    const best = byLift.get(panelLift)?.get(u.username);
     if (best == null || !p.weight) return "";
     const ratio = best / p.weight;
     const pct = percentileFor(ex, s, ratio, "strengthlevel");
     if (pct == null) return "";
     return `<span class="rec-pct-you-chip" title="${escapeHtml(u.user)}: best ≈ ${fmt(best)}kg ÷ ${fmt(p.weight)}kg bw = ${ratio.toFixed(2)}× → ~${ordinal(pct)} percentile among gym (StrengthLevel) lifters">${escapeHtml(u.user)} <b>${ratio.toFixed(2)}×</b> ≈ <b>${ordinal(pct)}</b></span>`;
   }).filter(Boolean).join("");
+  const totalNote = recordsLift === "total"
+    ? `<div class="rec-pct-sub muted">Total has no single standard — showing Squat. Tap Squat / Bench / Deadlift above to switch.</div>`
+    : "";
   return `<section class="rec-pct-panel">` +
-    `<div class="rec-pct-head"><span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-lift muted">${escapeHtml(LIFT_LABEL[recordsLift])}</span>` +
+    `<div class="rec-pct-head"><span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-lift muted">${escapeHtml(LIFT_LABEL[panelLift])}</span>` +
     `<span class="rec-pct-est" title="ESTIMATED. The Gym row is seeded from StrengthLevel standards; General & Professional are derived estimates — real data pending (#research).">≈ est</span>` +
     `<button type="button" class="rec-pct-sex" data-recstdsex title="Toggle sex — the curves are sex-specific">${s === "f" ? "W" : "M"}</button></div>` +
     `<div class="rec-pct-sub muted">1RM as ×bodyweight at each percentile, by population.</div>` +
+    totalNote +
     `<div class="data-table-wrap"><table class="data-table rec-pct-table"><thead><tr><th>Population</th>${headCols}</tr></thead><tbody>${rows}</tbody></table></div>` +
     (you ? `<div class="rec-pct-you">${you}</div>` : "") +
     `</section>`;

@@ -141,8 +141,8 @@ const LT: Record<string, string> = {
     "Nėra sportininkų su įrašytu ūgiu ir lytimi, kad būtų galima priskirti svorio kategoriją.",
   // ---- Strength-percentile panel ----
   "Strength percentiles": "Jėgos procentiliai",
-  "Pick a single lift (not Total) to see strength percentiles.":
-    "Pasirinkite vieną pratimą (ne Bendrą), kad matytumėte jėgos procentilius.",
+  "Total has no single standard — showing Squat. Tap Squat / Bench / Deadlift above to switch.":
+    "Bendras neturi atskiro standarto — rodomas Pritūpimas. Spustelėkite Pritūpimą / Spaudimą / Mirties trauką viršuje, kad pakeistumėte.",
   "≈ est": "≈ įvert.",
   "1RM as ×bodyweight at each percentile, by population.":
     "1RM kaip ×kūno svoris kiekviename procentilyje, pagal populiaciją.",
