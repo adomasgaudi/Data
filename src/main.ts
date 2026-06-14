@@ -10652,6 +10652,32 @@ function setSetupNote(name: string, text: string): void {
   saveJson(SETUP_NOTES_KEY, setupNotes);
 }
 
+// Per-lift PAIR preference, owner-driven (the auto-guess is only a tiebreaker). A
+// candidate is flagged "hard" (awkward to superset — far machine / lots of setup)
+// or "avoid" (don't want to pair this), keyed by the candidate lift since its
+// portability is mostly a global property (a dumbbell move pairs with anything; a
+// fixed machine rarely does). Cycles ok → hard → avoid → ok.
+const PAIR_PREF_KEY = "colosseum.pairPrefs.v1";
+const pairPrefs: Record<string, "hard" | "avoid"> = loadJsonObject<Record<string, "hard" | "avoid">>(PAIR_PREF_KEY) ?? {};
+function pairPrefFor(name: string): "" | "hard" | "avoid" { return pairPrefs[name] ?? ""; }
+function cyclePairPref(name: string): void {
+  const cur = pairPrefs[name];
+  if (!cur) pairPrefs[name] = "hard";
+  else if (cur === "hard") pairPrefs[name] = "avoid";
+  else delete pairPrefs[name];
+  saveJson(PAIR_PREF_KEY, pairPrefs);
+}
+/** Rough "easy to pair up" score (lower = easier), used only as a secondary
+ *  tiebreaker behind priority and the user's own flags. Portable kit (dumbbell /
+ *  kettlebell / band) is easiest; a fixed station (machine / smith / press) is
+ *  hardest; barbell & bodyweight sit in the middle. */
+function pairEaseScore(name: string): number {
+  const n = name.toLowerCase();
+  if (/dumb?bell|\bdb\b|kettlebell|\bkb\b|\bband\b/.test(n)) return 0;
+  if (/machine|smith|hack|leg press|pec deck|pulldown|cable|\brc\b/.test(n)) return 3;
+  return 2;
+}
+
 /** This athlete's CURRENT (decay-faded) estimated 1RM for one lift — the same
  *  per-day-best → decayingStrengthPoints model the live plan uses, so the brief
  *  agrees with the plan. null when they've never logged it. */
@@ -10738,17 +10764,38 @@ function liftTrainingHtml(name: string): string {
     : `<p class="muted lt-mini">—</p>`;
 
   // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
-  // you can superset them (train one while these muscles rest). NOT true antagonists;
-  // it's "anything this lift doesn't use", most-trained first.
+  // you can superset them (train one while these muscles rest). Ordered by (1) the
+  // athlete's PRIORITY for that lift (focus level first), then (2) how easy it is to
+  // pair up (the user's own flag wins, the auto-ease guess only breaks ties). "Avoid"
+  // flagged lifts sink to the end, struck, so they can still be un-flagged.
   const myMuscles = new Set(mgsFor(name));
   const todayD = dayNumber(todayIso());
+  const pri = athletePriorities(user);
+  const focusRank = (le: { name: string }): number => {
+    const p = pri[le.name];
+    return p ? PRIORITY_ORDER[p.level] : 9; // focus lifts (max=0…maintain=3) before the rest
+  };
+  const prefRank = (n: string): number => { const f = pairPrefFor(n); return f === "avoid" ? 2 : f === "hard" ? 1 : 0; };
   const pairCands = liveExercises(user, todayD)
     .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)))
-    .sort((p, q) => q.sets - p.sets)
-    .slice(0, 6);
+    .sort((p, q) =>
+      (prefRank(p.name) - prefRank(q.name)) ||      // avoid-flagged sink to the bottom
+      (focusRank(p) - focusRank(q)) ||              // 1st group: highest priority
+      (pairEaseScore(p.name) - pairEaseScore(q.name)) || // 2nd group: easier to pair first
+      (q.sets - p.sets))                            // tiebreak: most-trained
+    .slice(0, 8);
+  const pairChip = (le: { name: string }): string => {
+    const pref = pairPrefFor(le.name);
+    const cls = pref === "avoid" ? " is-avoid" : pref === "hard" ? " is-hard" : "";
+    const flagGlyph = pref === "avoid" ? "✕" : pref === "hard" ? "⚑" : "⚐";
+    const flagTitle = pref === "avoid" ? "Won't pair (don't want) — tap to clear" : pref === "hard" ? "Hard to pair (far / lots of setup) — tap: don't want" : "Easy to pair — tap to flag: hard to set up";
+    return `<span class="lt-paircell${cls}">` +
+      `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
+      `<button type="button" class="lt-pairflag" data-pairflag="${escapeHtml(le.name)}" title="${flagTitle}" aria-label="${flagTitle}">${flagGlyph}</button>` +
+      `</span>`;
+  };
   const antBody = pairCands.length
-    ? `<div class="lt-ant">` + pairCands.map((le) =>
-        `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>`).join("") + `</div>`
+    ? `<div class="lt-ant">` + pairCands.map(pairChip).join("") + `</div>`
     : `<p class="muted lt-mini">No non-overlapping lift logged yet.</p>`;
 
   const note = setupNoteFor(name);
@@ -12205,7 +12252,19 @@ async function init() {
   // Delegated: a pill's ⓘ navigates — group pill → that group's own info card;
   // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
   els.exInfoBody.addEventListener("click", (e) => {
-    // Antagonist lift chip in the "How to train" panel → open that lift's brief.
+    // "Pair with" flag: cycle this candidate's pairing preference (ok → hard → avoid).
+    // Re-render the brief (re-sorts) but keep the card's scroll so it doesn't jump.
+    const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairflag]");
+    if (pflag?.dataset.pairflag) {
+      e.preventDefault(); e.stopPropagation();
+      const sc = els.exInfoBody.parentElement;
+      const y = sc?.scrollTop ?? 0;
+      cyclePairPref(pflag.dataset.pairflag);
+      refreshExerciseInfo();
+      if (sc) sc.scrollTop = y;
+      return;
+    }
+    // Pair-with lift chip in the "How to train" panel → open that lift's brief.
     const trainex = (e.target as HTMLElement).closest<HTMLElement>("[data-trainex]");
     if (trainex?.dataset.trainex) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(trainex.dataset.trainex); return; }
     const ex = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-ex]");
