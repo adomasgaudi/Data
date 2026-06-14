@@ -1053,10 +1053,11 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
    the current athlete; "More" expands to the full multi-exercise / multi-athlete graph. ── */
 .wa-gmini { display: flex; flex-direction: column; gap: 0.5rem; }
 /* Single-lift carousel header: the exercise name is the focus — show it LARGE and
-   CENTRED across the card (owner request). The kg/×BW + Legend/Fit controls no longer
-   live here; they ride the graph's top-right edge (the .gmini-overlay below). */
-.gmini-head { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-.gmini-title { text-align: center; min-width: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.2; color: var(--accent); }
+   LEFT-ALIGNED (owner request: titles align left, matching the other section headers).
+   The kg/×BW + Legend/Fit controls no longer live here; they ride the graph's top-right
+   edge (the .gmini-overlay below). */
+.gmini-head { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; }
+.gmini-title { text-align: left; min-width: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.2; color: var(--accent); }
 /* The chart + its on-edge corner toolbar. The wrapper is the positioning context so the
    overlay (Legend · ⤢ Fit · kg, relocated here from above the plot) rides the top-right
    edge of the graph — matching the multi-graph view's in-chart overlay. */

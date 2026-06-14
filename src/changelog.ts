@@ -91,6 +91,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.349", shortTitle: "Left-align graph carousel title", code: "CHART-110", title: "Graph: the single-lift carousel title is left-aligned instead of centred", sp: 0.5, note: "The single-lift graph carousel (.gmini) showed its big exercise-name title CENTRED, which looked misaligned against every other left-aligned section header. Switched the carousel header to left-align (justify-content: flex-start + text-align: left) so the graph title lines up with the rest. Owner: “graph titles not aligned. align to left.”", cat: "CHART", model: "Opus 4.8" },
   { version: "b.2.8.348", shortTitle: "Graph title always ≥2 columns", code: "CHART-109", title: "Graph selected-lift title never collapses to one column — capped so 2+ always fit", sp: 0.5, note: "The Graph card's picked-lift title lays the names out in an auto-fit grid sized to the longest name. With long names (e.g. “Seated Calf Raise”, “Hex Bar Deadlift”) the per-column width exceeded half the card, so auto-fit dropped to ONE column and the names stacked into a tall single list. Capped the column min at ~half the row (calc(50% − gap)) so at least 2 columns always fit, and let a name wider than its capped column wrap within its cell instead of overflowing. Short names still get 3 columns. Owner: “this title should be never less than 2 cols.”", cat: "CHART", model: "Opus 4.8" },
   { version: "b.2.8.347", shortTitle: "Drop Formulas from the ⋯ menu", code: "CALC-29", title: "Formulas removed from the ⋯ pages menu — reached only via the 🧮 button beside Plan", sp: 0.5, note: "Follow-up to the Formulas-popup move: the Formulas entry is gone from the ⋯ (More) pages menu, since it now opens from the 🧮 Formulas button next to the Plan button. Removed the now-dead data-open=\"formulas\" menu handler. The command-bar “Formulas” jump still opens the popup.", cat: "CALC", model: "Opus 4.8" },
   { version: "b.2.8.346", shortTitle: "Formulas → popup; Priorities button renamed Plan", code: "CALC-28", title: "Formulas moved from a top tab into a popup beside the renamed “Plan” button", sp: 2, note: "The Formulas view (1RM calculator, Coach working-weight & warm-up tool, strength-fade curve, and the “how the numbers work” notes) is no longer a top-level tab. It's now a popup opened by a new 🧮 Formulas button sitting right next to the training-plan button in the workout history header — and that 📋 button is renamed from “Priorities” to “Plan” (its popup header now reads “{athlete} plan”). Removed the “Test” top tab and re-pointed the ⋯ menu's Formulas item and the command-bar “Formulas” jump at the popup. Escape closes it; the calculator + charts re-render each open. No calculation logic changed. Lithuanian updated.", cat: "CALC", model: "Opus 4.8" },
@@ -1894,6 +1895,7 @@ const RELEASE_DATES: Record<string, string> = {
   "b.2.8.343": "2026-06-14",
   "b.2.8.344": "2026-06-14",
   "b.2.8.345": "2026-06-14",
+  "b.2.8.349": "2026-06-14",
 };
 
 export interface SpTimelinePoint {
