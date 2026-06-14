@@ -1,0 +1,29 @@
+name: Setup shared KV table
+
+# Creates the shared `kv` table (the multi-user browser-cache mirror, CLAUDE.md
+# rule 41) by running ONLY supabase/kv-table.sql — deliberately NOT the
+# supabase/migrations/** set, whose stale 0001 would re-enable RLS on `sets` and
+# break the live anon access. Idempotent: safe to re-run.
+#
+# Runs automatically when kv-table.sql or this workflow changes on opus-4.8, and
+# can be triggered manually. The owner never has to touch Supabase (rule 42).
+
+on:
+  push:
+    branches: [opus-4.8]
+    paths:
+      - supabase/kv-table.sql
+      - .github/workflows/kv-setup.yml
+  workflow_dispatch:
+
+jobs:
+  kv-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kv table
+        run: psql "$DATABASE_URL" -f supabase/kv-table.sql -v ON_ERROR_STOP=1
+        env:
+          # Session-mode pooler (IPv4, port 5432) — same connection db-migrate uses.
+          DATABASE_URL: postgresql://postgres.nbjgwqytwkkuarxlkmnj:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
