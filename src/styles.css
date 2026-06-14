@@ -3818,7 +3818,10 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-lens-btn.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 /* Quick title toolbar: + add exercise · ✕ remove all · = match the other view. Sits at
    the start of the graph/history title (identical on both). Compact, finger-sized pills. */
-.wa-title-tools { display: inline-flex; gap: 4px; vertical-align: middle; margin-right: 0.45rem; }
+/* The +/✕/= title toolbar sits at the BOTTOM-RIGHT of the title box (owner), clear of
+   the right-edge Pick tab; buttons are opaque so they read over any name beneath. */
+.wa-title-tools { position: absolute; right: 0; bottom: 0; z-index: 2; display: inline-flex; gap: 4px; margin: 0; }
+.wa-seltitle-box.has-pick .wa-title-tools { right: 2.3rem; }
 .wa-title-tool {
   flex: none; min-width: var(--tap-min); min-height: var(--tap-min);
   display: inline-flex; align-items: center; justify-content: center;
