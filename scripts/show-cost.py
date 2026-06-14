@@ -205,12 +205,16 @@ def version_label():
     except Exception:
         return ""
 
-# Compact, owner-defined format (real numbers only — output tokens, € and % of the 5h /
-# weekly limits, % to 2 sig figs). The AI quotes this VERBATIM (rule 39, hallucination-free).
+# Owner-defined compact format (real numbers only — Python does ALL the math; rule 39).
+# CLEAN: model on its own line, codename·version next, then a Tokens block with EACH
+# metric on its own line (tokens·€ then %5h-%W), % to 2 sig figs. No ceiling clutter.
+# The AI may expand the version line to the JOURNEY form (rule 40); numbers stay verbatim.
 print(f"""
-{model_label(model)} · {version_label()}
-Tokens (real, vs your usage limits · anchor: {anchor_note})
-  Prompt  - {turn['out']:,} · {fmt_eur(turn_real)} (~{sig2(turn_5h)}%5h ~{sig2(turn_W)}%W)
-  Session - {sess['out']:,} · {fmt_eur(sess_real)} (~{sig2(sess_5h)}%5h ~{sig2(sess_W)}%W)
-  (API-list ceiling — NOT real spend, ~100×: prompt {fmt_eur(turn_eur)} · session {fmt_eur(sess_eur)})
+{model_label(model)}
+{version_label()}
+Tokens
+Prompt  - {turn['out']:,} · {fmt_eur(turn_real)}
+{sig2(turn_5h)}%5h - {sig2(turn_W)}%W
+Session - {sess['out']:,} · {fmt_eur(sess_real)}
+{sig2(sess_5h)}%5h - {sig2(sess_W)}%W
 """)
