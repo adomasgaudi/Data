@@ -201,20 +201,19 @@ def version_label():
         major, minor, patch = int(m.group(1)), int(m.group(2)), m.group(3)
         table = ESPADA if major == 2 else CAPTAIN if major >= 3 else None
         name = table[minor] if table and minor < len(table) else f"{major}.{minor}"
-        return f"{name} v.{patch}"
+        return f"{name} -> v.{patch}"
     except Exception:
         return ""
 
 # Owner-defined compact format (real numbers only — Python does ALL the math; rule 39).
-# CLEAN: model on its own line, codename·version next, then a Tokens block with EACH
-# metric on its own line (tokens·€ then %5h-%W), % to 2 sig figs. No ceiling clutter.
-# The AI may expand the version line to the JOURNEY form (rule 40); numbers stay verbatim.
+# CLEAN: model on its own line, then "Codename -> v.<current>" (the arrow ALWAYS shows,
+# even with no bump; the AI may expand the left side to the bump JOURNEY, rule 40), then
+# a Tokens block — SINGLE PROMPT only (no session), each metric on its own line, % to 2
+# sig figs. No API-ceiling line, no redundant Branch/Version line (version is up top).
 print(f"""
 {model_label(model)}
 {version_label()}
 Tokens
 Prompt  - {turn['out']:,} · {fmt_eur(turn_real)}
 {sig2(turn_5h)}%5h - {sig2(turn_W)}%W
-Session - {sess['out']:,} · {fmt_eur(sess_real)}
-{sig2(sess_5h)}%5h - {sig2(sess_W)}%W
 """)
