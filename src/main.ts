@@ -18558,7 +18558,6 @@ function setupBottomNav() {
       // Some items open an OVERLAY page (data-open) instead of switching a top tab.
       if (item.dataset.open === "health") { openHealth(); return; }
       if (item.dataset.open === "backup") { openBackup(); return; }
-      if (item.dataset.open === "formulas") { openFormulas(); return; }
       switchTopTab(item.dataset.nav === "analysis" ? analysisTabName() : item.dataset.tab ?? "");
     });
   }
