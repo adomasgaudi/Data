@@ -75,7 +75,7 @@ const LT: Record<string, string> = {
   "Warmup": "Apšilimas",
   "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
   "Setup notes": "Pasiruošimo užrašai",
-  "Antagonist lifts": "Antagonistų pratimai",
+  "Pair with": "Derinti su",
   "✎ Index entry — code, tags, groups & data": "✎ Rodyklės įrašas — kodas, žymos, grupės ir duomenys",
   // ---- Mini stats carousel ----
   "More ▾": "Daugiau ▾",

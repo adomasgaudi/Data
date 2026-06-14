@@ -3372,6 +3372,9 @@ function currentTopTab(): string {
 /** Where the exercise-settings overlay was opened from, so its Back button can
  * return there (Analysis or Index). Captured only on a fresh open. */
 let exInfoOrigin = "bwparts";
+/** True when the exercise card was opened from the 📋 Priorities popup, so Back returns
+ * to Priorities instead of a tab. Captured only on a fresh open. */
+let exInfoFromPlan = false;
 /** The Index table row for a lift — or, for a synthetic combined/comparison lift
  * that has NO row of its own (e.g. "SQ mix" isn't a logged name), the row of its
  * first listed member, so "go to Index" lands on something relevant instead of
@@ -3392,10 +3395,10 @@ function syncPillToggle(): void {
   els.exInfoPillToggle.classList.toggle("is-on", exInfoMode);
   els.exInfoPillToggle.setAttribute("aria-pressed", String(exInfoMode));
 }
-function openExerciseInfo(name: string): void {
+function openExerciseInfo(name: string, fromPlan = false): void {
   // Remember the view we came from (only on a fresh open — opening another lift
   // while the overlay is up keeps the original origin).
-  if (els.exInfoPage.hidden) exInfoOrigin = currentTopTab();
+  if (els.exInfoPage.hidden) { exInfoOrigin = currentTopTab(); exInfoFromPlan = fromPlan; }
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
   const row = indexRowFor(name);
@@ -3414,6 +3417,9 @@ function openExerciseInfo(name: string): void {
 function closeExerciseInfo(): void {
   currentExInfo = null;
   els.exInfoPage.hidden = true;
+  // Opened from the 📋 Priorities popup → Back reopens Priorities (over its original
+  // backdrop tab), not the tab behind it.
+  if (exInfoFromPlan) { exInfoFromPlan = false; switchTopTab(exInfoOrigin || "analysis"); openWorkoutPlan(); return; }
   // PB-9: Back returns to the view you opened the card FROM (Index / Analysis / S-ANL)
   // and leaves the analysis graph + history selection UNTOUCHED. It used to ALWAYS
   // collapse both selectors to just the inspected lift, so opening a card merely to
@@ -10789,26 +10795,19 @@ function liftTrainingHtml(name: string): string {
     ? `<div class="lt-setsug"><b>3 × ${hs.reps}</b> @ <b>${fmt(hs.weightKg)}kg</b> <span class="muted">· RIR ${hs.rir} · ${fmt(hs.pctOf1RM)}% of 1RM</span></div>`
     : `<p class="muted lt-mini">—</p>`;
 
-  // Antagonist lifts: this lift's antagonist muscle(s) → the athlete's own trained
-  // lifts hitting them (good to superset). Uses the existing ANTAGONIST_PAIRS map.
+  // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
+  // you can superset them (train one while these muscles rest). NOT true antagonists;
+  // it's "anything this lift doesn't use", most-trained first.
   const myMuscles = new Set(mgsFor(name));
-  const antMuscles = new Set<MuscleGroup>();
-  for (const [a, b] of ANTAGONIST_PAIRS) {
-    if (myMuscles.has(a)) antMuscles.add(b);
-    if (myMuscles.has(b)) antMuscles.add(a);
-  }
-  let antBody = `<p class="muted lt-mini">No opposing-muscle lift mapped.</p>`;
-  if (antMuscles.size) {
-    const todayD = dayNumber(todayIso());
-    const cands = liveExercises(user, todayD)
-      .filter((le) => le.name !== name && le.muscles.some((m) => antMuscles.has(m)))
-      .sort((p, q) => q.sets - p.sets)
-      .slice(0, 6);
-    antBody = cands.length
-      ? `<div class="lt-ant">` + cands.map((le) =>
-          `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="Open ${escapeHtml(displayName(le.name))}">${escapeHtml(shortFor(le.name))}</button>`).join("") + `</div>`
-      : `<p class="muted lt-mini">No ${[...antMuscles].join("/")} lift logged yet.</p>`;
-  }
+  const todayD = dayNumber(todayIso());
+  const pairCands = liveExercises(user, todayD)
+    .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)))
+    .sort((p, q) => q.sets - p.sets)
+    .slice(0, 6);
+  const antBody = pairCands.length
+    ? `<div class="lt-ant">` + pairCands.map((le) =>
+        `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>`).join("") + `</div>`
+    : `<p class="muted lt-mini">No non-overlapping lift logged yet.</p>`;
 
   const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
@@ -10817,7 +10816,7 @@ function liftTrainingHtml(name: string): string {
     sec("Warmup", warmRows) +
     sec("Reps → %1RM (Nuzzo)", nuzzoSvg(hs?.reps ?? null, hs?.pctOf1RM ?? null)) +
     sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
-    sec("Antagonist lifts", antBody) +
+    sec("Pair with", antBody) +
     `</div>`;
 }
 
@@ -12365,7 +12364,7 @@ async function init() {
     }
     // Tap the name → open the exercise's info.
     const row = t.closest<HTMLElement>("[data-planopen]");
-    if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen); }
+    if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen, true); }
   });
   // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
   // exercise's settings in the floating overlay.
