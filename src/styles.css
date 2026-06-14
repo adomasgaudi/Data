@@ -4287,6 +4287,9 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
 /* The slide-in card holds the controls (group-by / period / First-N / ⚙) + the chips.
    Inline it's a plain block; swiped in, .is-pick-drawer makes it a fixed right panel. */
 .wa-pick-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.4rem; margin: 0 0 0.4rem; }
+/* In-panel exercise search box in the selector picker (drives waSearchQuery). */
+.wa-chip-search { display: block; width: 100%; box-sizing: border-box; margin: 0 0 0.4rem; font: inherit; font-size: var(--fs-md); padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel); color: var(--text); }
+.wa-chip-search:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 /* The drawer is a plain WHITE sheet pulled out leftward from the right edge:
    the card colour (--panel), squared-off at the attached right edge, a soft lift-shadow
    at the free left edge (no sticky-note tint / dog-ear). Swipe it right to send it back;

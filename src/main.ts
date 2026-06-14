@@ -9714,6 +9714,7 @@ function renderCoachUiCatalogue(): void {
 
     ${group("Inputs & Search", [
       sec("Command / search bar", "search bar / command bar", ".cmd-input", `<input class="cmd-input" type="text" placeholder="Search exercises… or type . for commands" style="max-width:260px" readonly>`),
+      sec("Picker search box", "picker search / exercise filter box", ".wa-chip-search", `<input class="wa-chip-search" type="search" placeholder="Search exercises…" style="max-width:260px">`),
       sec("Inline number input", "number input / set weight input", ".set-edit-f input", `<input type="number" value="80" style="width:4rem;padding:4px 6px;border:1px solid var(--line);border-radius:var(--r-pill);font:inherit;background:var(--bg);color:var(--text)">`),
       sec("Rep-max column input", "rep-max input / RM input", ".rm-col-input", `<input class="rm-col-input" type="number" value="5" style="width:3rem">`),
     ].join(""))}
@@ -13213,6 +13214,16 @@ async function init() {
     scaleEditDirty = true;
   };
   document.addEventListener("input", onScrub);
+  // In-panel exercise search: typing in the selector's .wa-chip-search box drives the
+  // shared waSearchQuery (the catalogue-wide chip filter). The input sits OUTSIDE
+  // #waChips, so refilling just the chips keeps the input — and its focus/caret — alive.
+  document.addEventListener("input", (e) => {
+    const t = e.target;
+    const inp = t instanceof Element ? t.closest<HTMLInputElement>(".wa-chip-search") : null;
+    if (!inp) return;
+    waSearchQuery = inp.value;
+    renderWaChipsScope((inp.dataset.scope as SelScope) || "graph");
+  });
   // On release: resume the rep loop and do the deferred table/graph sync.
   document.addEventListener("change", (e) => {
     if (!(e.target as HTMLElement).closest?.(".pose-scrub")) return;
@@ -16512,12 +16523,16 @@ function renderSelector(scope: SelScope): void {
   // tab on the title. NOTHING of it sits inline between the title and the chart (owner
   // request). Only the graph's "Trim to N" stays inline — a contextual action on the
   // current selection, not part of the picker.
+  // In-panel search box (owner request) — drives the existing waSearchQuery, so typing
+  // filters the chips across the WHOLE catalogue (not just the shown First N), and the
+  // placeholder auto-translates (it's an LT key). Sits between the controls and chips.
+  const pickSearch = `<input type="search" class="wa-chip-search" data-scope="${scope}" placeholder="Search exercises…" aria-label="Search exercises…" autocomplete="off" value="${escapeHtml(waSearchQuery)}">`;
   const pickBody = showGrid
-    // Exercise mode: controls + the chip grid (filled by renderWaChipsScope below).
-    ? `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
+    // Exercise mode: controls + search + the chip grid (filled by renderWaChipsScope below).
+    ? `<div class="wa-pick-controls">${groupCtl}${controls}</div>` + pickSearch +
       `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>`
-    // Category mode: controls + the whole-category strip (selPills = .wa-catstrip).
-    : `<div class="wa-pick-controls">${groupCtl}${controls}</div>${selPills}`;
+    // Category mode: controls + search + the whole-category strip (selPills = .wa-catstrip).
+    : `<div class="wa-pick-controls">${groupCtl}${controls}</div>` + pickSearch + selPills;
   sel.innerHTML =
     (trimBtn ? `<div class="wa-sel-header"><div class="wa-sel-tools">${trimBtn}</div></div>` : "") +
     // A manual fold (not <details>) so the group dropdown's / ⚙'s own menus aren't clipped.
