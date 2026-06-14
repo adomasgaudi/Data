@@ -9931,10 +9931,7 @@ function renderLive(): void {
   // each Focus-lift's own card (owner).
   const ordered = plannedSection + watchSection;
 
-  box.innerHTML =
-    `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
-    `<p class="live-for muted">Training plan — switch athlete on the Analysis view.</p>` +
-    ordered;
+  box.innerHTML = ordered;
 }
 
 // ---- World records page ---------------------------------------------------
@@ -10595,6 +10592,8 @@ function renderWorkoutPlan(): void {
         return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
       }).join("")}</div></div>`
     : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
+  const planTitle = document.getElementById("planTitle");
+  if (planTitle) planTitle.textContent = `${athleteLabel()} priorities`;
   els.planBody.innerHTML = summary + list + addBlock;
 }
 
