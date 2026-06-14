@@ -150,6 +150,18 @@ const LT: Record<string, string> = {
   "General": "Bendra",
   "Gym (StrengthLevel)": "Salė (StrengthLevel)",
   "Professional": "Profesionalai",
+  // ---- Personal benchmarks ----
+  "Your benchmarks": "Jūsų etalonai",
+  "Benchmarks": "Etalonai",
+  "+ add": "+ pridėti",
+  "No benchmarks yet — set your own targets for this lift.":
+    "Dar nėra etalonų — nustatykite savo tikslus šiam pratimui.",
+  "Label": "Pavadinimas",
+  "Benchmark label": "Etalono pavadinimas",
+  "Benchmark value": "Etalono reikšmė",
+  "Add a benchmark for this lift": "Pridėti etaloną šiam pratimui",
+  "Toggle unit — ×bodyweight or kg": "Keisti vienetą — ×kūno svoris arba kg",
+  "Remove this benchmark": "Pašalinti šį etaloną",
   "Every released version, newest first — the same log as the git history.": "Kiekviena išleista versija, naujausia viršuje — tas pats sąrašas kaip git istorijoje.",
   // ---- Settings ----
   "Calculations & display": "Skaičiavimai ir rodymas",

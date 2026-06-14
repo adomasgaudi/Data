@@ -1,6 +1,6 @@
 # Plan: strength percentiles (3 populations) + custom benchmarks, per lift
 
-- **Asked:** 2026-06-14  ·  **Status:** Phase 1 & 2 shipped → next: Phase 3 (benchmarks)
+- **Asked:** 2026-06-14  ·  **Status:** Phases 1–3 shipped → next: Phase 4 (lift card, when it cools) + Phase 5 (real data)
 - **Owner decisions (#? answers):** show **all 3 populations** (general / StrengthLevel-gym / professional), **estimates OK now, find real data later**; **plan both features first, then build.**
 
 ## The two features
@@ -27,9 +27,9 @@
 - [x] 4. A compact per-lift "Strength percentiles" panel: the 3 population curves (estimates marked), the athlete's current 1RM placed on it ("≈ Nth %ile of gym pop"). #cram, one horizontally-scrollable strip where it gets wide. — table of bw-ratios + per-athlete placement chips, M↔W toggle, '≈ est' flag.
 - [x] 5. i18n + tests; ship.
 
-### Phase 3 — benchmarks store + editor (start on WR page, quiet)
-- [ ] 6. `colosseum.benchmarks.v1` store + a small per-lift editor (add/remove labelled threshold rows: label + bw-ratio or kg).
-- [ ] 7. Show benchmarks against the athlete's 1RM on the same panel; ship.
+### Phase 3 — benchmarks store + editor (start on WR page, quiet) ✅ DONE (b.2.8.368, DATA-19)
+- [x] 6. `colosseum.benchmarks.v1` store + a small per-lift editor (add/remove labelled threshold rows: label + bw-ratio or kg). — pure `benchmarks.ts` (+7 tests) + admin editor under the percentile table (label · value · ×|kg unit pill · ✕). Owner chose: BOTH units per row, GLOBAL scope.
+- [x] 7. Show benchmarks against the athlete's 1RM on the same panel; ship. — each athlete you-chip gains a gold "met" badge = the hardest benchmark they've reached (×bw rows scale by their bodyweight, kg rows absolute). Non-admins see read-only benchmark chips.
 
 ### Phase 4 — bring both into the Index lift card (WAIT until that area cools — it's hot now)
 - [ ] 8. Same percentile panel + benchmarks in the lift card's WR section, reusing the Phase 2/3 renderers. Ship when #co-work churn there settles.
@@ -37,11 +37,13 @@
 ### Phase 5 — real data + polish (#research)
 - [ ] 9. #research pass to replace the general-pop/pro estimates with sourced+graded data where it exists; bump `confidence` to "real".
 
-## Decisions / open for the owner
-- **Benchmark unit:** bw-ratio (×bw) or absolute kg per threshold? (Plan assumes a per-row choice of either.) — confirm if you have a preference.
-- **Per-athlete vs global benchmarks:** plan = device-global per lift (your recommendations apply to everyone). Say if you want them per-athlete.
+## Decisions (settled)
+- **Benchmark unit:** RESOLVED — each row picks its OWN unit (×bw or kg), owner-chosen.
+- **Per-athlete vs global benchmarks:** RESOLVED — GLOBAL per lift (your recommendations apply to everyone), owner-chosen.
 
 ## Log
 - 2026-06-14 — plan created (Opus 4.8); owner approved 3-pop+estimates & plan-first. Starting Phase 1 (data module).
 - 2026-06-14 — Phase 1 shipped (b.2.8.359, DATA-14): pure tested data module.
 - 2026-06-14 — Phase 2 shipped (b.2.8.362, DATA-16): percentile panel on the World Records page (3-pop curve table + per-athlete placement chips + M↔W toggle, '≈ est' flagged).
+- 2026-06-14 — panel made visible on Total (b.2.8.365, DATA-17): falls back to Squat instead of hiding behind a note.
+- 2026-06-14 — Phase 3 shipped (b.2.8.368, DATA-19): personal benchmarks — pure benchmarks.ts module (+7 tests), global per-lift store (colosseum.benchmarks.v1, syncs), admin editor (both units per row), per-athlete 'met' badges on the panel. Owner picked both-units + global scope.
