@@ -162,6 +162,8 @@ const LT: Record<string, string> = {
   "Add a benchmark for this lift": "Pridėti etaloną šiam pratimui",
   "Toggle unit — ×bodyweight or kg": "Keisti vienetą — ×kūno svoris arba kg",
   "Remove this benchmark": "Pašalinti šį etaloną",
+  "Where this lift sits as 1RM ×bodyweight across populations (estimated), your placement, and your own benchmarks.":
+    "Kur šis pratimas yra kaip 1RM ×kūno svoris tarp populiacijų (įvertinta), jūsų vieta ir jūsų etalonai.",
   "Every released version, newest first — the same log as the git history.": "Kiekviena išleista versija, naujausia viršuje — tas pats sąrašas kaip git istorijoje.",
   // ---- Settings ----
   "Calculations & display": "Skaičiavimai ir rodymas",

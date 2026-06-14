@@ -9953,10 +9953,6 @@ function loadBenchmarks(): BenchmarkStore {
 function benchmarksFor(exerciseName: string): Benchmark[] {
   return benchmarks[benchKey(exerciseName)] ?? [];
 }
-/** The exercise the percentile/benchmark panel is currently showing (Total → Squat). */
-function recordsPanelExercise(): string {
-  return LIFT_EXERCISE[recordsLift === "total" ? "squat" : recordsLift];
-}
 /** Replace a lift's benchmark list (kept sorted; empty list drops the key) + persist. */
 function commitBenchmarks(exerciseName: string, list: Benchmark[]): void {
   const key = benchKey(exerciseName);
@@ -9969,11 +9965,12 @@ function commitBenchmarks(exerciseName: string, list: Benchmark[]): void {
  * targets read-only. */
 function benchmarksHtml(exerciseName: string): string {
   const list = benchmarksFor(exerciseName);
+  const exAttr = escapeHtml(exerciseName);
   const admin = canEditGlobalMeta();
   if (!admin) {
     if (!list.length) return "";
     const chips = list.map((b) => `<span class="rec-bm-chip">${escapeHtml(b.label)} <b>${b.unit === "kg" ? `${fmt(b.value)}kg` : `${b.value}×`}</b></span>`).join("");
-    return `<div class="rec-bm"><div class="rec-bm-head"><span class="rec-bm-title">Benchmarks</span></div><div class="rec-bm-chips">${chips}</div></div>`;
+    return `<div class="rec-bm" data-bm-ex="${exAttr}"><div class="rec-bm-head"><span class="rec-bm-title">Benchmarks</span></div><div class="rec-bm-chips">${chips}</div></div>`;
   }
   const rows = list.map((b, i) =>
     `<div class="rec-bm-row" data-bmidx="${i}">` +
@@ -9982,7 +9979,7 @@ function benchmarksHtml(exerciseName: string): string {
     `<button type="button" class="rec-bm-unit" data-bmunit title="Toggle unit — ×bodyweight or kg">${b.unit === "kg" ? "kg" : "×"}</button>` +
     `<button type="button" class="rec-bm-del" data-bmdel title="Remove this benchmark">✕</button>` +
     `</div>`).join("");
-  return `<div class="rec-bm">` +
+  return `<div class="rec-bm" data-bm-ex="${exAttr}">` +
     `<div class="rec-bm-head"><span class="rec-bm-title">Your benchmarks</span>` +
     `<button type="button" class="rec-bm-add" data-bmadd title="Add a benchmark for this lift">+ add</button></div>` +
     (rows ? `<div class="rec-bm-rows">${rows}</div>` : `<div class="rec-pct-sub muted">No benchmarks yet — set your own targets for this lift.</div>`) +
@@ -9999,11 +9996,6 @@ function recordsPercentileHtml(byLift: Map<PowerLift, Map<string, number>>, rost
   const ex = LIFT_EXERCISE[panelLift];
   if (!hasStandards(ex)) return "";
   const s = recordsStdSex;
-  const headCols = PERCENTILES.map((p) => `<th class="num">${ordinal(p)}</th>`).join("");
-  const rows = (["general", "strengthlevel", "pro"] as Population[]).map((pop) => {
-    const c = curveFor(ex, s, pop)!;
-    return `<tr class="rec-pct-${pop}"><td>${escapeHtml(POPULATION_LABEL[pop])}</td>${c.map((r) => `<td class="num">${r.toFixed(2)}×</td>`).join("")}</tr>`;
-  }).join("");
   const bms = benchmarksFor(ex);
   const you = roster.filter((u) => athProfile(u.username)?.sex === s).map((u) => {
     const p = athProfile(u.username)!;
@@ -10026,10 +10018,48 @@ function recordsPercentileHtml(byLift: Map<PowerLift, Map<string, number>>, rost
     `<button type="button" class="rec-pct-sex" data-recstdsex title="Toggle sex — the curves are sex-specific">${s === "f" ? "W" : "M"}</button></div>` +
     `<div class="rec-pct-sub muted">1RM as ×bodyweight at each percentile, by population.</div>` +
     totalNote +
-    `<div class="data-table-wrap"><table class="data-table rec-pct-table"><thead><tr><th>Population</th>${headCols}</tr></thead><tbody>${rows}</tbody></table></div>` +
+    percentileTableHtml(ex, s) +
     (you ? `<div class="rec-pct-you">${you}</div>` : "") +
     benchmarksHtml(ex) +
     `</section>`;
+}
+
+/** The 3-population ×bw curve table for a lift + sex — shared by the World Records page
+ *  and the Index lift card so the two never drift. */
+function percentileTableHtml(exerciseName: string, sex: Sex): string {
+  const headCols = PERCENTILES.map((p) => `<th class="num">${ordinal(p)}</th>`).join("");
+  const rows = (["general", "strengthlevel", "pro"] as Population[]).map((pop) => {
+    const c = curveFor(exerciseName, sex, pop)!;
+    return `<tr class="rec-pct-${pop}"><td>${escapeHtml(POPULATION_LABEL[pop])}</td>${c.map((r) => `<td class="num">${r.toFixed(2)}×</td>`).join("")}</tr>`;
+  }).join("");
+  return `<div class="data-table-wrap"><table class="data-table rec-pct-table"><thead><tr><th>Population</th>${headCols}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/** Index lift-card version of the strength-percentile panel (Phase 4): the curve table
+ *  for the CURRENT athlete's sex, that athlete's own placement, and the per-lift
+ *  benchmarks. Returns "" for lifts we have no standard for (most exercises). */
+function liftPercentileHtml(name: string): string {
+  if (!hasStandards(name)) return "";
+  const me = els.athlete.value;
+  const prof = athProfile(me);
+  const sex: Sex = prof?.sex === "f" ? "f" : "m";
+  const best = bestE1rmByUser(name).get(me);
+  let youHtml = "";
+  if (prof?.weight && best != null) {
+    const ratio = best / prof.weight;
+    const pct = percentileFor(name, sex, ratio, "strengthlevel");
+    if (pct != null) {
+      const met = topMet(benchmarksFor(name), best, prof.weight);
+      const metBadge = met ? ` · <b class="rec-bm-met">${escapeHtml(met.label)}</b>` : "";
+      youHtml = `<div class="rec-pct-you"><span class="rec-pct-you-chip" title="Your best ≈ ${fmt(best)}kg ÷ ${fmt(prof.weight)}kg bw = ${ratio.toFixed(2)}× → ~${ordinal(pct)} percentile among gym (StrengthLevel) lifters">${escapeHtml(athleteLabel())} <b>${ratio.toFixed(2)}×</b> ≈ <b>${ordinal(pct)}</b>${metBadge}</span></div>`;
+    }
+  }
+  return `<details class="ex-group ex-model-fold rec-pct-fold"><summary class="ex-group-hd">📊 <span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-est" title="ESTIMATED — the Gym row is from StrengthLevel standards; General & Professional are derived estimates, real data pending (#research).">≈ est</span></summary>` +
+    `<div class="ex-group-why muted">Where this lift sits as 1RM ×bodyweight across populations (estimated), your placement, and your own benchmarks.</div>` +
+    percentileTableHtml(name, sex) +
+    youHtml +
+    benchmarksHtml(name) +
+    `</details>`;
 }
 
 /** Each athlete's BEST estimated 1RM for one logged exercise, username → e1rm
@@ -11266,7 +11296,7 @@ function exerciseInfoHtml(name: string): string {
   // INDEX entry (code, tags, tier, groups, data) is folded away behind a tap — they're
   // separate concerns (owner: "info ≠ index, two views"). Open state is remembered so
   // editing a tag inside doesn't snap the fold shut.
-  const indexPart = `${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}`;
+  const indexPart = `${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${liftPercentileHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}`;
   return `<div class="ex-info">${liftTrainingHtml(name)}` +
     `<details class="ex-index-fold"${exIndexFoldOpen ? " open" : ""}><summary class="ex-index-sum">✎ Index entry — code, tags, groups &amp; data</summary>` +
     `<div class="ex-index-body">${indexPart}</div></details></div>`;
@@ -12269,21 +12299,32 @@ async function init() {
     recordsLift = pill.dataset.reclift as PowerLift;
     renderRecords();
   });
-  // Strength-percentile panel: sex toggle + the per-lift benchmarks editor (admin only).
+  // World Records page: toggle the sex the percentile curves are shown for.
   document.getElementById("recordsBody")?.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest(".rec-pct-sex")) return;
+    recordsStdSex = recordsStdSex === "m" ? "f" : "m";
+    renderRecords();
+  });
+  // Benchmarks editor — document-level + self-describing (data-bm-ex), so the SAME
+  // handler drives it on both the World Records page and the Index lift card. We rebuild
+  // only the editor in place (not the host), so folds, scroll and focus stay put.
+  const rerenderBenchmarks = (host: HTMLElement, ex: string): HTMLElement | null => {
+    const fresh = document.createElement("div");
+    fresh.innerHTML = benchmarksHtml(ex);
+    const node = fresh.firstElementChild as HTMLElement | null;
+    if (node) host.replaceWith(node);
+    return node;
+  };
+  document.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
-    if (t.closest(".rec-pct-sex")) {
-      recordsStdSex = recordsStdSex === "m" ? "f" : "m";
-      renderRecords();
-      return;
-    }
-    if (!canEditGlobalMeta()) return; // benchmark edits are global config → admin only
-    const ex = recordsPanelExercise();
+    const host = t.closest<HTMLElement>(".rec-bm[data-bm-ex]");
+    if (!host || !canEditGlobalMeta()) return; // global config → admin only
+    const ex = host.dataset.bmEx ?? "";
     if (t.closest(".rec-bm-add")) {
       commitBenchmarks(ex, [...benchmarksFor(ex), { label: "New", value: 1, unit: "x" }]);
-      renderRecords();
-      const inputs = document.querySelectorAll<HTMLInputElement>("#recordsBody .rec-bm-label");
-      inputs[inputs.length - 1]?.select();
+      const node = rerenderBenchmarks(host, ex);
+      const inputs = node?.querySelectorAll<HTMLInputElement>(".rec-bm-label");
+      inputs?.[inputs.length - 1]?.select();
       return;
     }
     const row = t.closest<HTMLElement>(".rec-bm-row");
@@ -12294,22 +12335,22 @@ async function init() {
     if (t.closest(".rec-bm-del")) {
       list.splice(idx, 1);
       commitBenchmarks(ex, list);
-      renderRecords();
+      rerenderBenchmarks(host, ex);
     } else if (t.closest(".rec-bm-unit")) {
       list[idx] = { ...list[idx]!, unit: list[idx]!.unit === "kg" ? "x" : "kg" };
       commitBenchmarks(ex, list);
-      renderRecords();
+      rerenderBenchmarks(host, ex);
     }
   });
-  // Commit benchmark label/value edits on blur (change), not per keystroke, so focus is
-  // never stolen mid-type; re-render to re-sort the rows and refresh the "met" badges.
-  document.getElementById("recordsBody")?.addEventListener("change", (e) => {
-    if (!canEditGlobalMeta()) return;
+  // Commit label/value edits on blur (change), not per keystroke, so focus is never
+  // stolen mid-type; rebuild the editor in place to re-sort the rows.
+  document.addEventListener("change", (e) => {
     const t = e.target;
     if (!(t instanceof HTMLInputElement)) return;
+    const host = t.closest<HTMLElement>(".rec-bm[data-bm-ex]");
     const row = t.closest<HTMLElement>(".rec-bm-row");
-    if (!row) return;
-    const ex = recordsPanelExercise();
+    if (!host || !row || !canEditGlobalMeta()) return;
+    const ex = host.dataset.bmEx ?? "";
     const idx = Number(row.dataset.bmidx);
     const list = benchmarksFor(ex).slice();
     if (!(idx >= 0 && idx < list.length)) return;
@@ -12317,11 +12358,11 @@ async function init() {
       list[idx] = { ...list[idx]!, label: t.value.trim() || list[idx]!.label };
     } else if (t.dataset.bmfield === "value") {
       const v = parseFloat(t.value);
-      if (!Number.isFinite(v) || v <= 0) { renderRecords(); return; } // revert bad input
+      if (!Number.isFinite(v) || v <= 0) { rerenderBenchmarks(host, ex); return; } // revert bad input
       list[idx] = { ...list[idx]!, value: Math.round(v * 100) / 100 };
-    }
+    } else { return; }
     commitBenchmarks(ex, list);
-    renderRecords();
+    rerenderBenchmarks(host, ex);
   });
   setupDataTab();
   renderDataTab();

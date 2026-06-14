@@ -1,6 +1,6 @@
 # Plan: strength percentiles (3 populations) + custom benchmarks, per lift
 
-- **Asked:** 2026-06-14  ·  **Status:** Phases 1–3 shipped → next: Phase 4 (lift card, when it cools) + Phase 5 (real data)
+- **Asked:** 2026-06-14  ·  **Status:** Phases 1–4 shipped → only Phase 5 left (#research real data)
 - **Owner decisions (#? answers):** show **all 3 populations** (general / StrengthLevel-gym / professional), **estimates OK now, find real data later**; **plan both features first, then build.**
 
 ## The two features
@@ -31,8 +31,8 @@
 - [x] 6. `colosseum.benchmarks.v1` store + a small per-lift editor (add/remove labelled threshold rows: label + bw-ratio or kg). — pure `benchmarks.ts` (+7 tests) + admin editor under the percentile table (label · value · ×|kg unit pill · ✕). Owner chose: BOTH units per row, GLOBAL scope.
 - [x] 7. Show benchmarks against the athlete's 1RM on the same panel; ship. — each athlete you-chip gains a gold "met" badge = the hardest benchmark they've reached (×bw rows scale by their bodyweight, kg rows absolute). Non-admins see read-only benchmark chips.
 
-### Phase 4 — bring both into the Index lift card (WAIT until that area cools — it's hot now)
-- [ ] 8. Same percentile panel + benchmarks in the lift card's WR section, reusing the Phase 2/3 renderers. Ship when #co-work churn there settles.
+### Phase 4 — bring both into the Index lift card ✅ DONE (b.2.8.370, DATA-20)
+- [x] 8. Same percentile panel + benchmarks in the lift card's WR section, reusing the Phase 2/3 renderers. — a 📊 Strength percentiles fold sits right under the 🏆 World record fold in each exercise's Index entry: the curve table for the current athlete's sex, that athlete's placement, and the (shared) benchmarks editor. Shared `percentileTableHtml()` so the two views never drift; benchmarks editor made document-level + self-describing (`data-bm-ex`) so ONE handler drives both pages and rebuilds in place (no fold-collapse, rule 24). Only shows for the ~11 lifts we have a standard for.
 
 ### Phase 5 — real data + polish (#research)
 - [ ] 9. #research pass to replace the general-pop/pro estimates with sourced+graded data where it exists; bump `confidence` to "real".
@@ -46,4 +46,5 @@
 - 2026-06-14 — Phase 1 shipped (b.2.8.359, DATA-14): pure tested data module.
 - 2026-06-14 — Phase 2 shipped (b.2.8.362, DATA-16): percentile panel on the World Records page (3-pop curve table + per-athlete placement chips + M↔W toggle, '≈ est' flagged).
 - 2026-06-14 — panel made visible on Total (b.2.8.365, DATA-17): falls back to Squat instead of hiding behind a note.
-- 2026-06-14 — Phase 3 shipped (b.2.8.368, DATA-19): personal benchmarks — pure benchmarks.ts module (+7 tests), global per-lift store (colosseum.benchmarks.v1, syncs), admin editor (both units per row), per-athlete 'met' badges on the panel. Owner picked both-units + global scope.
+- 2026-06-14 — Phase 3 shipped (b.2.8.369, DATA-19): personal benchmarks — pure benchmarks.ts module (+7 tests), global per-lift store (colosseum.benchmarks.v1, syncs), admin editor (both units per row), per-athlete 'met' badges on the panel. Owner picked both-units + global scope.
+- 2026-06-14 — Phase 4 shipped (b.2.8.370, DATA-20): percentile panel + benchmarks brought into the Index lift card (📊 fold under 🏆 World record). Shared percentileTableHtml(); benchmarks editor made document-level/self-describing so one handler serves both pages.
