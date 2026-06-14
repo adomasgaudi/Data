@@ -1731,11 +1731,14 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .exercise-targets[hidden] { display: none; }
 .target-lead { font-size: 0.78rem; margin-bottom: 0.4rem; }
 .target-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.target-chip {
+/* Column stat-chip — shared origin for target & week chips (UIC-2); only the
+   per-context min-width differs. */
+.target-chip, .wk-chip {
   display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--r-pill); padding: 6px 12px; min-width: 84px;
+  border-radius: var(--r-pill); padding: 6px 12px;
 }
+.target-chip { min-width: 84px; }
 .target-reps { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .target-weight { font-size: 1.05rem; font-weight: 700; color: var(--text); }
 /* Collapsible reps↔weight calculator (a multi-row editable table) in the drill-in. */
@@ -1779,11 +1782,7 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .wk-stats[hidden] { display: none; }
 .wk-lead { font-size: 0.78rem; margin-bottom: 0.4rem; }
 .wk-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.wk-chip {
-  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--r-pill); padding: 6px 12px; min-width: 70px;
-}
+.wk-chip { min-width: 70px; } /* shares the .target-chip base (UIC-2) */
 .wk-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
 .wk-lbl { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 /* Compact peak/this-week line under each exercise name in the list. */
@@ -1912,20 +1911,19 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-calendar { margin: 0 0 1.25rem; }
 /* Year-view controls: single/all toggle + the exercise/category filter. */
 .heat-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin-bottom: 0.7rem; }
-.cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
-.cal-mode-btn { padding: 5px 14px; font: inherit; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
-.cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
-.cal-mode-btn:hover { color: var(--text); }
-.cal-mode-btn.is-active { color: #fff; background: var(--accent); }
+/* .cal-mode / .cal-mode-btn share the segmented-toggle component below (UIC-1 —
+   single origin; see docs/ui-consistency-audit.md). No standalone rules here. */
 /* "Colour by" picker for the all-exercises calendar. */
 .cal-colorby { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--fs-sm); color: var(--muted); }
 .cal-colorby-sel { font: inherit; font-size: var(--fs-sm); padding: 4px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); cursor: pointer; }
 /* Segmented toggle (e.g. Workouts View: By day / By week). */
-.seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
-.seg-btn { padding: 6px 12px; font: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
-.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
-.seg-btn:hover { color: var(--text); }
-.seg-btn.is-active { color: #fff; background: var(--accent); }
+/* Segmented toggle — single origin for adjacent-button toggles (Workouts View
+   by day/week AND the year-calendar single/all mode, UIC-1). */
+.seg-toggle, .cal-mode { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-pill); overflow: hidden; }
+.seg-btn, .cal-mode-btn { padding: 6px 12px; font: inherit; font-size: var(--fs-md); font-weight: 600; color: var(--muted); background: var(--bg); border: 0; cursor: pointer; }
+.seg-btn + .seg-btn, .cal-mode-btn + .cal-mode-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover, .cal-mode-btn:hover { color: var(--text); }
+.seg-btn.is-active, .cal-mode-btn.is-active { color: #fff; background: var(--accent); }
 .seg-btn.wo-af-pick { font-size: 0.95rem; padding: 4px 9px; } /* 📅 — pick any date */
 /* Custom calendar date-picker popup (rule 20: not the native picker). A floating month
    grid placed by JS (position-fixed, clamped to the viewport). */
@@ -4012,7 +4010,7 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 .wa-cat-pill {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   font: inherit; cursor: pointer; padding: 5px 11px; border: 1px solid var(--line);
-  border-radius: 12px; background: var(--bg); color: var(--text); line-height: 1.15;
+  border-radius: var(--r-pill); background: var(--bg); color: var(--text); line-height: 1.15; /* UIC-8: token, was 12px */
 }
 .wa-cat-pill:hover { border-color: var(--accent); }
 .wa-cat-pill.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
