@@ -91,6 +91,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.350", shortTitle: "Title toolbar: add · clear · match", code: "SEL-46", title: "Graph & history titles get a quick +/✕/= toolbar — add an exercise, remove all, match the other view", sp: 1, note: "Added a compact three-button toolbar to the lift-selection title (shown in the multi-lift view on BOTH the graph and history, kept identical): + adds an exercise (opens the picker), ✕ removes all (clears the selection, disabled when empty), and = matches the other view's selection (graph ← history, history ← graph). These reuse the existing capture handlers (data-titlepicker / titledeselect / titlematch) that previously only lived in the picker drawer, so the actions are now one tap from the title. The right-edge Pick drag-tab stays. Owner: “in graph title multi view add buttons to add exercise and remove all and match history (+, ✕, =).”", cat: "SEL", model: "Opus 4.8" },
   { version: "b.2.8.349", shortTitle: "Left-align graph carousel title", code: "CHART-110", title: "Graph: the single-lift carousel title is left-aligned instead of centred", sp: 0.5, note: "The single-lift graph carousel (.gmini) showed its big exercise-name title CENTRED, which looked misaligned against every other left-aligned section header. Switched the carousel header to left-align (justify-content: flex-start + text-align: left) so the graph title lines up with the rest. Owner: “graph titles not aligned. align to left.”", cat: "CHART", model: "Opus 4.8" },
   { version: "b.2.8.348", shortTitle: "Graph title always ≥2 columns", code: "CHART-109", title: "Graph selected-lift title never collapses to one column — capped so 2+ always fit", sp: 0.5, note: "The Graph card's picked-lift title lays the names out in an auto-fit grid sized to the longest name. With long names (e.g. “Seated Calf Raise”, “Hex Bar Deadlift”) the per-column width exceeded half the card, so auto-fit dropped to ONE column and the names stacked into a tall single list. Capped the column min at ~half the row (calc(50% − gap)) so at least 2 columns always fit, and let a name wider than its capped column wrap within its cell instead of overflowing. Short names still get 3 columns. Owner: “this title should be never less than 2 cols.”", cat: "CHART", model: "Opus 4.8" },
   { version: "b.2.8.347", shortTitle: "Drop Formulas from the ⋯ menu", code: "CALC-29", title: "Formulas removed from the ⋯ pages menu — reached only via the 🧮 button beside Plan", sp: 0.5, note: "Follow-up to the Formulas-popup move: the Formulas entry is gone from the ⋯ (More) pages menu, since it now opens from the 🧮 Formulas button next to the Plan button. Removed the now-dead data-open=\"formulas\" menu handler. The command-bar “Formulas” jump still opens the popup.", cat: "CALC", model: "Opus 4.8" },
@@ -1896,6 +1897,7 @@ const RELEASE_DATES: Record<string, string> = {
   "b.2.8.344": "2026-06-14",
   "b.2.8.345": "2026-06-14",
   "b.2.8.349": "2026-06-14",
+  "b.2.8.350": "2026-06-14",
 };
 
 export interface SpTimelinePoint {

@@ -3818,6 +3818,18 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-lens-btn { font: inherit; font-size: 0.92rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 9px; }
 .wa-lens-btn:hover { border-color: var(--accent); color: var(--accent); }
 .wa-lens-btn.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* Quick title toolbar: + add exercise · ✕ remove all · = match the other view. Sits at
+   the start of the graph/history title (identical on both). Compact, finger-sized pills. */
+.wa-title-tools { display: inline-flex; gap: 4px; vertical-align: middle; margin-right: 0.45rem; }
+.wa-title-tool {
+  flex: none; min-width: var(--tap-min); min-height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 0.95rem; font-weight: 700; line-height: 1; cursor: pointer;
+  color: var(--accent); background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--r-pill); padding: 0 6px;
+}
+.wa-title-tool:hover { border-color: var(--accent); }
+.wa-title-tool:disabled { opacity: 0.4; cursor: default; }
 /* The total-count badge that always leads the graph title, and the "+N more" tail. */
 .wa-title-count { display: inline-block; margin-right: 0.4em; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
 .wa-title-more { margin-left: 0.3em; font-size: 0.7em; font-weight: 600; color: var(--muted); }

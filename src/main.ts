@@ -15854,6 +15854,16 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const pickerBtn = remove
     ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">Pick</span></button>`
     : "";
+  // Quick title toolbar (graph + history identical): + add an exercise · ✕ remove all ·
+  // = match the OTHER view's selection. Reuse the existing capture handlers (data-title*).
+  const otherLabel = remove === "graph" ? "history" : "graph";
+  const titleTools = remove
+    ? `<span class="wa-title-tools">` +
+        `<button type="button" class="wa-title-tool" data-titlepicker="${remove}" title="Add an exercise" aria-label="Add an exercise">+</button>` +
+        `<button type="button" class="wa-title-tool" data-titledeselect="${remove}"${sel.length ? "" : " disabled"} title="Remove all — clear the ${remove === "graph" ? "graph" : "history"} selection" aria-label="Remove all">✕</button>` +
+        `<button type="button" class="wa-title-tool" data-titlematch="${remove}" title="Match the ${otherLabel} selection" aria-label="Match ${otherLabel}">=</button>` +
+      `</span>`
+    : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the
   // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
@@ -15867,7 +15877,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const seltitleAttrs = grid
     ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 0.4rem)"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${titleTools}${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
