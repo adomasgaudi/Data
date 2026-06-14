@@ -69,6 +69,13 @@ const LT: Record<string, string> = {
   "Active": "Aktyvus",
   "Passive": "Pasyvus",
   "Maintain": "Palaikyti",
+  // Set-intensity (effort) pill in the expanded focus-lift panel.
+  "intensity": "intensyvumas",
+  "Hard": "Sunkios",
+  "Mid": "Vidut.",
+  "Half": "Pusė",
+  "near failure": "iki ribos",
+  "½ max reps": "½ maks. kart.",
   "target": "tikslas",
   // ---- "How to train" lift brief ----
   "Working weights": "Darbiniai svoriai",

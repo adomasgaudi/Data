@@ -10375,7 +10375,19 @@ const PRIORITY_LEVELS: PriorityLevel[] = ["max", "active", "passive", "maintain"
 const PRIORITY_LABEL: Record<PriorityLevel, string> = { max: "Max effort", active: "Active", passive: "Passive", maintain: "Maintain" };
 const PRIORITY_ORDER: Record<PriorityLevel, number> = { max: 0, active: 1, passive: 2, maintain: 3 };
 const PRIORITY_MAX = 10;
-interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number }
+// How HARD each set is — the target sets number assumes HARD sets by default, but a
+// passive/maintenance lift may only need mid sets (3–8 RIR) or half-rep sets (the
+// maintenance minimum). Stored only when the owner overrides the level's default.
+type PriorityEffort = "hard" | "mid" | "half";
+const EFFORT_LEVELS: PriorityEffort[] = ["hard", "mid", "half"];
+const EFFORT_LABEL: Record<PriorityEffort, string> = { hard: "Hard", mid: "Mid", half: "Half" };
+const EFFORT_HINT: Record<PriorityEffort, string> = { hard: "near failure", mid: "3–8 RIR", half: "½ max reps" };
+const EFFORT_TIP: Record<PriorityEffort, string> = {
+  hard: "Hard sets — taken near failure (0–2 reps in reserve).",
+  mid: "Mid sets — 3–8 reps in reserve, not to failure.",
+  half: "Half sets — about half your max reps, the minimum to maintain.",
+};
+interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort }
 const PRIORITIES_KEY = "colosseum.priorities.v1";
 const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEntry>>>(PRIORITIES_KEY);
 function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
@@ -10389,6 +10401,19 @@ function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
   if (level === "passive") return 2;
   return Math.max(1, Math.round(monthAvg)); // maintain = match recent
 }
+/** The set intensity a level ASSUMES by default — hard for Max/Active, easing to mid
+ *  (Passive) and half-rep (Maintain). The owner can override it per lift. */
+function defaultEffort(level: PriorityLevel): PriorityEffort {
+  return level === "maintain" ? "half" : level === "passive" ? "mid" : "hard";
+}
+function effortOf(e: PriorityEntry): PriorityEffort { return e.effort ?? defaultEffort(e.level); }
+/** Step the weekly target. Below 2 it moves in 0.5s so sub-1 frequencies are reachable
+ *  (0.5 = one set every 2 weeks); above 2 it moves in whole sets. Clamped to [0, 20]. */
+function stepTarget(cur: number, dir: number): number {
+  const step = (dir < 0 ? cur <= 2 : cur < 2) ? 0.5 : 1;
+  return Math.round(Math.max(0, Math.min(20, cur + dir * step)) * 2) / 2;
+}
+function fmtTarget(v: number): string { return Number.isInteger(v) ? String(v) : v.toFixed(1); }
 /** Avg sets/week actually done over the trailing 30 days, for one athlete+exercise.
  * A synthetic combinable/comparable lift (e.g. "Squat pattern") has nothing logged
  * under its own name, so aggregate its member lifts' sets — that's its real volume. */
@@ -10530,9 +10555,17 @@ function renderWorkoutPlan(): void {
       `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
         `<span class="prio-tgt-lbl muted">target</span>` +
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
-        `<span class="prio-tgt-val" title="Weekly sets target">${e.target}</span>` +
+        `<span class="prio-tgt-val" title="Weekly sets target">${fmtTarget(e.target)}</span>` +
         `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
       `</span></div>`;
+    // Set INTENSITY — the target sets count assumes HARD sets; this says how hard each
+    // set needs to be (Hard near failure · Mid 3–8 RIR · Half ½ max reps for maintenance),
+    // defaulting from the level. Lives in the detail panel so the row stays one line.
+    const eff = effortOf(e);
+    const effHtml =
+      `<div class="prio-eff-row"><span class="prio-eff-lbl muted">intensity</span>` +
+      `<button type="button" class="prio-effort prio-effort-${eff}" data-prioeffort="${escapeHtml(ex)}" title="${EFFORT_TIP[eff]} Tap to cycle Hard → Mid → Half.">${EFFORT_LABEL[eff]}</button>` +
+      `<span class="prio-eff-hint muted">${EFFORT_HINT[eff]}</span></div>`;
     return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
       caret +
       `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
@@ -10541,7 +10574,7 @@ function renderWorkoutPlan(): void {
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
       `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
-      (open ? `<div class="prio-detail">${statsHtml}${goalHtml}${relPanel}</div>` : "") +
+      (open ? `<div class="prio-detail">${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
   // Summary line on top: total weekly target sets + the per-level breakdown
@@ -12321,14 +12354,24 @@ async function init() {
       pri[ex] = { level: next, target: suggestedTarget(next, exerciseMonthAvg(user, ex)) };
       savePriorities(); renderWorkoutPlan(); return;
     }
+    // Cycle the SET INTENSITY (hard → mid → half) in the detail panel. Doesn't change
+    // order, but re-render to recolour the pill + hint.
+    const effBtn = t.closest<HTMLElement>("[data-prioeffort]");
+    if (effBtn?.dataset.prioeffort && pri[effBtn.dataset.prioeffort]) {
+      const ex = effBtn.dataset.prioeffort;
+      const cur = effortOf(pri[ex]!);
+      pri[ex]!.effort = EFFORT_LEVELS[(EFFORT_LEVELS.indexOf(cur) + 1) % EFFORT_LEVELS.length]!;
+      savePriorities(); renderWorkoutPlan(); return;
+    }
     // Target −/+ stepper — update IN PLACE (no re-sort, so the row doesn't jump as you tap).
+    // Sub-1 steps of 0.5 below 2 (0.5 = one set / 2 weeks); whole sets above.
     const tgt = t.closest<HTMLElement>("[data-priotgt]");
     if (tgt?.dataset.priotgt && pri[tgt.dataset.priotgt]) {
       const ex = tgt.dataset.priotgt;
-      const v = Math.max(0, Math.min(20, pri[ex]!.target + (Number(tgt.dataset.d) || 0)));
+      const v = stepTarget(pri[ex]!.target, Number(tgt.dataset.d) || 0);
       pri[ex]!.target = v; savePriorities();
       const val = tgt.closest(".prio-target")?.querySelector(".prio-tgt-val");
-      if (val) val.textContent = `${v}/wk`;
+      if (val) val.textContent = fmtTarget(v);
       return;
     }
     // Remove a priority.

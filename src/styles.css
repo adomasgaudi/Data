@@ -4664,6 +4664,20 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 }
 .prio-goal-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .prio-goal-cur { font-size: 0.68rem; }
+/* Set-intensity row in the detail panel: a Hard/Mid/Half pill (effort ladder mirroring
+   the level pill) + a hint. The target sets count assumes HARD sets; this says how hard. */
+.prio-eff-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.prio-eff-lbl { font-size: 0.64rem; white-space: nowrap; }
+.prio-effort {
+  flex: none; font: inherit; font-size: 0.68rem; font-weight: 700; cursor: pointer;
+  min-height: var(--tap-min); display: inline-flex; align-items: center;
+  padding: 2px 10px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--muted); white-space: nowrap;
+}
+.prio-effort-hard { color: #fff; background: var(--accent); border-color: var(--accent); }
+.prio-effort-mid { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.prio-effort-half { color: var(--muted); background: var(--bg); opacity: 0.85; }
+.prio-eff-hint { font-size: 0.64rem; }
 .prio-related {
   display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;
 }
