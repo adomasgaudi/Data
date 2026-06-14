@@ -77,8 +77,17 @@ it can drift from reality. True single origin = extract builder fns (`btn()`,
 the machine-type toggle `machineModeControl`) AND the Coach catalogue example to
 render through them — so the toggle markup now has one origin and the catalogue
 can't drift from the real component. Zero markup change (verified: 519 tests +
-typecheck). **Next families (each its own slice):** `.wa-cat-pill`, `.athlete-chip`,
-the `.wa-fold`/`.coach-section` folds, the `.xdd` dropdown.
+typecheck). **Slice 2 ✅ (coach fold):** added `coachSection()` builder; the
+persistent-bugs + app-info Coach-page docs (16 hand-typed `<details class="coach-section">`
+blocks) now build through it — 16 copy-pasted folds → one origin. Zero output change.
+
+**`#senior` note — diminishing returns past here:** a duplication scan showed the
+two genuinely copy-pasted components (the segmented toggle, the coach fold) are now
+done. `.wa-cat-pill`/`.athlete-chip` have only ONE real builder + a static catalogue
+example (no duplication to remove); the rest already have single builder functions.
+Forcing the data-coupled real builders to also drive the catalogue is impractical
+(they need live data). **Recommend pausing UIC-7** — the high-value single-origin
+work is complete; remaining "slices" would be low-value churn.
 
 ### UIC-8 🟢 ✅ Literal radius — `.wa-cat-pill { border-radius: 12px }`
 Used a magic `12px` instead of the `--r-pill` token (the `#design` rule). **Fixed:**

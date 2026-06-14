@@ -9823,26 +9823,25 @@ function renderCoachTechStack(): void {
   el.innerHTML = TECH_STACK_HTML;
 }
 
-const PERSISTENT_BUGS_HTML = `
-  <details class="coach-section"><summary class="coach-sum">PB-10 · wa-sel-cog-menu goes off-screen</summary>
-  <div class="coach-body"><p>Exercise selector ⚙ popup escaped the viewport when the cog wrapped to a new row. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code>. <em>Recurrences: 1</em></p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-13 · Exercise picker opener keeps changing</summary>
-  <div class="coach-body"><p>The opener UI has been redesigned multiple times: full-width bar → pill → slide-in drawer → sticky tab. Each redesign solved discoverability but broke another constraint. Root cause: tension between reach (always visible) and space (no room). Current: sticky tab on right edge, drag left to open.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-14 · Version number not bumped on ship</summary>
-  <div class="coach-body"><p>AIs shipped commits without bumping the patch version or updating the changelog. Fixed: added CLAUDE.md rule 29 — version bump + changelog entry + index.html span are mandatory before any commit.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-15 · Manual sets with no seq silently dropped from upload</summary>
-  <div class="coach-body"><p>Sets added before the <code>seq</code> field existed had <code>seq: undefined</code> and were filtered out of every Supabase upsert silently. Fixed: back-fill seq on first upload.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-16 · Supabase anon key can't INSERT even with RLS disabled</summary>
-  <div class="coach-body"><p>RLS disable alone doesn't grant write access; <code>GRANT SELECT/INSERT/UPDATE/DELETE TO anon, authenticated</code> is also required. Table also had a uuid PK that caused PostgREST to cast the text user_id to uuid → 400. Fixed: rebuilt table with composite natural PK, added GRANT.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-17 · Workout ⚙ menu out of viewport bounds</summary>
-  <div class="coach-body"><p>Same class as PB-10 — <code>position:absolute</code> with <code>right:0</code> / <code>left:0</code> always escapes bounds when the anchor moves. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code> on toggle event.</p></div></details>
-`;
+/** Single-origin builder for the Coach-page fold (UIC-7): ONE place emits the
+ * `.coach-section` <details> + `.coach-sum` summary + `.coach-body`, so the
+ * persistent-bugs / app-info folds can't drift. Bodies are trusted static HTML. */
+function coachSection(title: string, bodyHtml: string, attrs = ""): string {
+  return `<details class="coach-section"${attrs}><summary class="coach-sum">${title}</summary><div class="coach-body">${bodyHtml}</div></details>`;
+}
 
-const APP_INFO_HTML = `
-  <details class="coach-section"><summary class="coach-sum">Data flow</summary>
-  <div class="coach-body"><p>StrengthLevel → Apps Script → Google Sheet "UD" → <code>doGet</code> JSON → site (validate → compute → render). Manual sets also stored in Supabase <code>sets</code> table (anon key, composite PK).</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">Key source files</summary>
-  <div class="coach-body"><ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
+const PERSISTENT_BUGS_HTML = ([
+  ["PB-10 · wa-sel-cog-menu goes off-screen", `<p>Exercise selector ⚙ popup escaped the viewport when the cog wrapped to a new row. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code>. <em>Recurrences: 1</em></p>`],
+  ["PB-13 · Exercise picker opener keeps changing", `<p>The opener UI has been redesigned multiple times: full-width bar → pill → slide-in drawer → sticky tab. Each redesign solved discoverability but broke another constraint. Root cause: tension between reach (always visible) and space (no room). Current: sticky tab on right edge, drag left to open.</p>`],
+  ["PB-14 · Version number not bumped on ship", `<p>AIs shipped commits without bumping the patch version or updating the changelog. Fixed: added CLAUDE.md rule 29 — version bump + changelog entry + index.html span are mandatory before any commit.</p>`],
+  ["PB-15 · Manual sets with no seq silently dropped from upload", `<p>Sets added before the <code>seq</code> field existed had <code>seq: undefined</code> and were filtered out of every Supabase upsert silently. Fixed: back-fill seq on first upload.</p>`],
+  ["PB-16 · Supabase anon key can't INSERT even with RLS disabled", `<p>RLS disable alone doesn't grant write access; <code>GRANT SELECT/INSERT/UPDATE/DELETE TO anon, authenticated</code> is also required. Table also had a uuid PK that caused PostgREST to cast the text user_id to uuid → 400. Fixed: rebuilt table with composite natural PK, added GRANT.</p>`],
+  ["PB-17 · Workout ⚙ menu out of viewport bounds", `<p>Same class as PB-10 — <code>position:absolute</code> with <code>right:0</code> / <code>left:0</code> always escapes bounds when the anchor moves. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code> on toggle event.</p>`],
+] as const).map(([t, b]) => coachSection(t, b)).join("");
+
+const APP_INFO_HTML = ([
+  ["Data flow", `<p>StrengthLevel → Apps Script → Google Sheet "UD" → <code>doGet</code> JSON → site (validate → compute → render). Manual sets also stored in Supabase <code>sets</code> table (anon key, composite PK).</p>`],
+  ["Key source files", `<ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
     <li><code>src/main.ts</code> — all DOM glue, render functions, event handlers</li>
     <li><code>src/metrics.ts</code> — pure 1RM / strength / percentile calculations</li>
     <li><code>src/aggregate.ts</code> — data grouping, filtering, record selection</li>
@@ -9853,9 +9852,8 @@ const APP_INFO_HTML = `
     <li><code>src/i18n.ts</code> — EN/LT translation dictionary</li>
     <li><code>src/supabase.ts</code> — Supabase client, set upload/download helpers</li>
     <li><code>src/versionName.ts</code> — Bleach zanpakutō display names for version minors</li>
-  </ul></div></details>
-  <details class="coach-section"><summary class="coach-sum">Standing rules (key highlights)</summary>
-  <div class="coach-body"><ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
+  </ul>`],
+  ["Standing rules (key highlights)", `<ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
     <li>Version: AIs bump ONLY the patch (3rd digit). Owner bumps minor/major.</li>
     <li>Save = commit + push after every change (owner sees only the live site).</li>
     <li>Every change: bump version + update changelog + update index.html span.</li>
@@ -9865,8 +9863,8 @@ const APP_INFO_HTML = `
     <li>Popup menus must preserve their open state across re-renders (rule 24).</li>
     <li>Supabase <code>sets</code> table: composite natural PK, no uuid, GRANT to anon.</li>
     <li>No-code project: optimise for AI readability, not human conventions.</li>
-  </ul></div></details>
-`;
+  </ul>`],
+] as const).map(([t, b]) => coachSection(t, b)).join("");
 
 const TECH_STACK_HTML = `
   <div style="display:flex;flex-direction:column;gap:0.4rem">
