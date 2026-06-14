@@ -225,6 +225,9 @@ const els = {
   planPage: $("planPage"),
   planClose: $<HTMLButtonElement>("planClose"),
   planBody: $("planBody"),
+  formulasBtn: $<HTMLButtonElement>("formulasBtn"),
+  formulasPage: $("formulasPage"),
+  formulasClose: $<HTMLButtonElement>("formulasClose"),
   exInfoPage: $("exInfoPage"),
   exInfoTitle: $("exInfoTitle"),
   exInfoBack: $<HTMLButtonElement>("exInfoBack"),
@@ -3206,6 +3209,17 @@ function openHealth() {
 function openBackup() {
   setSettingsOpen(false);
   els.backupPage.hidden = false;
+}
+
+/** Open the Formulas overlay (the old Test tab, now a popup beside the Plan button):
+ * the 1RM calculator, the Coach working-weight tool, the strength-fade curve and the
+ * "how the numbers work" notes. Show first, then render so the SVG charts measure a
+ * real (non-zero) width. */
+function openFormulas() {
+  setSettingsOpen(false);
+  setOtherSheetOpen(false);
+  els.formulasPage.hidden = false;
+  requestAnimationFrame(() => { renderTest(); renderCoachRx(); });
 }
 
 /** Open the version-history overlay from Settings. */
@@ -10607,7 +10621,7 @@ function renderWorkoutPlan(): void {
       }).join("")}</div></div>`
     : "";
   const planTitle = document.getElementById("planTitle");
-  if (planTitle) planTitle.textContent = `${athleteLabel()} priorities`;
+  if (planTitle) planTitle.textContent = `${athleteLabel()} plan`;
   els.planBody.innerHTML = summary + list + addBlock;
 }
 
@@ -12299,6 +12313,7 @@ async function init() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (pickDrawerScope !== null) { closePickDrawer(); return; } // topmost overlay closes first
+    if (!els.formulasPage.hidden) { els.formulasPage.hidden = true; return; }
     if (!els.planPage.hidden) { els.planPage.hidden = true; return; }
     if (!els.exInfoPage.hidden) closeExerciseInfo();
     else if (document.body.classList.contains("wa-graph-full")) { document.body.classList.remove("wa-graph-full"); renderWaGraph(); }
@@ -12306,6 +12321,9 @@ async function init() {
   // "Plan workout" — suggest what to train today (top of the workout history).
   els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
   els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
+  // Formulas popup (was the Test tab) — sits beside the Plan button.
+  els.formulasBtn.addEventListener("click", openFormulas);
+  els.formulasClose.addEventListener("click", () => { els.formulasPage.hidden = true; });
   // 1RM goal input (Phase 2): save the target kg (or clear it) on change, then re-render
   // so the % progress updates. Input has already blurred, so re-rendering is fine.
   els.planBody.addEventListener("change", (e) => {
@@ -17454,6 +17472,8 @@ function runSearchAction(act: string): void {
     hideCmdPalette();
     if (input) input.value = "";
     input?.blur();
+    // Formulas is no longer a tab — it's a popup beside the Plan button.
+    if (tab === "test") { openFormulas(); return; }
     switchTopTab(tab === "analysis" ? analysisTabName() : tab);
     return;
   }
@@ -18346,7 +18366,6 @@ function switchTopTab(name: string) {
   document.body.classList.toggle("on-s-anl", name === "s-analysis");
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
-  if (name === "test") renderCoachRx();
   if (name === "changelog") { renderChangelog(); expandLatestChangelog(); }
   if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
@@ -18523,7 +18542,7 @@ function updateBottomNav() {
 const PAGE_NAMES: Record<string, string> = {
   analysis: "Analysis", "s-analysis": "S-Analysis", leaderboards: "Colosseum",
   athlete: "Athlete", bwparts: "Index", groups: "Stats", team: "Group",
-  data: "Data", test: "Formulas", statsedit: "Athletes",
+  data: "Data", statsedit: "Athletes",
   guide: "Guide", changelog: "Version history",
 };
 function updateBrand() {

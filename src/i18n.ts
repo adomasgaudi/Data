@@ -59,9 +59,10 @@ const LT: Record<string, string> = {
   // ---- Page titles (top bar shows the current page name) ----
   "Athlete": "Sportininkas",
   "Stats": "Statistika",
-  // ---- Priorities overlay ----
-  "📋 Priorities": "📋 Prioritetai",
-  "Priorities": "Prioritetai",
+  // ---- Plan overlay (the 📋 button; was "Priorities") ----
+  "📋 Plan": "📋 Planas",
+  "🧮 Formulas": "🧮 Formulės",
+  "Plan": "Planas",
   "Focus lifts": "Svarbiausi pratimai",
   "🎯 Goal": "🎯 Tikslas",
   "no 1RM yet": "dar nėra 1RM",
