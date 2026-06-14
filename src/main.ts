@@ -3656,10 +3656,10 @@ function renderChangelog() {
       if (i < timeline.length && eraName(timeline[i]!.version) === eraName(timeline[i0]!.version)) continue;
       const era = eraName(timeline[i0]!.version);
       const pts: SvgPoint[] = [];
-      if (i0 > 0) { const pp = timeline[i0 - 1]!; pts.push({ x: Date.parse(pp.date), y: pp.cumulative }); }
+      if (i0 > 0) { const pp = timeline[i0 - 1]!; pts.push({ x: pp.t, y: pp.cumulative }); }
       for (let k = i0; k < i; k++) {
         const p = timeline[k]!;
-        pts.push({ x: Date.parse(p.date), y: p.cumulative, meta: `${displayVersion(p.version)} · ${p.date} · ${fmtSp(p.cumulative)} SP` });
+        pts.push({ x: p.t, y: p.cumulative, meta: `${displayVersion(p.version)} · ${p.date} · ${fmtSp(p.cumulative)} SP` });
       }
       eraSeries.push({ name: era, color: eraColor(timeline[i0]!.version), type: "line", points: pts, noLegend: true });
       i0 = i;
@@ -3672,7 +3672,7 @@ function renderChangelog() {
       let cc = 0; const pts: SvgPoint[] = [];
       for (const p of timeline) if ((p.cat ?? "?") === tag) {
         cc = Math.round((cc + p.sp) * 10) / 10;
-        pts.push({ x: Date.parse(p.date), y: cc, meta: `${tag} · ${p.date} · ${fmtSp(cc)} SP` });
+        pts.push({ x: p.t, y: cc, meta: `${tag} · ${p.date} · ${fmtSp(cc)} SP` });
       }
       return { name: tag, color: PALETTE[(idx + 2) % PALETTE.length]!, type: "line" as const, points: pts, hidden: true };
     });

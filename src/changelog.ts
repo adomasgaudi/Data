@@ -91,6 +91,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.375", shortTitle: "SP graph: spread a busy day; log real-usage calibration", code: "META-177", title: "Version-history SP chart spreads same-day releases across the day (no vertical cliff); real Claude-app weekly readings logged as cost calibration", sp: 1, note: "Two things. (1) GRAPH: the SP-over-time chart plotted every release at Date.parse(day), so ~39 releases dated 2026-06-14 stacked on ONE x — a vertical cliff (owner: 'too much sp in one day'). buildSpTimeline now gives each point a `t` timestamp SPREAD evenly within its calendar day, so a busy day rises as a ~23h slope; `date` still labels it. (2) CALIBRATION: logged the owner's real app readings in docs/cost-model.md — weekly (all models) moved ~+12pp in ~12h (11%→23%), while the 5h bar resets through the day so it's not cross-day comparable. Finding: the per-turn/session € figures are the right ORDER of magnitude but UNDER-report true weekly burn because the script sees only ONE transcript while several sessions run in parallel; the app's weekly bar is the real total. Anchor left at 5.2M output/5h pending a clean single-session re-measure (no fabricated number). 526 tests.", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.374", shortTitle: "Recent 100 SP valued 2× in version-history cost", code: "META-176", title: "Version history cost: the most-recent 100 SP are weighted 2× (recent work has been slower & harder)", sp: 1, note: "Owner: \"update the last 100 SP at double value, it's been slower and harder.\" Added a RECENCY multiplier to the version-history € distribution in changelog.ts: the most-recent 100 SP (RECENT_SP_WINDOW, walking the log newest-first) are valued at 2× (RECENCY_EFFORT_MULT) alongside the existing model-weight. The grand total stays pinned to PROJECT_COST_EUR — it only shifts the per-version € SHARE toward recent work, so a recent update now reads exactly ~2× the € per SP it otherwise would (verified) and older work proportionally less. SP grades themselves are unchanged. Cost-method refinement documented in docs/cost-model.md; constants RECENCY_EFFORT_MULT / RECENT_SP_WINDOW are tunable. All 526 tests pass (cost still sums to the pinned total).", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.373", shortTitle: "UIC-7 slice 4: fix catalogue nav drift (subtab-btn → ex-tab)", code: "UIC-6", title: "Catalogue-drift audit: the UI page documented two stale nav controls; replaced with the real .ex-tab app tab", sp: 1, note: "Fourth UIC-7 slice — a drift audit (checked every catalogued class exists in CSS). The Coach UI catalogue's nav entries were stale: 'Nav tab → .tab' is the RETIRED top tab bar (display:none) and 'Bottom nav button → .subtab-btn' references a class that doesn't exist — the bottom tab bar was replaced by the .ex-tab tabs (Workouts/List & stats/Compare/Single), which weren't catalogued at all. Replaced both lying entries with one accurate .ex-tab entry, so the UI page now reflects the real navigation. Also flagged the now-confirmed-dead .subtabs/.subtab/.subtab-ico CSS for a cleanup pass (cleanup-backlog UIC-DEAD-CSS). 526 tests. See docs/ui-consistency-audit.md.", cat: "UIC", model: "Opus 4.8" },
   { version: "b.2.8.372", shortTitle: "Reply rules: Summary lists open-loops + suggestions; version line shows the shift", code: "META-175", title: "New HARD RULE 45 + rule 40 update: the Summary ends with unfinished tasks & a missing-only suggestion count, and the version line shows the x→y shift", sp: 1, note: "Owner #remember (two parts). (1) Rule 45: the end Summary, after the point-title recap, lists any UNFINISHED/deferred tasks as 2-5-word titles and — only when a genuine GAP (MISSING functionality, never extra/gold-plating, rule 11) — a 'Suggestions: <n>' count whose detail sits above in the body; nothing unfinished + no real gaps -> omit, never pad. (2) Rule 40 + scripts/show-cost.py: the model+version line now shows the SHIFT 'Codename v.<start> -> v.<now>' when a bump happened this turn (start = the version at the end of the previous reply), computed automatically from a per-session sidecar keyed by the transcript + locked per prompt number (re-runs in the same turn don't drift it; the very first run seeds the start from git HEAD~1). Docs/tooling only.", cat: "META", model: "Opus 4.8" },
@@ -1953,6 +1954,7 @@ const RELEASE_DATES: Record<string, string> = {
   "b.2.8.362": "2026-06-14",
   "b.2.8.363": "2026-06-14",
   "b.2.8.374": "2026-06-14",
+  "b.2.8.375": "2026-06-14",
 };
 
 export interface SpTimelinePoint {
@@ -1961,6 +1963,9 @@ export interface SpTimelinePoint {
   cumulative: number;
   /** Commit day (YYYY-MM-DD), carried forward over gaps. */
   date: string;
+  /** Chart x: ms timestamp, SPREAD within the day so a busy day slopes up instead of
+   *  forming one vertical cliff (many releases share a calendar date). */
+  t: number;
   /** Task-code category of this release. */
   cat?: string | undefined;
 }
@@ -1978,9 +1983,23 @@ export function buildSpTimeline(): SpTimelinePoint[] {
   for (let i = CHANGELOG.length - 1; i >= 0; i--) collect(CHANGELOG[i]!);
   let cum = 0;
   let lastDate = "2026-06-02";
-  return leaves.map((l) => {
+  const out: SpTimelinePoint[] = leaves.map((l) => {
     cum = Math.round((cum + l.sp) * 10) / 10;
     lastDate = RELEASE_DATES[l.version] ?? lastDate;
-    return { version: l.version, sp: l.sp, cumulative: cum, date: lastDate, cat: l.cat };
+    return { version: l.version, sp: l.sp, cumulative: cum, date: lastDate, t: 0, cat: l.cat };
   });
+  // Spread points that share a calendar day EVENLY across that day, so a very busy day
+  // (dozens of releases on 2026-06-14) rises as a slope instead of one vertical cliff
+  // on the chart (owner: "the graph is too much sp in one day"). `date` stays the plain
+  // day for labels; `t` is the chart x.
+  const DAY = 86_400_000;
+  for (let i = 0; i < out.length; ) {
+    let j = i;
+    while (j < out.length && out[j]!.date === out[i]!.date) j++;
+    const start = Date.parse(out[i]!.date + "T00:00:00Z");
+    const n = j - i;
+    for (let k = i; k < j; k++) out[k]!.t = start + ((k - i + 1) / (n + 1)) * DAY;
+    i = j;
+  }
+  return out;
 }

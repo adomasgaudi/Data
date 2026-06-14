@@ -98,3 +98,24 @@ been "slower and harder" than its raw SP grade suggests. The grand total stays p
 (a recent update reads ~2× the € it otherwise would; older work proportionally less). The
 SP grades themselves are unchanged. Constants `RECENCY_EFFORT_MULT` / `RECENT_SP_WINDOW`
 live in `src/changelog.ts`; widen the window or drop the multiplier to 1 to retire it.
+
+## Real-usage calibration log (ground truth from the Claude app)
+
+The **weekly** limit is the reliable cross-day signal — the 5h window resets through the
+day, so 5h % is NOT comparable between snapshots; only weekly accumulates. Readings the
+owner has reported (all on the Max plan, weekly resets Wed 02:59):
+
+| when (2026-06) | session 5h | weekly (all models) |
+|----------------|-----------|----------------------|
+| 14th 00:32     | 10%       | **11%**              |
+| 14th 12:24     | 35%       | **23%**              |
+
+So weekly moved **~+12pp in ~12h** of heavy multi-session work. Sanity check vs the
+anchor: one transcript turn shows ~0.01–0.1% weekly here, and a full session ~0.3% — far
+below the observed +12pp, because the weekly cap aggregates ALL sessions/branches running
+in parallel (often several at once), not just one transcript. The per-turn figures are
+the right ORDER of magnitude but the script can only see ONE transcript, so it
+**under-reports the true weekly burn** when many sessions run together — read the app's
+weekly bar for the real total. To re-measure the Opus anchor cleanly, run ONE isolated
+session and read the weekly delta it alone caused. Anchor left at 5.2M output/5h pending
+such a clean single-session measurement (don't fabricate a "measured" number).
