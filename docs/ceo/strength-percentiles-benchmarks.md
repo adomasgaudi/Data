@@ -1,6 +1,6 @@
 # Plan: strength percentiles (3 populations) + custom benchmarks, per lift
 
-- **Asked:** 2026-06-14  ·  **Status:** PLANNING → building Phase 1
+- **Asked:** 2026-06-14  ·  **Status:** Phase 1 & 2 shipped → next: Phase 3 (benchmarks)
 - **Owner decisions (#? answers):** show **all 3 populations** (general / StrengthLevel-gym / professional), **estimates OK now, find real data later**; **plan both features first, then build.**
 
 ## The two features
@@ -19,13 +19,13 @@
 
 ## Phases (incremental, one per turn; #careful)
 ### Phase 1 — the data module (new file, zero #co-work conflict)
-- [ ] 1. `src/strengthStandards.ts`: types (`Population`, `StandardCurve`), `PERCENTILES`, a seed for ~8–12 common lifts × sex × 3 populations (bw-ratios, `confidence` flagged), and `percentileFor(lift, sex, bodyweightRatio)` + `standardsFor(lift, sex)` lookups with a name→canonical resolver.
-- [ ] 2. `src/strengthStandards.test.ts`: monotonic curves, ratio→percentile round-trips, estimate-flag presence, unknown-lift → null.
-- [ ] 3. Ship (no UI yet) — pure module, fully tested.
+- [x] 1. `src/strengthStandards.ts`: types (`Population`, `StandardCurve`), `PERCENTILES`, a seed for ~8–12 common lifts × sex × 3 populations (bw-ratios, `confidence` flagged), and `percentileFor(lift, sex, bodyweightRatio)` + `standardsFor(lift, sex)` lookups with a name→canonical resolver. — shipped b.2.8.359 (DATA-14).
+- [x] 2. `src/strengthStandards.test.ts`: monotonic curves, ratio→percentile round-trips, estimate-flag presence, unknown-lift → null. — 6 tests, b.2.8.359.
+- [x] 3. Ship (no UI yet) — pure module, fully tested.
 
-### Phase 2 — percentile panel on the World Records page (quieter view)
-- [ ] 4. A compact per-lift "Strength percentiles" panel: the 3 population curves (estimates marked), the athlete's current 1RM placed on it ("≈ Nth %ile of gym pop"). #cram, one horizontally-scrollable strip where it gets wide.
-- [ ] 5. i18n + tests; ship.
+### Phase 2 — percentile panel on the World Records page (quieter view) ✅ DONE (b.2.8.362, DATA-16)
+- [x] 4. A compact per-lift "Strength percentiles" panel: the 3 population curves (estimates marked), the athlete's current 1RM placed on it ("≈ Nth %ile of gym pop"). #cram, one horizontally-scrollable strip where it gets wide. — table of bw-ratios + per-athlete placement chips, M↔W toggle, '≈ est' flag.
+- [x] 5. i18n + tests; ship.
 
 ### Phase 3 — benchmarks store + editor (start on WR page, quiet)
 - [ ] 6. `colosseum.benchmarks.v1` store + a small per-lift editor (add/remove labelled threshold rows: label + bw-ratio or kg).
@@ -43,3 +43,5 @@
 
 ## Log
 - 2026-06-14 — plan created (Opus 4.8); owner approved 3-pop+estimates & plan-first. Starting Phase 1 (data module).
+- 2026-06-14 — Phase 1 shipped (b.2.8.359, DATA-14): pure tested data module.
+- 2026-06-14 — Phase 2 shipped (b.2.8.362, DATA-16): percentile panel on the World Records page (3-pop curve table + per-athlete placement chips + M↔W toggle, '≈ est' flagged).

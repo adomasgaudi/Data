@@ -139,6 +139,17 @@ const LT: Record<string, string> = {
   "Hide the History section": "Slėpti istorijos skiltį",
   "No athletes with a height & sex on file to place in a weight class.":
     "Nėra sportininkų su įrašytu ūgiu ir lytimi, kad būtų galima priskirti svorio kategoriją.",
+  // ---- Strength-percentile panel ----
+  "Strength percentiles": "Jėgos procentiliai",
+  "Pick a single lift (not Total) to see strength percentiles.":
+    "Pasirinkite vieną pratimą (ne Bendrą), kad matytumėte jėgos procentilius.",
+  "≈ est": "≈ įvert.",
+  "1RM as ×bodyweight at each percentile, by population.":
+    "1RM kaip ×kūno svoris kiekviename procentilyje, pagal populiaciją.",
+  "Population": "Populiacija",
+  "General": "Bendra",
+  "Gym (StrengthLevel)": "Salė (StrengthLevel)",
+  "Professional": "Profesionalai",
   "Every released version, newest first — the same log as the git history.": "Kiekviena išleista versija, naujausia viršuje — tas pats sąrašas kaip git istorijoje.",
   // ---- Settings ----
   "Calculations & display": "Skaičiavimai ir rodymas",

@@ -153,6 +153,7 @@ import {
   RECORDS_AS_OF, RECORDS_PROVISIONAL, weightClassFor, recordFor, percentOfRecord,
   type PowerLift,
 } from "./records";
+import { curveFor, percentileFor, hasStandards, PERCENTILES, POPULATION_LABEL, type Population, type Sex } from "./strengthStandards";
 import { DEFAULT_FORMULA } from "./config";
 import { supabase, upsertSets, fetchKv, upsertKv } from "./supabase";
 import { isSyncable, merge3, SYNC_BASE_KEY } from "./cacheSync";
@@ -9929,6 +9930,44 @@ function renderLive(): void {
 // ---- World records page ---------------------------------------------------
 // Which trio lift the records table is showing (mutually-exclusive pill set).
 let recordsLift: PowerLift = "total";
+// Sex shown in the strength-percentile panel (the curves are sex-specific). Cycles M↔W.
+let recordsStdSex: Sex = "m";
+/** Ordinal suffix: 1→1st, 22→22nd, 23→23rd, 72→72nd, 95→95th. */
+function ordinal(n: number): string {
+  const v = n % 100, s = ["th", "st", "nd", "rd"];
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+/** The "Strength percentiles (estimated)" panel for the selected lift + sex: the 3
+ * population bw-ratio curves, plus where each athlete of that sex lands on the gym curve.
+ * Phase 2 of docs/ceo/strength-percentiles-benchmarks.md. */
+function recordsPercentileHtml(byLift: Map<PowerLift, Map<string, number>>, roster: { username: string; user: string }[]): string {
+  if (recordsLift === "total") return `<p class="rec-pct-note muted">Pick a single lift (not Total) to see strength percentiles.</p>`;
+  const ex = LIFT_EXERCISE[recordsLift as Exclude<PowerLift, "total">];
+  if (!hasStandards(ex)) return "";
+  const s = recordsStdSex;
+  const headCols = PERCENTILES.map((p) => `<th class="num">${ordinal(p)}</th>`).join("");
+  const rows = (["general", "strengthlevel", "pro"] as Population[]).map((pop) => {
+    const c = curveFor(ex, s, pop)!;
+    return `<tr class="rec-pct-${pop}"><td>${escapeHtml(POPULATION_LABEL[pop])}</td>${c.map((r) => `<td class="num">${r.toFixed(2)}×</td>`).join("")}</tr>`;
+  }).join("");
+  const you = roster.filter((u) => athProfile(u.username)?.sex === s).map((u) => {
+    const p = athProfile(u.username)!;
+    const best = byLift.get(recordsLift)?.get(u.username);
+    if (best == null || !p.weight) return "";
+    const ratio = best / p.weight;
+    const pct = percentileFor(ex, s, ratio, "strengthlevel");
+    if (pct == null) return "";
+    return `<span class="rec-pct-you-chip" title="${escapeHtml(u.user)}: best ≈ ${fmt(best)}kg ÷ ${fmt(p.weight)}kg bw = ${ratio.toFixed(2)}× → ~${ordinal(pct)} percentile among gym (StrengthLevel) lifters">${escapeHtml(u.user)} <b>${ratio.toFixed(2)}×</b> ≈ <b>${ordinal(pct)}</b></span>`;
+  }).filter(Boolean).join("");
+  return `<section class="rec-pct-panel">` +
+    `<div class="rec-pct-head"><span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-lift muted">${escapeHtml(LIFT_LABEL[recordsLift])}</span>` +
+    `<span class="rec-pct-est" title="ESTIMATED. The Gym row is seeded from StrengthLevel standards; General & Professional are derived estimates — real data pending (#research).">≈ est</span>` +
+    `<button type="button" class="rec-pct-sex" data-recstdsex title="Toggle sex — the curves are sex-specific">${s === "f" ? "W" : "M"}</button></div>` +
+    `<div class="rec-pct-sub muted">1RM as ×bodyweight at each percentile, by population.</div>` +
+    `<div class="data-table-wrap"><table class="data-table rec-pct-table"><thead><tr><th>Population</th>${headCols}</tr></thead><tbody>${rows}</tbody></table></div>` +
+    (you ? `<div class="rec-pct-you">${you}</div>` : "") +
+    `</section>`;
+}
 
 /** Each athlete's BEST estimated 1RM for one logged exercise, username → e1rm
  * (kg). Mirrors the leaderboard pipeline so the numbers match that page. */
@@ -10022,7 +10061,8 @@ function renderRecords(): void {
         `<thead><tr><th>Athlete</th><th class="num">Ht</th><th class="num">Lean</th><th class="num">Fat</th><th class="num">Opt&nbsp;wt</th><th class="num">Class</th><th class="num">WR</th><th class="num">Best*</th><th class="num">%WR</th></tr></thead>` +
         `<tbody>${rows}</tbody></table></div>` +
         `<p class="rec-foot muted">Opt&nbsp;wt, Lean &amp; Fat are kg at the estimated natural ceiling (power body-fat). WR = world record for that optimal class. Best* = the athlete's best ESTIMATED 1RM from logged sets (Total = the three summed), so it's a rough gauge, not a meet lift.</p>`
-      : `<p class="muted">No athletes with a height & sex on file to place in a weight class.</p>`);
+      : `<p class="muted">No athletes with a height & sex on file to place in a weight class.</p>`) +
+    recordsPercentileHtml(byLift, roster);
 }
 
 function renderStatsEdit(): void {
@@ -12164,6 +12204,12 @@ async function init() {
     const pill = (e.target as HTMLElement).closest<HTMLElement>(".rec-lift-pill");
     if (!pill?.dataset.reclift) return;
     recordsLift = pill.dataset.reclift as PowerLift;
+    renderRecords();
+  });
+  // Strength-percentile panel: toggle the sex its curves are shown for (M ↔ W).
+  document.getElementById("recordsBody")?.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest(".rec-pct-sex")) return;
+    recordsStdSex = recordsStdSex === "m" ? "f" : "m";
     renderRecords();
   });
   setupDataTab();
