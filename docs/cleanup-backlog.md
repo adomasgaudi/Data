@@ -12,6 +12,13 @@ committed `CAT-n` is derived at commit time (rule 8). Risky deletions go via the
 attic/warehouse tiers (rule 10). Keep this file updated — mark items done, add new
 ones, re-grade as the code changes.
 
+## 🎨 UI consistency (UIC — see docs/ui-consistency-audit.md)
+- 🟢 **UIC-DEAD-CSS** [CSS] (SP:0.5) — Delete the unused bottom-nav classes `.subtabs`
+  / `.subtab` / `.subtab-ico` (+ `:hover`/`.is-active`) in `src/styles.css`: the bottom
+  tab bar was replaced by the `.ex-tab` tabs, so these are dead (confirmed via grep —
+  used nowhere). The retired `.tab`/`.tabs` top-bar CSS is similarly dead-but-kept
+  (it's the `is-active` source). Found during the UIC-7 catalogue-drift audit.
+
 ## ✅ Done sweeps (recent)
 
 - **Synthetic-lift inheritance prune (DONE)** `[exercises/grouping]` — synthetic

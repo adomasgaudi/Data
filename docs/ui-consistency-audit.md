@@ -87,6 +87,16 @@ origin. Bonus: the Coach catalogue example had DRIFTED (showed numbered `‹/2/�
 buttons, but the real pager is `‹ Prev / range / Next ›`) — the catalogue now
 renders the real `pagerNav`, so it can't lie about the component anymore.
 
+**Slice 4 ✅ (catalogue drift audit — nav):** checked every catalogued class exists
+in CSS. Found the catalogue's nav entries were stale: "Nav tab → `.tab`" points at
+the RETIRED top tab bar (`.tabs { display:none }`), and "Bottom nav button →
+`.subtab-btn`" references a class that **doesn't exist** — the bottom tab bar was
+replaced by the `.ex-tab` tabs (Workouts / List & stats / Compare / Single), which
+weren't catalogued at all. Replaced both stale entries with one accurate `.ex-tab`
+entry. **Dead-CSS follow-up:** `.subtabs` / `.subtab` / `.subtab-ico` (+ states) in
+`styles.css` are now confirmed unused — safe to delete in a cleanup pass (logged in
+`cleanup-backlog.md`).
+
 **`#senior` note — remaining slices are lower-value (owner chose to continue):** the
 duplication scan shows the clearly copy-pasted components (segmented toggle, coach
 fold, pager) are now done. `.wa-cat-pill`/`.athlete-chip` have ONE real builder + a

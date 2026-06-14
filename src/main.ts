@@ -9675,8 +9675,7 @@ function renderCoachUiCatalogue(): void {
     <p class="muted" style="font-size:0.8rem;margin:0 0 0.8rem">Live renders — tap an item to expand. Use the <strong>Prompt name</strong> when reporting problems.</p>
 
     ${group("Buttons", [
-      sec("Nav tab", "nav tab / top tab", ".tab", `<button class="tab">Tab</button> <button class="tab is-active">Active tab</button>`),
-      sec("Bottom nav button", "bottom nav / subtab", ".subtab-btn", `<button class="subtab-btn">⌂ Home</button>`),
+      sec("App tab (view switcher)", "app tab / view tab / nav tab", ".ex-tab", `<button class="ex-tab">Workouts</button> <button class="ex-tab is-active">List &amp; stats</button>`),
       sec("Primary button", "primary button", ".primary-btn", `<button class="primary-btn">Primary</button>`),
       sec("Settings link button", "settings button / settings row button", ".settings-link", `<button class="settings-link">⬆ Upload sets</button>`),
       sec("Icon button (on-chart)", "on-chart button / graph corner button", ".wa-gov-btn", `<button class="wa-gov-btn">⤢</button> <button class="wa-gov-btn">kg</button> <button class="wa-gov-btn">⛶</button>`),
