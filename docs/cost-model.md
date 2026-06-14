@@ -4,6 +4,15 @@
 at the end of a turn (the `scripts/show-cost.py` Stop hook + CLAUDE.md rule 34). The
 numbers are easy to get catastrophically wrong, so here is the one true method.
 
+## Method version — **this is `cost-v.2`** (commits tag the figure `cost-v.2`)
+
+The current estimate method is **v.2**: real cost = OUTPUT tokens (from the transcript
+`usage` objects) measured against a per-model 5h-window anchor, € via the flat-plan
+formula below. Commit bodies tag their cost figure **`cost-v.2`** so a future, better
+method (v.3+) can re-price old updates and we'll know which estimate produced which
+number. When the method changes, bump this label and note what changed.
+(History: v.1 = the early API-list-price guess, retired as ~100× too high.)
+
 ## The core truth
 
 The plan is a **flat-fee subscription** (currently €180/mo, the Max "4x/20x" tier),
