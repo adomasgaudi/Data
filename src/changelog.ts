@@ -91,6 +91,7 @@ const SOON: Release = {
  * truth; the nested ~100 / ~30 SP history tree is built from it automatically.
  */
 export const RELEASES: Release[] = [
+  { version: "b.2.8.374", shortTitle: "Recent 100 SP valued 2× in version-history cost", code: "META-176", title: "Version history cost: the most-recent 100 SP are weighted 2× (recent work has been slower & harder)", sp: 1, note: "Owner: \"update the last 100 SP at double value, it's been slower and harder.\" Added a RECENCY multiplier to the version-history € distribution in changelog.ts: the most-recent 100 SP (RECENT_SP_WINDOW, walking the log newest-first) are valued at 2× (RECENCY_EFFORT_MULT) alongside the existing model-weight. The grand total stays pinned to PROJECT_COST_EUR — it only shifts the per-version € SHARE toward recent work, so a recent update now reads exactly ~2× the € per SP it otherwise would (verified) and older work proportionally less. SP grades themselves are unchanged. Cost-method refinement documented in docs/cost-model.md; constants RECENCY_EFFORT_MULT / RECENT_SP_WINDOW are tunable. All 526 tests pass (cost still sums to the pinned total).", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.373", shortTitle: "UIC-7 slice 4: fix catalogue nav drift (subtab-btn → ex-tab)", code: "UIC-6", title: "Catalogue-drift audit: the UI page documented two stale nav controls; replaced with the real .ex-tab app tab", sp: 1, note: "Fourth UIC-7 slice — a drift audit (checked every catalogued class exists in CSS). The Coach UI catalogue's nav entries were stale: 'Nav tab → .tab' is the RETIRED top tab bar (display:none) and 'Bottom nav button → .subtab-btn' references a class that doesn't exist — the bottom tab bar was replaced by the .ex-tab tabs (Workouts/List & stats/Compare/Single), which weren't catalogued at all. Replaced both lying entries with one accurate .ex-tab entry, so the UI page now reflects the real navigation. Also flagged the now-confirmed-dead .subtabs/.subtab/.subtab-ico CSS for a cleanup pass (cleanup-backlog UIC-DEAD-CSS). 526 tests. See docs/ui-consistency-audit.md.", cat: "UIC", model: "Opus 4.8" },
   { version: "b.2.8.372", shortTitle: "Reply rules: Summary lists open-loops + suggestions; version line shows the shift", code: "META-175", title: "New HARD RULE 45 + rule 40 update: the Summary ends with unfinished tasks & a missing-only suggestion count, and the version line shows the x→y shift", sp: 1, note: "Owner #remember (two parts). (1) Rule 45: the end Summary, after the point-title recap, lists any UNFINISHED/deferred tasks as 2-5-word titles and — only when a genuine GAP (MISSING functionality, never extra/gold-plating, rule 11) — a 'Suggestions: <n>' count whose detail sits above in the body; nothing unfinished + no real gaps -> omit, never pad. (2) Rule 40 + scripts/show-cost.py: the model+version line now shows the SHIFT 'Codename v.<start> -> v.<now>' when a bump happened this turn (start = the version at the end of the previous reply), computed automatically from a per-session sidecar keyed by the transcript + locked per prompt number (re-runs in the same turn don't drift it; the very first run seeds the start from git HEAD~1). Docs/tooling only.", cat: "META", model: "Opus 4.8" },
   { version: "b.2.8.371", shortTitle: "Percentiles + benchmarks now on each Index lift card (Phase 4)", code: "DATA-20", title: "Index lift card: a 📊 Strength percentiles fold under 🏆 World record — population curves, your placement and your benchmarks, for every covered lift", sp: 5, note: "Phase 4 (final UI) of docs/ceo/strength-percentiles-benchmarks.md — completing the owner's original 'in the world records AND THE INDEX each exercise world-record section' ask. Each exercise's Index entry now carries a 📊 Strength percentiles fold right under the 🏆 World record fold: the 3-population ×bw curve table for the CURRENT athlete's sex, that athlete's own placement chip (with their hardest met benchmark), and the same per-lift benchmarks editor. Refactor to keep it DRY + correct: extracted shared percentileTableHtml() so the World Records page and the lift card render identical tables (single origin), and made the benchmarks editor document-level + self-describing via data-bm-ex so ONE handler drives it on both pages and rebuilds only the editor IN PLACE (folds, scroll & focus preserved — no rule-24 collapse). Shows only for the ~11 lifts with a standard. Lithuanian added. 526 tests pass. UNVERIFIED on-device — please check the card fold + editor.", cat: "DATA", model: "Opus 4.8" },
@@ -1412,19 +1413,43 @@ function modelWeight(model: string): number {
   return (MODEL_OUTPUT_PRICE[family] ?? MODEL_OUTPUT_PRICE.Opus!) / MODEL_OUTPUT_PRICE.Opus!;
 }
 
-/** Σ over leaves of sp × model-weight — the denominator that keeps the weighted
- *  total equal to PROJECT_COST_EUR. */
+/** RECENCY effort multiplier (owner: "the last 100 SP at double value — it's been
+ *  slower and harder"). The most-recent RECENT_SP_WINDOW story-points (walking the log
+ *  newest-first) are valued at RECENCY_EFFORT_MULT× in the version-history COST
+ *  distribution. The grand total stays pinned to PROJECT_COST_EUR — this only shifts the
+ *  per-version € SHARE toward recent work, so a recent update reads ~2× the € it
+ *  otherwise would and older work proportionally less. (Cost-method refinement; the SP
+ *  grades themselves are unchanged. See docs/cost-model.md.) */
+export const RECENCY_EFFORT_MULT = 2;
+export const RECENT_SP_WINDOW = 100;
+const RECENT_VERSIONS: Set<string> = (() => {
+  const s = new Set<string>();
+  let acc = 0;
+  for (const r of RELEASES) {            // RELEASES is newest-first
+    if (r.soon) continue;
+    if (acc >= RECENT_SP_WINDOW) break;  // covered the most-recent 100 SP
+    s.add(r.version);
+    acc += r.sp;
+  }
+  return s;
+})();
+function recencyWeight(r: Release): number {
+  return RECENT_VERSIONS.has(r.version) ? RECENCY_EFFORT_MULT : 1;
+}
+
+/** Σ over leaves of sp × model-weight × recency-weight — the denominator that keeps the
+ *  weighted total equal to PROJECT_COST_EUR. */
 const WEIGHTED_SP_TOTAL = RELEASES.reduce(
-  (s, r) => (r.soon ? s : s + r.sp * modelWeight(modelForRelease(r))), 0);
+  (s, r) => (r.soon ? s : s + r.sp * modelWeight(modelForRelease(r)) * recencyWeight(r)), 0);
 /** € per weighted story-point, so Σ of every leaf's cost === PROJECT_COST_EUR. */
 export const EUR_PER_WEIGHTED_SP = WEIGHTED_SP_TOTAL > 0 ? PROJECT_COST_EUR / WEIGHTED_SP_TOTAL : 0;
 
-/** A node's MODEL-AWARE € cost: a leaf is sp × model-weight × rate; a group is
- *  the sum of its children, so it rolls up the tree exactly like SP does. */
+/** A node's MODEL-AWARE € cost: a leaf is sp × model-weight × recency-weight × rate; a
+ *  group is the sum of its children, so it rolls up the tree exactly like SP does. */
 export function costForNode(r: Release): number {
   if (r.soon) return 0;
   if (r.children?.length) return r.children.reduce((s, c) => s + costForNode(c), 0);
-  return r.sp * modelWeight(modelForRelease(r)) * EUR_PER_WEIGHTED_SP;
+  return r.sp * modelWeight(modelForRelease(r)) * recencyWeight(r) * EUR_PER_WEIGHTED_SP;
 }
 
 /** The on-screen version: the newest actual leaf — descend the first child of
@@ -1927,6 +1952,7 @@ const RELEASE_DATES: Record<string, string> = {
   "b.2.8.361": "2026-06-14",
   "b.2.8.362": "2026-06-14",
   "b.2.8.363": "2026-06-14",
+  "b.2.8.374": "2026-06-14",
 };
 
 export interface SpTimelinePoint {

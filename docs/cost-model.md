@@ -86,3 +86,15 @@ All in `scripts/show-cost.py`: `MONTHLY_SUBSCRIPTION_EUR` (€180), `WEEKLY_WIND
 Bump `MONTHLY_SUBSCRIPTION_EUR` if the plan changes. The version-history per-update €
 cost (`PROJECT_COST_EUR` / `COST_PER_SP_EUR` in `src/changelog.ts`) uses the same
 "real, not list price" philosophy — amortised spend spread across story points.
+
+## Version-history cost: recency multiplier (cost-v.2 refinement)
+
+The version-history € per update is distributed across story points, **model-weighted**
+(an Opus version costs ~5× a Haiku one of equal SP) and now **recency-weighted**: the
+most-recent `RECENT_SP_WINDOW` SP (default **100**, walking the log newest-first) are
+valued at `RECENCY_EFFORT_MULT`× (default **2**) — the owner's call that recent work has
+been "slower and harder" than its raw SP grade suggests. The grand total stays pinned to
+`PROJECT_COST_EUR`, so this only shifts the per-version € **share** toward recent work
+(a recent update reads ~2× the € it otherwise would; older work proportionally less). The
+SP grades themselves are unchanged. Constants `RECENCY_EFFORT_MULT` / `RECENT_SP_WINDOW`
+live in `src/changelog.ts`; widen the window or drop the multiplier to 1 to retire it.
