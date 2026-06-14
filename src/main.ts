@@ -14417,12 +14417,25 @@ async function syncManualToSupabase(): Promise<void> {
  *  entries from other users that aren't stored locally). */
 async function loadManualFromSupabase(): Promise<void> {
   try {
-    const { data: rows, error } = await supabase
-      .from("sets")
-      .select("*")
-      .gte("set_number", 100000000);
-    if (error) { showSyncStatus("err", "⬇ " + (error.message ?? "error").slice(0, 40)); console.error("[sync download]", error); return; }
-    if (!rows || rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
+    // PAGINATE — PostgREST caps a plain select at 1000 rows. With thousands of
+    // shared manual sets a single fetch silently dropped the most-recent ones, so
+    // other devices never saw lifts added past the first 1000 (the "not synced"
+    // bug). Page through in 1000-row windows until exhausted.
+    const PAGE = 1000;
+    const rows: import("./supabase").DbSet[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("sets")
+        .select("*")
+        .gte("set_number", 100000000)
+        .order("set_number", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) { showSyncStatus("err", "⬇ " + (error.message ?? "error").slice(0, 40)); console.error("[sync download]", error); return; }
+      if (!data || data.length === 0) break;
+      rows.push(...(data as import("./supabase").DbSet[]));
+      if (data.length < PAGE) break;
+    }
+    if (rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
     const localIds = new Set(manualEntries.map((m) => m.id));
     let added = 0;
     for (const r of rows as import("./supabase").DbSet[]) {
