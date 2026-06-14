@@ -70,9 +70,15 @@ already token-driven. Leave.
 AND re-typed in the Coach catalogue. The catalogue is a hand-maintained *mirror*, so
 it can drift from reality. True single origin = extract builder fns (`btn()`,
 `pill()`, `fold()`, `segToggle()`…) that the catalogue + every call site share.
-**CEO-scale, multi-session, risky on the 18k-line `main.ts`.** Owner deferred it;
-recommend greenlighting per-family (start with the segmented toggle + the column
-stat-chip, the two cleanest) rather than all at once.
+**CEO-scale, multi-session, risky on the 18k-line `main.ts`.** Doing it per-family.
+
+**Slice 1 ✅ (segmented toggle):** added `segBtn()` + `segToggle()` builders in
+`main.ts`; rewired BOTH real call sites (the add-form date toggle `afWhenToggle`,
+the machine-type toggle `machineModeControl`) AND the Coach catalogue example to
+render through them — so the toggle markup now has one origin and the catalogue
+can't drift from the real component. Zero markup change (verified: 519 tests +
+typecheck). **Next families (each its own slice):** `.wa-cat-pill`, `.athlete-chip`,
+the `.wa-fold`/`.coach-section` folds, the `.xdd` dropdown.
 
 ### UIC-8 🟢 ✅ Literal radius — `.wa-cat-pill { border-radius: 12px }`
 Used a magic `12px` instead of the `--r-pill` token (the `#design` rule). **Fixed:**

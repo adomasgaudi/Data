@@ -9698,7 +9698,7 @@ function renderCoachUiCatalogue(): void {
       sec("Workout DJ button (on/off)", "DJ button / workout filter pill", ".wo-dj-btn", `<button class="wo-dj-btn is-active">10RM</button> <button class="wo-dj-btn">Rest</button> <button class="wo-dj-btn is-active">Sets+</button>`),
       sec("Language toggle", "language toggle", ".lang-opt", `<button class="lang-opt is-active">EN</button> <button class="lang-opt">LT</button>`),
       sec("Alone filter", "alone filter / session filter", ".alone-filter", `<button class="alone-filter wo-dj-btn">Both</button>`),
-      sec("Segmented toggle", "segmented toggle / mode toggle", ".seg-toggle / .seg-btn", `<span class="seg-toggle"><button class="seg-btn is-active">By day</button><button class="seg-btn">By week</button></span>`),
+      sec("Segmented toggle", "segmented toggle / mode toggle", ".seg-toggle / .seg-btn", segToggle(segBtn("By day", { active: true }) + segBtn("By week"))),
     ].join(""))}
 
     ${group("Folds / Expandable sections", [
@@ -14784,14 +14784,25 @@ function openDatePicker(anchor: HTMLElement, currentIso: string, onPick: (iso: s
   setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 
+/** Single-origin builders for the segmented toggle (UIC-7): ONE place emits the
+ * `.seg-toggle` wrapper + `.seg-btn` button shape, so every real toggle AND the
+ * Coach UI catalogue render through the same code and can't drift. */
+function segBtn(label: string, opts: { active?: boolean; cls?: string; attrs?: string } = {}): string {
+  return `<button type="button" class="seg-btn${opts.active ? " is-active" : ""}${opts.cls ? " " + opts.cls : ""}"${opts.attrs ? " " + opts.attrs : ""}>${label}</button>`;
+}
+function segToggle(buttons: string, opts: { tag?: "span" | "div"; cls?: string; attrs?: string } = {}): string {
+  const tag = opts.tag ?? "span";
+  return `<${tag} class="seg-toggle${opts.cls ? " " + opts.cls : ""}"${opts.attrs ? " " + opts.attrs : ""}>${buttons}</${tag}>`;
+}
+
 /** Date chooser for the inline add form: the session day, Today, and a 📅 that opens a
  * custom calendar to log to ANY date. (Always shown now — the 📅 needs a home even when
  * you're viewing today.) When the session IS today, the redundant day chip is dropped. */
 function afWhenToggle(date: string, today: string): string {
-  const dayBtn = date === today ? "" : `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>`;
-  const todayBtn = `<button type="button" class="seg-btn${date === today ? " is-active" : ""}" data-when="today">Today</button>`;
-  const pickBtn = `<button type="button" class="seg-btn wo-af-pick" data-when="pick" title="Pick any date (calendar)" aria-label="Pick a date">📅</button>`;
-  return `<span class="wo-af-when seg-toggle">${dayBtn}${todayBtn}${pickBtn}</span>`;
+  const dayBtn = date === today ? "" : segBtn(escapeHtml(shortDate(date)), { active: true, attrs: `data-when="day"` });
+  const todayBtn = segBtn("Today", { active: date === today, attrs: `data-when="today"` });
+  const pickBtn = segBtn("📅", { cls: "wo-af-pick", attrs: `data-when="pick" title="Pick any date (calendar)" aria-label="Pick a date"` });
+  return segToggle(`${dayBtn}${todayBtn}${pickBtn}`, { cls: "wo-af-when" });
 }
 
 /** Compact inline "add set" form shown right under an exercise in the Workouts
@@ -17333,7 +17344,7 @@ function machineModeControl(name: string): string {
   const mode = machineModeFor(name);
   if (!machineModeEligible(name)) return "";
   const btn = (m: MachineMode, label: string, title: string) =>
-    `<button type="button" class="seg-btn${mode === m ? " is-active" : ""}" data-machinemode="${m}" data-machine-ex="${escapeHtml(name)}" title="${escapeHtml(title)}">${label}</button>`;
+    segBtn(label, { active: mode === m, attrs: `data-machinemode="${m}" data-machine-ex="${escapeHtml(name)}" title="${escapeHtml(title)}"` });
   let note = "";
   if (mode === "gravity") {
     note = `<p class="muted wa-machine-note">Every set scaled to its cable-equivalent (×${GRAVITY_MULT}). The logged machine weight still shows in the set list.</p>`;
@@ -17350,11 +17361,12 @@ function machineModeControl(name: string): string {
   return (
     `<div class="wa-machine">` +
     `<div class="wa-machine-head"><span class="wa-ctl-lbl">Machine</span>` +
-    `<div class="seg-toggle" role="group" aria-label="Machine type">` +
-    btn("cable", "All cable", "Weights as logged (cable stack).") +
-    btn("gravity", "All gravity", `Gravity machine — every set ×${GRAVITY_MULT} for strength.`) +
-    btn("mixed", "Mixed", "Both machines logged together — auto-classify each set.") +
-    `</div></div>` + note + `</div>`
+    segToggle(
+      btn("cable", "All cable", "Weights as logged (cable stack).") +
+      btn("gravity", "All gravity", `Gravity machine — every set ×${GRAVITY_MULT} for strength.`) +
+      btn("mixed", "Mixed", "Both machines logged together — auto-classify each set."),
+      { tag: "div", attrs: `role="group" aria-label="Machine type"` }
+    ) + `</div>` + note + `</div>`
   );
 }
 
