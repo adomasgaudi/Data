@@ -154,7 +154,8 @@ import {
   type PowerLift,
 } from "./records";
 import { DEFAULT_FORMULA } from "./config";
-import { supabase, upsertSets } from "./supabase";
+import { supabase, upsertSets, fetchKv, upsertKv } from "./supabase";
+import { isSyncable, merge3, SYNC_BASE_KEY } from "./cacheSync";
 import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { modelLabelFor } from "./modelName";
@@ -14400,6 +14401,83 @@ async function loadManualFromSupabase(): Promise<void> {
   } catch { /* Supabase unreachable — local data is fine */ }
 }
 
+// ── Shared cache mirror (the `kv` table — CLAUDE.md rule 41) ─────────────────
+// Mirrors the SHARED colosseum.* keys (not device prefs, not manualSets) through
+// Supabase so every device/user converges on one copy. Merge is the tested 3-way
+// in cacheSync.ts: a side that didn't touch a key yields, so nothing is clobbered.
+let applyingRemoteKv = false;        // true while writing merged cloud→local (don't re-push)
+const kvDirty = new Set<string>();   // syncable keys changed locally, awaiting push
+let kvPushTimer: number | undefined;
+
+function loadKvBase(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(SYNC_BASE_KEY) ?? "{}") as Record<string, string>; }
+  catch { return {}; }
+}
+function saveKvBase(base: Record<string, string>): void {
+  try { localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(base)); } catch { /* ignore */ }
+}
+
+/** Push the queued local changes up to the shared kv table (debounced). Base only
+ *  advances on success, so a failed push is retried next load (no lost edit). */
+function pushKvDirty(): void {
+  const rows = [...kvDirty].filter(isSyncable)
+    .map((k) => ({ key: k, value: localStorage.getItem(k) }))
+    .filter((r): r is { key: string; value: string } => r.value !== null);
+  kvDirty.clear();
+  if (!rows.length) return;
+  upsertKv(rows).then(() => {
+    const base = loadKvBase();
+    for (const r of rows) base[r.key] = r.value;
+    saveKvBase(base);
+    showSyncStatus("up", `⬆ ${rows.length} synced`);
+  }).catch((e) => { console.error("[kv push]", e); });
+}
+
+/** Pull the shared kv table and 3-way-merge it into localStorage. If anything
+ *  changed locally, reload so every in-memory store re-reads the merged cache. */
+async function pullMergeKv(): Promise<void> {
+  let cloud: Record<string, string>;
+  try { cloud = await fetchKv(); }
+  catch (e) { console.error("[kv pull]", e); return; }
+  const base = loadKvBase();
+  const keys = new Set<string>();
+  for (const k of Object.keys(cloud)) if (isSyncable(k)) keys.add(k);
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && isSyncable(k)) keys.add(k); }
+  const newBase: Record<string, string> = { ...base };
+  const toPush: { key: string; value: string }[] = [];
+  let localChanged = 0;
+  applyingRemoteKv = true;
+  try {
+    for (const k of keys) {
+      const localV = localStorage.getItem(k) ?? undefined;
+      const cloudV = cloud[k];
+      const merged = merge3(base[k], localV, cloudV);
+      if (merged !== localV) {
+        if (merged === undefined) localStorage.removeItem(k); else localStorage.setItem(k, merged);
+        localChanged++;
+      }
+      if (merged !== undefined && merged !== cloudV) {
+        toPush.push({ key: k, value: merged }); // base advances only after a successful push
+      } else if (merged === undefined) {
+        delete newBase[k];
+      } else {
+        newBase[k] = merged; // already matches cloud → agreed
+      }
+    }
+  } finally { applyingRemoteKv = false; }
+  saveKvBase(newBase);
+  if (toPush.length) {
+    try {
+      await upsertKv(toPush);
+      const b = loadKvBase();
+      for (const r of toPush) b[r.key] = r.value;
+      saveKvBase(b);
+      showSyncStatus("up", `⬆ ${toPush.length} synced`);
+    } catch (e) { console.error("[kv pull-push]", e); } // base stays → retried next load
+  }
+  if (localChanged > 0) location.reload(); // re-read every in-memory store from the merged cache
+}
+
 function saveManualLocal() {
   try { localStorage.setItem(MANUAL_KEY, JSON.stringify(manualEntries)); } catch { /* ignore */ }
 }
@@ -15034,7 +15112,14 @@ function installBackupHook() {
   const native = localStorage.setItem.bind(localStorage);
   localStorage.setItem = (k: string, v: string) => {
     native(k, v);
-    if (k.startsWith("colosseum.") && k !== AUTOBACKUP_AT_KEY && k !== AUTOBACKUP_ON_KEY) scheduleAutoBackup();
+    if (k.startsWith("colosseum.") && k !== AUTOBACKUP_AT_KEY && k !== AUTOBACKUP_ON_KEY && k !== SYNC_BASE_KEY) scheduleAutoBackup();
+    // Mirror shared keys to the cloud kv table (rule 41). Skip writes we made
+    // ourselves while applying a remote merge, or we'd echo them straight back.
+    if (!applyingRemoteKv && isSyncable(k)) {
+      kvDirty.add(k);
+      if (kvPushTimer) clearTimeout(kvPushTimer);
+      kvPushTimer = window.setTimeout(pushKvDirty, 1500);
+    }
   };
 }
 
@@ -18605,4 +18690,4 @@ function setupBottomNav() {
 void init();
 // Fetch other users' manual sets from Supabase after the app loads.
 // Silent no-op if Supabase is unreachable or RLS blocks access.
-setTimeout(async () => { await loadManualFromSupabase(); void syncManualToSupabase(); }, 1500);
+setTimeout(async () => { await loadManualFromSupabase(); await syncManualToSupabase(); await pullMergeKv(); }, 1500);
