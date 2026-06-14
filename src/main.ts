@@ -9318,17 +9318,6 @@ function goalKeywords(coach: CoachingProfile | null): string[] {
   )];
 }
 
-/** Antagonist muscle-group pairs — opposing movers good to superset together. */
-const ANTAGONIST_PAIRS: [MuscleGroup, MuscleGroup][] = [
-  ["Chest", "Upper back"],
-  ["Chest", "Lats"],
-  ["Shoulders", "Lats"],
-  ["Biceps", "Triceps"],
-  ["Quads", "Hamstrings"],
-  ["Abductors", "Adductors"],
-  ["Lower back", "Core"],
-];
-
 interface LiveEx {
   name: string;
   tier: ExerciseTier;
@@ -9895,43 +9884,13 @@ function renderLive(): void {
   const coach = coachingFor(username);
   const daysAgo = (x: LiveEx) => (Number.isFinite(x.lastDay) ? todayD - x.lastDay : 999);
   const agoTxt = (x: LiveEx) => { const n = daysAgo(x); return n >= 999 ? "never" : n === 0 ? "today" : `${n}d ago`; };
-  const dropTxt = (x: LiveEx) => (x.drop >= 0.5 ? `<span class="live-drop">−${x.drop.toFixed(0)}%</span>` : "");
-  const exPill = (x: LiveEx) =>
-    `<button type="button" class="live-ex${x.goal ? " is-goal" : ""}" data-waexinfo="${escapeHtml(x.name)}" title="${escapeHtml(x.name)}${x.goal ? " — a goal lift" : ""} — tap for info">` +
-    `${x.goal ? `<span class="live-goal-star" title="Matches a goal" aria-hidden="true">★</span>` : ""}` +
-    `<span class="live-ex-name">${escapeHtml(displayName(x.name))}</span>` +
-    `<span class="live-ex-meta muted">${agoTxt(x)}</span>${dropTxt(x)}</button>`;
 
-  // 1) WHAT TO TRAIN — by tier, most-stale/slipped first. `byTier` still feeds the
-  //    warm-up and watch-out sections; the old "Train today" tier list was removed —
-  //    its per-lift cards live inside each Focus-lift now (tap a lift to open its brief).
+  // 1) WHAT TO TRAIN — by tier. `byTier` feeds the watch-out section; the Train-today,
+  //    Warm-ups and Antagonist-supersets sections were removed — that info is redundant
+  //    with each Focus-lift's own card (its Warmup ramp + "Pair with" lifts).
   const byTier = (t: ExerciseTier) => list.filter((x) => x.tier === t).sort((a, b) => b.priority - a.priority);
 
-  // 2) ANTAGONIST SUPERSETS — pair an opposing-muscle lift either side. Pick the
-  //    highest-priority lift on each side; don't reuse a lift across pairs.
-  const topByMuscle = (m: MuscleGroup, used: Set<string>): LiveEx | null =>
-    list.filter((x) => x.muscles[0] === m && !used.has(x.name)).sort((a, b) => b.priority - a.priority)[0] ?? null;
-  const usedSS = new Set<string>();
-  const pairs: string[] = [];
-  for (const [a, b] of ANTAGONIST_PAIRS) {
-    const ea = topByMuscle(a, usedSS);
-    const eb = topByMuscle(b, usedSS);
-    if (ea && eb) {
-      usedSS.add(ea.name); usedSS.add(eb.name);
-      pairs.push(
-        `<div class="live-ss"><span class="live-ss-pair">${exPill(ea)}<span class="live-ss-plus">+</span>${exPill(eb)}</span>` +
-        `<span class="live-ss-why muted">${a} ⇄ ${b}</span></div>`,
-      );
-    }
-    if (pairs.length >= 5) break;
-  }
-  const ssSection = pairs.length
-    ? `<section class="live-card"><h3 class="live-h">Antagonist supersets</h3>` +
-      `<p class="live-sub muted">Alternate opposing muscles to save time and keep both sides balanced — rest one while the other works.</p>` +
-      pairs.join("") + `</section>`
-    : "";
-
-  // 2.5) PLANNED TODAY — explicit planned work from the coaching profile (e.g. Marija's
+  // PLANNED TODAY — explicit planned work from the coaching profile (e.g. Marija's
   //      "2 sets of adductors"), with the working weight + a warm-up sized off her recent
   //      top set for that muscle (so the warm-up tracks current strength, not a guess).
   const plannedItems = (coach?.planned ?? []).map((p) => {
@@ -9952,20 +9911,7 @@ function renderLive(): void {
       `<ul class="live-list">${plannedItems.join("")}</ul></section>`
     : "";
 
-  // 3) WARM-UPS — the muscle groups today's top lifts hit, + a simple ramp recipe.
-  const topToday = [...byTier("main"), ...byTier("second")].sort((a, b) => b.priority - a.priority).slice(0, 4);
-  const warmMuscles = [...new Set(topToday.flatMap((x) => x.muscles.slice(0, 2)))].slice(0, 6);
-  const warmSection = topToday.length
-    ? `<section class="live-card"><h3 class="live-h">Warm-ups</h3>` +
-      `<p class="live-sub muted">Before today's top lifts:</p>` +
-      `<ul class="live-list">` +
-      `<li>Raise + mobilise: ${warmMuscles.length ? warmMuscles.map((m) => escapeHtml(m)).join(" · ") : "the muscles you're training"} (5–8 min).</li>` +
-      `<li>Per lift, ramp up: 2–3 sets rising ~50% → 70% → 85% of your working weight before the first hard set.</li>` +
-      `<li>First heavy lift today: <b>${escapeHtml(displayName(topToday[0]!.name))}</b> — give it the fullest warm-up.</li>` +
-      `</ul></section>`
-    : "";
-
-  // 4) WATCH-OUTS — neglected muscle groups (no set in 21+ days) and stale primaries.
+  // WATCH-OUTS — neglected muscle groups (no set in 21+ days) and stale primaries.
   const lastByMuscle = new Map<MuscleGroup, number>();
   for (const x of list) for (const m of x.muscles) lastByMuscle.set(m, Math.max(lastByMuscle.get(m) ?? -Infinity, x.lastDay));
   const neglected = [...lastByMuscle.entries()]
@@ -9980,14 +9926,10 @@ function renderLive(): void {
     ? `<section class="live-card live-warn"><h3 class="live-h">Watch-outs</h3><ul class="live-list">${watchItems.join("")}</ul></section>`
     : "";
 
-  // GOALS & CAUTIONS card REMOVED from the plan (owner): goals now live per-lift (the
-  // 🎯 Goal in Focus lifts) and per-exercise style/cautions live in each lift's Setup
-  // notes — so the global card is redundant. (Warm-ups / supersets / watch-outs stay.)
-  // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
-  // section right after the plan; otherwise it sits lower.
-  const ordered = coach?.pushSupersets
-    ? plannedSection + ssSection + warmSection + watchSection
-    : plannedSection + warmSection + ssSection + watchSection;
+  // The plan is now just any explicit Planned-today work + Watch-outs; Goals & cautions,
+  // Train-today, Warm-ups and Antagonist-supersets were all removed as redundant with
+  // each Focus-lift's own card (owner).
+  const ordered = plannedSection + watchSection;
 
   box.innerHTML =
     `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
