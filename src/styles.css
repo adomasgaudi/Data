@@ -3766,10 +3766,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    sit just below it. */
 .wa-seltitle--grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(max(var(--gcols-min, 6rem), 5.5rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(max(var(--gcols-min, 6rem), 5.5rem), calc(50% - 0.3rem)), 1fr));
   gap: 0.15rem 0.6rem; align-items: baseline; width: 100%;
 }
 .wa-seltitle--grid > .wa-title-lift, .wa-seltitle--grid > .wa-title-more { justify-self: start; }
+/* In the grid, a long name must NEVER force a single column: the column min is capped
+   at ~half the row (above) so 2+ columns always fit, and a name wider than its capped
+   column WRAPS within the cell (overriding the inline-form nowrap) instead of spilling
+   over. Owner: "this title should be never less than 2 cols." */
+.wa-seltitle--grid > .wa-title-lift { white-space: normal; overflow-wrap: break-word; }
 /* A bigger caret with clear margin from the title, so there's an obvious "empty"
    spot (the caret) to COLLAPSE — distinct from the lift names, which REMOVE. */
 .wa-fold-titled[open] > .wa-fold-sum.is-bigtitle::before { font-size: 1.4rem; margin-right: 0.5em; opacity: 0.55; }
