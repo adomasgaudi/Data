@@ -316,7 +316,6 @@ const els = {
   decayCurveNote: $("decayCurveNote"),
   testAthlete: $<HTMLSelectElement>("testAthlete"),
   testExercise: $<HTMLSelectElement>("testExercise"),
-  testPickHint: $("testPickHint"),
   calcTabs: $("calcTabs"),
   rxModeBtn: $<HTMLButtonElement>("rxModeBtn"),
   rxOrm: $<HTMLInputElement>("rxOrm"),
@@ -11740,10 +11739,7 @@ function populateTestExercises(username: string) {
 function prefillTestFromPick() {
   const username = els.testAthlete.value;
   const exName = els.testExercise.value;
-  if (username === "" || exName === "") {
-    els.testPickHint.textContent = "";
-    return;
-  }
+  if (username === "" || exName === "") return;
   const formula = currentFormula();
   // Pick the top set the SAME way the athlete page does: best bodyweight-aware
   // added-weight 1RM (honours the rep cap), not a raw estimate — so the Test tab
@@ -11759,17 +11755,12 @@ function prefillTestFromPick() {
     }
   }
   if (!best || best.weight === null || best.reps === null) {
-    els.testPickHint.textContent = "No logged sets with a usable 1RM for this exercise.";
     return;
   }
   els.calcWeight.value = String(best.weight);
   els.calcReps.value = String(best.reps);
   els.calcBw.value = String(best.bodyweight ?? athProfile(username)?.weight ?? els.calcBw.value);
   els.calcCoeff.value = String(coeffFor(exName));
-  const label = els.testAthlete.selectedOptions[0]?.textContent ?? username;
-  els.testPickHint.textContent =
-    `Loaded ${label}'s top ${exName}: ${best.weight}kg × ${best.reps} on ${shortDate(best.date)} ` +
-    `(${fmt(bestE1rm)}kg est. 1RM). Tweak any number below.`;
   renderTest();
 }
 
@@ -14137,7 +14128,6 @@ async function init() {
   });
   for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
     input.addEventListener("input", () => {
-      els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
       renderTest();
     });
 
