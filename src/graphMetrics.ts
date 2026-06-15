@@ -8,7 +8,7 @@
 import type { SetRecord } from "./domain";
 import { addedWeight1RM, decayedStrengthSeries } from "./aggregate";
 import { setVolume, type OneRepMaxFormula } from "./metrics";
-import { fitLog, sampleProjection } from "./projection";
+import { fitLog, fitCeiling, sampleProjection } from "./projection";
 import type { GraphConfig } from "./graphConfig";
 
 const DAY = 86_400_000;
@@ -193,12 +193,16 @@ function projectionBasisPoints(records: readonly SetRecord[], cfg: GraphConfig):
   return basis === "records" ? runningMax(pts).map((p) => ({ x: p.x, y: p.y! })) : pts;
 }
 
-/** Logarithmic projection y = c + b·ln(t + a) (grid-searched shift, see
- * projection.ts) over the data span extended by the horizon. Returns [] when there
- * are too few points to fit (missing-data state). */
-function predict(pts: { x: number; y: number }[], horizonDays: number): GraphPoint[] {
+/** Strength projection over the data span extended by the horizon. When a CEILING
+ * is known (the user's Potential ceiling, else the world record) the curve is the
+ * ceiling-approach fit y = ceiling − e^(m·t+b) — steep early, flattening toward the
+ * ceiling (the owner's ask). Otherwise it falls back to the plain log fit
+ * y = c + b·ln(t + a). Returns [] when there are too few points to fit. */
+function predict(pts: { x: number; y: number }[], horizonDays: number, ceiling: number | null): GraphPoint[] {
   if (pts.length < 3) return [];
-  const fit = fitLog(pts);
+  // Ceiling must sit ABOVE the latest point, else there's nothing to approach.
+  const last = pts[pts.length - 1]!.y;
+  const fit = (ceiling != null && ceiling > last ? fitCeiling(pts, ceiling) : null) ?? fitLog(pts);
   if (!fit) return [];
   const t0 = pts[0]!.x;
   const end = pts[pts.length - 1]!.x + Math.max(0, horizonDays) * DAY;
@@ -298,7 +302,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   { id: "pctWR", label: "WR%", type: "scatter" },
   { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
   { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
-  { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays) },
+  { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays, cfg.potentialCeiling ?? cfg.ceilingOf?.(rs) ?? null) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
   // Interval — WEEK by default — and read as bars (a column per bucket); switch

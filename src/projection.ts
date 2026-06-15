@@ -9,7 +9,12 @@ import { linearFit } from "./metrics";
 
 const DAY = 86_400_000;
 
-export interface LogFit {
+/** Anything that can map a timestamp x to a predicted y (or null off-domain). */
+export interface CurveFit {
+  predict(x: number): number | null;
+}
+
+export interface LogFit extends CurveFit {
   /** Shift parameter (days).  Chosen by grid search. */
   a: number;
   /** ln coefficient. */
@@ -90,11 +95,41 @@ export function fitLog(pts: readonly { x: number; y: number }[]): LogFit | null 
 }
 
 /**
+ * Ceiling-approach fit: y = ceiling − e^(m·t + b), the curve the owner wants —
+ * rises steeply early and FLATTENS toward `ceiling` (a lifetime-potential / world-
+ * record level). Linearised by regressing ln(ceiling − y) on t (days), so a lifter
+ * climbing toward the ceiling has a shrinking gap → m < 0 → an asymptotic approach.
+ * Requires ≥ 3 points strictly BELOW the ceiling. Returns null otherwise.
+ */
+export function fitCeiling(pts: readonly { x: number; y: number }[], ceiling: number): CurveFit | null {
+  if (!Number.isFinite(ceiling)) return null;
+  const x0 = pts.length ? pts[0]!.x : 0;
+  // Only points below the ceiling can be log-distanced; a tiny floor avoids ln(0).
+  const usable = pts
+    .map((p) => ({ t: (p.x - x0) / DAY, gap: ceiling - p.y }))
+    .filter((p) => p.gap > 1e-6);
+  if (usable.length < 3) return null;
+  const fit = linearFit(usable.map((p) => ({ x: p.t, y: Math.log(p.gap) })));
+  if (!fit) return null;
+  const { slope: m, intercept: b } = fit;
+  if (!Number.isFinite(m) || !Number.isFinite(b)) return null;
+  return {
+    predict(x: number): number | null {
+      const t = (x - x0) / DAY;
+      const gap = Math.exp(m * t + b);
+      if (!Number.isFinite(gap)) return null;
+      const y = ceiling - gap;
+      return Number.isFinite(y) ? y : null;
+    },
+  };
+}
+
+/**
  * Sample the fitted curve at `steps` evenly-spaced timestamps in [fromX, toX].
  * Points where predict returns null are omitted.
  */
 export function sampleProjection(
-  fit: LogFit,
+  fit: CurveFit,
   fromX: number,
   toX: number,
   steps = 60,

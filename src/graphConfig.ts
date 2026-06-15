@@ -49,6 +49,11 @@ export interface GraphConfig {
    * resolver the app injects so the scatter can size each dot by effort — higher
    * RIR (easier) draws smaller, the hardest stay biggest. Absent = uniform dots. */
   rirOf?: (r: SetRecord) => number | null;
+  /** Render-time hook (NOT persisted): resolves the projection's flattening CEILING
+   * (kg) for a group's records — the user's Potential ceiling if set, else the
+   * exercise's world-record level. Null = no ceiling known → the projection falls
+   * back to the plain log fit. */
+  ceilingOf?: (records: readonly SetRecord[]) => number | null;
   /** "Lifetime potential" log view: when on, the LEFT (strength/kg) axis is spaced by
    *  −ln(ceiling − value), so an exponential approach to the ceiling reads as a straight
    *  line. A real plateau still flattens; continued gains keep rising. Single ceiling for

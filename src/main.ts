@@ -18033,7 +18033,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const projBasis = c.projectionBasis ?? "records";
   const projBasisLbl = projBasis === "records" ? "Records" : projBasis === "hard" ? "Hard sets" : "All sets";
   const cfgProjection = cfgGroup("Projection", projOn ? `${projDaysLbl} · ${projBasisLbl.toLowerCase()}` : "",
-    `<button type="button" class="wa-metric${projOn ? " is-on" : ""}" data-wametric="predicted" title="Draw a log-curve (ln) strength forecast line ahead of your data.">Show forecast line</button>` +
+    `<button type="button" class="wa-metric${projOn ? " is-on" : ""}" data-wametric="predicted" title="Draw a strength forecast that rises steeply early and flattens toward your ceiling (the Potential ceiling if set, else this lift's world record).">Show forecast line</button>` +
     `<button type="button" class="wa-name-opt" data-waprojdays title="How far ahead the forecast projects. Tap to cycle.">Ahead <span class="muted">${projDaysLbl}</span></button>` +
     `<button type="button" class="wa-name-opt" data-waprojbasis title="Which logged sets the curve is fitted to (warm-ups always excluded). Tap to cycle.">Fit <span class="muted">${projBasisLbl}</span></button>`);
   const cfgUi =
@@ -18120,6 +18120,15 @@ function renderWaGraph(): void {
     const fm = waGraphConfig.formula;
     const sm = currentStrengthByUserExercise(fm);
     waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+    // Projection ceiling: the lift's world-record level (scaled to the athlete's
+    // bodyweight) for THIS group's exercise — what the forecast flattens toward when
+    // the user hasn't set an explicit Potential ceiling. Resolved per group's records.
+    waGraphConfig.ceilingOf = (rs) => {
+      const r = rs[0];
+      if (!r) return null;
+      const sex = athProfile(r.username)?.sex === "f" ? "f" : "m";
+      return worldRecordKg(r.exerciseName, sex, r.bodyweight ?? null);
+    };
   }
   const gAthletes = graphAthleteList();
   const multiAthlete = gAthletes.length > 1;
