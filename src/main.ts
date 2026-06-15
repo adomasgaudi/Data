@@ -231,6 +231,8 @@ const els = {
   formulasBtn: $<HTMLButtonElement>("formulasBtn"),
   formulasPage: $("formulasPage"),
   formulasClose: $<HTMLButtonElement>("formulasClose"),
+  statseditPage: $("statseditPage"),
+  statseditClose: $<HTMLButtonElement>("statseditClose"),
   exInfoPage: $("exInfoPage"),
   exInfoTitle: $("exInfoTitle"),
   exInfoBack: $<HTMLButtonElement>("exInfoBack"),
@@ -9260,10 +9262,12 @@ function renderBwGroupBar(): void {
 // ---- Edit athlete stats page ----
 let statsEditUser = ""; // which athlete the editor is showing
 
-/** Open the stats editor for one athlete (from the ✎ Edit button on the card). */
+/** Open the athlete stats editor as a popup overlay (from the ✎ Edit button in the
+ * Stats section). No longer a menu page — moved into the Stats section per owner. */
 function openStatsEditor(username: string): void {
   statsEditUser = username;
-  switchTopTab("statsedit");
+  renderStatsEdit();
+  els.statseditPage.hidden = false;
 }
 
 /** Render the editable stats form for `statsEditUser` (defaults to the selected
@@ -12578,6 +12582,7 @@ async function init() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (pickDrawerScope !== null) { closePickDrawer(); return; } // topmost overlay closes first
+    if (!els.statseditPage.hidden) { els.statseditPage.hidden = true; return; }
     if (!els.formulasPage.hidden) { els.formulasPage.hidden = true; return; }
     if (!els.planPage.hidden) { els.planPage.hidden = true; return; }
     if (!els.exInfoPage.hidden) closeExerciseInfo();
@@ -12586,6 +12591,7 @@ async function init() {
   // "Plan workout" — suggest what to train today (top of the workout history).
   els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
   els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
+  els.statseditClose.addEventListener("click", () => { els.statseditPage.hidden = true; });
   // Formulas popup (was the Test tab) — sits beside the Plan button.
   els.formulasBtn.addEventListener("click", openFormulas);
   els.formulasClose.addEventListener("click", () => { els.formulasPage.hidden = true; });
@@ -17855,7 +17861,6 @@ const NAV_PAGES: { tab: string; label: string }[] = [
   { tab: "leaderboards", label: "Colosseum" },
   { tab: "groups", label: "Stats" },
   { tab: "team", label: "Group" },
-  { tab: "statsedit", label: "Athletes" },
   { tab: "data", label: "Data" },
   { tab: "test", label: "Formulas" },
   { tab: "guide", label: "Guide" },
@@ -18856,7 +18861,6 @@ function switchTopTab(name: string) {
   if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
-  if (name === "statsedit") renderStatsEdit();
   if (name === "records") renderRecords();
   if (name === "coach") renderCoachPage();
   if (name === "analysis") renderWorkoutAnalysis();
