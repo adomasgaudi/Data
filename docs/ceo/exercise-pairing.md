@@ -36,21 +36,22 @@ Today's `pairPrefs.v1` is flat `{exercise → state}` and **device-local** — i
 - [x] 2. Remove the 8-candidate cap in "Pair with" so all pairs are visible. — b.2.8.419
 - [x] 3. "⇄ Pair flags" manager in the Plan popup: see all flags grouped + search to flag any lift. — b.2.8.419
 
-### Phase 2 — The two-layer model (gym truth + personal veto)
-- [ ] 4. **Reshape the store** to `{ gym: {edge→state}, personal: {edge→state} }` (keyed by an unordered exercise-pair edge), with a migration from flat `pairPrefs.v1` → personal layer. Resolution helper `pairState(a,b) = personal ?? gym ?? autoEase`. Keep it a pure tested function (SSOT for every read).
-- [ ] 5. **Home-gym profile field** (one synced setting per athlete; default a single implicit "shared" gym). The flag a user sets writes to the gym layer for their home gym; a long-press / second control writes a personal override.
-- [ ] 6. **Show the layer in the chip:** a gym-sourced flag looks shared (e.g. a small 👥 + the count "★ ·8"); a personal override shows it's yours (and offers "clear → back to gym default"). Experience goal: you always know whose flag you're looking at.
+### Phase 2 — The two-layer model (gym truth + personal veto) — SHIPPED b.2.8.427 (WO-179)
+- [x] 4. **Reshape the store** — DIRECTIONAL edge model in pure tested `src/pairing.ts` (12 tests): `pairShared` (gym) + `pairPersonal` (per-user), resolution `personal ?? shared ?? neutral`, specific edge beating a `*→to` wildcard. Migrates the old flat `pairPrefs.v1` into the shared layer as wildcard baselines. — b.2.8.427
+- [x] 5. **Single shared layer (no named gyms yet, per owner decision).** The flag a user sets writes to the GYM layer by default; the grade menu's 👤 Just-me toggle writes a personal override instead. (Home-gym profile field deferred until a 2nd gym exists.) — b.2.8.427
+- [x] 6. **Show the layer in the chip** — a 👤 badge marks YOUR override; the grade menu titles the directional edge and its Gym/Just-me toggle shows which layer you're editing. — b.2.8.427
+- [x] (sync) **Both layers sync to every user** automatically — `colosseum.pairShared.v1` + `colosseum.pairPersonal.v1` ride the existing cacheSync kv mirror (no backend wiring; rule 41/42). — b.2.8.427
 
 ### Phase 3 — Social hook + picker polish (tiers ① ②)
-- [ ] 7. **Social count on each flag** — "starred by N lifters here" — the bragworthy, curiosity layer. Even a count of 1 ("you") reads better than a bare glyph.
-- [ ] 8. **Picker grouping** in the Pairs manager: group candidates by body-part / by "easy here vs hard here", not one flat list (owner asked for "more grouping abilities"). Reuse the Index group-mode idea, don't rebuild it.
-- [ ] 9. **Reasons (optional):** a one-tap reason on a flag ("far apart", "always busy", "bad pump") — opt-in, tier-③ depth, never required.
+- [ ] 7. **Social count on each flag** — "starred by N lifters here". DEFERRED: the chosen single-shared-VALUE model has no per-user votes to count; a count needs a votes map (`edge → {user: grade}`), a bigger change. Worth doing once there are real multiple users at one gym.
+- [x] 8. **Picker grouping** — the Pairs manager now groups flagged pairs by their FROM-lift ("Any lift →" for wildcards, then per lift). (Body-part grouping not added — from-grouping is the more useful axis for directional pairs.) — b.2.8.427
+- [ ] 9. **Reasons (optional):** a one-tap reason on a flag ("far apart", "busy", "bad pump"). DEFERRED — tier-③ depth, additive (a `reason` field on the edge), easy to bolt on later; left out to keep this pass focused.
 
 ### Phase 4 — Close the loop (tier ④)
-- [ ] 10. **Planner uses it:** the "Pair with" suggestion leads with gym-★ pairs and annotates WHY ("next machine over · starred by 8"), so every plan ends in one concrete superset to do today.
+- [x] 10. **Planner uses it (lite):** the exercise card's "top pairs" strip surfaces the SUPER/GOOD directional pairs (from this lift → candidate) near the numbers, so the plan leads with the best supersets. The WHY annotation ("next machine over · starred by N") waits on steps 7/9. — b.2.8.427
 
-## Sync note (rule 41 / rule 42)
-Gym + personal pairing layers are SHARED data → they must mirror to Supabase like `sets` do (today only `manualSets` syncs; this rides the same goal). The AI does the backend wiring via the existing GitHub Action + secrets — the owner never touches SQL.
+## Sync note (rule 41 / rule 42) — DONE
+Both layers are `colosseum.*` keys and NOT in cacheSync's exclude/local-only lists, so they already mirror to every user via the 3-way kv merge — no dedicated table or SQL needed. (Confirmed by reading `src/cacheSync.ts`: any `colosseum.*` key auto-syncs.)
 
 ## Why this is ~10 prompts, not 100
 The hard part is the **two-layer model + migration** (steps 4–6, one careful effort); the rest is UI polish reusing patterns the app already has (chips, group-modes, the manager shipped in Phase-1). It is NOT a from-scratch feature — it's layering shared/personal onto an existing, now-visible flag system.
