@@ -91,7 +91,7 @@ import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { testMockRecords } from "./mockData";
 import {
   pairEdge, resolvePairGrade, setPairGrade as applyPairGrade, migrateLegacyPairs,
-  flaggedPairsFor, PAIR_WILDCARD,
+  PAIR_WILDCARD,
   type PairMap, type PersonalPairMap,
 } from "./pairing";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
@@ -350,7 +350,7 @@ let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
-let pairMgrQuery = ""; // Pairs manager search box
+let prioAddOpen = false; // "Add another" dropdown open state (closed by default; rule 24 keeps it across re-renders)
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 
 const PAGE_SIZE = 50; // List & stats page size
@@ -9415,26 +9415,6 @@ function coachingSeed(username: string): CoachingProfile | null {
 function coachingFor(username: string): CoachingProfile | null {
   return coachingOverrides[username] ?? coachingSeed(username);
 }
-/** The athlete's recent top weighted set on any lift hitting a muscle group — the
- * heaviest set logged for it in the last ~60 days. Used to size a warm-up off recent
- * strength. Returns null if no weighted set is on record. */
-function recentTopSetForMuscle(username: string, muscle: MuscleGroup, todayD: number): { exercise: string; weight: number; reps: number; daysAgo: number } | null {
-  let best: { exercise: string; weight: number; reps: number; day: number } | null = null;
-  for (const r of computedRecords()) {
-    if (r.username !== username || !r.date) continue;
-    if (typeof r.weight !== "number" || !(r.weight > 0)) continue;
-    const d = dayNumber(r.date);
-    if (todayD - d > 60) continue; // only "recent" strength
-    if (!mgsFor(r.exerciseName).includes(muscle)) continue;
-    if (!best || r.weight > best.weight) best = { exercise: r.exerciseName, weight: r.weight, reps: r.reps ?? 0, day: d };
-  }
-  return best ? { exercise: best.exercise, weight: best.weight, reps: best.reps, daysAgo: todayD - best.day } : null;
-}
-/** Round a warm-up weight to a tidy increment (2.5 kg ≥ 20, else 1 kg). */
-function tidyWarmupKg(kg: number): number {
-  if (kg >= 20) return Math.round(kg / 2.5) * 2.5;
-  return Math.max(1, Math.round(kg));
-}
 /** Lowercased goal/maintain keywords (≥3 chars), for goal-weighting the plan. */
 function goalKeywords(coach: CoachingProfile | null): string[] {
   if (!coach) return [];
@@ -10004,45 +9984,6 @@ const TECH_STACK_HTML = `
 `;
 
 /** The "Live" training-plan page for the currently-selected athlete. */
-function renderLive(): void {
-  const box = document.getElementById("liveBody");
-  if (!box) return;
-  const username = els.athlete.value;
-  const todayD = dayNumber(todayIso());
-  const list = liveExercises(username, todayD);
-  if (!list.length) {
-    box.innerHTML = `<p class="muted">No training logged for ${escapeHtml(athleteLabel())} yet — log some sets and your plan appears here.</p>`;
-    return;
-  }
-  const coach = coachingFor(username);
-
-  // PLANNED TODAY — explicit planned work from the coaching profile (e.g. Marija's
-  //      "2 sets of adductors"), with the working weight + a warm-up sized off her recent
-  //      top set for that muscle (so the warm-up tracks current strength, not a guess).
-  const plannedItems = (coach?.planned ?? []).map((p) => {
-    const top = recentTopSetForMuscle(username, p.muscle, todayD);
-    const setsTxt = `<b>${p.sets} set${p.sets === 1 ? "" : "s"}</b> of <b>${escapeHtml(p.muscle)}</b>`;
-    if (!top) {
-      return `<li>${setsTxt}${p.note ? ` <span class="muted">(${escapeHtml(p.note)})</span>` : ""} — <span class="muted">no recent weight on record, start light and feel it out.</span></li>`;
-    }
-    const warm = tidyWarmupKg(top.weight * 0.5);
-    const recentTxt = `recent top: ${top.weight} kg × ${top.reps} on ${escapeHtml(displayName(top.exercise))}, ${top.daysAgo}d ago`;
-    return `<li>${setsTxt} at ~<b>${top.weight} kg</b> <span class="muted">(${recentTxt})</span>. ` +
-      `Warm-up: 1 set ×15 at ~<b>${warm} kg</b> <span class="muted">(≈50% of recent)</span>.` +
-      (p.note ? ` <span class="muted">${escapeHtml(p.note)}</span>` : "") + `</li>`;
-  });
-  const plannedSection = plannedItems.length
-    ? `<section class="live-card"><h3 class="live-h">Planned today</h3>` +
-      `<p class="live-sub muted">Set work added to the plan, with the warm-up sized off your recent strength.</p>` +
-      `<ul class="live-list">${plannedItems.join("")}</ul></section>`
-    : "";
-
-  // The plan is now just any explicit Planned-today work; Watch-outs, Goals & cautions,
-  // Train-today, Warm-ups and Antagonist-supersets were all removed as redundant with
-  // each Focus-lift's own card + the Focus-lifts list itself (owner).
-  box.innerHTML = plannedSection;
-}
-
 // ---- World records page ---------------------------------------------------
 // Which trio lift the records table is showing (mutually-exclusive pill set).
 let recordsLift: PowerLift = "total";
@@ -10501,7 +10442,6 @@ function setupLive(): void {
       if (keepPlanned?.length) prof.planned = keepPlanned;
       coachingOverrides[username] = prof;
       saveCoaching();
-      renderLive();
     }
   });
 }
@@ -11034,57 +10974,23 @@ function renderWorkoutPlan(): void {
         return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
       }).join("");
   // Always offer the search box (even with no curated suggestions) so the full registry
-  // is always reachable.
+  // is always reachable. CLOSED dropdown by default (owner) — keep its open state across
+  // the re-render the inner search triggers (rule 24): read the live DOM before rebuild.
+  const existingFold = els.planBody.querySelector<HTMLDetailsElement>(".prio-add");
+  if (existingFold) prioAddOpen = existingFold.open;
+  const addOpen = prioAddOpen || !!prioQ; // typing a search always reveals it
   const addBlock = (allAddable.length || searchPool.length)
-    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${prioQ ? "search" : names.length})</div>` +
+    ? `<details class="prio-add"${addOpen ? " open" : ""}><summary class="prio-add-sum muted">${names.length ? "Add another" : "Suggested"} (${prioQ ? "search" : names.length})</summary>` +
       `<input type="search" class="wa-chip-search prio-add-search" placeholder="Search exercises…" aria-label="Search exercises to add" autocomplete="off" value="${escapeHtml(prioAddQuery)}">` +
-      `<div class="prio-add-chips">${addChips}</div></div>`
+      `<div class="prio-add-chips">${addChips}</div></details>`
     : "";
   const planTitle = document.getElementById("planTitle");
   if (planTitle) planTitle.textContent = `${athleteLabel()} plan`;
-  els.planBody.innerHTML = summary + list + addBlock + pairManagerHtml(user);
-}
-
-/** Pairs management section in the Plan popup: shows ALL flagged directional pairs
- *  (gym + your overrides), grouped by their FROM-lift, and a search box to flag any
- *  lift as a gym-wide "any lift" (*→X) baseline. A 👤 badge marks your overrides. */
-function pairManagerHtml(user: string): string {
-  const rows = flaggedPairsFor(pairShared, pairPersonal, user); // {from,to,grade,layer}, sorted best→worst
-  const fromLabel = (f: string) => f === PAIR_WILDCARD ? "Any lift" : displayName(f);
-  // Group the flagged pairs by their from-lift (the wildcard "Any lift" group sorts first).
-  const groups = new Map<string, { to: string }[]>();
-  for (const r of rows) { const g = groups.get(r.from) ?? (groups.set(r.from, []).get(r.from)!); g.push({ to: r.to }); }
-  const fromKeys = [...groups.keys()].sort((a, b) => (a === PAIR_WILDCARD ? -1 : b === PAIR_WILDCARD ? 1 : fromLabel(a).localeCompare(fromLabel(b))));
-  const chip = (from: string, to: string): string =>
-    `<span class="lt-paircell pg-${pairGradeFor(from, to)} pairs-mgr-chip">` +
-    `<span class="pairs-mgr-name">${escapeHtml(displayName(to))}</span>` +
-    pairFlagBtn(from, to) +
-    `</span>`;
-  const groupHtml = fromKeys.map((from) =>
-    `<div class="pairs-mgr-grp"><div class="pairs-mgr-grp-h muted">${escapeHtml(fromLabel(from))} →</div>` +
-    `<div class="pairs-mgr-list">${groups.get(from)!.map((r) => chip(from, r.to)).join("")}</div></div>`).join("");
-  const flaggedHtml = rows.length
-    ? groupHtml
-    : `<p class="muted pairs-mgr-empty">No pair flags yet — flag exercises in their info card or search below.</p>`;
-  // Search flags a gym-wide *→exercise baseline (the old per-exercise mental model).
-  const q = pairMgrQuery.trim().toLowerCase();
-  const pool = q
-    ? liveExercises(user, dayNumber(todayIso())).filter((le) => displayName(le.name).toLowerCase().includes(q) || le.name.toLowerCase().includes(q))
-    : [];
-  const searchResultsHtml = q
-    ? `<div class="pairs-mgr-results">${pool.slice(0, 20).map((le) => chip(PAIR_WILDCARD, le.name)).join("") || `<span class="muted">No matches for "${escapeHtml(pairMgrQuery)}".</span>`}</div>`
-    : "";
-  return `<div class="pairs-mgr">` +
-    `<div class="pairs-mgr-hd muted">⇄ Pair flags</div>` +
-    flaggedHtml +
-    `<input type="search" class="wa-chip-search pairs-mgr-search" placeholder="Search to flag…" aria-label="Search exercises to pair-flag" autocomplete="off" value="${escapeHtml(pairMgrQuery)}">` +
-    searchResultsHtml +
-    `</div>`;
+  els.planBody.innerHTML = summary + list + addBlock;
 }
 
 function openWorkoutPlan(): void {
-  renderLive(); // the training plan (relocated from the old Live tab) sits at the top
-  renderWorkoutPlan(); // the manual focus-lifts planner below it
+  renderWorkoutPlan(); // the manual focus-lifts planner
   els.planPage.hidden = false;
 }
 // Remember which taxonomy sections (Discipline / Muscle group / Tier / Combinable /
@@ -13049,22 +12955,12 @@ async function init() {
   // plan, then restore focus + caret to the search input (it's recreated by the render).
   els.planBody.addEventListener("input", (e) => {
     const inp = (e.target as Element)?.closest?.<HTMLInputElement>(".prio-add-search");
-    if (inp) {
-      prioAddQuery = inp.value;
-      const caret = inp.selectionStart ?? inp.value.length;
-      renderWorkoutPlan();
-      const s = els.planBody.querySelector<HTMLInputElement>(".prio-add-search");
-      if (s) { s.focus(); s.setSelectionRange(caret, caret); }
-      return;
-    }
-    const inp2 = (e.target as Element)?.closest?.<HTMLInputElement>(".pairs-mgr-search");
-    if (inp2) {
-      pairMgrQuery = inp2.value;
-      const caret = inp2.selectionStart ?? inp2.value.length;
-      renderWorkoutPlan();
-      const s = els.planBody.querySelector<HTMLInputElement>(".pairs-mgr-search");
-      if (s) { s.focus(); s.setSelectionRange(caret, caret); }
-    }
+    if (!inp) return;
+    prioAddQuery = inp.value;
+    const caret = inp.selectionStart ?? inp.value.length;
+    renderWorkoutPlan();
+    const s = els.planBody.querySelector<HTMLInputElement>(".prio-add-search");
+    if (s) { s.focus(); s.setSelectionRange(caret, caret); }
   });
   els.planBody.addEventListener("change", (e) => {
     const g = (e.target as HTMLElement).closest<HTMLInputElement>("[data-priogoal]");

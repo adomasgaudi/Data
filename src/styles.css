@@ -4938,6 +4938,11 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 /* "Add another" — one horizontally-scrolling row of suggestion chips (cram: never a
    wrapped multi-row wall; swipe sideways like the athlete strip). */
 .prio-add { margin-top: 0.5rem; }
+/* Closed-by-default "Add another" dropdown — the summary is the tappable header. */
+.prio-add-sum { font-size: 0.74rem; color: var(--muted); margin: 0 0 0.4rem; min-height: var(--tap-min); display: flex; align-items: center; gap: 0.35rem; cursor: pointer; list-style: none; font-weight: 600; }
+.prio-add-sum::-webkit-details-marker { display: none; }
+.prio-add-sum::before { content: "▸"; font-size: 0.7rem; transition: transform 0.12s ease; }
+.prio-add[open] .prio-add-sum::before { transform: rotate(90deg); }
 .prio-add-lbl { font-size: 0.7rem; color: var(--muted); margin: 0 0 0.4rem; }
 /* Tier-2 picker search box (docs/exercise-picker-tiers.md) — reuses .wa-chip-search look. */
 .prio-add-search { width: 100%; margin: 0 0 0.4rem; }
