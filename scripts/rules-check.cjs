@@ -5,8 +5,15 @@
  * time the AI stops and surfaces a {"systemMessage": ...} when a rule was
  * broken. Silent when clean. Never blocks (exit 0).
  *
- * Runs each check only when THIS session touched the relevant files, so it
- * never nags on unrelated turns:
+ * EVERY turn (reads the session transcript, so it works regardless of files):
+ *   0. REPLY FORMAT — the reply the AI just sent must follow the "Talking to the
+ *      owner" rules (CLAUDE.md): NO retired ALL-CAPS line (rule 4); a Summary must
+ *      open with a `User: <task recap>` line (rule 44); a substantive reply must
+ *      end with the token block (`…%5h - …%W`, rule 39) and the model+version line
+ *      (`… v.<n>`, rule 40). These kept getting dropped by AIs on stale branches.
+ *
+ * The rest run only when THIS session touched the relevant files, so they never
+ * nag on unrelated turns:
  *   When a RELEASE was touched (src/changelog.ts or index.html):
  *     1. the newest RELEASES entry has a `model:` stamp (rule: STAMP YOUR MODEL);
  *     2. index.html <span class="version"> matches the newest release (lockstep);
@@ -20,11 +27,73 @@
  */
 const { execSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const sh = (cmd) => {
   try { return execSync(cmd, { stdio: ["ignore", "pipe", "ignore"] }).toString(); }
   catch { return ""; }
 };
+const read = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } };
+const violations = [];
+
+// ── Reply-format check (rules 4/39/40/44 — runs EVERY turn) ────────────────────
+// Read the newest session transcript (same source as show-cost.py) and inspect the
+// LAST assistant text reply — the one the owner just saw — for the reply-format rules.
+function newestTranscript() {
+  const dir = path.join(os.homedir(), ".claude", "projects");
+  let newest = null, newestM = 0;
+  const walk = (d) => {
+    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".jsonl")) { const m = fs.statSync(p).mtimeMs; if (m > newestM) { newestM = m; newest = p; } }
+    }
+  };
+  walk(dir);
+  return newest;
+}
+function lastAssistantText(file) {
+  const lines = read(file).split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let obj; try { obj = JSON.parse(lines[i]); } catch { continue; }
+    const msg = obj.message || obj;
+    if ((obj.type === "assistant" || msg.role === "assistant") && Array.isArray(msg.content)) {
+      const text = msg.content.filter((p) => p && p.type === "text").map((p) => p.text).join("\n").trim();
+      if (text) return text;
+    }
+  }
+  return "";
+}
+function checkReplyFormat(text) {
+  if (!text) return;
+  // (a) RETIRED ALL-CAPS line (rule 4 retired it). Flag a standalone line that's ≥4
+  // words and ≥85% uppercase letters — the old "PUSHED TO OPUS-4.8" summary line.
+  let inFence = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("```")) { inFence = !inFence; continue; }
+    if (inFence || !line || line.startsWith("#") || line.startsWith("|") || line.includes("`")) continue;
+    const letters = line.replace(/[^A-Za-z]/g, "");
+    const words = line.split(/\s+/).filter((w) => /[A-Za-z]/.test(w));
+    if (letters.length >= 15 && words.length >= 4 && (line.match(/[A-Z]/g) || []).length / letters.length >= 0.85) {
+      violations.push(`reply has a RETIRED ALL-CAPS line ("${line.slice(0, 36)}…") — rule 4 retired it; end with the title-recap Summary, no ALL-CAPS line.`);
+      break;
+    }
+  }
+  // (b) A Summary must OPEN with a `User: <task recap>` line (rule 44).
+  if (/(^|\n)\s*(\*\*Summary\*\*|#+ *Summary|Summary:)/i.test(text) && !/(^|\n)\s*(\*\*)?User:/.test(text)) {
+    violations.push("the Summary doesn't open with a `User: <task recap>` line (rule 44).");
+  }
+  // (c) A substantive reply (≥200 chars) must end with the token block + version line.
+  if (text.length >= 200) {
+    if (!/%5h/.test(text)) violations.push("reply has NO token block — end every reply with the show-cost.py output (Tokens / Prompt … / …%5h - …%W), rule 39.");
+    if (!/v\.\d+/.test(text)) violations.push("reply has NO model+version line (e.g. `Los Lobos v.x -> v.y`), rule 40.");
+  }
+}
+const transcript = newestTranscript();
+if (transcript) checkReplyFormat(lastAssistantText(transcript));
 
 // Which files did this session touch? uncommitted + commits ahead of deployed.
 const DEPLOYED = "origin/claude/strength-training-dashboard-SdAlT";
@@ -38,10 +107,6 @@ for (const f of sh(`git diff --name-only ${DEPLOYED}...HEAD`).split("\n")) {
 }
 const touchedRelease = changed.has("src/changelog.ts") || changed.has("index.html");
 const touchedUi = changed.has("src/main.ts") || changed.has("src/styles.css");
-if (!touchedRelease && !touchedUi) process.exit(0);
-
-const read = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } };
-const violations = [];
 
 // ── Release checks (rules: model stamp, version lockstep, patch-only) ──────────
 if (touchedRelease) {
