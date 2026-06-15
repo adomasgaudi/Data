@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   pairEdge, pairEdgeParts, resolvePairGrade, setPairGrade,
-  migrateLegacyPairs, flaggedPairsFor, PAIR_WILDCARD,
+  stripWildcards, stripWildcardsPersonal, flaggedPairsFor, PAIR_WILDCARD,
   type PairMap, type PersonalPairMap,
 } from "./pairing";
 
@@ -16,11 +16,8 @@ describe("pairing edge keys", () => {
   });
 });
 
-describe("resolvePairGrade — layering + direction + wildcard", () => {
-  const shared: PairMap = {
-    [pairEdge("Squat", "Calf Raise")]: "super",
-    [pairEdge(PAIR_WILDCARD, "Bicep Curl")]: "good", // migrated per-exercise baseline
-  };
+describe("resolvePairGrade — layering + direction, STRICTLY per-exercise", () => {
+  const shared: PairMap = { [pairEdge("Squat", "Calf Raise")]: "super" };
   const personal: PersonalPairMap = {
     g: { [pairEdge("Squat", "Calf Raise")]: "noway" }, // g vetoes the gym's super
   };
@@ -32,12 +29,30 @@ describe("resolvePairGrade — layering + direction + wildcard", () => {
   it("is directional — the reverse edge is independent", () => {
     expect(resolvePairGrade("Calf Raise", "Squat", shared, personal, "h")).toEqual({ grade: "neutral", layer: "auto" });
   });
-  it("falls back to the wildcard baseline when no specific edge exists", () => {
-    expect(resolvePairGrade("Deadlift", "Bicep Curl", shared, personal, "h")).toEqual({ grade: "good", layer: "shared" });
+  it("does NOT leak a flag onto another from-exercise (the bug: no wildcard)", () => {
+    // Calf Raise is flagged super FROM Squat — it must stay neutral from any other lift.
+    expect(resolvePairGrade("Deadlift", "Calf Raise", shared, personal, "h").grade).toBe("neutral");
+    expect(resolvePairGrade("Bench", "Calf Raise", shared, personal, "h").grade).toBe("neutral");
   });
-  it("specific edge beats the wildcard", () => {
+});
+
+describe("stripWildcards — purge cross-exercise contamination", () => {
+  it("removes `*→to` edges, keeps specific ones, reports the change", () => {
     const s: PairMap = { [pairEdge(PAIR_WILDCARD, "X")]: "noway", [pairEdge("A", "X")]: "super" };
-    expect(resolvePairGrade("A", "X", s, {}, "h").grade).toBe("super");
+    const r = stripWildcards(s);
+    expect(r.changed).toBe(true);
+    expect(r.map).toEqual({ [pairEdge("A", "X")]: "super" });
+  });
+  it("reports no change when there's nothing to purge", () => {
+    const s: PairMap = { [pairEdge("A", "B")]: "good" };
+    expect(stripWildcards(s)).toEqual({ map: s, changed: false });
+  });
+  it("purges wildcards across every user's personal bucket and drops emptied ones", () => {
+    const p: PersonalPairMap = { g: { [pairEdge(PAIR_WILDCARD, "X")]: "noway" }, h: { [pairEdge("A", "B")]: "good" } };
+    const r = stripWildcardsPersonal(p);
+    expect(r.changed).toBe(true);
+    expect(r.map.g).toBeUndefined();        // g's only edge was a wildcard → bucket dropped
+    expect(r.map.h).toEqual({ [pairEdge("A", "B")]: "good" });
   });
 });
 
@@ -59,19 +74,6 @@ describe("setPairGrade — immutability + clear + layers", () => {
     expect(personal.g![pairEdge("A", "B")]).toBe("noway");
     ({ personal } = setPairGrade({ from: "A", to: "B", grade: "neutral", layer: "personal", user: "g", shared: {}, personal }));
     expect(personal.g).toBeUndefined(); // empty bucket pruned
-  });
-});
-
-describe("migrateLegacyPairs", () => {
-  it("turns flat 3-state + 5-grade flags into shared wildcard edges", () => {
-    const out = migrateLegacyPairs({ "Calf Raise": "prefer", "Cable Fly": "avoid", "Plank": "super" });
-    expect(out[pairEdge(PAIR_WILDCARD, "Calf Raise")]).toBe("good");
-    expect(out[pairEdge(PAIR_WILDCARD, "Cable Fly")]).toBe("noway");
-    expect(out[pairEdge(PAIR_WILDCARD, "Plank")]).toBe("super");
-  });
-  it("ignores unknown values and empty input", () => {
-    expect(migrateLegacyPairs({ X: "weird" })).toEqual({});
-    expect(migrateLegacyPairs(null)).toEqual({});
   });
 });
 

@@ -46,16 +46,16 @@ export function pairGradeRank(g: PairGrade): number {
 }
 
 /** Resolve the EFFECTIVE grade + which layer it came from, for a directional pair
- *  (from → to) as seen by `user`. Personal beats shared; specific beats wildcard. */
+ *  (from → to) as seen by `user`. Personal beats shared. Pairings are STRICTLY
+ *  per-(from)-exercise — there is NO cross-exercise wildcard, so a flag made on one
+ *  lift's card never leaks onto another's (owner: pairings are unique per exercise). */
 export function resolvePairGrade(
   from: string, to: string, shared: PairMap, personal: PersonalPairMap, user: string,
 ): { grade: PairGrade; layer: PairLayer } {
   const mine = personal[user] ?? {};
-  const e = pairEdge(from, to), w = pairEdge(PAIR_WILDCARD, to);
+  const e = pairEdge(from, to);
   if (mine[e]) return { grade: mine[e], layer: "personal" };
-  if (mine[w]) return { grade: mine[w], layer: "personal" };
   if (shared[e]) return { grade: shared[e], layer: "shared" };
-  if (shared[w]) return { grade: shared[w], layer: "shared" };
   return { grade: "neutral", layer: "auto" };
 }
 
@@ -82,18 +82,29 @@ export function setPairGrade(
   return { shared: args.shared, personal };
 }
 
-/** Migrate the OLD flat per-exercise map ({exercise → grade/legacy-3-state}) into the
- *  SHARED layer as wildcard `*→exercise` edges, so existing flags become a gym-wide
- *  baseline for that candidate. Accepts both the 5-grade ids and the original
- *  prefer/hard/avoid words. */
-export function migrateLegacyPairs(old: Record<string, string> | null | undefined): PairMap {
-  const MIG: Record<string, StoredGrade> = {
-    prefer: "good", hard: "difficult", avoid: "noway",
-    super: "super", good: "good", difficult: "difficult", noway: "noway",
-  };
-  const out: PairMap = {};
-  for (const [ex, v] of Object.entries(old ?? {})) { const g = MIG[v]; if (g) out[pairEdge(PAIR_WILDCARD, ex)] = g; }
-  return out;
+/** Drop any cross-exercise WILDCARD edge (`*→to`) from a shared map. Earlier builds
+ *  migrated the old context-free per-exercise flags into wildcards, which then leaked
+ *  onto every lift's card — this purges that contamination. Returns the cleaned map +
+ *  whether anything was removed (so the caller only re-persists when needed). */
+export function stripWildcards(shared: PairMap): { map: PairMap; changed: boolean } {
+  const out: PairMap = {}; let changed = false;
+  for (const [edge, g] of Object.entries(shared)) {
+    if (pairEdgeParts(edge).from === PAIR_WILDCARD) { changed = true; continue; }
+    out[edge] = g;
+  }
+  return { map: out, changed };
+}
+
+/** Same wildcard purge across every user's personal bucket. */
+export function stripWildcardsPersonal(personal: PersonalPairMap): { map: PersonalPairMap; changed: boolean } {
+  const out: PersonalPairMap = {}; let changed = false;
+  for (const [user, bucket] of Object.entries(personal)) {
+    const r = stripWildcards(bucket);
+    if (r.changed) changed = true;
+    if (Object.keys(r.map).length) out[user] = r.map;
+    else if (Object.keys(bucket).length) changed = true; // emptied bucket dropped
+  }
+  return { map: out, changed };
 }
 
 /** All edges that resolve to a non-neutral grade FOR a user, flattened for a manager

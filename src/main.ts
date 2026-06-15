@@ -90,8 +90,8 @@ import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { testMockRecords } from "./mockData";
 import {
-  pairEdge, resolvePairGrade, setPairGrade as applyPairGrade, migrateLegacyPairs,
-  PAIR_WILDCARD,
+  pairEdge, resolvePairGrade, setPairGrade as applyPairGrade,
+  stripWildcards, stripWildcardsPersonal,
   type PairMap, type PersonalPairMap,
 } from "./pairing";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
@@ -11060,19 +11060,22 @@ function pairGradeMeta(g: PairGrade) { return PAIR_GRADES.find((x) => x.id === g
 //   • pairShared  — the GYM truth everyone sees (one shared pool, no named gyms yet).
 //   • pairPersonal — per-user vetoes that shadow the gym flag for that user only.
 // Both are colosseum.* keys, so they ride the cacheSync kv mirror to every user
-// automatically (no backend wiring). The OLD flat per-exercise map migrates ONCE into
-// the shared layer as `*→exercise` wildcard baselines.
-const PAIR_PREF_KEY = "colosseum.pairPrefs.v1";       // legacy flat per-exercise (migrated once)
+// automatically (no backend wiring). Pairings are STRICTLY per-(from)-exercise: an
+// earlier build migrated old context-free flags into cross-exercise `*→to` wildcards
+// that LEAKED a flag onto every lift's card (owner bug) — on load we PURGE any such
+// wildcard so each pairing stays unique to the exercise it was made on.
 const PAIR_SHARED_KEY = "colosseum.pairShared.v1";    // gym truth (synced to everyone)
 const PAIR_PERSONAL_KEY = "colosseum.pairPersonal.v1"; // per-user overrides (synced as one blob)
 let pairShared: PairMap = (() => {
-  const have = loadJsonObject<PairMap>(PAIR_SHARED_KEY);
-  if (have && Object.keys(have).length) return have;
-  const migrated = migrateLegacyPairs(loadJsonObject<Record<string, string>>(PAIR_PREF_KEY));
-  if (Object.keys(migrated).length) saveJson(PAIR_SHARED_KEY, migrated);
-  return migrated;
+  const r = stripWildcards(loadJsonObject<PairMap>(PAIR_SHARED_KEY) ?? {});
+  if (r.changed) saveJson(PAIR_SHARED_KEY, r.map); // persist the one-time cleanup (syncs the removal)
+  return r.map;
 })();
-let pairPersonal: PersonalPairMap = loadJsonObject<PersonalPairMap>(PAIR_PERSONAL_KEY) ?? {};
+let pairPersonal: PersonalPairMap = (() => {
+  const r = stripWildcardsPersonal(loadJsonObject<PersonalPairMap>(PAIR_PERSONAL_KEY) ?? {});
+  if (r.changed) saveJson(PAIR_PERSONAL_KEY, r.map);
+  return r.map;
+})();
 /** Who is "you" for a personal override — the viewed athlete (matches priorities). */
 function pairUser(): string { return els.athlete.value; }
 /** Effective grade for a directional pair (from → to), for the current user. */
@@ -11092,8 +11095,7 @@ function pairFlagBtn(from: string, to: string): string {
   const { grade: g, layer } = resolvePairGrade(from, to, pairShared, pairPersonal, pairUser());
   const meta = pairGradeMeta(g);
   const badge = layer === "personal" ? `<span class="pg-layer" title="Your personal override">👤</span>` : "";
-  const fromTxt = from === PAIR_WILDCARD ? "Any lift" : displayName(from);
-  return `<button type="button" class="lt-pairflag pg-${g}" data-pairfrom="${escapeHtml(from)}" data-pairto="${escapeHtml(to)}" title="${escapeHtml(fromTxt)} → ${escapeHtml(displayName(to))}: ${meta.label} (${layer === "personal" ? "your override" : "gym"}) — tap to grade" aria-label="Pairing grade: ${meta.label}">${meta.glyph}${badge}</button>`;
+  return `<button type="button" class="lt-pairflag pg-${g}" data-pairfrom="${escapeHtml(from)}" data-pairto="${escapeHtml(to)}" title="${escapeHtml(displayName(from))} → ${escapeHtml(displayName(to))}: ${meta.label} (${layer === "personal" ? "your override" : "gym"}) — tap to grade" aria-label="Pairing grade: ${meta.label}">${meta.glyph}${badge}</button>`;
 }
 let pairMenuFrom: string | null = null;
 let pairMenuTo: string | null = null;
@@ -11115,9 +11117,8 @@ function renderPairGradeMenu(): void {
   // Highlight the grade stored ON the chosen layer, so the tick matches what a tap edits.
   const onLayer = pairMenuLayer === "personal" ? (pairPersonal[pairUser()] ?? {})[pairEdge(from, to)] : pairShared[pairEdge(from, to)];
   const cur = onLayer ?? "neutral";
-  const fromTxt = from === PAIR_WILDCARD ? "Any lift" : displayName(from);
   m.innerHTML =
-    `<div class="pair-grade-hd">${escapeHtml(fromTxt)} → ${escapeHtml(displayName(to))}</div>` +
+    `<div class="pair-grade-hd">${escapeHtml(displayName(from))} → ${escapeHtml(displayName(to))}</div>` +
     `<div class="pair-layer-row">` +
       `<button type="button" class="pair-layer-pill${pairMenuLayer === "shared" ? " is-on" : ""}" data-pairlayer="shared" title="Set the gym-wide flag everyone here sees">👥 Gym</button>` +
       `<button type="button" class="pair-layer-pill${pairMenuLayer === "personal" ? " is-on" : ""}" data-pairlayer="personal" title="Override just for you — shadows the gym flag">👤 Just me</button>` +
