@@ -2941,14 +2941,36 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-antex:hover { background: var(--accent); color: #fff; }
 .lt-pairflag { min-width: var(--tap-min); min-height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; color: var(--muted); background: transparent; border: none; border-left: 1px solid var(--line); cursor: pointer; }
 .lt-pairflag:hover { color: var(--accent); }
-.lt-paircell.is-hard { background: var(--gold-soft); }
-.lt-paircell.is-hard .lt-antex { color: var(--gold); }
-.lt-paircell.is-hard .lt-pairflag { color: var(--gold); }
-.lt-paircell.is-avoid { background: transparent; outline: 1px dashed var(--line); opacity: 0.6; }
-.lt-paircell.is-avoid .lt-antex { color: var(--muted); text-decoration: line-through; }
-.lt-paircell.is-prefer { background: var(--accent-soft); outline: 1.5px solid var(--accent); }
-.lt-paircell.is-prefer .lt-antex { color: var(--accent); font-weight: 800; }
-.lt-paircell.is-prefer .lt-pairflag { color: var(--accent); }
+/* 5-grade pairing colour (super → no way; pg-neutral = the base accent-soft look). */
+.lt-paircell.pg-super { background: var(--accent-soft); outline: 2px solid var(--accent); }
+.lt-paircell.pg-super .lt-antex,
+.lt-paircell.pg-super .lt-pairflag { color: var(--accent); }
+.lt-paircell.pg-super .lt-antex { font-weight: 800; }
+.lt-paircell.pg-good { outline: 1.5px solid var(--accent); }
+.lt-paircell.pg-good .lt-antex,
+.lt-paircell.pg-good .lt-pairflag { color: var(--accent); }
+.lt-paircell.pg-good .lt-antex { font-weight: 800; }
+.lt-paircell.pg-difficult { background: var(--gold-soft); }
+.lt-paircell.pg-difficult .lt-antex,
+.lt-paircell.pg-difficult .lt-pairflag { color: var(--gold); }
+.lt-paircell.pg-noway { background: transparent; outline: 1px dashed var(--line); opacity: 0.6; }
+.lt-paircell.pg-noway .lt-antex { color: var(--muted); text-decoration: line-through; }
+/* Pairing-grade mini popup menu (replaces the confusing cycle toggle; rule 32). */
+.pair-grade-menu { position: fixed; z-index: var(--z-modal); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 24px rgba(20, 24, 38, 0.22); padding: 4px; min-width: 9.5rem; }
+.pair-grade-menu[hidden] { display: none; }
+.pair-grade-hd { font-size: 0.7rem; color: var(--muted); padding: 4px 8px 5px; border-bottom: 1px solid var(--line); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pair-grade-opt { display: flex; align-items: center; gap: 0.5rem; width: 100%; min-height: var(--tap-min); padding: 4px 10px; font: inherit; font-size: 0.82rem; color: var(--text); background: none; border: none; border-radius: var(--r-pill); cursor: pointer; text-align: left; }
+.pair-grade-opt:hover { background: var(--accent-soft); }
+.pair-grade-opt.is-on { background: var(--accent-soft); font-weight: 700; }
+.pair-grade-opt .pgo-glyph { width: 1.25rem; text-align: center; flex: none; }
+.pair-grade-opt.pg-super .pgo-glyph, .pair-grade-opt.pg-good .pgo-glyph { color: var(--accent); }
+.pair-grade-opt.pg-difficult .pgo-glyph { color: var(--gold); }
+.pair-grade-opt.pg-noway .pgo-glyph { color: var(--remove, var(--muted)); }
+/* "Top pairs" strip (super/good) surfaced near the numbers in the exercise card. */
+.lt-toppairs { display: flex; flex-wrap: wrap; gap: 5px; }
+.lt-toppair { display: inline-flex; align-items: center; gap: 0.3rem; min-height: var(--tap-min); padding: 3px 10px; font: inherit; font-size: 0.76rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); cursor: pointer; }
+.lt-toppair:hover { background: var(--accent); color: #fff; }
+.lt-toppair .pgo-glyph { font-size: 0.8rem; }
 /* Pairs manager (Plan popup ⇄ section) */
 .pairs-mgr { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; }
 .pairs-mgr-hd { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding-bottom: 5px; }
