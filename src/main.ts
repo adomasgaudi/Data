@@ -348,6 +348,8 @@ let data: LoadedData;
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
+let cardNuzzoSvg: SvgChart | null = null; // Exercise-card 1RM-fit (Nuzzo) graph (SVG engine)
+let cardNuzzoRaf = false; // rAF coalescer so a slider drag re-plots at most once/frame
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
@@ -11331,20 +11333,44 @@ function cardNuzzoRealPts(name: string, oneRM: number | null): SvgPoint[] {
     meta: `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg → ${Math.round((rm.weight / oneRM) * 100)}%`,
   }));
 }
-/** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
- *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
- *  so every re-render path gets the live chart — not just the first open. */
-function mountExInfoCharts(): void {
-  const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
-  if (!box) return;
+/** Build the card's Nuzzo chart config from the live `.lt-nuzzo` box (its dataset carries
+ *  the suggested set's reps/%1RM and the current assumed 1RM). Shared by the full mount
+ *  and the live slider re-plot so they never drift. */
+function cardNuzzoConfigFromBox(box: HTMLElement): SvgChartConfig {
   const reps = Number(box.dataset.nzreps), pct = Number(box.dataset.nzpct);
   const orm = Number(box.dataset.nzorm);
   const realPts = currentExInfo ? cardNuzzoRealPts(currentExInfo, Number.isFinite(orm) && orm > 0 ? orm : null) : [];
-  mountSvgChart(box, cardNuzzoConfig(
+  return cardNuzzoConfig(
     Number.isFinite(reps) && reps > 0 ? reps : null,
     Number.isFinite(pct) && pct > 0 ? pct : null,
     realPts,
-  ));
+  );
+}
+/** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
+ *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
+ *  so every re-render path gets the live chart — not just the first open. Keeps the chart
+ *  INSTANCE so a slider drag can .update() it instead of re-mounting (the SAME shared
+ *  svgChart engine as the Analysis / compare / calculator graphs). */
+function mountExInfoCharts(): void {
+  const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
+  if (!box) { cardNuzzoSvg = null; return; }
+  cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
+}
+/** LIVE re-plot during a 1RM-slider drag. Re-mounting the whole chart every input tick
+ *  rebuilt the full 300px SVG AND spun up a new ResizeObserver each time — heavy enough
+ *  to stutter the drag and drop the pointer ("the knob is hard to move / loses control").
+ *  Instead reuse the mounted instance and just `.update()` its series, coalesced to one
+ *  redraw per animation frame (rule 17 snappy-render). */
+function updateCardNuzzoLive(): void {
+  if (cardNuzzoRaf) return;
+  cardNuzzoRaf = true;
+  requestAnimationFrame(() => {
+    cardNuzzoRaf = false;
+    const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
+    if (!box) return;
+    if (cardNuzzoSvg) cardNuzzoSvg.update(cardNuzzoConfigFromBox(box));
+    else cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
+  });
 }
 /** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
  *  card (re)render funnels through, so the embedded svgChart is never left un-mounted. */
@@ -11407,6 +11433,19 @@ function liftTrainingHtml(name: string): string {
   const ormBase = e1rm ?? bestFit ?? maxW;
   const sMin = Math.max(Math.floor(maxW), 1);
   const sMax = Math.max(Math.ceil(ormBase * 1.6), sMin + 20);
+  // Where the dots come from: the real rep-maxes (heaviest set at each rep count) that
+  // feed the graph, in a collapsed dropdown — heaviest first — so the owner can see the
+  // source data behind the teal dots (owner: "I don't see the list of top real lifts").
+  const topReal = [...repMaxes].sort((a, b) => b.weight - a.weight).slice(0, 10);
+  const realSrc = topReal.length
+    ? `<details class="lt-realsrc"><summary class="lt-realsrc-sum muted">Real lifts on the graph <span class="lt-realsrc-cnt">${topReal.length}</span></summary>` +
+        `<div class="lt-realsrc-list">` +
+        topReal.map((rm) => {
+          const pct = ormBase > 0 ? Math.round((rm.weight / ormBase) * 100) : 0;
+          return `<div class="lt-realsrc-row"><span class="lt-realsrc-w">${fmt(rm.weight)} kg × ${rm.reps}</span><span class="muted">${pct}%</span></div>`;
+        }).join("") +
+        `</div></details>`
+    : "";
   const ormFit =
     `<div class="lt-ormfit">` +
       `<div class="lt-ormfit-row">` +
@@ -11418,6 +11457,7 @@ function liftTrainingHtml(name: string): string {
           : "") +
       `</div>` +
       nuzzoBox(ormBase) +
+      realSrc +
     `</div>`;
   // Working weights: true rep-maxes for common targets (load to FAILURE at N reps).
   const repTargets = [3, 5, 8, 12];
@@ -13200,7 +13240,7 @@ async function init() {
     if (slider && slider !== inp) slider.value = String(v);
     if (num && num !== inp) num.value = String(Math.round(v * 10) / 10);
     const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
-    if (box) { box.dataset.nzorm = String(Math.round(v * 10) / 10); mountExInfoCharts(); }
+    if (box) { box.dataset.nzorm = String(Math.round(v * 10) / 10); updateCardNuzzoLive(); }
     debounceCardOrmRender();
   });
   els.exInfoBody.addEventListener("click", (e) => {
