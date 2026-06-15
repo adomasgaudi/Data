@@ -13,6 +13,17 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-25 — A "created" new exercise doesn't appear (exercise list is data-only)
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Index + Analysis → add-exercise. Owner asked to "create a new exercise knee raise" with variations; the AI added it only to the variation-model config (`variationConfig.ts` FAMILIES + EXERCISE_FAMILY). Owner: "i dont see it in index (only str level exercises 'hanging knee raise'), i dont see it as an option when adding exercise in history #persistent".
+- **Prior failed fix (EXR-142, b.2.8.449):** added `KNEERAISE` family + `EXERCISE_FAMILY["Knee Raise"]` + a bodyweight coeff. None of these make an exercise VISIBLE — they're metadata that only activates for an exercise that ALREADY appears via logged data. So "Knee Raise" (zero logged sets anywhere) stayed invisible everywhere.
+- **Root cause:** the entire exercise list is **purely record-derived** — `distinctExercises(records)` builds names FROM logged `SetRecord`s, and every picker/index list flows from it. A lift with no sets can therefore NEVER appear, no matter how much metadata references its name. There was no registry of "exercises the owner intends to track but hasn't logged yet". The variation/family/coeff maps are name-keyed metadata, NOT a visibility source — adding a key there is a silent no-op until data exists.
+- **Fix (b.2.8.x):** added `EXTRA_EXERCISES` catalog in `aggregate.ts` and UNIONED it into `selectableExercises` (appended last = 0 sets). Switched the two surfaces that derived names directly — the Index "not-trained" list and the graph/analysis picker (`populateExercisePicker`) — from `distinctExercises` to `selectableExercises`, so a catalog lift shows in the index (as a not-trained gap), the add-exercise datalist, and the graph picker; the existing "is this a known exercise?" checks already use `selectableExercises`, so logging the first set against it is recognised. Once a set is logged, it's a normal data-derived exercise and the catalog entry is a no-op dedupe. Also fixed the sibling gap: the quick-add form only renders dims listed in `AF_DIM_ORDER`, so `backrest`/`obstacle` were added there (the family had them but they never showed). Code comment `PB-25` at the fix sites.
+- **Watch:** "create exercise X" needs X in `EXTRA_EXERCISES` (or a logged set) — adding it ONLY to `EXERCISE_FAMILY`/`EXERCISE_BW_COEFF`/`FAMILIES` does nothing visible. New family dims must ALSO be added to `AF_DIM_ORDER` (+ labels) or they won't appear in the quick-add form.
+- **Recurrences:** 1 (EXR-142 wired the metadata; this makes the exercise actually exist in the UI).
+
+---
+
 ## PB-24 — Add-set popup overflows / scrolls horizontally (inner flex children won't shrink)
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Workouts → "+ set" / "+ exercise" popup. Owner: "@image not fitting fix", then after the card-level fix "still not fixed #cowork #persistent — popup out of bounds shouldnt scroll horizontaly". The popup's content (weight/reps/sets inputs, Add button) extends past the card's right edge / lets the row scroll sideways.

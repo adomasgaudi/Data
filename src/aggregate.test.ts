@@ -777,6 +777,22 @@ describe("originals stay selectable when variants/groups exist (TASK 11)", () =>
     expect(names).toContain("Assisted Pull Up");
     expect(names).toContain("Gravity Machine Pull Up");
   });
+
+  it("EXTRA_EXERCISES catalog lifts are selectable even with zero logged sets (PB-25)", () => {
+    // "Knee Raise" is in EXTRA_EXERCISES but appears in no record here.
+    expect(distinctExercises(base)).not.toContain("Knee Raise"); // record-derived: invisible
+    expect(selectableExercises(base)).toContain("Knee Raise"); // catalog union: selectable
+    // Appended last (0 sets = least-used), never displacing a logged lift.
+    const names = selectableExercises(base);
+    expect(names[0]).toBe("Pull Ups"); // most-logged still leads
+    expect(names.indexOf("Knee Raise")).toBeGreaterThan(names.indexOf("Pull Ups"));
+  });
+
+  it("a catalog lift that gets logged is not duplicated (dedupe)", () => {
+    const logged = [...base, rec({ username: "ada", exerciseName: "Knee Raise" })];
+    const names = selectableExercises(logged);
+    expect(names.filter((n) => n === "Knee Raise")).toHaveLength(1);
+  });
 });
 
 describe("history periods", () => {

@@ -129,6 +129,18 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
 }
 
 /**
+ * Catalog of exercises the owner wants to TRACK that may not be in the logged
+ * data yet (StrengthLevel only knows what's been logged on it). Without this, a
+ * brand-new exercise can never appear — the whole list is record-derived, so a
+ * zero-set lift is invisible in the index AND the add-exercise picker. These
+ * names are UNIONED into {@link selectableExercises} (appended last = 0 sets =
+ * least-used), never subtracting a logged name. Once a set is logged against one,
+ * it becomes a normal data-derived exercise and this entry is just a no-op dedupe.
+ * Add a name here when the owner says "create exercise X". (PB-25.)
+ */
+export const EXTRA_EXERCISES: readonly string[] = ["Knee Raise"];
+
+/**
  * The exercise names a picker/selector should offer for a set of records.
  *
  * TASK 11 invariant — creating a dissolved / combined / comparison variant must
@@ -136,14 +148,18 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
  * offered, alongside any variant or synthetic group name present in `records`;
  * relationship membership (parent/child, group inclusion) never subtracts a name.
  * So an original (e.g. "Pull Ups") and its variants ("Assisted Pull Up", "Gravity
- * Machine Pull Up") are always selectable together. Most-logged first.
+ * Machine Pull Up") are always selectable together. Most-logged first, then the
+ * EXTRA_EXERCISES catalog (intended-but-unlogged lifts) appended at the end.
  *
  * It delegates to distinctExercises: the guarantee is that nothing here filters by
  * identity/relationship. Pass logged records for originals+variants, or
  * computedRecords() to also include synthetic group names.
  */
 export function selectableExercises(records: readonly SetRecord[]): string[] {
-  return distinctExercises(records);
+  const fromData = distinctExercises(records);
+  const seen = new Set(fromData);
+  const extra = EXTRA_EXERCISES.filter((e) => !seen.has(e));
+  return extra.length ? [...fromData, ...extra] : fromData;
 }
 export interface FreqTier {
   tier: string;

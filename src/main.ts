@@ -3102,7 +3102,9 @@ function computedRecordsAllLifts(): SetRecord[] {
  */
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
-  const pure = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
+  // selectableExercises so EXTRA_EXERCISES catalog lifts (no logged sets yet) are
+  // still graph/analysis-pickable — selecting one shows the inline calc (PB-25).
+  const pure = selectableExercises(activeRecords()); // pure lifts, most-logged first (active set)
   // The synthetic combinable/comparable lifts (SQ mix, DL pattern) whose members
   // are present — surfaced in a labelled group at the TOP so they're easy to find.
   const synth = availableSyntheticNames(pure);
@@ -5778,7 +5780,9 @@ function renderExercisesPage() {
   let items: ExItem[] = exerciseCounts(scoped, username).map((c) => ({ ...c, trained: true }));
   if (exerciseShowNotTrained) {
     const trainedEver = new Set(exerciseCounts(base, username).map((c) => c.exerciseName));
-    for (const name of distinctExercises(base))
+    // selectableExercises (not distinctExercises) so EXTRA_EXERCISES catalog lifts
+    // with zero logged sets anywhere still surface here as not-trained gaps (PB-25).
+    for (const name of selectableExercises(base))
       if (!trainedEver.has(name)) items.push({ exerciseName: name, count: 0, trained: false });
   }
   // Fold out 3rd-tier (cardio / mobility / warm-up) exercises unless the toggle
@@ -15488,10 +15492,12 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 
 // Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
 // order. Ladder sub-dims (grip/height) are left to the full per-set editor.
-const AF_DIM_ORDER = ["support", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { support: "support", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["support", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { support: "support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
-  support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder" },
+  support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder", hanging: "hanging", dips_bar: "dips bar" },
+  backrest: { none: "none", "30cm": "30cm rest" },
+  obstacle: { none: "none", S: "yoga S (6cm)", M: "yoga M (15cm)", L: "yoga L (23cm)" },
   continuity: { paused: "paused", uninterrupted: "uninterrupted" },
   band: { none: "no band", "1": "band 1", "2": "band 2", "3": "band 3", "4": "band 4", "5": "band 5", "6": "band 6" },
   position: { floor: "floor (on feet)", knees: "on knees" },
