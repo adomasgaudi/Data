@@ -240,6 +240,7 @@ const els = {
   exInfoPillToggle: $<HTMLButtonElement>("exInfoPillToggle"),
   exInfoGotoIndex: $<HTMLButtonElement>("exInfoGotoIndex"),
   exInfoGotoAnl: $<HTMLButtonElement>("exInfoGotoAnl"),
+  exInfoCalc: $<HTMLButtonElement>("exInfoCalc"),
   exInfoBody: $("exInfoBody"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
@@ -3241,6 +3242,22 @@ function openFormulas() {
   setOtherSheetOpen(false);
   els.formulasPage.hidden = false;
   requestAnimationFrame(() => { renderTest(); renderCalcTopSets(); });
+}
+
+/** Open the Formulas calculator pre-set to a given athlete + exercise — from the 🧮
+ * button in the exercise-info view. #cowork: reuses the calc as-is (just drives its
+ * existing athlete/exercise picker + the prefill), no calc internals touched. */
+function openCalcForExercise(username: string, exName: string | null): void {
+  const hasAth = [...els.testAthlete.options].some((o) => o.value === username);
+  if (username && exName && hasAth) {
+    els.testAthlete.value = username;
+    populateTestExercises(username);
+    if ([...els.testExercise.options].some((o) => o.value === exName)) {
+      els.testExercise.value = exName;
+      prefillTestFromPick();
+    }
+  }
+  openFormulas();
 }
 
 /** Open the version-history overlay from Settings. */
@@ -12764,6 +12781,7 @@ async function init() {
   els.exInfoBack.addEventListener("click", closeExerciseInfo);
   els.exInfoGotoIndex.addEventListener("click", gotoIndexFromInfo);
   els.exInfoGotoAnl.addEventListener("click", gotoAnlFromInfo);
+  els.exInfoCalc.addEventListener("click", () => openCalcForExercise(els.athlete.value, currentExInfo));
   // ⓘ header toggle: flip info-mode and re-render the card so every pill gains/loses
   // its small ⓘ. State persists across opening different lifts (synced on open).
   els.exInfoPillToggle.addEventListener("click", () => {
