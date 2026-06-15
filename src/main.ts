@@ -11365,10 +11365,6 @@ function liftTrainingHtml(name: string): string {
   const warmRows = hs
     ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm, hs.weightKg, hs.reps, formula, 2.5)}</div>`
     : `<p class="muted lt-mini">—</p>`;
-  // Set suggestion.
-  const setSug = hs
-    ? `<div class="lt-setsug"><b>3 × ${hs.reps}</b> @ <b>${fmt(hs.weightKg)}kg</b> <span class="muted">· RIR ${hs.rir} · ${fmt(hs.pctOf1RM)}% of 1RM</span></div>`
-    : `<p class="muted lt-mini">—</p>`;
 
   // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
   // you can superset them (train one while these muscles rest). Ordered by (1) the
@@ -11409,7 +11405,6 @@ function liftTrainingHtml(name: string): string {
   return `<div class="lt-wrap">` +
     sec("Calculate", calcRow) +
     sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
-    sec("Set suggestion", setSug) +
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
     sec("Reps → %1RM (Nuzzo)", `<div class="lt-nuzzo" data-nzreps="${hs?.reps ?? ""}" data-nzpct="${hs?.pctOf1RM ?? ""}"></div>`) +

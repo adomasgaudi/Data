@@ -95,7 +95,6 @@ const LT: Record<string, string> = {
   "Calculate": "Skaičiuoti",
   "type a set to calc": "įveskite seriją skaičiavimui",
   "Working weights": "Darbiniai svoriai",
-  "Set suggestion": "Serijos pasiūlymas",
   "Warmup": "Apšilimas",
   "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
   "Setup notes": "Pasiruošimo užrašai",
