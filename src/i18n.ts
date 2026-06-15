@@ -446,6 +446,8 @@ const LT: Record<string, string> = {
   "Fit": "Pritaikyta",
   "Records": "Rekordai",
   "All sets": "Visos serijos",
+  "drag the ⟵ ⟶ lines to set the fit window": "tempk ⟵ ⟶ linijas, kad nustatytum pritaikymo langą",
+  "Window: custom ✕": "Langas: pasirinktas ✕",
   "Potential (log)": "Potencialas (log)",
   "Log to potential": "Log iki potencialo",
   "Native log (exp.)": "Natyvus log (eksp.)",

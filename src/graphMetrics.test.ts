@@ -129,6 +129,21 @@ describe("graph metric registry (TASK 26)", () => {
     // Records basis (default) is monotonic in the source → still fits.
     expect(graphMetric("predicted")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
   });
+
+  it("projection fit-window (projectionFrom/To) excludes out-of-window sets", () => {
+    const recs = [2020, 2021, 2022, 2023, 2024].map((y, i) =>
+      rec({ date: `${y}-01-01`, weight: 100 + i * 5, reps: 3 }));
+    const all = graphMetric("predicted")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(all.length).toBeGreaterThan(0);
+    // Window covering only the last 2 points (< 3) → not enough to fit → empty.
+    const narrow = { ...DEFAULT_GRAPH_CONFIG, projectionFrom: Date.UTC(2023, 0, 1), projectionTo: Date.UTC(2024, 6, 1) };
+    expect(graphMetric("predicted")!.compute!(recs, narrow)).toEqual([]);
+    // Window covering the first 3 points → fits, and never starts before the window.
+    const early = { ...DEFAULT_GRAPH_CONFIG, projectionFrom: Date.UTC(2019, 0, 1), projectionTo: Date.UTC(2022, 6, 1) };
+    const earlyPts = graphMetric("predicted")!.compute!(recs, early);
+    expect(earlyPts.length).toBeGreaterThan(0);
+    expect(earlyPts[0]!.x).toBeGreaterThanOrEqual(Date.UTC(2020, 0, 1));
+  });
 });
 
 describe("graph config layer (TASK 29)", () => {

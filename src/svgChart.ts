@@ -178,6 +178,12 @@ export interface SvgChartConfig {
   /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
    * region as you approach a target. Drawn behind everything. */
   yBands?: { from: number; to?: number; fill: string }[] | undefined;
+  /** Draggable VERTICAL markers in x (data) space — e.g. the projection fit-window
+   * start/end lines. Each draws a labelled line + grab handle; dragging one calls
+   * onMarkerDrag with its committed x. Inert (no extra interaction) when absent. */
+  xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
+  /** Called on release after a marker drag, with the marker id and its new x value. */
+  onMarkerDrag?: ((id: string, x: number) => void) | undefined;
 }
 export interface SvgChart {
   update(cfg: Partial<SvgChartConfig>): void;
@@ -360,6 +366,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const tipEl = container.querySelector<HTMLElement>(".svgc-tip")!;
   const clipId = `svgc-clip-${Math.random().toString(36).slice(2, 8)}`;
   const glowId = `svgc-glow-${Math.random().toString(36).slice(2, 8)}`;
+  // Draggable x-markers: their last-drawn pixel x (viewBox units) for hit-testing, and
+  // the in-flight drag. Empty/null unless cfg.xMarkers is set (inert for every other chart).
+  let markerPx: { id: string; px: number }[] = [];
+  let mkDrag: { id: string; startX: number; origPx: number; g: SVGGElement | null; newX: number } | null = null;
 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
@@ -801,6 +811,26 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     body += directLabels.join("");
     body += tagAnnotations.join("");
 
+    // Draggable vertical fit-window markers (e.g. the projection's include-from/to lines):
+    // a coloured dashed line top-to-bottom + a grip tab at the top + a fat transparent
+    // hit-line. Their pixel x is cached for pointer hit-testing.
+    markerPx = [];
+    if (cfg.xMarkers && cfg.xMarkers.length) {
+      for (const mk of cfg.xMarkers) {
+        const px = xPix(mk.x);
+        markerPx.push({ id: mk.id, px });
+        const col = mk.color ?? "#2f8f88";
+        const lbl = mk.label ? `<text class="svgc-xmk-lbl" x="${(px + 4).toFixed(1)}" y="${(M.t + 11).toFixed(1)}" font-size="10" fill="${col}">${esc(mk.label)}</text>` : "";
+        body +=
+          `<g class="svgc-xmk" data-mk="${esc(mk.id)}" style="cursor:ew-resize">` +
+          `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${(h - M.b).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.9"/>` +
+          `<rect x="${(px - 5).toFixed(1)}" y="${M.t}" width="10" height="14" rx="2" fill="${col}"/>` +
+          `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${(h - M.b).toFixed(1)}" stroke="transparent" stroke-width="18"/>` +
+          lbl +
+          `</g>`;
+      }
+    }
+
     const frame = inside()
       ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" class="svgc-frame" stroke-width="1"/>`
       : `<line x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${h - M.b}" class="svgc-frame" stroke-width="1"/>` +
@@ -1137,12 +1167,50 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       }
     }
   };
+  // Pointer x in viewBox units (same space as markerPx), for marker hit-testing.
+  function pointerLocalX(clientX: number): number {
+    const svg = plotEl.querySelector("svg");
+    const rect = svg ? svg.getBoundingClientRect() : plotEl.getBoundingClientRect();
+    return ((clientX - rect.left) / rect.width) * widthOf();
+  }
+  // Live marker drag: move the grabbed marker's <g> horizontally and stash the new data
+  // x; commit on release via cfg.onMarkerDrag (so the heavy fit recompute runs once).
+  const onMkMove = (e: PointerEvent) => {
+    if (!mkDrag) return;
+    e.preventDefault();
+    const lx = pointerLocalX(e.clientX);
+    if (mkDrag.g) mkDrag.g.setAttribute("transform", `translate(${(lx - mkDrag.origPx).toFixed(1)},0)`);
+    mkDrag.newX = pixInfo(e.clientX, 0).fx;
+  };
+  const onMkUp = () => {
+    window.removeEventListener("pointermove", onMkMove);
+    window.removeEventListener("pointerup", onMkUp);
+    window.removeEventListener("pointercancel", onMkUp);
+    const d = mkDrag; mkDrag = null;
+    if (d) cfg.onMarkerDrag?.(d.id, d.newX);
+  };
   plotEl.addEventListener("pointerdown", (e) => {
     if (!interactive()) {
       const hp = hitTest(e.clientX, e.clientY);
       if (hp) pinDetail(hp);
       else { hideTip(); showTip(e.clientX); }
       return;
+    }
+    // A press near a draggable marker grabs it (instead of panning the chart).
+    if (cfg.onMarkerDrag && markerPx.length && pts.size === 0) {
+      const lx = pointerLocalX(e.clientX);
+      let near: { id: string; px: number } | null = null;
+      for (const m of markerPx) if (!near || Math.abs(m.px - lx) < Math.abs(near.px - lx)) near = m;
+      if (near && Math.abs(near.px - lx) <= 16) {
+        const g = plotEl.querySelector<SVGGElement>(`.svgc-xmk[data-mk="${CSS.escape(near.id)}"]`);
+        mkDrag = { id: near.id, startX: e.clientX, origPx: near.px, g, newX: pixInfo(e.clientX, 0).fx };
+        window.addEventListener("pointermove", onMkMove);
+        window.addEventListener("pointerup", onMkUp);
+        window.addEventListener("pointercancel", onMkUp);
+        try { plotEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        e.preventDefault();
+        return;
+      }
     }
     if (pts.size === 0) {
       window.addEventListener("pointermove", onMove);

@@ -761,6 +761,9 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .svgc-frame { stroke: var(--chart-axis); fill: none; }
 .svgc-axislabel { fill: var(--chart-label); }
 .svgc-halo { fill: var(--chart-label); stroke: var(--chart-halo); stroke-width: 3; paint-order: stroke; }
+/* Draggable projection fit-window markers (vertical lines + grab tab). */
+.svgc-xmk { touch-action: none; }
+.svgc-xmk-lbl { font-weight: 700; paint-order: stroke; stroke: var(--chart-halo); stroke-width: 2.4; }
 /* Leaderboard dot-plot (dedicated SVG renderer). */
 .lb-chart { width: 100%; }
 .lb-svg .lb-rank1 { fill: var(--gold); font-weight: 700; }

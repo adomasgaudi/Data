@@ -25,6 +25,10 @@ export interface GraphConfig {
    *  "all"     = every working set's e1RM.
    *  Warm-ups (clearly submaximal) are ALWAYS excluded, whatever the basis. */
   projectionBasis: "records" | "hard" | "all";
+  /** Optional fit WINDOW (ms timestamps): only sets logged within [from, to] feed the
+   * projection fit — the draggable vertical lines on the graph. Undefined = no bound. */
+  projectionFrom?: number | undefined;
+  projectionTo?: number | undefined;
   /** Fill opacity (0..1) for bar series (e.g. Volume), so they don't hide other
    * series. Default 0.6 — a touch more solid than the scatter dots. */
   opacity: number;

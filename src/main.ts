@@ -16898,6 +16898,11 @@ let waShowMissing = false;
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm", "strength"]); // default graph view: 1RM + Strength score (no decay)
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+// Projection fit-window (ms timestamps): the two draggable vertical lines bounding which
+// logged sets feed the forecast. null = open (data start / end). Reset when the forecast
+// is off; clamped so from < to.
+let projFitFrom: number | null = null;
+let projFitTo: number | null = null;
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
@@ -18238,10 +18243,16 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const projDaysLbl = projDays >= 365 ? `${Math.round(projDays / 365)} yr` : `${Math.round(projDays / 30)} mo`;
   const projBasis = c.projectionBasis ?? "records";
   const projBasisLbl = projBasis === "records" ? "Records" : projBasis === "hard" ? "Hard sets" : "All sets";
+  const windowSet = projFitFrom != null || projFitTo != null;
   const cfgProjection = cfgGroup("Projection", projOn ? `${projDaysLbl} · ${projBasisLbl.toLowerCase()}` : "",
     `<button type="button" class="wa-metric${projOn ? " is-on" : ""}" data-wametric="predicted" title="Draw a strength forecast that rises steeply early and flattens toward your ceiling (the Potential ceiling if set, else this lift's world record).">Show forecast line</button>` +
     `<button type="button" class="wa-name-opt" data-waprojdays title="How far ahead the forecast projects. Tap to cycle.">Ahead <span class="muted">${projDaysLbl}</span></button>` +
-    `<button type="button" class="wa-name-opt" data-waprojbasis title="Which logged sets the curve is fitted to (warm-ups always excluded). Tap to cycle.">Fit <span class="muted">${projBasisLbl}</span></button>`);
+    `<button type="button" class="wa-name-opt" data-waprojbasis title="Which logged sets the curve is fitted to (warm-ups always excluded). Tap to cycle.">Fit <span class="muted">${projBasisLbl}</span></button>` +
+    (projOn
+      ? (windowSet
+          ? `<button type="button" class="wa-name-opt is-on" data-waprojwinreset title="Reset the fit window back to all your data.">Window: custom ✕</button>`
+          : `<span class="muted wa-proj-hint">drag the ⟵ ⟶ lines to set the fit window</span>`)
+      : ""));
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
@@ -18423,11 +18434,42 @@ function renderWaGraph(): void {
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
+  // Projection fit-window: when the forecast is on, two draggable lines bound which sets
+  // feed the fit. Default the lines to the plotted data's span; dragging re-fits to the
+  // window. Cleared (and the config bounds dropped) when the forecast is off.
+  const projOnNow = drawMetricIds.includes("predicted");
+  let projMarkers: { id: string; x: number; color?: string; label?: string }[] | undefined;
+  if (projOnNow) {
+    let lo = Infinity, hi = -Infinity;
+    for (const r of athleteRecs) { const t = Date.parse(r.date); if (Number.isFinite(t)) { if (t < lo) lo = t; if (t > hi) hi = t; } }
+    if (Number.isFinite(lo) && Number.isFinite(hi) && hi > lo) {
+      // Clamp any saved window into THIS lift's span (a window set on another lift must
+      // not bound a different lift's data into emptiness).
+      const clamp = (v: number | null, dflt: number) => (v == null || v < lo || v > hi ? dflt : v);
+      const from = clamp(projFitFrom, lo), to = clamp(projFitTo, hi);
+      waGraphConfig.projectionFrom = from;
+      waGraphConfig.projectionTo = to;
+      projMarkers = [
+        { id: "from", x: from, color: "#2f8f88", label: "fit ⟵" },
+        { id: "to", x: to, color: "#2f8f88", label: "⟶ fit" },
+      ];
+    }
+  } else {
+    waGraphConfig.projectionFrom = undefined;
+    waGraphConfig.projectionTo = undefined;
+  }
   const analyticsInput = {
     exercises: graphExercises,
     records: athleteRecs,
     metrics: drawMetricIds,
     config: waGraphConfig,
+    xMarkers: projMarkers,
+    onMarkerDrag: (id: string, x: number) => {
+      if (id === "from") projFitFrom = x; else projFitTo = x;
+      // Keep from < to (swap if dragged past each other).
+      if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
+      scheduleWaGraph();
+    },
     codeOf: (ex: string) => displayName(ex, "graph"), // legend follows the GRAPH area's name mode (fired after the render pass)
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(els.athlete.value)?.weight ?? null,
@@ -19504,6 +19546,12 @@ function setupWorkoutAnalysis(): void {
       const steps = ["records", "hard", "all"] as const;
       const i = steps.indexOf(waGraphConfig.projectionBasis ?? "records");
       waGraphConfig.projectionBasis = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
+      return;
+    }
+    // Reset the projection fit-window back to all data (clears the dragged lines).
+    if (t.closest<HTMLElement>("[data-waprojwinreset]")) {
+      projFitFrom = null; projFitTo = null;
       scheduleWaGraph();
       return;
     }

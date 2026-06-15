@@ -189,7 +189,9 @@ function projectionBasisPoints(records: readonly SetRecord[], cfg: GraphConfig):
     if (basis === "hard") return rir < 3; // near-failure only
     return true;
   });
-  const pts = e1rmPoints(kept, cfg.formula);
+  const pts = e1rmPoints(kept, cfg.formula).filter(
+    (p) => (cfg.projectionFrom == null || p.x >= cfg.projectionFrom) && (cfg.projectionTo == null || p.x <= cfg.projectionTo),
+  );
   return basis === "records" ? runningMax(pts).map((p) => ({ x: p.x, y: p.y! })) : pts;
 }
 

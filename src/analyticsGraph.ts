@@ -97,6 +97,11 @@ export interface AnalyticsGraphInput {
    * whole-athlete "All exercises" aggregate — so clearing the selection leaves the
    * plot empty rather than implicitly showing everything. */
   emptyOnNoExercises?: boolean;
+  /** Draggable vertical fit-window markers (the projection's include-from/to lines),
+   * in ms timestamps. Passed straight to the chart; omitted = no markers. */
+  xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
+  /** Called on release after dragging a fit-window marker (id + new ms timestamp). */
+  onMarkerDrag?: ((id: string, x: number) => void) | undefined;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -318,6 +323,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           { from: 0.6, fill: "rgba(120,120,120,0.12)" },
         ]
       : undefined, // cleared when the %WR metric is turned off (no stale shading)
+    // Projection fit-window lines (always present so the merge clears them when off — PB-8).
+    xMarkers: input.xMarkers,
+    onMarkerDrag: input.onMarkerDrag,
   };
   const existing = charts.get(container);
   container.classList.add("svgc-freepan");
