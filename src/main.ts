@@ -11315,7 +11315,7 @@ function cardNuzzoConfig(markReps: number | null, markPct: number | null, realPt
     series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: markReps, y: markPct, meta: `${markReps} reps @ ${Math.round(markPct)}%` }], noLegend: true });
   }
   return {
-    series, xKind: "linear", height: 150, yUnit: "%",
+    series, xKind: "linear", height: 300, yUnit: "%",
     formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} reps`,
   };
 }

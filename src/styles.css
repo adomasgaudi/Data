@@ -3070,7 +3070,7 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pairs-mgr-chip { align-items: center; }
 .pairs-mgr-name { font-size: 0.74rem; font-weight: 700; padding: 2px 4px 2px 9px; }
 /* Nuzzo reps→%1RM curve — now the shared svgChart engine (.svgc) mounts into this box. */
-.lt-nuzzo { width: 100%; max-width: 320px; }
+.lt-nuzzo { width: 100%; }
 /* Each field is its own STACKED section (label header on top, controls full-width
    below) instead of a cramped label|value 2-column row — gives editing room. */
 .ex-info-item { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
