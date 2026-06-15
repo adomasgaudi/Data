@@ -2370,9 +2370,6 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 12px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
 }
-/* PB-24 diagnostic: a tiny runtime readout (version + measured widths) so an
-   on-device screenshot pinpoints WHICH element overflows. Remove once confirmed. */
-.addm-diag { font: 600 0.6rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); word-break: break-all; margin: 0 0 0.3rem; opacity: 0.75; }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
 .addm-title { font-size: 1rem; font-weight: 700; }
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }

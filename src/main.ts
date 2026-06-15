@@ -15691,27 +15691,11 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
     `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
-    `<div class="addm-diag" aria-hidden="true">measuring…</div>` +
     (isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "") +
     suggRow + form +
     `</div>`;
   document.body.appendChild(wrap);
   addModalEl = wrap;
-  // PB-24 diagnostic: after layout, report the version + the real measured widths of
-  // the card, the inputs row and the date-toggle row, against both the layout viewport
-  // (innerWidth) and the visual viewport. If any element width exceeds vv, that's the
-  // overflow source; a stale version here means the device is on a cached old build.
-  // Temporary — strip once the popup is confirmed in-bounds on the owner's phone.
-  requestAnimationFrame(() => {
-    const card = wrap.querySelector<HTMLElement>(".addm-card");
-    const diag = wrap.querySelector<HTMLElement>(".addm-diag");
-    if (!card || !diag) return;
-    const w = (sel: string) => { const el = wrap.querySelector<HTMLElement>(sel); return el ? Math.round(el.getBoundingClientRect().width) : 0; };
-    const vv = window.visualViewport ? Math.round(window.visualViewport.width) : 0;
-    diag.textContent =
-      `v${CURRENT_VERSION.replace(/^b\./, "")} · vw${window.innerWidth}/vv${vv} · ` +
-      `card${Math.round(card.getBoundingClientRect().width)} · in${w(".addm-inputs")} · when${w(".wo-af-when")}`;
-  });
   if (prefill) {
     const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
     setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
