@@ -11,6 +11,19 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+---
+
+## PB-24 — Add-set popup overflows / scrolls horizontally (inner flex children won't shrink)
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Workouts → "+ set" / "+ exercise" popup. Owner: "@image not fitting fix", then after the card-level fix "still not fixed #cowork #persistent — popup out of bounds shouldnt scroll horizontaly". The popup's content (weight/reps/sets inputs, Add button) extends past the card's right edge / lets the row scroll sideways.
+- **Prior failed fix (WO-184, b.2.8.443):** added `min-width: 0` + `overflow: hidden auto` to `.addm-card` so the CARD shrinks to the overlay width. Didn't hold — that only stops the card itself from growing; the flex ROWS *inside* it (`.addm-inputs` with three `flex: 1 1 0` number inputs) still defaulted to `min-width: auto`, so each input kept its ~170px browser-intrinsic width (~510px total) and overflowed the card. The card clipped/scrolled it → "out of bounds".
+- **Root cause:** the SAME flex `min-width: auto` trap as the card bug, one level deeper. Fixing the outer flex item (card) doesn't make its flex children shrink — every nested flex item needs `min-width: 0` (or it floors at content width). The inputs row had `flex: 1 1 0; width: auto` but no `min-width: 0`, so `flex-shrink` couldn't take effect below intrinsic input width.
+- **Fix (b.2.8.x):** `min-width: 0` on `.wo-addform--modal .addm-inputs input` (and the row container) so the three inputs actually share the row width and shrink to fit — no overflow, nothing to scroll. The intentionally-scrollable rows (`.addm-sugg-row` chips, `.wo-af-dims` variant pickers) are unaffected. Code comment `PB-24` at the fix site.
+- **Watch:** a `min-width: 0` fix on a flex container does NOT propagate — re-apply it to EVERY nested flex item that holds intrinsically-wide content (inputs, long text, `<select>`). When a popup "doesn't fit", check the inner rows, not just the card.
+- **Recurrences:** 1 (WO-184 fixed the card; this fixes the inner input row — the actual overflow source).
+
+---
+
 ## PB-23 — Graph data dots jammed against the plot frame (no side margin)
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Graph (Marija "Pull Up", and earlier "Hip AD"). Owner: "fitting the graph should leave about 10px margin so the side dots are not so completely against the side" — then "nope #persistent" when the first fix didn't hold. The first/last data points (and the trend-line ends) sit right on the left/right frame, sometimes in the corners.
