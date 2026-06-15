@@ -11,6 +11,19 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-20 — Can't pick exercises after clearing all (empty Graph/multi view)
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android / Samsung), Analysis → Graph in the empty (nothing-picked) state, esp. the multi/full graph view.
+- **Symptom:** Tapping ✕ (remove all) on the selection title clears every lift, and then there is no visible way to pick new ones — the graph title collapses and the picker is unreachable.
+- **Prior fixes that didn't hold:**
+  - **SEL-49 (b.2.8.380):** made the empty-state selection TITLE still render its `+ / ✕ / =` toolbar and Pick tab. This fixed the **History** title (confirmed working), but NOT the **Graph**: the graph summary collapses to a thin eyebrow-height strip when empty (`:not(.is-bigtitle)`), so the absolutely-positioned toolbar/Pick tab clip or vanish. Made worse by **SEL-48 (b.2.8.378)**, which removed the inline `#waExerciseSelector` picker — so the Pick tab/drawer is now the ONLY way in, and when it's clipped you're stranded.
+- **Root cause:** the empty-state pick affordance depended on absolutely-positioned elements (toolbar at `bottom:0`, Pick tab at the right edge) inside a `<summary>` whose height collapses when there are no names — fragile, and it clips inside the card. Relying on a positioned overlay for a primary action in a collapsible container is the design flaw.
+- **Fix (b.2.8.x — this entry):** the always-visible **"No lifts picked"** graph note is now itself the picker BUTTON (`.wa-graphnote-pick`, `data-titlepicker="graph"` → `openPickDrawer`). It's a normal in-flow, full-size tap target in the graph body that can't collapse or clip, so there is always a reliable way to open the picker regardless of title state. Comment at the fix site points here.
+- **Watch:** never make a PRIMARY action reachable ONLY via an absolutely-positioned element inside a collapsible/clipping container — always keep an in-flow fallback.
+- **Recurrences:** 1
+
+---
+
 ## PB-18 — Swipe-to-delete a SET ROW drags a few mm then snaps back
 
 - **First seen / reported:** 2026-06-12, mobile (Brave, Android / Samsung), expanded-history set table: swiping a set row left→right to delete it moves a couple of mm then "loses the drag" and snaps back.

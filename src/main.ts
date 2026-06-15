@@ -17407,7 +17407,11 @@ function renderWaGraph(): void {
       (n) => [...waMetrics].some((id) => !isMetricAllowed(graphPerms, n, id)),
     ) ?? graphExercises[0] ?? "";
     if (graphExercises.length === 0) {
-      noteEl.textContent = "No lifts picked — choose lifts above (or Select all) to plot.";
+      // The note IS the picker button — a big, always-visible, in-flow tap target that
+      // opens the Pick drawer. The title's Pick tab/+ can collapse or clip in the empty
+      // state, and SEL-48 removed the inline picker, so this is the reliable way back in
+      // (PB-20). data-titlepicker reuses the drawer handler.
+      noteEl.innerHTML = `<button type="button" class="wa-graphnote-pick" data-titlepicker="graph">No lifts picked — tap to pick lifts to plot.</button>`;
     } else if (waMetrics.size > 0 && drawMetricIds.length === 0) {
       noteEl.innerHTML = graphReviewPromptHtml(reviewTarget, graphExercises);
     } else {
