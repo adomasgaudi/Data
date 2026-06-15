@@ -16448,11 +16448,12 @@ function renderSelector(scope: SelScope): void {
   const foldTools = `<div class="wa-chips-tools">${missingToggle}${searchActive}</div>`;
   const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
   const prevChipScroll = sel.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
-  // Collapse the (often long) exercise-chip picker under a fold so it doesn't fill the
-  // screen — the selected lifts stay visible as pills above. Default CLOSED; auto-open
-  // while searching (so matches show), and preserve the open state across re-renders.
-  const prevChipsFold = sel.querySelector<HTMLElement>(".wa-chips-fold");
-  const chipsFoldOpen = waSearchQuery.trim() ? true : prevChipsFold ? prevChipsFold.classList.contains("is-open") : false;
+  // The whole picker (group-by, First-N / Clear / ⚙ and the chip grid) lives ONLY in the
+  // slide-out Pick drawer now — it must NEVER appear inline between the title and the chart,
+  // not even while searching (owner request — SEL-48). So the inline card stays hidden;
+  // openPickDrawer() is the only thing that reveals it (as the drawer). A search still
+  // filters the chips — you see them by opening Pick (which has its own search box).
+  const chipsFoldOpen = false;
   // Everything but Group lives in the ⚙ popout now: pick-mode, Select all / Clear,
   // Match, Show missing, the identity toggles and name mode. Its open state MUST
   // survive the re-render every inner toggle triggers — otherwise tapping any option
