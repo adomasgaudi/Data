@@ -11,6 +11,15 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-27 — "Add another" exercise search lags — rebuilds the pills on every letter
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Focus-lifts plan → "Add another (search)". Owner: "add another exercise search lagging because with each letter it's changing the pills." Tagged #persistent #repeating #2process — same lag CLASS as PB-22 (a heavy re-render where a targeted one would do).
+- **Root cause:** the `.prio-add-search` input lives INSIDE `els.planBody`, and its `input` handler called `renderWorkoutPlan()` — which rebuilds `planBody.innerHTML` (the summary + EVERY focus-lift row + all pills) on EVERY keystroke. Because that also destroyed & recreated the input, the handler had to restore focus + caret each time. Rebuilding the whole plan per letter is the lag. (Rule 17 violation: heavy app-wide rebuild synchronously on input.)
+- **Fix (b.2.8.460):** follow the SAME good pattern the other four searches already use — `s-wo-search`→`renderSWoList` (only `#sWoList`), `waNewSearch`→`renderVariantPicker` (only `#waNewChips`/pills), `wa-chip-search`→`renderWaChipsScope`, `compareSearch`→`renderCompareChips`: refill ONLY the sub-container. Extracted `buildAddChips(query)` and exposed a `planAddChipsRefill` closure (set by `renderWorkoutPlan`, captures the stable `searchPool`/`suggestions`); the input handler now refills just `.prio-add-chips` + the summary count, leaving the live input — and its focus/caret — untouched. No whole-plan rebuild, no focus-restore hack.
+- **#prune note:** swept all `addEventListener("input")` search handlers — the plan search was the ONLY anti-pattern (input destroyed by its own full re-render); the other four already refill a dedicated sub-container, and `els.exerciseSearch`/`els.dataSearch` are fixed elements outside their rebuilt result lists. The lesson is now uniform: a filter box must sit OUTSIDE the region it refilters.
+- **Watch:** never put a search input inside a container that its own keystroke handler re-renders wholesale — refill a dedicated `#…chips` child instead.
+- **Recurrences:** 1 (PB-22 was the analysis-filter snapshot dimension; this is the per-keystroke-rebuild dimension of the same "do the targeted render, not the whole-view render" lesson).
+
 ---
 
 ## PB-26 — Deleting a set lags and moves you away from the expanded view
@@ -57,6 +66,7 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **Recurrences:** 1 (CHART-112 was the domain-pad attempt; this is the transform-level root fix).
 
 ---
+## PB-22 — Added exercise lags / shows only after a delay (Analysis history)
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Workouts ("All Exercises"). Owner added "v-squats" via "+ exercise" and it didn't appear at first ("not adding"), then "shows now, so it's a lagging issue". Tagged #persistent #prune — same CLASS as PB-11 ("I added a set but don't see it").
 - **Root cause:** the Analysis history list is scoped by `waListExerciseFilter`, a NAME-SNAPSHOT computed in `renderWorkoutAnalysis` (`historyFilterWithSearch(histFilterNames(waSelected))`). The add-set/exercise commit updates `waSelected` but did NOT recompute that snapshot, and on the analysis tab it only re-rendered the GRAPH (not a fresh-filter list). So a just-logged, often brand-NEW exercise was excluded by the stale filter until the next analysis render re-derived it — the perceived "lag".

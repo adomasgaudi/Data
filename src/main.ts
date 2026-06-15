@@ -350,6 +350,9 @@ const compareSelected = new Set<string>(); // exercises ticked for the overlay g
 let compareChipQuery = ""; // search box text filtering the compare chips
 let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
 let prioAddOpen = false; // "Add another" dropdown open state (closed by default; rule 24 keeps it across re-renders)
+// PB-23: refill ONLY the Add-another suggestion pills as you type (set by renderWorkoutPlan,
+// captures the current data) — so the search no longer rebuilds the whole plan per keystroke.
+let planAddChipsRefill: ((query: string) => void) | null = null;
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 
 const PAGE_SIZE = 50; // List & stats page size
@@ -10964,7 +10967,6 @@ function renderWorkoutPlan(): void {
   ];
   const prioChip = (name: string, synth: boolean) =>
     `<button type="button" class="prio-add-chip${synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(name)}" title="Add ${escapeHtml(displayName(name))}${synth ? " — a group lift" : ""} to your priorities">${synth ? "✦ " : "+ "}${escapeHtml(displayName(name))}</button>`;
-  const prioQ = prioAddQuery.trim().toLowerCase();
   // Searching reaches the FULL exercise registry (every lift anyone has logged + custom
   // defs), not just THIS athlete's trained suggestions — so you can plan a lift they've
   // never done yet (owner). Still excludes current priorities + same-lift duplicates.
@@ -10972,38 +10974,60 @@ function renderWorkoutPlan(): void {
     ...selectableExercises(data.records).filter(addable).map((n) => ({ name: n, synth: false })),
     ...synthSug.map((n) => ({ name: n, synth: true })),
   ];
-  const addChips = prioQ
-    ? (() => {
-        const hits = searchPool.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
-        return hits.length
-          ? hits.map((a) => prioChip(a.name, a.synth)).join("")
-          : (() => {
-              // #prune sibling of the command-bar Create fix: when no trained lift
-              // matches, offer to add the typed name as a BRAND-NEW focus (start training it).
-              const nm = prioAddQuery.trim();
-              return `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(nm)}" title="Add “${escapeHtml(nm)}” as a new focus lift — start training it">➕ ${escapeHtml(nm)}</button><span class="muted prio-add-none">new focus — no history yet</span>`;
-            })();
-      })()
-    : suggestions.map((s) => {
-        const specific = prioChip(s.name, s.synth);
-        // A specific lift in a comparable pattern → a "⇄ pattern" button to add it as the
-        // COMPARE (whole pattern) instead of the SPECIFIC lift.
-        const compare = s.cmp
-          ? `<button type="button" class="prio-add-cmp" data-prioadd="${escapeHtml(s.cmp)}" title="Add the “${escapeHtml(displayName(s.cmp))}” pattern instead — train the whole movement (compare), not just this specific lift">⇄ ${escapeHtml(displayName(s.cmp))}</button>`
-          : "";
-        return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
-      }).join("");
+  // The suggestion-pill HTML for a given search query. Factored out so the live search
+  // can refill JUST the pills (PB-23) without rebuilding the whole plan — searchPool +
+  // suggestions don't change while you type, so this closure stays valid until the next
+  // full render reassigns it.
+  const buildAddChips = (rawQuery: string): string => {
+    const prioQ = rawQuery.trim().toLowerCase();
+    return prioQ
+      ? (() => {
+          const hits = searchPool.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
+          return hits.length
+            ? hits.map((a) => prioChip(a.name, a.synth)).join("")
+            : (() => {
+                // #prune sibling of the command-bar Create fix: when no trained lift
+                // matches, offer to add the typed name as a BRAND-NEW focus (start training it).
+                const nm = rawQuery.trim();
+                return `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(nm)}" title="Add “${escapeHtml(nm)}” as a new focus lift — start training it">➕ ${escapeHtml(nm)}</button><span class="muted prio-add-none">new focus — no history yet</span>`;
+              })();
+        })()
+      : suggestions.map((s) => {
+          const specific = prioChip(s.name, s.synth);
+          // A specific lift in a comparable pattern → a "⇄ pattern" button to add it as the
+          // COMPARE (whole pattern) instead of the SPECIFIC lift.
+          const compare = s.cmp
+            ? `<button type="button" class="prio-add-cmp" data-prioadd="${escapeHtml(s.cmp)}" title="Add the “${escapeHtml(displayName(s.cmp))}” pattern instead — train the whole movement (compare), not just this specific lift">⇄ ${escapeHtml(displayName(s.cmp))}</button>`
+            : "";
+          return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
+        }).join("");
+  };
+  const addChips = buildAddChips(prioAddQuery);
   // Always offer the search box (even with no curated suggestions) so the full registry
   // is always reachable. CLOSED dropdown by default (owner) — keep its open state across
   // the re-render the inner search triggers (rule 24): read the live DOM before rebuild.
   const existingFold = els.planBody.querySelector<HTMLDetailsElement>(".prio-add");
   if (existingFold) prioAddOpen = existingFold.open;
-  const addOpen = prioAddOpen || !!prioQ; // typing a search always reveals it
-  const addBlock = (allAddable.length || searchPool.length)
-    ? `<details class="prio-add"${addOpen ? " open" : ""}><summary class="prio-add-sum muted">${names.length ? "Add another" : "Suggested"} (${prioQ ? "search" : names.length})</summary>` +
+  const addOpen = prioAddOpen || !!prioAddQuery.trim(); // typing a search always reveals it
+  const hasAddBlock = allAddable.length || searchPool.length;
+  const addSumLabel = (rawQuery: string) =>
+    `${names.length ? "Add another" : "Suggested"} (${rawQuery.trim() ? "search" : names.length})`;
+  const addBlock = hasAddBlock
+    ? `<details class="prio-add"${addOpen ? " open" : ""}><summary class="prio-add-sum muted">${addSumLabel(prioAddQuery)}</summary>` +
       `<input type="search" class="wa-chip-search prio-add-search" placeholder="Search exercises…" aria-label="Search exercises to add" autocomplete="off" value="${escapeHtml(prioAddQuery)}">` +
       `<div class="prio-add-chips">${addChips}</div></details>`
     : "";
+  // PB-23: live-search refill. The input is OUTSIDE .prio-add-chips, so refreshing only
+  // the pills (and the summary count) leaves the input — and its focus/caret — untouched,
+  // exactly like the S-ANL / variant-picker / graph-chip searches. No whole-plan rebuild.
+  planAddChipsRefill = hasAddBlock
+    ? (query: string) => {
+        const box = els.planBody.querySelector<HTMLElement>(".prio-add-chips");
+        if (box) box.innerHTML = buildAddChips(query);
+        const sum = els.planBody.querySelector<HTMLElement>(".prio-add-sum");
+        if (sum) sum.textContent = addSumLabel(query);
+      }
+    : null;
   const planTitle = document.getElementById("planTitle");
   if (planTitle) planTitle.textContent = `${athleteLabel()} plan`;
   els.planBody.innerHTML = summary + list + addBlock;
@@ -13111,10 +13135,13 @@ async function init() {
     const inp = (e.target as Element)?.closest?.<HTMLInputElement>(".prio-add-search");
     if (!inp) return;
     prioAddQuery = inp.value;
-    const caret = inp.selectionStart ?? inp.value.length;
-    renderWorkoutPlan();
-    const s = els.planBody.querySelector<HTMLInputElement>(".prio-add-search");
-    if (s) { s.focus(); s.setSelectionRange(caret, caret); }
+    // PB-23 (#persistent): the search box lives INSIDE planBody, so the old code
+    // re-rendered the WHOLE plan on every keystroke — rebuilding every focus-lift row +
+    // pill (and destroying the input, hence the focus-restore hack), which lagged
+    // ("with each letter it's changing the pills"). Root fix (rule 17, same idiom as the
+    // S-ANL / variant-picker / graph-chip searches): refill ONLY the suggestion pills,
+    // leaving the live input untouched — no whole-plan rebuild, no focus theft.
+    planAddChipsRefill?.(prioAddQuery);
   });
   els.planBody.addEventListener("change", (e) => {
     const g = (e.target as HTMLElement).closest<HTMLInputElement>("[data-priogoal]");
