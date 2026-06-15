@@ -38,6 +38,17 @@ const sh = (cmd) => {
 const read = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } };
 const violations = [];
 
+// ── Conflict-marker guard (runs EVERY turn) ────────────────────────────────────
+// An unresolved git conflict marker in a source file is a broken push waiting to
+// happen — it has happened twice (a bad b.2.8.1 and stray markers in src/main.ts both
+// reached opus during a rebase). `<<<<<<<` / `>>>>>>>` are never legitimate in these
+// files, so flag them loudly so the marker is fixed before the next push.
+for (const f of ["src/main.ts", "src/styles.css", "src/changelog.ts", "index.html", "src/i18n.ts"]) {
+  if (/^(<<<<<<<|>>>>>>>)/m.test(read(f))) {
+    violations.push(`${f} has an UNRESOLVED git conflict marker (<<<<<<< / >>>>>>>) — do NOT push; resolve it, rebuild, and re-verify first.`);
+  }
+}
+
 // ── Reply-format check (rules 4/39/40/44 — runs EVERY turn) ────────────────────
 // Read the newest session transcript (same source as show-cost.py) and inspect the
 // LAST assistant text reply — the one the owner just saw — for the reply-format rules.
