@@ -404,7 +404,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       ? xExtent(geomSeries().filter(visible))
       : dataXExtent(geomSeries());
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
-    const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
+    // Inset the data ~10px from the plot's left/right frame so edge points (the first &
+    // last dots / the trend line's ends) aren't jammed against the side (owner). The pad
+    // is data-units but sized from the pixel width, so it stays ~10px at any range/zoom.
+    const plotWForPad = Math.max(1, widthOf() - margins().l - margins().r);
+    const xPad = (xe.xMax - xe.xMin) * (10 / plotWForPad) || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
     if (cfg.forceLeftRange) {
       // Pinned left axis (per-bodyweight): use the caller's range verbatim.
