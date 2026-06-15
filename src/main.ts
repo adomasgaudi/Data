@@ -16817,6 +16817,23 @@ const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
   // name keyword-matches nothing), so they group exactly where their members do.
   : syntheticMembers(name).length ? [...new Set(syntheticMembers(name).flatMap((m) => waMeta(m, dim)))]
   : exerciseMetaValues(name, dim, userTaxonomy);
+/** EVERY grouping tag a lift carries across ALL taxonomy dimensions (muscle group,
+ * body part, discipline, movement, function, equipment, joint, tier…), lowercased —
+ * so the search bar can match a GROUPING word ("bicep", "calisthenics", "push") and
+ * return that whole group, not just lifts whose NAME contains the word. Memoised for
+ * one synchronous render pass (waChipListBase is called several times per render),
+ * then dropped on the next microtask so an override edit is reflected immediately. */
+let groupTagCache: Map<string, string[]> | null = null;
+function exerciseGroupTags(name: string): string[] {
+  if (!groupTagCache) { groupTagCache = new Map(); queueMicrotask(() => { groupTagCache = null; }); }
+  let tags = groupTagCache.get(name);
+  if (!tags) {
+    tags = [];
+    for (const dim of FILTER_DIMS) for (const v of waMeta(name, dim)) if (v) tags.push(v.toLowerCase());
+    groupTagCache.set(name, tags);
+  }
+  return tags;
+}
 /** Distinct selectable exercises for the current athlete, tagged by identity:
  * their logged lifts are "original"; the synthetic group derived names they have
  * are "combined" / "comparison_group". De-duplicated by name (originals win). */
@@ -17487,7 +17504,11 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
   return list.filter((e) => !q
     || e.name.toLowerCase().includes(q)
     || codeFor(e.name).toLowerCase().includes(q)
-    || shortFor(e.name).toLowerCase().includes(q));
+    || shortFor(e.name).toLowerCase().includes(q)
+    // A body-part / muscle / discipline / any-grouping word matches every lift in that
+    // group, so "bicep" or "calisthenics" finds them all (then Filter / Find-in-history /
+    // Graph / Select-all all inherit it, since they read this same list).
+    || exerciseGroupTags(e.name).some((t) => t.includes(q)));
 }
 /** EVERY group key (of the current Group-by dimension) an exercise belongs to — an
  * exercise in several muscle groups (e.g. a squat trains Quads AND Glutes) shows
