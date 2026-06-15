@@ -10905,12 +10905,19 @@ function renderWorkoutPlan(): void {
   const prioChip = (name: string, synth: boolean) =>
     `<button type="button" class="prio-add-chip${synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(name)}" title="Add ${escapeHtml(displayName(name))}${synth ? " — a group lift" : ""} to your priorities">${synth ? "✦ " : "+ "}${escapeHtml(displayName(name))}</button>`;
   const prioQ = prioAddQuery.trim().toLowerCase();
+  // Searching reaches the FULL exercise registry (every lift anyone has logged + custom
+  // defs), not just THIS athlete's trained suggestions — so you can plan a lift they've
+  // never done yet (owner). Still excludes current priorities + same-lift duplicates.
+  const searchPool = [
+    ...selectableExercises(data.records).filter(addable).map((n) => ({ name: n, synth: false })),
+    ...synthSug.map((n) => ({ name: n, synth: true })),
+  ];
   const addChips = prioQ
     ? (() => {
-        const hits = allAddable.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
+        const hits = searchPool.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
         return hits.length
           ? hits.map((a) => prioChip(a.name, a.synth)).join("")
-          : `<span class="muted prio-add-none">No addable exercise matches “${escapeHtml(prioAddQuery)}”.</span>`;
+          : `<span class="muted prio-add-none">No exercise matches “${escapeHtml(prioAddQuery)}”.</span>`;
       })()
     : suggestions.map((s) => {
         const specific = prioChip(s.name, s.synth);
@@ -10921,7 +10928,9 @@ function renderWorkoutPlan(): void {
           : "";
         return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
       }).join("");
-  const addBlock = allAddable.length
+  // Always offer the search box (even with no curated suggestions) so the full registry
+  // is always reachable.
+  const addBlock = (allAddable.length || searchPool.length)
     ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${prioQ ? "search" : names.length})</div>` +
       `<input type="search" class="wa-chip-search prio-add-search" placeholder="Search exercises…" aria-label="Search exercises to add" autocomplete="off" value="${escapeHtml(prioAddQuery)}">` +
       `<div class="prio-add-chips">${addChips}</div></div>`
