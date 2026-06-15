@@ -9,7 +9,9 @@
  * index.html) so it never nags on unrelated turns:
  *   1. the newest RELEASES entry has a `model:` stamp (rule: STAMP YOUR MODEL);
  *   2. index.html <span class="version"> matches the newest release (lockstep);
- *   3. the newest version is a clean patch bump b.X.Y.Z — no 4th digit (rule 1).
+ *   3. the newest version is a clean patch bump b.X.Y.Z — no 4th digit (rule 1);
+ *   4. the newest entry's `shortTitle` is 2-5 words (the version-history's first
+ *      line) — AIs keep writing long ones; it MUST stay short (≤5 words).
  *
  * Add the next forgotten rule here rather than only writing prose in CLAUDE.md.
  */
@@ -66,6 +68,17 @@ if (newestVer && spanVer && newestVer !== spanVer) {
 }
 if (newestVer && !/^b\.\d+\.\d+\.\d+$/.test(newestVer)) {
   violations.push(`version ${newestVer} is not a clean patch bump b.X.Y.Z — bump the PATCH digit only, never a 4th digit or minor/major.`);
+}
+
+// shortTitle is the version-history's FIRST line — must be 2-5 words (kept short).
+const shortTitle = (entry.match(/shortTitle\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+if (entry && shortTitle === undefined) {
+  violations.push("the newest RELEASES entry has NO `shortTitle` — the version history's first line needs a 2-5 word shortTitle.");
+} else if (shortTitle !== undefined) {
+  const words = shortTitle.trim().split(/\s+/).filter(Boolean).length;
+  if (words > 5) {
+    violations.push(`shortTitle "${shortTitle}" is ${words} words — the version-history's first line MUST be 2-5 words. Shorten it (move detail into \`title\`).`);
+  }
 }
 
 if (violations.length) {
