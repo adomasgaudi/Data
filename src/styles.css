@@ -2997,6 +2997,17 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    strip) — never a wrapped multi-row block (#cram rule 16). */
 .lt-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
 .lt-now { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-right: 2px; flex: 0 0 auto; white-space: nowrap; }
+/* "Pair with" header row: title left, sort + hide controls right (compact, #cram). */
+.lt-sec-h-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.lt-pairctrls { display: inline-flex; align-items: center; gap: 4px; }
+.lt-pairsort, .lt-pairhide {
+  min-height: var(--tap-min); display: inline-flex; align-items: center; gap: 3px;
+  padding: 0 8px; font: inherit; font-size: 0.66rem; font-weight: 700; letter-spacing: 0;
+  text-transform: none; color: var(--text); background: var(--bg); cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill); white-space: nowrap;
+}
+.lt-pairsort:hover, .lt-pairhide:hover { border-color: var(--accent); color: var(--accent); }
+.lt-pairhide.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 /* Card inline mini-calculator: weight × reps → 1RM (so a never-logged lift still computes). */
 .lt-calc { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .lt-calc-in { width: 4.2rem; font: inherit; font-size: 0.82rem; padding: 4px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); text-align: center; }

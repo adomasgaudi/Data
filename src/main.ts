@@ -3509,6 +3509,15 @@ let cardOrm: number | null = null;
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
 let exInfoMode = false;
+/** "Pair with" list view prefs (device-local, rule 41): the sort key + whether to
+ *  hide AVOID-graded (no-way) suggestions. Cycled / toggled by the controls in the
+ *  section header; applied only on render, so a grade tap never re-sorts the list. */
+type PairSort = "practical" | "muscle" | "name" | "trained";
+let pairSort: PairSort = (() => {
+  try { const v = localStorage.getItem("colosseum.pairSort"); return v === "muscle" || v === "name" || v === "trained" ? v : "practical"; }
+  catch { return "practical"; }
+})();
+let pairHideAvoid = (() => { try { return localStorage.getItem("colosseum.pairHideAvoid") === "1"; } catch { return false; } })();
 /** Whether the exercise card's editable "Index entry" fold (code/tags/groups/data) is
  * expanded — the info brief shows by default, the index editing is opt-in. Remembered
  * across the card's re-renders so editing a tag inside doesn't snap it shut. */
@@ -11502,12 +11511,29 @@ function liftTrainingHtml(name: string): string {
   };
   // The grid does NOT re-sort by pairing grade — re-sorting made the chip you just
   // tapped JUMP (owner: confusing). Grade is set via the mini menu; order stays stable.
-  const pairCands = liveExercises(user, todayD)
-    .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)))
-    .sort((p, q) =>
-      (focusRank(p) - focusRank(q)) ||              // highest priority first
-      (pairEaseScore(p.name) - pairEaseScore(q.name)) || // easier to pair first
-      (q.sets - p.sets));                            // tiebreak: most-trained
+  // The owner-chosen SORT key + HIDE-avoid toggle apply only here, on render.
+  type PairCand = { name: string; muscles: string[]; sets: number };
+  const pairCmp = (p: PairCand, q: PairCand): number => {
+    switch (pairSort) {
+      case "muscle": // by primary muscle group, then name
+        return (mgsFor(p.name)[0] ?? "").localeCompare(mgsFor(q.name)[0] ?? "") ||
+          displayName(p.name).localeCompare(displayName(q.name));
+      case "name":
+        return displayName(p.name).localeCompare(displayName(q.name));
+      case "trained": // most-trained first
+        return (q.sets - p.sets) || displayName(p.name).localeCompare(displayName(q.name));
+      default: // "practical": priority → ease-to-pair → most-trained (the original order)
+        return (focusRank(p) - focusRank(q)) ||
+          (pairEaseScore(p.name) - pairEaseScore(q.name)) ||
+          (q.sets - p.sets);
+    }
+  };
+  const allPairCands = liveExercises(user, todayD)
+    .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)));
+  // "Hide avoid": drop the no-way-graded suggestions (kept count so the toggle shows it).
+  const avoidCount = allPairCands.filter((le) => pairGradeFor(name, le.name) === "noway").length;
+  const pairCands = (pairHideAvoid ? allPairCands.filter((le) => pairGradeFor(name, le.name) !== "noway") : allPairCands)
+    .sort(pairCmp);                            // tiebreak: most-trained
   const pairChip = (le: { name: string }): string =>
     `<span class="lt-paircell pg-${pairGradeFor(name, le.name)}">` +
     `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
@@ -11521,7 +11547,16 @@ function liftTrainingHtml(name: string): string {
   }).join("") + `</div>`;
   const antBody = pairCands.length
     ? `<div class="lt-ant">` + pairCands.map(pairChip).join("") + `</div>`
-    : `<p class="muted lt-mini">No non-overlapping lift logged yet.</p>`;
+    : `<p class="muted lt-mini">${pairHideAvoid && avoidCount ? "All pairs are avoid-flagged (hidden)." : "No non-overlapping lift logged yet."}</p>`;
+  // Sort key cycles through one pill (rule 15 #toggle); Hide-avoid is an on/off pill.
+  const SORT_LABEL: Record<PairSort, string> = { practical: "Practical", muscle: "Muscle", name: "A–Z", trained: "Trained" };
+  const pairCtrls =
+    `<div class="lt-pairctrls">` +
+      `<button type="button" class="lt-pairsort" data-pairsort title="Sort pairs">⇅ ${SORT_LABEL[pairSort]}</button>` +
+      `<button type="button" class="lt-pairhide${pairHideAvoid ? " is-on" : ""}" data-pairhide aria-pressed="${pairHideAvoid}" title="Hide avoid-flagged pairs">⊘${avoidCount ? ` ${avoidCount}` : ""}</button>` +
+    `</div>`;
+  const pairSecHtml =
+    `<div class="lt-sec"><div class="lt-sec-h lt-sec-h-row"><span>Pair with</span>${pairCtrls}</div>${antBody}</div>`;
 
   const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
@@ -11534,7 +11569,7 @@ function liftTrainingHtml(name: string): string {
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
     sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
-    sec("Pair with", antBody) +
+    pairSecHtml +
     `</div>`;
 }
 
@@ -13269,6 +13304,25 @@ async function init() {
     if (pflag?.dataset.pairfrom && pflag.dataset.pairto) {
       e.preventDefault(); e.stopPropagation();
       openPairGradeMenu(pflag.dataset.pairfrom, pflag.dataset.pairto, pflag);
+      return;
+    }
+    // "Pair with" SORT pill: cycle the sort key (Practical → Muscle → A–Z → Trained).
+    const psort = (e.target as HTMLElement).closest<HTMLElement>("[data-pairsort]");
+    if (psort) {
+      e.preventDefault(); e.stopPropagation();
+      const order: PairSort[] = ["practical", "muscle", "name", "trained"];
+      pairSort = order[(order.indexOf(pairSort) + 1) % order.length]!;
+      try { localStorage.setItem("colosseum.pairSort", pairSort); } catch { /* ignore */ }
+      if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+      return;
+    }
+    // "Pair with" HIDE-avoid toggle: show/hide the no-way-graded suggestions.
+    const phide = (e.target as HTMLElement).closest<HTMLElement>("[data-pairhide]");
+    if (phide) {
+      e.preventDefault(); e.stopPropagation();
+      pairHideAvoid = !pairHideAvoid;
+      try { localStorage.setItem("colosseum.pairHideAvoid", pairHideAvoid ? "1" : "0"); } catch { /* ignore */ }
+      if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
       return;
     }
     // Pair-with lift chip in the "How to train" panel → open that lift's brief.

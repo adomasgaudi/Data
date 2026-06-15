@@ -55,3 +55,27 @@ Both layers are `colosseum.*` keys and NOT in cacheSync's exclude/local-only lis
 
 ## Why this is ~10 prompts, not 100
 The hard part is the **two-layer model + migration** (steps 4–6, one careful effort); the rest is UI polish reusing patterns the app already has (chips, group-modes, the manager shipped in Phase-1). It is NOT a from-scratch feature — it's layering shared/personal onto an existing, now-visible flag system.
+
+## Phase 5 — Practicality (equipment / mobility), owner decisions 2026-06-15
+The owner wants pairings ranked by PRACTICALITY, not just non-overlapping muscle:
+equipment mobility + setup cost + gym etiquette (can't hog more than 2–3 stations).
+
+- [x] 11. **Sort + Hide on the "Pair with" list (ship first).** A Sort cycle pill
+  (Practical / Muscle / A–Z / Trained) + a Hide-avoid toggle that drops the
+  no-way-graded pairs. Device-local view prefs (`colosseum.pairSort`,
+  `colosseum.pairHideAvoid`); apply only on render so a grade tap never re-sorts
+  (rule 47). — b.2.8.476 (SEL-58)
+- [ ] 12. **Equipment + practicality tags — FULL SEPARATE TAGS (owner's chosen depth).**
+  NOT derive-from-equipment: the owner picked four INDEPENDENT per-exercise tags —
+  **Equipment** (already a taxonomy in `exerciseMeta.ts`, only ~6 seeded) + **Station**
+  (which fixed station it occupies / none) + **Setup** (teardown cost: none/light/heavy —
+  e.g. deadlift heavy) + **Occupancy** (how many stations it ties up, for the 2–3-place
+  etiquette rule). Populate across the whole library (keyword inference like
+  `INFER_RULES`, plus a manage-tags UI), then a `pairPracticality(A,B)` score replaces
+  the name-regex `pairEaseScore()` and feeds the Practical sort + a new practicality grade.
+- [ ] 13. **Wire practicality into suggestions** — the Practical sort uses the real
+  (A,B) station/setup/occupancy score; optionally auto-demote pairs that need >2 busy
+  stations. i18n + tests for the new tags.
+
+Step 11 is shipped; 12–13 are the real data-model work (4 tags × whole library +
+a manage UI) — a separate #careful pass, not one prompt.
