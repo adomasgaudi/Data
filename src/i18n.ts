@@ -302,6 +302,8 @@ const LT: Record<string, string> = {
   "✕ Remove": "✕ Pašalinti",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
+  "Default ROM": "Numatyta amplitudė",
+  "% of full ROM": "% nuo pilnos amplitudės",
   "backrest": "nugaros atrama",
   "back rest": "nugaros atrama",
   "obstacle": "kliūtis",

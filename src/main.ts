@@ -795,7 +795,38 @@ function saveCoeffs() {
   }
 }
 
-// ---- Metadata overrides: Category / Muscle group / Tier, editable + saved ----
+// ---- Default range of motion (ROM): per-exercise, editable + saved + synced ----
+// Every exercise is ASSUMED to be trained at a partial range — 90% by default —
+// and that default is customisable per exercise (owner: "every exercise should be
+// assumed to have a range of motion, set a custom default per exercise, assume
+// 90%"). Stored as a percentage (full ROM = 100). This is a TRACKED/displayed
+// default only — it does NOT rescale strength numbers (effort scaling is a
+// separate, opt-in follow-up so existing 1RMs never shift unexpectedly).
+const ROM_DEFAULT_KEY = "colosseum.exerciseRomDefaults.v1";
+const ROM_DEFAULT_PCT = 90;
+const exerciseRomDefaults: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(ROM_DEFAULT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+/** The per-exercise default ROM % — the owner's pin, else the global 90% assumption. */
+function romDefaultFor(exerciseName: string): number {
+  const v = exerciseRomDefaults[exerciseName];
+  return Number.isFinite(v) ? v! : ROM_DEFAULT_PCT;
+}
+function setRomDefault(exerciseName: string, value: number) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
+  let v = Math.round(value);
+  if (!Number.isFinite(v)) v = ROM_DEFAULT_PCT;
+  v = Math.min(100, Math.max(10, v));
+  exerciseRomDefaults[exerciseName] = v;
+  try { localStorage.setItem(ROM_DEFAULT_KEY, JSON.stringify(exerciseRomDefaults)); } catch { /* private mode */ }
+}
+
+
 // Same layering as the coefficient: profile.ts derives a default from the lift's
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
 // are the read points used across the app so an edit shows everywhere.
@@ -11494,6 +11525,13 @@ function exerciseInfoHtml(name: string): string {
     `<input class="ex-edit-coeff-max" type="number" step="0.05" min="0" max="2" value="${cr.max}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part max for ${escapeHtml(name)}" />` +
     `<span class="ex-coeff-avg" title="Average of the range — this is what the 1RM uses">avg ${coeff}</span>` +
     `</span>`;
+  // Default range of motion (%) — every exercise is assumed 90% unless customised
+  // here. Tracked/displayed only (does not rescale 1RMs). (ROM feature, owner.)
+  const romInput =
+    `<span class="ex-rom-range">` +
+    `<input class="ex-edit-rom" type="number" step="5" min="10" max="100" value="${romDefaultFor(name)}" data-editex="${escapeHtml(name)}" aria-label="Default range of motion percent for ${escapeHtml(name)}" />` +
+    `<span class="ex-rom-unit">% of full ROM</span>` +
+    `</span>`;
 
   // Code + Short name share one row (two compact columns) — they're the two tiny
   // name fields, so side-by-side reads tighter than two stacked rows.
@@ -11530,6 +11568,7 @@ function exerciseInfoHtml(name: string): string {
     compareChips ? foldSection("compare", "Comparable", compareHint, compareChips) : "",
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
+    item("Default ROM", romInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -13919,6 +13958,14 @@ async function init() {
       const mn = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-min")?.value);
       const mx = clampv(wrap?.querySelector<HTMLInputElement>(".ex-edit-coeff-max")?.value);
       setCoeffRange(ex, mn, mx);
+      scheduleRender(() => reopenIndexDetail(ex));
+      return;
+    }
+    // Default range of motion (%) for this exercise — tracked default, not a rescale.
+    const romEl = t.closest<HTMLInputElement>(".ex-edit-rom");
+    if (romEl?.dataset.editex) {
+      const ex = romEl.dataset.editex;
+      setRomDefault(ex, parseFloat(romEl.value));
       scheduleRender(() => reopenIndexDetail(ex));
       return;
     }
