@@ -9,7 +9,10 @@
  *    intermediate / advanced / elite. Cross-checked against the sources below; the big-3
  *    male curves were corrected (squat & deadlift medians were a level too strong — read
  *    as "advanced" where StrengthLevel calls it "intermediate"). GRADE: High for the gym
- *    big-3 (multiple sources agree), Moderate for the accessory lifts (single-source).
+ *    big-3 (multiple sources agree), Moderate for the other barbell lifts, Low for the
+ *    machine/cable/isolation lifts (RDL, incline bench, lat pulldown, leg extension, leg
+ *    curl, calf raise — STD-1 coverage extension; StrengthLevel-anchored approximations,
+ *    each variant keyed BEFORE its base lift so it gets its own lighter curve).
  *  - The GENERAL and PRO curves are still DERIVED from the gym curve by one population
  *    multiplier each — NOT per-population sourced data (clean public-population percentiles
  *    don't exist). The multipliers are sanity-checked against "untrained adult" figures
@@ -49,6 +52,14 @@ interface LiftStd { keys: string[]; m: Curve; f: Curve }
  *  (header); accessory lifts are single-source approximations. */
 const GYM_STANDARDS: LiftStd[] = [
   { keys: ["front squat"], m: [0.6, 0.85, 1.05, 1.45, 2.1], f: [0.5, 0.7, 0.9, 1.2, 1.6] },
+  // Specific variants BEFORE their base lift, so they get their own (lighter) curve
+  // instead of matching the generic deadlift/bench/curl key (STD-1 coverage extension).
+  { keys: ["romanian deadlift", "rdl", "stiff leg deadlift", "stiff-leg deadlift", "straight leg deadlift"], m: [0.85, 1.1, 1.35, 1.75, 2.4], f: [0.65, 0.9, 1.15, 1.5, 2.05] },
+  { keys: ["incline bench", "incline press"], m: [0.4, 0.6, 0.85, 1.25, 1.7], f: [0.25, 0.4, 0.6, 0.85, 1.2] },
+  { keys: ["leg curl", "hamstring curl", "lying leg curl", "seated leg curl"], m: [0.4, 0.6, 0.8, 1.1, 1.5], f: [0.3, 0.45, 0.6, 0.85, 1.15] },
+  { keys: ["lat pulldown", "pulldown", "lat pull"], m: [0.6, 0.9, 1.2, 1.55, 2.0], f: [0.4, 0.6, 0.8, 1.05, 1.4] },
+  { keys: ["leg extension", "knee extension"], m: [0.6, 0.9, 1.2, 1.6, 2.1], f: [0.45, 0.7, 0.95, 1.3, 1.7] },
+  { keys: ["calf raise", "calf press", "calf"], m: [1.0, 1.5, 2.0, 2.75, 3.75], f: [0.8, 1.2, 1.6, 2.2, 3.0] },
   { keys: ["leg press"], m: [1.5, 2.5, 3.5, 4.5, 6.0], f: [1.2, 2.0, 3.0, 4.0, 5.0] },
   { keys: ["overhead press", "shoulder press", "military", "ohp", "strict press"], m: [0.35, 0.55, 0.8, 1.1, 1.4], f: [0.2, 0.35, 0.5, 0.7, 0.95] },
   { keys: ["hip thrust"], m: [1.0, 1.75, 2.5, 3.25, 4.0], f: [0.9, 1.6, 2.3, 3.0, 3.75] },

@@ -69,4 +69,19 @@ describe("strengthStandards", () => {
     expect(curveFor("Squat", "m", "strengthlevel")![2]).toBe(1.25);
     expect(curveFor("Deadlift", "m", "strengthlevel")![2]).toBe(1.5);
   });
+
+  it("extended-coverage variants resolve and key BEFORE their base lift (STD-1)", () => {
+    for (const l of ["Romanian Deadlift", "Incline Bench Press", "Lat Pulldown",
+                     "Leg Extension", "Seated Leg Curl", "Standing Calf Raise"]) {
+      expect(hasStandards(l)).toBe(true);
+    }
+    // Each variant must NOT inherit the heavier base-lift curve.
+    expect(curveFor("Romanian Deadlift", "m", "strengthlevel")![2])
+      .toBeLessThan(curveFor("Deadlift", "m", "strengthlevel")![2]!);
+    expect(curveFor("Incline Bench Press", "m", "strengthlevel")![2])
+      .toBeLessThan(curveFor("Bench Press", "m", "strengthlevel")![2]!);
+    // A LEG curl must not read the BICEP-curl curve (keyword-order trap).
+    expect(curveFor("Seated Leg Curl", "m", "strengthlevel"))
+      .not.toEqual(curveFor("Bicep Curl", "m", "strengthlevel"));
+  });
 });
