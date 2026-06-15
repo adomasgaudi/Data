@@ -16222,12 +16222,21 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // Quick title toolbar (graph + history identical): + add an exercise · ✕ remove all ·
   // = match the OTHER view's selection. Reuse the existing capture handlers (data-title*).
   const otherLabel = remove === "graph" ? "history" : "graph";
-  const titleTools = remove
+  // The +/✕/= toolbar is only useful once something is picked; when EMPTY the title
+  // carries the pick prompt instead (emptyCta below), so drop the toolbar then.
+  const titleTools = remove && sel.length
     ? `<span class="wa-title-tools">` +
         `<button type="button" class="wa-title-tool" data-titlepicker="${remove}" title="Add an exercise" aria-label="Add an exercise">+</button>` +
-        `<button type="button" class="wa-title-tool" data-titledeselect="${remove}"${sel.length ? "" : " disabled"} title="Remove all — clear the ${remove === "graph" ? "graph" : "history"} selection" aria-label="Remove all">✕</button>` +
+        `<button type="button" class="wa-title-tool" data-titledeselect="${remove}" title="Remove all — clear the ${remove === "graph" ? "graph" : "history"} selection" aria-label="Remove all">✕</button>` +
         `<button type="button" class="wa-title-tool" data-titlematch="${remove}" title="Match the ${otherLabel} selection" aria-label="Match ${otherLabel}">=</button>` +
       `</span>`
+    : "";
+  // Nothing picked → the title ITSELF is the pick prompt: a full-width, in-flow button
+  // that FILLS the title (so it can't collapse) and opens the picker drawer. Owner:
+  // "move this inside the title if there are no exercises so it doesn't collapse" — this
+  // replaces the bottom-of-graph note (PB-20) with an in-title affordance.
+  const emptyCta = remove && sel.length === 0
+    ? `<button type="button" class="wa-title-pickcta" data-titlepicker="${remove}">No lifts picked — tap to pick.</button>`
     : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the
@@ -16242,7 +16251,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const seltitleAttrs = grid
     ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 0.4rem)"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${titleTools}${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${titleTools}${count}<span${seltitleAttrs}>${allLabel || emptyCta || `${names}${more}`}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
@@ -17502,11 +17511,10 @@ function renderWaGraph(): void {
       (n) => [...waMetrics].some((id) => !isMetricAllowed(graphPerms, n, id)),
     ) ?? graphExercises[0] ?? "";
     if (graphExercises.length === 0) {
-      // The note IS the picker button — a big, always-visible, in-flow tap target that
-      // opens the Pick drawer. The title's Pick tab/+ can collapse or clip in the empty
-      // state, and SEL-48 removed the inline picker, so this is the reliable way back in
-      // (PB-20). data-titlepicker reuses the drawer handler.
-      noteEl.innerHTML = `<button type="button" class="wa-graphnote-pick" data-titlepicker="graph">No lifts picked — tap to pick lifts to plot.</button>`;
+      // Nothing picked: the pick prompt now lives IN the graph TITLE (the .wa-title-pickcta
+      // button, which fills the title so it can't collapse — owner request, supersedes the
+      // bottom-of-graph note of PB-20), so the bottom note stays empty here.
+      noteEl.textContent = "";
     } else if (waMetrics.size > 0 && drawMetricIds.length === 0) {
       noteEl.innerHTML = graphReviewPromptHtml(reviewTarget, graphExercises);
     } else {

@@ -158,7 +158,7 @@ const LT: Record<string, string> = {
   // ---- Personal benchmarks ----
   "Your benchmarks": "Jūsų etalonai",
   "Benchmarks": "Etalonai",
-  "No lifts picked — tap to pick lifts to plot.": "Nepasirinkta pratimų — bakstelėkite, kad pasirinktumėte.",
+  "No lifts picked — tap to pick.": "Nepasirinkta pratimų — bakstelėkite, kad pasirinktumėte.",
   "+ add": "+ pridėti",
   "No benchmarks yet — set your own targets for this lift.":
     "Dar nėra etalonų — nustatykite savo tikslus šiam pratimui.",
