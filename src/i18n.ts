@@ -122,6 +122,8 @@ const LT: Record<string, string> = {
   "Plates": "Blynai",
   "Your 1RM": "Tavo 1RM",
   "Warm-up to your set": "Apšilimas iki tavo serijos",
+  "Top 10 sets by 1RM": "10 geriausių serijų pagal 1RM",
+  "No sets with a usable 1RM yet.": "Dar nėra serijų su tinkamu 1RM.",
   "enter weight & reps": "įvesk svorį ir pakartojimus",
   "Enter a weight & reps to see the warm-up.": "Įvesk svorį ir pakartojimus, kad pamatytum apšilimą.",
   "Work set": "Darbinis sakinys",

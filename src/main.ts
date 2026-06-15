@@ -3239,7 +3239,7 @@ function openFormulas() {
   setSettingsOpen(false);
   setOtherSheetOpen(false);
   els.formulasPage.hidden = false;
-  requestAnimationFrame(() => { renderTest(); });
+  requestAnimationFrame(() => { renderTest(); renderCalcTopSets(); });
 }
 
 /** Open the version-history overlay from Settings. */
@@ -11968,6 +11968,31 @@ function prefillTestFromPick() {
   els.calcBw.value = String(best.bodyweight ?? athProfile(username)?.weight ?? els.calcBw.value);
   els.calcCoeff.value = String(coeffFor(exName));
   renderTest();
+  renderCalcTopSets();
+}
+
+/** The athlete's TOP 10 sets for the picked exercise, ranked by estimated 1RM — shown in
+ * an expandable list under the calculator (the single top set can be a fluke, owner). Each
+ * row is tappable to load that set into the calculator. */
+function renderCalcTopSets(): void {
+  const box = document.getElementById("calcTopSets");
+  if (!box) return;
+  const username = els.testAthlete.value, exName = els.testExercise.value;
+  if (!username || !exName) { box.innerHTML = ""; return; }
+  const formula = currentFormula();
+  const scored = setsForUserExercise(data.records, username, exName)
+    .map((s) => ({ s, e: addedWeight1RM(computeRecord(s), formula) }))
+    .filter((x): x is { s: SetRecord; e: number } => x.e !== null && x.s.weight !== null && x.s.reps !== null)
+    .sort((a, b) => b.e - a.e)
+    .slice(0, 10);
+  if (!scored.length) { box.innerHTML = `<p class="muted calc-topsets-empty">No sets with a usable 1RM yet.</p>`; return; }
+  box.innerHTML = scored.map(({ s, e }, i) =>
+    `<button type="button" class="calc-topset-row" data-tsw="${s.weight}" data-tsr="${s.reps}"${s.bodyweight ? ` data-tsbw="${s.bodyweight}"` : ""} title="Load this set into the calculator">` +
+    `<span class="calc-ts-rank">${i + 1}</span>` +
+    `<span class="calc-ts-set">${s.weight}kg × ${s.reps}</span>` +
+    `<span class="calc-ts-e">${fmt(e)} kg</span>` +
+    `<span class="calc-ts-date muted">${s.date ? escapeHtml(shortDate(s.date)) : ""}</span></button>`,
+  ).join("");
 }
 
 // The 1RM formula shown in the Test-tab calculator (its own tab, independent of
@@ -12416,6 +12441,15 @@ async function init() {
     renderTest();
   });
 
+  // Tap a "top 10 sets" row → load that set into the calculator (keeps the exercise's coeff).
+  document.getElementById("calcTopSets")?.addEventListener("click", (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".calc-topset-row");
+    if (!row) return;
+    if (row.dataset.tsw) els.calcWeight.value = row.dataset.tsw;
+    if (row.dataset.tsr) els.calcReps.value = row.dataset.tsr;
+    if (row.dataset.tsbw) els.calcBw.value = row.dataset.tsbw;
+    renderTest();
+  });
   prefillTestFromPick(); // load Adomas / Squat into the calculator on first paint
 
   // Version label + history come from the single CHANGELOG source. The tag is
