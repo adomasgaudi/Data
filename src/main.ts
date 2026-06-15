@@ -10791,8 +10791,7 @@ function renderWorkoutPlan(): void {
     const staleHtml = `<span class="prio-stale${staleWarn ? " is-warn" : ""}" title="Last trained ${st.daysAgo >= 999 ? "never" : `${st.daysAgo}d ago`} · ${st.drop >= 0.5 ? `${st.drop.toFixed(0)}% below your best 1RM (decayed)` : "at your best 1RM"}">${agoTxt}${st.drop >= 0.5 ? ` · ↓${st.drop.toFixed(0)}%` : ""}</span>`;
     const related = relatedOf(ex);
     const open = prioExpanded.has(ex);
-    // The ▸ caret opens the row's detail: a 1RM GOAL setter + the related-lifts dropdown.
-    const caret = `<button type="button" class="prio-expand" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="${related.length ? `${related.length} related lift${related.length === 1 ? "" : "s"} + ` : ""}set a 1RM goal — tap to ${open ? "hide" : "show"}">${open ? "▾" : "▸"}${related.length ? `<span class="prio-rel-n">${related.length}</span>` : ""}</button>`;
+    // No caret — the whole row toggles its detail on tap (data-prioexpand on .prio-main).
     // 1RM GOAL (owner's Phase-2 "add goals"): an optional target kg you chase, shown
     // against the current best 1RM with a % progress.
     const best = bestE1rmFor(user, ex);
@@ -10848,10 +10847,11 @@ function renderWorkoutPlan(): void {
       : "";
     return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
       dragH +
-      caret +
-      `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
-      `${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
-      `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
+      // Tap the name to TOGGLE the row's detail (no caret). Name on its own line (full
+      // width, so it isn't squeezed by the muscle), the body-part as a tiny line below it.
+      `<button type="button" class="prio-main" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="Tap to ${open ? "hide" : "show"} ${escapeHtml(displayName(ex))}'s details${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
+      `<span class="prio-main-name">${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
+      `<span class="prio-name">${escapeHtml(displayName(ex))}</span></span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
       // Priority RANK pill (Top → Second → Optional) — a named tier SEPARATE from effort;
       // it leads the sort (rank first, effort second). e.g. a Top-priority lift you only
@@ -10859,7 +10859,11 @@ function renderWorkoutPlan(): void {
       `<button type="button" class="prio-rank prio-rank-${rankOf(e)}" data-priorank="${escapeHtml(ex)}" title="Priority rank — tap to choose: Top · Second · Optional. Sorts the list (rank first, then effort level).">${RANK_LABEL[rankOf(e)]}</button>` +
       `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to choose: Max effort · Active · Passive · Maintain. Sets the weekly target; the priority RANK is separate.">${PRIORITY_LABEL[e.level]}</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
-      (open ? `<div class="prio-detail">${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
+      // The row tap now EXPANDS; the full exercise card is reached from a small button
+      // inside the detail (data-planopen — the old name-tap action).
+      (open ? `<div class="prio-detail">` +
+        `<button type="button" class="prio-opencard" data-planopen="${escapeHtml(ex)}" title="Open the full exercise card (how to train, warm-up, working weights…)">ⓘ Open card</button>` +
+        `${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
   // Summary line on top: total weekly target sets + the per-level breakdown

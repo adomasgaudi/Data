@@ -4728,13 +4728,23 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .prio-row.prio-dragging { opacity: 0.9; background: var(--accent-soft); box-shadow: 0 6px 18px rgba(0,0,0,0.18); position: relative; z-index: 2; }
 /* ↕ Sort pill — sits at the head of the summary row; reuses the compact .wo-dj-btn look. */
 .prio-sort { flex: none; }
-/* Lift name · muscle INLINE (cram) — a plain text button that opens the lift. */
+/* Tap-to-expand name button: the lift NAME on its own line (full width, so the wide
+   rank/level pills don't squeeze it), with the body-part as a tiny line just below. */
 .prio-main {
-  flex: 1 1 6rem; min-width: 0; display: flex; flex-direction: row; flex-wrap: nowrap;
-  align-items: baseline; gap: 0.3rem; text-align: left; font: inherit; cursor: pointer;
-  background: none; border: none; padding: 0; overflow: hidden;
+  flex: 1 1 6rem; min-width: 0; display: flex; flex-direction: column;
+  align-items: stretch; gap: 0; text-align: left; font: inherit; cursor: pointer;
+  background: none; border: none; padding: 2px 0; overflow: hidden;
 }
-.prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.prio-main-name { display: flex; flex-direction: row; align-items: baseline; gap: 0.25rem; min-width: 0; }
+.prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Body-part: a small muted sub-line under the name (was inline, squeezing the name). */
+.prio-mg { font-size: 0.6rem; line-height: 1; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Open-card button inside the expanded detail (replaces the old name→card tap). */
+.prio-opencard {
+  align-self: flex-start; font: inherit; font-size: 0.66rem; font-weight: 600; cursor: pointer;
+  color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent);
+  border-radius: var(--r-pill); padding: 2px 8px; min-height: var(--tap-min);
+}
 /* Group/pattern priorities are marked only by the ✦ diamond (gold = combinable mix,
    teal = comparable pattern) — no row tint or coloured border (owner). */
 .prio-grp-mark { flex: none; font-size: 0.7rem; align-self: center; }
@@ -4791,7 +4801,6 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .prio-rel-chip.is-pri { box-shadow: inset 0 0 0 1px var(--accent); }
 .prio-rel-avg { font-size: 0.6rem; font-weight: 600; color: var(--muted); }
 .prio-main:hover .prio-name { text-decoration: underline; }
-.prio-mg { font-size: 0.64rem; color: var(--muted); flex: none; white-space: nowrap; }
 /* Level pill — an intensity ladder: Max (filled) → Active (outline) → Passive →
    Maintain (faint). Tap to cycle. */
 .prio-level {
