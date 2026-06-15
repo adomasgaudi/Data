@@ -11119,8 +11119,10 @@ function liftTrainingHtml(name: string): string {
   // Warmup ramp up to the suggested working weight.
   const warm = hs ? warmupRamp({ oneRepMax: e1rm, workingWeightKg: hs.weightKg, formula }) : [];
   const warmRows = warm.length
-    ? `<div class="lt-warm">` + warm.map((w) =>
-        `<span class="lt-wset"><b>${fmt(w.weightKg)}</b>kg × ${w.reps} <span class="muted">(${w.pctOfWorking}%)</span></span>`).join("") + `</div>`
+    ? `<div class="lt-warm">` + warm.map((w) => {
+        const range = w.downKg === w.upKg ? `${fmt(w.weightKg)}` : `${fmt(w.downKg)}–${fmt(w.upKg)}`;
+        return `<span class="lt-wset"><b>${range}</b>kg × ${w.reps} <span class="muted">(${w.pctOf1RM}% · ${w.exactKg})</span></span>`;
+      }).join("") + `</div>`
     : `<p class="muted lt-mini">—</p>`;
   // Set suggestion.
   const setSug = hs
@@ -12094,11 +12096,16 @@ function renderWarmup(orm: number | null, workingWeightKg: number, workReps: num
     `<div class="rx-work"><span class="rx-work-lbl">Work set</span> ` +
     `<b>${r2(workingWeightKg)} kg</b> × ${workReps} reps</div>`;
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg, formula, increment });
+  // Each row: the plate-rounded load (a down→up range when rounding is ambiguous) BIG,
+  // the exact unrounded value small/grey beside it, and the % of 1RM (owner).
   const wuRows = wu
-    .map((s) => `<tr class="rx-wu-${s.kind}"><td>${s.weightKg} kg</td><td>× ${s.reps}</td><td class="muted">${s.pctOfWorking}%</td></tr>`)
+    .map((s) => {
+      const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
+      return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b> <span class="rx-wu-exact">${s.exactKg}</span></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
+    })
     .join("");
   const wuTable = wu.length
-    ? `<table class="rx-wu"><thead><tr><th>Warm-up</th><th>reps</th><th></th></tr></thead><tbody>${wuRows}</tbody></table>`
+    ? `<table class="rx-wu"><thead><tr><th>Warm-up</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${wuRows}</tbody></table>`
     : "";
   els.rxOut.innerHTML = work + wuTable;
 }

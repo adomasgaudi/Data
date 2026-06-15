@@ -86,13 +86,24 @@ export function hardSetWeight(
   };
 }
 
+/** Warm-up scheme (owner): quick (2 sets) · standard (4) · heavy / pyramid (6). */
+export type WarmupPlan = "quick" | "standard" | "heavy";
+export const WARMUP_PLANS: WarmupPlan[] = ["quick", "standard", "heavy"];
+export const WARMUP_PLAN_SETS: Record<WarmupPlan, number> = { quick: 2, standard: 4, heavy: 6 };
+
 export interface WarmupSet {
-  /** "general" = light high-rep primer; "ramp" = grooving set toward the load. */
+  /** "general" = light high-rep primer (<60% 1RM); "ramp" = grooving set toward the load. */
   kind: "general" | "ramp";
+  /** This set's load as a % of 1RM (whole number). */
+  pctOf1RM: number;
+  /** Exact (unrounded) target = 1RM × pct, 1 dp — shown small/grey. */
+  exactKg: number;
+  /** Exact rounded to the NEAREST loadable increment — the headline weight. */
   weightKg: number;
+  /** Exact rounded DOWN / UP to the increment — a small load range to pick within. */
+  downKg: number;
+  upKg: number;
   reps: number;
-  /** This set's load as a % of the WORKING weight (whole number). */
-  pctOfWorking: number;
 }
 
 export interface WarmupOptions {
@@ -100,16 +111,8 @@ export interface WarmupOptions {
   workingWeightKg: number;
   formula?: OneRepMaxFormula;
   increment?: number;
+  plan?: WarmupPlan;
 }
-
-/**
- * General-phase primers: light sets in the 30–60% (of working weight) band at
- * 10–20 reps (owner's spec). Two sets, getting a little heavier and shorter.
- */
-const GENERAL_PHASE: ReadonlyArray<{ pct: number; reps: number }> = [
-  { pct: 0.3, reps: 20 },
-  { pct: 0.5, reps: 12 },
-];
 
 /**
  * The number of RAMP sets between 60% and the working weight. Owner: "the
@@ -136,36 +139,34 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
   const { oneRepMax, workingWeightKg } = opts;
   const formula = opts.formula ?? "epley";
   const increment = opts.increment ?? 2.5;
+  const plan = opts.plan ?? "standard";
   if (!(oneRepMax > 0) || !(workingWeightKg > 0)) return [];
 
+  // Warm-up sets are % of 1RM (owner), spanning ~40% up to just below the work set; the
+  // set COUNT comes from the plan, reps ≈ ⅓ of what's achievable at that load (grooving).
+  const workPct = workingWeightKg / oneRepMax;
+  const floorPct = 0.4;
+  const topPct = Math.min(0.9, workPct - 0.05); // a touch below the work set, capped at 90%
+  const n = WARMUP_PLAN_SETS[plan];
   const sets: WarmupSet[] = [];
-  let last = 0;
-  const push = (kind: WarmupSet["kind"], pctOfWorking: number, reps: number): void => {
-    const weightKg = roundToIncrement(workingWeightKg * pctOfWorking, increment);
+  let lastKg = 0;
+  for (let i = 0; i < n; i++) {
+    const pct = topPct <= floorPct ? floorPct : floorPct + (topPct - floorPct) * (i / Math.max(1, n - 1));
+    const exactKg = oneRepMax * pct;
+    const weightKg = roundToIncrement(exactKg, increment);
     // Keep strictly increasing and strictly below the working weight.
-    if (weightKg <= last || weightKg >= workingWeightKg) return;
+    if (weightKg <= lastKg || weightKg >= workingWeightKg) continue;
+    const achievable = repsForWeight(oneRepMax, weightKg, formula);
     sets.push({
-      kind,
+      kind: pct < 0.6 ? "general" : "ramp",
+      pctOf1RM: Math.round(pct * 100),
+      exactKg: Math.round(exactKg * 10) / 10,
       weightKg,
-      reps: Math.max(1, Math.round(reps)),
-      pctOfWorking: Math.round(pctOfWorking * 100),
+      downKg: Math.round(Math.floor(exactKg / increment) * increment * 100) / 100,
+      upKg: Math.round(Math.ceil(exactKg / increment) * increment * 100) / 100,
+      reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
     });
-    last = weightKg;
-  };
-
-  // General primers (30–60%, 10–20 reps).
-  for (const g of GENERAL_PHASE) push("general", g.pct, g.reps);
-
-  // Ramp 60% → ~90%, ⅓ of achievable reps at each step; more steps when heavy.
-  const intensity = workingWeightKg / oneRepMax;
-  const count = rampSetCount(intensity);
-  for (let i = 0; i < count; i++) {
-    const pct = count === 1 ? 0.8 : 0.6 + (0.9 - 0.6) * (i / (count - 1));
-    const rampWeight = roundToIncrement(workingWeightKg * pct, increment);
-    const achievable = repsForWeight(oneRepMax, rampWeight, formula);
-    const reps = achievable === null ? 5 : achievable / 3;
-    push("ramp", pct, reps);
+    lastKg = weightKg;
   }
-
   return sets;
 }

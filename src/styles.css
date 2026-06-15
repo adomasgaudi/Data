@@ -2774,6 +2774,8 @@ table.rx-wu { border-collapse: collapse; font-size: var(--fs-base); font-variant
 table.rx-wu th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.9rem 2px 0; }
 table.rx-wu td { padding: 2px 0.9rem 2px 0; border-top: 1px solid var(--line); }
 table.rx-wu tr.rx-wu-general td { color: var(--muted); }
+/* The exact (unrounded) warm-up load — small + grey beside the plate-rounded weight. */
+.rx-wu-exact { font-size: 0.72rem; color: var(--muted); font-weight: 400; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
 /* Each guide topic is a collapsible <details> section. The summary is styled

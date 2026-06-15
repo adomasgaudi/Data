@@ -110,6 +110,20 @@ describe("warmupRamp", () => {
     expect(heavy.length).toBeGreaterThanOrEqual(light.length);
   });
 
+  it("sets are % of 1RM with a plate-round range; the plan drives the set count", () => {
+    const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 90, increment: 2.5, plan: "standard" });
+    expect(sets.length).toBeGreaterThan(0);
+    for (const s of sets) {
+      expect(s.pctOf1RM).toBeGreaterThanOrEqual(40);
+      expect(s.exactKg).toBeGreaterThan(0);
+      expect(s.downKg).toBeLessThanOrEqual(s.weightKg);
+      expect(s.upKg).toBeGreaterThanOrEqual(s.weightKg);
+    }
+    const quick = warmupRamp({ oneRepMax: 100, workingWeightKg: 90, plan: "quick" });
+    const heavy = warmupRamp({ oneRepMax: 100, workingWeightKg: 90, plan: "heavy" });
+    expect(heavy.length).toBeGreaterThan(quick.length);
+  });
+
   it("returns [] on invalid input", () => {
     expect(warmupRamp({ oneRepMax: 0, workingWeightKg: 80 })).toEqual([]);
     expect(warmupRamp({ oneRepMax: 100, workingWeightKg: 0 })).toEqual([]);
