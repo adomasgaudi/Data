@@ -15651,6 +15651,17 @@ function addSetSuggestions(username: string, exercise: string): { prefill: AddSu
 
 let addModalEl: HTMLElement | null = null;
 function addModalEsc(e: KeyboardEvent): void { if (e.key === "Escape") closeAddModal(); }
+/** The wrapped "Variant" block for the add popup — the structured dim pickers for a
+ * modelled lift, or "" when the lift has no variation model. Shared by the initial
+ * render and the reactive rebuild when the exercise is picked in the new-lift popup
+ * (so its variants show as you choose it, not only after it's added). The note
+ * fallback afVariationField can emit is NOT used here — the popup has its own Note. */
+function addmVariantField(ex: string): string {
+  const vf = ex ? afVariationField(ex) : "";
+  return vf.includes("wo-af-dims")
+    ? `<div class="addm-field"><span class="addm-flbl">Variant</span>${vf}</div>`
+    : "";
+}
 function closeAddModal(): void {
   addModalEl?.remove();
   addModalEl = null;
@@ -15664,10 +15675,8 @@ function openAddModal(exerciseName: string | null, date: string): void {
   const today = todayIso();
   const { prefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
   // Variant = structured dim pickers for modelled lifts only (never conflated with notes).
-  const vf = ex ? afVariationField(ex) : "";
-  const variantBlock = vf.includes("wo-af-dims")
-    ? `<div class="addm-field"><span class="addm-flbl">Variant</span>${vf}</div>`
-    : "";
+  // Lives in a stable slot so the new-lift popup can rebuild it when you PICK an exercise.
+  const variantBlock = addmVariantField(ex);
   // Note — always a separate free-text field; past notes fill the datalist.
   const notes = ex ? variationNotesFor(ex) : [];
   const noteListId = `addmNotes-${++afNoteSeq}`;
@@ -15692,7 +15701,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     exField +
     afWhenToggle(date, today) +
-    variantBlock +
+    `<div class="addm-variant-slot">${variantBlock}</div>` +
     `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps · sets</span><div class="addm-inputs">${AF_INPUTS}</div></div></div>` +
     noteField +
     `<div class="addm-actions">${AF_BUTTONS}</div>` +
@@ -15715,6 +15724,27 @@ function openAddModal(exerciseName: string | null, date: string): void {
   }
   wrap.addEventListener("click", onAddModalClick);
   document.addEventListener("keydown", addModalEsc, true);
+  // New-lift popup: rebuild the Variant pickers the moment a modelled exercise is
+  // PICKED (or typed) — so you set support/back-rest/obstacle etc. while first adding
+  // it, not only after. Keyed by family so it only rebuilds when the variation model
+  // actually changes (no thrash per keystroke); the injected <select>s are auto-xdd'd
+  // by the body MutationObserver. Owner: "change the popup based on the selected exercise".
+  if (isNew) {
+    const exInput = wrap.querySelector<HTMLInputElement>(".wo-af-ex");
+    const slot = wrap.querySelector<HTMLElement>(".addm-variant-slot");
+    if (exInput && slot) {
+      let lastKey = ex ? (familyOf(ex) ?? "") : "";
+      const refreshVariant = () => {
+        const name = exInput.value.trim();
+        const key = name ? (familyOf(name) ?? "") : "";
+        if (key === lastKey) return; // same model → nothing to rebuild
+        lastKey = key;
+        slot.innerHTML = addmVariantField(name);
+      };
+      exInput.addEventListener("change", refreshVariant);
+      exInput.addEventListener("input", refreshVariant);
+    }
+  }
   wrap.querySelector<HTMLInputElement>(isNew ? ".wo-af-ex" : ".wo-af-weight")?.focus();
 }
 function onAddModalClick(e: MouseEvent): void {
