@@ -8,9 +8,10 @@
  * EVERY turn (reads the session transcript, so it works regardless of files):
  *   0. REPLY FORMAT — the reply the AI just sent must follow the "Talking to the
  *      owner" rules (CLAUDE.md): NO retired ALL-CAPS line (rule 4); a Summary must
- *      open with a `User: <task recap>` line (rule 44); a substantive reply must
- *      end with the token block (`…%5h - …%W`, rule 39) and the model+version line
- *      (`… v.<n>`, rule 40). These kept getting dropped by AIs on stale branches.
+ *      open with a `User: <task recap>` line (rule 44); Summary points are
+ *      TITLE-ONLY (no description after the **bold** label — rule 4/43); and a
+ *      substantive reply must end with the token block (`…%5h - …%W`, rule 39) and
+ *      the model+version line (`… v.<n>`, rule 40). Kept getting dropped by AIs.
  *
  * The rest run only when THIS session touched the relevant files, so they never
  * nag on unrelated turns:
@@ -83,8 +84,21 @@ function checkReplyFormat(text) {
     }
   }
   // (b) A Summary must OPEN with a `User: <task recap>` line (rule 44).
-  if (/(^|\n)\s*(\*\*Summary\*\*|#+ *Summary|Summary:)/i.test(text) && !/(^|\n)\s*(\*\*)?User:/.test(text)) {
+  const sumIdx = text.search(/(^|\n)\s*(\*\*Summary\*\*|#+ *Summary\b|Summary:)/i);
+  if (sumIdx >= 0 && !/(^|\n)\s*(\*\*)?User:/.test(text)) {
     violations.push("the Summary doesn't open with a `User: <task recap>` line (rule 44).");
+  }
+  // (b2) Summary points are TITLE-ONLY (2–5 words) — the 5–50-word description belongs
+  // in the detail body ABOVE, never on the Summary bullet (rule 4/43). Flag a Summary
+  // bullet that has real text AFTER its **bold** label.
+  if (sumIdx >= 0) {
+    for (const raw of text.slice(sumIdx).split("\n")) {
+      const m = raw.trim().match(/^[-*]\s+\*\*[^*]+\*\*\s*(.*)$/);
+      if (m && /[A-Za-z]{2,}/.test(m[1])) {
+        violations.push("a Summary point has a description after its title — Summary points must be TITLE-ONLY (2–5 words); put the 5–50-word description in the detail body above (rule 4/43).");
+        break;
+      }
+    }
   }
   // (c) A substantive reply (≥200 chars) must end with the token block + version line.
   if (text.length >= 200) {
