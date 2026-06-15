@@ -10633,21 +10633,28 @@ function saveWoSortByPriority(): void { try { localStorage.setItem(WO_PRIO_SORT_
 // The rank / effort-level pills open a small PICK MENU (not tap-to-cycle, owner request).
 // position:fixed + clamp into the viewport (rule 32), mirroring openLiftMenu.
 function closePrioPickMenu(): void { document.getElementById("prioPickMenu")?.remove(); }
-function openPrioPickMenu(anchor: HTMLElement, ex: string, kind: "rank" | "level"): void {
+function openPrioPickMenu(anchor: HTMLElement, ex: string, kind: "rank" | "level" | "both"): void {
   closePrioPickMenu(); closeLiftMenu();
   const pri = prioritiesStore[els.athlete.value];
   if (!pri?.[ex]) return;
-  const cur: string = kind === "rank" ? rankOf(pri[ex]!) : pri[ex]!.level;
-  const opts: { val: string; label: string; cls: string }[] = kind === "rank"
-    ? PRIORITY_RANKS.map((r) => ({ val: r, label: RANK_LABEL[r], cls: `prio-rank-${r}` }))
-    : PRIORITY_LEVELS.map((l) => ({ val: l, label: PRIORITY_LABEL[l], cls: `prio-level-${l}` }));
-  const rows = opts.map((o) =>
-    `<button type="button" class="prio-pick-row ${o.cls}${o.val === cur ? " is-on" : ""}" ` +
-    `data-priopick="${escapeHtml(o.val)}" data-priopickex="${escapeHtml(ex)}" data-priopickkind="${kind}">${escapeHtml(o.label)}</button>`,
-  ).join("");
+  // One control for BOTH dials (owner): a "both" menu stacks a Rank section over an Effort
+  // section; each option still carries its own kind so the existing data-priopick handler
+  // sets the right dial. A single-kind menu (legacy) just renders that one section.
+  const section = (k: "rank" | "level"): string => {
+    const cur: string = k === "rank" ? rankOf(pri[ex]!) : pri[ex]!.level;
+    const opts: { val: string; label: string; cls: string }[] = k === "rank"
+      ? PRIORITY_RANKS.map((r) => ({ val: r, label: RANK_LABEL[r], cls: `prio-rank-${r}` }))
+      : PRIORITY_LEVELS.map((l) => ({ val: l, label: PRIORITY_LABEL[l], cls: `prio-level-${l}` }));
+    const head = kind === "both" ? `<div class="prio-pick-lbl">${k === "rank" ? "Rank" : "Effort"}</div>` : "";
+    return head + opts.map((o) =>
+      `<button type="button" class="prio-pick-row ${o.cls}${o.val === cur ? " is-on" : ""}" ` +
+      `data-priopick="${escapeHtml(o.val)}" data-priopickex="${escapeHtml(ex)}" data-priopickkind="${k}">${escapeHtml(o.label)}</button>`,
+    ).join("");
+  };
+  const rows = kind === "both" ? section("rank") + section("level") : section(kind);
   const menu = document.createElement("div");
   menu.id = "prioPickMenu";
-  menu.className = "prio-pick-menu";
+  menu.className = `prio-pick-menu${kind === "both" ? " is-both" : ""}`;
   menu.innerHTML = rows;
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
@@ -10853,11 +10860,13 @@ function renderWorkoutPlan(): void {
       `<span class="prio-main-name">${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
       `<span class="prio-name">${escapeHtml(displayName(ex))}</span></span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
-      // Priority RANK pill (Top → Second → Optional) — a named tier SEPARATE from effort;
-      // it leads the sort (rank first, effort second). e.g. a Top-priority lift you only
-      // Maintain. Tap to cycle.
-      `<button type="button" class="prio-rank prio-rank-${rankOf(e)}" data-priorank="${escapeHtml(ex)}" title="Priority rank — tap to choose: Top · Second · Optional. Sorts the list (rank first, then effort level).">${RANK_LABEL[rankOf(e)]}</button>` +
-      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to choose: Max effort · Active · Passive · Maintain. Sets the weekly target; the priority RANK is separate.">${PRIORITY_LABEL[e.level]}</button>` +
+      // CRAM (owner): ONE control around the tags for BOTH dials — rank + effort show as
+      // small TAGS, and tapping opens a single pick-menu with both sections. Replaces the
+      // two full-size pills.
+      `<button type="button" class="prio-meta" data-priometa="${escapeHtml(ex)}" title="Priority rank &amp; effort — tap to choose">` +
+        `<span class="prio-tag prio-rank-${rankOf(e)}">${RANK_LABEL[rankOf(e)]}</span>` +
+        `<span class="prio-tag prio-level-${e.level}">${PRIORITY_LABEL[e.level]}</span>` +
+      `</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
       // The row tap now EXPANDS; the full exercise card is reached from a small button
       // inside the detail (data-planopen — the old name-tap action).
@@ -12757,22 +12766,12 @@ async function init() {
       }
       return;
     }
-    // Cycle the priority LEVEL → re-suggest the target for the new level (re-renders: the
-    // order changes by level, by design).
-    // Effort LEVEL pill → open a small pick menu (Max effort / Active / Passive / Maintain)
-    // instead of tap-to-cycle (owner). stopPropagation so the menu's outside-close
-    // (document handler) doesn't fire on this same click.
-    const lvl = t.closest<HTMLElement>("[data-priolevel]");
-    if (lvl?.dataset.priolevel && pri[lvl.dataset.priolevel]) {
+    // The combined rank+effort tags → open ONE pick menu with both sections (owner).
+    // stopPropagation so the menu's outside-close (document handler) doesn't fire on this click.
+    const meta = t.closest<HTMLElement>("[data-priometa]");
+    if (meta?.dataset.priometa && pri[meta.dataset.priometa]) {
       e.stopPropagation();
-      openPrioPickMenu(lvl, lvl.dataset.priolevel, "level");
-      return;
-    }
-    // PRIORITY RANK pill → its own pick menu (Top / Second / Optional).
-    const rk = t.closest<HTMLElement>("[data-priorank]");
-    if (rk?.dataset.priorank && pri[rk.dataset.priorank]) {
-      e.stopPropagation();
-      openPrioPickMenu(rk, rk.dataset.priorank, "rank");
+      openPrioPickMenu(meta, meta.dataset.priometa, "both");
       return;
     }
     // Cycle the SET INTENSITY (hard → mid → half) in the detail panel. Doesn't change
