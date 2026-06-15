@@ -170,6 +170,7 @@ import { modelLabelFor } from "./modelName";
 // __BUILD_BRANCH__ (baked in by vite.config's define) names the MODEL working this
 // branch (opus-4.8 → "Opus 4.8") for the title tag — declared in build-env.d.ts.
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename, clearCache } from "./backup";
+import { exerciseDailyVolumes, exerciseOverreach, sorenessSusceptibility, type Overreach } from "./soreness";
 import defaultCache from "./data/defaultCache.json";
 
 // Bundled "global cache" — the owner's baseline setup (overrides, world records,
@@ -7287,6 +7288,24 @@ function renderWorkoutsPage() {
   const workoutFormula = currentFormula();
   const period = historyPeriod(S.workoutViewMode);
   const byWeek = period !== null;
+  // SORE Phase 2 — soreness "overreach" indicator (DAY view only; period rows pool many
+  // days so a per-day record comparison wouldn't line up). A lift gets a 💢 dot when this
+  // session's volume beat your RECENT records (best day in the last month; best 7/14-day
+  // window in the last 3 months) — the no-input soreness signal — and the dot's strength
+  // scales by the lift's susceptibility × how far past the record you went. Records come
+  // from the athlete's FULL log (liveRecords), not the active-filter view. Memoised per
+  // (lift, date) because the collapsed line is reused (active + hidden-reveal lists).
+  const soreVol = byWeek ? null : exerciseDailyVolumes(liveRecords(), els.athlete.value);
+  const soreCache = new Map<string, Overreach | null>();
+  const soreFor = (ex: string, date: string): Overreach | null => {
+    if (!soreVol) return null;
+    const k = `${ex}|${date}`;
+    if (!soreCache.has(k)) {
+      const ov = exerciseOverreach(soreVol.get(ex) ?? [], ex, date);
+      soreCache.set(k, ov.overreach > 0 ? ov : null);
+    }
+    return soreCache.get(k) ?? null;
+  };
   syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
@@ -7363,10 +7382,27 @@ function renderWorkoutsPage() {
         const addBtn = S.showAddSets
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
+        // SORE Phase 2: a soreness dot when this session over-reached a recent volume
+        // record for this lift, weighted by the lift's intrinsic susceptibility (eccentric
+        // / stretch-loaded lifts tear more). dose = overreach × susceptibility; shown above
+        // a small floor so a trivial bump on a low-soreness lift stays quiet, brighter when
+        // it's a big over-reach on a tear-prone lift.
+        const ov = soreFor(exerciseName, g.date);
+        let soreTxt = "";
+        if (ov) {
+          const susc = sorenessSusceptibility(exerciseName);
+          const dose = ov.overreach * susc;
+          if (dose >= 0.25) {
+            const which = [ov.exceededDay ? "month's daily" : "", ov.exceededWeek ? "weekly" : "", ov.exceededTwoWeek ? "2-week" : ""].filter(Boolean).join(" + ");
+            const lean = susc >= 1.3 ? " — a stretch/eccentric lift, sores more" : susc <= 0.8 ? " — a low-soreness lift" : "";
+            const tip = `Beat your recent ${which} volume record → expect soreness${lean}.`;
+            soreTxt = ` <span class="wo-sore${dose >= 0.8 ? " is-high" : ""}" title="${escapeHtml(tip)}" aria-label="Likely soreness: ${escapeHtml(which)} record beaten"></span>`;
+          }
+        }
         // NO swipe-to-delete on this collapsed day line (owner request): removing sets is
         // done per-set INSIDE the expanded set table (swipe a set row there), never by
         // dragging a whole exercise off the collapsed day view.
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${srcTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {

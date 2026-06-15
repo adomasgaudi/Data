@@ -1937,6 +1937,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* The merged-group source lift(s) after the group name — smaller + grey so "Bicep+"
    stays the headline and "(BB Curl)" reads as the where-from footnote. */
 .wo-exname-src { font-size: 0.78em; font-weight: 400; color: var(--muted); }
+/* SORE Phase 2: soreness "over-reach" dot beside a lift that beat a recent volume record.
+   A genuine dot, so 50% rounding is allowed (rule 22). Faint by default, bright when the
+   over-reach × susceptibility is high. */
+.wo-sore { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #d98a3a; vertical-align: middle; margin: 0 0.15rem; flex: none; cursor: help; }
+.wo-sore.is-high { width: 8px; height: 8px; background: #c0492f; box-shadow: 0 0 0 2px color-mix(in srgb, #c0492f 22%, transparent); }
 .wo-setlist { font-size: var(--fs-md); color: var(--accent); } /* weights + reps in blue */
 /* Period buckets (week / month modes) tint each SESSION's run of sets with a
    faint rounded band, so distinct sessions read at a glance without loud dividers.
