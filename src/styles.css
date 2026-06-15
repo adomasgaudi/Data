@@ -2942,6 +2942,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-paircell.is-hard .lt-pairflag { color: var(--gold); }
 .lt-paircell.is-avoid { background: transparent; outline: 1px dashed var(--line); opacity: 0.6; }
 .lt-paircell.is-avoid .lt-antex { color: var(--muted); text-decoration: line-through; }
+.lt-paircell.is-prefer { background: var(--accent-soft); outline: 1.5px solid var(--accent); }
+.lt-paircell.is-prefer .lt-antex { color: var(--accent); font-weight: 800; }
+.lt-paircell.is-prefer .lt-pairflag { color: var(--accent); }
+/* Pairs manager (Plan popup ⇄ section) */
+.pairs-mgr { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; }
+.pairs-mgr-hd { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding-bottom: 5px; }
+.pairs-mgr-list, .pairs-mgr-results { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 6px; }
+.pairs-mgr-empty { font-size: 0.8rem; padding: 4px 0 8px; }
+.pairs-mgr-chip { align-items: center; }
+.pairs-mgr-name { font-size: 0.74rem; font-weight: 700; padding: 2px 4px 2px 9px; }
 /* Nuzzo reps→%1RM mini-curve */
 .nz-svg { width: 100%; max-width: 280px; height: auto; }
 .nz-grid { stroke: var(--line); stroke-width: 1; }

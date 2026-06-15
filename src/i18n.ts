@@ -89,6 +89,9 @@ const LT: Record<string, string> = {
   "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
   "Setup notes": "Pasiruošimo užrašai",
   "Pair with": "Derinti su",
+  "⇄ Pair flags": "⇄ Derinimo žymės",
+  "Search to flag…": "Ieškoti žymėjimui…",
+  "No pair flags yet — flag exercises in their info card or search below.": "Dar nėra žymių — pažymėkite pratimus jų informacijos kortelėje arba ieškokite žemiau.",
   "✎ Index entry — code, tags, groups & data": "✎ Rodyklės įrašas — kodas, žymos, grupės ir duomenys",
   // ---- Mini stats carousel ----
   "More ▾": "Daugiau ▾",

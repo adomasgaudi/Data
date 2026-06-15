@@ -343,6 +343,7 @@ let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
+let pairMgrQuery = ""; // Pairs manager search box
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 
 const PAGE_SIZE = 50; // List & stats page size
@@ -10983,7 +10984,45 @@ function renderWorkoutPlan(): void {
     : "";
   const planTitle = document.getElementById("planTitle");
   if (planTitle) planTitle.textContent = `${athleteLabel()} plan`;
-  els.planBody.innerHTML = summary + list + addBlock;
+  els.planBody.innerHTML = summary + list + addBlock + pairManagerHtml(user);
+}
+
+/** Pairs management section in the Plan popup: shows all explicitly flagged exercises
+ *  (prefer / hard / avoid) and a search box to flag new ones. */
+function pairManagerHtml(user: string): string {
+  const todayD = dayNumber(todayIso());
+  const allLive = liveExercises(user, todayD);
+  const flagged = allLive.filter((le) => pairPrefFor(le.name) !== "");
+  flagged.sort((a, b) => {
+    const ra = pairPrefFor(a.name) === "prefer" ? 0 : pairPrefFor(a.name) === "hard" ? 1 : 2;
+    const rb = pairPrefFor(b.name) === "prefer" ? 0 : pairPrefFor(b.name) === "hard" ? 1 : 2;
+    return ra - rb || a.name.localeCompare(b.name);
+  });
+  const q = pairMgrQuery.trim().toLowerCase();
+  const searchPool = allLive.filter((le) =>
+    !q || displayName(le.name).toLowerCase().includes(q) || le.name.toLowerCase().includes(q));
+  const flagChip = (name: string): string => {
+    const pref = pairPrefFor(name);
+    const cls = pref === "prefer" ? " is-prefer" : pref === "hard" ? " is-hard" : pref === "avoid" ? " is-avoid" : "";
+    const glyph = pref === "prefer" ? "★" : pref === "hard" ? "⚑" : pref === "avoid" ? "✕" : "⚐";
+    const tip = pref === "prefer" ? "Preferred — tap to flag hard" : pref === "hard" ? "Hard — tap to avoid" : pref === "avoid" ? "Avoiding — tap to clear" : "Tap to flag";
+    return `<span class="lt-paircell${cls} pairs-mgr-chip">` +
+      `<span class="pairs-mgr-name">${escapeHtml(displayName(name))}</span>` +
+      `<button type="button" class="lt-pairflag" data-pairflag2="${escapeHtml(name)}" title="${tip}" aria-label="${tip}">${glyph}</button>` +
+      `</span>`;
+  };
+  const flaggedHtml = flagged.length
+    ? `<div class="pairs-mgr-list">${flagged.map((le) => flagChip(le.name)).join("")}</div>`
+    : `<p class="muted pairs-mgr-empty">No pair flags yet — flag exercises in their info card or search below.</p>`;
+  const searchResultsHtml = q
+    ? `<div class="pairs-mgr-results">${searchPool.slice(0, 20).map((le) => flagChip(le.name)).join("") || `<span class="muted">No matches for "${escapeHtml(pairMgrQuery)}".</span>`}</div>`
+    : "";
+  return `<div class="pairs-mgr">` +
+    `<div class="pairs-mgr-hd muted">⇄ Pair flags</div>` +
+    flaggedHtml +
+    `<input type="search" class="wa-chip-search pairs-mgr-search" placeholder="Search to flag…" aria-label="Search exercises to pair-flag" autocomplete="off" value="${escapeHtml(pairMgrQuery)}">` +
+    searchResultsHtml +
+    `</div>`;
 }
 
 function openWorkoutPlan(): void {
@@ -11046,11 +11085,12 @@ function setSetupNote(name: string, text: string): void {
 // portability is mostly a global property (a dumbbell move pairs with anything; a
 // fixed machine rarely does). Cycles ok → hard → avoid → ok.
 const PAIR_PREF_KEY = "colosseum.pairPrefs.v1";
-const pairPrefs: Record<string, "hard" | "avoid"> = loadJsonObject<Record<string, "hard" | "avoid">>(PAIR_PREF_KEY) ?? {};
-function pairPrefFor(name: string): "" | "hard" | "avoid" { return pairPrefs[name] ?? ""; }
+const pairPrefs: Record<string, "prefer" | "hard" | "avoid"> = loadJsonObject<Record<string, "prefer" | "hard" | "avoid">>(PAIR_PREF_KEY) ?? {};
+function pairPrefFor(name: string): "" | "prefer" | "hard" | "avoid" { return pairPrefs[name] ?? ""; }
 function cyclePairPref(name: string): void {
   const cur = pairPrefs[name];
-  if (!cur) pairPrefs[name] = "hard";
+  if (!cur) pairPrefs[name] = "prefer";
+  else if (cur === "prefer") pairPrefs[name] = "hard";
   else if (cur === "hard") pairPrefs[name] = "avoid";
   else delete pairPrefs[name];
   saveJson(PAIR_PREF_KEY, pairPrefs);
@@ -11165,20 +11205,22 @@ function liftTrainingHtml(name: string): string {
     const p = pri[le.name];
     return p ? PRIORITY_ORDER[p.level] : 9; // focus lifts (max=0…maintain=3) before the rest
   };
-  const prefRank = (n: string): number => { const f = pairPrefFor(n); return f === "avoid" ? 2 : f === "hard" ? 1 : 0; };
+  const prefRank = (n: string): number => { const f = pairPrefFor(n); return f === "prefer" ? 0 : f === "hard" ? 2 : f === "avoid" ? 3 : 1; };
   const pairCands = liveExercises(user, todayD)
     .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)))
     .sort((p, q) =>
-      (prefRank(p.name) - prefRank(q.name)) ||      // avoid-flagged sink to the bottom
+      (prefRank(p.name) - prefRank(q.name)) ||      // preferred float up, avoid sink down
       (focusRank(p) - focusRank(q)) ||              // 1st group: highest priority
       (pairEaseScore(p.name) - pairEaseScore(q.name)) || // 2nd group: easier to pair first
-      (q.sets - p.sets))                            // tiebreak: most-trained
-    .slice(0, 8);
+      (q.sets - p.sets));                            // tiebreak: most-trained
   const pairChip = (le: { name: string }): string => {
     const pref = pairPrefFor(le.name);
-    const cls = pref === "avoid" ? " is-avoid" : pref === "hard" ? " is-hard" : "";
-    const flagGlyph = pref === "avoid" ? "✕" : pref === "hard" ? "⚑" : "⚐";
-    const flagTitle = pref === "avoid" ? "Won't pair (don't want) — tap to clear" : pref === "hard" ? "Hard to pair (far / lots of setup) — tap: don't want" : "Easy to pair — tap to flag: hard to set up";
+    const cls = pref === "prefer" ? " is-prefer" : pref === "hard" ? " is-hard" : pref === "avoid" ? " is-avoid" : "";
+    const flagGlyph = pref === "prefer" ? "★" : pref === "avoid" ? "✕" : pref === "hard" ? "⚑" : "⚐";
+    const flagTitle = pref === "prefer" ? "Preferred pair — tap to flag: hard to set up"
+      : pref === "hard" ? "Hard to pair (far / lots of setup) — tap: don't want"
+      : pref === "avoid" ? "Won't pair (don't want) — tap to clear"
+      : "Tap to flag as preferred pair (good combo)";
     return `<span class="lt-paircell${cls}">` +
       `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
       `<button type="button" class="lt-pairflag" data-pairflag="${escapeHtml(le.name)}" title="${flagTitle}" aria-label="${flagTitle}">${flagGlyph}</button>` +
@@ -12817,12 +12859,22 @@ async function init() {
   // plan, then restore focus + caret to the search input (it's recreated by the render).
   els.planBody.addEventListener("input", (e) => {
     const inp = (e.target as Element)?.closest?.<HTMLInputElement>(".prio-add-search");
-    if (!inp) return;
-    prioAddQuery = inp.value;
-    const caret = inp.selectionStart ?? inp.value.length;
-    renderWorkoutPlan();
-    const s = els.planBody.querySelector<HTMLInputElement>(".prio-add-search");
-    if (s) { s.focus(); s.setSelectionRange(caret, caret); }
+    if (inp) {
+      prioAddQuery = inp.value;
+      const caret = inp.selectionStart ?? inp.value.length;
+      renderWorkoutPlan();
+      const s = els.planBody.querySelector<HTMLInputElement>(".prio-add-search");
+      if (s) { s.focus(); s.setSelectionRange(caret, caret); }
+      return;
+    }
+    const inp2 = (e.target as Element)?.closest?.<HTMLInputElement>(".pairs-mgr-search");
+    if (inp2) {
+      pairMgrQuery = inp2.value;
+      const caret = inp2.selectionStart ?? inp2.value.length;
+      renderWorkoutPlan();
+      const s = els.planBody.querySelector<HTMLInputElement>(".pairs-mgr-search");
+      if (s) { s.focus(); s.setSelectionRange(caret, caret); }
+    }
   });
   els.planBody.addEventListener("change", (e) => {
     const g = (e.target as HTMLElement).closest<HTMLInputElement>("[data-priogoal]");
@@ -12914,6 +12966,9 @@ async function init() {
       }
       return;
     }
+    // Pairs manager flag toggle (in the Plan popup pairs section).
+    const pf2 = t.closest<HTMLElement>("[data-pairflag2]");
+    if (pf2?.dataset.pairflag2) { cyclePairPref(pf2.dataset.pairflag2); renderWorkoutPlan(); return; }
     // Tap the name → open the exercise's info.
     const row = t.closest<HTMLElement>("[data-planopen]");
     if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen, true); }
