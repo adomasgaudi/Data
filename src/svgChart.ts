@@ -520,14 +520,24 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const realMax = useCompact() ? compactor.from(view.xMax) : view.xMax;
       const toView = (realT: number) => (useCompact() ? compactor.to(realT) : realT);
       let lastLabelPx = -Infinity;
+      // Show BOTH period levels at once (owner): alternating MONTHS as a very-light-blue
+      // wash + alternating WEEKS as very-light-gray stripes over it. Weeks too thin to
+      // see (wide zoom) are skipped, so it degrades to month blocks gracefully.
+      const bandRect = (b: { start: number; end: number; shade: boolean }, cls: string, minW: number): string => {
+        const x0 = xPix(toView(b.start)), x1 = xPix(toView(b.end));
+        if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) return "";
+        const cx0 = clampX(x0), cx1 = clampX(x1);
+        return (b.shade && cx1 - cx0 > minW)
+          ? `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" class="${cls}"/>`
+          : "";
+      };
+      for (const b of timeBands(realMin, realMax, "month")) bands += bandRect(b, "svgc-band-month", 0.5);
+      for (const b of timeBands(realMin, realMax, "week")) bands += bandRect(b, "svgc-band", 3);
+      // Gridlines + labels follow the auto level (sensible label density per zoom).
       for (const b of timeBands(realMin, realMax)) {
         const x0 = xPix(toView(b.start));
-        const x1 = xPix(toView(b.end));
-        if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) continue;
-        const cx0 = clampX(x0);
-        const cx1 = clampX(x1);
-        if (b.shade && cx1 - cx0 > 0.5)
-          bands += `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" class="svgc-band"/>`;
+        const cx0 = clampX(x0), cx1 = clampX(xPix(toView(b.end)));
+        if (cx1 < M.l - 0.5 || cx0 > W - M.r + 0.5) continue;
         // gridline at the band boundary
         if (x0 >= M.l - 0.5 && x0 <= W - M.r + 0.5)
           grid += `<line x1="${x0.toFixed(1)}" y1="${M.t}" x2="${x0.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
