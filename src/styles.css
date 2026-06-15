@@ -2361,7 +2361,8 @@ sup.wr-bw { font-size: 0.85em; }
 /* ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) ---- */
 .addm-overlay { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(20, 24, 38, 0.42); }
 .addm-card {
-  width: 100%; max-width: 26rem; max-height: 88vh; overflow-y: auto;
+  /* min-width:0 lets the flex item shrink to the overlay width (default auto overflows). */
+  width: 100%; max-width: 26rem; min-width: 0; max-height: 88vh; overflow: hidden auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 12px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
 }

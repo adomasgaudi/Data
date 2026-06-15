@@ -51,7 +51,6 @@ const LT: Record<string, string> = {
   "Add exercise": "Pridėti pratimą",
   "Suggested": "Siūloma",
   "Note": "Užrašas",
-  "Note / variation": "Užrašas / variacija",
   "Variant": "Variacija",
   "optional note": "neprivalomas užrašas",
   "Weight · reps · sets": "Svoris · kart. · serijos",

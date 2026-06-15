@@ -15657,17 +15657,18 @@ function openAddModal(exerciseName: string | null, date: string): void {
   const ex = exerciseName ?? "";
   const today = todayIso();
   const { prefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
-  // The variant field (dim pickers for a modelled lift, else its own note input).
+  // Variant = structured dim pickers for modelled lifts only (never conflated with notes).
   const vf = ex ? afVariationField(ex) : "";
-  const hasOwnNote = vf.includes("wo-af-note"); // non-modelled lift already has a note input
-  const variantBlock = vf && vf.includes("wo-af-dims") ? `<div class="addm-field"><span class="addm-flbl">Variant</span>${vf}</div>` : (hasOwnNote ? "" : "");
-  // A free NOTE (decoupled from variants — owner: a note is NOT assumed a variant),
-  // suggested from this lift's past notes. Added unless the variation field already is one.
+  const variantBlock = vf.includes("wo-af-dims")
+    ? `<div class="addm-field"><span class="addm-flbl">Variant</span>${vf}</div>`
+    : "";
+  // Note — always a separate free-text field; past notes fill the datalist.
   const notes = ex ? variationNotesFor(ex) : [];
   const noteListId = `addmNotes-${++afNoteSeq}`;
-  const noteField = hasOwnNote ? `<div class="addm-field"><span class="addm-flbl">Note / variation</span>${vf}</div>`
-    : `<div class="addm-field"><span class="addm-flbl">Note</span><input class="wo-af-note" list="${noteListId}" placeholder="optional note" autocomplete="off" /></div>` +
-      `<datalist id="${noteListId}">${notes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`;
+  const noteField =
+    `<div class="addm-field"><span class="addm-flbl">Note</span>` +
+    `<input class="wo-af-note" list="${noteListId}" placeholder="optional note" autocomplete="off" /></div>` +
+    `<datalist id="${noteListId}">${notes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`;
   const suggRow = chips.length
     ? `<div class="addm-sugg"><span class="addm-flbl">Suggested</span><div class="addm-sugg-row">` +
       chips.map((c) => `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}">${escapeHtml(c.label)}</button>`).join("") +
