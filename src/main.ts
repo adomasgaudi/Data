@@ -1979,6 +1979,22 @@ function deleteSetsWithUndo(ids: string[], label: string): void {
   for (const id of real) deletedSets.add(id);
   saveDeletedSets();
   logAction("delete-sets", `Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`);
+  // PB-26 part 2 — TWO-PROCESS feel: phase 1 (instant) hides the deleted set's rows
+  // RIGHT NOW so the tap feels immediate even while phase 2 (the heavy graph/history
+  // rebuild) catches up a frame later. Each set is a `.set-main` row + its optional
+  // `.set-note-row` + hidden `.set-edit-row`; hide the run. The deferred rebuild
+  // replaces the whole DOM, so these inline hides need no cleanup (rule 17 recipe).
+  for (const id of real) {
+    const main = document.querySelector<HTMLElement>(`tr.set-main[data-setid="${CSS.escape(id)}"]`);
+    if (!main) continue;
+    main.style.display = "none";
+    let sib = main.nextElementSibling;
+    while (sib && (sib.classList.contains("set-note-row") || sib.classList.contains("set-edit-row"))) {
+      const next = sib.nextElementSibling;
+      (sib as HTMLElement).style.display = "none";
+      sib = next;
+    }
+  }
   // PB-26: deleting a set must NOT move you away from the expanded view. The old
   // rerender ran renderWorkoutsPage() SYNCHRONOUSLY (no scroll restore) and called
   // renderWorkoutAnalysis WITHOUT reopenSetEdit, so on the Analysis tab the open
