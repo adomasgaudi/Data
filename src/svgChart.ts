@@ -109,6 +109,9 @@ export interface SvgSeries {
    * projections (e.g. Predicted Strength) whose tail extends past the real data.
    * The axis stays anchored to the logged data and the projection is clipped. */
   noExtendX?: boolean;
+  /** Draw this line dashed even outside "faint" mode — marks a series as a FORECAST
+   * (the projection / Predicted Strength), so it never reads as logged data. */
+  dashed?: boolean;
   /** Vertical shift for THIS series only, as a fraction of the plot height
    * (+ = up, − = down). A pure visual reposition — moves the whole series (bars
    * move with their baseline) without changing its values; used to lift the
@@ -615,8 +618,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         const faint = !!cfg.styleToggles && faintLines;
         const col = faint ? grayify(s.color, 0.55) : s.color;
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
-        body += `<polyline points="${d}" fill="none" stroke="${col}" stroke-width="${faint ? 1 : 2}" stroke-opacity="${faint ? 0.4 : 0.9}"${faint ? ` stroke-dasharray="3 3"` : ""}/>`;
-        const dotR = faint ? 1.3 : 2.4;
+        // A forecast series (s.dashed) draws dashed + slightly translucent even when
+        // not in faint mode, so the projection never looks like logged data.
+        const dash = faint ? ` stroke-dasharray="3 3"` : s.dashed ? ` stroke-dasharray="5 4"` : "";
+        body += `<polyline points="${d}" fill="none" stroke="${col}" stroke-width="${faint ? 1 : 2}" stroke-opacity="${faint ? 0.4 : s.dashed ? 0.7 : 0.9}"${dash}/>`;
+        const dotR = faint ? 1.3 : s.dashed ? 0 : 2.4;
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
           body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${dotR}" fill="${col}" fill-opacity="${faint ? 0.35 : 0.6}"/>`;
