@@ -2790,6 +2790,16 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); border-top: 1px solid var(--a
 .rx-wu-worktag { color: var(--accent); font-size: 0.7rem; font-weight: 700; }
 /* Hard-set plan pill sits right after the "Work sets" label (not pushed to the edge). */
 .rx-ws-plan { margin-left: 0; }
+/* Tabbed plan POPUP (owner): warm-up / hard-set type tabs → a live table → an explanation. */
+.plan-popup { position: fixed; z-index: var(--z-top, 200); width: 320px; max-width: 92vw; max-height: 70vh; overflow-y: auto; background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 32px rgba(0,0,0,0.28); padding: 0.5rem 0.6rem; }
+:root[data-theme="dark"] .plan-popup { background: var(--panel); }
+.plan-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 0.45rem; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.plan-tab { flex: 0 0 auto; white-space: nowrap; font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px; min-height: var(--tap-min); }
+.plan-tab.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.plan-tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.plan-tbl th { text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.7rem 2px 0; }
+.plan-tbl td { padding: 2px 0.7rem 2px 0; border-top: 1px solid var(--line); }
+.plan-blurb { font-size: 0.78rem; color: var(--text); margin: 0.5rem 0 0.1rem; line-height: 1.4; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
 /* Each guide topic is a collapsible <details> section. The summary is styled
