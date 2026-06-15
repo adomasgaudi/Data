@@ -451,6 +451,7 @@ function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); 
 function setViewMode(mode: ViewMode) {
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
+  rebuildAthleteRosters(); // the roster differs by view (admin-only "test" sandbox user)
   const locked = lockedUsername(); // null in admin, else the locked athlete
   // The mode toggle in the header shows the current view; the Settings dropdown +
   // auth button mirror it.
@@ -1691,6 +1692,10 @@ let manualAthletes: { username: string; user: string }[] = (() => {
   try { const a = JSON.parse(localStorage.getItem(MANUAL_ATHLETES_KEY) ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
 })();
 function saveManualAthletes(): void { saveJson(MANUAL_ATHLETES_KEY, manualAthletes); }
+// Built-in athletes that exist ONLY in the admin view (a "test" sandbox user the owner
+// can poke at; never shown to a locked user/spectator, nor when an admin previews them).
+const ADMIN_ONLY_ATHLETES: { username: string; user: string }[] = [{ username: "test", user: "test" }];
+const ADMIN_ONLY_USERNAMES = new Set(ADMIN_ONLY_ATHLETES.map((a) => a.username));
 /** The full athlete roster: everyone in the scraped data PLUS any manually-added
  * users, deduped by username and sorted by display name. The single source of the
  * athlete list for every picker (replaces bare distinctUsers(data.records)). */
@@ -1698,6 +1703,13 @@ function rosterUsers(): { username: string; user: string }[] {
   const map = new Map<string, string>();
   for (const u of distinctUsers(data.records)) map.set(u.username, u.user);
   for (const u of manualAthletes) if (!map.has(u.username)) map.set(u.username, u.user);
+  // Admin-only sandbox users (e.g. "test") show ONLY in the admin view; everywhere else
+  // (locked user/spectator, or an admin previewing them) they're hidden entirely.
+  if (viewMode === "admin") {
+    for (const u of ADMIN_ONLY_ATHLETES) if (!map.has(u.username)) map.set(u.username, u.user);
+  } else {
+    for (const k of ADMIN_ONLY_USERNAMES) map.delete(k);
+  }
   return [...map].map(([username, user]) => ({ username, user })).sort((a, b) => a.user.localeCompare(b.user));
 }
 
