@@ -47,7 +47,7 @@
   --chart-label: #6b7280;
   --chart-halo: #ffffff;
   --chart-band: rgba(0, 0, 0, 0.02);             /* week stripes — near-white, barely there */
-  --chart-band-month: rgba(40, 78, 134, 0.02);  /* month wash — near-white faint blue */
+  --chart-band-month: rgba(40, 78, 134, 0.05);  /* month wash — faint blue */
   /* Year heatmap rest squares, alternating by month: even = white + thin gray
      outline, odd = very light gray + slightly darker outline. */
   --hm-rest-even: #ffffff;
@@ -112,7 +112,7 @@
   --chart-label: #aeb6c2;
   --chart-halo: #1b212b;
   --chart-band: rgba(255, 255, 255, 0.025);        /* week stripes — near-bg, barely there */
-  --chart-band-month: rgba(130, 165, 235, 0.025); /* month wash — near-bg faint blue */
+  --chart-band-month: rgba(130, 165, 235, 0.06); /* month wash — faint blue */
   --hm-rest-even: #161b23;
   --hm-rest-odd: #20272f;
   --hm-bd-even: #2b3340;

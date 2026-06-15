@@ -12,7 +12,7 @@
  * The pure axis maths (calendar gridlines, nice y ticks) live in chartAxis.ts and
  * are unit-tested; this module is the rendering + interaction shell.
  */
-import { timeBands, niceTicks, buildCompactor, type TimeCompactor } from "./chartAxis";
+import { timeBands, timeLevel, niceTicks, buildCompactor, type TimeCompactor } from "./chartAxis";
 
 /* "Compacted time" is a single app-wide preference: flip it on any time chart and
  * every time chart follows, so the axis mode is consistent everywhere. Stored on
@@ -538,12 +538,15 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       for (const b of timeBands(realMin, realMax, "month")) bands += bandRect(b, "svgc-band-month", 0.5);
       for (const b of timeBands(realMin, realMax, "week")) bands += bandRect(b, "svgc-band", 3);
       // Gridlines + labels follow the auto level (sensible label density per zoom).
+      // Boundary lines ONLY at the year level (owner): week/month dividers are noise —
+      // the alternating bands already show the period — but year boundaries stay marked.
+      const showGrid = timeLevel(realMax - realMin) === "year";
       for (const b of timeBands(realMin, realMax)) {
         const x0 = xPix(toView(b.start));
         const cx0 = clampX(x0), cx1 = clampX(xPix(toView(b.end)));
         if (cx1 < M.l - 0.5 || cx0 > W - M.r + 0.5) continue;
-        // gridline at the band boundary
-        if (x0 >= M.l - 0.5 && x0 <= W - M.r + 0.5)
+        // gridline at the band boundary (years only)
+        if (showGrid && x0 >= M.l - 0.5 && x0 <= W - M.r + 0.5)
           grid += `<line x1="${x0.toFixed(1)}" y1="${M.t}" x2="${x0.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
         // label centred in the visible part of the band, thinned if crowded
         const mid = (cx0 + cx1) / 2;
