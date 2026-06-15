@@ -47,6 +47,7 @@ export const S: {
   showVariants: boolean;
   showAloneTags: boolean;
   showRestDays: boolean;
+  restCompact: boolean;
 } = {
   waCompareView: "trend",
   waChipsFoldOpen: false,
@@ -72,4 +73,5 @@ export const S: {
   showVariants: false,
   showAloneTags: false,
   showRestDays: true, // rest-day slivers shown by default (the gaps between sessions read as the timeline)
+  restCompact: false, // when showRestDays is on, shrink the slivers to a 3px hairline (the Rest button's 3rd state)
 };

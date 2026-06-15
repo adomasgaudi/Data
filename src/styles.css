@@ -2356,6 +2356,11 @@ sup.wr-bw { font-size: 0.85em; }
    sessions. Hover/tap shows the date via the row's title. */
 .rest-row td { height: 3px; padding: 0; border-bottom: 1px solid var(--line); background: var(--rest-fill); }
 .rest-row:hover td { background: var(--accent); }
+/* Compact rest mode (the Rest button's 3rd state): the normal sliver still carries a
+   ~14-18px line box from inherited font metrics (height:3px is only a MINIMUM), so it
+   reads as ~10-20px. Killing the line box (line-height/font-size 0) lets the 3px height
+   win → a true ~3px hairline. */
+.rest-row.is-compact td { height: 3px; line-height: 0; font-size: 0; }
 /* Broken-axis break for a long run of empty days (collapseRestRuns): a centred,
    dashed "N more rest days" marker standing in for the skipped slivers. */
 .rest-gap-row td { padding: 0.15rem 0; text-align: center; background: var(--rest-fill); border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }

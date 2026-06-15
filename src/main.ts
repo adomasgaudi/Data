@@ -4058,7 +4058,15 @@ function syncWorkoutToggles(): void {
   els.workoutRmCycle.textContent = `${xrmReps}RM`;
   els.workoutRmCycle.classList.toggle("is-active", xrmReps > 1);
   els.restToggle.hidden = false; // rest periods now apply to day AND the period modes
+  // Tri-state: off → Rest (full slivers) → Rest· (compact hairline) → off. The dot marks
+  // the compact mode; is-active covers both shown states. The compact CSS class on the
+  // table shrinks the rest rows.
   els.restToggle.classList.toggle("is-active", S.showRestDays);
+  els.restToggle.classList.toggle("is-compact", S.showRestDays && S.restCompact);
+  els.restToggle.textContent = S.showRestDays && S.restCompact ? "Rest·" : "Rest";
+  els.restToggle.title = !S.showRestDays ? "Rest days hidden — tap to show them"
+    : !S.restCompact ? "Rest days shown — tap for compact (thin hairline) rest days"
+    : "Rest days compact (thin hairline) — tap to hide them";
   els.restToggle.setAttribute("aria-pressed", S.showRestDays ? "true" : "false");
   els.addSetsToggle.classList.toggle("is-active", S.showAddSets);
   els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
@@ -7269,8 +7277,9 @@ function renderWorkoutsPage() {
           return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td colspan="2"><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">rest days</span> ⋯</span></td></tr>`;
         }
         // A rest day is just a thin sliver with a separating line — count the
-        // lines between sessions to see how many days passed, no text needed.
-        return `<tr class="rest-row" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
+        // lines between sessions to see how many days passed, no text needed. In
+        // compact mode (.is-compact) the sliver shrinks to a ~3px hairline.
+        return `<tr class="rest-row${S.restCompact ? " is-compact" : ""}" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
       }
       const abs = start + i;
       // One exercise's compact line (1RM · name · sets), reused for the day's active
@@ -13659,7 +13668,10 @@ async function init() {
     renderWorkoutsPage();
   });
   els.restToggle.addEventListener("click", () => {
-    S.showRestDays = !S.showRestDays;
+    // Cycle: off → full slivers → compact hairline → off.
+    if (!S.showRestDays) { S.showRestDays = true; S.restCompact = false; }
+    else if (!S.restCompact) { S.restCompact = true; }
+    else { S.showRestDays = false; S.restCompact = false; }
     S.workoutsPage = 0;
     renderWorkoutsPage();
   });
