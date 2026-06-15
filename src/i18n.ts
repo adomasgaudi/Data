@@ -150,6 +150,7 @@ const LT: Record<string, string> = {
   "Hide the Stats section": "Slėpti statistikos skiltį",
   "Graph": "Grafikas",
   "History": "Istorija",
+  "Close options": "Uždaryti parinktis",
   "Show the Graph section": "Rodyti grafiko skiltį",
   "Hide the Graph section": "Slėpti grafiko skiltį",
   "Show the History section": "Rodyti istorijos skiltį",

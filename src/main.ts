@@ -17663,7 +17663,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
   return `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
-    `<div class="wa-graph-menu">${cfgUi}</div>` +
+    `<div class="wa-graph-menu"><button type="button" class="wa-gmenu-close" data-wagmenuclose title="Close options" aria-label="Close options">✕</button>${cfgUi}</div>` +
     `</details>`;
 }
 /** Build the graph "min" carousel: title + ×BW quick-option + chart stage + prev/next +
@@ -18941,6 +18941,13 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // Prediction / Decay line modifiers (pills) — flip the config flag, redraw.
+    // ✕ Close the graph Options menu.
+    const gmClose = t.closest<HTMLElement>("[data-wagmenuclose]");
+    if (gmClose) {
+      const fold = gmClose.closest<HTMLDetailsElement>(".wa-graph-fold");
+      if (fold) { fold.open = false; S.waGraphFoldOpen = false; }
+      return;
+    }
     const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
     if (cfgTog?.dataset.wacfgtoggle) {
       const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay" | "potentialLog" | "potentialNativeLog";

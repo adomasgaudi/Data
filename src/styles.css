@@ -4476,6 +4476,9 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
   background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill);
 }
 .wa-graph-compare-btn.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+/* ✕ Close button pinned at the top-right of the graph Options sheet. */
+.wa-gmenu-close { position: absolute; top: 4px; right: 6px; z-index: 1; width: var(--tap-min); height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 1rem; cursor: pointer; color: var(--muted); background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.wa-gmenu-close:hover { color: var(--accent); border-color: var(--accent); }
 .wa-graph-menu {
   /* A bottom-anchored, height-CAPPED, internally-scrollable sheet — NOT a tall dropdown
      that pushes the page. It sits just above the command bar, so the chart stays visible
