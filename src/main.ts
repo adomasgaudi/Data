@@ -11009,25 +11009,16 @@ function renderWorkoutPlan(): void {
 function pairManagerHtml(user: string): string {
   const todayD = dayNumber(todayIso());
   const allLive = liveExercises(user, todayD);
-  const flagged = allLive.filter((le) => pairPrefFor(le.name) !== "");
-  flagged.sort((a, b) => {
-    const ra = pairPrefFor(a.name) === "prefer" ? 0 : pairPrefFor(a.name) === "hard" ? 1 : 2;
-    const rb = pairPrefFor(b.name) === "prefer" ? 0 : pairPrefFor(b.name) === "hard" ? 1 : 2;
-    return ra - rb || a.name.localeCompare(b.name);
-  });
+  const flagged = allLive.filter((le) => pairGradeFor(le.name) !== "neutral");
+  flagged.sort((a, b) => pairGradeRank(pairGradeFor(a.name)) - pairGradeRank(pairGradeFor(b.name)) || a.name.localeCompare(b.name));
   const q = pairMgrQuery.trim().toLowerCase();
   const searchPool = allLive.filter((le) =>
     !q || displayName(le.name).toLowerCase().includes(q) || le.name.toLowerCase().includes(q));
-  const flagChip = (name: string): string => {
-    const pref = pairPrefFor(name);
-    const cls = pref === "prefer" ? " is-prefer" : pref === "hard" ? " is-hard" : pref === "avoid" ? " is-avoid" : "";
-    const glyph = pref === "prefer" ? "★" : pref === "hard" ? "⚑" : pref === "avoid" ? "✕" : "⚐";
-    const tip = pref === "prefer" ? "Preferred — tap to flag hard" : pref === "hard" ? "Hard — tap to avoid" : pref === "avoid" ? "Avoiding — tap to clear" : "Tap to flag";
-    return `<span class="lt-paircell${cls} pairs-mgr-chip">` +
-      `<span class="pairs-mgr-name">${escapeHtml(displayName(name))}</span>` +
-      `<button type="button" class="lt-pairflag" data-pairflag2="${escapeHtml(name)}" title="${tip}" aria-label="${tip}">${glyph}</button>` +
-      `</span>`;
-  };
+  const flagChip = (name: string): string =>
+    `<span class="lt-paircell pg-${pairGradeFor(name)} pairs-mgr-chip">` +
+    `<span class="pairs-mgr-name">${escapeHtml(displayName(name))}</span>` +
+    pairFlagBtn(name) +
+    `</span>`;
   const flaggedHtml = flagged.length
     ? `<div class="pairs-mgr-list">${flagged.map((le) => flagChip(le.name)).join("")}</div>`
     : `<p class="muted pairs-mgr-empty">No pair flags yet — flag exercises in their info card or search below.</p>`;
@@ -11101,16 +11092,57 @@ function setSetupNote(name: string, text: string): void {
 // or "avoid" (don't want to pair this), keyed by the candidate lift since its
 // portability is mostly a global property (a dumbbell move pairs with anything; a
 // fixed machine rarely does). Cycles ok → hard → avoid → ok.
+// Owner's 5-level pairing grade (super → no way). Glyph + label live in ONE place
+// (the chip glyph AND the mini-menu popup both read this).
+type PairGrade = "super" | "good" | "neutral" | "difficult" | "noway";
+type StoredGrade = Exclude<PairGrade, "neutral">;
+const PAIR_GRADES: { id: PairGrade; label: string; glyph: string }[] = [
+  { id: "super",     label: "Super",     glyph: "🔥" },
+  { id: "good",      label: "Good",      glyph: "★" },
+  { id: "neutral",   label: "Neutral",   glyph: "⚐" },
+  { id: "difficult", label: "Difficult", glyph: "⚑" },
+  { id: "noway",     label: "No way",    glyph: "✕" },
+];
+function pairGradeMeta(g: PairGrade) { return PAIR_GRADES.find((x) => x.id === g)!; }
 const PAIR_PREF_KEY = "colosseum.pairPrefs.v1";
-const pairPrefs: Record<string, "prefer" | "hard" | "avoid"> = loadJsonObject<Record<string, "prefer" | "hard" | "avoid">>(PAIR_PREF_KEY) ?? {};
-function pairPrefFor(name: string): "" | "prefer" | "hard" | "avoid" { return pairPrefs[name] ?? ""; }
-function cyclePairPref(name: string): void {
-  const cur = pairPrefs[name];
-  if (!cur) pairPrefs[name] = "prefer";
-  else if (cur === "prefer") pairPrefs[name] = "hard";
-  else if (cur === "hard") pairPrefs[name] = "avoid";
-  else delete pairPrefs[name];
+// Migrate the old 3-state values (prefer/hard/avoid) → the 5-grade ids, in place.
+const pairPrefs: Record<string, StoredGrade> = (() => {
+  const raw = loadJsonObject<Record<string, string>>(PAIR_PREF_KEY) ?? {};
+  const MIG: Record<string, StoredGrade> = { prefer: "good", hard: "difficult", avoid: "noway", super: "super", good: "good", difficult: "difficult", noway: "noway" };
+  const out: Record<string, StoredGrade> = {};
+  for (const [k, v] of Object.entries(raw)) { const m = MIG[v]; if (m) out[k] = m; }
+  return out;
+})();
+function pairGradeFor(name: string): PairGrade { return pairPrefs[name] ?? "neutral"; }
+// Rank for sorting: super(0) … no-way(4). neutral sits in the middle.
+function pairGradeRank(g: PairGrade): number { return ["super", "good", "neutral", "difficult", "noway"].indexOf(g); }
+function setPairGrade(name: string, g: PairGrade): void {
+  if (g === "neutral") delete pairPrefs[name]; else pairPrefs[name] = g;
   saveJson(PAIR_PREF_KEY, pairPrefs);
+}
+/** The single-origin pairing-grade flag button — opens the mini grade menu on tap
+ * (NOT a cycling toggle, per the owner: cycling + auto-sort is confusing). */
+function pairFlagBtn(name: string): string {
+  const g = pairGradeFor(name), meta = pairGradeMeta(g);
+  return `<button type="button" class="lt-pairflag pg-${g}" data-pairgrade="${escapeHtml(name)}" title="Pairing: ${meta.label} — tap to grade" aria-label="Pairing grade: ${meta.label}">${meta.glyph}</button>`;
+}
+let pairMenuName: string | null = null;
+/** Mini popup menu to PICK a pairing grade (super → no way). Floats via
+ * clampMenuIntoView (rule 32). Replaces the confusing cycle-on-tap toggle. */
+function openPairGradeMenu(name: string, anchor: HTMLElement): void {
+  pairMenuName = name;
+  let m = document.getElementById("pairGradeMenu");
+  if (!m) { m = document.createElement("div"); m.id = "pairGradeMenu"; m.className = "pair-grade-menu"; document.body.appendChild(m); }
+  const cur = pairGradeFor(name);
+  m.innerHTML = `<div class="pair-grade-hd">${escapeHtml(displayName(name))}</div>` +
+    PAIR_GRADES.map((g) => `<button type="button" class="pair-grade-opt pg-${g.id}${g.id === cur ? " is-on" : ""}" data-setgrade="${g.id}"><span class="pgo-glyph">${g.glyph}</span><span>${g.label}</span></button>`).join("");
+  m.hidden = false;
+  clampMenuIntoView(m, anchor);
+}
+function closePairGradeMenu(): void {
+  const m = document.getElementById("pairGradeMenu");
+  if (m) m.hidden = true;
+  pairMenuName = null;
 }
 /** Rough "easy to pair up" score (lower = easier), used only as a secondary
  *  tiebreaker behind priority and the user's own flags. Portable kit (dumbbell /
@@ -11222,27 +11254,25 @@ function liftTrainingHtml(name: string): string {
     const p = pri[le.name];
     return p ? PRIORITY_ORDER[p.level] : 9; // focus lifts (max=0…maintain=3) before the rest
   };
-  const prefRank = (n: string): number => { const f = pairPrefFor(n); return f === "prefer" ? 0 : f === "hard" ? 2 : f === "avoid" ? 3 : 1; };
+  // The grid does NOT re-sort by pairing grade — re-sorting made the chip you just
+  // tapped JUMP (owner: confusing). Grade is set via the mini menu; order stays stable.
   const pairCands = liveExercises(user, todayD)
     .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)))
     .sort((p, q) =>
-      (prefRank(p.name) - prefRank(q.name)) ||      // preferred float up, avoid sink down
-      (focusRank(p) - focusRank(q)) ||              // 1st group: highest priority
-      (pairEaseScore(p.name) - pairEaseScore(q.name)) || // 2nd group: easier to pair first
+      (focusRank(p) - focusRank(q)) ||              // highest priority first
+      (pairEaseScore(p.name) - pairEaseScore(q.name)) || // easier to pair first
       (q.sets - p.sets));                            // tiebreak: most-trained
-  const pairChip = (le: { name: string }): string => {
-    const pref = pairPrefFor(le.name);
-    const cls = pref === "prefer" ? " is-prefer" : pref === "hard" ? " is-hard" : pref === "avoid" ? " is-avoid" : "";
-    const flagGlyph = pref === "prefer" ? "★" : pref === "avoid" ? "✕" : pref === "hard" ? "⚑" : "⚐";
-    const flagTitle = pref === "prefer" ? "Preferred pair — tap to flag: hard to set up"
-      : pref === "hard" ? "Hard to pair (far / lots of setup) — tap: don't want"
-      : pref === "avoid" ? "Won't pair (don't want) — tap to clear"
-      : "Tap to flag as preferred pair (good combo)";
-    return `<span class="lt-paircell${cls}">` +
-      `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
-      `<button type="button" class="lt-pairflag" data-pairflag="${escapeHtml(le.name)}" title="${flagTitle}" aria-label="${flagTitle}">${flagGlyph}</button>` +
-      `</span>`;
-  };
+  const pairChip = (le: { name: string }): string =>
+    `<span class="lt-paircell pg-${pairGradeFor(le.name)}">` +
+    `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
+    pairFlagBtn(le.name) +
+    `</span>`;
+  // Item 3: the SUPER/GOOD pairs, surfaced as a compact strip near the top (by the numbers).
+  const topPairs = pairCands.filter((le) => pairGradeFor(le.name) === "super" || pairGradeFor(le.name) === "good");
+  const topPairsHtml = `<div class="lt-toppairs">` + topPairs.map((le) => {
+    const meta = pairGradeMeta(pairGradeFor(le.name));
+    return `<button type="button" class="lt-toppair pg-${pairGradeFor(le.name)}" data-trainex="${escapeHtml(le.name)}" title="${meta.label} pair — tap to open"><span class="pgo-glyph">${meta.glyph}</span> ${escapeHtml(shortFor(le.name))}</button>`;
+  }).join("") + `</div>`;
   const antBody = pairCands.length
     ? `<div class="lt-ant">` + pairCands.map(pairChip).join("") + `</div>`
     : `<p class="muted lt-mini">No non-overlapping lift logged yet.</p>`;
@@ -11251,6 +11281,7 @@ function liftTrainingHtml(name: string): string {
   return `<div class="lt-wrap">` +
     sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
     sec("Set suggestion", setSug) +
+    (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
     sec("Reps → %1RM (Nuzzo)", nuzzoSvg(hs?.reps ?? null, hs?.pctOf1RM ?? null)) +
     sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
@@ -12822,18 +12853,28 @@ async function init() {
     if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
   });
   // Delegated: a pill's ⓘ navigates — group pill → that group's own info card;
+  // Pairing-grade mini menu (super → no way): pick an option → set + close + re-render
+  // the open view; a tap outside the menu closes it. (Menu lives on <body>.)
+  document.addEventListener("click", (e) => {
+    const opt = (e.target as Element | null)?.closest<HTMLElement>("[data-setgrade]");
+    if (opt?.dataset.setgrade && pairMenuName) {
+      const nm = pairMenuName;
+      setPairGrade(nm, opt.dataset.setgrade as PairGrade);
+      closePairGradeMenu();
+      if (!els.exInfoPage.hidden) refreshExerciseInfo();
+      if (els.planPage && !els.planPage.hidden) renderWorkoutPlan();
+      return;
+    }
+    const m = document.getElementById("pairGradeMenu");
+    if (m && !m.hidden && !(e.target as Element | null)?.closest("#pairGradeMenu, [data-pairgrade]")) closePairGradeMenu();
+  });
   // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
   els.exInfoBody.addEventListener("click", (e) => {
-    // "Pair with" flag: cycle this candidate's pairing preference (ok → hard → avoid).
-    // Re-render the brief (re-sorts) but keep the card's scroll so it doesn't jump.
-    const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairflag]");
-    if (pflag?.dataset.pairflag) {
+    // "Pair with" flag: open the mini grade menu (super → no way). NOT a cycle toggle.
+    const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairgrade]");
+    if (pflag?.dataset.pairgrade) {
       e.preventDefault(); e.stopPropagation();
-      const sc = els.exInfoBody.parentElement;
-      const y = sc?.scrollTop ?? 0;
-      cyclePairPref(pflag.dataset.pairflag);
-      refreshExerciseInfo();
-      if (sc) sc.scrollTop = y;
+      openPairGradeMenu(pflag.dataset.pairgrade, pflag);
       return;
     }
     // Pair-with lift chip in the "How to train" panel → open that lift's brief.
@@ -13029,8 +13070,8 @@ async function init() {
       return;
     }
     // Pairs manager flag toggle (in the Plan popup pairs section).
-    const pf2 = t.closest<HTMLElement>("[data-pairflag2]");
-    if (pf2?.dataset.pairflag2) { cyclePairPref(pf2.dataset.pairflag2); renderWorkoutPlan(); return; }
+    const pf2 = t.closest<HTMLElement>("[data-pairgrade]");
+    if (pf2?.dataset.pairgrade) { openPairGradeMenu(pf2.dataset.pairgrade, pf2); return; }
     // Tap the name → open the exercise's info.
     const row = t.closest<HTMLElement>("[data-planopen]");
     if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen, true); }
