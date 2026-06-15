@@ -10533,10 +10533,15 @@ const EFFORT_TIP: Record<PriorityEffort, string> = {
   mid: "Mid sets — 3–8 reps in reserve, not to failure.",
   half: "Half sets — about half your max reps, the minimum to maintain.",
 };
-// `order` = the owner's CUSTOM manual position (drag-to-reorder). Absent until the
-// list is first dragged; once any entry has it, ordered entries sort by it (ascending),
-// then any not-yet-ordered ones fall back to the level sort below them.
-interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort; order?: number }
+// `rank` = the lift's PRIORITY TIER, a named dial SEPARATE from effort: Top → Second →
+// Optional. The Focus-lifts list sorts by rank FIRST, then effort level — so a lift can
+// be Top priority but only "Maintain". Defaults to "second" when unset.
+type PriorityRank = "top" | "second" | "optional";
+const PRIORITY_RANKS: PriorityRank[] = ["top", "second", "optional"];
+const RANK_LABEL: Record<PriorityRank, string> = { top: "Top", second: "Second", optional: "Optional" };
+const RANK_ORDER: Record<PriorityRank, number> = { top: 0, second: 1, optional: 2 };
+interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort; rank?: PriorityRank }
+const rankOf = (e: PriorityEntry): PriorityRank => e.rank ?? "second";
 const PRIORITIES_KEY = "colosseum.priorities.v1";
 const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEntry>>>(PRIORITIES_KEY);
 function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
@@ -10603,15 +10608,12 @@ function renderWorkoutPlan(): void {
     const ref = liveByName.get(referenceMemberFor(ex) ?? "");
     return { daysAgo: Number.isFinite(lastDay) ? todayD - lastDay : 999, drop: ref?.drop ?? 0 };
   };
-  // Order: the owner's CUSTOM drag order wins (entries with `order`, ascending); any
-  // entry without one (e.g. just added) falls below them in the default level sort.
-  const names = Object.keys(pri).sort((a, b) => {
-    const oa = pri[a]!.order, ob = pri[b]!.order;
-    const ha = typeof oa === "number", hb = typeof ob === "number";
-    if (ha && hb) return oa! - ob!;
-    if (ha !== hb) return ha ? -1 : 1; // custom-ordered lifts sit above un-ordered ones
-    return (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b);
-  });
+  // Sort by RANK first (Top → Second → Optional), then EFFORT level, then target, then
+  // name — so the priority tier leads and effort breaks ties within a tier (owner).
+  const names = Object.keys(pri).sort((a, b) =>
+    (RANK_ORDER[rankOf(pri[a]!)] - RANK_ORDER[rankOf(pri[b]!)]) ||
+    (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) ||
+    (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
   // ---- Lift↔pattern relations (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
   // Every lift stays a FLAT row in its OWN effort order — NOT nested. Each row has a
   // dropdown of related lifts, split by RELATION:
@@ -10664,7 +10666,7 @@ function renderWorkoutPlan(): void {
     ...realSug.map((name) => ({ name, synth: false, cmp: comparePatternFor(name) })),
   ].slice(0, 16);
 
-  const rowHtml = (ex: string, i: number): string => {
+  const rowHtml = (ex: string): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
     const avg = exerciseMonthAvg(user, ex);
@@ -10724,19 +10726,17 @@ function renderWorkoutPlan(): void {
       `<span class="prio-eff-hint muted">${EFFORT_HINT[eff]}</span></div>`;
     // Drag handle — grab to reorder the focus lifts into a custom order (persisted as
     // `order`). touch-action:none (CSS) so dragging the grip doesn't scroll the popup.
-    const dragH = `<button type="button" class="prio-drag" data-priodrag="${escapeHtml(ex)}" aria-label="Drag to reorder ${escapeHtml(displayName(ex))}" title="Drag to reorder">≡</button>`;
     return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
-      dragH +
       caret +
       `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
       `${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
       `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
-      // Priority RANK (#1 = top) — the row's position in your custom order, shown next to
-      // the effort level but INDEPENDENT of it (e.g. #1 priority that you only Maintain).
-      // Drag the ≡ grip to change it.
-      `<span class="prio-rank" title="Priority #${i + 1} (1 = top) — drag the ≡ grip to change">#${i + 1}</span>` +
-      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to cycle: Max effort → Active → Passive → Maintain. Sets the weekly target; the priority NUMBER (#n) is separate — drag to change it.">${PRIORITY_LABEL[e.level]}</button>` +
+      // Priority RANK pill (Top → Second → Optional) — a named tier SEPARATE from effort;
+      // it leads the sort (rank first, effort second). e.g. a Top-priority lift you only
+      // Maintain. Tap to cycle.
+      `<button type="button" class="prio-rank prio-rank-${rankOf(e)}" data-priorank="${escapeHtml(ex)}" title="Priority rank — tap to cycle: Top → Second → Optional. Sorts the list (rank first, then effort level).">${RANK_LABEL[rankOf(e)]}</button>` +
+      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to cycle: Max effort → Active → Passive → Maintain. Sets the weekly target; the priority RANK (Top/Second/Optional) is separate.">${PRIORITY_LABEL[e.level]}</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
       (open ? `<div class="prio-detail">${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
@@ -12529,51 +12529,6 @@ async function init() {
   // Formulas popup (was the Test tab) — sits beside the Plan button.
   els.formulasBtn.addEventListener("click", openFormulas);
   els.formulasClose.addEventListener("click", () => { els.formulasPage.hidden = true; });
-  // Drag-to-reorder the focus-lift priorities into a custom order (the ≡ grip). Delegated
-  // on els.planBody so it survives the re-render. While dragging the grabbed row we move it
-  // among its siblings live by pointer Y; on release we read the DOM order, write each
-  // entry's `order`, and persist — but ONLY if the order actually changed (a stray tap on
-  // the grip mustn't silently lock the list into custom-order mode).
-  let prioDrag: { listEl: HTMLElement; row: HTMLElement; pointerId: number; initial: string[] } | null = null;
-  els.planBody.addEventListener("pointerdown", (e) => {
-    const handle = (e.target as HTMLElement).closest<HTMLElement>("[data-priodrag]");
-    if (!handle) return;
-    const row = handle.closest<HTMLElement>(".prio-row");
-    const listEl = row?.parentElement as HTMLElement | null;
-    if (!row || !listEl) return;
-    e.preventDefault();
-    const initial = Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row")).map((r) => r.dataset.prioex ?? "");
-    prioDrag = { listEl, row, pointerId: e.pointerId, initial };
-    row.classList.add("prio-dragging");
-    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-  }, { passive: false });
-  els.planBody.addEventListener("pointermove", (e) => {
-    if (!prioDrag || e.pointerId !== prioDrag.pointerId) return;
-    e.preventDefault();
-    const { listEl, row } = prioDrag;
-    const y = e.clientY;
-    for (const other of Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row"))) {
-      if (other === row) continue;
-      const r = other.getBoundingClientRect();
-      const mid = r.top + r.height / 2;
-      const otherIsAfter = !!(row.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING);
-      if (y < mid && !otherIsAfter) { listEl.insertBefore(row, other); break; }            // dragging up past `other`
-      if (y > mid && otherIsAfter) { listEl.insertBefore(row, other.nextSibling); break; }  // dragging down past `other`
-    }
-  }, { passive: false });
-  const endPrioDrag = () => {
-    if (!prioDrag) return;
-    const { listEl, row, initial } = prioDrag;
-    prioDrag = null;
-    row.classList.remove("prio-dragging");
-    const final = Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row")).map((r) => r.dataset.prioex ?? "");
-    if (final.join("") === initial.join("")) return; // no move → don't lock the order
-    const store = prioritiesStore[els.athlete.value];
-    if (store) { final.forEach((ex, i) => { if (store[ex]) store[ex]!.order = i; }); savePriorities(); }
-    renderWorkoutPlan();
-  };
-  els.planBody.addEventListener("pointerup", endPrioDrag);
-  els.planBody.addEventListener("pointercancel", endPrioDrag);
   // 1RM goal input (Phase 2): save the target kg (or clear it) on change, then re-render
   // so the % progress updates. Input has already blurred, so re-rendering is fine.
   // Tier-2 "Add another" search: filter the addable list as you type. Re-render the
@@ -12629,7 +12584,17 @@ async function init() {
     if (lvl?.dataset.priolevel && pri[lvl.dataset.priolevel]) {
       const ex = lvl.dataset.priolevel;
       const next = PRIORITY_LEVELS[(PRIORITY_LEVELS.indexOf(pri[ex]!.level) + 1) % PRIORITY_LEVELS.length]!;
-      pri[ex] = { level: next, target: suggestedTarget(next, exerciseMonthAvg(user, ex)) };
+      // Spread keeps the independent dials (rank, 1RM goal, effort) — only level + its
+      // suggested target change. (Changing level no longer wipes the rank or goal.)
+      pri[ex] = { ...pri[ex]!, level: next, target: suggestedTarget(next, exerciseMonthAvg(user, ex)) };
+      savePriorities(); renderWorkoutPlan(); return;
+    }
+    // Cycle the PRIORITY RANK (Top → Second → Optional) — the named tier that leads the
+    // sort (rank first, effort second), independent of the effort level.
+    const rk = t.closest<HTMLElement>("[data-priorank]");
+    if (rk?.dataset.priorank && pri[rk.dataset.priorank]) {
+      const ex = rk.dataset.priorank;
+      pri[ex]!.rank = PRIORITY_RANKS[(PRIORITY_RANKS.indexOf(rankOf(pri[ex]!)) + 1) % PRIORITY_RANKS.length]!;
       savePriorities(); renderWorkoutPlan(); return;
     }
     // Cycle the SET INTENSITY (hard → mid → half) in the detail panel. Doesn't change
