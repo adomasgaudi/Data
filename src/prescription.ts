@@ -171,13 +171,21 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
     if (effRounded <= lastEff || effRounded >= effWork) continue;
     const achievable = repsForWeight(eff1rm, effRounded, formula);
     const exactKg = exactEff - bwl; // displayed ADDED weight (may be negative = assisted)
+    // Round the DISPLAYED ADDED (loadable bar) weight to the plate increment — NOT the
+    // effective load. Rounding the effective load then subtracting a non-plate bodyweight
+    // share (e.g. 0.6×97.1) produced messy bar weights like 24.24–26.74 kg; the bar must
+    // round to real plates. For a barbell lift (bwl=0) exactKg===exactEff, so this is
+    // byte-for-byte identical to before.
+    const eps = increment * 1e-6;
+    const down = Math.round((Math.floor(exactKg / increment + eps) * increment) * 100) / 100;
+    const up = Math.round((Math.ceil(exactKg / increment - eps) * increment) * 100) / 100;
     sets.push({
       kind: pct < 0.6 ? "general" : "ramp",
       pctOf1RM: Math.round(pct * 100),
       exactKg: Math.round(exactKg * 10) / 10,
-      weightKg: effRounded - bwl,
-      downKg: Math.round((Math.floor(exactEff / increment) * increment - bwl) * 100) / 100,
-      upKg: Math.round((Math.ceil(exactEff / increment) * increment - bwl) * 100) / 100,
+      weightKg: roundToIncrement(exactKg, increment),
+      downKg: down,
+      upKg: up,
       reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
     });
     lastEff = effRounded;

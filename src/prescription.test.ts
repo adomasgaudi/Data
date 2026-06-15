@@ -175,4 +175,18 @@ describe("warmupRamp", () => {
   it("still returns [] when even the effective load is non-positive", () => {
     expect(warmupRamp({ oneRepMax: -10, workingWeightKg: -20, bodyweightLoad: 5 })).toEqual([]);
   });
+
+  it("displayed bar weights are plate-rounded even with a non-plate bodyweight share", () => {
+    // Squat: 1RM 151.3 added, work 120, bodyweight share 0.6×97.1 = 58.26 (NOT a plate
+    // multiple). Before the fix the effective load was plate-rounded then 58.26 subtracted,
+    // giving messy bar weights (24.24–26.74 kg). Now the ADDED weight rounds to the plate.
+    const sets = warmupRamp({ oneRepMax: 151.3, workingWeightKg: 120, bodyweightLoad: 58.26, increment: 2.5, plan: "heavy" });
+    expect(sets.length).toBeGreaterThan(0);
+    const onGrid = (v: number) => expect(Math.abs(v / 2.5 - Math.round(v / 2.5))).toBeLessThan(1e-6);
+    for (const s of sets) {
+      onGrid(s.weightKg);
+      onGrid(s.downKg);
+      onGrid(s.upKg);
+    }
+  });
 });
