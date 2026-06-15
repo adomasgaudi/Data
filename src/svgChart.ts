@@ -357,7 +357,6 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const tipEl = container.querySelector<HTMLElement>(".svgc-tip")!;
   const clipId = `svgc-clip-${Math.random().toString(36).slice(2, 8)}`;
   const glowId = `svgc-glow-${Math.random().toString(36).slice(2, 8)}`;
-  const hatchId = `svgc-hatch-${Math.random().toString(36).slice(2, 8)}`;
 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
@@ -528,18 +527,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // Show BOTH period levels at once (owner): alternating MONTHS as a very-light-blue
       // wash + alternating WEEKS as very-light-gray stripes over it. Weeks too thin to
       // see (wide zoom) are skipped, so it degrades to month blocks gracefully.
-      // `fill` is the full SVG attribute string, e.g. `class="svgc-band-month"` or `fill="url(#id)"`.
-      const bandRect = (b: { start: number; end: number; shade: boolean }, fill: string, minW: number): string => {
+      const bandRect = (b: { start: number; end: number; shade: boolean }, cls: string, minW: number): string => {
         const x0 = xPix(toView(b.start)), x1 = xPix(toView(b.end));
         if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) return "";
         const cx0 = clampX(x0), cx1 = clampX(x1);
         return (b.shade && cx1 - cx0 > minW)
-          ? `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" ${fill}/>`
+          ? `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" class="${cls}"/>`
           : "";
       };
-      for (const b of timeBands(realMin, realMax, "month")) bands += bandRect(b, `class="svgc-band-month"`, 0.5);
-      // Weeks: alternating crosshatch vs nothing (shade=true → hatch, shade=false → gap).
-      for (const b of timeBands(realMin, realMax, "week")) bands += bandRect(b, `fill="url(#${hatchId})"`, 3);
+      for (const b of timeBands(realMin, realMax, "month")) bands += bandRect(b, "svgc-band-month", 0.5);
+      for (const b of timeBands(realMin, realMax, "week")) bands += bandRect(b, "svgc-band", 3);
       // Gridlines + labels follow the auto level (sensible label density per zoom).
       for (const b of timeBands(realMin, realMax)) {
         const x0 = xPix(toView(b.start));
@@ -891,8 +888,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
       `<defs><clipPath id="${clipId}"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath>` +
-      `<filter id="${glowId}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-      `<pattern id="${hatchId}" patternUnits="userSpaceOnUse" width="10" height="10"><line x1="0" y1="0" x2="10" y2="10" stroke="var(--chart-hatch)" stroke-width="0.7"/><line x1="10" y1="0" x2="0" y2="10" stroke="var(--chart-hatch)" stroke-width="0.7"/></pattern></defs>` +
+      `<filter id="${glowId}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` +
       `<g clip-path="url(#${clipId})">${bands}${grid}${body}${inside() ? xLabels + yLabels : ""}</g>` +
       frame +
       (inside() ? "" : xLabels + yLabels) +
