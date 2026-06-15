@@ -16462,7 +16462,7 @@ let searchFindHistory = false;
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
-type WaGroupBy = "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness";
+type WaGroupBy = "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness" | "priorities";
 let waGroupBy: WaGroupBy = "bestlifts"; // default: rank the powerlifting trio by world-record %
 // The picker's "Group by" mode is REMEMBERED PER ATHLETE (owner request): switching
 // to an athlete restores the last mode they used; a fresh athlete falls back to the default.
@@ -16996,11 +16996,12 @@ function renderSelector(scope: SelScope): void {
   const isLocal = !!nameModeByScope[scope]; // diverged from the global default
   const nameToggle =
     `<button type="button" class="wa-name-opt name-mode-opt${isLocal ? " is-local" : ""}" data-waname="${nextName}" title="Lift labels here — tap to cycle: code → short → full (this area only; the Settings picker sets all areas)">${curName === "code" ? "Code" : curName === "short" ? "Short" : "Full"}</button>`;
-  // Owner-chosen display order: Frequency · Best lifts · Discipline · Muscle group ·
-  // Effectiveness · Function · Tier. (None was already removed from this menu.)
+  // Owner-chosen display order: Frequency · Best lifts · Priorities · Discipline ·
+  // Muscle group · Effectiveness · Function · Tier. (None was already removed.)
   const groupOptList: { value: string; label: string }[] = [
     { value: "frequency", label: "Frequency" },
     { value: "bestlifts", label: "Best lifts" },
+    { value: "priorities", label: "Priorities" },
     { value: "discipline", label: FILTER_DIM_LABELS["discipline"] },
     { value: "muscleGroup", label: FILTER_DIM_LABELS["muscleGroup"] },
     { value: "effectiveness", label: "Effectiveness" },
@@ -17208,6 +17209,12 @@ function waGroupKeys(name: string): string[] {
   if (waGroupBy === "none" || isSpecialGroupBy(waGroupBy)) return [""];
   // Effectiveness: ONE bucket per lift = its highest muscle-training level (0–4).
   if (waGroupBy === "effectiveness") return [`Level ${maxMgLevel(name)}`];
+  // Priorities: bucket by the athlete's focus-lift level (Max effort → Maintain);
+  // everything not on the plan goes under "Not a focus".
+  if (waGroupBy === "priorities") {
+    const lvl = athletePriorities(els.athlete.value)[name]?.level;
+    return [lvl ? PRIORITY_LABEL[lvl] : "Not a focus"];
+  }
   // "Strength" is too broad: when grouping by Discipline, split strength lifts by
   // their MUSCLE GROUPS instead (Chest, Back, Quads…) — each as its own pill.
   if (waGroupBy === "discipline") {
@@ -17238,6 +17245,8 @@ function waGroupIsStrength(key: string): boolean {
 function waGroupRank(key: string): number {
   // Effectiveness: highest level first (Level 4 → Level 0).
   if (waGroupBy === "effectiveness") return 4 - (Number(key.slice(6)) || 0);
+  // Priorities: Max effort → Maintain in PRIORITY order, "Not a focus" last.
+  if (waGroupBy === "priorities") { const i = PRIORITY_LEVELS.map((l) => PRIORITY_LABEL[l]).indexOf(key); return i === -1 ? 99 : i; }
   // Discipline grouping splits Strength into muscle-group pills — rank those inside
   // Strength's slot (by muscle order) so they lead and stay together.
   if (waGroupBy === "discipline" && waGroupIsStrength(key))
