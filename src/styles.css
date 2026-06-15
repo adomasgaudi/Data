@@ -2707,14 +2707,23 @@ sup.wr-bw { font-size: 0.85em; }
 .rank { color: var(--muted); width: 2rem; }
 .rank-1 { color: var(--gold); font-weight: 700; }
 .bw-on { color: var(--accent); font-weight: 600; }
-.calc-picker { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem; }
-.calc-picker > label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
-.calc-inputs { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
-.calc-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
-.calc-inputs input {
-  width: 6rem; font: inherit; font-size: 16px; background: var(--bg); color: var(--text);
-  border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 10px;
+/* Formulas page — CRAMMED inputs (owner): all four (Exercise · Weight · Reps · BW part)
+   fit on one tight row, and the number inputs + the enhanced-select dropdowns read as the
+   SAME compact box (consistent UI). */
+.calc-picker { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; margin-bottom: 0.45rem; align-items: flex-end; }
+.calc-picker > label { display: flex; flex-direction: column; gap: 2px; font-size: 0.66rem; font-weight: 600; color: var(--muted); }
+.calc-inputs { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; margin-bottom: 0.55rem; align-items: flex-end; }
+.calc-inputs label { display: flex; flex-direction: column; gap: 2px; font-size: 0.66rem; font-weight: 600; color: var(--muted); }
+.calc-picker input, .calc-inputs input,
+.calc-picker .xdd-btn, .calc-inputs .xdd-btn {
+  font: inherit; font-size: 16px; font-weight: 600; min-height: 34px; box-sizing: border-box;
+  padding: 5px 9px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--bg); color: var(--text);
 }
+.calc-inputs input { width: 3.7rem; }
+.calc-picker input { width: 5rem; }
+.calc-inputs .xdd, .calc-inputs select { min-width: 6.2rem; flex: 0 1 auto; }
+.calc-picker .xdd, .calc-picker select { min-width: 6.5rem; }
 .calc-inputs input:focus { outline: none; border-color: var(--accent); box-shadow: var(--shadow-focus); }
 .calc-row { padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 0.86rem; line-height: 1.45; }
 .calc-row:last-child { border-bottom: none; }

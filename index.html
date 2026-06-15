@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.379</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.8.380</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -378,7 +378,6 @@
             </label>
             <label>Bodyweight (kg)<input id="calcBw" type="number" value="80" step="1" /></label>
           </div>
-          <p id="testPickHint" class="muted" style="margin: 0 0 1rem; font-size: 0.8rem"></p>
           <div class="calc-inputs">
             <label>Exercise
               <select id="testExercise"></select>
@@ -398,29 +397,9 @@
             </div>
             <div id="calcOut" class="calc-out"></div>
           </details>
-          <div id="calcCurveChart"></div>
-          <p class="muted" id="calcCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
-          <p class="calc-links">
-            <a class="link-btn" href="reps-1rm.html" target="_blank" rel="noopener">
-              📊 Bench reps at % of 1RM — research data
-            </a>
-          </p>
-          <!-- App-wide 1RM formula (set-once app-wide setting — sets the formula the whole
-               app uses for leaderboards, PRs and the history). Kept at the BOTTOM since it's
-               rarely changed; same #formula id, so its wiring + .xdd dropdown are unchanged. -->
-          <label class="formula-field formula-field--foot">App-wide 1RM formula
-            <select id="formula">
-              <option value="epley">Epley</option>
-              <option value="brzycki">Brzycki</option>
-              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
-            </select>
-          </label>
         </section>
         <section class="panel rx-panel">
           <h2>Coach — working weight &amp; warm-up</h2>
-          <p class="muted" style="margin: 0 0 0.75rem; font-size: 0.8rem">
-            From a client's 1RM: the hard-set load and a full warm-up ramp up to it.
-          </p>
           <button type="button" id="rxModeBtn" class="rx-mode" data-mode="repsRIR">Target: reps + RIR</button>
           <div class="calc-inputs">
             <label>1RM (kg)<input id="rxOrm" type="number" value="100" step="2.5" min="1" /></label>
@@ -445,17 +424,33 @@
           <div id="rxOut" class="calc-out"></div>
         </section>
         <section class="panel">
-          <h2>Strength fade — use it or lose it</h2>
-          <p class="muted" style="margin: 0 0 1rem">
-            How a lift's estimated 1RM fades when you stop training it (the “Current strength”
-            setting). Full strength for two weeks, then about 10% gone a month later, slowing down
-            after that and never dropping below half. Drag to pan · wheel to zoom.
+          <h2>1RM curve</h2>
+          <div id="calcCurveChart"></div>
+          <p class="muted" id="calcCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
+          <p class="calc-links">
+            <a class="link-btn" href="reps-1rm.html" target="_blank" rel="noopener">
+              📊 Bench reps at % of 1RM — research data
+            </a>
           </p>
+          <!-- App-wide 1RM formula (set-once app-wide setting — sets the formula the whole
+               app uses for leaderboards, PRs and the history). Kept low since it's rarely
+               changed; same #formula id, so its wiring + .xdd dropdown are unchanged. -->
+          <label class="formula-field formula-field--foot">App-wide 1RM formula
+            <select id="formula">
+              <option value="epley">Epley</option>
+              <option value="brzycki">Brzycki</option>
+              <option value="nuzzo" selected>Nuzzo (bench curve)</option>
+            </select>
+          </label>
+        </section>
+        <section class="panel">
+          <h2>Strength fade — use it or lose it</h2>
           <div id="decayCurveChart"></div>
           <p class="muted" id="decayCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
         </section>
         <section class="panel">
-          <h2>How the numbers work</h2>
+          <details class="merge-fold calc-fold">
+          <summary class="merge-fold-sum calc-fold-sum">How the numbers work</summary>
           <div class="calc-explain">
             <p><strong>1. Effective load.</strong> For lifts that move your body (pull-ups, squats…),
               the load is <code>coeff × bodyweight + added weight</code>. <code>coeff</code> 0 = bar only
@@ -473,6 +468,7 @@
             <p><strong>6. Per bodyweight</strong> (the relative leaderboard): <code>1RM ÷ bodyweight</code>,
               shown as ×BW, so people of different sizes compare fairly.</p>
           </div>
+          </details>
         </section>
         </div>
       </div>
