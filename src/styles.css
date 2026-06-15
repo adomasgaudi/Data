@@ -4828,6 +4828,9 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
    wrapped multi-row wall; swipe sideways like the athlete strip). */
 .prio-add { margin-top: 0.5rem; }
 .prio-add-lbl { font-size: 0.7rem; color: var(--muted); margin: 0 0 0.4rem; }
+/* Tier-2 picker search box (docs/exercise-picker-tiers.md) — reuses .wa-chip-search look. */
+.prio-add-search { width: 100%; margin: 0 0 0.4rem; }
+.prio-add-none { font-size: 0.78rem; color: var(--muted); align-self: center; padding: 4px 2px; white-space: nowrap; }
 .prio-add-chips { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .prio-add-chips::-webkit-scrollbar { display: none; }
 .prio-add-chip {

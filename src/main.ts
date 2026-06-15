@@ -338,6 +338,7 @@ let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SV
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
+let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 
 const PAGE_SIZE = 50; // List & stats page size
@@ -9722,6 +9723,12 @@ function renderCoachUiCatalogue(): void {
       sec("Other sheet", "other menu / bottom sheet", ".other-sheet", `<span class="muted" style="font-size:0.8rem">Opens from ··· bottom nav</span>`),
     ].join(""))}
 
+    ${group("Exercise pickers (3 tiers — see docs/exercise-picker-tiers.md)", [
+      sec("Tier 1 — Pick one (dropdown)", "picker tier 1 / pick-one dropdown", ".xdd", `<div class="xdd" style="display:inline-block"><button class="xdd-btn" type="button">Pick exercise ▾</button></div>`),
+      sec("Tier 2 — Pick a few (search + chips)", "picker tier 2 / search picker", ".wa-chip-search / .prio-add-chip", `<input class="wa-chip-search" type="search" placeholder="Search exercises…" style="max-width:220px"><div style="margin-top:4px;display:flex;gap:5px"><button class="prio-add-chip">+ Squat</button> <button class="prio-add-chip is-synth">✦ Pull*</button></div>`),
+      sec("Tier 3 — Full picker (drawer)", "picker tier 3 / full drawer picker", ".wa-pick-card", `<span class="muted" style="font-size:0.8rem">Search + category pills + counts + ⓘ in a sliding <code>.wa-pick-card</code> drawer (the Analysis selector).</span>`),
+    ].join(""))}
+
     ${group("Cards & Panels", [
       sec("Main panel card", "panel / card", ".panel", `<div class="panel" style="padding:0.7rem;max-width:200px;font-size:0.82rem">Panel card content</div>`),
       sec("Group card (Stats view)", "group card", ".gv-card", `<div class="gv-card" style="max-width:200px"><div class="gv-card-head"><h3 style="margin:0;font-size:0.85rem">Push</h3><span class="muted gv-count">4 lifts</span></div></div>`),
@@ -10748,17 +10755,35 @@ function renderWorkoutPlan(): void {
   const list = names.length
     ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
     : `<p class="muted prio-empty">No priorities yet. Add the exercises you want to focus on — tap a suggestion below.</p>`;
-  const addBlock = suggestions.length
-    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length})</div>` +
-      `<div class="prio-add-chips">${suggestions.map((s) => {
-        const specific = `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a group lift" : ""} to your priorities">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`;
+  // "Add another" is now a Tier-2 picker (docs/exercise-picker-tiers.md): curated
+  // suggestions by default, but a search box reveals ANY addable lift, not just the top few.
+  const allAddable = [
+    ...realSug.map((n) => ({ name: n, synth: false })),
+    ...synthSug.map((n) => ({ name: n, synth: true })),
+  ];
+  const prioChip = (name: string, synth: boolean) =>
+    `<button type="button" class="prio-add-chip${synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(name)}" title="Add ${escapeHtml(displayName(name))}${synth ? " — a group lift" : ""} to your priorities">${synth ? "✦ " : "+ "}${escapeHtml(displayName(name))}</button>`;
+  const prioQ = prioAddQuery.trim().toLowerCase();
+  const addChips = prioQ
+    ? (() => {
+        const hits = allAddable.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
+        return hits.length
+          ? hits.map((a) => prioChip(a.name, a.synth)).join("")
+          : `<span class="muted prio-add-none">No addable exercise matches “${escapeHtml(prioAddQuery)}”.</span>`;
+      })()
+    : suggestions.map((s) => {
+        const specific = prioChip(s.name, s.synth);
         // A specific lift in a comparable pattern → a "⇄ pattern" button to add it as the
         // COMPARE (whole pattern) instead of the SPECIFIC lift.
         const compare = s.cmp
           ? `<button type="button" class="prio-add-cmp" data-prioadd="${escapeHtml(s.cmp)}" title="Add the “${escapeHtml(displayName(s.cmp))}” pattern instead — train the whole movement (compare), not just this specific lift">⇄ ${escapeHtml(displayName(s.cmp))}</button>`
           : "";
         return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
-      }).join("")}</div></div>`
+      }).join("");
+  const addBlock = allAddable.length
+    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${prioQ ? "search" : names.length})</div>` +
+      `<input type="search" class="wa-chip-search prio-add-search" placeholder="Search exercises…" aria-label="Search exercises to add" autocomplete="off" value="${escapeHtml(prioAddQuery)}">` +
+      `<div class="prio-add-chips">${addChips}</div></div>`
     : "";
   const planTitle = document.getElementById("planTitle");
   if (planTitle) planTitle.textContent = `${athleteLabel()} plan`;
@@ -12547,6 +12572,17 @@ async function init() {
   els.planBody.addEventListener("pointercancel", endPrioDrag);
   // 1RM goal input (Phase 2): save the target kg (or clear it) on change, then re-render
   // so the % progress updates. Input has already blurred, so re-rendering is fine.
+  // Tier-2 "Add another" search: filter the addable list as you type. Re-render the
+  // plan, then restore focus + caret to the search input (it's recreated by the render).
+  els.planBody.addEventListener("input", (e) => {
+    const inp = (e.target as Element)?.closest?.<HTMLInputElement>(".prio-add-search");
+    if (!inp) return;
+    prioAddQuery = inp.value;
+    const caret = inp.selectionStart ?? inp.value.length;
+    renderWorkoutPlan();
+    const s = els.planBody.querySelector<HTMLInputElement>(".prio-add-search");
+    if (s) { s.focus(); s.setSelectionRange(caret, caret); }
+  });
   els.planBody.addEventListener("change", (e) => {
     const g = (e.target as HTMLElement).closest<HTMLInputElement>("[data-priogoal]");
     if (!g?.dataset.priogoal) return;
