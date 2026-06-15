@@ -2998,6 +2998,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-calc-orm { font-size: 0.82rem; margin-left: 4px; }
 .lt-calc-orm b { color: var(--accent); }
 .lt-calc-hint { font-size: 0.76rem; margin-left: 4px; }
+/* 1RM-fit control: a slider + number that drives the card's 1RM, with the Nuzzo
+   curve below it showing the real rep-max dots slide to the fit. */
+.lt-ormfit { display: flex; flex-direction: column; gap: 6px; }
+.lt-ormfit-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.lt-ormfit-slider { flex: 1 1 8rem; min-width: 6rem; accent-color: var(--accent); min-height: var(--tap-min); }
+.lt-ormfit-num { width: 4.2rem; font: inherit; font-size: 0.82rem; padding: 4px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--accent); font-weight: 800; text-align: center; }
+.lt-ormfit-unit { font-size: 0.78rem; color: var(--muted); font-weight: 700; }
+.lt-ormfit-best { font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer; padding: 4px 9px; min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
+.lt-ormfit-best:active { background: var(--gold-soft); color: var(--gold); }
 .lt-pill { display: inline-flex; align-items: center; gap: 3px; background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 7px; font-size: 0.72rem; flex: 0 0 auto; white-space: nowrap; }
 .lt-pl { color: var(--muted); font-weight: 700; }
 .lt-pv { color: var(--gold); font-weight: 800; }

@@ -241,10 +241,11 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           ...(m.axis ? { axis: m.axis } : {}),
           ...(m.type === "bars" ? { fillOpacity: input.config.opacity } : {}),
           ...(isVolume && input.config.volumeYShift ? { yShiftFrac: input.config.volumeYShift } : {}),
-          // Predicted Strength projects into the future — let it draw (clipped) but
-          // never let its tail widen the time axis (owner: anchor to real data). Dashed
-          // so the forecast reads as a projection, not as logged data.
-          ...(m.id === "predicted" ? { noExtendX: true, dashed: true } : {}),
+          // Predicted Strength projects into the future. It now EXTENDS the time axis so
+          // the chosen horizon (out to 15 yr) is actually visible and the ceiling-approach
+          // curve has room to flatten (owner: "the graph should extend to 15 years"). Dashed
+          // so the forecast still reads as a projection, not as logged data.
+          ...(m.id === "predicted" ? { dashed: true } : {}),
         });
     }
   }

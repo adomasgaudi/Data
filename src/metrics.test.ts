@@ -12,6 +12,8 @@ import {
   nuzzo1RM,
   nuzzoWeightForReps,
   nuzzoRepsAtWeight,
+  nuzzoRepMaxes,
+  bestFitNuzzo1RM,
   estimate1RM,
   weightForReps,
   repsForWeight,
@@ -263,6 +265,27 @@ describe("Nuzzo bench curve", () => {
     expect(nuzzo1RM(0, 5)).toBeNull();
     expect(nuzzoWeightForReps(null, 5)).toBeNull();
     expect(nuzzoRepsAtWeight(80, null)).toBeNull();
+  });
+
+  it("nuzzoRepMaxes keeps the heaviest weight per rep, drops junk + out-of-range", () => {
+    const out = nuzzoRepMaxes([
+      { weight: 100, reps: 5 }, { weight: 110, reps: 5 }, { weight: 90, reps: 5 }, // 5-rep best = 110
+      { weight: 120, reps: 3 }, { weight: 60, reps: 12 },
+      { weight: 0, reps: 4 }, { weight: 50, reps: null }, { weight: null, reps: 2 }, // junk dropped
+      { weight: 40, reps: 25 }, // past 20-rep cap → dropped
+    ]);
+    expect(out).toEqual([
+      { reps: 3, weight: 120 }, { reps: 5, weight: 110 }, { reps: 12, weight: 60 },
+    ]);
+    expect(nuzzoRepMaxes([])).toEqual([]);
+  });
+
+  it("bestFitNuzzo1RM recovers the 1RM that put points exactly on the curve", () => {
+    // Build rep-maxes FROM a known 1RM via the curve → the fit must return that 1RM.
+    const trueOrm = 140;
+    const repMaxes = [3, 5, 8, 12].map((reps) => ({ reps, weight: nuzzoWeightForReps(trueOrm, reps)! }));
+    expect(bestFitNuzzo1RM(repMaxes)!).toBeCloseTo(trueOrm, 4);
+    expect(bestFitNuzzo1RM([])).toBeNull();
   });
 });
 

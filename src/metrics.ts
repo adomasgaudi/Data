@@ -103,6 +103,41 @@ export function nuzzoWeightForReps(oneRepMax: number | null, reps: number | null
   return (oneRepMax * benchPctForReps(reps)) / 100;
 }
 
+/** The heaviest weight logged at each (rounded) rep count, 1..maxReps — the lifter's
+ * real rep-maxes. These are the points that, plotted as %1RM vs reps, should sit ON
+ * the Nuzzo curve when the assumed 1RM is right (the card's interactive fit). */
+export function nuzzoRepMaxes(
+  sets: ReadonlyArray<{ weight: number | null; reps: number | null }>,
+  maxReps = 20,
+): { reps: number; weight: number }[] {
+  const best = new Map<number, number>();
+  for (const s of sets) {
+    const w = s.weight, r = s.reps;
+    if (w == null || r == null || !(w > 0) || !(r >= 1)) continue;
+    const rr = Math.round(r);
+    if (rr < 1 || rr > maxReps) continue;
+    best.set(rr, Math.max(best.get(rr) ?? 0, w));
+  }
+  return [...best.entries()].map(([reps, weight]) => ({ reps, weight })).sort((a, b) => a.reps - b.reps);
+}
+
+/** The 1RM that best fits the rep-max points to the Nuzzo %1RM curve, in closed form.
+ * Minimising Σ(100·w/R − pct(reps))² over R gives R = Σ(100w)² / Σ(pct·100w). Null
+ * when there are no usable points. This is the "snap-to-best-fit" the card offers. */
+export function bestFitNuzzo1RM(
+  repMaxes: ReadonlyArray<{ reps: number; weight: number }>,
+): number | null {
+  let num = 0, den = 0;
+  for (const { reps, weight } of repMaxes) {
+    const a = 100 * weight;
+    const t = benchPctForReps(reps);
+    num += a * a;
+    den += t * a;
+  }
+  return den > 0 ? num / den : null;
+}
+
+
 /**
  * Predicted bench reps to failure at a given load, given your 1RM (Nuzzo curve):
  * read the curve at (weight/1RM)×100. At or above the 1RM it's a single.

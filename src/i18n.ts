@@ -93,6 +93,7 @@ const LT: Record<string, string> = {
   "target": "tikslas",
   // ---- "How to train" lift brief ----
   "Calculate": "Skaičiuoti",
+  "1RM — fit to your lifts": "1RM — pritaikyk prie savo kėlimų",
   "type a set to calc": "įveskite seriją skaičiavimui",
   "Working weights": "Darbiniai svoriai",
   "Warmup": "Apšilimas",

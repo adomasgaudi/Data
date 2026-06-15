@@ -59,6 +59,8 @@ import {
   benchPctForReps,
   benchRepsAtPct,
   BENCH_REPS_STUDY,
+  nuzzoRepMaxes,
+  bestFitNuzzo1RM,
   estimate1RM,
   weightForReps,
   repsForWeight,
@@ -3493,6 +3495,10 @@ let currentExInfo: string | null = null;
 // Manual weight×reps the owner can type on the exercise card to compute a 1RM there (so a
 // NEVER-logged lift still gets the warm-up / working-set calculator — PB-21). Reset per lift.
 let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
+// The card's adjustable 1RM (the Nuzzo-fit slider). null = use the logged best. Drives
+// the whole card (working weights, warm-up) and where the real rep-max points sit on
+// the Nuzzo curve, so the user can dial the 1RM until their lifts fit the curve.
+let cardOrm: number | null = null;
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
@@ -3540,6 +3546,7 @@ function openExerciseInfo(name: string, fromPlan = false): void {
   // while the overlay is up keeps the original origin).
   if (els.exInfoPage.hidden) { exInfoOrigin = currentTopTab(); exInfoFromPlan = fromPlan; }
   cardCalc = { weight: "", reps: "" }; // fresh manual-1RM input per lift
+  cardOrm = null; // fresh 1RM-fit slider per lift (defaults to the logged best)
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
   const row = indexRowFor(name);
@@ -11288,7 +11295,7 @@ function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormu
  *  on y; the best-fit curve as a line, the study point-estimates as dots, and the
  *  suggested working set as a gold dot. Bench-derived but the closest data-grounded
  *  rep curve we have, so shown for any lift. */
-function cardNuzzoConfig(markReps: number | null, markPct: number | null): SvgChartConfig {
+function cardNuzzoConfig(markReps: number | null, markPct: number | null, realPts: SvgPoint[] = []): SvgChartConfig {
   const xMax = 20; // reps shown (the interesting near-failure range)
   const fitPts: SvgPoint[] = [];
   for (let r = 1; r <= xMax; r++) fitPts.push({ x: r, y: Math.round(benchPctForReps(r) * 10) / 10 });
@@ -11299,6 +11306,11 @@ function cardNuzzoConfig(markReps: number | null, markPct: number | null): SvgCh
     { name: "Best-fit curve", color: "#284e86", type: "line", points: fitPts, noLegend: true },
     { name: "Study estimates (Nuzzo et al.)", color: "#5b6472", type: "scatter", points: studyPts, noLegend: true },
   ];
+  // Your REAL rep-maxes, placed at (reps, weight ÷ assumed-1RM): drag the 1RM and they
+  // slide up/down — the 1RM that lands them ON the curve is your true 1RM (teal dots).
+  if (realPts.length) {
+    series.push({ name: "Your lifts", color: "#2f8f88", type: "scatter", points: realPts, noLegend: true });
+  }
   if (markReps && markPct && markReps <= xMax) {
     series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: markReps, y: markPct, meta: `${markReps} reps @ ${Math.round(markPct)}%` }], noLegend: true });
   }
@@ -11307,6 +11319,18 @@ function cardNuzzoConfig(markReps: number | null, markPct: number | null): SvgCh
     formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} reps`,
   };
 }
+
+/** This lift's real rep-maxes as %1RM points for the Nuzzo fit-graph, scaled by the
+ * given assumed 1RM. Each point: x = reps, y = weight ÷ 1RM × 100. */
+function cardNuzzoRealPts(name: string, oneRM: number | null): SvgPoint[] {
+  if (oneRM == null || !(oneRM > 0)) return [];
+  const repMaxes = nuzzoRepMaxes(setsForUserExercise(activeRecords(), els.athlete.value, name));
+  return repMaxes.map((rm) => ({
+    x: rm.reps,
+    y: Math.round((rm.weight / oneRM) * 1000) / 10,
+    meta: `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg → ${Math.round((rm.weight / oneRM) * 100)}%`,
+  }));
+}
 /** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
  *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
  *  so every re-render path gets the live chart — not just the first open. */
@@ -11314,9 +11338,12 @@ function mountExInfoCharts(): void {
   const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
   if (!box) return;
   const reps = Number(box.dataset.nzreps), pct = Number(box.dataset.nzpct);
+  const orm = Number(box.dataset.nzorm);
+  const realPts = currentExInfo ? cardNuzzoRealPts(currentExInfo, Number.isFinite(orm) && orm > 0 ? orm : null) : [];
   mountSvgChart(box, cardNuzzoConfig(
     Number.isFinite(reps) && reps > 0 ? reps : null,
     Number.isFinite(pct) && pct > 0 ? pct : null,
+    realPts,
   ));
 }
 /** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
@@ -11335,7 +11362,13 @@ function liftTrainingHtml(name: string): string {
   // lift can still compute a 1RM + warm-up + working sets right here (PB-21 parity).
   const mw = parseFloat(cardCalc.weight), mr = parseFloat(cardCalc.reps);
   const manualOrm = (Number.isFinite(mw) && mw > 0 && Number.isFinite(mr) && mr >= 1) ? estimate1RM(mw, mr, formula) : null;
-  const e1rm = manualOrm ?? loggedE1rm;
+  // The lift's real rep-maxes (for the Nuzzo fit-graph) and the 1RM that best fits them
+  // to the curve. When sets are logged, the card's 1RM is the adjustable slider value
+  // (cardOrm) — defaulting to the logged best — instead of the kg×reps mini-calculator.
+  const repMaxes = nuzzoRepMaxes(setsForUserExercise(activeRecords(), user, name));
+  const bestFit = bestFitNuzzo1RM(repMaxes);
+  const hasLogged = repMaxes.length > 0;
+  const e1rm = hasLogged ? (cardOrm ?? loggedE1rm ?? bestFit) : manualOrm;
   const fmt = (n: number) => String(Math.round(n * 10) / 10);
   const sec = (title: string, body: string) =>
     `<div class="lt-sec"><div class="lt-sec-h">${escapeHtml(title)}</div>${body}</div>`;
@@ -11364,6 +11397,28 @@ function liftTrainingHtml(name: string): string {
 
   // Suggested hard set: 5 reps @ RIR 2 (a sensible default working set).
   const hs = hardSetWeight(e1rm, { kind: "repsRIR", reps: 5, rir: 2 }, formula);
+  // The interactive 1RM-FIT control (logged lifts): a slider + number for the assumed
+  // 1RM, an optional snap-to-best-fit chip, and the Nuzzo curve with the real rep-max
+  // dots — drag the 1RM and the dots slide until they sit ON the curve (the owner's ask:
+  // "show the nuzzo graph with points of real lifts and adjust the 1RM to see the fit").
+  const nuzzoBox = (orm: number | null) =>
+    `<div class="lt-nuzzo" data-nzreps="${hs?.reps ?? ""}" data-nzpct="${hs?.pctOf1RM ?? ""}" data-nzorm="${orm != null ? fmt(orm) : ""}"></div>`;
+  const maxW = repMaxes.reduce((m, rm) => Math.max(m, rm.weight), 0);
+  const ormBase = e1rm ?? bestFit ?? maxW;
+  const sMin = Math.max(Math.floor(maxW), 1);
+  const sMax = Math.max(Math.ceil(ormBase * 1.6), sMin + 20);
+  const ormFit =
+    `<div class="lt-ormfit">` +
+      `<div class="lt-ormfit-row">` +
+        `<input type="range" class="lt-ormfit-slider" min="${sMin}" max="${sMax}" step="0.5" value="${fmt(ormBase)}" data-cardorm="slider" aria-label="Assumed 1RM">` +
+        `<input type="number" class="lt-ormfit-num" inputmode="decimal" step="0.5" min="0" value="${fmt(ormBase)}" data-cardorm="num" aria-label="1RM in kilograms">` +
+        `<span class="lt-ormfit-unit">kg 1RM</span>` +
+        (bestFit && Math.abs(bestFit - ormBase) > 0.5
+          ? `<button type="button" class="lt-ormfit-best" data-cardorm="best" data-best="${fmt(bestFit)}" title="Snap the 1RM to the value that best fits your logged sets to the curve">fit ${fmt(bestFit)}</button>`
+          : "") +
+      `</div>` +
+      nuzzoBox(ormBase) +
+    `</div>`;
   // Working weights: true rep-maxes for common targets (load to FAILURE at N reps).
   const repTargets = [3, 5, 8, 12];
   const workPills = repTargets.map((reps) => {
@@ -11418,11 +11473,14 @@ function liftTrainingHtml(name: string): string {
 
   const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
-    sec("Calculate", calcRow) +
+    // Logged lift → the 1RM-fit graph IS the calculator (slider + real points on the
+    // Nuzzo curve). Never-logged-but-typed → the kg×reps mini-calc + the plain curve.
+    (hasLogged
+      ? sec("1RM — fit to your lifts", ormFit)
+      : sec("Calculate", calcRow) + sec("Reps → %1RM (Nuzzo)", nuzzoBox(null))) +
     sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
-    sec("Reps → %1RM (Nuzzo)", `<div class="lt-nuzzo" data-nzreps="${hs?.reps ?? ""}" data-nzpct="${hs?.pctOf1RM ?? ""}"></div>`) +
     sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
     sec("Pair with", antBody) +
     `</div>`;
@@ -12678,6 +12736,13 @@ function debounceWaRender(): void {
   if (waRenderTimer) clearTimeout(waRenderTimer);
   waRenderTimer = setTimeout(() => { waRenderTimer = null; renderWorkoutAnalysis(); }, 200);
 }
+// The 1RM-fit slider re-plots the chart live on every input but DEFERS the heavy
+// whole-card rebuild (working weights, warm-up table) until the drag pauses.
+let cardOrmTimer: ReturnType<typeof setTimeout> | null = null;
+function debounceCardOrmRender(): void {
+  if (cardOrmTimer) clearTimeout(cardOrmTimer);
+  cardOrmTimer = setTimeout(() => { cardOrmTimer = null; if (currentExInfo) paintExInfo(currentExInfo); }, 220);
+}
 /** The ONE place a lift leaves a selection (graph OR history — independent scopes).
  * Mutates the SSOT array, then INSTANTLY drops every on-screen projection of that
  * lift (its title chip + picked pill) so editing feels immediate, and DEBOUNCES the
@@ -13120,7 +13185,33 @@ async function init() {
     cardCalc = { weight: w.trim(), reps: r.trim() };
     if (currentExInfo) paintExInfo(currentExInfo);
   });
+  // 1RM-fit slider / number: dragging recomputes the card's 1RM. INSTANT feedback —
+  // update the sibling control + re-plot the real points live (re-mount the Nuzzo
+  // chart); DEFER the heavy whole-card re-render (working weights, warm-up table) to a
+  // debounce so the drag stays smooth (snappy-render recipe).
+  els.exInfoBody.addEventListener("input", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>('[data-cardorm="slider"],[data-cardorm="num"]');
+    if (!inp) return;
+    const v = parseFloat(inp.value);
+    if (!Number.isFinite(v) || v <= 0) return;
+    cardOrm = v;
+    const slider = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardorm="slider"]');
+    const num = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardorm="num"]');
+    if (slider && slider !== inp) slider.value = String(v);
+    if (num && num !== inp) num.value = String(Math.round(v * 10) / 10);
+    const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
+    if (box) { box.dataset.nzorm = String(Math.round(v * 10) / 10); mountExInfoCharts(); }
+    debounceCardOrmRender();
+  });
   els.exInfoBody.addEventListener("click", (e) => {
+    // "fit" chip: snap the 1RM to the value that best fits the logged sets to the curve.
+    const fitBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-cardorm="best"]');
+    if (fitBtn?.dataset.best) {
+      e.preventDefault(); e.stopPropagation();
+      cardOrm = parseFloat(fitBtn.dataset.best);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
     // "Pair with" flag: open the mini grade menu for the directional edge (from → to).
     const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairfrom]");
     if (pflag?.dataset.pairfrom && pflag.dataset.pairto) {
@@ -19398,9 +19489,11 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
-    // Projection horizon — how far ahead the forecast line projects (1 → 3 → 6 → 12 mo).
+    // Projection horizon — how far ahead the forecast projects. Goes out to 15 YEARS so
+    // the ceiling-approach curve has room to visibly flatten toward the ceiling (owner:
+    // a 1-year window is too short to see it bend). 1·3·6·12 mo, then 2·5·10·15 yr.
     if (t.closest<HTMLElement>("[data-waprojdays]")) {
-      const steps = [30, 90, 180, 365];
+      const steps = [30, 90, 180, 365, 730, 1825, 3650, 5475];
       const i = steps.indexOf(waGraphConfig.predictionDays);
       waGraphConfig.predictionDays = steps[(i + 1) % steps.length] ?? 90;
       scheduleWaGraph();
