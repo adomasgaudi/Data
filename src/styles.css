@@ -2780,6 +2780,11 @@ table.rx-wu td { padding: 2px 0.9rem 2px 0; border-top: 1px solid var(--line); }
 table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 /* The exact (unrounded) warm-up load — small + grey beside the plate-rounded weight. */
 .rx-wu-exact { font-size: 0.72rem; color: var(--muted); font-weight: 400; }
+/* The warm-up table continues into the WORK sets (owner) — set off with an accent rule. */
+table.rx-wu tr.rx-wu-work td { color: var(--text); border-top: 1px solid var(--accent); }
+.rx-wu-worktag { color: var(--accent); font-size: 0.7rem; font-weight: 700; }
+/* Hard-set plan pill sits right after the "Work sets" label (not pushed to the edge). */
+.rx-ws-plan { margin-left: 0; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
 /* Each guide topic is a collapsible <details> section. The summary is styled

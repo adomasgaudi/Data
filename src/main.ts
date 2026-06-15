@@ -73,7 +73,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { hardSetWeight, warmupRamp, WARMUP_PLANS, type WarmupPlan } from "./prescription";
+import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
@@ -12175,6 +12175,24 @@ function getWarmupPlan(): WarmupPlan {
 }
 function setWarmupPlan(p: WarmupPlan): void { try { localStorage.setItem("colosseum.warmupPlan", p); } catch { /* ignore */ } }
 
+// Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). "Entered"
+// keeps the typed weight × reps; the others prescribe N sets at the weight for that rep
+// target (from 1RM). Device-local pref, cycled by the work-set pill.
+interface WorksetPlan { id: string; label: string; sets: number | null; reps: number | null }
+const WORKSET_PLANS: WorksetPlan[] = [
+  { id: "entered", label: "Entered", sets: null, reps: null },
+  { id: "5x5", label: "5×5", sets: 5, reps: 5 },
+  { id: "3x5", label: "3×5", sets: 3, reps: 5 },
+  { id: "3x8", label: "3×8", sets: 3, reps: 8 },
+  { id: "4x10", label: "4×10", sets: 4, reps: 10 },
+  { id: "5x3", label: "5×3", sets: 5, reps: 3 },
+];
+function getWorksetPlan(): WorksetPlan {
+  try { const v = localStorage.getItem("colosseum.worksetPlan"); return WORKSET_PLANS.find((p) => p.id === v) ?? WORKSET_PLANS[0]!; }
+  catch { return WORKSET_PLANS[0]!; }
+}
+function setWorksetPlan(id: string): void { try { localStorage.setItem("colosseum.worksetPlan", id); } catch { /* ignore */ } }
+
 /** Warm-up ramp to the entered set, using the 1RM the calculator just computed (merged
  * from the old Coach panel — no separate 1RM/reps/formula inputs; Plates rounds it). */
 function renderWarmup(orm: number | null, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula): void {
@@ -12187,9 +12205,19 @@ function renderWarmup(orm: number | null, workingWeightKg: number, workReps: num
     els.rxOut.innerHTML = `<p class="muted" style="font-size:0.85rem">Enter a weight &amp; reps to see the warm-up.</p>`;
     return;
   }
+  // Hard-set (working-set) plan — a SEPARATE pick from the warm-up. "Entered" uses the
+  // typed weight × reps; a scheme prescribes N sets at the weight for that rep target.
+  const wsPlan = getWorksetPlan();
+  let workSets: { weightKg: number; reps: number }[];
+  if (wsPlan.sets == null || wsPlan.reps == null) {
+    workSets = [{ weightKg: r2(workingWeightKg), reps: workReps }];
+  } else {
+    const w = roundToIncrement(weightForReps(orm, wsPlan.reps, formula) ?? workingWeightKg, increment);
+    workSets = Array.from({ length: wsPlan.sets }, () => ({ weightKg: w, reps: wsPlan.reps! }));
+  }
   const work =
-    `<div class="rx-work"><span class="rx-work-lbl">Work set</span> ` +
-    `<b>${r2(workingWeightKg)} kg</b> × ${workReps} reps</div>`;
+    `<div class="rx-work"><span class="rx-work-lbl">Work sets</span> ` +
+    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to cycle: Entered · 5×5 · 3×5 · 3×8 · 4×10 · 5×3">${wsPlan.label}</button></div>`;
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg, formula, increment, plan });
   // Each row: the plate-rounded load (a down→up range when rounding is ambiguous) BIG,
   // the exact unrounded value small/grey beside it, and the % of 1RM (owner).
@@ -12199,8 +12227,12 @@ function renderWarmup(orm: number | null, workingWeightKg: number, workReps: num
       return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b> <span class="rx-wu-exact">${s.exactKg}</span></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
     })
     .join("");
-  const wuTable = wu.length
-    ? `<table class="rx-wu"><thead><tr><th>Warm-up</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${wuRows}</tbody></table>`
+  // The warm-up table CONTINUES into the working sets (owner: one full workout table).
+  const workRows = workSets
+    .map((s) => `<tr class="rx-wu-work"><td><b>${s.weightKg} kg</b></td><td>× ${s.reps}</td><td class="rx-wu-worktag">work</td></tr>`)
+    .join("");
+  const wuTable = (wu.length || workSets.length)
+    ? `<table class="rx-wu"><thead><tr><th>Set</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
     : "";
   els.rxOut.innerHTML = work + wuTable;
 }
@@ -14577,6 +14609,14 @@ async function init() {
   document.getElementById("warmupPlanBtn")?.addEventListener("click", () => {
     const next = WARMUP_PLANS[(WARMUP_PLANS.indexOf(getWarmupPlan()) + 1) % WARMUP_PLANS.length]!;
     setWarmupPlan(next);
+    renderTest();
+  });
+  // Hard-set plan pill (separate from the warm-up, owner) — cycles the working-set scheme;
+  // delegated since it's re-rendered inside rxOut on every recompute.
+  els.rxOut.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest("[data-worksetplan]")) return;
+    const cur = WORKSET_PLANS.findIndex((p) => p.id === getWorksetPlan().id);
+    setWorksetPlan(WORKSET_PLANS[(cur + 1) % WORKSET_PLANS.length]!.id);
     renderTest();
   });
 
