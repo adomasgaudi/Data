@@ -11216,13 +11216,15 @@ function liftTrainingHtml(name: string): string {
     const w = weightForReps(e1rm, reps, formula);
     return w === null ? "" : pill(`${reps}RM`, `${fmt(w)}kg`);
   }).join("");
-  // Warmup ramp up to the suggested working weight.
-  const warm = hs ? warmupRamp({ oneRepMax: e1rm, workingWeightKg: hs.weightKg, formula, plan: getWarmupPlan() }) : [];
-  const warmRows = warm.length
-    ? `<div class="lt-warm">` + warm.map((w) => {
-        const range = w.downKg === w.upKg ? `${fmt(w.weightKg)}` : `${fmt(w.downKg)}–${fmt(w.upKg)}`;
-        return `<span class="lt-wset"><b>${range}</b>kg × ${w.reps} <span class="muted">(${w.pctOf1RM}% · ${w.exactKg})</span></span>`;
-      }).join("") + `</div>`
+  // Warm-up + working sets — the SAME rich table + plan pickers as the calculator (owner:
+  // the card should have everything the calculator has). The pills open the shared tabbed
+  // popups; lastWuCalc/lastWuRerender let the popup compute + refresh THIS card.
+  if (hs && currentExInfo === name) {
+    lastWuCalc = { orm: e1rm, work: hs.weightKg, reps: hs.reps, formula, increment: 2.5 };
+    lastWuRerender = () => { if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo); };
+  }
+  const warmRows = hs
+    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm, hs.weightKg, hs.reps, formula, 2.5)}</div>`
     : `<p class="muted lt-mini">—</p>`;
   // Set suggestion.
   const setSug = hs
@@ -12232,6 +12234,31 @@ function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, wo
 // Last calc state captured by renderWarmup, so the plan popups can build their preview
 // tables off the SAME 1RM / work weight without recomputing the whole calculator.
 let lastWuCalc: { orm: number; work: number; reps: number; formula: OneRepMaxFormula; increment: number } | null = null;
+// How to re-render the view that owns the warm-up the popup is editing (the Formulas calc
+// OR the exercise card), so a plan change refreshes the right place. Set on each render.
+let lastWuRerender: () => void = () => {};
+
+/** The shared warm-up + working-set table (warm-up ramp continuing into the hard sets) —
+ *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
+function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number): string {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan() });
+  const wuRows = wu.map((s) => {
+    const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
+    return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b> <span class="rx-wu-exact">${s.exactKg}</span></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
+  }).join("");
+  const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment);
+  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="rx-wu-worktag">work</td></tr>`).join("");
+  return (wu.length || sets.length)
+    ? `<table class="rx-wu"><thead><tr><th>Set</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
+    : "";
+}
+
+/** The warm-up + hard-set PLAN PILLS (open the tabbed popups) — shared by the calc & card. */
+function planPillsHtml(): string {
+  return `<button type="button" class="calc-wu-plan" data-warmupplan title="Warm-up plan — tap to choose">${WARMUP_PLAN_LABEL[getWarmupPlan()]}</button> ` +
+    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose">${escapeHtml(getWorksetPlan().label)}</button>`;
+}
 
 /** Close any open warm-up / hard-set plan popup. */
 function closePlanPopup(): void { document.getElementById("planPopup")?.remove(); }
@@ -12291,31 +12318,11 @@ function renderWarmup(orm: number | null, workingWeightKg: number, workReps: num
     return;
   }
   lastWuCalc = { orm, work: workingWeightKg, reps: workReps, formula, increment }; // for the plan popups
-  // Hard-set (working-set) plan — a SEPARATE pick from the warm-up. "Entered" uses the
-  // typed weight × reps; a scheme prescribes a per-set rep sequence, each loaded at the
-  // weight for that rep target.
-  const wsPlan = getWorksetPlan();
-  const workSets = worksetRows(wsPlan, orm, workingWeightKg, workReps, formula, increment);
+  lastWuRerender = renderTest; // a plan change from the popup recomputes the calculator
   const work =
     `<div class="rx-work"><span class="rx-work-lbl">Work sets</span> ` +
-    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose (strength · power · peaking · hypertrophy · volume · pump…)">${wsPlan.label}</button></div>`;
-  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg, formula, increment, plan });
-  // Each row: the plate-rounded load (a down→up range when rounding is ambiguous) BIG,
-  // the exact unrounded value small/grey beside it, and the % of 1RM (owner).
-  const wuRows = wu
-    .map((s) => {
-      const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
-      return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b> <span class="rx-wu-exact">${s.exactKg}</span></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
-    })
-    .join("");
-  // The warm-up table CONTINUES into the working sets (owner: one full workout table).
-  const workRows = workSets
-    .map((s) => `<tr class="rx-wu-work"><td><b>${s.weightKg} kg</b></td><td>× ${s.reps}</td><td class="rx-wu-worktag">work</td></tr>`)
-    .join("");
-  const wuTable = (wu.length || workSets.length)
-    ? `<table class="rx-wu"><thead><tr><th>Set</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
-    : "";
-  els.rxOut.innerHTML = work + wuTable;
+    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose (strength · power · peaking · hypertrophy · volume · pump…)">${escapeHtml(getWorksetPlan().label)}</button></div>`;
+  els.rxOut.innerHTML = work + warmupTableHtml(orm, workingWeightKg, workReps, formula, increment);
 }
 
 /**
@@ -14692,34 +14699,32 @@ async function init() {
   // The warm-up ramp is part of renderTest now (merged calculator). Changing the Plates
   // rounding recomputes it.
   els.rxInc.addEventListener("change", renderTest);
-  // Warm-up plan pill → open the tabbed plan popup (types · table · explanation), owner.
-  document.getElementById("warmupPlanBtn")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    openPlanPopup("warmup", e.currentTarget as HTMLElement);
-  });
-  // Hard-set plan pill (delegated — it's re-rendered inside rxOut) → open its plan popup.
-  els.rxOut.addEventListener("click", (e) => {
-    const pill = (e.target as HTMLElement).closest<HTMLElement>("[data-worksetplan]");
-    if (!pill) return;
-    e.stopPropagation();
-    openPlanPopup("workset", pill);
-  });
-  // Inside the popup: a tab applies that plan, refreshes the popup table/blurb, and
-  // re-renders the calculator behind it. A click anywhere else closes the popup.
+  // ONE delegated handler for the plan popups, shared by the calculator AND the exercise
+  // card (owner: the card should have everything the calculator has): a warm-up/hard-set
+  // pill (data-warmupplan / data-worksetplan, anywhere) opens the tabbed popup; a tab
+  // inside it applies the plan + refreshes the OWNING view (lastWuRerender) and the popup;
+  // a click elsewhere closes it.
   document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const wuPill = t.closest<HTMLElement>("[data-warmupplan]");
+    const wsPill = t.closest<HTMLElement>("[data-worksetplan]");
+    if (wuPill || wsPill) {
+      e.stopPropagation();
+      openPlanPopup(wuPill ? "warmup" : "workset", (wuPill ?? wsPill)!);
+      return;
+    }
     const menu = document.getElementById("planPopup");
     if (!menu) return;
-    const tab = (e.target as HTMLElement).closest<HTMLElement>("[data-plantab]");
+    const tab = t.closest<HTMLElement>("[data-plantab]");
     if (tab && menu.contains(tab)) {
       e.stopPropagation();
       const kind = menu.dataset.kind as "warmup" | "workset";
-      const val = tab.dataset.plantab!;
-      if (kind === "warmup") setWarmupPlan(val as WarmupPlan); else setWorksetPlan(val);
+      if (kind === "warmup") setWarmupPlan(tab.dataset.plantab as WarmupPlan); else setWorksetPlan(tab.dataset.plantab!);
+      lastWuRerender();
       menu.innerHTML = planPopupHtml(kind);
-      renderTest();
       return;
     }
-    if (!menu.contains(e.target as Node)) closePlanPopup();
+    if (!menu.contains(t)) closePlanPopup();
   });
 
   setupBottomNav();

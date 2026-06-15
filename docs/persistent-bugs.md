@@ -11,6 +11,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-21 — Exercise card ↔ calculator feature parity (recurring "the card should have what the calc has")
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), exercise-info card. Recurring request: the card keeps lacking features the Formulas calculator has (WR/benchmarks/stats were moved over in EXR-139; now the warm-up + hard-set plan pickers / full workout table). Owner: "exercise card should have everything a calculator has."
+- **Why it recurs (root):** the warm-up / working-weight prescription is rendered by TWO separate code paths — `renderWarmup` (Formulas, into `#rxOut`) and `liftTrainingHtml` (the card) — each with its own markup. So every calculator improvement has to be re-applied to the card by hand, and gets forgotten → the parity gap keeps reopening. Same class as the card already pulling in WR/benchmarks/percentiles.
+- **Fix (b.2.8.x — ongoing):** extracted a SHARED `warmupTableHtml()` (the warm-up ramp continuing into the hard sets) + `planPillsHtml()` (the warm-up & hard-set plan pills) that BOTH `renderWarmup` and the card now call — one source, so they can't drift. The plan popups (`openPlanPopup`) work from either view via `lastWuCalc` + `lastWuRerender` (the popup refreshes whichever view owns the warm-up). Remaining gap: the card still has no manual weight/reps INPUT for a never-logged lift (the 🧮 Calc button opens the prefilled calculator for that). Root cure = keep sharing components rather than duplicating; never add a calc feature to one path only.
+- **Watch:** any new Formulas/warm-up feature must go through the shared helpers, not a card-only or calc-only copy.
+- **Recurrences:** 2 (EXR-139 moved WR/benchmarks/stats; this turn shares the warm-up + plan pickers).
+
+---
+
 ## PB-20 — Can't pick exercises after clearing all (empty Graph/multi view)
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android / Samsung), Analysis → Graph in the empty (nothing-picked) state, esp. the multi/full graph view.

@@ -2952,6 +2952,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-setsug { font-size: 0.85rem; }
 .lt-mini { font-size: 0.78rem; margin: 0; }
 .lt-warm { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Card warm-up block: the plan pills above the shared warm-up→work table (calc parity). */
+.lt-warm-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 0.4rem; }
 .lt-wset { font-size: 0.74rem; background: var(--accent-soft); border-radius: var(--r-pill); padding: 2px 7px; white-space: nowrap; }
 .lt-note { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.82rem; resize: vertical; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 5px 7px; background: var(--bg); color: var(--text); }
 .lt-ant { display: flex; flex-wrap: wrap; gap: 4px; }
