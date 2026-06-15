@@ -16239,7 +16239,11 @@ function renderWorkoutAnalysis(): void {
     // from the graph — see the data-graphremove handler) + "… +N" when there are more.
     // A "Graph" label rides along, shown by CSS ONLY when the fold is COLLAPSED (the
     // picked exercises are noise when the chart isn't even open — owner request).
-    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
+    // Even with NOTHING picked we still render the full title (toolbar + Pick tab), just
+    // with no names — otherwise clearing all lifts (✕) would remove the very + / Pick
+    // affordances you need to pick again (owner report). Collapsed still reads "Graph"
+    // via the CSS-swapped .wa-graph-closed label.
+    graphSummary.innerHTML = `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
@@ -16263,7 +16267,7 @@ function renderWorkoutAnalysis(): void {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
       // "Workout history" prefix, no member breakdown, no ℹ. Collapsed, a plain
       // "Workout history" shows instead (CSS swaps them on the fold's open state).
-      calHistTitle.innerHTML = waSelected.length ? `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle(waSelected, "hist")}` : "Workouts";
+      calHistTitle.innerHTML = `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle(waSelected, "hist")}`;
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -16279,7 +16283,12 @@ function renderWorkoutAnalysis(): void {
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
     const calHistTitle = document.getElementById("waCalHistSummary");
-    if (calHistTitle) { calHistTitle.textContent = "Workouts"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
+    // Nothing selected: still render the title with its + / ✕ / = toolbar and Pick tab so
+    // you can pick again (clearing all must not strand you with no picker — owner report).
+    if (calHistTitle) {
+      calHistTitle.innerHTML = `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle([], "hist")}`;
+      calHistTitle.classList.remove("is-bigtitle");
+    }
     stats?.setAttribute("hidden", "");
     withNameScope("hist", renderWorkoutsPage); // the analysis history shows the HISTORY area's name mode
     }
@@ -17255,9 +17264,12 @@ function renderWaGraph(): void {
   // per-slide title); the multi-lift selection title shows only in the full view.
   const summ = document.getElementById("waGraphSummary");
   if (summ) {
-    if (graphFullShown && waGraphSel.length) {
+    // Show the multi-lift title (with the + / ✕ / = toolbar + Pick tab) in the full view,
+    // OR whenever nothing is picked — so clearing all never strands you without a picker.
+    // Plain "Graph" only in carousel mode WITH a selection (the carousel has its own titles).
+    if (graphFullShown || !waGraphSel.length) {
       summ.innerHTML = `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
-      summ.classList.add("is-bigtitle");
+      summ.classList.toggle("is-bigtitle", waGraphSel.length > 0);
     } else { summ.textContent = "Graph"; summ.classList.remove("is-bigtitle"); }
   }
   const miniEl = document.getElementById("waGraphMini");
