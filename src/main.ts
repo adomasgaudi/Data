@@ -15683,8 +15683,14 @@ function openAddModal(exerciseName: string | null, date: string): void {
   const exHead = isNew
     ? `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" autocomplete="off" aria-label="Exercise" />`
     : `<div class="addm-exname">${escapeHtml(displayName(ex))}</div>`;
+  // The exercise-name field lives INSIDE the form span so onInlineAddGo's single
+  // read path (form.querySelector('.wo-af-ex')) finds it — when it sat outside the
+  // form, the lookup returned null, the name fell back to the empty data-addex, and
+  // Add silently no-op'd ("nothing happens" on a new exercise).
+  const exField = isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "";
   const form =
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    exField +
     afWhenToggle(date, today) +
     variantBlock +
     `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps · sets</span><div class="addm-inputs">${AF_INPUTS}</div></div></div>` +
@@ -15697,7 +15703,6 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
     `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
-    (isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "") +
     suggRow + form +
     `</div>`;
   document.body.appendChild(wrap);
