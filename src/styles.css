@@ -1912,7 +1912,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 /* Custom calendar date-picker popup (rule 20: not the native picker). A floating month
    grid placed by JS (position-fixed, clamped to the viewport). */
 .dp-pop {
-  position: fixed; z-index: var(--z-modal); width: 15rem; max-width: calc(100vw - 12px);
+  /* PB-28: the date picker is launched from INSIDE the add modal (.addm-overlay,
+     z-index 120), so it must sit ABOVE it — at --z-modal (60) it opened behind the
+     modal and was invisible/unpressable. --z-top clears the add modal. (The add
+     overlay's raw 120 bypasses the z-token scale — flagged for a later cleanup.) */
+  position: fixed; z-index: var(--z-top); width: 15rem; max-width: calc(100vw - 12px);
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 8px 24px rgba(20, 24, 38, 0.22); padding: 0.5rem; user-select: none;
 }

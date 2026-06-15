@@ -11,6 +11,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-28 — Calendar (custom-date) picker won't open from the add-exercise popup
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → "+ exercise" popup → tapping the 📅 (pick a date) button. Owner: "I can't press the calendar icon to enter a custom date it's not working." Same CLASS as PB-17 / PB-32 (floating thing in the wrong layer / bounds).
+- **Root cause:** a z-index stacking bug. `.dp-pop` (the date picker, appended to `<body>`) used `z-index: var(--z-modal)` (= 60), but the add-set popup `.addm-overlay` uses a RAW `z-index: 120` (it bypasses the semantic z-token scale `--z-drop 40 / --z-modal 60 / --z-top 200`). Since the picker is launched from INSIDE that modal, it opened at 60 — behind the 120 overlay — so it was covered by the modal's backdrop + card: invisible and unpressable.
+- **Fix (b.2.8.x):** `.dp-pop` → `z-index: var(--z-top)` (200), clearing the add modal (120). Comment `PB-28` at the rule. Flagged the deeper inconsistency (the add overlay's raw 120 sits off the token scale) for a later cleanup — any popup launched from the add modal that uses `--z-modal`/`--z-drop` will fall behind it the same way.
+- **Watch:** a popup/menu launched from WITHIN the add modal must use a z-index above the add overlay's 120 — `--z-modal`/`--z-drop` are not enough. Better long-term: bring `.addm-overlay` onto the token scale so the layers compose.
+- **Recurrences:** 0 (first report; sibling of the PB-17/PB-32 floating-layer class).
+
+---
+
 ## PB-27 — "Add another" exercise search lags — rebuilds the pills on every letter
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Focus-lifts plan → "Add another (search)". Owner: "add another exercise search lagging because with each letter it's changing the pills." Tagged #persistent #repeating #2process — same lag CLASS as PB-22 (a heavy re-render where a targeted one would do).
