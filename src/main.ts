@@ -3411,6 +3411,9 @@ function renderBacklog() {
 // row that pushes the table down. So it's unmistakably "this one exercise's
 // settings, in the context of the Index". `currentExInfo` is the lift it shows.
 let currentExInfo: string | null = null;
+// Manual weight×reps the owner can type on the exercise card to compute a 1RM there (so a
+// NEVER-logged lift still gets the warm-up / working-set calculator — PB-21). Reset per lift.
+let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
@@ -3457,6 +3460,7 @@ function openExerciseInfo(name: string, fromPlan = false): void {
   // Remember the view we came from (only on a fresh open — opening another lift
   // while the overlay is up keeps the original origin).
   if (els.exInfoPage.hidden) { exInfoOrigin = currentTopTab(); exInfoFromPlan = fromPlan; }
+  cardCalc = { weight: "", reps: "" }; // fresh manual-1RM input per lift
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
   const row = indexRowFor(name);
@@ -11193,18 +11197,34 @@ function nuzzoSvg(markReps: number | null, markPct: number | null): string {
 function liftTrainingHtml(name: string): string {
   const formula = currentFormula();
   const user = els.athlete.value;
-  const e1rm = currentLiftE1RM(user, name, formula);
+  const loggedE1rm = currentLiftE1RM(user, name, formula);
+  // A manual weight×reps typed on the card OVERRIDES the logged best — so a never-logged
+  // lift can still compute a 1RM + warm-up + working sets right here (PB-21 parity).
+  const mw = parseFloat(cardCalc.weight), mr = parseFloat(cardCalc.reps);
+  const manualOrm = (Number.isFinite(mw) && mw > 0 && Number.isFinite(mr) && mr >= 1) ? estimate1RM(mw, mr, formula) : null;
+  const e1rm = manualOrm ?? loggedE1rm;
   const fmt = (n: number) => String(Math.round(n * 10) / 10);
   const sec = (title: string, body: string) =>
     `<div class="lt-sec"><div class="lt-sec-h">${escapeHtml(title)}</div>${body}</div>`;
   const pill = (label: string, value: string) =>
     `<span class="lt-pill"><span class="lt-pl">${escapeHtml(label)}</span><span class="lt-pv">${value}</span></span>`;
+  // Inline mini-calculator: type a weight × reps to compute the 1RM that drives this card
+  // (defaults to the logged best when blank). The card is the calculator now (owner).
+  const calcRow = `<div class="lt-calc">` +
+    `<input type="number" class="lt-calc-in lt-calc-w" inputmode="decimal" step="0.5" min="0" placeholder="kg" value="${escapeHtml(cardCalc.weight)}" aria-label="Weight" data-cardcalc="w">` +
+    `<span class="lt-calc-x">×</span>` +
+    `<input type="number" class="lt-calc-in lt-calc-r" inputmode="numeric" step="1" min="1" placeholder="reps" value="${escapeHtml(cardCalc.reps)}" aria-label="Reps" data-cardcalc="r">` +
+    (e1rm != null && e1rm > 0
+      ? `<span class="lt-calc-orm">≈ <b>${fmt(e1rm)}</b> kg 1RM${manualOrm != null ? "" : loggedE1rm != null ? ` <span class="muted">(logged)</span>` : ""}</span>`
+      : `<span class="muted lt-calc-hint">type a set to calc</span>`) +
+    `</div>`;
 
   if (e1rm === null || !(e1rm > 0)) {
-    // No data yet — still show setup notes (always editable) + a hint.
+    // No logged data AND nothing typed — show the inline calculator (so a never-logged lift
+    // still works) + the always-editable setup notes.
     const note = setupNoteFor(name);
     return `<div class="lt-wrap">` +
-      `<p class="muted lt-empty">No logged sets for ${escapeHtml(displayName(name))} yet — log a set to see warmup, working weights and a set suggestion.</p>` +
+      sec("Calculate", calcRow) +
       sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
       `</div>`;
   }
@@ -11269,6 +11289,7 @@ function liftTrainingHtml(name: string): string {
 
   const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
+    sec("Calculate", calcRow) +
     sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
     sec("Set suggestion", setSug) +
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
@@ -12933,6 +12954,17 @@ async function init() {
     if (m && !m.hidden && !(e.target as Element | null)?.closest("#pairGradeMenu, [data-pairfrom]")) closePairGradeMenu();
   });
   // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
+  // Card inline calculator: typing a weight×reps recomputes the card's 1RM (and the warm-up
+  // / working sets that flow from it). On commit (blur/Enter) re-render the card; focus has
+  // already left the input so nothing is stolen mid-type.
+  els.exInfoBody.addEventListener("change", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-cardcalc]");
+    if (!inp) return;
+    const w = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="w"]')?.value ?? "";
+    const r = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="r"]')?.value ?? "";
+    cardCalc = { weight: w.trim(), reps: r.trim() };
+    if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+  });
   els.exInfoBody.addEventListener("click", (e) => {
     // "Pair with" flag: open the mini grade menu for the directional edge (from → to).
     const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairfrom]");

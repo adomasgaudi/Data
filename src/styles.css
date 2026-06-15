@@ -2946,6 +2946,13 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-sec-h { font-size: 0.68rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .lt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .lt-now { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-right: 2px; }
+/* Card inline mini-calculator: weight × reps → 1RM (so a never-logged lift still computes). */
+.lt-calc { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.lt-calc-in { width: 4.2rem; font: inherit; font-size: 0.82rem; padding: 4px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); text-align: center; }
+.lt-calc-x { color: var(--muted); font-weight: 700; }
+.lt-calc-orm { font-size: 0.82rem; margin-left: 4px; }
+.lt-calc-orm b { color: var(--accent); }
+.lt-calc-hint { font-size: 0.76rem; margin-left: 4px; }
 .lt-pill { display: inline-flex; align-items: center; gap: 3px; background: var(--gold-soft); border-radius: var(--r-pill); padding: 2px 7px; font-size: 0.72rem; }
 .lt-pl { color: var(--muted); font-weight: 700; }
 .lt-pv { color: var(--gold); font-weight: 800; }

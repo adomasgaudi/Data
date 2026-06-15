@@ -83,6 +83,8 @@ const LT: Record<string, string> = {
   "½ max reps": "½ maks. kart.",
   "target": "tikslas",
   // ---- "How to train" lift brief ----
+  "Calculate": "Skaičiuoti",
+  "type a set to calc": "įveskite seriją skaičiavimui",
   "Working weights": "Darbiniai svoriai",
   "Set suggestion": "Serijos pasiūlymas",
   "Warmup": "Apšilimas",
