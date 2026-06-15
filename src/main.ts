@@ -1975,6 +1975,35 @@ function setDeleted(id: string, on: boolean): void {
   saveDeletedSets();
 }
 
+// ---- Loading "hydration" indicator (rule 46) --------------------------------
+// A small busy pill shown while a deferred rebuild runs (e.g. after a delete), so
+// a heavy re-render reads as "updating", not frozen. A min-visible window keeps it
+// perceptible even when the synchronous rebuild is sub-frame. (PB-26 part 3.)
+let hydratingShownAt = 0;
+let hydratingTimer: number | null = null;
+function showHydrating(label = "Updating…"): void {
+  let el = document.getElementById("hydratingPill");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "hydratingPill";
+    el.className = "hydrating-pill";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+  el.textContent = label;
+  el.hidden = false;
+  hydratingShownAt = Date.now();
+  if (hydratingTimer) { clearTimeout(hydratingTimer); hydratingTimer = null; }
+}
+function hideHydrating(): void {
+  const el = document.getElementById("hydratingPill");
+  if (!el) return;
+  const wait = Math.max(0, 320 - (Date.now() - hydratingShownAt)); // keep it readable
+  if (hydratingTimer) clearTimeout(hydratingTimer);
+  hydratingTimer = window.setTimeout(() => { el.hidden = true; hydratingTimer = null; }, wait);
+}
+
 // ---- Action log (in the cache) + a 10s undo toast ----------------------------
 // Destructive actions (and their undos) are appended to a localStorage log so there's
 // always a record of what changed, and surfaced briefly as an "Undo" toast.
@@ -2037,10 +2066,12 @@ function deleteSetsWithUndo(ids: string[], label: string): void {
   // render only the VISIBLE view, then reopenSetEdit() LAST so the expanded set
   // survives the rebuild.
   const rerender = () => {
+    showHydrating(); // PB-26 part 3: a brief "Updating…" pill while the rebuild runs
     deferRender(() => {
       if (document.getElementById("workoutsTable")) renderWorkoutsPage();
       if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
       reopenSetEdit();
+      hideHydrating();
     });
   };
   rerender();

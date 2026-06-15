@@ -300,6 +300,7 @@ const LT: Record<string, string> = {
   "⊕ Merged": "⊕ Sujungta",
   "⇄ Separated": "⇄ Atskirai",
   "✕ Remove": "✕ Pašalinti",
+  "Updating…": "Atnaujinama…",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
   "Default ROM": "Numatyta amplitudė",

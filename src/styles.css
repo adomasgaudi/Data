@@ -218,6 +218,17 @@ body {
 .gh-sync--ok::before { content: "✓"; }
 .gh-sync--err { color: #b84040; background: color-mix(in srgb, #b84040 14%, transparent); }
 @keyframes gh-spin { to { transform: rotate(360deg); } }
+/* Loading "hydration" pill — shown briefly during a deferred rebuild (e.g. after a
+   delete) so a heavy re-render reads as "updating", not frozen. (PB-26 part 3.) */
+.hydrating-pill {
+  position: fixed; left: 50%; bottom: 7.5rem; transform: translateX(-50%); z-index: var(--z-top);
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill);
+  box-shadow: 0 6px 20px rgba(20, 24, 38, 0.22); font-size: 0.8rem; color: var(--muted);
+  pointer-events: none;
+}
+.hydrating-pill[hidden] { display: none; }
+.hydrating-pill::before { content: "⟳"; display: inline-block; color: var(--accent); animation: gh-spin 0.9s linear infinite; }
 /* Bleach code-name (the minor) in small gold; the AI-bumped patch as a grey "v.N". */
 .title-ver .version .ver-name { font-size: 0.95em; color: var(--gold); font-weight: 700; font-style: italic; letter-spacing: 0.2px; }
 .title-ver .version .ver-patch { font-size: 0.8em; color: var(--muted); font-weight: 600; }
