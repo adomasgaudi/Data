@@ -10601,10 +10601,10 @@ const EFFORT_TIP: Record<PriorityEffort, string> = {
 // `rank` = the lift's PRIORITY TIER, a named dial SEPARATE from effort: Top → Second →
 // Optional. The Focus-lifts list sorts by rank FIRST, then effort level — so a lift can
 // be Top priority but only "Maintain". Defaults to "second" when unset.
-type PriorityRank = "top" | "second" | "optional";
-const PRIORITY_RANKS: PriorityRank[] = ["top", "second", "optional"];
-const RANK_LABEL: Record<PriorityRank, string> = { top: "Top", second: "Second", optional: "Optional" };
-const RANK_ORDER: Record<PriorityRank, number> = { top: 0, second: 1, optional: 2 };
+type PriorityRank = "top" | "second" | "third" | "optional";
+const PRIORITY_RANKS: PriorityRank[] = ["top", "second", "third", "optional"];
+const RANK_LABEL: Record<PriorityRank, string> = { top: "Top", second: "Second", third: "Third", optional: "Optional" };
+const RANK_ORDER: Record<PriorityRank, number> = { top: 0, second: 1, third: 2, optional: 3 };
 // `order` = manual drag position, used only in the "manual" sort mode (below).
 interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort; rank?: PriorityRank; order?: number }
 const rankOf = (e: PriorityEntry): PriorityRank => e.rank ?? "second";
@@ -10624,6 +10624,9 @@ const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEnt
 function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
 // Which priority rows have their "related lifts" dropdown open (in-session, by lift name).
 const prioExpanded = new Set<string>();
+// Which focus-lift SECTIONS (grouped by rank or level) are COLLAPSED — default open, keyed
+// "<dim>:<key>". In-session, so it survives the plan's re-renders (rule 24).
+const prioSectionCollapsed = new Set<string>();
 function athletePriorities(user: string): Record<string, PriorityEntry> { return prioritiesStore[user] ?? {}; }
 /** Reusable comparator ordering exercise NAMES by the athlete's PLAN priority — the SAME
  * order the Plan page's default uses (rank Top→Second→Optional → effort level → target).
@@ -10910,8 +10913,29 @@ function renderWorkoutPlan(): void {
           PRIORITY_LEVELS.map(chip).join("") + `</div>`;
       })()
     : "";
+  // Focus lifts grouped into collapsible SECTIONS by the CURRENT sort dimension (owner):
+  // sorting by Effort → group by level; by Top/Drag (rank/manual) → group by rank. Each
+  // section is an expandable <details> (default open; collapse state kept in
+  // prioSectionCollapsed across re-renders). `names` is already sorted, so members keep
+  // their sub-order within each section.
+  const groupDim: "rank" | "level" = prioSortMode === "effort" ? "level" : "rank";
+  const groupOrder: string[] = groupDim === "level" ? PRIORITY_LEVELS : PRIORITY_RANKS;
+  const keyOf = (ex: string): string => groupDim === "level" ? pri[ex]!.level : rankOf(pri[ex]!);
+  const groupLabelOf = (k: string): string => groupDim === "level" ? PRIORITY_LABEL[k as PriorityLevel] : RANK_LABEL[k as PriorityRank];
   const list = names.length
-    ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
+    ? groupOrder.map((k) => {
+        const members = names.filter((ex) => keyOf(ex) === k);
+        if (!members.length) return "";
+        const tgt = members.reduce((s, ex) => s + (pri[ex]!.target || 0), 0);
+        const skey = `${groupDim}:${k}`;
+        const cls = groupDim === "level" ? `prio-level-${k}` : `prio-rank-${k}`;
+        return `<details class="prio-section"${prioSectionCollapsed.has(skey) ? "" : " open"}>` +
+          `<summary class="prio-section-sum" data-priosection="${escapeHtml(skey)}">` +
+          `<span class="caret">▸</span><span class="prio-section-lbl ${cls}">${escapeHtml(groupLabelOf(k))}</span>` +
+          `<span class="prio-section-n muted">${members.length}</span>` +
+          `<span class="prio-section-tgt muted">Σ ${tgt}/wk</span></summary>` +
+          `<div class="prio-list">${members.map(rowHtml).join("")}</div></details>`;
+      }).join("")
     : `<p class="muted prio-empty">No priorities yet. Add the exercises you want to focus on — tap a suggestion below.</p>`;
   // "Add another" is now a Tier-2 picker (docs/exercise-picker-tiers.md): curated
   // suggestions by default, but a search box reveals ANY addable lift, not just the top few.
@@ -12816,6 +12840,14 @@ async function init() {
     const t = e.target as HTMLElement;
     const user = els.athlete.value;
     const pri = prioritiesStore[user] ?? (prioritiesStore[user] = {});
+    // A focus-lift SECTION header toggles its collapse — native <details> handles the
+    // open/close; we just record the new state so a re-render preserves it (no re-render).
+    const secSum = t.closest<HTMLElement>("[data-priosection]");
+    if (secSum?.dataset.priosection) {
+      const k = secSum.dataset.priosection;
+      if (prioSectionCollapsed.has(k)) prioSectionCollapsed.delete(k); else prioSectionCollapsed.add(k);
+      return;
+    }
     // ↕ Sort pill — cycle the list order: Top → Effort → Drag (manual).
     if (t.closest("[data-priosort]")) {
       prioSortMode = PRIO_SORTS[(PRIO_SORTS.indexOf(prioSortMode) + 1) % PRIO_SORTS.length]!;

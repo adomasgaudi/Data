@@ -73,6 +73,7 @@ const LT: Record<string, string> = {
   "Active": "Aktyvus",
   "Passive": "Pasyvus",
   "Maintain": "Palaikyti",
+  "Third": "Trečias",
   // Set-intensity (effort) pill in the expanded focus-lift panel.
   "intensity": "intensyvumas",
   "Hard": "Sunkios",
