@@ -2267,9 +2267,12 @@ sup.wr-bw { font-size: 0.85em; }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .data-table sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
 .wo-date { white-space: nowrap; }
-/* The 2-char year (e.g. '25) is only shown once the day is EXPANDED — keeps the
-   collapsed list clean but disambiguates the year when you open a session. */
-.wo-year { display: none; color: var(--muted); font-weight: 600; }
+/* Longer date: big relative phrase ("Last Thursday") + a smaller month-day ("May 12"). */
+.wo-rel { font-weight: 700; }
+.wo-md { color: var(--muted); font-weight: 600; font-size: 0.82em; }
+/* The full year (e.g. 2026) is only shown once the day is EXPANDED — keeps the collapsed
+   list clean but disambiguates the year when you open a session. */
+.wo-year { display: none; color: var(--muted); font-weight: 600; font-size: 0.82em; }
 .wo-row.open .wo-year { display: inline; }
 /* Slight separators between day rows when the week / month / year changes (the list
    is newest-first). Week = faint dashed, month = a soft accent line, year = a bolder

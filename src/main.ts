@@ -5,7 +5,7 @@
  */
 import { niceTicks } from "./chartAxis";
 import {
-  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, relativeDayLabel,
+  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, relativeDayLabel, dayHeaderParts,
   isoWeekNumber, todayIso, trainingDuration,
 } from "./format";
 import { hashHueHex, cellBgColor, cellBgGradient, heatLevel } from "./colorScale";
@@ -7368,9 +7368,12 @@ function renderWorkoutsPage() {
         if (yr) yearMark = `<span class="wo-yearmark">${escapeHtml(g.date.slice(0, 4))}</span>`;
       }
       prevRowDate = g.date;
+      // Longer date: a big relative phrase ("Last Thursday") + a smaller month-day
+      // ("May 12"), with the full year ("2026") added only when the day is expanded.
+      const dp = dayHeaderParts(g.date, todayIso());
       return (
         `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
-        `<div class="wo-date">${yearMark}<span class="caret">▸</span>${g.label}<span class="wo-year"> '${escapeHtml(g.date.slice(2, 4))}</span>${tagBtn}</div>` +
+        `<div class="wo-date">${yearMark}<span class="caret">▸</span><span class="wo-rel">${escapeHtml(dp.rel)}</span> <span class="wo-md">${escapeHtml(dp.md)}</span><span class="wo-year"> ${escapeHtml(dp.year)}</span>${tagBtn}</div>` +
         `<div class="wo-did">${did}${addExBtn}</div></td>` +
         `<td class="num">${g.totalSets}</td></tr>`
       );
@@ -7668,7 +7671,10 @@ function onWorkoutRowClick(e: MouseEvent) {
   // never expands the day, so you can open a lift's Index info without unfolding.
   const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
-  if (!target.closest(".wo-date")) return;
+  // Tap ANYWHERE on the collapsed day expands it (owner) — the exercise-name link and
+  // every button already returned above; the golden per-lift summary chip has its own
+  // column-change handler, so leave it alone.
+  if (target.closest(".wo-summary")) return;
   if (toggleCollapse(row)) return;
   const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
