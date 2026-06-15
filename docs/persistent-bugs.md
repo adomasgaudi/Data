@@ -11,7 +11,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
-## PB-22 — Added exercise lags / shows only after a delay (Analysis history)
+## PB-23 — Graph data dots jammed against the plot frame (no side margin)
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Graph (Marija "Pull Up", and earlier "Hip AD"). Owner: "fitting the graph should leave about 10px margin so the side dots are not so completely against the side" — then "nope #persistent" when the first fix didn't hold. The first/last data points (and the trend-line ends) sit right on the left/right frame, sometimes in the corners.
+- **Prior failed fix (CHART-112, b.2.8.434):** padded the X DOMAIN in `resetView()` by ~10px-equivalent (`xPad = range × 10/plotW`). Didn't hold — `resetView` only runs on **Fit / double-tap / mount**. The owner was looking at a **paginated/zoomed window** (the ‹ › pager / pinch / drag), whose view bounds are set by `zoomXY` / pan / pagination, NONE of which add padding. So edge points still landed on the frame on every non-Fit view.
+- **Root cause:** the margin was being added at the wrong LAYER — the data DOMAIN (`view.xMin/xMax`), which has many independent writers (resetView, zoomXY, pan, pinch, pager). The single chokepoint every view funnels through is the COORDINATE TRANSFORM `xPix`, which mapped `view.xMin → M.l` and `view.xMax → W-M.r` exactly — so whenever a data point coincides with a view edge it touches the frame. Padding one writer can't fix a property that belongs to the transform.
+- **Fix (b.2.8.x):** bake a fixed ~10px gutter into the X transform itself: `xPix` now maps the view into `[M.l+padX, W-M.r-padX]`, and the same inset is applied to the horizontal gridlines, the calendar bands, the bar step width, `clampX`, and EVERY inverse transform (tooltip / crosshair / pan-zoom pixel→value) so hit-testing stays aligned. The earlier `resetView` domain pad was reverted to its original tiny value. Now the margin holds on Fit, pan, zoom AND pagination — it's a property of the plot geometry, not of one view-setter. Code comment `PB-23` at `xPix`.
+- **Watch:** never add a "visual margin / inset" by nudging `view.*` — do it in the transform, the one place all view states share. Any new pixel↔value conversion must use the same `padX` (`xL`/`xW`) bounds as `xPix`, or tooltips/pan will drift.
+- **Recurrences:** 1 (CHART-112 was the domain-pad attempt; this is the transform-level root fix).
+
+---
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Workouts ("All Exercises"). Owner added "v-squats" via "+ exercise" and it didn't appear at first ("not adding"), then "shows now, so it's a lagging issue". Tagged #persistent #prune — same CLASS as PB-11 ("I added a set but don't see it").
 - **Root cause:** the Analysis history list is scoped by `waListExerciseFilter`, a NAME-SNAPSHOT computed in `renderWorkoutAnalysis` (`historyFilterWithSearch(histFilterNames(waSelected))`). The add-set/exercise commit updates `waSelected` but did NOT recompute that snapshot, and on the analysis tab it only re-rendered the GRAPH (not a fresh-filter list). So a just-logged, often brand-NEW exercise was excluded by the stale filter until the next analysis render re-derived it — the perceived "lag".

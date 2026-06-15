@@ -404,11 +404,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       ? xExtent(geomSeries().filter(visible))
       : dataXExtent(geomSeries());
     if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
-    // Inset the data ~10px from the plot's left/right frame so edge points (the first &
-    // last dots / the trend line's ends) aren't jammed against the side (owner). The pad
-    // is data-units but sized from the pixel width, so it stays ~10px at any range/zoom.
-    const plotWForPad = Math.max(1, widthOf() - margins().l - margins().r);
-    const xPad = (xe.xMax - xe.xMin) * (10 / plotWForPad) || 1;
+    // Small domain breathing only; the ~10px visible side margin is added at the
+    // transform (xPix, PB-23) so it holds on EVERY view, not just this fit.
+    const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
     if (cfg.forceLeftRange) {
       // Pinned left axis (per-bodyweight): use the caller's range verbatim.
@@ -451,7 +449,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const M = margins();
     const plotW = W - M.l - M.r;
     const plotH = h - M.t - M.b;
-    const xPix = (x: number) => M.l + ((x - view.xMin) / (view.xMax - view.xMin)) * plotW;
+    // PB-23: the data area is inset ~10px from the left/right frame so edge dots (the
+    // first/last points & trend-line ends) are never jammed against the side — on EVERY
+    // view (fit, pan, zoom, pagination), because the margin lives in the transform, not
+    // in any one view-setter. Inverse transforms (tooltip / pan-zoom) use the same xL/xW.
+    const padX = plotW > 80 ? 10 : 0;
+    const xL = M.l + padX, xW = plotW - 2 * padX;
+    const xPix = (x: number) => xL + ((x - view.xMin) / (view.xMax - view.xMin)) * xW;
     // "Potential (log)" axis mode: position values via tY (−ln(ceiling − value)); niceTicks
     // still makes nice kg ticks, yL just places them non-linearly. Identity when off.
     const yL = (y: number) => {
@@ -701,7 +705,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // series — a single bucket, or a few far-apart ones — can't blow up into one
         // giant bar that paints a whole shaded band across the chart (the old
         // Infinity-step fallback used the entire plot width).
-        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / 24;
+        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * xW : xW / 24;
         const girth = cfg.barGirth ?? 1; // user width knob (grouped lanes get thin, so allow fattening)
         const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14) * girth); // ~30% thinner than a step, capped, ×girth
         // Baseline = the (possibly shifted) zero line. Both the baseline and each
@@ -900,7 +904,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const M = margins();
     const plotW = W - M.l - M.r;
     const localX = ((clientX - rect.left) / rect.width) * W;
-    const xVal = view.xMin + ((localX - M.l) / plotW) * (view.xMax - view.xMin);
+    // PB-23: match the xL/xW inset used by xPix so hit-testing aligns with the dots.
+    const padX = plotW > 80 ? 10 : 0;
+    const xL = M.l + padX, xW = plotW - 2 * padX;
+    const xVal = view.xMin + ((localX - xL) / xW) * (view.xMax - view.xMin);
     const gs = geomSeries();
     let best: { p: SvgPoint; dx: number } | null = null;
     for (const s of gs) {
@@ -926,7 +933,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       .join("");
     tipEl.innerHTML = `<div class="svgc-tip-hd">${esc(fmtTipX(xv))}</div>${rows}`;
     tipEl.hidden = false;
-    const px = M.l + ((xv - view.xMin) / (view.xMax - view.xMin)) * plotW;
+    const px = xL + ((xv - view.xMin) / (view.xMax - view.xMin)) * xW;
     tipEl.style.left = `${Math.min(Math.max(px, 8), (plotEl.clientWidth || W) - tipEl.offsetWidth - 8)}px`;
     tipEl.style.top = `4px`;
   }
@@ -1017,7 +1024,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const plotH = h - M.t - M.b;
     const lx = ((clientX - rect.left) / rect.width) * W;
     const ly = ((clientY - rect.top) / rect.height) * h;
-    return { fx: view.xMin + ((lx - M.l) / plotW) * (view.xMax - view.xMin), vfrac: (ly - M.t) / plotH };
+    // PB-23: same xL/xW inset as xPix so pan/zoom anchor on the pointer, not 10px off.
+    const padX = plotW > 80 ? 10 : 0;
+    const xL = M.l + padX, xW = plotW - 2 * padX;
+    return { fx: view.xMin + ((lx - xL) / xW) * (view.xMax - view.xMin), vfrac: (ly - M.t) / plotH };
   }
   /** Zoom by independent factors per axis (>1 = out): x about fx, y about the
    * screen-fraction `vfrac` so BOTH the left and right y-axes scale together. */
