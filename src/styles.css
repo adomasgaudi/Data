@@ -3061,13 +3061,8 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pairs-mgr-empty { font-size: 0.8rem; padding: 4px 0 8px; }
 .pairs-mgr-chip { align-items: center; }
 .pairs-mgr-name { font-size: 0.74rem; font-weight: 700; padding: 2px 4px 2px 9px; }
-/* Nuzzo reps→%1RM mini-curve */
-.nz-svg { width: 100%; max-width: 280px; height: auto; }
-.nz-grid { stroke: var(--line); stroke-width: 1; }
-.nz-curve { stroke: var(--accent); stroke-width: 2; }
-.nz-dot { fill: var(--muted); opacity: 0.55; }
-.nz-mark { fill: var(--gold); stroke: #fff; stroke-width: 1; }
-.nz-axt { fill: var(--muted); font-size: 8px; }
+/* Nuzzo reps→%1RM curve — now the shared svgChart engine (.svgc) mounts into this box. */
+.lt-nuzzo { width: 100%; max-width: 320px; }
 /* Each field is its own STACKED section (label header on top, controls full-width
    below) instead of a cramped label|value 2-column row — gives editing room. */
 .ex-info-item { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }

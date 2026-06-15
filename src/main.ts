@@ -3467,9 +3467,9 @@ function openExerciseInfo(name: string, fromPlan = false): void {
     requestAnimationFrame(() => row.scrollIntoView({ behavior: "auto", block: "center" }));
   }
   els.exInfoTitle.textContent = name;
-  els.exInfoBody.innerHTML = exerciseInfoHtml(name);
+  els.exInfoPage.hidden = false; // unhide first so the embedded chart can measure width
+  paintExInfo(name);
   syncPillToggle();
-  els.exInfoPage.hidden = false;
   refreshPoseViz();
   els.exInfoBody.parentElement?.scrollTo(0, 0); // reset the card's own scroll
 }
@@ -3538,7 +3538,7 @@ function gotoIndexCategory(mode: IndexGroupMode, key: string): void {
  * so it stays in sync without closing. No-op when the overlay is closed. */
 function refreshExerciseInfo(): void {
   if (currentExInfo === null || els.exInfoPage.hidden) return;
-  els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+  paintExInfo(currentExInfo);
   refreshPoseViz();
 }
 /** From a note's "who & when" entry: switch to that athlete, open the Analysis
@@ -11166,31 +11166,47 @@ function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormu
   return series.length ? series[series.length - 1]!.y : Math.max(...pts.map((p) => p.y));
 }
 
-/** Compact inline SVG of the Nuzzo bench reps↔%1RM curve (reps 1–20 on x, %1RM on
- *  y), the study points as dots, and the suggested working set marked. Bench-derived
- *  but the closest data-grounded rep curve we have, so shown for any lift. */
-function nuzzoSvg(markReps: number | null, markPct: number | null): string {
-  const W = 260, H = 132, padL = 26, padR = 8, padT = 8, padB = 18;
-  const xMax = 20; // reps
-  const x = (reps: number) => padL + ((Math.min(reps, xMax) - 1) / (xMax - 1)) * (W - padL - padR);
-  const y = (pct: number) => padT + (1 - pct / 100) * (H - padT - padB);
-  let curve = "";
-  for (let r = 1; r <= xMax; r++) {
-    curve += `${r === 1 ? "M" : "L"}${x(r).toFixed(1)},${y(benchPctForReps(r)).toFixed(1)} `;
-  }
-  const dots = BENCH_REPS_STUDY
+/** The card's reps→%1RM (Nuzzo) curve as an svgChart config — the SAME engine as the
+ *  Analysis / compare / calculator graphs (the app's one chart tech). Reps on x, %1RM
+ *  on y; the best-fit curve as a line, the study point-estimates as dots, and the
+ *  suggested working set as a gold dot. Bench-derived but the closest data-grounded
+ *  rep curve we have, so shown for any lift. */
+function cardNuzzoConfig(markReps: number | null, markPct: number | null): SvgChartConfig {
+  const xMax = 20; // reps shown (the interesting near-failure range)
+  const fitPts: SvgPoint[] = [];
+  for (let r = 1; r <= xMax; r++) fitPts.push({ x: r, y: Math.round(benchPctForReps(r) * 10) / 10 });
+  const studyPts: SvgPoint[] = BENCH_REPS_STUDY
     .filter(([, reps]) => reps <= xMax)
-    .map(([pct, reps]) => `<circle cx="${x(reps).toFixed(1)}" cy="${y(pct).toFixed(1)}" r="2" class="nz-dot" />`)
-    .join("");
-  // y gridlines at 100/75/50/25 %
-  const grid = [100, 75, 50, 25].map((p) =>
-    `<line x1="${padL}" y1="${y(p).toFixed(1)}" x2="${W - padR}" y2="${y(p).toFixed(1)}" class="nz-grid" /><text x="2" y="${(y(p) + 3).toFixed(1)}" class="nz-axt">${p}</text>`).join("");
-  const xticks = [1, 5, 10, 15, 20].map((r) =>
-    `<text x="${x(r).toFixed(1)}" y="${H - 6}" class="nz-axt" text-anchor="middle">${r}</text>`).join("");
-  const marker = (markReps && markPct && markReps <= xMax)
-    ? `<circle cx="${x(markReps).toFixed(1)}" cy="${y(markPct).toFixed(1)}" r="3.5" class="nz-mark" />`
-    : "";
-  return `<svg class="nz-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Reps to %1RM curve">${grid}<path d="${curve}" class="nz-curve" fill="none" />${dots}${marker}${xticks}<text x="${W - padR}" y="${H - 6}" class="nz-axt" text-anchor="end">reps</text></svg>`;
+    .map(([pct, reps]) => ({ x: Math.round(reps * 10) / 10, y: pct, meta: `${reps.toFixed(1)} reps @ ${Math.round(pct)}%` }));
+  const series: SvgSeries[] = [
+    { name: "Best-fit curve", color: "#284e86", type: "line", points: fitPts, noLegend: true },
+    { name: "Study estimates (Nuzzo et al.)", color: "#5b6472", type: "scatter", points: studyPts, noLegend: true },
+  ];
+  if (markReps && markPct && markReps <= xMax) {
+    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: markReps, y: markPct, meta: `${markReps} reps @ ${Math.round(markPct)}%` }], noLegend: true });
+  }
+  return {
+    series, xKind: "linear", height: 150, yUnit: "%",
+    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} reps`,
+  };
+}
+/** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
+ *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
+ *  so every re-render path gets the live chart — not just the first open. */
+function mountExInfoCharts(): void {
+  const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
+  if (!box) return;
+  const reps = Number(box.dataset.nzreps), pct = Number(box.dataset.nzpct);
+  mountSvgChart(box, cardNuzzoConfig(
+    Number.isFinite(reps) && reps > 0 ? reps : null,
+    Number.isFinite(pct) && pct > 0 ? pct : null,
+  ));
+}
+/** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
+ *  card (re)render funnels through, so the embedded svgChart is never left un-mounted. */
+function paintExInfo(name: string): void {
+  els.exInfoBody.innerHTML = exerciseInfoHtml(name);
+  mountExInfoCharts();
 }
 
 /** The "How to train" brief for one lift — six panels, prepended to the info card. */
@@ -11242,7 +11258,7 @@ function liftTrainingHtml(name: string): string {
   // popups; lastWuCalc/lastWuRerender let the popup compute + refresh THIS card.
   if (hs && currentExInfo === name) {
     lastWuCalc = { orm: e1rm, work: hs.weightKg, reps: hs.reps, formula, increment: 2.5 };
-    lastWuRerender = () => { if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo); };
+    lastWuRerender = () => { if (currentExInfo) paintExInfo(currentExInfo); };
   }
   const warmRows = hs
     ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm, hs.weightKg, hs.reps, formula, 2.5)}</div>`
@@ -11294,7 +11310,7 @@ function liftTrainingHtml(name: string): string {
     sec("Set suggestion", setSug) +
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
-    sec("Reps → %1RM (Nuzzo)", nuzzoSvg(hs?.reps ?? null, hs?.pctOf1RM ?? null)) +
+    sec("Reps → %1RM (Nuzzo)", `<div class="lt-nuzzo" data-nzreps="${hs?.reps ?? ""}" data-nzpct="${hs?.pctOf1RM ?? ""}"></div>`) +
     sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
     sec("Pair with", antBody) +
     `</div>`;
@@ -12948,7 +12964,7 @@ async function init() {
   els.exInfoPillToggle.addEventListener("click", () => {
     exInfoMode = !exInfoMode;
     syncPillToggle();
-    if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+    if (currentExInfo) paintExInfo(currentExInfo);
   });
   // Delegated: a pill's ⓘ navigates — group pill → that group's own info card;
   // Pairing-grade mini menu (super → no way): pick an option → set + close + re-render
@@ -12982,7 +12998,7 @@ async function init() {
     const w = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="w"]')?.value ?? "";
     const r = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="r"]')?.value ?? "";
     cardCalc = { weight: w.trim(), reps: r.trim() };
-    if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+    if (currentExInfo) paintExInfo(currentExInfo);
   });
   els.exInfoBody.addEventListener("click", (e) => {
     // "Pair with" flag: open the mini grade menu for the directional edge (from → to).
@@ -13561,7 +13577,7 @@ async function init() {
       const v = Number(step!.value);
       if (Number.isFinite(v) && v > 0) {
         setInclineCmPerStep(stepDim, Math.round(v * 10) / 10);
-        if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+        if (currentExInfo) paintExInfo(currentExInfo);
         scheduleModelFactorsApply();
       }
       return;
