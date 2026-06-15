@@ -13,6 +13,15 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-26 — Deleting a set lags and moves you away from the expanded view
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis tab → workout history with a set expanded (the FREE/B2W variation chips showing). Owner: "when i delete a set the app lags and move me away from the expanded view. use two process and loading hydration and keep me in the expanded view #senior". Same CLASS as PB-12 (a control inside the set view collapsing it), now via the toast-delete path.
+- **Root cause:** `deleteSetsWithUndo` (the toast/Undo delete) re-rendered with `deferRender(renderWorkoutAnalysis); if (workoutsTable) renderWorkoutsPage();` — two problems: (1) `renderWorkoutsPage()` ran SYNCHRONOUSLY, outside `deferRender`'s `scrollY` capture/restore, so the page jumped; (2) `renderWorkoutAnalysis` (the Analysis-tab path) rebuilds the history `innerHTML` but — unlike `renderWorkoutsPage` (which calls `reopenSetEdit` at its end) — never re-applied the open set panel, so the expanded view was destroyed. Net: on the Analysis tab a delete collapsed the expanded set AND jumped scroll. (The editor/swipe delete `deleteSetById` was already correct — it captures+restores `scrollY`.)
+- **Fix — Part 1 (b.2.8.x, the "keep me in the expanded view" half):** rewrote the rerender closure to one DEFERRED pass — `deferRender(() => { if (workoutsTable) renderWorkoutsPage(); if (analysis visible) renderWorkoutAnalysis(); reopenSetEdit(); })`. `deferRender` restores `scrollY` (twice, for async chart reflow); rendering only the VISIBLE view avoids the double rebuild; `reopenSetEdit()` LAST keeps the expanded set open across the rebuild (PB-12 idiom). Code comment `PB-26` at `deleteSetsWithUndo`.
+- **Still to come (Parts 2–3):** optimistic two-phase delete (instant DOM removal of the deleted cells, then debounced heavy rebuild) + a shared loading indicator during the deferred rebuild (rule 46), per the owner's "two process and loading hydration". Then persist the standing rule (`#remember`).
+- **Watch:** any mutate-then-rebuild handler (delete, undo, edit) must go through ONE deferred, scroll-preserving render and call `reopenSetEdit()` last — never a synchronous `renderWorkoutsPage()`/`renderWorkoutAnalysis()` that bypasses `deferRender`.
+- **Recurrences:** 0 (first report; sibling of the PB-12 class).
+
 ## PB-25 — A "created" new exercise doesn't appear (exercise list is data-only)
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Index + Analysis → add-exercise. Owner asked to "create a new exercise knee raise" with variations; the AI added it only to the variation-model config (`variationConfig.ts` FAMILIES + EXERCISE_FAMILY). Owner: "i dont see it in index (only str level exercises 'hanging knee raise'), i dont see it as an option when adding exercise in history #persistent".

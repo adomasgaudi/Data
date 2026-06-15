@@ -1979,7 +1979,20 @@ function deleteSetsWithUndo(ids: string[], label: string): void {
   for (const id of real) deletedSets.add(id);
   saveDeletedSets();
   logAction("delete-sets", `Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`);
-  const rerender = () => { deferRender(renderWorkoutAnalysis); if (document.getElementById("workoutsTable")) renderWorkoutsPage(); };
+  // PB-26: deleting a set must NOT move you away from the expanded view. The old
+  // rerender ran renderWorkoutsPage() SYNCHRONOUSLY (no scroll restore) and called
+  // renderWorkoutAnalysis WITHOUT reopenSetEdit, so on the Analysis tab the open
+  // set panel was destroyed and the page jumped. Match the established set-edit
+  // idiom: one DEFERRED pass (deferRender restores scrollY across the rebuild),
+  // render only the VISIBLE view, then reopenSetEdit() LAST so the expanded set
+  // survives the rebuild.
+  const rerender = () => {
+    deferRender(() => {
+      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+      if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+      reopenSetEdit();
+    });
+  };
   rerender();
   showToast(`Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`, "Undo", () => {
     for (const id of real) deletedSets.delete(id);
