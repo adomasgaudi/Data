@@ -10836,7 +10836,7 @@ function renderWorkoutPlan(): void {
     const ha = typeof oa === "number", hb = typeof ob === "number";
     if (ha && hb) return oa! - ob!;
     if (ha !== hb) return ha ? -1 : 1; // dragged entries first, in their order
-    return byRank(a, b);               // un-dragged ones keep the rank order below them
+    return byEffort(a, b);             // UN-dragged ones default to EFFORT order (owner: untouched = by effort)
   };
   const names = Object.keys(pri).sort(
     prioSortMode === "effort" ? byEffort : prioSortMode === "manual" ? byManual : byRank);
@@ -10979,6 +10979,10 @@ function renderWorkoutPlan(): void {
         `${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
+  // FREE-SORT state (owner): in Drag mode the list is a FLAT, freely-draggable list.
+  // Until you drag, it's ordered by EFFORT (no manual `order` set); once you've hand-
+  // sorted, those entries carry an `order` and the list shows a "free order" badge.
+  const freeSorted = prioSortMode === "manual" && names.some((ex) => typeof pri[ex]!.order === "number");
   // Summary line on top: total weekly target sets + the per-level breakdown
   // (Max effort / Active / Passive / Maintain), each chip in its level colour.
   const summary = names.length
@@ -10990,9 +10994,16 @@ function renderWorkoutPlan(): void {
           `<span class="prio-sum-chip prio-level-${lvl}" title="${escapeHtml(PRIORITY_LABEL[lvl])} — weekly target sets across these lifts">` +
           `<span class="prio-sum-lbl">${PRIORITY_LABEL[lvl]}</span> <span class="prio-sum-n">${byLevel[lvl]}</span></span>`;
         // ↕ Sort pill — cycles how the list is ordered: Top → Effort → Drag (manual).
-        const sortPill = `<button type="button" class="prio-sort wo-dj-btn" data-priosort title="Sort the focus lifts — tap to cycle: Top (priority tier) → Effort (level) → Drag (manual order).${prioSortMode === "manual" ? " Drag the ≡ grips to reorder." : ""}">↕ ${PRIO_SORT_LABEL[prioSortMode]}</button>`;
+        const sortPill = `<button type="button" class="prio-sort wo-dj-btn" data-priosort title="Sort the focus lifts — tap to cycle: Top (priority tier) → Effort (level) → Drag (free order).${prioSortMode === "manual" ? " Drag the ≡ grips to reorder freely." : ""}">↕ ${PRIO_SORT_LABEL[prioSortMode]}</button>`;
+        // In Drag mode, show whether the list is your own FREE order or still the
+        // effort default — with a one-tap reset back to effort once you've sorted.
+        const freeBadge = prioSortMode !== "manual" ? ""
+          : freeSorted
+            ? `<span class="prio-freebadge is-free" title="You've hand-sorted these lifts. Tap ↺ to go back to effort order.">✋ Free order<button type="button" class="prio-freereset" data-prioresetorder title="Reset to effort order" aria-label="Reset to effort order">↺</button></span>`
+            : `<span class="prio-freebadge muted" title="Drag the ≡ grips to set your own order. Until then they're sorted by effort.">by effort · drag to customise</span>`;
         return `<div class="prio-summary">` +
           sortPill +
+          freeBadge +
           `<span class="prio-sum-total" title="Total weekly target sets across all focus lifts">Σ ${total}<span class="prio-sum-unit">/wk</span></span>` +
           PRIORITY_LEVELS.map(chip).join("") + `</div>`;
       })()
@@ -11006,8 +11017,13 @@ function renderWorkoutPlan(): void {
   const groupOrder: string[] = groupDim === "level" ? PRIORITY_LEVELS : PRIORITY_RANKS;
   const keyOf = (ex: string): string => groupDim === "level" ? pri[ex]!.level : rankOf(pri[ex]!);
   const groupLabelOf = (k: string): string => groupDim === "level" ? PRIORITY_LABEL[k as PriorityLevel] : RANK_LABEL[k as PriorityRank];
-  const list = names.length
-    ? groupOrder.map((k) => {
+  // Drag mode = ONE FLAT, freely-sortable list (no rank/level sections), so a lift can
+  // be dragged anywhere; the drag handler writes a global `order` across this list.
+  const list = !names.length
+    ? `<p class="muted prio-empty">No priorities yet. Add the exercises you want to focus on — tap a suggestion below.</p>`
+    : prioSortMode === "manual"
+    ? `<div class="prio-list prio-list--flat">${names.map(rowHtml).join("")}</div>`
+    : groupOrder.map((k) => {
         const members = names.filter((ex) => keyOf(ex) === k);
         if (!members.length) return "";
         const tgt = members.reduce((s, ex) => s + (pri[ex]!.target || 0), 0);
@@ -11019,8 +11035,7 @@ function renderWorkoutPlan(): void {
           `<span class="prio-section-n muted">${members.length}</span>` +
           `<span class="prio-section-tgt muted">Σ ${tgt}/wk</span></summary>` +
           `<div class="prio-list">${members.map(rowHtml).join("")}</div></details>`;
-      }).join("")
-    : `<p class="muted prio-empty">No priorities yet. Add the exercises you want to focus on — tap a suggestion below.</p>`;
+      }).join("");
   // "Add another" is now a Tier-2 picker (docs/exercise-picker-tiers.md): curated
   // suggestions by default, but a search box reveals ANY addable lift, not just the top few.
   const allAddable = [
@@ -13232,10 +13247,16 @@ async function init() {
       if (prioSectionCollapsed.has(k)) prioSectionCollapsed.delete(k); else prioSectionCollapsed.add(k);
       return;
     }
-    // ↕ Sort pill — cycle the list order: Top → Effort → Drag (manual).
+    // ↕ Sort pill — cycle the list order: Top → Effort → Drag (free order).
     if (t.closest("[data-priosort]")) {
       prioSortMode = PRIO_SORTS[(PRIO_SORTS.indexOf(prioSortMode) + 1) % PRIO_SORTS.length]!;
       savePrioSort(); renderWorkoutPlan(); return;
+    }
+    // ↺ Reset free order — clear every hand-sorted `order` so the list falls back to
+    // the effort default (owner: "untouched = sorted by effort").
+    if (t.closest("[data-prioresetorder]")) {
+      for (const ex of Object.keys(pri)) delete pri[ex]!.order;
+      savePriorities(); renderWorkoutPlan(); return;
     }
     // Toggle a row's "related lifts" dropdown (no sort change — the rows stay put).
     const exp = t.closest<HTMLElement>("[data-prioexpand]");

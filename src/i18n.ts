@@ -300,6 +300,8 @@ const LT: Record<string, string> = {
   "⇄ Separated": "⇄ Atskirai",
   "✕ Remove": "✕ Pašalinti",
   "Updating…": "Atnaujinama…",
+  "✋ Free order": "✋ Laisva tvarka",
+  "by effort · drag to customise": "pagal pastangą · tempk, kad pakeistum",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
   "Default ROM": "Numatyta amplitudė",

@@ -4874,6 +4874,18 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .prio-row.prio-dragging { opacity: 0.9; background: var(--accent-soft); box-shadow: 0 6px 18px rgba(0,0,0,0.18); position: relative; z-index: 2; }
 /* ↕ Sort pill — sits at the head of the summary row; reuses the compact .wo-dj-btn look. */
 .prio-sort { flex: none; }
+/* Free-sort indicator (Drag mode): a small badge — muted hint when still in effort
+   order, accent "Free order" + ↺ reset once you've hand-sorted. */
+.prio-freebadge {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: var(--r-pill);
+}
+.prio-freebadge.is-free { color: var(--accent); background: var(--accent-soft); }
+.prio-freereset {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--tap-min); min-height: var(--tap-min); margin: -4px -2px -4px 0;
+  background: none; border: none; color: var(--accent); font-size: 0.95rem; cursor: pointer;
+}
 /* Tap-to-expand name button: the lift NAME on its own line (full width, so the wide
    rank/level pills don't squeeze it), with the body-part as a tiny line just below. */
 .prio-main {
