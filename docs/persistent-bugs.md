@@ -11,6 +11,17 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-22 — Added exercise lags / shows only after a delay (Analysis history)
+
+- **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → Workouts ("All Exercises"). Owner added "v-squats" via "+ exercise" and it didn't appear at first ("not adding"), then "shows now, so it's a lagging issue". Tagged #persistent #prune — same CLASS as PB-11 ("I added a set but don't see it").
+- **Root cause:** the Analysis history list is scoped by `waListExerciseFilter`, a NAME-SNAPSHOT computed in `renderWorkoutAnalysis` (`historyFilterWithSearch(histFilterNames(waSelected))`). The add-set/exercise commit updates `waSelected` but did NOT recompute that snapshot, and on the analysis tab it only re-rendered the GRAPH (not a fresh-filter list). So a just-logged, often brand-NEW exercise was excluded by the stale filter until the next analysis render re-derived it — the perceived "lag".
+- **Fix (b.2.8.x):** after the commit updates `waSelected`, when the analysis tab is visible it now recomputes `waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected))` BEFORE `renderWorkoutsPage`, so the new exercise is in scope immediately. Invariant (shared with PB-11): after logging, that lift is visible NOW, on every view. Covers both "+ set" and "+ exercise" (same shared commit).
+- **#prune note:** the other lift-add paths (priorities Add-another, command-bar create, compare-combine) don't use the analysis history filter, so they're unaffected by this snapshot; this commit was the one place the stale scope bit.
+- **Watch:** any view scoped by a cached name-list must refresh that cache when a set/exercise is added, not rely on the next interaction.
+- **Recurrences:** 1 (PB-11 was the set-row / date dimension; this is the analysis-filter dimension of the same invariant).
+
+---
+
 ## PB-21 — Exercise card ↔ calculator feature parity (recurring "the card should have what the calc has")
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), exercise-info card. Recurring request: the card keeps lacking features the Formulas calculator has (WR/benchmarks/stats were moved over in EXR-139; now the warm-up + hard-set plan pickers / full workout table). Owner: "exercise card should have everything a calculator has."

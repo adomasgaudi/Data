@@ -15716,6 +15716,14 @@ function onInlineAddGo(form: HTMLElement) {
     saveActiveSet(); refreshActiveSet();
   }
   if (waSelected.length && !waSelected.includes(exerciseName)) waSelected = [...waSelected, exerciseName];
+  // The Analysis history is scoped by a name-SNAPSHOT filter (waListExerciseFilter); on the
+  // analysis tab that snapshot is stale right after an add, so a just-logged (often brand-
+  // NEW) exercise stays hidden until the next analysis render — the recurring "I added it
+  // but it only shows after a delay" (PB-22, same class as PB-11). Recompute the filter from
+  // the now-current selection so renderWorkoutsPage below shows it immediately.
+  if (document.getElementById("tab-analysis")?.hidden === false && waSelected.length) {
+    waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected));
+  }
   // Which weeks/days are expanded right now — reopen them after the rebuild.
   const openDates = new Set(
     Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
