@@ -110,13 +110,32 @@ describe("graph metric registry (TASK 26)", () => {
     ];
     expect(graphMetric("predicted")!.compute!(many, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
   });
+
+  it("projection basis honours warm-up exclusion + hard-only filter", () => {
+    // 4 sessions; each has a hard top set and a warm-up. rirOf marks warm-ups (rir 8).
+    const recs = [
+      rec({ date: "2024-01-01", weight: 100, reps: 3, setNumber: 1 }),
+      rec({ date: "2024-01-01", weight: 40, reps: 10, setNumber: 2 }), // warm-up
+      rec({ date: "2024-02-01", weight: 105, reps: 3, setNumber: 1 }),
+      rec({ date: "2024-03-01", weight: 110, reps: 3, setNumber: 1 }),
+      rec({ date: "2024-04-01", weight: 115, reps: 3, setNumber: 1 }),
+    ];
+    const rirOf = (r: SetRecord) => (r.weight != null && r.weight < 60 ? 8 : 1); // light = warm-up
+    const hardCfg = { ...DEFAULT_GRAPH_CONFIG, rirOf, projectionBasis: "hard" as const };
+    const allCfg = { ...DEFAULT_GRAPH_CONFIG, rirOf, projectionBasis: "all" as const };
+    // Both bases still produce a forecast (warm-up dropped, ≥3 hard points remain).
+    expect(graphMetric("predicted")!.compute!(recs, hardCfg).length).toBeGreaterThan(0);
+    expect(graphMetric("predicted")!.compute!(recs, allCfg).length).toBeGreaterThan(0);
+    // Records basis (default) is monotonic in the source → still fits.
+    expect(graphMetric("predicted")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
+  });
 });
 
 describe("graph config layer (TASK 29)", () => {
   it("has a default config with all settings", () => {
     expect(DEFAULT_GRAPH_CONFIG).toEqual({
-      aggregation: "none", interval: "week", smoothing: 0, prediction: false, decay: false,
-      formula: "epley", predictionDays: 90, opacity: 0.6, rightHeadroom: 1, volumeYShift: 0, barGirth: 1, spread: 0.9,
+      aggregation: "none", interval: "week", smoothing: 0, decay: false,
+      formula: "epley", predictionDays: 90, projectionBasis: "records", opacity: 0.6, rightHeadroom: 1, volumeYShift: 0, barGirth: 1, spread: 0.9,
     });
   });
 });

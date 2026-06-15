@@ -13,14 +13,18 @@ export interface GraphConfig {
   interval: "day" | "week" | "month";
   /** Moving-average window in points (0 = off). */
   smoothing: number;
-  /** Extend a trend into the future (a general flag; the Predicted metric projects). */
-  prediction: boolean;
   /** Apply the strength-fade (detraining) model to strength metrics. */
   decay: boolean;
   /** 1RM formula for the strength/1RM metrics (matches the app-wide choice). */
   formula: OneRepMaxFormula;
   /** How far ahead the Predicted Strength metric projects, in days. */
   predictionDays: number;
+  /** What logged points feed the projection fit:
+   *  "records" = the running-max (PR) e1RM line (smooth lifetime trend, default),
+   *  "hard"    = only hard sets' e1RM (near-failure effort),
+   *  "all"     = every working set's e1RM.
+   *  Warm-ups (clearly submaximal) are ALWAYS excluded, whatever the basis. */
+  projectionBasis: "records" | "hard" | "all";
   /** Fill opacity (0..1) for bar series (e.g. Volume), so they don't hide other
    * series. Default 0.6 — a touch more solid than the scatter dots. */
   opacity: number;
@@ -62,10 +66,10 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   aggregation: "none",
   interval: "week",
   smoothing: 0,
-  prediction: false,
   decay: false,
   formula: "epley",
   predictionDays: 90,
+  projectionBasis: "records",
   opacity: 0.6,
   rightHeadroom: 1,
   volumeYShift: 0,

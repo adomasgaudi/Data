@@ -17863,7 +17863,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const hasSetMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "range" || m.type === "scatter"); });
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
   const openMetricGroups = new Set<string>();
@@ -17892,7 +17892,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const compact = getTimeCompact();
   const onoff = (on: boolean, attr: string, label: string, title: string) =>
     `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
-  const lensCount = [c.prediction, c.decay, waHardOnly].filter(Boolean).length;
+  const lensCount = [c.decay, waHardOnly].filter(Boolean).length;
   const openCfgGroups = new Set<string>();
   if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
     if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
@@ -17905,7 +17905,6 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."));
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
     onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
-    onoff(c.prediction, `data-wacfgtoggle="prediction"`, "Prediction", "Add a logarithmic strength forecast line.") +
     onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."));
   const cfgBars = hasBarMetric
     ? cfgGroup("Bars & axes", "",
@@ -17927,11 +17926,23 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength AXIS by distance to a lifetime-potential ceiling — values stay in kg, the axis just compresses near the ceiling. An approach-to-ceiling reads straight; a true plateau still flattens.") +
     onoff(!!c.potentialNativeLog, `data-wacfgtoggle="potentialNativeLog"`, "Native log (exp.)", "EXPERIMENTAL: transform each data POINT's value to its log-distance from the ceiling and plot THAT on a normal linear axis (the plotted numbers become the log values).") +
     `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
+  // Projection — the log-curve forecast line (ln(x+a)+b fit). Lives right under the
+  // Volume & frequency metric group. ON/OFF reuses the "predicted" metric so it draws
+  // through the existing render path; horizon + basis are cycle pills.
+  const projOn = waMetrics.has("predicted");
+  const projDays = c.predictionDays;
+  const projDaysLbl = projDays >= 365 ? `${Math.round(projDays / 365)} yr` : `${Math.round(projDays / 30)} mo`;
+  const projBasis = c.projectionBasis ?? "records";
+  const projBasisLbl = projBasis === "records" ? "Records" : projBasis === "hard" ? "Hard sets" : "All sets";
+  const cfgProjection = cfgGroup("Projection", projOn ? `${projDaysLbl} · ${projBasisLbl.toLowerCase()}` : "",
+    `<button type="button" class="wa-metric${projOn ? " is-on" : ""}" data-wametric="predicted" title="Draw a log-curve (ln) strength forecast line ahead of your data.">Show forecast line</button>` +
+    `<button type="button" class="wa-name-opt" data-waprojdays title="How far ahead the forecast projects. Tap to cycle.">Ahead <span class="muted">${projDaysLbl}</span></button>` +
+    `<button type="button" class="wa-name-opt" data-waprojbasis title="Which logged sets the curve is fitted to (warm-ups always excluded). Tap to cycle.">Fit <span class="muted">${projBasisLbl}</span></button>`);
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
     `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
     `</div>`;
@@ -18901,7 +18912,6 @@ function setupWorkoutAnalysis(): void {
       else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
       else if (key === "spread") waGraphConfig.spread = Math.min(9.8, Math.max(0, Number((el as HTMLInputElement).value)));
       else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
-      else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
       else if (key === "potentialCeiling") { const v = Number((el as HTMLInputElement).value); waGraphConfig.potentialCeiling = v > 0 ? v : undefined; }
       scheduleWaGraph();
@@ -19166,6 +19176,22 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
+    // Projection horizon — how far ahead the forecast line projects (1 → 3 → 6 → 12 mo).
+    if (t.closest<HTMLElement>("[data-waprojdays]")) {
+      const steps = [30, 90, 180, 365];
+      const i = steps.indexOf(waGraphConfig.predictionDays);
+      waGraphConfig.predictionDays = steps[(i + 1) % steps.length] ?? 90;
+      scheduleWaGraph();
+      return;
+    }
+    // Projection basis — which logged sets the curve is fitted to (records → hard → all).
+    if (t.closest<HTMLElement>("[data-waprojbasis]")) {
+      const steps = ["records", "hard", "all"] as const;
+      const i = steps.indexOf(waGraphConfig.projectionBasis ?? "records");
+      waGraphConfig.projectionBasis = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
+      return;
+    }
     // ── Graph "min" carousel interactions ──────────────────────────────────────
     // "Multi ▾" → expand the single-lift carousel into the full multi-exercise graph.
     if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
@@ -19227,7 +19253,7 @@ function setupWorkoutAnalysis(): void {
     }
     const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
     if (cfgTog?.dataset.wacfgtoggle) {
-      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay" | "potentialLog" | "potentialNativeLog";
+      const key = cfgTog.dataset.wacfgtoggle as "decay" | "potentialLog" | "potentialNativeLog";
       waGraphConfig[key] = !waGraphConfig[key];
       // The two potential-log views are alternatives (axis-scale vs data-transform) and
       // both are kg-based, so turning one on turns the other AND ×BW off.

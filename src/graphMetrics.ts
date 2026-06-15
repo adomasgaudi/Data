@@ -7,7 +7,8 @@
  */
 import type { SetRecord } from "./domain";
 import { addedWeight1RM, decayedStrengthSeries } from "./aggregate";
-import { setVolume, linearFit, type OneRepMaxFormula } from "./metrics";
+import { setVolume, type OneRepMaxFormula } from "./metrics";
+import { fitLog, sampleProjection } from "./projection";
 import type { GraphConfig } from "./graphConfig";
 
 const DAY = 86_400_000;
@@ -173,23 +174,35 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
   return pts.map((p) => ({ x: p.x, y: r1((m = Math.max(m, p.y))) }));
 }
 
-/** Logarithmic projection (a + b·ln(day+1)) over the data span extended by the
- * horizon. Returns [] when there are too few points to fit (missing-data state). */
+/** Select the points that feed the projection fit, per the configured basis.
+ * Warm-ups (clearly submaximal: RIR ≥ 6 when effort is known) are ALWAYS dropped;
+ * "hard" keeps only near-failure sets (RIR < 3), "records" reduces to the running
+ * max, and "all" keeps every working set. */
+function projectionBasisPoints(records: readonly SetRecord[], cfg: GraphConfig): { x: number; y: number }[] {
+  const basis = cfg.projectionBasis ?? "records";
+  const rirOf = cfg.rirOf;
+  const kept = records.filter((r) => {
+    if (!rirOf) return true; // no effort signal → can't tell warm-ups apart, keep all
+    const rir = rirOf(r);
+    if (rir == null || !Number.isFinite(rir)) return true; // unknown effort → keep
+    if (rir >= 6) return false; // clear warm-up — never projected
+    if (basis === "hard") return rir < 3; // near-failure only
+    return true;
+  });
+  const pts = e1rmPoints(kept, cfg.formula);
+  return basis === "records" ? runningMax(pts).map((p) => ({ x: p.x, y: p.y! })) : pts;
+}
+
+/** Logarithmic projection y = c + b·ln(t + a) (grid-searched shift, see
+ * projection.ts) over the data span extended by the horizon. Returns [] when there
+ * are too few points to fit (missing-data state). */
 function predict(pts: { x: number; y: number }[], horizonDays: number): GraphPoint[] {
   if (pts.length < 3) return [];
-  const t0 = pts[0]!.x;
-  const dayOf = (x: number) => (x - t0) / DAY;
-  const fit = linearFit(pts.map((p) => ({ x: Math.log(dayOf(p.x) + 1), y: p.y })));
+  const fit = fitLog(pts);
   if (!fit) return [];
-  const lastDay = dayOf(pts[pts.length - 1]!.x);
-  const end = lastDay + Math.max(0, horizonDays);
-  const out: GraphPoint[] = [];
-  const N = 24;
-  for (let i = 0; i <= N; i++) {
-    const d = (end * i) / N;
-    out.push({ x: t0 + d * DAY, y: r1(fit.intercept + fit.slope * Math.log(d + 1)) });
-  }
-  return out;
+  const t0 = pts[0]!.x;
+  const end = pts[pts.length - 1]!.x + Math.max(0, horizonDays) * DAY;
+  return sampleProjection(fit, t0, end, 24).map((p) => ({ x: p.x, y: r1(p.y) }));
 }
 
 const WEEK = 7 * DAY;
@@ -285,7 +298,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   { id: "pctWR", label: "WR%", type: "scatter" },
   { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
   { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
-  { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
+  { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
   // Interval — WEEK by default — and read as bars (a column per bucket); switch
