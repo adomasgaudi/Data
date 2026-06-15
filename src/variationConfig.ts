@@ -131,6 +131,17 @@ export const FAMILIES: Record<string, FamilyDef> = {
     },
     defaults: { support: "hanging", backrest: "none", obstacle: "none" },
   },
+  CROSSSQUAT: {
+    // Cross-legged (seated cross-leg → stand) squat. The owner's two requested
+    // variables: an ASSISTANCE BAND (helps you up — heavier band = more help) and
+    // (handled universally) the range of motion. Band factors are PLACEHOLDERS (×1 —
+    // they capture the level without scaling yet); calibrate in ⚙ Difficulty
+    // multipliers. ROM is the per-exercise universal default (90%), not a dim here.
+    dims: {
+      band: { none: 1.0, "1": 1.0, "2": 1.0, "3": 1.0, "4": 1.0, "5": 1.0, "6": 1.0 },
+    },
+    defaults: { band: "none" },
+  },
 };
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
@@ -253,6 +264,26 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "yoga s": { obstacle: "S" },
     "yoga block s": { obstacle: "S" },
   },
+  CROSSSQUAT: {
+    // Assistance band by number (higher = heavier = more help). Longest-match-first
+    // means "band 5" beats bare "band"/"assisted" (which assume a mid band).
+    "band 1": { band: "1" },
+    "band 2": { band: "2" },
+    "band 3": { band: "3" },
+    "band 4": { band: "4" },
+    "band 5": { band: "5" },
+    "band 6": { band: "6" },
+    "guma 1": { band: "1" },
+    "guma 2": { band: "2" },
+    "guma 3": { band: "3" },
+    "guma 4": { band: "4" },
+    "guma 5": { band: "5" },
+    "guma 6": { band: "6" },
+    band: { band: "5" },
+    assisted: { band: "5" },
+    "band assisted": { band: "5" },
+    guma: { band: "5" },
+  },
 };
 
 /** The bundled config (passed by default to the resolver; callers may pass their
@@ -260,7 +291,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 14;
+export const CONFIG_VERSION = 15;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -286,6 +317,11 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Knee Raises": "KNEERAISE",
   "Hanging Knee Raise": "KNEERAISE",
   "Hanging Knee Raises": "KNEERAISE",
+  "Cross-Legged Squats": "CROSSSQUAT",
+  "Cross-Legged Squat": "CROSSSQUAT",
+  "Cross-leg Squat": "CROSSSQUAT",
+  "Cross-leg squat": "CROSSSQUAT",
+  "Cross Legged Squat": "CROSSSQUAT",
 };
 
 export function familyOf(

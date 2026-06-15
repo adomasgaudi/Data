@@ -209,6 +209,8 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
   "Knee Raises": 0.35,
   "Hanging Knee Raise": 0.35,
   "Hanging Knee Raises": 0.35,
+  "Cross-Legged Squats": 0.6,
+  "Cross-Legged Squat": 0.6,
 };
 
 /** Exercises with no match contribute no bodyweight (treated as pure load). */

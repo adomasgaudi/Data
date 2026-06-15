@@ -138,7 +138,7 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
  * it becomes a normal data-derived exercise and this entry is just a no-op dedupe.
  * Add a name here when the owner says "create exercise X". (PB-25.)
  */
-export const EXTRA_EXERCISES: readonly string[] = ["Knee Raise"];
+export const EXTRA_EXERCISES: readonly string[] = ["Knee Raise", "Cross-Legged Squats"];
 
 /**
  * The exercise names a picker/selector should offer for a set of records.
