@@ -88,6 +88,7 @@ import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 // rebuild, restore from warehouse/2026-06-10-pose-3d-engine/ (see its manifest.json).
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
+import { testMockRecords } from "./mockData";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
@@ -453,8 +454,16 @@ function signIn(): void {
 function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
 
 function setViewMode(mode: ViewMode) {
+  const prev = viewMode;
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
+  // The admin-only "test" sandbox's mock sets live in data.records ONLY in admin view —
+  // rebuild + re-render when crossing the admin boundary so they appear/vanish with it
+  // (and never linger in a user/spectator view or the leaderboards).
+  if ((prev === "admin") !== (mode === "admin") && loadedRecords.length) {
+    mergeManualSets();
+    if (typeof renderAll === "function") renderAll();
+  }
   rebuildAthleteRosters(); // the roster differs by view (admin-only "test" sandbox user)
   const locked = lockedUsername(); // null in admin, else the locked athlete
   // The mode toggle in the header shows the current view; the Settings dropdown +
@@ -15014,6 +15023,12 @@ function mergeManualSets() {
   // A high, unique set number per entry → a stable, collision-free setId (so each
   // hand-logged set edits/tags independently and never clashes with a CSV set).
   manualEntries.forEach((m, i) => data.records.push(manualToRecord(m, 100000 + i)));
+  // Admin-only "test" sandbox (ATH-50): inject deterministic mock sets so its graph/
+  // stats/history populate and there are sessions to log into — ONLY in the admin view,
+  // so it never leaks into a user/spectator view or the shared leaderboards.
+  if (viewMode === "admin") {
+    for (const a of ADMIN_ONLY_ATHLETES) data.records.push(...testMockRecords(a.username, a.user, todayIso()));
+  }
   // Re-derive the spelling-merge report (CSV only) so it reflects any split-outs.
   data.merges = mergesFromRecords(csv);
   mergeVariantsCache = null;
