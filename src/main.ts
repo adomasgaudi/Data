@@ -15435,7 +15435,6 @@ const AF_BUTTONS =
   `<button type="button" class="wo-af-go">Add</button>` +
   `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
   `<span class="wo-af-msg muted"></span>`;
-const AF_FIELDS = AF_INPUTS + AF_BUTTONS;
 
 /** Distinct variation NOTES already logged for an exercise (e.g. a handstand's
  * "b2w +15cm", a push-up's "deficit"), most-used first — the choices we offer when
@@ -15576,31 +15575,6 @@ function afWhenToggle(date: string, today: string): string {
 /** Compact inline "add set" form shown right under an exercise in the Workouts
  * view, so a set is logged on this screen without jumping to the Add page. The
  * athlete is the one the page is showing; the date is the session's date. */
-function inlineAddFormHtml(exerciseName: string, date: string): string {
-  const today = todayIso();
-  return (
-    `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
-    afWhenToggle(date, today) +
-    afVariationField(exerciseName) +
-    AF_FIELDS +
-    `</span>`
-  );
-}
-
-/** Like the add-set form, but with a searchable exercise picker up front so a
- * brand-new exercise can be added to a session (type to filter every known
- * exercise; a new name is allowed too). */
-function inlineAddExerciseFormHtml(date: string): string {
-  const today = todayIso();
-  return (
-    `<span class="wo-addform wo-addform--new" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
-    afWhenToggle(date, today) +
-    `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" aria-label="Exercise" autocomplete="off" />` +
-    AF_FIELDS +
-    `</span>`
-  );
-}
-
 /** Remove an open inline add form, plus its wrapping detail-table row if it sits
  * in the expanded sets table. */
 function removeInlineAddForm(form: HTMLElement) {
@@ -15609,66 +15583,136 @@ function removeInlineAddForm(form: HTMLElement) {
   else form.remove();
 }
 
-/** Toggle the inline add form for a "+ set" button. In the expanded sets table
- * it becomes its own row under the exercise header; in the collapsed session
- * summary it sits inline right after the button. */
-function toggleInlineAddForm(btn: HTMLElement) {
-  const ex = btn.dataset.addex ?? "";
-  const date = btn.dataset.adddate ?? "";
-  const headerRow = btn.closest("tr.set-ex-row");
-  if (headerRow) {
-    const next = headerRow.nextElementSibling;
-    if (next?.classList.contains("wo-addform-row")) {
-      next.remove();
-      return;
-    }
-    const tr = document.createElement("tr");
-    tr.className = "wo-addform-row";
-    tr.innerHTML = `<td colspan="4">${inlineAddFormHtml(ex, date)}</td>`;
-    headerRow.insertAdjacentElement("afterend", tr);
-    tr.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
-    return;
-  }
-  const sib = btn.nextElementSibling;
-  if (sib?.classList.contains("wo-addform")) {
-    sib.remove();
-    return;
-  }
-  btn.insertAdjacentHTML("afterend", inlineAddFormHtml(ex, date));
-  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+// ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) --------
+// Owner: the inline kg/reps/sets row "is not enough" — a roomy popup that prefills
+// the last hard set, suggests sets from history, and holds the richer fields
+// (variant pickers + a free note). Reuses the proven write path (onInlineAddGo on
+// the same .wo-addform markup) so logging itself is unchanged.
+interface AddSuggestion { label: string; weight: number | null; reps: number; sets: number; }
+/** Prefill (the last HARD set = the heaviest of the most recent session) + a couple
+ * of quick set-suggestion chips, from this athlete's logged sets for the lift. */
+function addSetSuggestions(username: string, exercise: string): { prefill: AddSuggestion | null; chips: AddSuggestion[] } {
+  const recs = data.records.filter((r) => r.username === username && r.exerciseName === exercise && r.reps != null);
+  if (!recs.length) return { prefill: null, chips: [] };
+  const byDate = new Map<string, SetRecord[]>();
+  for (const r of recs) { const a = byDate.get(r.date); if (a) a.push(r); else byDate.set(r.date, [r]); }
+  const lastDate = [...byDate.keys()].sort().pop()!;
+  const lastSets = byDate.get(lastDate)!;
+  const heaviest = [...lastSets].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0) || (b.reps ?? 0) - (a.reps ?? 0))[0]!;
+  const wr = (w: number | null, r: number) => (w != null && w > 0 ? `${Math.round(w * 10) / 10}×${r}` : `${r} reps`);
+  const prefill: AddSuggestion = { label: "last session", weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length };
+  const chips: AddSuggestion[] = [
+    { label: `Last · ${wr(heaviest.weight, heaviest.reps ?? 1)}${lastSets.length > 1 ? ` ·${lastSets.length}×` : ""}`, weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length },
+  ];
+  const cutoff = new Date(Date.now() - 84 * 86_400_000).toISOString().slice(0, 10);
+  let top: SetRecord | null = null;
+  for (const r of recs) if (r.date >= cutoff && (top === null || (r.weight ?? 0) > (top.weight ?? 0))) top = r;
+  if (top && (top.weight ?? 0) > (heaviest.weight ?? 0)) chips.push({ label: `Top · ${wr(top.weight, top.reps ?? 1)}`, weight: top.weight, reps: top.reps ?? 1, sets: 1 });
+  return { prefill, chips };
 }
 
-/** Toggle the inline "add a new exercise" form for a "+ exercise" button. Same
- * two contexts as toggleInlineAddForm, but the form leads with a searchable
- * exercise picker. */
+let addModalEl: HTMLElement | null = null;
+function addModalEsc(e: KeyboardEvent): void { if (e.key === "Escape") closeAddModal(); }
+function closeAddModal(): void {
+  addModalEl?.remove();
+  addModalEl = null;
+  document.removeEventListener("keydown", addModalEsc, true);
+}
+/** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
+function openAddModal(exerciseName: string | null, date: string): void {
+  closeAddModal();
+  const isNew = !exerciseName;
+  const ex = exerciseName ?? "";
+  const today = todayIso();
+  const { prefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
+  // The variant field (dim pickers for a modelled lift, else its own note input).
+  const vf = ex ? afVariationField(ex) : "";
+  const hasOwnNote = vf.includes("wo-af-note"); // non-modelled lift already has a note input
+  const variantBlock = vf && vf.includes("wo-af-dims") ? `<div class="addm-field"><span class="addm-flbl">Variant</span>${vf}</div>` : (hasOwnNote ? "" : "");
+  // A free NOTE (decoupled from variants — owner: a note is NOT assumed a variant),
+  // suggested from this lift's past notes. Added unless the variation field already is one.
+  const notes = ex ? variationNotesFor(ex) : [];
+  const noteListId = `addmNotes-${++afNoteSeq}`;
+  const noteField = hasOwnNote ? `<div class="addm-field"><span class="addm-flbl">Note / variation</span>${vf}</div>`
+    : `<div class="addm-field"><span class="addm-flbl">Note</span><input class="wo-af-note" list="${noteListId}" placeholder="optional note" autocomplete="off" /></div>` +
+      `<datalist id="${noteListId}">${notes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`;
+  const suggRow = chips.length
+    ? `<div class="addm-sugg"><span class="addm-flbl">Suggested</span><div class="addm-sugg-row">` +
+      chips.map((c) => `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}">${escapeHtml(c.label)}</button>`).join("") +
+      `</div></div>`
+    : "";
+  const exHead = isNew
+    ? `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" autocomplete="off" aria-label="Exercise" />`
+    : `<div class="addm-exname">${escapeHtml(displayName(ex))}</div>`;
+  const form =
+    `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    afWhenToggle(date, today) +
+    variantBlock +
+    `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps · sets</span><div class="addm-inputs">${AF_INPUTS}</div></div></div>` +
+    noteField +
+    `<div class="addm-actions">${AF_BUTTONS}</div>` +
+    `</span>`;
+  const wrap = document.createElement("div");
+  wrap.className = "addm-overlay";
+  wrap.innerHTML =
+    `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
+    `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
+    `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
+    (isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "") +
+    suggRow + form +
+    `</div>`;
+  document.body.appendChild(wrap);
+  addModalEl = wrap;
+  if (prefill) {
+    const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
+    setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
+    setv(".wo-af-reps", String(prefill.reps));
+    setv(".wo-af-sets", String(prefill.sets));
+  }
+  wrap.addEventListener("click", onAddModalClick);
+  document.addEventListener("keydown", addModalEsc, true);
+  wrap.querySelector<HTMLInputElement>(isNew ? ".wo-af-ex" : ".wo-af-weight")?.focus();
+}
+function onAddModalClick(e: MouseEvent): void {
+  const wrap = addModalEl;
+  if (!wrap) return;
+  const t = e.target as HTMLElement;
+  if (t === wrap) { closeAddModal(); return; } // backdrop tap
+  const form = wrap.querySelector<HTMLElement>(".wo-addform");
+  if (!form) return;
+  const chip = t.closest<HTMLElement>(".addm-chip");
+  if (chip) {
+    const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
+    fill(".wo-af-weight", chip.dataset.fillw);
+    fill(".wo-af-reps", chip.dataset.fillr);
+    fill(".wo-af-sets", chip.dataset.fills);
+    return;
+  }
+  if (t.closest(".wo-af-go")) { if (onInlineAddGo(form)) closeAddModal(); return; }
+  if (t.closest(".wo-af-cancel")) { closeAddModal(); return; }
+  const seg = t.closest<HTMLElement>(".wo-af-when .seg-btn");
+  if (seg) {
+    const activate = () => { for (const b of form.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn")) b.classList.toggle("is-active", b === seg); };
+    if (seg.dataset.when === "pick") {
+      const cur = form.dataset.pickdate || form.dataset.daydate || todayIso();
+      openDatePicker(seg, cur, (iso) => { form.dataset.pickdate = iso; seg.textContent = shortDate(iso); seg.title = `Logging to ${shortDate(iso)} — tap to change`; activate(); });
+    } else activate();
+  }
+}
+
+/** "+ set" → open the add popup prefilled for this lift. */
+function toggleInlineAddForm(btn: HTMLElement) {
+  openAddModal(btn.dataset.addex ?? "", btn.dataset.adddate ?? "");
+}
+
+/** "+ exercise" → open the add popup with a searchable exercise picker. */
 function toggleInlineAddExerciseForm(btn: HTMLElement) {
-  const date = btn.dataset.adddate ?? "";
-  const hostRow = btn.closest("tr.set-ex-row");
-  if (hostRow) {
-    const next = hostRow.nextElementSibling;
-    if (next?.classList.contains("wo-addform-row")) {
-      next.remove();
-      return;
-    }
-    const tr = document.createElement("tr");
-    tr.className = "wo-addform-row";
-    tr.innerHTML = `<td colspan="4">${inlineAddExerciseFormHtml(date)}</td>`;
-    hostRow.insertAdjacentElement("afterend", tr);
-    tr.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
-    return;
-  }
-  const sib = btn.nextElementSibling;
-  if (sib?.classList.contains("wo-addform")) {
-    sib.remove();
-    return;
-  }
-  btn.insertAdjacentHTML("afterend", inlineAddExerciseFormHtml(date));
-  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+  openAddModal(null, btn.dataset.adddate ?? "");
 }
 
 /** Log the set(s) from an inline form into the hand-logged sets, then refresh
  * the Workouts view in place (keeping the open weeks/days expanded). */
-function onInlineAddGo(form: HTMLElement) {
+function onInlineAddGo(form: HTMLElement): boolean {
   // New-exercise form carries a search input; the per-exercise form carries the
   // name on the button's data-addex.
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
@@ -15683,7 +15727,7 @@ function onInlineAddGo(form: HTMLElement) {
   if (exInput && !exerciseName) {
     if (msg) msg.textContent = "Pick or type an exercise.";
     exInput.focus();
-    return;
+    return false;
   }
   const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
   const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
@@ -15701,17 +15745,19 @@ function onInlineAddGo(form: HTMLElement) {
     const fam = familyOf(exerciseName);
     const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
     for (const s of dimEls) { const dim = s.dataset.dim!; const lvl = s.value; if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]); }
-    note = ""; // picked tags carry the variation per-set; no auto-note text
+    // Picked tags carry the VARIANT per-set; a free note (if typed) rides ALONGSIDE them
+    // as a plain note — it is NOT assumed to be a variant (owner: notes ≠ variants).
+    note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
   } else {
     note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
   }
   const username = els.athlete.value;
   const user = athleteLabel();
-  if (!username || !exerciseName) return;
+  if (!username || !exerciseName) return false;
   if (!Number.isFinite(reps) || reps < 1) {
     if (msg) msg.textContent = "Enter reps (1+).";
     form.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
-    return;
+    return false;
   }
   const startIdx = manualEntries.length; // setNumber for entry n is 100000+n (see mergeManualSets)
   for (let i = 0; i < sets; i++) {
@@ -15784,6 +15830,7 @@ function onInlineAddGo(form: HTMLElement) {
   // just-added set — not only the list. Graph-only, so the day group re-expanded above
   // isn't collapsed by a full re-render.
   if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+  return true;
 }
 
 /** After a re-render, re-expand the workout rows whose group date is in the set. */

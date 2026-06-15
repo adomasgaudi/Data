@@ -2355,6 +2355,35 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-addform .wo-af-msg { font-size: 0.72rem; }
 .wo-addform .wo-af-when .seg-btn { padding: 3px 10px; font-size: 0.94rem; font-weight: 700; }
 .wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
+/* ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) ---- */
+.addm-overlay { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(20, 24, 38, 0.42); }
+.addm-card {
+  width: 100%; max-width: 26rem; max-height: 88vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
+}
+.addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
+.addm-title { font-size: 1rem; font-weight: 700; }
+.addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
+.addm-field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.45rem 0; }
+.addm-flbl { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.addm-exname { font-size: 0.95rem; font-weight: 600; color: var(--accent); }
+/* The popup form stacks full-width (overrides .wo-addform's inline-flex wrap). */
+.wo-addform--modal { display: flex; flex-direction: column; align-items: stretch; gap: 0.1rem; margin: 0; width: 100%; }
+.wo-addform--modal .addm-inputs { display: flex; gap: 0.4rem; }
+.wo-addform--modal .addm-inputs input { flex: 1 1 0; width: auto; }
+.wo-addform--modal .wo-af-ex, .wo-addform--modal .wo-af-note { width: 100%; }
+.wo-addform--modal .wo-af-dims { max-width: 100%; }
+.addm-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
+.addm-actions .wo-af-go { flex: 1 1 auto; padding: 9px 13px; }
+/* Suggestions: ONE tight, sideways-scrolling row of chips, kept clear of the inputs. */
+.addm-sugg { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.1rem 0 0.5rem; }
+.addm-sugg-row { display: flex; flex-wrap: nowrap; gap: 0.35rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.addm-chip {
+  flex: 0 0 auto; font: inherit; font-size: 0.82rem; font-weight: 600; white-space: nowrap; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 4px 11px;
+  background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min);
+}
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }

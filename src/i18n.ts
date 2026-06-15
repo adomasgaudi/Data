@@ -46,6 +46,16 @@ const LT: Record<string, string> = {
   "Group view": "Grupių rodinys",
   "Stats view": "Statistikos rodinys",
   "Add a set": "Pridėti seriją",
+  // ---- Add-set / add-exercise popup ----
+  "Add set": "Pridėti seriją",
+  "Add exercise": "Pridėti pratimą",
+  "Suggested": "Siūloma",
+  "Note": "Užrašas",
+  "Note / variation": "Užrašas / variacija",
+  "Variant": "Variacija",
+  "optional note": "neprivalomas užrašas",
+  "Weight · reps · sets": "Svoris · kart. · serijos",
+  "search exercise…": "ieškoti pratimo…",
   "Index": "Rodyklė",
   // ---- Live coaching page ----
   "Live": "Gyvai",
