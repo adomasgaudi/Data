@@ -4346,7 +4346,10 @@ function syncAthleteChips() {
     btn.disabled = false;
     btn.classList.remove("is-locked");
     const sex = athProfile(btn.dataset.username ?? "")?.sex;
-    btn.classList.toggle("is-sexhidden", sex !== athleteSexFilter && !on);
+    // Hide only when the sex is KNOWN and differs from the filter — an athlete with no
+    // profile/sex (e.g. the admin-only "test" sandbox) has nothing to filter on, so it
+    // always shows (otherwise the M/W filter swallowed it on both M and W).
+    btn.classList.toggle("is-sexhidden", sex !== undefined && sex !== athleteSexFilter && !on);
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 }
