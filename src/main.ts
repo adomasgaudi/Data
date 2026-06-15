@@ -10110,11 +10110,19 @@ function liftPercentileHtml(name: string): string {
     }
   }
   return `<details class="ex-group ex-model-fold rec-pct-fold"><summary class="ex-group-hd">📊 <span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-est" title="ESTIMATED — the Gym row is from StrengthLevel standards; General & Professional are derived estimates, real data pending (#research).">≈ est</span></summary>` +
-    `<div class="ex-group-why muted">Where this lift sits as 1RM ×bodyweight across populations (estimated), your placement, and your own benchmarks.</div>` +
+    `<div class="ex-group-why muted">Where this lift sits as 1RM ×bodyweight across populations (estimated) and your placement.</div>` +
     percentileTableHtml(name, sex) +
     youHtml +
-    benchmarksHtml(name) +
     `</details>`;
+}
+
+/** The per-lift benchmarks as its OWN collapsible fold (owner: a separate dropdown on the
+ * exercise INFO page). Admins edit here; locked views see read-only chips. Empty for a
+ * non-admin lift with no benchmarks set. */
+function benchmarksFoldHtml(name: string): string {
+  const inner = benchmarksHtml(name);
+  if (!inner) return "";
+  return `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🎯 <span class="bm-fold-ttl">Benchmarks</span></summary>${inner}</details>`;
 }
 
 /** Each athlete's BEST estimated 1RM for one logged exercise, username → e1rm
@@ -11485,8 +11493,11 @@ function exerciseInfoHtml(name: string): string {
   // INDEX entry (code, tags, tier, groups, data) is folded away behind a tap — they're
   // separate concerns (owner: "info ≠ index, two views"). Open state is remembered so
   // editing a tag inside doesn't snap the fold shut.
-  const indexPart = `${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${liftPercentileHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}`;
+  const indexPart = `${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}`;
+  // World records · Benchmarks · Statistics live ON the info page now (owner) — three
+  // collapsible dropdowns right under the training brief, editable in place (admin).
   return `<div class="ex-info">${liftTrainingHtml(name)}` +
+    worldRecordEditorHtml(name) + benchmarksFoldHtml(name) + liftPercentileHtml(name) +
     `<details class="ex-index-fold"${exIndexFoldOpen ? " open" : ""}><summary class="ex-index-sum">✎ Index entry — code, tags, groups &amp; data</summary>` +
     `<div class="ex-index-body">${indexPart}</div></details></div>`;
 }
