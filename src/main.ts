@@ -294,6 +294,7 @@ const els = {
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
   workoutRmCycle: $<HTMLButtonElement>("workoutRmCycle"),
+  prioSortToggle: $<HTMLButtonElement>("prioSortToggle"),
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   variantToggle: $<HTMLButtonElement>("variantToggle"),
@@ -4076,6 +4077,8 @@ function syncWorkoutToggles(): void {
   // Tri-state: off → Rest (full slivers) → Rest· (compact hairline) → off. The dot marks
   // the compact mode; is-active covers both shown states. The compact CSS class on the
   // table shrinks the rest rows.
+  els.prioSortToggle.classList.toggle("is-active", woSortByPriority);
+  els.prioSortToggle.setAttribute("aria-pressed", woSortByPriority ? "true" : "false");
   els.restToggle.classList.toggle("is-active", S.showRestDays);
   els.restToggle.classList.toggle("is-compact", S.showRestDays && S.restCompact);
   els.restToggle.textContent = S.showRestDays && S.restCompact ? "Rest·" : "Rest";
@@ -7241,6 +7244,14 @@ function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): s
 
 function renderWorkoutsPage() {
   workoutGroups = buildWorkoutGroups();
+  // Default: order each group's exercises by the athlete's plan priority (the SAME order
+  // as the Plan page; non-priority lifts last). New group objects so no cached source is
+  // mutated; both the collapsed summary and the expanded set table read this one array.
+  if (woSortByPriority) {
+    const cmp = priorityComparator(els.athlete.value);
+    if (cmp) workoutGroups = workoutGroups.map((g) =>
+      g.exercises ? { ...g, exercises: [...g.exercises].sort((x, y) => cmp(x.exerciseName, y.exerciseName)) } : g);
+  }
   const workoutFormula = currentFormula();
   const period = historyPeriod(S.workoutViewMode);
   const byWeek = period !== null;
@@ -10597,6 +10608,28 @@ function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
 // Which priority rows have their "related lifts" dropdown open (in-session, by lift name).
 const prioExpanded = new Set<string>();
 function athletePriorities(user: string): Record<string, PriorityEntry> { return prioritiesStore[user] ?? {}; }
+/** Reusable comparator ordering exercise NAMES by the athlete's PLAN priority — the SAME
+ * order the Plan page's default uses (rank Top→Second→Optional → effort level → target).
+ * NON-priority lifts sort AFTER all prioritized ones (stable among themselves). Returns
+ * null when the athlete has no priorities, so callers keep their own order. The ONE source
+ * every grouped view uses to "sort by priority", so they never drift from the plan page. */
+function priorityComparator(user: string): ((a: string, b: string) => number) | null {
+  const pri = prioritiesStore[user];
+  if (!pri || Object.keys(pri).length === 0) return null;
+  return (a, b) => {
+    const pa = pri[a], pb = pri[b];
+    if (!!pa !== !!pb) return pa ? -1 : 1; // prioritized before non-priority
+    if (!pa || !pb) return 0;              // both non-priority → keep input order (stable sort)
+    return (RANK_ORDER[rankOf(pa)] - RANK_ORDER[rankOf(pb)])
+      || (PRIORITY_ORDER[pa.level] - PRIORITY_ORDER[pb.level])
+      || (pb.target - pa.target);
+  };
+}
+/** History view pref (device-local, rule 41): sort exercises within each day/week/month
+ * by the athlete's plan priorities. DEFAULT ON (owner) — only an explicit "0" turns it off. */
+const WO_PRIO_SORT_KEY = "colosseum.woSortByPriority";
+let woSortByPriority: boolean = (() => { try { return localStorage.getItem(WO_PRIO_SORT_KEY) !== "0"; } catch { return true; } })();
+function saveWoSortByPriority(): void { try { localStorage.setItem(WO_PRIO_SORT_KEY, woSortByPriority ? "1" : "0"); } catch { /* ignore */ } }
 /** Weekly target sets a level SUGGESTS — Maintain ≈ keep your recent month average. */
 function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
   if (level === "max") return 6;
@@ -13787,6 +13820,13 @@ async function init() {
   els.addSetsToggle.addEventListener("click", () => {
     S.showAddSets = !S.showAddSets;
     localStorage.setItem("colosseum.showAddSets", S.showAddSets ? "1" : "0");
+    renderWorkoutsPage();
+  });
+  els.prioSortToggle.addEventListener("click", () => {
+    woSortByPriority = !woSortByPriority;
+    saveWoSortByPriority();
+    els.prioSortToggle.classList.toggle("is-active", woSortByPriority); // instant pill feedback
+    els.prioSortToggle.setAttribute("aria-pressed", woSortByPriority ? "true" : "false");
     renderWorkoutsPage();
   });
   els.variantToggle.addEventListener("click", () => {

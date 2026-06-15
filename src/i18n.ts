@@ -443,6 +443,8 @@ const LT: Record<string, string> = {
   "No workouts.": "Treniruočių nėra.",
   "No workouts for that filter.": "Nėra treniruočių pagal šį filtrą.",
   "rest days": "poilsio dienų",
+  "Prio": "Prior.",
+  "priority": "prioritetas",
   "period": "laikotarpis",
   "vs group": "ar grupė",
   "per page": "puslapyje",
