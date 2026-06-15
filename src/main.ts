@@ -18033,9 +18033,19 @@ function renderSearchPalette(value: string): void {
     { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
     { act: "clear", label: "✕ Clear search", desc: "", on: false },
   ];
-  if (cmdActiveIdx >= opts.length) cmdActiveIdx = 0;
+  // Fix (path a): when NO existing lift matches the typed text, the bar offers to
+  // CREATE that exercise directly — no hidden "create " prefix needed. (Before, typing a
+  // brand-new name like "nordic ham curls" offered nothing, so it seemed un-addable.)
+  const wantCreate = n === 0 && navOpts.length === 0 && q.length >= 2;
+  const finalOpts = wantCreate
+    ? [
+        { act: "createex", label: `➕ Create exercise “${q}”`, desc: "No lift matches — opens the inline add form to log its first set", on: false },
+        { act: "clear", label: "✕ Clear search", desc: "", on: false },
+      ]
+    : opts;
+  if (cmdActiveIdx >= finalOpts.length) cmdActiveIdx = 0;
   pal.hidden = false;
-  pal.innerHTML = opts
+  pal.innerHTML = finalOpts
     .map(
       (o, i) =>
         `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}${o.on ? " is-on" : ""}${"sub" in o && o.sub ? " cmd-opt-sub" : ""}" data-searchact="${o.act}" role="option">` +
@@ -18074,9 +18084,12 @@ function runSearchAction(act: string): void {
     return;
   }
   if (act === "createex") {
-    // Parse the name from "create <Name>" and open the INLINE add-exercise form in the
-    // workouts view prefilled — the exercise is born when its first set is logged.
-    const name = parseCreateQuery(input?.value ?? "").name;
+    // Open the INLINE add-exercise form prefilled — the exercise is born when its first
+    // set is logged. Works whether the user typed "create <Name>" OR just a no-match
+    // name (the ➕ Create action the bar now offers when nothing matches).
+    const raw = input?.value ?? "";
+    const pc = parseCreateQuery(raw);
+    const name = pc.hit ? pc.name : raw.trim();
     hideCmdPalette();
     if (input) input.value = "";
     input?.blur();
