@@ -7305,7 +7305,7 @@ function renderWorkoutsPage() {
         // NO swipe-to-delete on this collapsed day line (owner request): removing sets is
         // done per-set INSIDE the expanded set table (swipe a set row there), never by
         // dragging a whole exercise off the collapsed day view.
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${srcTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -7639,12 +7639,14 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (openSetInfo(target)) return; // a set's ⓘ → open the exercise in the Index
   if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
-  // An exercise name in an expanded day -> filter the Analysis view to just that
-  // exercise (single mode), so the graph/stats/history all scope to it.
+  // Tapping an exercise NAME (collapsed line or expanded day header) opens its Index
+  // info popup — same as the plan page's focus lifts (owner request). The per-set ⓘ in
+  // the expanded set table still opens the same popup; the collapsed ⓘ is gone (the name
+  // is the affordance now).
   const exLink = target.closest(".wo-exlink") as HTMLElement | null;
   if (exLink) {
     const exName = exLink.dataset.exname;
-    if (exName) openWorkoutAnalysis({ exercises: [exName] });
+    if (exName) openExerciseInfo(exName);
     return;
   }
 
