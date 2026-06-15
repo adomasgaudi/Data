@@ -73,7 +73,7 @@ import {
   STRENGTH_DECAY,
   type OneRepMaxFormula,
 } from "./metrics";
-import { hardSetWeight, warmupRamp } from "./prescription";
+import { hardSetWeight, warmupRamp, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
@@ -11181,7 +11181,7 @@ function liftTrainingHtml(name: string): string {
     return w === null ? "" : pill(`${reps}RM`, `${fmt(w)}kg`);
   }).join("");
   // Warmup ramp up to the suggested working weight.
-  const warm = hs ? warmupRamp({ oneRepMax: e1rm, workingWeightKg: hs.weightKg, formula }) : [];
+  const warm = hs ? warmupRamp({ oneRepMax: e1rm, workingWeightKg: hs.weightKg, formula, plan: getWarmupPlan() }) : [];
   const warmRows = warm.length
     ? `<div class="lt-warm">` + warm.map((w) => {
         const range = w.downKg === w.upKg ? `${fmt(w.weightKg)}` : `${fmt(w.downKg)}–${fmt(w.upKg)}`;
@@ -12149,11 +12149,23 @@ function renderTest() {
   renderDecayCurve();
 }
 
+// Warm-up plan (owner pick: quick / standard / heavy — fewer→more warm-up sets). Device-
+// local; read by BOTH the Formulas warm-up and the exercise-info warm-up.
+const WARMUP_PLAN_LABEL: Record<WarmupPlan, string> = { quick: "Quick", standard: "Standard", heavy: "Heavy" };
+function getWarmupPlan(): WarmupPlan {
+  try { const v = localStorage.getItem("colosseum.warmupPlan"); return v === "quick" || v === "heavy" ? v : "standard"; }
+  catch { return "standard"; }
+}
+function setWarmupPlan(p: WarmupPlan): void { try { localStorage.setItem("colosseum.warmupPlan", p); } catch { /* ignore */ } }
+
 /** Warm-up ramp to the entered set, using the 1RM the calculator just computed (merged
  * from the old Coach panel — no separate 1RM/reps/formula inputs; Plates rounds it). */
 function renderWarmup(orm: number | null, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula): void {
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const increment = parseFloat(els.rxInc.value) || 2.5;
+  const plan = getWarmupPlan();
+  const planBtn = document.getElementById("warmupPlanBtn");
+  if (planBtn) planBtn.textContent = WARMUP_PLAN_LABEL[plan];
   if (orm === null || !(orm > 0) || !(workingWeightKg > 0)) {
     els.rxOut.innerHTML = `<p class="muted" style="font-size:0.85rem">Enter a weight &amp; reps to see the warm-up.</p>`;
     return;
@@ -12161,7 +12173,7 @@ function renderWarmup(orm: number | null, workingWeightKg: number, workReps: num
   const work =
     `<div class="rx-work"><span class="rx-work-lbl">Work set</span> ` +
     `<b>${r2(workingWeightKg)} kg</b> × ${workReps} reps</div>`;
-  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg, formula, increment });
+  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg, formula, increment, plan });
   // Each row: the plate-rounded load (a down→up range when rounding is ambiguous) BIG,
   // the exact unrounded value small/grey beside it, and the % of 1RM (owner).
   const wuRows = wu
@@ -14543,6 +14555,12 @@ async function init() {
   // The warm-up ramp is part of renderTest now (merged calculator). Changing the Plates
   // rounding recomputes it.
   els.rxInc.addEventListener("change", renderTest);
+  // Warm-up plan pill — cycles Quick → Standard → Heavy (fewer→more warm-up sets), saved.
+  document.getElementById("warmupPlanBtn")?.addEventListener("click", () => {
+    const next = WARMUP_PLANS[(WARMUP_PLANS.indexOf(getWarmupPlan()) + 1) % WARMUP_PLANS.length]!;
+    setWarmupPlan(next);
+    renderTest();
+  });
 
   setupBottomNav();
 
