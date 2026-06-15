@@ -1,6 +1,6 @@
 # Plan: strength percentiles (3 populations) + custom benchmarks, per lift
 
-- **Asked:** 2026-06-14  ·  **Status:** Phases 1–4 shipped → only Phase 5 left (#research real data)
+- **Asked:** 2026-06-14  ·  **Status:** ✅ COMPLETE — all 5 phases shipped (Phase 5 #research calibration done 2026-06-15)
 - **Owner decisions (#? answers):** show **all 3 populations** (general / StrengthLevel-gym / professional), **estimates OK now, find real data later**; **plan both features first, then build.**
 
 ## The two features
@@ -34,8 +34,8 @@
 ### Phase 4 — bring both into the Index lift card ✅ DONE (b.2.8.370, DATA-20)
 - [x] 8. Same percentile panel + benchmarks in the lift card's WR section, reusing the Phase 2/3 renderers. — a 📊 Strength percentiles fold sits right under the 🏆 World record fold in each exercise's Index entry: the curve table for the current athlete's sex, that athlete's placement, and the (shared) benchmarks editor. Shared `percentileTableHtml()` so the two views never drift; benchmarks editor made document-level + self-describing (`data-bm-ex`) so ONE handler drives both pages and rebuilds in place (no fold-collapse, rule 24). Only shows for the ~11 lifts we have a standard for.
 
-### Phase 5 — real data + polish (#research)
-- [ ] 9. #research pass to replace the general-pop/pro estimates with sourced+graded data where it exists; bump `confidence` to "real".
+### Phase 5 — real data + polish (#research) ✅ DONE (b.2.8.388, DATA-21)
+- [x] 9. #research pass — calibrated the GYM (StrengthLevel) curve against published standards (sources + GRADEs in the module header): the big-3 MALE squat & deadlift medians were a level too strong ("advanced" where StrengthLevel says "intermediate") — corrected to 1.25× / 1.5×; front-squat lowered to keep specificity. GENERAL & PRO stay derived-multiplier estimates (no clean public-population percentiles exist; sanity-checked, GRADE Low), so `STANDARDS_ESTIMATED` stays true and the UI keeps "≈ est". Added a calibration test pinning the StrengthLevel anchors.
 
 ## Decisions (settled)
 - **Benchmark unit:** RESOLVED — each row picks its OWN unit (×bw or kg), owner-chosen.

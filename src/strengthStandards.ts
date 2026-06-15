@@ -3,13 +3,28 @@
  * so a lift's WR section can show "what each percentile can do" and place the athlete on
  * it (docs/ceo/strength-percentiles-benchmarks.md).
  *
- * DATA STATUS: ESTIMATES (owner-approved, real data later). The StrengthLevel "gym"
- * curve is hand-seeded from common StrengthLevel standards (the 5 levels beginner→elite
- * ≈ the 5 percentiles below); the GENERAL and PRO curves are DERIVED from it by a
- * population multiplier, not sourced. Everything is flagged `estimated` so the UI marks
- * it and a later #research pass (Phase 5) can replace the numbers without touching the
- * shape. Values are bw-ratios: kg = ratio × bodyweight (what StrengthLevel uses); for
- * bodyweight lifts (pull-up/dip) it's TOTAL load ÷ bodyweight.
+ * DATA STATUS (after the Phase-5 #research calibration, 2026-06-15):
+ *  - The "Gym (StrengthLevel)" curve is now CALIBRATED to published StrengthLevel-style
+ *    standards: the 5 percentiles (5/25/50/75/95) line up with beginner / novice /
+ *    intermediate / advanced / elite. Cross-checked against the sources below; the big-3
+ *    male curves were corrected (squat & deadlift medians were a level too strong — read
+ *    as "advanced" where StrengthLevel calls it "intermediate"). GRADE: High for the gym
+ *    big-3 (multiple sources agree), Moderate for the accessory lifts (single-source).
+ *  - The GENERAL and PRO curves are still DERIVED from the gym curve by one population
+ *    multiplier each — NOT per-population sourced data (clean public-population percentiles
+ *    don't exist). The multipliers are sanity-checked against "untrained adult" figures
+ *    (general) and elite-powerlifter norms (pro), but remain ESTIMATES. GRADE: Low.
+ * Because general/pro stay estimates, STANDARDS_ESTIMATED is still true and the UI keeps
+ * its "≈ est" flag. Values are bw-ratios: kg = ratio × bodyweight (what StrengthLevel
+ * uses); for bodyweight lifts (pull-up/dip) it's TOTAL load ÷ bodyweight.
+ *
+ * SOURCES (graded for THIS use — re-judged per CLAUDE.md rule 9):
+ *  - StrengthLevel.com strength standards (153M+ logged lifts) — the primary gym anchor.
+ *    GRADE: High (huge self-reported dataset; the de-facto reference, though self-selected).
+ *  - Legion Athletics / TrainCalc / Arvo strength-standard tables — corroborate the big-3
+ *    ×BW levels. GRADE: Moderate (commercial, but consistent with StrengthLevel).
+ *  - "Untrained adult" 1RM ranges (Outlift, survey/forum aggregates) used to sanity-check
+ *    the GENERAL multiplier. GRADE: Low (small / anecdotal samples).
  */
 export type Population = "general" | "strengthlevel" | "pro";
 export type Sex = "m" | "f";
@@ -28,27 +43,31 @@ export const POPULATION_LABEL: Record<Population, string> = {
 type Curve = [number, number, number, number, number]; // bw-ratio at each PERCENTILE
 interface LiftStd { keys: string[]; m: Curve; f: Curve }
 
-/** StrengthLevel "gym" bw-ratio curves. Most-specific keys FIRST (so "front squat"
- *  matches before "squat", etc.). */
+/** Gym (StrengthLevel) bw-ratio curves, calibrated so 5/25/50/75/95 ≈ beginner / novice /
+ *  intermediate / advanced / elite. Most-specific keys FIRST (so "front squat" matches
+ *  before "squat", etc.). Big-3 male curves cross-checked against multiple sources
+ *  (header); accessory lifts are single-source approximations. */
 const GYM_STANDARDS: LiftStd[] = [
-  { keys: ["front squat"], m: [0.6, 1.0, 1.3, 1.7, 2.1], f: [0.5, 0.85, 1.05, 1.35, 1.7] },
+  { keys: ["front squat"], m: [0.6, 0.85, 1.05, 1.45, 2.1], f: [0.5, 0.7, 0.9, 1.2, 1.6] },
   { keys: ["leg press"], m: [1.5, 2.5, 3.5, 4.5, 6.0], f: [1.2, 2.0, 3.0, 4.0, 5.0] },
   { keys: ["overhead press", "shoulder press", "military", "ohp", "strict press"], m: [0.35, 0.55, 0.8, 1.1, 1.4], f: [0.2, 0.35, 0.5, 0.7, 0.95] },
   { keys: ["hip thrust"], m: [1.0, 1.75, 2.5, 3.25, 4.0], f: [0.9, 1.6, 2.3, 3.0, 3.75] },
   { keys: ["bench"], m: [0.5, 0.75, 1.0, 1.5, 2.0], f: [0.3, 0.5, 0.7, 1.0, 1.4] },
-  { keys: ["deadlift"], m: [1.0, 1.5, 2.0, 2.5, 3.0], f: [0.8, 1.25, 1.6, 2.0, 2.5] },
-  { keys: ["squat"], m: [0.75, 1.25, 1.5, 2.0, 2.5], f: [0.6, 1.0, 1.25, 1.6, 2.0] },
+  { keys: ["deadlift"], m: [1.0, 1.25, 1.5, 2.0, 2.75], f: [0.8, 1.1, 1.4, 1.8, 2.5] },
+  { keys: ["squat"], m: [0.75, 1.0, 1.25, 1.75, 2.5], f: [0.6, 0.85, 1.1, 1.45, 2.0] },
   { keys: ["row"], m: [0.5, 0.75, 1.0, 1.3, 1.6], f: [0.35, 0.55, 0.75, 1.0, 1.3] },
   { keys: ["pull up", "pullup", "pull-up", "chin up", "chinup", "chin-up"], m: [1.0, 1.15, 1.35, 1.6, 2.0], f: [0.85, 1.0, 1.15, 1.4, 1.75] },
   { keys: ["dip"], m: [1.0, 1.2, 1.45, 1.75, 2.1], f: [0.8, 1.0, 1.2, 1.5, 1.85] },
   { keys: ["curl", "bicep"], m: [0.25, 0.4, 0.55, 0.75, 1.0], f: [0.15, 0.25, 0.35, 0.5, 0.7] },
 ];
 
-/** Population multipliers vs the gym curve (ESTIMATE): the general public is far weaker
- *  (mostly non-lifters); pros sit near the gym-elite end and beyond. */
+/** Population multipliers vs the gym curve (ESTIMATE — see header SOURCES, GRADE: Low):
+ *  the general public is far weaker (mostly non-lifters; sanity-checked vs untrained-adult
+ *  1RM ranges); pros sit at/above the gym-elite end. */
 const POP_MULT: Record<Population, number> = { general: 0.6, strengthlevel: 1, pro: 1.3 };
 
-/** True — every number here is currently an estimate (see file header). */
+/** Still true: the GENERAL and PRO curves remain derived estimates (the gym curve is now
+ *  source-calibrated, but the per-population split isn't), so the UI keeps its "≈ est" mark. */
 export const STANDARDS_ESTIMATED = true;
 
 /** The gym standard whose keyword matches this exercise name, or null. */

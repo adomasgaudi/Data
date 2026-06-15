@@ -56,4 +56,17 @@ describe("strengthStandards", () => {
   it("is flagged as estimated data", () => {
     expect(STANDARDS_ESTIMATED).toBe(true);
   });
+
+  it("gym big-3 male curve is calibrated to StrengthLevel levels (Phase-5 #research)", () => {
+    // 5/25/50/75/95 ≈ beginner / novice / intermediate / advanced / elite. These anchors
+    // are cross-checked against published StrengthLevel-style standards (see the module
+    // header SOURCES) — pin them so a future edit can't silently drift them back up.
+    expect(curveFor("Bench Press", "m", "strengthlevel")).toEqual([0.5, 0.75, 1.0, 1.5, 2.0]);
+    expect(curveFor("Squat", "m", "strengthlevel")).toEqual([0.75, 1.0, 1.25, 1.75, 2.5]);
+    expect(curveFor("Deadlift", "m", "strengthlevel")).toEqual([1.0, 1.25, 1.5, 2.0, 2.75]);
+    // The median (intermediate) must read ~1.25× squat / 1.5× deadlift, NOT the old too-
+    // strong 1.5 / 2.0 (which mislabelled an advanced lifter as merely intermediate).
+    expect(curveFor("Squat", "m", "strengthlevel")![2]).toBe(1.25);
+    expect(curveFor("Deadlift", "m", "strengthlevel")![2]).toBe(1.5);
+  });
 });
