@@ -485,31 +485,12 @@ body.on-s-anl .appfoot { display: none; }
 }
 .tab:hover { color: var(--text); }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-/* App-style fixed bottom nav (Workouts / Exercises / Other) — the primary
-   navigation for the whole app. */
-.subtabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
-  display: flex; margin: 0;
-  background: var(--panel); border-top: 1px solid var(--line);
-  box-shadow: 0 -2px 12px rgba(20, 24, 38, 0.06);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-/* When the keyboard is open, hide the bottom nav so only the search bar floats
-   above it (the nav would otherwise ride up with the keyboard too). */
-html.kb-open .subtabs { display: none; }
+/* (Dead bottom-nav CSS removed — UIC-DEAD-CSS: the .subtabs/.subtab/.subtab-ico
+   bottom tab bar was replaced by the .ex-tab tabs and was unused. .subtab-panel,
+   below, is a different thing and stays.) */
 /* Athlete picker relocated above the Analysis card — give it a little breathing
    room so it doesn't crowd the header or the card. */
 .wa-athlete-top:not(:empty) { margin: 0.4rem 0 0.6rem; }
-.subtab {
-  flex: 1 1 0; min-width: 0;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: none; border: none; border-top: 2px solid transparent; border-radius: 0;
-  color: var(--muted); font: inherit; font-size: 0.72rem; font-weight: 600;
-  padding: 0.5rem 0.4rem 0.6rem; cursor: pointer;
-}
-.subtab-ico { width: 22px; height: 22px; flex: none; }
-.subtab:hover { color: var(--text); }
-.subtab.is-active { color: var(--accent); border-top-color: var(--accent); background: var(--accent-soft); }
 /* Clearance so no panel's content hides behind the always-on command bar pinned
    at the bottom (the bottom nav bar was removed). */
 main { padding-bottom: 5rem; }
