@@ -161,6 +161,7 @@ const LT: Record<string, string> = {
   "Volume 4×10": "Apimtis 4×10",
   "Pump 3×20": "Pampas 3×20",
   "Endurance 2×30": "Ištvermė 2×30",
+  "Custom": "Savas",
   "Quick": "Greitas",
   "Standard": "Standartinis",
   "Heavy": "Sunkus",

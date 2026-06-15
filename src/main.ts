@@ -12236,7 +12236,16 @@ const WORKSET_PLANS: WorksetPlan[] = [
   { id: "4x10", label: "Volume 4×10", blurb: "Higher-volume hypertrophy — 4×10 (~65%). More total work per session; good for lagging muscles that respond to volume.", repsSeq: [10, 10, 10, 10] },
   { id: "3x20", label: "Pump 3×20", blurb: "High-rep pump work for glutes, calves and accessories — 3×20 light. Metabolic stress + muscular endurance.", repsSeq: [20, 20, 20] },
   { id: "2x30", label: "Endurance 2×30", blurb: "Very high-rep endurance — 2×30 very light. Conditioning, rehab, or a burnout finisher.", repsSeq: [30, 30] },
+  { id: "custom", label: "Custom", blurb: "Your own scheme — set the number of sets and reps below; the loads are computed off your 1RM.", repsSeq: null },
 ];
+// Owner-editable custom hard-set scheme (sets × reps) for the "Custom" tab.
+function getWorksetCustom(): { sets: number; reps: number } {
+  try { const o = JSON.parse(localStorage.getItem("colosseum.worksetCustom") ?? "null"); if (o && o.sets >= 1 && o.reps >= 1) return { sets: Math.min(12, o.sets | 0), reps: Math.min(50, o.reps | 0) }; } catch { /* ignore */ }
+  return { sets: 4, reps: 6 };
+}
+function setWorksetCustom(sets: number, reps: number): void {
+  try { localStorage.setItem("colosseum.worksetCustom", JSON.stringify({ sets: Math.max(1, Math.min(12, sets | 0)), reps: Math.max(1, Math.min(50, reps | 0)) })); } catch { /* ignore */ }
+}
 function getWorksetPlan(): WorksetPlan {
   try { const v = localStorage.getItem("colosseum.worksetPlan"); return WORKSET_PLANS.find((p) => p.id === v) ?? WORKSET_PLANS[0]!; }
   catch { return WORKSET_PLANS[0]!; }
@@ -12244,10 +12253,12 @@ function getWorksetPlan(): WorksetPlan {
 function setWorksetPlan(id: string): void { try { localStorage.setItem("colosseum.worksetPlan", id); } catch { /* ignore */ } }
 
 /** The working sets a hard-set plan prescribes for a 1RM: each set loaded at the weight
- *  for its rep target (plate-rounded); "Entered" keeps the typed set. */
+ *  for its rep target (plate-rounded); "Entered" keeps the typed set, "Custom" uses the
+ *  owner's sets × reps. */
 function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number): { weightKg: number; reps: number }[] {
-  if (plan.repsSeq == null) return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
-  return plan.repsSeq.map((reps) => ({
+  const seq = plan.id === "custom" ? (() => { const c = getWorksetCustom(); return Array(c.sets).fill(c.reps); })() : plan.repsSeq;
+  if (seq == null) return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
+  return seq.map((reps) => ({
     weightKg: roundToIncrement(weightForReps(orm, reps, formula) ?? workingWeightKg, increment),
     reps,
   }));
@@ -12323,7 +12334,13 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
     `<button type="button" class="plan-tab${p.id === cur.id ? " is-on" : ""}" data-plantab="${escapeHtml(p.id)}">${escapeHtml(p.label)}</button>`).join("");
   const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment);
   const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="muted">${c.orm > 0 ? Math.round((s.weightKg / c.orm) * 100) : 0}%</td></tr>`).join("");
-  return `<div class="plan-tabs">${tabs}</div>` +
+  // The Custom tab adds editable sets × reps inputs (owner: manipulate the numbers too).
+  let customEdit = "";
+  if (cur.id === "custom") {
+    const cc = getWorksetCustom();
+    customEdit = `<div class="plan-custom"><input type="number" class="plan-cust-in" data-worksetcustom="sets" min="1" max="12" step="1" value="${cc.sets}" aria-label="Sets"> sets × <input type="number" class="plan-cust-in" data-worksetcustom="reps" min="1" max="50" step="1" value="${cc.reps}" aria-label="Reps"> reps</div>`;
+  }
+  return `<div class="plan-tabs">${tabs}</div>` + customEdit +
     `<table class="plan-tbl"><thead><tr><th>Set</th><th>kg</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${rows}</tbody></table>` +
     `<p class="plan-blurb">${escapeHtml(cur.blurb)}</p>`;
 }
@@ -14758,6 +14775,21 @@ async function init() {
       return;
     }
     if (!menu.contains(t)) closePlanPopup();
+  });
+  // Custom hard-set inputs inside the popup (sets × reps): commit on blur, refresh the
+  // popup table + the owning view (owner: manipulate the numbers).
+  document.addEventListener("change", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-worksetcustom]");
+    const menu = document.getElementById("planPopup");
+    if (!inp || !menu) return;
+    const sets = Number(menu.querySelector<HTMLInputElement>('[data-worksetcustom="sets"]')?.value);
+    const reps = Number(menu.querySelector<HTMLInputElement>('[data-worksetcustom="reps"]')?.value);
+    if (sets >= 1 && reps >= 1) {
+      setWorksetCustom(sets, reps);
+      setWorksetPlan("custom");
+      lastWuRerender();
+      menu.innerHTML = planPopupHtml("workset");
+    }
   });
 
   setupBottomNav();
