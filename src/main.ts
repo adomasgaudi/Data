@@ -89,6 +89,11 @@ import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
 import { testMockRecords } from "./mockData";
+import {
+  pairEdge, resolvePairGrade, setPairGrade as applyPairGrade, migrateLegacyPairs,
+  flaggedPairsFor, PAIR_WILDCARD,
+  type PairMap, type PersonalPairMap,
+} from "./pairing";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
@@ -11004,26 +11009,34 @@ function renderWorkoutPlan(): void {
   els.planBody.innerHTML = summary + list + addBlock + pairManagerHtml(user);
 }
 
-/** Pairs management section in the Plan popup: shows all explicitly flagged exercises
- *  (prefer / hard / avoid) and a search box to flag new ones. */
+/** Pairs management section in the Plan popup: shows ALL flagged directional pairs
+ *  (gym + your overrides), grouped by their FROM-lift, and a search box to flag any
+ *  lift as a gym-wide "any lift" (*→X) baseline. A 👤 badge marks your overrides. */
 function pairManagerHtml(user: string): string {
-  const todayD = dayNumber(todayIso());
-  const allLive = liveExercises(user, todayD);
-  const flagged = allLive.filter((le) => pairGradeFor(le.name) !== "neutral");
-  flagged.sort((a, b) => pairGradeRank(pairGradeFor(a.name)) - pairGradeRank(pairGradeFor(b.name)) || a.name.localeCompare(b.name));
-  const q = pairMgrQuery.trim().toLowerCase();
-  const searchPool = allLive.filter((le) =>
-    !q || displayName(le.name).toLowerCase().includes(q) || le.name.toLowerCase().includes(q));
-  const flagChip = (name: string): string =>
-    `<span class="lt-paircell pg-${pairGradeFor(name)} pairs-mgr-chip">` +
-    `<span class="pairs-mgr-name">${escapeHtml(displayName(name))}</span>` +
-    pairFlagBtn(name) +
+  const rows = flaggedPairsFor(pairShared, pairPersonal, user); // {from,to,grade,layer}, sorted best→worst
+  const fromLabel = (f: string) => f === PAIR_WILDCARD ? "Any lift" : displayName(f);
+  // Group the flagged pairs by their from-lift (the wildcard "Any lift" group sorts first).
+  const groups = new Map<string, { to: string }[]>();
+  for (const r of rows) { const g = groups.get(r.from) ?? (groups.set(r.from, []).get(r.from)!); g.push({ to: r.to }); }
+  const fromKeys = [...groups.keys()].sort((a, b) => (a === PAIR_WILDCARD ? -1 : b === PAIR_WILDCARD ? 1 : fromLabel(a).localeCompare(fromLabel(b))));
+  const chip = (from: string, to: string): string =>
+    `<span class="lt-paircell pg-${pairGradeFor(from, to)} pairs-mgr-chip">` +
+    `<span class="pairs-mgr-name">${escapeHtml(displayName(to))}</span>` +
+    pairFlagBtn(from, to) +
     `</span>`;
-  const flaggedHtml = flagged.length
-    ? `<div class="pairs-mgr-list">${flagged.map((le) => flagChip(le.name)).join("")}</div>`
+  const groupHtml = fromKeys.map((from) =>
+    `<div class="pairs-mgr-grp"><div class="pairs-mgr-grp-h muted">${escapeHtml(fromLabel(from))} →</div>` +
+    `<div class="pairs-mgr-list">${groups.get(from)!.map((r) => chip(from, r.to)).join("")}</div></div>`).join("");
+  const flaggedHtml = rows.length
+    ? groupHtml
     : `<p class="muted pairs-mgr-empty">No pair flags yet — flag exercises in their info card or search below.</p>`;
+  // Search flags a gym-wide *→exercise baseline (the old per-exercise mental model).
+  const q = pairMgrQuery.trim().toLowerCase();
+  const pool = q
+    ? liveExercises(user, dayNumber(todayIso())).filter((le) => displayName(le.name).toLowerCase().includes(q) || le.name.toLowerCase().includes(q))
+    : [];
   const searchResultsHtml = q
-    ? `<div class="pairs-mgr-results">${searchPool.slice(0, 20).map((le) => flagChip(le.name)).join("") || `<span class="muted">No matches for "${escapeHtml(pairMgrQuery)}".</span>`}</div>`
+    ? `<div class="pairs-mgr-results">${pool.slice(0, 20).map((le) => chip(PAIR_WILDCARD, le.name)).join("") || `<span class="muted">No matches for "${escapeHtml(pairMgrQuery)}".</span>`}</div>`
     : "";
   return `<div class="pairs-mgr">` +
     `<div class="pairs-mgr-hd muted">⇄ Pair flags</div>` +
@@ -11087,15 +11100,11 @@ function setSetupNote(name: string, text: string): void {
   saveJson(SETUP_NOTES_KEY, setupNotes);
 }
 
-// Per-lift PAIR preference, owner-driven (the auto-guess is only a tiebreaker). A
-// candidate is flagged "hard" (awkward to superset — far machine / lots of setup)
-// or "avoid" (don't want to pair this), keyed by the candidate lift since its
-// portability is mostly a global property (a dumbbell move pairs with anything; a
-// fixed machine rarely does). Cycles ok → hard → avoid → ok.
 // Owner's 5-level pairing grade (super → no way). Glyph + label live in ONE place
-// (the chip glyph AND the mini-menu popup both read this).
+// (the chip glyph AND the mini-menu popup both read this). The grade is set per
+// DIRECTIONAL pair on a LAYER (gym vs personal) — see the pairShared/pairPersonal
+// stores and pairing.ts below.
 type PairGrade = "super" | "good" | "neutral" | "difficult" | "noway";
-type StoredGrade = Exclude<PairGrade, "neutral">;
 const PAIR_GRADES: { id: PairGrade; label: string; glyph: string }[] = [
   { id: "super",     label: "Super",     glyph: "🔥" },
   { id: "good",      label: "Good",      glyph: "★" },
@@ -11104,45 +11113,81 @@ const PAIR_GRADES: { id: PairGrade; label: string; glyph: string }[] = [
   { id: "noway",     label: "No way",    glyph: "✕" },
 ];
 function pairGradeMeta(g: PairGrade) { return PAIR_GRADES.find((x) => x.id === g)!; }
-const PAIR_PREF_KEY = "colosseum.pairPrefs.v1";
-// Migrate the old 3-state values (prefer/hard/avoid) → the 5-grade ids, in place.
-const pairPrefs: Record<string, StoredGrade> = (() => {
-  const raw = loadJsonObject<Record<string, string>>(PAIR_PREF_KEY) ?? {};
-  const MIG: Record<string, StoredGrade> = { prefer: "good", hard: "difficult", avoid: "noway", super: "super", good: "good", difficult: "difficult", noway: "noway" };
-  const out: Record<string, StoredGrade> = {};
-  for (const [k, v] of Object.entries(raw)) { const m = MIG[v]; if (m) out[k] = m; }
-  return out;
+// Pairing is DIRECTIONAL + TWO-LAYER (CEO plan: docs/ceo/exercise-pairing.md). The
+// pure model lives in pairing.ts; here we hold the two synced stores and thin glue.
+//   • pairShared  — the GYM truth everyone sees (one shared pool, no named gyms yet).
+//   • pairPersonal — per-user vetoes that shadow the gym flag for that user only.
+// Both are colosseum.* keys, so they ride the cacheSync kv mirror to every user
+// automatically (no backend wiring). The OLD flat per-exercise map migrates ONCE into
+// the shared layer as `*→exercise` wildcard baselines.
+const PAIR_PREF_KEY = "colosseum.pairPrefs.v1";       // legacy flat per-exercise (migrated once)
+const PAIR_SHARED_KEY = "colosseum.pairShared.v1";    // gym truth (synced to everyone)
+const PAIR_PERSONAL_KEY = "colosseum.pairPersonal.v1"; // per-user overrides (synced as one blob)
+let pairShared: PairMap = (() => {
+  const have = loadJsonObject<PairMap>(PAIR_SHARED_KEY);
+  if (have && Object.keys(have).length) return have;
+  const migrated = migrateLegacyPairs(loadJsonObject<Record<string, string>>(PAIR_PREF_KEY));
+  if (Object.keys(migrated).length) saveJson(PAIR_SHARED_KEY, migrated);
+  return migrated;
 })();
-function pairGradeFor(name: string): PairGrade { return pairPrefs[name] ?? "neutral"; }
-// Rank for sorting: super(0) … no-way(4). neutral sits in the middle.
-function pairGradeRank(g: PairGrade): number { return ["super", "good", "neutral", "difficult", "noway"].indexOf(g); }
-function setPairGrade(name: string, g: PairGrade): void {
-  if (g === "neutral") delete pairPrefs[name]; else pairPrefs[name] = g;
-  saveJson(PAIR_PREF_KEY, pairPrefs);
+let pairPersonal: PersonalPairMap = loadJsonObject<PersonalPairMap>(PAIR_PERSONAL_KEY) ?? {};
+/** Who is "you" for a personal override — the viewed athlete (matches priorities). */
+function pairUser(): string { return els.athlete.value; }
+/** Effective grade for a directional pair (from → to), for the current user. */
+function pairGradeFor(from: string, to: string): PairGrade {
+  return resolvePairGrade(from, to, pairShared, pairPersonal, pairUser()).grade;
+}
+function setPairGrade(from: string, to: string, g: PairGrade, layer: "shared" | "personal"): void {
+  const out = applyPairGrade({ from, to, grade: g, layer, user: pairUser(), shared: pairShared, personal: pairPersonal });
+  pairShared = out.shared; pairPersonal = out.personal;
+  saveJson(PAIR_SHARED_KEY, pairShared);
+  saveJson(PAIR_PERSONAL_KEY, pairPersonal);
 }
 /** The single-origin pairing-grade flag button — opens the mini grade menu on tap
- * (NOT a cycling toggle, per the owner: cycling + auto-sort is confusing). */
-function pairFlagBtn(name: string): string {
-  const g = pairGradeFor(name), meta = pairGradeMeta(g);
-  return `<button type="button" class="lt-pairflag pg-${g}" data-pairgrade="${escapeHtml(name)}" title="Pairing: ${meta.label} — tap to grade" aria-label="Pairing grade: ${meta.label}">${meta.glyph}</button>`;
+ * (NOT a cycling toggle, per the owner: cycling + auto-sort is confusing). Carries the
+ * directional edge (from → to) and shows a 👤 badge when YOUR override is in force. */
+function pairFlagBtn(from: string, to: string): string {
+  const { grade: g, layer } = resolvePairGrade(from, to, pairShared, pairPersonal, pairUser());
+  const meta = pairGradeMeta(g);
+  const badge = layer === "personal" ? `<span class="pg-layer" title="Your personal override">👤</span>` : "";
+  const fromTxt = from === PAIR_WILDCARD ? "Any lift" : displayName(from);
+  return `<button type="button" class="lt-pairflag pg-${g}" data-pairfrom="${escapeHtml(from)}" data-pairto="${escapeHtml(to)}" title="${escapeHtml(fromTxt)} → ${escapeHtml(displayName(to))}: ${meta.label} (${layer === "personal" ? "your override" : "gym"}) — tap to grade" aria-label="Pairing grade: ${meta.label}">${meta.glyph}${badge}</button>`;
 }
-let pairMenuName: string | null = null;
-/** Mini popup menu to PICK a pairing grade (super → no way). Floats via
- * clampMenuIntoView (rule 32). Replaces the confusing cycle-on-tap toggle. */
-function openPairGradeMenu(name: string, anchor: HTMLElement): void {
-  pairMenuName = name;
+let pairMenuFrom: string | null = null;
+let pairMenuTo: string | null = null;
+let pairMenuLayer: "shared" | "personal" = "shared";
+let pairMenuAnchor: HTMLElement | null = null;
+/** Mini popup menu to PICK a pairing grade (super → no way) on a chosen LAYER (gym vs
+ * just-me). Floats via clampMenuIntoView (rule 32). */
+function openPairGradeMenu(from: string, to: string, anchor: HTMLElement): void {
+  pairMenuFrom = from; pairMenuTo = to; pairMenuAnchor = anchor;
+  // Default the editing layer to where the current value already lives.
+  pairMenuLayer = resolvePairGrade(from, to, pairShared, pairPersonal, pairUser()).layer === "personal" ? "personal" : "shared";
+  renderPairGradeMenu();
+}
+function renderPairGradeMenu(): void {
+  if (!pairMenuFrom || !pairMenuTo || !pairMenuAnchor) return;
+  const from = pairMenuFrom, to = pairMenuTo;
   let m = document.getElementById("pairGradeMenu");
   if (!m) { m = document.createElement("div"); m.id = "pairGradeMenu"; m.className = "pair-grade-menu"; document.body.appendChild(m); }
-  const cur = pairGradeFor(name);
-  m.innerHTML = `<div class="pair-grade-hd">${escapeHtml(displayName(name))}</div>` +
+  // Highlight the grade stored ON the chosen layer, so the tick matches what a tap edits.
+  const onLayer = pairMenuLayer === "personal" ? (pairPersonal[pairUser()] ?? {})[pairEdge(from, to)] : pairShared[pairEdge(from, to)];
+  const cur = onLayer ?? "neutral";
+  const fromTxt = from === PAIR_WILDCARD ? "Any lift" : displayName(from);
+  m.innerHTML =
+    `<div class="pair-grade-hd">${escapeHtml(fromTxt)} → ${escapeHtml(displayName(to))}</div>` +
+    `<div class="pair-layer-row">` +
+      `<button type="button" class="pair-layer-pill${pairMenuLayer === "shared" ? " is-on" : ""}" data-pairlayer="shared" title="Set the gym-wide flag everyone here sees">👥 Gym</button>` +
+      `<button type="button" class="pair-layer-pill${pairMenuLayer === "personal" ? " is-on" : ""}" data-pairlayer="personal" title="Override just for you — shadows the gym flag">👤 Just me</button>` +
+    `</div>` +
     PAIR_GRADES.map((g) => `<button type="button" class="pair-grade-opt pg-${g.id}${g.id === cur ? " is-on" : ""}" data-setgrade="${g.id}"><span class="pgo-glyph">${g.glyph}</span><span>${g.label}</span></button>`).join("");
   m.hidden = false;
-  clampMenuIntoView(m, anchor);
+  clampMenuIntoView(m, pairMenuAnchor);
 }
 function closePairGradeMenu(): void {
   const m = document.getElementById("pairGradeMenu");
   if (m) m.hidden = true;
-  pairMenuName = null;
+  pairMenuFrom = null; pairMenuTo = null; pairMenuAnchor = null;
 }
 /** Rough "easy to pair up" score (lower = easier), used only as a secondary
  *  tiebreaker behind priority and the user's own flags. Portable kit (dumbbell /
@@ -11263,15 +11308,15 @@ function liftTrainingHtml(name: string): string {
       (pairEaseScore(p.name) - pairEaseScore(q.name)) || // easier to pair first
       (q.sets - p.sets));                            // tiebreak: most-trained
   const pairChip = (le: { name: string }): string =>
-    `<span class="lt-paircell pg-${pairGradeFor(le.name)}">` +
+    `<span class="lt-paircell pg-${pairGradeFor(name, le.name)}">` +
     `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
-    pairFlagBtn(le.name) +
+    pairFlagBtn(name, le.name) +
     `</span>`;
-  // Item 3: the SUPER/GOOD pairs, surfaced as a compact strip near the top (by the numbers).
-  const topPairs = pairCands.filter((le) => pairGradeFor(le.name) === "super" || pairGradeFor(le.name) === "good");
+  // Item 3: the SUPER/GOOD pairs (directional name → candidate), surfaced near the top.
+  const topPairs = pairCands.filter((le) => pairGradeFor(name, le.name) === "super" || pairGradeFor(name, le.name) === "good");
   const topPairsHtml = `<div class="lt-toppairs">` + topPairs.map((le) => {
-    const meta = pairGradeMeta(pairGradeFor(le.name));
-    return `<button type="button" class="lt-toppair pg-${pairGradeFor(le.name)}" data-trainex="${escapeHtml(le.name)}" title="${meta.label} pair — tap to open"><span class="pgo-glyph">${meta.glyph}</span> ${escapeHtml(shortFor(le.name))}</button>`;
+    const meta = pairGradeMeta(pairGradeFor(name, le.name));
+    return `<button type="button" class="lt-toppair pg-${pairGradeFor(name, le.name)}" data-trainex="${escapeHtml(le.name)}" title="${meta.label} pair — tap to open"><span class="pgo-glyph">${meta.glyph}</span> ${escapeHtml(shortFor(le.name))}</button>`;
   }).join("") + `</div>`;
   const antBody = pairCands.length
     ? `<div class="lt-ant">` + pairCands.map(pairChip).join("") + `</div>`
@@ -12856,25 +12901,31 @@ async function init() {
   // Pairing-grade mini menu (super → no way): pick an option → set + close + re-render
   // the open view; a tap outside the menu closes it. (Menu lives on <body>.)
   document.addEventListener("click", (e) => {
+    // Toggle the menu's editing LAYER (gym vs just-me) without closing it (rule 24).
+    const lay = (e.target as Element | null)?.closest<HTMLElement>("[data-pairlayer]");
+    if (lay?.dataset.pairlayer && pairMenuFrom && pairMenuTo) {
+      pairMenuLayer = lay.dataset.pairlayer === "personal" ? "personal" : "shared";
+      renderPairGradeMenu();
+      return;
+    }
     const opt = (e.target as Element | null)?.closest<HTMLElement>("[data-setgrade]");
-    if (opt?.dataset.setgrade && pairMenuName) {
-      const nm = pairMenuName;
-      setPairGrade(nm, opt.dataset.setgrade as PairGrade);
+    if (opt?.dataset.setgrade && pairMenuFrom && pairMenuTo) {
+      setPairGrade(pairMenuFrom, pairMenuTo, opt.dataset.setgrade as PairGrade, pairMenuLayer);
       closePairGradeMenu();
       if (!els.exInfoPage.hidden) refreshExerciseInfo();
       if (els.planPage && !els.planPage.hidden) renderWorkoutPlan();
       return;
     }
     const m = document.getElementById("pairGradeMenu");
-    if (m && !m.hidden && !(e.target as Element | null)?.closest("#pairGradeMenu, [data-pairgrade]")) closePairGradeMenu();
+    if (m && !m.hidden && !(e.target as Element | null)?.closest("#pairGradeMenu, [data-pairfrom]")) closePairGradeMenu();
   });
   // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
   els.exInfoBody.addEventListener("click", (e) => {
-    // "Pair with" flag: open the mini grade menu (super → no way). NOT a cycle toggle.
-    const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairgrade]");
-    if (pflag?.dataset.pairgrade) {
+    // "Pair with" flag: open the mini grade menu for the directional edge (from → to).
+    const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairfrom]");
+    if (pflag?.dataset.pairfrom && pflag.dataset.pairto) {
       e.preventDefault(); e.stopPropagation();
-      openPairGradeMenu(pflag.dataset.pairgrade, pflag);
+      openPairGradeMenu(pflag.dataset.pairfrom, pflag.dataset.pairto, pflag);
       return;
     }
     // Pair-with lift chip in the "How to train" panel → open that lift's brief.
@@ -13069,9 +13120,9 @@ async function init() {
       }
       return;
     }
-    // Pairs manager flag toggle (in the Plan popup pairs section).
-    const pf2 = t.closest<HTMLElement>("[data-pairgrade]");
-    if (pf2?.dataset.pairgrade) { openPairGradeMenu(pf2.dataset.pairgrade, pf2); return; }
+    // Pairs manager flag toggle (in the Plan popup pairs section) — directional edge.
+    const pf2 = t.closest<HTMLElement>("[data-pairfrom]");
+    if (pf2?.dataset.pairfrom && pf2.dataset.pairto) { openPairGradeMenu(pf2.dataset.pairfrom, pf2.dataset.pairto, pf2); return; }
     // Tap the name → open the exercise's info.
     const row = t.closest<HTMLElement>("[data-planopen]");
     if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen, true); }

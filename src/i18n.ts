@@ -92,6 +92,13 @@ const LT: Record<string, string> = {
   "⇄ Pair flags": "⇄ Derinimo žymės",
   "Search to flag…": "Ieškoti žymėjimui…",
   "No pair flags yet — flag exercises in their info card or search below.": "Dar nėra žymių — pažymėkite pratimus jų informacijos kortelėje arba ieškokite žemiau.",
+  "👥 Gym": "👥 Salė",
+  "👤 Just me": "👤 Tik man",
+  "Super": "Super",
+  "Good": "Gerai",
+  "Neutral": "Neutralu",
+  "Difficult": "Sunku",
+  "No way": "Niekada",
   "✎ Index entry — code, tags, groups & data": "✎ Rodyklės įrašas — kodas, žymos, grupės ir duomenys",
   // ---- Mini stats carousel ----
   "More ▾": "Daugiau ▾",

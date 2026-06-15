@@ -2971,6 +2971,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pair-grade-opt.pg-super .pgo-glyph, .pair-grade-opt.pg-good .pgo-glyph { color: var(--accent); }
 .pair-grade-opt.pg-difficult .pgo-glyph { color: var(--gold); }
 .pair-grade-opt.pg-noway .pgo-glyph { color: var(--remove, var(--muted)); }
+/* Layer toggle in the grade menu — Gym (shared) vs Just-me (personal override). */
+.pair-layer-row { display: flex; gap: 3px; padding: 3px 4px 5px; }
+.pair-layer-pill { flex: 1; min-height: var(--tap-min); padding: 3px 6px; font: inherit; font-size: 0.72rem; font-weight: 600; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); cursor: pointer; white-space: nowrap; }
+.pair-layer-pill.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+/* The 👤 badge on a flag that's YOUR override (vs the gym default). */
+.pg-layer { font-size: 0.62rem; margin-left: 1px; opacity: 0.85; }
+/* Pairs manager: a from-lift group ("Squat →" then its target chips). */
+.pairs-mgr-grp { padding-bottom: 4px; }
+.pairs-mgr-grp-h { font-size: 0.7rem; font-weight: 600; padding: 2px 0 3px; }
 /* "Top pairs" strip (super/good) surfaced near the numbers in the exercise card. */
 .lt-toppairs { display: flex; flex-wrap: wrap; gap: 5px; }
 .lt-toppair { display: inline-flex; align-items: center; gap: 0.3rem; min-height: var(--tap-min); padding: 3px 10px; font: inherit; font-size: 0.76rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); cursor: pointer; }
