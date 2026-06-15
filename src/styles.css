@@ -4707,6 +4707,18 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
   padding: 0.2rem 0.4rem; border: 1px solid var(--line);
   border-radius: var(--r-md); background: var(--panel);
 }
+/* Drag grip (≡) — grab to reorder the focus lifts into a custom order (saved as
+   `order`). touch-action:none so a drag on the grip reorders instead of scrolling
+   the popup. Sized to the shared tap-min like the ▸ caret beside it. */
+.prio-drag {
+  flex: none; width: var(--tap-min); min-height: var(--tap-min); display: inline-flex;
+  align-items: center; justify-content: center; font-size: 1rem; line-height: 1;
+  color: var(--muted); background: none; border: none; padding: 0;
+  cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.prio-drag:active { cursor: grabbing; }
+/* The row being dragged lifts off the list (tint + shadow) so its position is clear. */
+.prio-row.prio-dragging { opacity: 0.9; background: var(--accent-soft); box-shadow: 0 6px 18px rgba(0,0,0,0.18); position: relative; z-index: 2; }
 /* Lift name · muscle INLINE (cram) — a plain text button that opens the lift. */
 .prio-main {
   flex: 1 1 6rem; min-width: 0; display: flex; flex-direction: row; flex-wrap: nowrap;

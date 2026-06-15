@@ -10526,7 +10526,10 @@ const EFFORT_TIP: Record<PriorityEffort, string> = {
   mid: "Mid sets — 3–8 reps in reserve, not to failure.",
   half: "Half sets — about half your max reps, the minimum to maintain.",
 };
-interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort }
+// `order` = the owner's CUSTOM manual position (drag-to-reorder). Absent until the
+// list is first dragged; once any entry has it, ordered entries sort by it (ascending),
+// then any not-yet-ordered ones fall back to the level sort below them.
+interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort; order?: number }
 const PRIORITIES_KEY = "colosseum.priorities.v1";
 const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEntry>>>(PRIORITIES_KEY);
 function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
@@ -10593,8 +10596,15 @@ function renderWorkoutPlan(): void {
     const ref = liveByName.get(referenceMemberFor(ex) ?? "");
     return { daysAgo: Number.isFinite(lastDay) ? todayD - lastDay : 999, drop: ref?.drop ?? 0 };
   };
-  const names = Object.keys(pri).sort((a, b) =>
-    (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
+  // Order: the owner's CUSTOM drag order wins (entries with `order`, ascending); any
+  // entry without one (e.g. just added) falls below them in the default level sort.
+  const names = Object.keys(pri).sort((a, b) => {
+    const oa = pri[a]!.order, ob = pri[b]!.order;
+    const ha = typeof oa === "number", hb = typeof ob === "number";
+    if (ha && hb) return oa! - ob!;
+    if (ha !== hb) return ha ? -1 : 1; // custom-ordered lifts sit above un-ordered ones
+    return (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b);
+  });
   // ---- Lift↔pattern relations (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
   // Every lift stays a FLAT row in its OWN effort order — NOT nested. Each row has a
   // dropdown of related lifts, split by RELATION:
@@ -10705,7 +10715,11 @@ function renderWorkoutPlan(): void {
       `<div class="prio-eff-row"><span class="prio-eff-lbl muted">intensity</span>` +
       `<button type="button" class="prio-effort prio-effort-${eff}" data-prioeffort="${escapeHtml(ex)}" title="${EFFORT_TIP[eff]} Tap to cycle Hard → Mid → Half.">${EFFORT_LABEL[eff]}</button>` +
       `<span class="prio-eff-hint muted">${EFFORT_HINT[eff]}</span></div>`;
+    // Drag handle — grab to reorder the focus lifts into a custom order (persisted as
+    // `order`). touch-action:none (CSS) so dragging the grip doesn't scroll the popup.
+    const dragH = `<button type="button" class="prio-drag" data-priodrag="${escapeHtml(ex)}" aria-label="Drag to reorder ${escapeHtml(displayName(ex))}" title="Drag to reorder">≡</button>`;
     return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
+      dragH +
       caret +
       `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
       `${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
@@ -12486,6 +12500,51 @@ async function init() {
   // Formulas popup (was the Test tab) — sits beside the Plan button.
   els.formulasBtn.addEventListener("click", openFormulas);
   els.formulasClose.addEventListener("click", () => { els.formulasPage.hidden = true; });
+  // Drag-to-reorder the focus-lift priorities into a custom order (the ≡ grip). Delegated
+  // on els.planBody so it survives the re-render. While dragging the grabbed row we move it
+  // among its siblings live by pointer Y; on release we read the DOM order, write each
+  // entry's `order`, and persist — but ONLY if the order actually changed (a stray tap on
+  // the grip mustn't silently lock the list into custom-order mode).
+  let prioDrag: { listEl: HTMLElement; row: HTMLElement; pointerId: number; initial: string[] } | null = null;
+  els.planBody.addEventListener("pointerdown", (e) => {
+    const handle = (e.target as HTMLElement).closest<HTMLElement>("[data-priodrag]");
+    if (!handle) return;
+    const row = handle.closest<HTMLElement>(".prio-row");
+    const listEl = row?.parentElement as HTMLElement | null;
+    if (!row || !listEl) return;
+    e.preventDefault();
+    const initial = Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row")).map((r) => r.dataset.prioex ?? "");
+    prioDrag = { listEl, row, pointerId: e.pointerId, initial };
+    row.classList.add("prio-dragging");
+    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  }, { passive: false });
+  els.planBody.addEventListener("pointermove", (e) => {
+    if (!prioDrag || e.pointerId !== prioDrag.pointerId) return;
+    e.preventDefault();
+    const { listEl, row } = prioDrag;
+    const y = e.clientY;
+    for (const other of Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row"))) {
+      if (other === row) continue;
+      const r = other.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      const otherIsAfter = !!(row.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING);
+      if (y < mid && !otherIsAfter) { listEl.insertBefore(row, other); break; }            // dragging up past `other`
+      if (y > mid && otherIsAfter) { listEl.insertBefore(row, other.nextSibling); break; }  // dragging down past `other`
+    }
+  }, { passive: false });
+  const endPrioDrag = () => {
+    if (!prioDrag) return;
+    const { listEl, row, initial } = prioDrag;
+    prioDrag = null;
+    row.classList.remove("prio-dragging");
+    const final = Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row")).map((r) => r.dataset.prioex ?? "");
+    if (final.join("") === initial.join("")) return; // no move → don't lock the order
+    const store = prioritiesStore[els.athlete.value];
+    if (store) { final.forEach((ex, i) => { if (store[ex]) store[ex]!.order = i; }); savePriorities(); }
+    renderWorkoutPlan();
+  };
+  els.planBody.addEventListener("pointerup", endPrioDrag);
+  els.planBody.addEventListener("pointercancel", endPrioDrag);
   // 1RM goal input (Phase 2): save the target kg (or clear it) on change, then re-render
   // so the % progress updates. Input has already blurred, so re-rendering is fine.
   els.planBody.addEventListener("change", (e) => {
