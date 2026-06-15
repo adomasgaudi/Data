@@ -4792,6 +4792,12 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
   padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--r-pill);
   background: var(--bg); color: var(--muted); white-space: nowrap;
 }
+/* Priority RANK badge (#1 = top) — the row's position in the custom order, sat just
+   left of the effort-level pill. Quiet/monospace-ish number, not a button. */
+.prio-rank {
+  flex: none; font-size: 0.66rem; font-weight: 700; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; align-self: center;
+}
 .prio-level-max { color: #fff; background: var(--accent); border-color: var(--accent); }
 .prio-level-active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 .prio-level-passive { color: var(--muted); background: var(--bg); }

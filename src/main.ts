@@ -10664,7 +10664,7 @@ function renderWorkoutPlan(): void {
     ...realSug.map((name) => ({ name, synth: false, cmp: comparePatternFor(name) })),
   ].slice(0, 16);
 
-  const rowHtml = (ex: string): string => {
+  const rowHtml = (ex: string, i: number): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
     const avg = exerciseMonthAvg(user, ex);
@@ -10732,7 +10732,11 @@ function renderWorkoutPlan(): void {
       `${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
       `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
-      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
+      // Priority RANK (#1 = top) — the row's position in your custom order, shown next to
+      // the effort level but INDEPENDENT of it (e.g. #1 priority that you only Maintain).
+      // Drag the ≡ grip to change it.
+      `<span class="prio-rank" title="Priority #${i + 1} (1 = top) — drag the ≡ grip to change">#${i + 1}</span>` +
+      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to cycle: Max effort → Active → Passive → Maintain. Sets the weekly target; the priority NUMBER (#n) is separate — drag to change it.">${PRIORITY_LABEL[e.level]}</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
       (open ? `<div class="prio-detail">${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
