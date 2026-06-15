@@ -165,6 +165,13 @@ if (touchedRelease) {
   if (newestVer && !/^b\.\d+\.\d+\.\d+$/.test(newestVer)) {
     violations.push(`version ${newestVer} is not a clean patch bump b.X.Y.Z — bump the PATCH digit only, never a 4th digit or minor/major.`);
   }
+  // dist must match the on-screen version too — a rebase that resolves dist with
+  // `git checkout --theirs` leaves a STALE deployed build (it shipped b.2.8.424 once
+  // while source was .425). The owner only sees the live build, so this matters.
+  const distVer = ((read("dist/index.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
+  if (distVer && spanVer && distVer !== spanVer) {
+    violations.push(`dist/index.html is built at ${distVer} but index.html is ${spanVer} — the DEPLOYED build is STALE; rebuild it (\`npm run build\`) and commit dist (never resolve dist with --theirs).`);
+  }
 }
 
 // ── UI check (rule 9/UIC-7: the Coach catalogue must not drift from real CSS) ──
