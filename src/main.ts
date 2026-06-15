@@ -384,9 +384,10 @@ let viewUser: string | null = (() => {
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
 // Tabs a non-admin (locked user / spectator) may stay on — the Clients section of
-// the More menu: both analysis pages, the athlete view, plus Live, Colosseum,
-// Stats view (groups) and World records. (Coach pages bounce back to analysis.)
-const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records"]);
+// the More menu: both analysis pages, the athlete view, the Index (exercise reference),
+// plus Live, Colosseum, Stats view (groups) and World records. (Coach pages bounce back
+// to analysis.)
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records", "bwparts"]);
 /** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
  * Simplified-view toggle is on, else the full ANL. */
 function analysisTabName(): string {
