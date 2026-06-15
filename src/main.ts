@@ -10630,6 +10630,30 @@ function priorityComparator(user: string): ((a: string, b: string) => number) | 
 const WO_PRIO_SORT_KEY = "colosseum.woSortByPriority";
 let woSortByPriority: boolean = (() => { try { return localStorage.getItem(WO_PRIO_SORT_KEY) !== "0"; } catch { return true; } })();
 function saveWoSortByPriority(): void { try { localStorage.setItem(WO_PRIO_SORT_KEY, woSortByPriority ? "1" : "0"); } catch { /* ignore */ } }
+// The rank / effort-level pills open a small PICK MENU (not tap-to-cycle, owner request).
+// position:fixed + clamp into the viewport (rule 32), mirroring openLiftMenu.
+function closePrioPickMenu(): void { document.getElementById("prioPickMenu")?.remove(); }
+function openPrioPickMenu(anchor: HTMLElement, ex: string, kind: "rank" | "level"): void {
+  closePrioPickMenu(); closeLiftMenu();
+  const pri = prioritiesStore[els.athlete.value];
+  if (!pri?.[ex]) return;
+  const cur: string = kind === "rank" ? rankOf(pri[ex]!) : pri[ex]!.level;
+  const opts: { val: string; label: string; cls: string }[] = kind === "rank"
+    ? PRIORITY_RANKS.map((r) => ({ val: r, label: RANK_LABEL[r], cls: `prio-rank-${r}` }))
+    : PRIORITY_LEVELS.map((l) => ({ val: l, label: PRIORITY_LABEL[l], cls: `prio-level-${l}` }));
+  const rows = opts.map((o) =>
+    `<button type="button" class="prio-pick-row ${o.cls}${o.val === cur ? " is-on" : ""}" ` +
+    `data-priopick="${escapeHtml(o.val)}" data-priopickex="${escapeHtml(ex)}" data-priopickkind="${kind}">${escapeHtml(o.label)}</button>`,
+  ).join("");
+  const menu = document.createElement("div");
+  menu.id = "prioPickMenu";
+  menu.className = "prio-pick-menu";
+  menu.innerHTML = rows;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 4)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
+}
 /** Weekly target sets a level SUGGESTS — Maintain ≈ keep your recent month average. */
 function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
   if (level === "max") return 6;
@@ -10832,8 +10856,8 @@ function renderWorkoutPlan(): void {
       // Priority RANK pill (Top → Second → Optional) — a named tier SEPARATE from effort;
       // it leads the sort (rank first, effort second). e.g. a Top-priority lift you only
       // Maintain. Tap to cycle.
-      `<button type="button" class="prio-rank prio-rank-${rankOf(e)}" data-priorank="${escapeHtml(ex)}" title="Priority rank — tap to cycle: Top → Second → Optional. Sorts the list (rank first, then effort level).">${RANK_LABEL[rankOf(e)]}</button>` +
-      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to cycle: Max effort → Active → Passive → Maintain. Sets the weekly target; the priority RANK (Top/Second/Optional) is separate.">${PRIORITY_LABEL[e.level]}</button>` +
+      `<button type="button" class="prio-rank prio-rank-${rankOf(e)}" data-priorank="${escapeHtml(ex)}" title="Priority rank — tap to choose: Top · Second · Optional. Sorts the list (rank first, then effort level).">${RANK_LABEL[rankOf(e)]}</button>` +
+      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Effort level — tap to choose: Max effort · Active · Passive · Maintain. Sets the weekly target; the priority RANK is separate.">${PRIORITY_LABEL[e.level]}</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
       (open ? `<div class="prio-detail">${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
@@ -12731,22 +12755,21 @@ async function init() {
     }
     // Cycle the priority LEVEL → re-suggest the target for the new level (re-renders: the
     // order changes by level, by design).
+    // Effort LEVEL pill → open a small pick menu (Max effort / Active / Passive / Maintain)
+    // instead of tap-to-cycle (owner). stopPropagation so the menu's outside-close
+    // (document handler) doesn't fire on this same click.
     const lvl = t.closest<HTMLElement>("[data-priolevel]");
     if (lvl?.dataset.priolevel && pri[lvl.dataset.priolevel]) {
-      const ex = lvl.dataset.priolevel;
-      const next = PRIORITY_LEVELS[(PRIORITY_LEVELS.indexOf(pri[ex]!.level) + 1) % PRIORITY_LEVELS.length]!;
-      // Spread keeps the independent dials (rank, 1RM goal, effort) — only level + its
-      // suggested target change. (Changing level no longer wipes the rank or goal.)
-      pri[ex] = { ...pri[ex]!, level: next, target: suggestedTarget(next, exerciseMonthAvg(user, ex)) };
-      savePriorities(); renderWorkoutPlan(); return;
+      e.stopPropagation();
+      openPrioPickMenu(lvl, lvl.dataset.priolevel, "level");
+      return;
     }
-    // Cycle the PRIORITY RANK (Top → Second → Optional) — the named tier that leads the
-    // sort (rank first, effort second), independent of the effort level.
+    // PRIORITY RANK pill → its own pick menu (Top / Second / Optional).
     const rk = t.closest<HTMLElement>("[data-priorank]");
     if (rk?.dataset.priorank && pri[rk.dataset.priorank]) {
-      const ex = rk.dataset.priorank;
-      pri[ex]!.rank = PRIORITY_RANKS[(PRIORITY_RANKS.indexOf(rankOf(pri[ex]!)) + 1) % PRIORITY_RANKS.length]!;
-      savePriorities(); renderWorkoutPlan(); return;
+      e.stopPropagation();
+      openPrioPickMenu(rk, rk.dataset.priorank, "rank");
+      return;
     }
     // Cycle the SET INTENSITY (hard → mid → half) in the detail panel. Doesn't change
     // order, but re-render to recolour the pill + hint.
@@ -12841,6 +12864,31 @@ async function init() {
       return;
     }
     if (!menu.contains(t)) closeLiftMenu();
+  });
+  // The rank / effort-level PICK MENU (opened from the Plan focus-lift pills): apply a
+  // tapped option, else close on an outside click. The menu lives on document.body, so
+  // this is a document-level handler (mirrors the lift-menu one above).
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const menu = document.getElementById("prioPickMenu");
+    if (!menu) return;
+    const pick = t.closest<HTMLElement>("[data-priopick]");
+    if (pick && menu.contains(pick)) {
+      e.preventDefault(); e.stopPropagation();
+      const ex = pick.dataset.priopickex!, val = pick.dataset.priopick!, kind = pick.dataset.priopickkind;
+      const user = els.athlete.value;
+      const pri = prioritiesStore[user];
+      if (pri?.[ex]) {
+        if (kind === "rank") pri[ex]!.rank = val as PriorityRank;
+        // Spread keeps the independent dials (rank, 1RM goal, effort); level also re-suggests its target.
+        else pri[ex] = { ...pri[ex]!, level: val as PriorityLevel, target: suggestedTarget(val as PriorityLevel, exerciseMonthAvg(user, ex)) };
+        savePriorities();
+      }
+      closePrioPickMenu();
+      renderWorkoutPlan();
+      return;
+    }
+    if (!menu.contains(t)) closePrioPickMenu();
   });
   // Swipe-RIGHT-to-remove on the selection-title chips (same drop as the menu's ✕
   // Remove, via the one removeLiftFromSelection choke-point). Only the title chips —
