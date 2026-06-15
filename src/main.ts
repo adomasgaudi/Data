@@ -10934,7 +10934,12 @@ function renderWorkoutPlan(): void {
         const hits = searchPool.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
         return hits.length
           ? hits.map((a) => prioChip(a.name, a.synth)).join("")
-          : `<span class="muted prio-add-none">No exercise matches “${escapeHtml(prioAddQuery)}”.</span>`;
+          : (() => {
+              // #prune sibling of the command-bar Create fix: when no trained lift
+              // matches, offer to add the typed name as a BRAND-NEW focus (start training it).
+              const nm = prioAddQuery.trim();
+              return `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(nm)}" title="Add “${escapeHtml(nm)}” as a new focus lift — start training it">➕ ${escapeHtml(nm)}</button><span class="muted prio-add-none">new focus — no history yet</span>`;
+            })();
       })()
     : suggestions.map((s) => {
         const specific = prioChip(s.name, s.synth);

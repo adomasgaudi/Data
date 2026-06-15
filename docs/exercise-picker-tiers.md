@@ -43,8 +43,8 @@ sort + per-group counts + ⓘ info + identity filters, in a sliding `.wa-pick-ca
 |---|---|---|---|
 | Analysis selector | full drawer | **3** | reference — leave |
 | Variant/create picker | search + chips + pills | **3** | already aligned (shares `.wa-ex-chip`/`.wa-sel-pill`) |
-| Compare picker | `.compare-chip` + search + quick-picks | **2** | adopt `.wa-ex-chip` look |
-| Focus-lifts "Add another" | bare suggestion chips | **2** | **upgrade: add search + fuller list** |
+| Compare picker | `.compare-chip` + search + quick-picks | **2** | DONE-ish: shape (border/radius/padding) already matches `.wa-ex-chip`; its muted/none unselected colour is KEPT — it's functional (contrasts the colour-coded *chosen* chips), so not forced solid |
+| Focus-lifts "Add another" | bare suggestion chips | **2** | DONE: search + fuller list + can now **create a brand-new focus** on no-match |
 | Leaderboard | native `<select>`→`.xdd` | **1** | already `.xdd` |
 | Compare "Add another" | `.xdd` dropdown | **1** | already `.xdd` |
 | Add-set inline | native `<datalist>` | **1** | move to `.xdd` for consistency |
