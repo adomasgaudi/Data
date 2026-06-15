@@ -302,6 +302,11 @@ const LT: Record<string, string> = {
   "✕ Remove": "✕ Pašalinti",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
+  "backrest": "nugaros atrama",
+  "obstacle": "kliūtis",
+  "hanging": "kabantis",
+  "dips_bar": "lygiagretės",
+  "dips bar": "lygiagretės",
   "ROM": "amplitudė",
   "fwd lean": "pasvirimas",
   "tempo": "tempas",

@@ -123,6 +123,14 @@ export const FAMILIES: Record<string, FamilyDef> = {
     },
     defaults: { height: "0", angle: "1", position: "full", rom: "0cm" },
   },
+  KNEERAISE: {
+    dims: {
+      support: { hanging: 1.0, dips_bar: 0.85 },
+      backrest: { none: 1.0, "30cm": 0.9 },
+      obstacle: { none: 1.0, S: 1.05, M: 1.1, L: 1.15 },
+    },
+    defaults: { support: "hanging", backrest: "none", obstacle: "none" },
+  },
 };
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
@@ -221,6 +229,30 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "full bend": { position: "full" },
     full: { position: "full" },
   },
+  KNEERAISE: {
+    hanging: { support: "hanging" },
+    "hang bar": { support: "hanging" },
+    "dips bar": { support: "dips_bar", priority: 4 },
+    "dip bar": { support: "dips_bar", priority: 4 },
+    dips: { support: "dips_bar" },
+    lygiagretės: { support: "dips_bar" },
+    lygiageretes: { support: "dips_bar" },
+    "back rest": { backrest: "30cm" },
+    backrest: { backrest: "30cm" },
+    "back pad": { backrest: "30cm" },
+    "nugaros atrama": { backrest: "30cm" },
+    "l yoga": { obstacle: "L" },
+    "yoga l": { obstacle: "L" },
+    "yoga block l": { obstacle: "L" },
+    "m yoga": { obstacle: "M" },
+    "yoga m": { obstacle: "M" },
+    "yoga block m": { obstacle: "M" },
+    "yoga block": { obstacle: "M" },
+    yoga: { obstacle: "M" },
+    "s yoga": { obstacle: "S" },
+    "yoga s": { obstacle: "S" },
+    "yoga block s": { obstacle: "S" },
+  },
 };
 
 /** The bundled config (passed by default to the resolver; callers may pass their
@@ -228,7 +260,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 13;
+export const CONFIG_VERSION = 14;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -250,6 +282,10 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Chin Up": "PULLUP",
   "Chin Ups": "PULLUP",
   "Roman Chair Side Bend": "RCSIDEBEND",
+  "Knee Raise": "KNEERAISE",
+  "Knee Raises": "KNEERAISE",
+  "Hanging Knee Raise": "KNEERAISE",
+  "Hanging Knee Raises": "KNEERAISE",
 };
 
 export function familyOf(

@@ -205,6 +205,10 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
   "Decline Sit Up": 0.3,
   "Roman Chair Side Bend": 0.3,
   "Hip Abduction": 0,
+  "Knee Raise": 0.35,
+  "Knee Raises": 0.35,
+  "Hanging Knee Raise": 0.35,
+  "Hanging Knee Raises": 0.35,
 };
 
 /** Exercises with no match contribute no bodyweight (treated as pure load). */
