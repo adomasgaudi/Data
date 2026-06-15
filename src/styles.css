@@ -2263,23 +2263,6 @@ sup.wr-bw { font-size: 0.85em; }
   margin-right: -1.25rem;
   touch-action: none; /* let the zoom plugin own touch gestures (pan/pinch) */
 }
-.chart-center {
-  position: absolute;
-  top: 6px;
-  right: 10px;
-  z-index: 3;
-  padding: 4px 10px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--accent, #284e86);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--line, #e3e3e3);
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(20, 24, 38, 0.12);
-}
-.chart-center:hover { background: #fff; }
-.chart-center:active { transform: translateY(1px); }
 /* The Exercises drill-in graph is shorter (~30%) so the page scrolls more easily;
    the standalone Progress tab keeps the taller full-height version. */
 .exercise-progress .chart-wrap--big { height: 49vh; }
@@ -2848,7 +2831,7 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); border-top: 1px solid var(--a
 /* Hard-set plan pill sits right after the "Work sets" label (not pushed to the edge). */
 .rx-ws-plan { margin-left: 0; }
 /* Tabbed plan POPUP (owner): warm-up / hard-set type tabs → a live table → an explanation. */
-.plan-popup { position: fixed; z-index: var(--z-top, 200); width: 320px; max-width: 92vw; max-height: 70vh; overflow-y: auto; background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 32px rgba(0,0,0,0.28); padding: 0.5rem 0.6rem; }
+.plan-popup { position: fixed; z-index: var(--z-top, 200); width: 320px; max-width: 92vw; max-height: 70vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 10px 32px rgba(0,0,0,0.28); padding: 0.5rem 0.6rem; }
 :root[data-theme="dark"] .plan-popup { background: var(--panel); }
 .plan-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 0.45rem; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
 .plan-tab { flex: 0 0 auto; white-space: nowrap; font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px; min-height: var(--tap-min); }
@@ -4596,7 +4579,7 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 }
 .wa-graph-compare-btn.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
 /* ✕ Close button pinned at the top-right of the graph Options sheet. */
-.wa-gmenu-close { position: absolute; top: 4px; right: 6px; z-index: 1; width: var(--tap-min); height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 1rem; cursor: pointer; color: var(--muted); background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.wa-gmenu-close { position: absolute; top: 4px; right: 6px; z-index: 1; width: var(--tap-min); height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 1rem; cursor: pointer; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill); }
 .wa-gmenu-close:hover { color: var(--accent); border-color: var(--accent); }
 .wa-graph-menu {
   /* A bottom-anchored, height-CAPPED, internally-scrollable sheet — NOT a tall dropdown
@@ -5110,7 +5093,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 /* "⚑ hidden H/T" → floating menu of hidden lifts, each tap-to-unhide, + Unhide all. */
 .wo-hidden-menu {
   position: fixed; z-index: 80; max-width: min(92vw, 320px); max-height: 60vh; overflow-y: auto;
-  background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
   box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.5rem 0.6rem;
 }
 .wo-hidden-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: var(--fs-md); }
@@ -5135,7 +5118,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-sel-pill.lens-compared { border-color: var(--lens-compare); }
 .wa-sel-pill.lens-both { border-color: var(--lens-both); }
 /* Per-lift popup menu (Info / Combine / Compare / Remove). */
-.lift-menu { position: fixed; z-index: 90; min-width: 152px; max-width: 80vw; background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; }
+.lift-menu { position: fixed; z-index: 90; min-width: 152px; max-width: 80vw; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; }
 .lift-menu-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); padding: 0.2rem 0.5rem 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
 .lift-menu-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; font: inherit; font-size: var(--fs-md); cursor: pointer; background: none; border: none; border-radius: 6px; padding: 6px 8px; color: var(--text); }
 .lift-menu-row:hover { background: var(--accent-soft); }
@@ -5143,7 +5126,7 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .lift-menu-row.lift-menu-rm { color: #a23b3b; }
 /* The rank / effort-level PICK menu (Plan focus-lift pills) — a small floating list of
    the options, each styled like its pill; the current one is marked. */
-.prio-pick-menu { position: fixed; z-index: 90; min-width: 120px; max-width: 80vw; background: var(--card, #fff); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; display: flex; flex-direction: column; gap: 3px; }
+.prio-pick-menu { position: fixed; z-index: 90; min-width: 120px; max-width: 80vw; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 28px rgba(0,0,0,0.25); padding: 0.3rem; display: flex; flex-direction: column; gap: 3px; }
 .prio-pick-row { display: flex; align-items: center; width: 100%; text-align: left; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 5px 10px; min-height: var(--tap-min); background: var(--bg); color: var(--muted); }
 .prio-pick-row.is-on { box-shadow: inset 0 0 0 1px var(--accent); }
 /* Section label inside the combined (both) rank+effort pick menu. */
