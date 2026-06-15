@@ -2188,10 +2188,12 @@ function setAssistLoggedView(on: boolean): void {
   try { localStorage.setItem(ASSIST_VIEW_KEY, on ? "1" : "0"); } catch { /* ignore */ }
   clearMachineCache();
 }
-/** The weight a machine set is COUNTED/SHOWN as under the current view: logged keeps it
- * as-entered, real halves it. Non-machine weights pass through. */
-function viewAddedWeight(exerciseName: string, weight: number | null): number | null {
-  if (assistLoggedView) return weight;
+/** The weight a machine set is COUNTED/SHOWN as under the given view (default = the
+ * global graph flag): logged keeps it as-entered, real halves it. Non-machine weights
+ * pass through. Pass `logged` explicitly to compute a view INDEPENDENT of the graph
+ * toggle (the history list forces real so the graph's Assist option can't change it). */
+function viewAddedWeight(exerciseName: string, weight: number | null, logged = assistLoggedView): number | null {
+  if (logged) return weight;
   return assistedRealWeight(weight, isAssistedMachine(exerciseName));
 }
 /** The REAL (half) assistance for a machine set, IGNORING the view flag — used by the
@@ -2199,10 +2201,11 @@ function viewAddedWeight(exerciseName: string, weight: number | null): number | 
 function realAddedWeight(exerciseName: string, weight: number | null): number | null {
   return assistedRealWeight(weight, isAssistedMachine(exerciseName));
 }
-/** Bodyweight multiplier for the current view: machine sets in LOGGED view fold 2× the
- * bodyweight share (the machine's 2× scale), keeping the logged load = 2× the real one. */
-function viewBwMult(exerciseName: string, weight: number | null): number {
-  return assistLoggedView && isMachineSet(exerciseName, weight) ? 2 : 1;
+/** Bodyweight multiplier for the given view (default = the global flag): machine sets in
+ * LOGGED view fold 2× the bodyweight share (the machine's 2× scale), keeping the logged
+ * load = 2× the real one. */
+function viewBwMult(exerciseName: string, weight: number | null, logged = assistLoggedView): number {
+  return logged && isMachineSet(exerciseName, weight) ? 2 : 1;
 }
 
 const SET_SIDES_KEY = "colosseum.setSides.v1";
@@ -2454,8 +2457,8 @@ function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight"
  */
 /** Public computeRecord: the bodyweight-aware compute, then tag the owner's
  * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
-function computeRecord(r: SetRecord): SetRecord {
-  const base = computeRecordBase(r);
+function computeRecord(r: SetRecord, logged = assistLoggedView): SetRecord {
+  const base = computeRecordBase(r, logged);
   // Stamp the per-NOTE variation difficulty so the 1RM (addedWeight1RM) scales the
   // load by it — an easier variation reports a lower / negative 1RM. ×1 → unstamped.
   const mult = noteVariationScale(base);
@@ -2467,7 +2470,7 @@ function computeRecord(r: SetRecord): SetRecord {
   const nc = notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
   return nc ? { ...out, notComparable: true } : out;
 }
-function computeRecordBase(r: SetRecord): SetRecord {
+function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
@@ -2475,11 +2478,12 @@ function computeRecordBase(r: SetRecord): SetRecord {
   // real load/1RM (it only scales a separate "effort" 1RM, see scaleForRecord).
   const coeff = coeffFor(r.exerciseName);
   // Assisted-machine sets (a NEGATIVE pull-up/dip weight): the machine dial over-reads
-  // ~2×. The current view decides how it's counted — REAL halves it (−40 → −20) with
-  // normal bodyweight; LOGGED keeps −40 and doubles the bodyweight share. origWeight is
-  // the value to DISPLAY (so the set shows what the chosen view treats it as).
-  const viewAdded = viewAddedWeight(r.exerciseName, r.weight);
-  const bwMult = viewBwMult(r.exerciseName, r.weight);
+  // ~2×. The view decides how it's counted — REAL halves it (−40 → −20) with normal
+  // bodyweight; LOGGED keeps −40 and doubles the bodyweight share. origWeight is the
+  // value to DISPLAY. `logged` defaults to the global graph flag; the history passes
+  // false so the per-set list always reflects real effort regardless of the graph.
+  const viewAdded = viewAddedWeight(r.exerciseName, r.weight, logged);
+  const bwMult = viewBwMult(r.exerciseName, r.weight, logged);
   if (coeff <= 0) {
     const base = viewAdded === r.weight ? r : { ...r, weight: viewAdded, origWeight: viewAdded };
     return applyMachineMode(base);
@@ -3174,7 +3178,7 @@ function computedRecords(): SetRecord[] {
   // user exercise-def identity), PLUS the synthetic combinable/comparable group
   // records derived from those computed loads. Pure source lifts are never mutated.
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
-  const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
+  const pure = activeRecords().map(applySetOverride).map((r) => computeRecord(r)).map((r) => tagUserExerciseDef(r, byDef));
   computedRecordsCache = [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
   queueMicrotask(() => { computedRecordsCache = null; });
   return computedRecordsCache;
@@ -3188,7 +3192,7 @@ function computedRecords(): SetRecord[] {
  * (one card render); same transform pipeline, just the unfiltered base. */
 function computedRecordsAllLifts(): SetRecord[] {
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
-  const pure = liveRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
+  const pure = liveRecords().map(applySetOverride).map((r) => computeRecord(r)).map((r) => tagUserExerciseDef(r, byDef));
   return [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
 }
 
@@ -8212,7 +8216,10 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // what was actually loaded. `raw` is a raw record; apply the on-device per-set
   // edits, then compute it here so the sets tables match every other view.
   const s = applySetOverride(raw);
-  const computed = computeRecord(s);
+  // The history list is INDEPENDENT of the graph's Assist option (owner): always compute
+  // in REAL mode (logged=false) so toggling the graph never changes the history numbers,
+  // and the weight column shows the LOGGED dial value separately (with a "not real" mark).
+  const computed = computeRecord(s, false);
   const e1rm = addedWeight1RM(computed, formula);
   // "Not comparable" lifts keep their reps (shown in the W column) but get no
   // volume — it's as meaningless as their 1RM here.
@@ -8299,11 +8306,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
         ? `<span class="set-grav" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
   const edited = setOverrides[sid] !== undefined;
-  // Assisted MACHINE set (negative counterweight) — an auto tag. The weight shown +
-  // counted depends on the global Assist view (real ½ vs logged ×2, set on the graph).
+  // Assisted MACHINE set (negative counterweight) — an auto tag. The history ALWAYS shows
+  // the LOGGED dial value (real effort is half; the graph's Assist option no longer changes
+  // this list). machineReal = the real (halved) effort, shown in the expanded row.
   const machineSet = isMachineSet(s.exerciseName, s.weight);
+  const machineReal = machineSet ? realAddedWeight(s.exerciseName, s.weight) : null;
   const assistTag = machineSet
-    ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default; switch the graph's Assist option to ‘logged’ to see the machine's reading (×2, bodyweight also ×2).">machine</span>`
+    ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. The list shows the LOGGED dial value (your real effort is about half); expand the set to see both. The graph's Assist option doesn't change this list.">machine</span>`
     : "";
   // The whole set row is the edit handle now — tap anywhere on it (except the
   // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
@@ -8313,8 +8322,11 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
   const cellFor = (id: string): string => {
     switch (id) {
-      // Machine sets show the view's weight (real −20 / logged −40), not the raw log.
-      case "weight": return wr(machineSet ? (computed.origWeight ?? s.weight) : s.weight, s.reps);
+      // Always show the LOGGED dial value (s.weight); a machine set gets a "not real"
+      // mark because its real effort is ~half (shown in the expanded row).
+      case "weight": return machineSet
+        ? `${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
+        : wr(s.weight, s.reps);
       case "e1rm": return e1rmCell;
       case "volume": return vol === null ? "—" : fmt(vol);
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
