@@ -46,8 +46,8 @@
   --chart-axis: #9aa3b2;
   --chart-label: #6b7280;
   --chart-halo: #ffffff;
-  --chart-band: rgba(0, 0, 0, 0.035);            /* week stripes — very light gray */
-  --chart-band-month: rgba(40, 78, 134, 0.07);   /* month wash — very light blue */
+  --chart-hatch: rgba(0, 0, 0, 0.045);           /* week crosshatch lines — barely visible */
+  --chart-band-month: rgba(40, 78, 134, 0.035);  /* month wash — barely visible light blue */
   /* Year heatmap rest squares, alternating by month: even = white + thin gray
      outline, odd = very light gray + slightly darker outline. */
   --hm-rest-even: #ffffff;
@@ -111,8 +111,8 @@
   --chart-axis: #3c4757;
   --chart-label: #aeb6c2;
   --chart-halo: #1b212b;
-  --chart-band: rgba(255, 255, 255, 0.045);       /* week stripes — very light gray */
-  --chart-band-month: rgba(130, 165, 235, 0.09);  /* month wash — very light blue */
+  --chart-hatch: rgba(255, 255, 255, 0.055);       /* week crosshatch lines — barely visible */
+  --chart-band-month: rgba(130, 165, 235, 0.045); /* month wash — barely visible light blue */
   --hm-rest-even: #161b23;
   --hm-rest-odd: #20272f;
   --hm-bd-even: #2b3340;
@@ -745,7 +745,6 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .svgc-freepan .svgc-svg { touch-action: none !important; overscroll-behavior: none; }
 /* Themed chart structural elements (so charts follow light/dark). */
 .svgc-grid { stroke: var(--chart-grid); }
-.svgc-band { fill: var(--chart-band); }
 .svgc-band-month { fill: var(--chart-band-month); }
 .svgc-frame { stroke: var(--chart-axis); fill: none; }
 .svgc-axislabel { fill: var(--chart-label); }
