@@ -149,4 +149,30 @@ describe("warmupRamp", () => {
       ),
     );
   });
+
+  it("bodyweightLoad=0 is identical to omitting it (barbell unchanged)", () => {
+    const a = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, increment: 2.5, plan: "standard" });
+    const b = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, increment: 2.5, plan: "standard", bodyweightLoad: 0 });
+    expect(b).toEqual(a);
+  });
+
+  it("assisted calisthenics (negative added weight) still gets a warm-up", () => {
+    // Dips at -5 kg added, with ~94 kg bodyweight share: the ADDED working weight is
+    // negative but the EFFECTIVE load is positive, so the ramp should produce sets.
+    const sets = warmupRamp({ oneRepMax: 56, workingWeightKg: -5, bodyweightLoad: 94, increment: 2.5 });
+    expect(sets.length).toBeGreaterThan(0);
+    // Displayed (added) weights climb toward the work set and stay strictly below it;
+    // early sets are MORE assisted (more negative) than the -5 kg work set.
+    let prev = -Infinity;
+    for (const s of sets) {
+      expect(s.weightKg).toBeLessThan(-5);
+      expect(s.weightKg).toBeGreaterThan(prev);
+      prev = s.weightKg;
+    }
+    expect(sets[0]!.weightKg).toBeLessThan(0); // first warm-up is assisted
+  });
+
+  it("still returns [] when even the effective load is non-positive", () => {
+    expect(warmupRamp({ oneRepMax: -10, workingWeightKg: -20, bodyweightLoad: 5 })).toEqual([]);
+  });
 });

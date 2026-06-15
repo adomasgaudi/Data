@@ -246,7 +246,6 @@ const els = {
   exInfoPillToggle: $<HTMLButtonElement>("exInfoPillToggle"),
   exInfoGotoIndex: $<HTMLButtonElement>("exInfoGotoIndex"),
   exInfoGotoAnl: $<HTMLButtonElement>("exInfoGotoAnl"),
-  exInfoCalc: $<HTMLButtonElement>("exInfoCalc"),
   exInfoBody: $("exInfoBody"),
   athlete: $<HTMLSelectElement>("athlete"),
   athleteChips: $("athleteChips"),
@@ -3250,22 +3249,6 @@ function openFormulas() {
   setOtherSheetOpen(false);
   els.formulasPage.hidden = false;
   requestAnimationFrame(() => { renderTest(); renderCalcTopSets(); });
-}
-
-/** Open the Formulas calculator pre-set to a given athlete + exercise — from the 🧮
- * button in the exercise-info view. #cowork: reuses the calc as-is (just drives its
- * existing athlete/exercise picker + the prefill), no calc internals touched. */
-function openCalcForExercise(username: string, exName: string | null): void {
-  const hasAth = [...els.testAthlete.options].some((o) => o.value === username);
-  if (username && exName && hasAth) {
-    els.testAthlete.value = username;
-    populateTestExercises(username);
-    if ([...els.testExercise.options].some((o) => o.value === exName)) {
-      els.testExercise.value = exName;
-      prefillTestFromPick();
-    }
-  }
-  openFormulas();
 }
 
 /** Open the version-history overlay from Settings. */
@@ -12207,7 +12190,7 @@ function renderTest() {
     (addedWeight1RM === null
       ? `<span class="calc-orm-val calc-orm-na muted">enter weight &amp; reps</span>`
       : `<span class="calc-orm-val">${f2(addedWeight1RM)} kg</span>`);
-  renderWarmup(addedWeight1RM, addedWeight, reps, calcTab);
+  renderWarmup(addedWeight1RM, addedWeight, reps, calcTab, bodyweightLoad);
   renderCalcCurve(effLoad, bodyweightLoad, reps, addedWeight, calcTab);
   renderDecayCurve();
 }
@@ -12270,16 +12253,16 @@ function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, wo
 
 // Last calc state captured by renderWarmup, so the plan popups can build their preview
 // tables off the SAME 1RM / work weight without recomputing the whole calculator.
-let lastWuCalc: { orm: number; work: number; reps: number; formula: OneRepMaxFormula; increment: number } | null = null;
+let lastWuCalc: { orm: number; work: number; reps: number; formula: OneRepMaxFormula; increment: number; bwl?: number } | null = null;
 // How to re-render the view that owns the warm-up the popup is editing (the Formulas calc
 // OR the exercise card), so a plan change refreshes the right place. Set on each render.
 let lastWuRerender: () => void = () => {};
 
 /** The shared warm-up + working-set table (warm-up ramp continuing into the hard sets) —
  *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
-function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number): string {
+function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0): string {
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan() });
+  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
   const wuRows = wu.map((s) => {
     const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
     return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b> <span class="rx-wu-exact">${s.exactKg}</span></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
@@ -12324,7 +12307,7 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
     const cur = getWarmupPlan();
     const tabs = WARMUP_PLANS.map((p) =>
       `<button type="button" class="plan-tab${p === cur ? " is-on" : ""}" data-plantab="${p}">${WARMUP_PLAN_LABEL[p]}</button>`).join("");
-    const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur });
+    const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
     const rows = wu.map((s) => {
       const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
       return `<tr><td><b>${range}</b></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
@@ -12351,21 +12334,24 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
 
 /** Warm-up ramp to the entered set, using the 1RM the calculator just computed (merged
  * from the old Coach panel — no separate 1RM/reps/formula inputs; Plates rounds it). */
-function renderWarmup(orm: number | null, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula): void {
+function renderWarmup(orm: number | null, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, bodyweightLoad = 0): void {
   const increment = parseFloat(els.rxInc.value) || 2.5;
   const plan = getWarmupPlan();
   const planBtn = document.getElementById("warmupPlanBtn");
   if (planBtn) planBtn.textContent = WARMUP_PLAN_LABEL[plan];
-  if (orm === null || !(orm > 0) || !(workingWeightKg > 0)) {
+  // Gate on the EFFECTIVE load (added + bodyweight share), which is positive even when the
+  // ADDED weight is negative (an ASSISTED calisthenics set) — so a -5 kg Dips set still
+  // shows a warm-up instead of the misleading "enter a weight" prompt. bwl=0 for barbell.
+  if (orm === null || !(orm + bodyweightLoad > 0) || !(workingWeightKg + bodyweightLoad > 0)) {
     els.rxOut.innerHTML = `<p class="muted" style="font-size:0.85rem">Enter a weight &amp; reps to see the warm-up.</p>`;
     return;
   }
-  lastWuCalc = { orm, work: workingWeightKg, reps: workReps, formula, increment }; // for the plan popups
+  lastWuCalc = { orm, work: workingWeightKg, reps: workReps, formula, increment, bwl: bodyweightLoad }; // for the plan popups
   lastWuRerender = renderTest; // a plan change from the popup recomputes the calculator
   const work =
     `<div class="rx-work"><span class="rx-work-lbl">Work sets</span> ` +
     `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose (strength · power · peaking · hypertrophy · volume · pump…)">${escapeHtml(getWorksetPlan().label)}</button></div>`;
-  els.rxOut.innerHTML = work + warmupTableHtml(orm, workingWeightKg, workReps, formula, increment);
+  els.rxOut.innerHTML = work + warmupTableHtml(orm, workingWeightKg, workReps, formula, increment, bodyweightLoad);
 }
 
 /**
@@ -12944,7 +12930,6 @@ async function init() {
   els.exInfoBack.addEventListener("click", closeExerciseInfo);
   els.exInfoGotoIndex.addEventListener("click", gotoIndexFromInfo);
   els.exInfoGotoAnl.addEventListener("click", gotoAnlFromInfo);
-  els.exInfoCalc.addEventListener("click", () => openCalcForExercise(els.athlete.value, currentExInfo));
   // ⓘ header toggle: flip info-mode and re-render the card so every pill gains/loses
   // its small ⓘ. State persists across opening different lifts (synced on open).
   els.exInfoPillToggle.addEventListener("click", () => {

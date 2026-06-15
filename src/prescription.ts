@@ -112,6 +112,12 @@ export interface WarmupOptions {
   formula?: OneRepMaxFormula;
   increment?: number;
   plan?: WarmupPlan;
+  /** Bodyweight share of the load (coeff × bodyweight) for a calisthenics lift, in kg.
+   * Default 0 (a plain barbell lift). When > 0 the ramp runs on the EFFECTIVE load
+   * (added + bodyweight, always positive) and each row's displayed ADDED weight is the
+   * effective load minus this share — so an ASSISTED lift (negative added weight) gets a
+   * real warm-up instead of an empty one, and the assistance eases off toward the work set. */
+  bodyweightLoad?: number;
 }
 
 /**
@@ -136,37 +142,45 @@ export function rampSetCount(intensity: number): number {
  * below the working weight. Returns [] on invalid input.
  */
 export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
-  const { oneRepMax, workingWeightKg } = opts;
   const formula = opts.formula ?? "epley";
   const increment = opts.increment ?? 2.5;
   const plan = opts.plan ?? "standard";
-  if (!(oneRepMax > 0) || !(workingWeightKg > 0)) return [];
+  // Ramp in EFFECTIVE-load terms so a calisthenics lift works even when the ADDED weight
+  // is negative (assisted). bwl = 0 for a barbell lift, making eff* identical to the
+  // added values below — so plain lifts are byte-for-byte unchanged. The %1RM and the
+  // strictly-increasing/just-below-work checks all run on the (always-positive) effective
+  // load; only the DISPLAYED weightKg is peeled back to the added weight (eff − bwl).
+  const bwl = opts.bodyweightLoad ?? 0;
+  const eff1rm = opts.oneRepMax + bwl;
+  const effWork = opts.workingWeightKg + bwl;
+  if (!(eff1rm > 0) || !(effWork > 0)) return [];
 
   // Warm-up sets are % of 1RM (owner), spanning ~40% up to just below the work set; the
   // set COUNT comes from the plan, reps ≈ ⅓ of what's achievable at that load (grooving).
-  const workPct = workingWeightKg / oneRepMax;
+  const workPct = effWork / eff1rm;
   const floorPct = 0.4;
   const topPct = Math.min(0.9, workPct - 0.05); // a touch below the work set, capped at 90%
   const n = WARMUP_PLAN_SETS[plan];
   const sets: WarmupSet[] = [];
-  let lastKg = 0;
+  let lastEff = -Infinity;
   for (let i = 0; i < n; i++) {
     const pct = topPct <= floorPct ? floorPct : floorPct + (topPct - floorPct) * (i / Math.max(1, n - 1));
-    const exactKg = oneRepMax * pct;
-    const weightKg = roundToIncrement(exactKg, increment);
-    // Keep strictly increasing and strictly below the working weight.
-    if (weightKg <= lastKg || weightKg >= workingWeightKg) continue;
-    const achievable = repsForWeight(oneRepMax, weightKg, formula);
+    const exactEff = eff1rm * pct;
+    const effRounded = roundToIncrement(exactEff, increment);
+    // Keep strictly increasing and strictly below the working load (effective terms).
+    if (effRounded <= lastEff || effRounded >= effWork) continue;
+    const achievable = repsForWeight(eff1rm, effRounded, formula);
+    const exactKg = exactEff - bwl; // displayed ADDED weight (may be negative = assisted)
     sets.push({
       kind: pct < 0.6 ? "general" : "ramp",
       pctOf1RM: Math.round(pct * 100),
       exactKg: Math.round(exactKg * 10) / 10,
-      weightKg,
-      downKg: Math.round(Math.floor(exactKg / increment) * increment * 100) / 100,
-      upKg: Math.round(Math.ceil(exactKg / increment) * increment * 100) / 100,
+      weightKg: effRounded - bwl,
+      downKg: Math.round((Math.floor(exactEff / increment) * increment - bwl) * 100) / 100,
+      upKg: Math.round((Math.ceil(exactEff / increment) * increment - bwl) * 100) / 100,
       reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
     });
-    lastKg = weightKg;
+    lastEff = effRounded;
   }
   return sets;
 }
