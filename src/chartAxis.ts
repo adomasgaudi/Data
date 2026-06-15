@@ -34,9 +34,9 @@ export interface TimeBand {
  * and the labels include the year where it would otherwise be ambiguous, so you
  * never get three identical "Jan 1"s. Everything is UTC to match the ISO dates.
  */
-export function timeBands(min: number, max: number): TimeBand[] {
+export function timeBands(min: number, max: number, force?: TimeLevel): TimeBand[] {
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
-  const level = timeLevel(max - min);
+  const level = force ?? timeLevel(max - min);
   const out: TimeBand[] = [];
   const d = new Date(min);
 
