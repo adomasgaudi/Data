@@ -18772,6 +18772,11 @@ function renderGraphMini(): void {
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
       optionsFold +
+      // Compare moved to the Multi view when the carousel became the default single
+      // view (CHART-151); surface it here too — it opens Multi with compare on.
+      (lockedUsername() === null && rosterUsers().length >= 2
+        ? `<button type="button" class="ms-more gmini-compare" data-gmcompare="1" title="Compare other athletes on the graph (opens the multi-graph)">Compare</button>`
+        : "") +
       `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">Multi ▾</button>` +
     `</div>`;
   paintGraphSlide();
@@ -20057,6 +20062,8 @@ function setupWorkoutAnalysis(): void {
     // ── Graph "min" carousel interactions ──────────────────────────────────────
     // "Multi ▾" → expand the single-lift carousel into the full multi-exercise graph.
     if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
+    // "Compare" (carousel) → open the Multi graph with the athlete-compare row on.
+    if (t.closest<HTMLElement>("[data-gmcompare]")) { graphFullShown = true; waCompareOpen = true; renderWaGraph(); return; }
     // "Single ▴" → flip the full multi graph back to the single-lift carousel.
     if (t.closest<HTMLElement>("[data-gmsingle]")) { graphFullShown = false; renderWaGraph(); return; }
     // Single-view ⇆ SWITCH → open the picker drawer to choose a different lift (clears any
