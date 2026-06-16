@@ -185,10 +185,19 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // The fit curve + its drag handle use the app's TEAL accent (same as "Your lifts" /
     // the projection markers) — the harmonious green-ish, not a raw green (owner).
     const RVW_FIT_GREEN = "#2f8f88";
-    let fitMarker: { exercise: string; markerX: number; bodyShare: number; refReps: number } | null = null;
+    let fitMarker: { exercise: string; markerX: number; bodyShare: number; refReps: number; scale: number } | null = null;
     let fitCurve: SvgPoint[] | null = null; // the single-lift fit curve → drives the RIR zones
+    // ×BW (per-bodyweight) view: divide the DISPLAYED dial weight by the athlete's bodyweight
+    // so the X axis reads as multiples of bodyweight (a 100 kg squat at 80 kg BW = 1.25×) —
+    // letting athletes of different sizes line up. Each series uses its OWN athlete's bw. The
+    // fit + axis pinning stay in KG (only the displayed x is scaled); axisScale carries the
+    // single-lift scale through to the pinned axis range. 0 / unknown bw → scale 1 (plain kg).
+    let axisScale = 1;
     groups.forEach((g, gi2) => {
       const base = multiUser ? harmoniousColor(g.userIdx ?? gi2, input.users!.length) : harmoniousColor(gi2, groups.length);
+      const groupBw = g.user != null && input.bodyweightOf ? input.bodyweightOf(g.user) : input.bodyweight;
+      const scale = (input.perBodyweight && groupBw && groupBw > 0) ? groupBw : 1;
+      if (singleGroup) axisScale = scale;
       // Plot the LOGGED dial weight (origWeight) the athlete actually used — NOT the
       // bodyweight-inclusive effective load that computeRecord stamps onto `weight`
       // (which showed loads they never lifted, e.g. a bodyweight-folded DL at 60 vs the
@@ -215,7 +224,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           return pt;
         });
       if (!pts.length) return;
-      rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: pts as SvgPoint[] });
+      // pts keep x in KG (the fit below reads p.x); the scatter SERIES shows the ×BW-scaled x.
+      const dispPts = scale === 1 ? pts : pts.map((p) => ({ ...p, x: Math.round((p.x / scale) * 1000) / 1000 }));
+      rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: dispPts as SvgPoint[] });
       if (input.config.repsVsWeightFit) {
         // Best-fit NUZZO curve (owner), not a straight line: find the 1RM that best
         // places the Nuzzo reps↔%1RM curve through these sets, then sample it across the
@@ -249,7 +260,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           const step = (r1 - r0) / 48; // ~48 samples → visually smooth
           for (let r = r0; r <= r1 + 1e-9; r += step) {
             const eff = nuzzoWeightForReps(oneRm, r);
-            if (eff != null) curve.push({ x: Math.round((eff - bodyShare) * 100) / 100, y: Math.round(r * 100) / 100 } as SvgPoint);
+            if (eff != null) curve.push({ x: Math.round(((eff - bodyShare) / scale) * 100) / 100, y: Math.round(r * 100) / 100 } as SvgPoint);
           }
           if (curve.length > 1) {
             // The single-lift fit curve is GREEN + draggable (owner); multi-lift keeps per-lift
@@ -261,7 +272,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
             // end — curve[0], the rightmost VISIBLE point), NOT the off-screen 1RM (which fell
             // outside the auto-fitted x-domain → invisible). Dragging sets the 1RM that puts the
             // curve through (newX, r0 reps) — see onMarkerDrag below.
-            if (singleGroup) { fitMarker = { exercise: exName, markerX: curve[0]!.x as number, bodyShare, refReps: r0 }; fitCurve = curve; }
+            if (singleGroup) { fitMarker = { exercise: exName, markerX: curve[0]!.x as number, bodyShare, refReps: r0, scale }; fitCurve = curve; }
           }
         }
       }
@@ -271,11 +282,15 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // I can't tell the change … no autofit"). Set explicitly (undefined when off) — update()
     // merges, so a stale forced range must be cleared (PB-8).
     const axis = singleGroup ? input.rvwAxis : undefined;
+    const perBW = !!input.perBodyweight;
     const cfg: SvgChartConfig = {
       series: rvw, xKind: "linear", height: 360, panMode: "xy", yBeginAtZero: true, leftMargin: 30,
-      formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
-      xTitle: "weight (kg)", yTitle: "reps",
-      forceXRange: axis ? { min: axis.xMin, max: axis.xMax } : undefined,
+      formatX: perBW ? (x) => x.toFixed(1) : (x) => `${Math.round(x)}`,
+      formatTipX: perBW ? (x) => `${x.toFixed(2)}× BW` : (x) => `${Math.round(x)} kg`,
+      xTitle: perBW ? "× bodyweight" : "weight (kg)", yTitle: "reps",
+      // The pinned axis extent is computed in KG by the caller — scale it by the single lift's
+      // bodyweight so the ×BW view pins to the matching BW range (axisScale = 1 in kg mode).
+      forceXRange: axis ? { min: axis.xMin / axisScale, max: axis.xMax / axisScale } : undefined,
       forceLeftRange: axis ? { min: 0, max: axis.yMax } : undefined,
     };
     // RIR effort zones (single lift): ribbons stepping DOWN from the failure curve in REPS —
@@ -297,11 +312,13 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // dashed line / handle / "fit" label). Releasing maps the new weight back to a 1RM via the
     // Nuzzo curve at that point's reps (x_eff = newX + bodyweight share), committing the fit.
     if (fitMarker) {
-      const fm: { exercise: string; markerX: number; bodyShare: number; refReps: number } = fitMarker;
+      const fm: { exercise: string; markerX: number; bodyShare: number; refReps: number; scale: number } = fitMarker;
       cfg.xMarkers = [{ id: "rvwfit", x: fm.markerX, color: RVW_FIT_GREEN, label: "fit" }];
       cfg.onMarkerDrag = (id, x) => {
         if (id !== "rvwfit") return;
-        const eff = nuzzo1RM(x + fm.bodyShare, fm.refReps);
+        // x comes back in the DISPLAYED unit (×BW when scaled) — multiply back to kg for the
+        // Nuzzo 1RM (effective = added kg + bodyShare).
+        const eff = nuzzo1RM(x * fm.scale + fm.bodyShare, fm.refReps);
         if (eff != null) input.onRvwFitDrag?.(fm.exercise, eff);
       };
     }

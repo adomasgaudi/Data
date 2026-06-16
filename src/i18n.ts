@@ -123,6 +123,7 @@ const LT: Record<string, string> = {
   "lean mass": "liesa masė",
   "muscle, bone, organs, water": "raumenys, kaulai, organai, vanduo",
   "bodyweight": "kūno svoris",
+  "× bodyweight": "× kūno svoris",
   "fat mass": "riebalų masė",
   "years old": "metų",
   "height": "ūgis",
