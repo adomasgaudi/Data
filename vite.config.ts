@@ -32,7 +32,7 @@ export default defineConfig({
     hmr: false,
   },
   test: {
-    environment: "node",
+    environment: "jsdom",
     include: ["src/**/*.test.ts"],
   },
 });
