@@ -11375,6 +11375,7 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
   }
   return {
     series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones,
+    xTitle: "weight (kg)", yTitle: "reps",
     formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
   };
 }

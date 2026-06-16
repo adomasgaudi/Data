@@ -11,6 +11,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-33 — Graph axis NAMES not visible ("I don't see the axis names")
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), exercise card "1RM — fit to your lifts" graph (and the reps-vs-weight graph). Owner: "no i dont see the axis names #persistent". The axes show tick NUMBERS but nothing saying what they mean (weight kg / reps).
+- **Root cause (two parts):** (1) The card graph config (`cardNuzzoConfig`) never SET `xTitle`/`yTitle`, so it had no axis names at all — even though the engine supports them and the reps-vs-weight config had set them. A fix applied to one graph but not the other = the owner still "doesn't see them". (2) Even where set, the engine rendered titles as a TINY (9.5px) muted footnote crammed into the corners — yTitle top-left over the value column, xTitle bottom-right past the last tick — right against the tick numbers in the tight 26px bottom margin, so they read as noise, not axis names.
+- **Fix (b.2.8.x):** (a) `cardNuzzoConfig` now sets `xTitle:"weight (kg)"`, `yTitle:"reps"`. (b) The svgChart engine now gives axis titles their OWN room (only when set: `+16` bottom for x, `+14` left for y — title-less charts unaffected) and CENTRES them along each axis — the x-title centred under the tick row, the y-title rotated −90° up the left edge. (c) `.svgc-axistitle` bumped to 11.5px, bold, `var(--text)`, uppercase so it reads as a label. Comment `PB-33` at the margin + title-render sites.
+- **Watch:** axis titles must be set on EVERY weight/reps graph config (card + analytics), and live in their own margin space — a corner footnote at tick-number size is "not visible" to the owner.
+- **Recurrences:** 0 (first report).
+
+---
+
 ## PB-29 — Removing every lift from the graph/history leaves no placeholder + no add buttons
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph/History with all lifts removed. Owner: "when I remove exercises from the history or from the graph there's no placeholder text and I cannot see the buttons to add more exercises." Tagged `#persistent #debug`. Same CLASS as PB-20 (the empty-graph prompt) — it had been "fixed" by moving the prompt INTO the title, but the fix never held because of the bug below.

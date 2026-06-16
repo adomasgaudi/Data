@@ -418,7 +418,15 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
   // Axis TITLES sit INLINE at the axis ends (y-title top-left, x-title bottom-right) in
   // the EXISTING tick margins — they no longer widen l/b, so the plot stays big (owner).
-  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
+  const margins = () => {
+    if (inside()) return { l: 6, r: 6, t: 8, b: 6 };
+    const m = { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 };
+    // PB-33: axis titles get their OWN room (only when set) so they're CENTERED &
+    // clearly visible, not crammed into a corner over the tick numbers.
+    if (cfg.xTitle) m.b += 16;
+    if (cfg.yTitle) m.l += 14;
+    return m;
+  };
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
@@ -962,10 +970,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // no extra margin (owner: "names move inline with numbers so they don't take up space"):
     // the y-title at the top-left above the value column, the x-title at the bottom-right
     // on the tick-number baseline.
+    // PB-33: CENTER each axis title along its axis (x under the tick row, y rotated up
+    // the left edge) so it's an obvious axis NAME, not a corner footnote that's missed.
     let axisTitles = "";
     if (!inside()) {
-      if (cfg.yTitle) axisTitles += `<text x="2" y="${(M.t - 3).toFixed(1)}" text-anchor="start" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
-      if (cfg.xTitle) axisTitles += `<text x="${(W - M.r).toFixed(1)}" y="${(h - 4).toFixed(1)}" text-anchor="end" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
+      if (cfg.yTitle) axisTitles += `<text transform="translate(11,${(M.t + plotH / 2).toFixed(1)}) rotate(-90)" text-anchor="middle" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
+      if (cfg.xTitle) axisTitles += `<text x="${(M.l + plotW / 2).toFixed(1)}" y="${(h - 5).toFixed(1)}" text-anchor="middle" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
     }
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
