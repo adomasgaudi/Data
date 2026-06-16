@@ -4498,9 +4498,11 @@ body.wa-pick-open .wa-selector-sticky { position: static; }
 .wa-inc { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
 .wa-inc input { cursor: pointer; }
 /* Chip-label mode (Code / Full name) — a small segmented toggle in the ⚙ menu. */
-.wa-name-opt { font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 1px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); white-space: nowrap; }
+.wa-name-opt { font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); white-space: nowrap; }
 .wa-name-opt:hover { border-color: var(--accent); color: var(--accent); }
-.wa-name-opt.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wa-name-opt.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+/* The value part of a cycle pill (e.g. "Ahead · 3 mo") — clear gap from the label. */
+.wa-name-opt .muted, .wa-metric .muted { margin-left: 5px; opacity: 0.85; }
 /* This area's label mode is a LOCAL override (diverged from the global default): a
    small accent dot marks that this pill no longer follows the Settings picker. */
 .wa-name-opt.is-local { border-color: var(--accent); color: var(--accent); }
@@ -4715,9 +4717,12 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 /* Two-column settings: Data | Lines & filter on top, metric groups | Bars & axes below,
    the global "All graphs" toggle spanning the bottom. */
 .wa-gmenu-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
+  /* One clean column on a phone (the cramped 2-up was the messy part); the wide /
+     fullscreen view below restores two columns where there's room. */
+  display: grid; grid-template-columns: 1fr;
   gap: 0.1rem 0.9rem; align-items: start;
 }
+@media (min-width: 30rem) { .wa-gmenu-grid { grid-template-columns: 1fr 1fr; } }
 .wa-gmenu-cell { min-width: 0; }
 .wa-gmenu-span { grid-column: 1 / -1; }
 /* Fullscreen has the whole width — cap the columns so they don't stretch comically wide. */
@@ -4863,9 +4868,9 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-metric-group-sum::before { content: "▸ "; }
 .wa-metric-group[open] > .wa-metric-group-sum::before { content: "▾ "; }
 .wa-metric-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0 0 0.35rem 0.5rem; }
-.wa-metric { font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
+.wa-metric { font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
 .wa-metric:hover { border-color: var(--accent); color: var(--accent); }
-.wa-metric.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wa-metric.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
 /* Blocked (not yet reviewed) metric: greyed + dashed, so it reads as "off-limits
    until reviewed" while still being tappable (tapping shows the review prompt). */
 .wa-metric.is-blocked { opacity: 0.45; border-style: dashed; }
