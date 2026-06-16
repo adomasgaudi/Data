@@ -1077,6 +1077,8 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
    edge (the .gmini-overlay below). */
 .gmini-head { display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; }
 .gmini-title { text-align: left; min-width: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.2; color: var(--accent); }
+/* Single-view title tools (Switch / Match) sit at the right end of the head row. */
+.gmini-tools { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 /* The chart + its on-edge corner toolbar. The wrapper is the positioning context so the
    overlay (Legend · ⤢ Fit · kg, relocated here from above the plot) rides the top-right
    edge of the graph — matching the multi-graph view's in-chart overlay. */

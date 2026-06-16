@@ -18519,6 +18519,10 @@ function graphCarouselLifts(): string[] {
     if (kept.length) return kept.slice(0, 20);
     graphCarOverride = null; // none of the override lifts exist for this athlete → fall back
   }
+  // The graph SELECTION drives the reel next (so the single view's ⇆ switch / the picker
+  // choose what you flip through), falling back to top-by-frequency only when nothing's picked.
+  const sel = waGraphSel.filter((n) => has.has(n));
+  if (sel.length) return sel.slice(0, 20);
   const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
   const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
@@ -18747,7 +18751,14 @@ function renderGraphMini(): void {
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
   host.innerHTML =
     graphTypeTabsHtml() +
-    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button></div>` +
+    // Single-view title tools (owner): a SWITCH icon (pick a different lift to view — "add"
+    // makes no sense in a one-lift view) + "=" to match the top history lift. NO "✕" — you
+    // can only switch, never empty a single view.
+    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button>` +
+      `<span class="gmini-tools">` +
+        `<button type="button" class="wa-title-tool" data-gmswitch="1" title="Switch exercise — pick a different lift to view" aria-label="Switch exercise">⇆</button>` +
+        `<button type="button" class="wa-title-tool" data-gmmatch="1" title="Match the top history lift" aria-label="Match the top history lift">=</button>` +
+      `</span></div>` +
     `<div class="gmini-stagewrap">` +
       `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
       // On-chart corner toolbar (top-right edge), like the multi-graph view: the chart's
@@ -20048,6 +20059,16 @@ function setupWorkoutAnalysis(): void {
     if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
     // "Single ▴" → flip the full multi graph back to the single-lift carousel.
     if (t.closest<HTMLElement>("[data-gmsingle]")) { graphFullShown = false; renderWaGraph(); return; }
+    // Single-view ⇆ SWITCH → open the picker drawer to choose a different lift (clears any
+    // search-set single-view override so the new pick shows in the reel).
+    if (t.closest<HTMLElement>("[data-gmswitch]")) { graphCarOverride = null; openPickDrawer("graph"); return; }
+    // Single-view "=" → match the TOP history lift (only one): show it via the single-view
+    // override, WITHOUT touching the multi-graph selection.
+    if (t.closest<HTMLElement>("[data-gmmatch]")) {
+      const top = waSelected[0];
+      if (top) { graphCarOverride = [top]; graphCarIdx = 0; renderGraphMini(); }
+      return;
+    }
     // Prev / next lift in the carousel (manual rotation — no auto-rotate).
     const gmNav = t.closest<HTMLElement>("[data-gmnav]");
     if (gmNav?.dataset.gmnav) { stepGraphSlide(Number(gmNav.dataset.gmnav)); return; }
