@@ -18602,8 +18602,8 @@ function renderGraphMini(): void {
   // slide's lift — so the single view tweaks metrics/aggregation/etc. without leaving it.
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
   host.innerHTML =
-    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button></div>` +
     graphTypeTabsHtml() +
+    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button></div>` +
     `<div class="gmini-stagewrap">` +
       `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
       // On-chart corner toolbar (top-right edge), like the multi-graph view: the chart's

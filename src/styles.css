@@ -4629,17 +4629,20 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-ctrls { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem 0.5rem; width: 100%; min-width: 0; }
 .wa-graph-ctrls .wa-graph-fold { flex: 0 1 auto; min-width: 4.5rem; }
 .wa-graph-ctrls .wa-graph-compare-btn { flex: 0 0 auto; }
-/* Graph-type TABS — a 2-tab strip sitting ON TOP of the plot (owner: "like tabs"), so you
-   flip the whole graph between over-time and reps×weight. Active tab fills accent like the
-   Stats/Graph/History tabs; sits flush above the chart. */
-.wa-graphtabs { display: flex; gap: 4px; margin: 0.1rem 0 0.3rem; }
+/* Graph-type TABS — FILE-FOLDER tabs protruding from the top edge of the plot (owner:
+   "like files in a cabinet with protruding edges"): the row carries the drawer edge (an
+   accent bottom line = the chart's top), each tab has TOP-rounded corners only and sits ON
+   that line; the ACTIVE tab fills accent and merges into the edge (pulled-out file), the
+   inactive one is recessed (panel bg, muted). */
+.wa-graphtabs { display: flex; gap: 4px; align-items: flex-end; margin: 0.35rem 0 0; padding: 0 2px; border-bottom: 2px solid var(--accent); }
 .wa-graphtab {
   flex: 0 0 auto; white-space: nowrap; cursor: pointer; font: inherit; font-size: 0.76rem; font-weight: 700;
-  min-height: var(--tap-min); display: inline-flex; align-items: center; padding: 4px 12px;
-  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted);
+  display: inline-flex; align-items: center; padding: 5px 14px; position: relative; bottom: -2px;
+  border: 1px solid var(--line); border-bottom: none; border-radius: 8px 8px 0 0;
+  background: var(--panel); color: var(--muted);
 }
-.wa-graphtab:hover { border-color: var(--accent); color: var(--accent); }
-.wa-graphtab.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.wa-graphtab:hover { color: var(--accent); }
+.wa-graphtab.is-on { background: var(--accent); border-color: var(--accent); color: #fff; padding-top: 7px; }
 /* "Single ▴" toggle sits at the FAR RIGHT of the bar — the same bottom-right spot the
    carousel's "Multi ▾" button occupies, so the single ⇄ multi switch stays put. */
 .wa-graph-ctrls .wa-graph-single { flex: 0 0 auto; margin-left: auto; }
