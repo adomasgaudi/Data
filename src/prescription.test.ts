@@ -124,7 +124,7 @@ describe("warmupRamp", () => {
     expect(heavy.length).toBeGreaterThan(quick.length);
   });
 
-  it("first set is a light primer shown as a 30–60% / 10–20-rep band", () => {
+  it("first set is a light primer shown as a 30–60% / 10–20-rep band with an NRM band", () => {
     const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, plan: "quick" });
     const primer = sets[0]!;
     expect(primer.kind).toBe("general");
@@ -132,15 +132,22 @@ describe("warmupRamp", () => {
     expect(primer.pctLabel).toBe("30–60%");
     // the band's load range spans ~30%→60% of the 1RM (not a single point)
     expect(primer.upKg).toBeGreaterThan(primer.downKg);
-    // the ramp set(s) stay precise — no band labels, ⅓-max reps
+    // the primer carries an NRM BAND (e.g. "20–40") and no single maxReps
+    expect(primer.maxRepsLabel).toMatch(/^\d+–\d+$/);
+    expect(primer.maxReps).toBeUndefined();
+  });
+
+  it("a ramp set reads as a ZONE band: %1RM + NRM ranges, ⅓-max prescribed reps", () => {
+    const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, plan: "quick" });
     const ramp = sets.find((s) => s.kind === "ramp")!;
-    expect(ramp.pctLabel).toBeUndefined();
+    // owner: the single ramp step reads "60–80%", not a bare "78%"
+    expect(ramp.pctLabel).toMatch(/^\d+–\d+%$/);
+    expect(ramp.pctLabel!.startsWith("60–")).toBe(true);
+    // an NRM band beside it, and the prescribed reps stay the concrete ⅓-of-max number
+    expect(ramp.maxRepsLabel).toMatch(/^\d+–\d+$/);
     expect(ramp.repsLabel).toBeUndefined();
-    // a ramp set exposes the max reps at its load (for the "NRM" display), and its
-    // prescribed reps are ~⅓ of that max — the primer carries no maxReps (it's a band).
     expect(ramp.maxReps).toBeGreaterThan(0);
     expect(ramp.reps).toBe(Math.max(1, Math.round(ramp.maxReps! / 3)));
-    expect(primer.maxReps).toBeUndefined();
   });
 
   it("returns [] on invalid input", () => {

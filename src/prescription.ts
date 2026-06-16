@@ -109,6 +109,11 @@ export interface WarmupSet {
    * is ⅓ of this. Shown as an "NRM" next to the %1RM so you see why ⅓ is e.g. 3 reps.
    * Only set for the precise RAMP sets (the flexible primer shows its own rep band). */
   maxReps?: number;
+  /** The NRM shown beside the %1RM as a BAND across this row's zone — e.g. the primer's
+   * "20–40" (max reps you could do across 30→60%) or a ramp step's "9–20". When present it
+   * replaces the single `maxReps` in the display. The ramp's prescribed `reps` (⅓ of max)
+   * stays the concrete number to actually do. */
+  maxRepsLabel?: string;
   /** Display override for the %1RM column — e.g. the primer's "30–60%" band. Falls back
    * to `pctOf1RM%` when absent (the ramp sets, which are precise). */
   pctLabel?: string;
@@ -187,6 +192,15 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
   // 1) LIGHT PRIMER (owner): a flexible 30–60% / 10–20-rep set, shown as BANDS — a primer
   //    is "just do some light high-rep reps", not a spuriously precise single load. Clamped
   //    strictly below the work set so even a light work day still gets a lighter primer.
+  // Max reps achievable at a %1RM, clamped to a sane ceiling (rep-max models blow up at
+  // light loads — epley says ~70 reps at 30% — so cap the DISPLAYED NRM at 40). Used to
+  // show each zone's max-rep band beside its %1RM.
+  const maxRepsAt = (pct: number): number => {
+    const r = repsForWeight(eff1rm, eff1rm * pct, formula);
+    return r === null ? 1 : Math.min(40, Math.max(1, Math.round(r)));
+  };
+  const floor5 = (pct: number) => Math.floor((pct * 100) / 5) * 5;
+  const ceil5 = (pct: number) => Math.ceil((pct * 100) / 5) * 5;
   const pHiPct = Math.max(0.1, Math.min(0.6, workPct - 0.07));
   const pLoPct = Math.max(0.05, Math.min(0.3, pHiPct - 0.05));
   const pMidPct = (pLoPct + pHiPct) / 2;
@@ -201,16 +215,21 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
     reps: 15, // representative; the column shows the 10–20 band
     pctLabel: `${Math.round(pLoPct * 100)}–${Math.round(pHiPct * 100)}%`,
     repsLabel: "10–20",
+    // NRM band: heavier edge (pHi) = fewer reps, lighter edge (pLo) = more → "20–40".
+    maxRepsLabel: `${maxRepsAt(pHiPct)}–${maxRepsAt(pLoPct)}`,
   });
 
   // 2) RAMP SETS (owner): from 60% up to just below the work set, each doing ⅓ of the reps
   //    you COULD hit at that load (submaximal grooving, never to failure). Count = the plan
   //    total minus the one primer, so heavier plans add more ramp steps (pyramid). Kept
   //    strictly increasing and below the work set; degenerate light-work cases self-trim.
+  //    The %1RM + NRM show as a ZONE BAND (owner: "78% should read 60–80%") spanning the
+  //    previous step up to this one; the weight + ⅓-reps stay the concrete set to perform.
   const rampN = Math.max(1, n - 1);
   const rampFloor = 0.6;
   const rampTop = Math.min(0.9, workPct - 0.05); // a touch below the work set, capped at 90%
   let lastEff = pMidEff; // ramps must climb above the primer
+  let prevPct = rampFloor; // the previous zone boundary (starts at the ramp floor / primer top)
   for (let i = 0; i < rampN; i++) {
     const pct = rampTop <= rampFloor ? rampFloor : rampFloor + (rampTop - rampFloor) * (rampN === 1 ? 1 : i / (rampN - 1));
     const exactEff = eff1rm * pct;
@@ -218,6 +237,8 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
     if (effRounded <= lastEff || effRounded >= effWork) continue; // strictly increasing, below work
     const achievable = repsForWeight(eff1rm, effRounded, formula);
     const b = band(pct);
+    const loPct = Math.min(floor5(prevPct), floor5(pct)); // guard: never an inverted band
+    const hiPct = Math.max(ceil5(pct), loPct + 5);
     sets.push({
       kind: "ramp",
       pctOf1RM: Math.round(pct * 100),
@@ -227,8 +248,11 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
       upKg: b.up,
       reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
       ...(achievable === null ? {} : { maxReps: Math.max(1, Math.round(achievable)) }),
+      pctLabel: `${loPct}–${hiPct}%`,
+      maxRepsLabel: `${maxRepsAt(pct)}–${maxRepsAt(prevPct)}`,
     });
     lastEff = effRounded;
+    prevPct = pct;
   }
   return sets;
 }

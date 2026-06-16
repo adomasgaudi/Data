@@ -12607,8 +12607,9 @@ function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRe
     // The primer is a band (30–60% / 10–20 reps) so it shows no spuriously-precise exact kg.
     const exact = s.kind === "general" ? "" : ` <span class="rx-wu-exact">${s.exactKg}</span>`;
     // Max reps achievable at this load (an "NRM") next to the %1RM, so the ⅓-max ramp reps
-    // are self-explanatory (e.g. "78% · 9RM" → do 3). Only the precise ramp sets carry it.
-    const xrm = s.maxReps ? ` <span class="rx-wu-xrm">· ${s.maxReps}RM</span>` : "";
+    // are self-explanatory (e.g. "60–80% · 9–20RM" → do 3). Band when present, else single.
+    const xrmText = s.maxRepsLabel ?? (s.maxReps ? String(s.maxReps) : "");
+    const xrm = xrmText ? ` <span class="rx-wu-xrm">· ${xrmText}RM</span>` : "";
     return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b>${exact}</td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${s.pctLabel ?? `${s.pctOf1RM}%`}${xrm}</td></tr>`;
   }).join("");
   const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment);
@@ -12654,7 +12655,8 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
     const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
     const rows = wu.map((s) => {
       const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
-      const xrm = s.maxReps ? ` <span class="rx-wu-xrm">· ${s.maxReps}RM</span>` : "";
+      const xrmText = s.maxRepsLabel ?? (s.maxReps ? String(s.maxReps) : "");
+      const xrm = xrmText ? ` <span class="rx-wu-xrm">· ${xrmText}RM</span>` : "";
       return `<tr><td><b>${range}</b></td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${s.pctLabel ?? `${s.pctOf1RM}%`}${xrm}</td></tr>`;
     }).join("");
     return `<div class="plan-tabs">${tabs}</div>` +
