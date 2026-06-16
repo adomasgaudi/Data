@@ -2999,6 +2999,18 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-now { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-right: 2px; flex: 0 0 auto; white-space: nowrap; }
 /* "Pair with" header row: title left, sort + hide controls right (compact, #cram). */
 .lt-sec-h-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+/* "Pair with" dropdown: the pills are collapsed by default (owner — they dominated the
+   card); the summary reads like the other section headers with a disclosure caret. */
+.lt-pair-fold > summary.lt-pair-sum {
+  cursor: pointer; list-style: none; user-select: none; display: flex; align-items: center; gap: 0.35rem;
+  min-height: var(--tap-min); font-size: 0.68rem; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.lt-pair-sum::-webkit-details-marker { display: none; }
+.lt-pair-sum::before { content: "▸"; color: var(--accent); font-weight: 700; }
+.lt-pair-fold[open] > .lt-pair-sum::before { content: "▾"; }
+.lt-pair-n { color: var(--accent); font-weight: 800; }
+.lt-pair-body { display: flex; flex-direction: column; gap: 0.3rem; padding-top: 0.2rem; }
 .lt-pairctrls { display: inline-flex; align-items: center; gap: 4px; }
 .lt-pairsort, .lt-pairhide {
   min-height: var(--tap-min); display: inline-flex; align-items: center; gap: 3px;

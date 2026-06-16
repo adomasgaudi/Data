@@ -3522,6 +3522,9 @@ let pairHideAvoid = (() => { try { return localStorage.getItem("colosseum.pairHi
  * expanded — the info brief shows by default, the index editing is opt-in. Remembered
  * across the card's re-renders so editing a tag inside doesn't snap it shut. */
 let exIndexFoldOpen = false;
+/** "Pair with" pills are collapsed under a dropdown by default (owner: the wall of pills
+ * dominated the card); this remembers its open state across the card's re-renders. */
+let pairFoldOpen = false;
 /** Open one exercise's settings: bring the Index (the all-exercises list) up as
  * the backdrop, reveal + scroll to that lift's row, then float the settings card
  * on top — filled from the single-source `exerciseInfoHtml`. */
@@ -11555,8 +11558,13 @@ function liftTrainingHtml(name: string): string {
       `<button type="button" class="lt-pairsort" data-pairsort title="Sort pairs">⇅ ${SORT_LABEL[pairSort]}</button>` +
       `<button type="button" class="lt-pairhide${pairHideAvoid ? " is-on" : ""}" data-pairhide aria-pressed="${pairHideAvoid}" title="Hide avoid-flagged pairs">⊘${avoidCount ? ` ${avoidCount}` : ""}</button>` +
     `</div>`;
+  // The pills are COLLAPSED under a dropdown by default (owner: the wall dominated the
+  // card) — opening it reveals ALL pair candidates; the sort/hide controls live inside.
   const pairSecHtml =
-    `<div class="lt-sec"><div class="lt-sec-h lt-sec-h-row"><span>Pair with</span>${pairCtrls}</div>${antBody}</div>`;
+    `<details class="lt-sec lt-pair-fold"${pairFoldOpen ? " open" : ""}>` +
+      `<summary class="lt-pair-sum">Pair with <span class="lt-pair-n">${pairCands.length}</span></summary>` +
+      `<div class="lt-pair-body">${pairCtrls}${antBody}</div>` +
+    `</details>`;
 
   const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
@@ -14364,10 +14372,12 @@ async function init() {
     const k = `${ex}|${sec}`;
     if (d.open) metaFoldOpen.add(k); else metaFoldOpen.delete(k);
   }, true);
-  // Remember the "Index entry" fold's open/closed state across the card's re-renders.
+  // Remember the "Index entry" + "Pair with" folds' open state across card re-renders.
   document.addEventListener("toggle", (e) => {
     const d = e.target as HTMLElement;
-    if (d instanceof HTMLDetailsElement && d.classList.contains("ex-index-fold")) exIndexFoldOpen = d.open;
+    if (!(d instanceof HTMLDetailsElement)) return;
+    if (d.classList.contains("ex-index-fold")) exIndexFoldOpen = d.open;
+    else if (d.classList.contains("lt-pair-fold")) pairFoldOpen = d.open;
   }, true);
   // Editable SOURCES (spelling-merge): split a folded spelling into its own lift, or
   // merge a split-out sibling back in. Mutates the split set, rebuilds the records +
