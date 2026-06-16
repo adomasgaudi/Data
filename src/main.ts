@@ -60,6 +60,7 @@ import {
   benchRepsAtPct,
   BENCH_REPS_STUDY,
   nuzzoRepMaxes,
+  nuzzoAddedWeightForReps,
   bestFitNuzzo1RM,
   estimate1RM,
   weightForReps,
@@ -11320,27 +11321,34 @@ function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormu
  *  on y; the best-fit curve as a line, the study point-estimates as dots, and the
  *  suggested working set as a gold dot. Bench-derived but the closest data-grounded
  *  rep curve we have, so shown for any lift. */
-function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct: number | null, realPts: SvgPoint[] = []): SvgChartConfig {
-  // Owner orientation: WEIGHT IN KG on the X axis (increasing →), REPS on the Y axis
-  // (increasing ↑), curve extended down to 15% of 1RM (the high-rep end). The CURVE,
-  // study points and suggested set are scaled by the assumed 1RM (kg = pct% × 1RM), so
-  // dragging the 1RM slider MOVES THE CURVE; your real lifts are plotted at their fixed
-  // actual kg, so the curve slides under them — fit it by dragging (owner).
+/** One logged set in the card graph's ADDED-weight space: x = the plate you added
+ *  (negative = assisted), y = reps; date + setNumber drive the same-day connector. */
+type CardNuzzoSet = { date: string; setNumber: number; added: number; reps: number };
+
+function cardNuzzoConfig(
+  addedOneRM: number | null,
+  bodyShare: number,
+  suggested: { reps: number; added: number } | null,
+  realSets: CardNuzzoSet[] = [],
+): SvgChartConfig {
+  // Owner orientation: ADDED WEIGHT (the plate / −assistance) on the X axis, REPS on Y.
+  // The Nuzzo % applies to the EFFECTIVE load (added + bodyweight share), so the curve
+  // both SCALES with the 1RM and TRANSLATES left by the bodyweight share — for a
+  // bodyweight lift it crosses into NEGATIVE kg in the high-rep (assisted) range. For a
+  // bar-only lift (bodyShare 0) it's the plain curve. Dragging the 1RM moves the curve.
   const minPct = 15; // extend the curve down to 15% of 1RM
   const repCap = 60; // safety stop for the iteration
-  const orm = oneRM && oneRM > 0 ? oneRM : 100; // fallback scale when no 1RM yet
-  const kg = (pct: number) => Math.round((pct / 100) * orm * 10) / 10;
+  const b = Number.isFinite(bodyShare) ? bodyShare : 0;
+  // Fall back to an effective-100 scale when there's no 1RM yet (added = 100 − share).
+  const A = addedOneRM != null && addedOneRM + b > 0 ? addedOneRM : 100 - b;
+  const addedAt = (reps: number) => Math.round((nuzzoAddedWeightForReps(A, b, reps) ?? 0) * 10) / 10;
   const fitPts: SvgPoint[] = [];
   for (let r = 1; r <= repCap; r++) {
-    const pct = Math.round(benchPctForReps(r) * 10) / 10;
-    fitPts.push({ x: kg(pct), y: r });
-    if (pct <= minPct) break;
+    fitPts.push({ x: addedAt(r), y: r });
+    if (benchPctForReps(r) <= minPct) break;
   }
-  // EFFORT (RIR) zones: successive ribbons stepping DOWN from the failure curve, since
-  // a set's RIR = how many reps short of failure it stopped. ≤3 RIR (the curve down to
-  // 3 reps below) is a genuine hard set; 3–6 and 6–12 RIR are progressively more in the
-  // tank. The teal fill fades as RIR grows, so darkest = hardest (owner request). Bands
-  // tile (each yBot = the next yTop), so they don't overlap.
+  // EFFORT (RIR) zones: ribbons stepping DOWN from the failure curve (RIR = reps short of
+  // failure). The offset is in REPS (y), so it rides the translated curve unchanged.
   const effortBand = (top: number, bot: number, fill: string, label: string) => ({
     points: fitPts.map((p) => ({ x: p.x, yTop: Math.max(0, (p.y as number) - top), yBot: Math.max(0, (p.y as number) - bot) })),
     fill, label, labelColor: "#2f8f88",
@@ -11350,62 +11358,79 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     effortBand(3, 6, "rgba(47,143,136,0.09)", "3–6 RIR"),
     effortBand(6, 12, "rgba(47,143,136,0.045)", "6–12 RIR"),
   ];
-  // Training-load zones by rep-max: the WEIGHT range whose failure point is 3–6 reps
-  // (strength) and 6–12 reps (hypertrophy). Vertical bands at the loads for those RMs,
-  // so you can see which weight = which goal (and they move with the 1RM slider).
-  const wAt = (reps: number) => kg(benchPctForReps(reps));
+  // Load zones by rep-max, now in ADDED-weight space too (added weight at the 3/6/12 RM).
   const rmZones = [
-    { from: wAt(6), to: wAt(3), fill: "rgba(184,144,47,0.10)", label: "3–6RM", labelColor: "#b8902f" },
-    { from: wAt(12), to: wAt(6), fill: "rgba(91,79,150,0.10)", label: "6–12RM", labelColor: "#5b4f96" },
+    { from: addedAt(6), to: addedAt(3), fill: "rgba(184,144,47,0.10)", label: "3–6RM", labelColor: "#b8902f" },
+    { from: addedAt(12), to: addedAt(6), fill: "rgba(91,79,150,0.10)", label: "6–12RM", labelColor: "#5b4f96" },
   ];
-  // Owner: the Nuzzo curve is a LINE only — the study-estimate points (non-real) are
-  // dropped, so the only DOTS are YOUR lifts (teal) and the suggested set (gold). The
-  // series keep their names + show in the LEGEND so green vs gold is explained.
   const series: SvgSeries[] = [
-    // Dashed (and dot-less) so the model curve reads as a reference, not data (owner).
+    // Dashed (dot-less) reference curve.
     { name: "Nuzzo curve", color: "#284e86", type: "line", points: fitPts, dashed: true },
   ];
-  // Your REAL rep-maxes at their FIXED actual kg — drag the 1RM and the CURVE moves to
-  // them; the 1RM where the curve passes through your dots is your true 1RM (teal dots).
-  if (realPts.length) {
-    series.push({ name: "Your lifts", color: "#2f8f88", type: "scatter", points: realPts });
+  // Same-day SESSION connectors: join the sets logged on one day (in set order) with a
+  // thin light line so a session's path (warm-up ramp → work sets) reads at a glance.
+  // One light, dot-less, legend-less line per day; the scatter below owns the dots.
+  const byDay = new Map<string, CardNuzzoSet[]>();
+  for (const s of realSets) { const a = byDay.get(s.date) ?? []; a.push(s); byDay.set(s.date, a); }
+  for (const [, daySets] of byDay) {
+    if (daySets.length < 2) continue;
+    const pts = [...daySets].sort((p, q) => p.setNumber - q.setNumber).map((s) => ({ x: s.added, y: s.reps }));
+    series.push({ name: "session", color: "#8fc4be", type: "line", points: pts, noLegend: true, noDots: true });
   }
-  if (markReps && markPct) {
-    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }] });
+  // EVERY logged set (not just rep-maxes) — the full cloud, so submaximal sets land in
+  // the lower RIR bands and the session lines connect them (owner request).
+  const unit = b > 0 ? "kg added" : "kg"; // "added" only matters for bodyweight lifts
+  if (realSets.length) {
+    const eff = (s: CardNuzzoSet) => s.added + b;
+    series.push({
+      name: "Your lifts", color: "#2f8f88", type: "scatter",
+      points: realSets.map((s) => ({
+        x: s.added, y: s.reps,
+        meta: addedOneRM != null && addedOneRM + b > 0
+          ? `${s.reps} reps @ ${s.added}${unit} (${Math.round((eff(s) / (addedOneRM + b)) * 100)}% of 1RM)`
+          : `${s.reps} reps @ ${s.added}${unit}`,
+      })),
+    });
+  }
+  if (suggested) {
+    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: Math.round(suggested.added * 10) / 10, y: suggested.reps, meta: `Suggested set — ${suggested.reps} reps @ ${Math.round(suggested.added * 10) / 10}${unit}` }] });
   }
   return {
     series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones,
-    xTitle: "weight (kg)", yTitle: "reps",
-    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
+    xTitle: b > 0 ? "added weight (kg)" : "weight (kg)", yTitle: "reps",
+    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} ${unit}`,
   };
 }
 
-/** This lift's real rep-maxes for the Nuzzo fit-graph: plotted at their FIXED actual
- * weight (x = kg, y = reps). The curve (not these dots) moves with the assumed 1RM. */
-function cardNuzzoRealPts(name: string, oneRM: number | null): SvgPoint[] {
-  const repMaxes = nuzzoRepMaxes(setsForUserExercise(activeRecords(), els.athlete.value, name));
-  return repMaxes.map((rm) => ({
-    x: Math.round(rm.weight * 10) / 10,
-    y: rm.reps,
-    meta: oneRM && oneRM > 0
-      ? `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg (${Math.round((rm.weight / oneRM) * 100)}% of 1RM)`
-      : `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg`,
-  }));
+/** Every logged set for this lift in the card graph's ADDED-weight space (x = added
+ * plate, negative = assisted). The added weight mirrors addedWeight1RM's convention:
+ * the bar-only lift's whole load IS added (origWeight undefined), else the entered
+ * plate (origWeight). Reps 1..60 (matches the curve range, PB-30). */
+function cardNuzzoRealSets(name: string): CardNuzzoSet[] {
+  const out: CardNuzzoSet[] = [];
+  for (const s of setsForUserExercise(activeRecords(), els.athlete.value, name)) {
+    const reps = s.reps;
+    if (reps == null || reps < 1 || reps > 60) continue;
+    if (s.weight == null || !(s.weight > 0)) continue; // need a real effective load
+    const added = s.origWeight === undefined ? s.weight : (s.origWeight ?? 0);
+    out.push({ date: s.date, setNumber: s.setNumber, added: Math.round(added * 10) / 10, reps });
+  }
+  return out;
 }
-/** Build the card's Nuzzo chart config from the live `.lt-nuzzo` box (its dataset carries
- *  the suggested set's reps/%1RM and the current assumed 1RM). Shared by the full mount
- *  and the live slider re-plot so they never drift. */
+/** Build the card's Nuzzo chart config from the live `.lt-nuzzo` box. The dataset carries
+ *  the ADDED-weight 1RM (nzorm), the bodyweight share (nzbody), and the suggested set's
+ *  reps + added weight (nzsugreps / nzsugadded). Shared by the full mount and the live
+ *  slider re-plot so they never drift. */
 function cardNuzzoConfigFromBox(box: HTMLElement): SvgChartConfig {
-  const reps = Number(box.dataset.nzreps), pct = Number(box.dataset.nzpct);
-  const orm = Number(box.dataset.nzorm);
-  const oneRM = Number.isFinite(orm) && orm > 0 ? orm : null;
-  const realPts = currentExInfo ? cardNuzzoRealPts(currentExInfo, oneRM) : [];
-  return cardNuzzoConfig(
-    oneRM,
-    Number.isFinite(reps) && reps > 0 ? reps : null,
-    Number.isFinite(pct) && pct > 0 ? pct : null,
-    realPts,
-  );
+  const orm = Number(box.dataset.nzorm); // added-weight 1RM
+  const body = Number(box.dataset.nzbody);
+  const sugReps = Number(box.dataset.nzsugreps), sugAdded = Number(box.dataset.nzsugadded);
+  const addedOneRM = Number.isFinite(orm) ? orm : null;
+  const bodyShare = Number.isFinite(body) ? body : 0;
+  const suggested = Number.isFinite(sugReps) && sugReps > 0 && Number.isFinite(sugAdded)
+    ? { reps: sugReps, added: sugAdded } : null;
+  const realSets = currentExInfo ? cardNuzzoRealSets(currentExInfo) : [];
+  return cardNuzzoConfig(addedOneRM, bodyShare, suggested, realSets);
 }
 /** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
  *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
@@ -11453,9 +11478,21 @@ function liftTrainingHtml(name: string): string {
   // to the curve. When sets are logged, the card's 1RM is the adjustable slider value
   // (cardOrm) — defaulting to the logged best — instead of the kg×reps mini-calculator.
   const repMaxes = nuzzoRepMaxes(setsForUserExercise(activeRecords(), user, name));
-  const bestFit = bestFitNuzzo1RM(repMaxes);
+  const bestFit = bestFitNuzzo1RM(repMaxes); // EFFECTIVE 1RM (bodyweight folded in)
   const hasLogged = repMaxes.length > 0;
-  const e1rm = hasLogged ? (cardOrm ?? loggedE1rm ?? bestFit) : manualOrm;
+  // BODYWEIGHT-aware 1RM (#major): the graph + slider work in ADDED-weight space — the
+  // plate you add, negative when assisted — while the rest of the card keeps the EFFECTIVE
+  // 1RM. bodyShare = the body's contribution to this lift (coeff × bodyweight); 0 for
+  // bar-only lifts, so they're unchanged. cardOrm now stores the ADDED 1RM.
+  const bodyShare = Math.max(0, coeffFor(name) * (athProfile(user)?.weight ?? 0));
+  const loggedAdded = loggedE1rm != null ? loggedE1rm - bodyShare : null;
+  const bestFitAdded = bestFit != null ? bestFit - bodyShare : null;
+  const addedBase = hasLogged
+    ? (cardOrm ?? loggedAdded ?? bestFitAdded)
+    : (manualOrm != null ? manualOrm - bodyShare : null);
+  // Effective 1RM drives the working weights / warm-up / suggested set (same load space
+  // as the logged sets). = added 1RM + the body share.
+  const e1rm = addedBase != null ? addedBase + bodyShare : null;
   const fmt = (n: number) => String(Math.round(n * 10) / 10);
   const sec = (title: string, body: string) =>
     `<div class="lt-sec"><div class="lt-sec-h">${escapeHtml(title)}</div>${body}</div>`;
@@ -11488,36 +11525,43 @@ function liftTrainingHtml(name: string): string {
   // 1RM, an optional snap-to-best-fit chip, and the Nuzzo curve with the real rep-max
   // dots — drag the 1RM and the dots slide until they sit ON the curve (the owner's ask:
   // "show the nuzzo graph with points of real lifts and adjust the 1RM to see the fit").
-  const nuzzoBox = (orm: number | null) =>
-    `<div class="lt-nuzzo" data-nzreps="${hs?.reps ?? ""}" data-nzpct="${hs?.pctOf1RM ?? ""}" data-nzorm="${orm != null ? fmt(orm) : ""}"></div>`;
-  const maxW = repMaxes.reduce((m, rm) => Math.max(m, rm.weight), 0);
-  const ormBase = e1rm ?? bestFit ?? maxW;
-  const sMin = Math.max(Math.floor(maxW), 1);
-  const sMax = Math.max(Math.ceil(ormBase * 1.6), sMin + 20);
-  // Where the dots come from: the real rep-maxes (heaviest set at each rep count) that
-  // feed the graph, in a collapsed dropdown — heaviest first — so the owner can see the
-  // source data behind the teal dots (owner: "I don't see the list of top real lifts").
-  const topReal = [...repMaxes].sort((a, b) => b.weight - a.weight).slice(0, 10);
-  const realSrc = topReal.length
-    ? `<details class="lt-realsrc"><summary class="lt-realsrc-sum muted">Real lifts on the graph <span class="lt-realsrc-cnt">${topReal.length}</span></summary>` +
+  // The graph's data lives in ADDED-weight space. The box carries the added 1RM, the
+  // bodyweight share, and the suggested set (reps + its added weight) — read back by
+  // cardNuzzoConfigFromBox for the full mount AND the live slider re-plot.
+  const sugAdded = hs ? hs.weightKg - bodyShare : null;
+  const nuzzoBox = (added: number | null) =>
+    `<div class="lt-nuzzo" data-nzorm="${added != null ? fmt(added) : ""}" data-nzbody="${fmt(bodyShare)}" data-nzsugreps="${hs?.reps ?? ""}" data-nzsugadded="${sugAdded != null ? fmt(sugAdded) : ""}"></div>`;
+  const maxW = repMaxes.reduce((m, rm) => Math.max(m, rm.weight), 0); // heaviest EFFECTIVE
+  const maxAdded = Math.round((maxW - bodyShare) * 10) / 10;          // heaviest ADDED
+  const aBase = addedBase ?? maxAdded;       // slider value (added 1RM, may be negative)
+  const headroom = Math.max(20, Math.round((e1rm ?? 100) * 0.6));
+  const sMin = Math.floor(maxAdded);          // 1RM ≥ heaviest added single; negative when assisted
+  const sMax = Math.max(Math.ceil(aBase + headroom), sMin + 20);
+  const unit = bodyShare > 0 ? "kg added" : "kg";
+  // The dots' source data — EVERY logged set now (owner: "all points, not just top 10"),
+  // heaviest-added first, in a collapsed list so the cloud behind the teal dots is legible.
+  const allSets = currentExInfo === name ? cardNuzzoRealSets(name) : [];
+  const sortedSets = [...allSets].sort((p, q) => q.added - p.added || q.reps - p.reps);
+  const realSrc = sortedSets.length
+    ? `<details class="lt-realsrc"><summary class="lt-realsrc-sum muted">Real lifts on the graph <span class="lt-realsrc-cnt">${sortedSets.length}</span></summary>` +
         `<div class="lt-realsrc-list">` +
-        topReal.map((rm) => {
-          const pct = ormBase > 0 ? Math.round((rm.weight / ormBase) * 100) : 0;
-          return `<div class="lt-realsrc-row"><span class="lt-realsrc-w">${fmt(rm.weight)} kg × ${rm.reps}</span><span class="muted">${pct}%</span></div>`;
+        sortedSets.map((s) => {
+          const pct = e1rm && e1rm > 0 ? Math.round(((s.added + bodyShare) / e1rm) * 100) : 0;
+          return `<div class="lt-realsrc-row"><span class="lt-realsrc-w">${fmt(s.added)} ${unit} × ${s.reps}</span><span class="muted">${pct}%</span></div>`;
         }).join("") +
         `</div></details>`
     : "";
   const ormFit =
     `<div class="lt-ormfit">` +
       `<div class="lt-ormfit-row">` +
-        `<input type="range" class="lt-ormfit-slider" min="${sMin}" max="${sMax}" step="0.5" value="${fmt(ormBase)}" data-cardorm="slider" aria-label="Assumed 1RM">` +
-        `<input type="number" class="lt-ormfit-num" inputmode="decimal" step="0.5" min="0" value="${fmt(ormBase)}" data-cardorm="num" aria-label="1RM in kilograms">` +
-        `<span class="lt-ormfit-unit">kg 1RM</span>` +
-        (bestFit && Math.abs(bestFit - ormBase) > 0.5
-          ? `<button type="button" class="lt-ormfit-best" data-cardorm="best" data-best="${fmt(bestFit)}" title="Snap the 1RM to the value that best fits your logged sets to the curve">fit ${fmt(bestFit)}</button>`
+        `<input type="range" class="lt-ormfit-slider" min="${sMin}" max="${sMax}" step="0.5" value="${fmt(aBase)}" data-cardorm="slider" aria-label="Assumed 1RM">` +
+        `<input type="number" class="lt-ormfit-num" inputmode="decimal" step="0.5" min="${sMin}" value="${fmt(aBase)}" data-cardorm="num" aria-label="1RM in kilograms">` +
+        `<span class="lt-ormfit-unit">${unit === "kg" ? "kg 1RM" : "kg added 1RM"}</span>` +
+        (bestFitAdded != null && Math.abs(bestFitAdded - aBase) > 0.5
+          ? `<button type="button" class="lt-ormfit-best" data-cardorm="best" data-best="${fmt(bestFitAdded)}" title="Snap the 1RM to the value that best fits your logged sets to the curve">fit ${fmt(bestFitAdded)}</button>`
           : "") +
       `</div>` +
-      nuzzoBox(ormBase) +
+      nuzzoBox(aBase) +
       realSrc +
     `</div>`;
   // Working weights: true rep-maxes for common targets (load to FAILURE at N reps).
@@ -13334,7 +13378,9 @@ async function init() {
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>('[data-cardorm="slider"],[data-cardorm="num"]');
     if (!inp) return;
     const v = parseFloat(inp.value);
-    if (!Number.isFinite(v) || v <= 0) return;
+    // cardOrm is the ADDED-weight 1RM now — it CAN be ≤ 0 for an assisted-only lift, so
+    // only reject a non-finite value, not a negative one.
+    if (!Number.isFinite(v)) return;
     cardOrm = v;
     const slider = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardorm="slider"]');
     const num = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardorm="num"]');
