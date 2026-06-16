@@ -11517,19 +11517,19 @@ function updateCardNuzzoLive(): void {
     else cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
   });
 }
-/** Volume distribution chart for the exercise info card — overlapping bars with
- *  perspective illusion (front bars occlude back bars) to show sets per weight × rep range. */
+/** Volume distribution chart: 3D bars colored by weight (darker = heavier),
+ *  faded by reps (more reps = more faded/gray). Each bar is a 3D box. */
 function cardVolDistHtml(name: string): string {
   const sets = cardNuzzoRealSets(name);
   if (sets.length === 0)
     return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
 
-  const REP_RANGES: { label: string; min: number; max: number; color: string }[] = [
-    { label: "1–3",   min: 1,  max: 3,        color: "#1e5a96" },  // darkest
-    { label: "4–6",   min: 4,  max: 6,        color: "#3b7ab8" },  // medium-dark
-    { label: "7–9",   min: 7,  max: 9,        color: "#5b9bd5" },  // medium-light
-    { label: "10–12", min: 10, max: 12,       color: "#7fb3e5" },  // light
-    { label: "13+",   min: 13, max: Infinity,  color: "#a8c8db" },  // lightest
+  const REP_RANGES: { label: string; min: number; max: number }[] = [
+    { label: "1–3",   min: 1,  max: 3 },
+    { label: "4–6",   min: 4,  max: 6 },
+    { label: "7–9",   min: 7,  max: 9 },
+    { label: "10–12", min: 10, max: 12 },
+    { label: "13+",   min: 13, max: Infinity },
   ];
 
   const minA = sets.reduce((m, s) => Math.min(m, s.added), Infinity);
@@ -11539,10 +11539,17 @@ function cardVolDistHtml(name: string): string {
   const range = hi - lo;
   const binSize = Math.max(5, Math.ceil(range / 10 / 5) * 5);
 
-  type Bin = { label: string; from: number; to: number; counts: number[] };
+  type Bin = { label: string; from: number; to: number; midW: number; counts: number[] };
   const bins: Bin[] = [];
-  for (let w = lo; w < hi; w += binSize)
-    bins.push({ label: String(w), from: w, to: w + binSize, counts: new Array(REP_RANGES.length).fill(0) });
+  for (let w = lo; w < hi; w += binSize) {
+    bins.push({
+      label: String(w),
+      from: w,
+      to: w + binSize,
+      midW: w + binSize / 2,
+      counts: new Array(REP_RANGES.length).fill(0),
+    });
+  }
 
   for (const s of sets) {
     const bi = bins.findIndex(b => s.added >= b.from && s.added < b.to);
@@ -11558,38 +11565,63 @@ function cardVolDistHtml(name: string): string {
   const activeRr = REP_RANGES.map((_, i) => filled.some(b => b.counts[i]! > 0) ? i : -1).filter(i => i >= 0);
   const maxCount = filled.reduce((m, b) => Math.max(m, ...b.counts), 0);
 
-  // SVG layout: wider bars that overlap with perspective
+  // Color by weight: darker = heavier
+  const getWeightColor = (w: number) => {
+    const f = (w - lo) / (hi - lo); // 0..1
+    if (f < 0.25) return "#a8d0e8";  // light blue
+    if (f < 0.5) return "#6fa3c8";   // medium-light
+    if (f < 0.75) return "#3d6b99";  // medium-dark
+    return "#1a3f5c";                 // dark blue
+  };
+
+  // Opacity by reps: more reps = more faded
+  const getRepOpacity = (ri: number) => [1.0, 0.85, 0.65, 0.45, 0.25][ri] ?? 1.0;
+
+  // SVG layout
   const svgW = 400, svgH = 210;
   const ml = 32, mr = 8, mt = 12, mb = 52;
   const cW = svgW - ml - mr;
   const cH = svgH - mt - mb;
-  const nBins = filled.length;
-  const groupW = cW / nBins;
-  const barW = groupW * 0.65; // thicker bars (65% of bin width)
-  const barOffsets = [0, 8, 16, 24, 32]; // x-offsets for each rep range (creates overlap)
+  const groupW = cW / filled.length;
+  const barW = groupW * 0.5;
   const yScale = (n: number) => cH - (n / maxCount) * cH;
+  const boxDepth = 6; // 3D depth offset
+  const boxSlant = 8; // horizontal slant
 
-  // Draw bars back-to-front (reverse order) so front bars occlude back
-  // Vertical offset: back bars (higher indices) start higher, creating isometric perspective
   let bars = "";
   const drawOrder = activeRr.slice().reverse();
-  const yOffsets = [0, 8, 16, 24, 32]; // vertical offset per rep range
+  const yOffsets = [0, 6, 12, 18, 24];
+
   filled.forEach((bin, bi) => {
     const gx = ml + bi * groupW + (groupW - barW) / 2;
+    const wColor = getWeightColor(bin.midW);
+
     drawOrder.forEach(ri => {
       const count = bin.counts[ri]!;
       if (count === 0) return;
       const ari = activeRr.indexOf(ri);
-      const x = gx + barOffsets[ari]!;
+      const x = gx;
       const bh = (count / maxCount) * cH;
       const yBase = mt + yScale(count);
-      const y = yBase - yOffsets[ari]!; // offset back bars higher
-      const r = REP_RANGES[ri]!;
-      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="${r.color}" opacity="0.85" rx="1"><title>${bin.from}–${bin.to}kg · ${r.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
+      const y = yBase - yOffsets[ari]!;
+      const opacity = getRepOpacity(ri);
+
+      // Darker shade for right face (3D effect)
+      const darkerColor = `color-mix(in srgb, ${wColor} 60%, #000)`;
+      const lighterColor = `color-mix(in srgb, ${wColor} 80%, #fff)`;
+
+      // Top face (lighter, slanted)
+      bars += `<polygon points="${x.toFixed(1)},${y.toFixed(1)} ${(x + boxSlant).toFixed(1)},${(y - boxDepth).toFixed(1)} ${(x + barW + boxSlant).toFixed(1)},${(y - boxDepth).toFixed(1)} ${(x + barW).toFixed(1)},${y.toFixed(1)}" fill="${lighterColor}" opacity="${opacity * 0.6}"/>`;
+
+      // Right face (darker, vertical strip)
+      bars += `<polygon points="${(x + barW).toFixed(1)},${y.toFixed(1)} ${(x + barW + boxSlant).toFixed(1)},${(y - boxDepth).toFixed(1)} ${(x + barW + boxSlant).toFixed(1)},${(y + bh - boxDepth).toFixed(1)} ${(x + barW).toFixed(1)},${(y + bh).toFixed(1)}" fill="${darkerColor}" opacity="${opacity}"/>`;
+
+      // Front face (main)
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="${wColor}" opacity="${opacity}"><title>${bin.from}–${bin.to}kg · ${REP_RANGES[ri]!.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
     });
   });
 
-  // x-axis bin labels
+  // x-axis bin labels (weight)
   let xLbls = "";
   filled.forEach((bin, bi) => {
     const cx = ml + bi * groupW + groupW / 2;
@@ -11611,8 +11643,9 @@ function cardVolDistHtml(name: string): string {
   const yTitle = `<text transform="rotate(-90) translate(${-(mt + cH / 2)},10)" text-anchor="middle" font-size="9" fill="var(--muted)">Sets</text>`;
 
   const legendItems = activeRr.map(ri => {
-    const r = REP_RANGES[ri]!;
-    return `<span class="lt-vol-leg-item"><span class="lt-vol-leg-dot" style="background:${r.color}"></span>${r.label}</span>`;
+    const op = getRepOpacity(ri);
+    const dotStyle = `background:#6fa3c8;opacity:${op};`;
+    return `<span class="lt-vol-leg-item"><span class="lt-vol-leg-dot" style="${dotStyle}"></span>${REP_RANGES[ri]!.label}</span>`;
   }).join("");
 
   return `<div class="lt-vol-wrap">` +
@@ -11620,7 +11653,7 @@ function cardVolDistHtml(name: string): string {
     yLbls + bars + axes + xLbls + xTitle + yTitle +
     `</svg>` +
     `<div class="lt-vol-legend">${legendItems}</div>` +
-    `<div class="lt-vol-note muted">Sets per weight range</div>` +
+    `<div class="lt-vol-note muted">Darker = heavier weight · Faded = more reps</div>` +
     `</div>`;
 }
 
