@@ -205,7 +205,11 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         .map((r) => {
           const w = Math.round(dispW(r)! * 10) / 10;
           const fresh = Number.isFinite(Date.parse(r.date)) && (now - Date.parse(r.date)) / 86_400_000 < 14;
-          return { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}`, op: ageOp(r.date), glow: fresh };
+          const rir = input.config.rirOf?.(r); // size the bubble by effort (lower RIR = bigger)
+          const pt: { x: number; y: number; meta: string; op: number; glow: boolean; rir?: number } =
+            { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}`, op: ageOp(r.date), glow: fresh };
+          if (rir != null && Number.isFinite(rir)) pt.rir = rir;
+          return pt;
         });
       if (!pts.length) return;
       rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: pts as SvgPoint[] });
@@ -242,7 +246,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           if (curve.length > 1) {
             // The single-lift fit curve is GREEN + draggable (owner); multi-lift keeps per-lift
             // colour. DASHED (no dots) so it reads as the fitted Nuzzo curve, not data (owner).
-            rvw.push({ name: `${g.label} fit`, color: singleGroup ? RVW_FIT_GREEN : base, type: "line", noLegend: true, points: curve, dashed: true });
+            // noExtendX: the curve must NOT drive the x-domain — else dragging the fit re-fits the
+            // view and the whole plot JUMPS on release (owner: "jumps around confusingly").
+            rvw.push({ name: `${g.label} fit`, color: singleGroup ? RVW_FIT_GREEN : base, type: "line", noLegend: true, points: curve, dashed: true, noExtendX: singleGroup });
             // PB-35: anchor the drag handle at the curve's HEAVIEST drawn point (its r0-rep
             // end — curve[0], the rightmost VISIBLE point), NOT the off-screen 1RM (which fell
             // outside the auto-fitted x-domain → invisible). Dragging sets the 1RM that puts the

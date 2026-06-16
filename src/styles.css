@@ -4647,6 +4647,11 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 }
 .wa-graphtab:hover { color: var(--accent); }
 .wa-graphtab.is-on { background: var(--accent); border-color: var(--accent); color: #fff; padding-top: 7px; }
+/* Reps×weight 2-week window pager — a compact ‹ label › strip under the chart. */
+.rvw-pager { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0.2rem 0 0; }
+.rvw-pg { min-height: var(--tap-min); min-width: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.rvw-pg[disabled] { opacity: 0.4; cursor: default; }
+.rvw-pg-lbl { font-size: 0.74rem; font-weight: 700; color: var(--muted); min-width: 6.5rem; text-align: center; }
 /* "Single ▴" toggle sits at the FAR RIGHT of the bar — the same bottom-right spot the
    carousel's "Multi ▾" button occupies, so the single ⇄ multi switch stays put. */
 .wa-graph-ctrls .wa-graph-single { flex: 0 0 auto; margin-left: auto; }

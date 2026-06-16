@@ -17265,6 +17265,32 @@ function onRvwFitDrag(exercise: string, effOneRm: number): void {
   try { localStorage.setItem(RVW_FIT_KEY, JSON.stringify(rvwFitOverrides)); } catch { /* ignore */ }
   scheduleWaGraph();
 }
+// Reps×weight 2-week WINDOW pager (owner): null = all sets; 0 = the most recent 14-day
+// block; n = n blocks before that. Bottom ‹ › arrows page it, the rvw render filters the
+// plotted sets to the window. Anchored to the latest logged set so blocks align with data.
+let rvwWindowIdx: number | null = null;
+const RVW_WINDOW_MS = 14 * 86_400_000;
+function rvwWindowRecords(records: readonly SetRecord[]): SetRecord[] {
+  if (rvwWindowIdx == null) return records as SetRecord[];
+  let latest = 0;
+  for (const r of records) { const t = Date.parse(r.date); if (Number.isFinite(t) && t > latest) latest = t; }
+  if (!latest) return records as SetRecord[];
+  const hi = latest - rvwWindowIdx * RVW_WINDOW_MS, lo = hi - RVW_WINDOW_MS;
+  return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo && t <= hi; });
+}
+function rvwWindowLabel(): string {
+  if (rvwWindowIdx == null) return "All sets";
+  if (rvwWindowIdx === 0) return "Last 2 wk";
+  return `${rvwWindowIdx * 2}–${(rvwWindowIdx + 1) * 2} wk ago`;
+}
+/** The 2-week window pager strip — shown under the reps×weight chart only. */
+function rvwPagerHtml(): string {
+  return `<div class="rvw-pager">` +
+    `<button type="button" class="rvw-pg" data-rvwwin="older" aria-label="Older 2 weeks">‹</button>` +
+    `<span class="rvw-pg-lbl">${escapeHtml(rvwWindowLabel())}</span>` +
+    `<button type="button" class="rvw-pg" data-rvwwin="newer" aria-label="Newer 2 weeks"${rvwWindowIdx == null ? " disabled" : ""}>›</button>` +
+    `</div>`;
+}
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
@@ -18498,7 +18524,7 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   const projMarkers = projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
   renderAnalyticsGraph(container, {
     exercises: exs,
-    records: recs,
+    records: S.waRepsVsWeight ? rvwWindowRecords(recs) : recs,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
@@ -18691,6 +18717,7 @@ function renderGraphMini(): void {
       // toggle beside them — so the controls ride the graph edge instead of a row above it.
       `<div class="gmini-overlay">${bw}</div>` +
     `</div>` +
+    (S.waRepsVsWeight ? rvwPagerHtml() : "") +
     `<div class="gmini-foot">` +
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
@@ -18810,7 +18837,7 @@ function renderWaGraph(): void {
   let preservedLegend: Element | null = null;
   if (!chartBox) {
     box.innerHTML =
-      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphTabs"></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
+      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphTabs"></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div><div id="waGraphRvwPager"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
     // The legend node was relocated (into the chart overlay or the bar); the SVG
@@ -18839,6 +18866,9 @@ function renderWaGraph(): void {
   let tabsEl = box.querySelector<HTMLElement>("#waGraphTabs");
   if (!tabsEl && chartBox) { chartBox.insertAdjacentHTML("beforebegin", `<div id="waGraphTabs"></div>`); tabsEl = box.querySelector<HTMLElement>("#waGraphTabs"); }
   if (tabsEl) tabsEl.innerHTML = graphTypeTabsHtml();
+  // 2-week window pager (reps×weight only) — refreshed each render so its label tracks state.
+  const pagerEl = box.querySelector<HTMLElement>("#waGraphRvwPager");
+  if (pagerEl) pagerEl.innerHTML = S.waRepsVsWeight ? rvwPagerHtml() : "";
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
@@ -18850,7 +18880,7 @@ function renderWaGraph(): void {
   const projMarkers = projectionFitMarkers(athleteRecs, drawMetricIds);
   const analyticsInput = {
     exercises: graphExercises,
-    records: athleteRecs,
+    records: S.waRepsVsWeight ? rvwWindowRecords(athleteRecs) : athleteRecs,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
@@ -20020,6 +20050,13 @@ function setupWorkoutAnalysis(): void {
     // "Reps versus weight" scatter mode + its best-fit line.
     const rvwTab = t.closest<HTMLElement>("[data-warvwset]");
     if (rvwTab) { S.waRepsVsWeight = rvwTab.dataset.warvwset === "rvw"; scheduleWaGraph(); return; }
+    const rvwPg = t.closest<HTMLElement>("[data-rvwwin]");
+    if (rvwPg) {
+      if (rvwPg.dataset.rvwwin === "older") rvwWindowIdx = rvwWindowIdx == null ? 0 : rvwWindowIdx + 1;
+      else if (rvwWindowIdx != null) rvwWindowIdx = rvwWindowIdx <= 0 ? null : rvwWindowIdx - 1; // newer → toward All
+      scheduleWaGraph();
+      return;
+    }
     if (t.closest<HTMLElement>("[data-warvw]")) { S.waRepsVsWeight = !S.waRepsVsWeight; scheduleWaGraph(); return; }
     if (t.closest<HTMLElement>("[data-warvwfit]")) { S.waRepsVsWeightFit = !S.waRepsVsWeightFit; scheduleWaGraph(); return; }
     // "Per bodyweight (×BW)" lens (pill). Auto-Fit after the rescale so the data fills
