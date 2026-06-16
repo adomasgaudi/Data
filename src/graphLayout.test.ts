@@ -5,6 +5,8 @@ import {
   loadLayout,
   saveLayout,
   flushSaveLayout,
+  switchTab,
+  getActiveTab,
 } from "./graphLayout";
 
 describe("graphLayout", () => {
@@ -167,6 +169,59 @@ describe("graphLayout", () => {
       }).not.toThrow();
 
       spy.mockRestore();
+    });
+  });
+
+  describe("switchTab", () => {
+    it("updates activeTabId and saves the layout", async () => {
+      const layout = defaultLayout();
+      // Add a second tab so we can switch to it
+      const secondTab = { id: "tab-2", name: "Second Tab", carousels: [] };
+      layout.tabs.push(secondTab);
+
+      const updated = switchTab(layout, "tab-2");
+
+      expect(updated.activeTabId).toBe("tab-2");
+      expect(updated.tabs).toBe(layout.tabs); // tabs unchanged
+
+      // Wait for debounce and verify it was saved
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const stored = localStorage.getItem("colosseum.graphLayout.v1");
+      const parsed = stored ? JSON.parse(stored) : null;
+      expect(parsed?.activeTabId).toBe("tab-2");
+    });
+
+    it("returns a new layout object (immutable)", () => {
+      const layout = defaultLayout();
+      const updated = switchTab(layout, layout.activeTabId); // switch to same tab
+      expect(updated).not.toBe(layout);
+      expect(updated.activeTabId).toBe(layout.activeTabId);
+    });
+  });
+
+  describe("getActiveTab", () => {
+    it("returns the active tab", () => {
+      const layout = defaultLayout();
+      const active = getActiveTab(layout);
+      expect(active?.id).toBe("tab-main");
+      expect(active?.name).toBe("All Lifts");
+    });
+
+    it("returns undefined if activeTabId doesn't match any tab", () => {
+      const layout = defaultLayout();
+      layout.activeTabId = "nonexistent";
+      const active = getActiveTab(layout);
+      expect(active).toBeUndefined();
+    });
+
+    it("returns the correct tab when there are multiple tabs", () => {
+      const layout = defaultLayout();
+      layout.tabs.push({ id: "tab-2", name: "Second", carousels: [] });
+      layout.activeTabId = "tab-2";
+
+      const active = getActiveTab(layout);
+      expect(active?.id).toBe("tab-2");
+      expect(active?.name).toBe("Second");
     });
   });
 });

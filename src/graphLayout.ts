@@ -227,3 +227,28 @@ export function flushSaveLayout(layout: UserGraphLayout): void {
     /* storage may be unavailable */
   }
 }
+
+// ============================================================================================
+// UI HELPERS
+// ============================================================================================
+
+/**
+ * Switch to a different tab. Updates the layout and saves it (debounced).
+ * @param layout The current layout
+ * @param tabId The ID of the tab to switch to
+ * @returns The updated layout with the new activeTabId
+ */
+export function switchTab(layout: UserGraphLayout, tabId: string): UserGraphLayout {
+  const updated = { ...layout, activeTabId: tabId };
+  saveLayout(updated);
+  return updated;
+}
+
+/**
+ * Get the currently active tab from the layout.
+ * @param layout The current layout
+ * @returns The active TabLayout, or undefined if the activeTabId doesn't exist
+ */
+export function getActiveTab(layout: UserGraphLayout): TabLayout | undefined {
+  return layout.tabs.find((t) => t.id === layout.activeTabId);
+}
