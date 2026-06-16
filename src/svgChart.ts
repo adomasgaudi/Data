@@ -85,6 +85,12 @@ export interface SvgPoint {
    * none): a combined/comparison lift shapes each member-origin differently, same
    * colour, so the mixed sources are tellable apart. */
   shape?: SvgShape;
+  /** Per-POINT scatter fill-opacity override (0..1). Used to FADE old sets and keep
+   * recent ones solid (recency emphasis). Falls back to the default when absent. */
+  op?: number;
+  /** Per-POINT glow — a soft halo behind the scatter marker, for a VERY recent set so it
+   * "shines" (e.g. logged in the last 2 weeks). */
+  glow?: boolean;
 }
 export interface SvgSeries {
   name: string;
@@ -698,7 +704,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             // shape, just bigger + more solid so it still pops.
             const shp = s.shape ?? p.shape!;
             const r = p.rir != null ? Math.min(3.2, Math.max(1.6, 3.2 - 0.22 * p.rir)) : 3.0;
-            body += shapeMarker(shp, cx, cy, r, s.color, 0.62, !!p.pr);
+            const mk = shapeMarker(shp, cx, cy, r, s.color, p.op ?? 0.62, !!p.pr);
+            body += p.glow ? `<g filter="url(#${glowId})">${mk}</g>` : mk;
           } else if (p.pr) {
             // A new record → a diamond (≈ the dot's size, so records stand out
             // without dominating the scatter).
@@ -708,7 +715,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             // Plain set → a dot sized by effort: higher RIR (easier) draws smaller;
             // the hardest (low / no RIR) keep the previous biggest size (3.2).
             const r = p.rir != null ? Math.min(3.2, Math.max(1.5, 3.2 - 0.22 * p.rir)) : 3.2;
-            body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="0.55"/>`;
+            const dot = `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="${(p.op ?? 0.55).toFixed(2)}"/>`;
+            body += p.glow ? `<g filter="url(#${glowId})">${dot}</g>` : dot;
           }
           hitPoints.push({ px: cx, py: cy, yTop: cy, yBot: cy, s, p });
         }

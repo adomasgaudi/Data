@@ -183,6 +183,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // the projection markers) — the harmonious green-ish, not a raw green (owner).
     const RVW_FIT_GREEN = "#2f8f88";
     let fitMarker: { exercise: string; markerX: number; bodyShare: number; refReps: number } | null = null;
+    let fitCurve: SvgPoint[] | null = null; // the single-lift fit curve → drives the RIR zones
     groups.forEach((g, gi2) => {
       const base = multiUser ? harmoniousColor(g.userIdx ?? gi2, input.users!.length) : harmoniousColor(gi2, groups.length);
       // Plot the LOGGED dial weight (origWeight) the athlete actually used — NOT the
@@ -190,9 +191,22 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // (which showed loads they never lifted, e.g. a bodyweight-folded DL at 60 vs the
       // 40 on the bar). Matches the workout history's display rule (WO-194).
       const dispW = (r: SetRecord): number | null => (r.origWeight != null ? r.origWeight : r.weight);
+      // Recency emphasis (owner): fade OLD sets, keep recent ones solid, and let a set from
+      // the last 2 weeks "shine" (glow). Opacity steps down with age in days.
+      const now = Date.now();
+      const ageOp = (date: string): number => {
+        const t = Date.parse(date);
+        if (!Number.isFinite(t)) return 0.5;
+        const days = (now - t) / 86_400_000;
+        return days < 14 ? 0.9 : days < 30 ? 0.72 : days < 90 ? 0.55 : days < 180 ? 0.42 : 0.3;
+      };
       const pts = g.records
         .filter((r) => dispW(r) != null && r.reps != null && r.reps > 0)
-        .map((r) => { const w = Math.round(dispW(r)! * 10) / 10; return { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}` }; });
+        .map((r) => {
+          const w = Math.round(dispW(r)! * 10) / 10;
+          const fresh = Number.isFinite(Date.parse(r.date)) && (now - Date.parse(r.date)) / 86_400_000 < 14;
+          return { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}`, op: ageOp(r.date), glow: fresh };
+        });
       if (!pts.length) return;
       rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: pts as SvgPoint[] });
       if (input.config.repsVsWeightFit) {
@@ -226,13 +240,14 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
             if (eff != null) curve.push({ x: Math.round((eff - bodyShare) * 100) / 100, y: Math.round(r * 100) / 100 } as SvgPoint);
           }
           if (curve.length > 1) {
-            // The single-lift fit curve is GREEN + draggable (owner); multi-lift keeps per-lift colour.
-            rvw.push({ name: `${g.label} fit`, color: singleGroup ? RVW_FIT_GREEN : base, type: "line", noLegend: true, points: curve });
+            // The single-lift fit curve is GREEN + draggable (owner); multi-lift keeps per-lift
+            // colour. DASHED (no dots) so it reads as the fitted Nuzzo curve, not data (owner).
+            rvw.push({ name: `${g.label} fit`, color: singleGroup ? RVW_FIT_GREEN : base, type: "line", noLegend: true, points: curve, dashed: true });
             // PB-35: anchor the drag handle at the curve's HEAVIEST drawn point (its r0-rep
             // end — curve[0], the rightmost VISIBLE point), NOT the off-screen 1RM (which fell
             // outside the auto-fitted x-domain → invisible). Dragging sets the 1RM that puts the
             // curve through (newX, r0 reps) — see onMarkerDrag below.
-            if (singleGroup) fitMarker = { exercise: exName, markerX: curve[0]!.x as number, bodyShare, refReps: r0 };
+            if (singleGroup) { fitMarker = { exercise: exName, markerX: curve[0]!.x as number, bodyShare, refReps: r0 }; fitCurve = curve; }
           }
         }
       }
@@ -242,6 +257,20 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
       xTitle: "weight (kg)", yTitle: "reps",
     };
+    // RIR effort zones (single lift): ribbons stepping DOWN from the failure curve in REPS —
+    // 0–3 RIR (a hard set), 3–6, 6–12 — teal, fading out the easier they get (matches the card).
+    if (fitCurve) {
+      const fc: SvgPoint[] = fitCurve;
+      const band = (top: number, bot: number, fill: string, label: string) => ({
+        points: fc.map((p) => ({ x: p.x, yTop: Math.max(0, (p.y as number) - top), yBot: Math.max(0, (p.y as number) - bot) })),
+        fill, label, labelColor: RVW_FIT_GREEN,
+      });
+      cfg.areaBands = [
+        band(0, 3, "rgba(47,143,136,0.15)", "hard sets (≤3 RIR)"),
+        band(3, 6, "rgba(47,143,136,0.09)", "3–6 RIR"),
+        band(6, 12, "rgba(47,143,136,0.045)", "6–12 RIR"),
+      ];
+    }
     // Drag the green Nuzzo curve to adjust its fit — a draggable vertical "fit" line sitting
     // on the curve's heaviest drawn point (reusing the projection fit-marker mechanism + its
     // dashed line / handle / "fit" label). Releasing maps the new weight back to a 1RM via the
