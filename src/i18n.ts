@@ -98,6 +98,7 @@ const LT: Record<string, string> = {
   "Working weights": "Darbiniai svoriai",
   "Warmup": "Apšilimas",
   "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
+  "%1RM → reps (Nuzzo)": "%1RM → kartojimai (Nuzzo)",
   "Real lifts on the graph": "Tikri kėliniai grafike",
   "Setup notes": "Pasiruošimo užrašai",
   "Pair with": "Derinti su",
