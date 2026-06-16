@@ -2887,9 +2887,9 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
 .plan-tbl th { text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.7rem 2px 0; }
 .plan-tbl td { padding: 2px 0.7rem 2px 0; border-top: 1px solid var(--line); }
 .plan-blurb { font-size: 0.78rem; color: var(--text); margin: 0.5rem 0 0.1rem; line-height: 1.4; }
-/* Custom hard-set editor inside the plan popup (sets × reps). */
-.plan-custom { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.45rem; }
-.plan-cust-in { width: 3.4rem; font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); text-align: center; }
+/* Safety back-off editor inside the plan popup (a textarea of "weight reps" lines). */
+.plan-custom { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.45rem; }
+.plan-safety { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.85rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); resize: vertical; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
 /* Each guide topic is a collapsible <details> section. The summary is styled

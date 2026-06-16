@@ -12740,36 +12740,51 @@ function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; re
     return `${rm}RM`;
   };
   const adjReps = (n: number) => Math.max(1, n + dr); // apply the rep nudge
-  if (single) return `<b>${valAt(s.weightKg, true)}</b>${sup(adjReps(Number(s.repsLabel ?? s.reps)))}`;
+  if (single) {
+    // A single load may carry a rep RANGE ("15–30") or a non-numeric "max" (safety AMRAP).
+    const rr = bandNums(s.repsLabel);
+    const repsDisp = rr.length === 2 ? `${adjReps(rr[0]!)}–${adjReps(rr[1]!)}`
+      : (s.repsLabel && !Number.isFinite(Number(s.repsLabel))) ? s.repsLabel
+      : adjReps(Number(s.repsLabel ?? s.reps));
+    return `<b>${valAt(s.weightKg, true)}</b>${sup(repsDisp)}`;
+  }
   // reps band: repsLabel "lo–hi" = [heavyEndReps, lightEndReps].
   const r = bandNums(s.repsLabel);
   const repsHeavy = adjReps(r[0] ?? s.reps), repsLight = adjReps(r[1] ?? r[0] ?? s.reps);
   return `<b>${valAt(s.downKg, true)}</b>${sup(repsLight)}<span class="rx-wu-dash">–</span><b>${valAt(s.upKg, false)}</b>${sup(repsHeavy)}`;
 }
 
-// Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). "Entered"
-// keeps the typed weight × reps; the others prescribe a per-set rep sequence, each set
-// loaded at the weight for that rep target (from 1RM). Device-local pref.
-interface WorksetPlan { id: string; label: string; blurb: string; repsSeq: number[] | null }
+// Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). Each plan is
+// a TIER: the load = the weight you could do `rm` times (its rep-max), do a rep RANGE for
+// `sets` sets. "Entered" keeps the typed set; "Safety" is a user-typed back-off list (fixed
+// kg per line, incl. "max"). Device-local pref. (Owner redesign, replacing the old schemes.)
+interface WorksetPlan { id: string; label: string; blurb: string; rm: number; repsLo: number; repsHi: number; sets: number }
 const WORKSET_PLANS: WorksetPlan[] = [
-  { id: "entered", label: "Entered", blurb: "Just the set you typed — your actual work set, no scheme applied.", repsSeq: null },
-  { id: "5x5", label: "Strength 5×5", blurb: "Classic strength block — 5 sets of 5 (~80% of 1RM). A great all-round strength and size driver for novice→intermediate lifters.", repsSeq: [5, 5, 5, 5, 5] },
-  { id: "3x5", label: "Strength 3×5", blurb: "Leaner strength dose — 3 hard sets of 5. Less fatigue than 5×5; good when you're managing weekly volume.", repsSeq: [5, 5, 5] },
-  { id: "5x3", label: "Power 5×3", blurb: "Heavier, lower-rep power work — 5×3 (~87%). Builds top-end strength with crisp, fast, sub-maximal reps.", repsSeq: [3, 3, 3, 3, 3] },
-  { id: "peak", label: "Peaking 3·2·1", blurb: "Powerlifting peak — ascending sets of 3, 2, then 1 climbing toward a near-max single. Used in the last weeks before a test or meet.", repsSeq: [3, 2, 1] },
-  { id: "3x8", label: "Hypertrophy 3×8", blurb: "Muscle-building staple — 3×8 (~72%). Enough load to grow, enough reps for volume. The bread-and-butter of size work.", repsSeq: [8, 8, 8] },
-  { id: "4x10", label: "Volume 4×10", blurb: "Higher-volume hypertrophy — 4×10 (~65%). More total work per session; good for lagging muscles that respond to volume.", repsSeq: [10, 10, 10, 10] },
-  { id: "3x20", label: "Pump 3×20", blurb: "High-rep pump work for glutes, calves and accessories — 3×20 light. Metabolic stress + muscular endurance.", repsSeq: [20, 20, 20] },
-  { id: "2x30", label: "Endurance 2×30", blurb: "Very high-rep endurance — 2×30 very light. Conditioning, rehab, or a burnout finisher.", repsSeq: [30, 30] },
-  { id: "custom", label: "Custom", blurb: "Your own scheme — set the number of sets and reps below; the loads are computed off your 1RM.", repsSeq: null },
+  { id: "entered", label: "Entered", blurb: "Just the set you typed — your actual work set, no scheme applied.", rm: 0, repsLo: 0, repsHi: 0, sets: 1 },
+  { id: "end1", label: "Endurance 1", blurb: "A load you could do 30× (a 30RM), for 15–30 reps × 2 — muscular endurance / conditioning.", rm: 30, repsLo: 15, repsHi: 30, sets: 2 },
+  { id: "end2", label: "Endurance 2", blurb: "A 20RM load for 10–20 reps × 2 — endurance edging into hypertrophy.", rm: 20, repsLo: 10, repsHi: 20, sets: 2 },
+  { id: "str1", label: "Strength 1", blurb: "A 15RM load for 5–12 reps × 2 — hypertrophy-strength.", rm: 15, repsLo: 5, repsHi: 12, sets: 2 },
+  { id: "str2", label: "Strength 2", blurb: "A 10RM load for 3–8 reps × 2 — strength.", rm: 10, repsLo: 3, repsHi: 8, sets: 2 },
+  { id: "pow1", label: "Power 1", blurb: "An 8RM load for 1–3 reps × 2 — power.", rm: 8, repsLo: 1, repsHi: 3, sets: 2 },
+  { id: "pow2", label: "Power 2", blurb: "A 6RM load for 1–3 reps × 2 — heavy power.", rm: 6, repsLo: 1, repsHi: 3, sets: 2 },
+  { id: "elite", label: "Elite", blurb: "Near-max — a 1–5RM load for 1–5 reps × 2.", rm: 3, repsLo: 1, repsHi: 5, sets: 2 },
+  { id: "safety", label: "Safety", blurb: "Your own back-off list — type weight × reps per line (use “max” for AMRAP). Fixed kg, not computed from 1RM.", rm: 0, repsLo: 0, repsHi: 0, sets: 0 },
 ];
-// Owner-editable custom hard-set scheme (sets × reps) for the "Custom" tab.
-function getWorksetCustom(): { sets: number; reps: number } {
-  try { const o = JSON.parse(localStorage.getItem("colosseum.worksetCustom") ?? "null"); if (o && o.sets >= 1 && o.reps >= 1) return { sets: Math.min(12, o.sets | 0), reps: Math.min(50, o.reps | 0) }; } catch { /* ignore */ }
-  return { sets: 4, reps: 6 };
+// The user-typed "Safety" back-off list: fixed (weight, reps) lines; reps may be "max".
+function getSafetyList(): { weight: number; reps: string }[] {
+  try {
+    const a = JSON.parse(localStorage.getItem("colosseum.worksetSafety.v1") ?? "null");
+    if (Array.isArray(a)) return a.filter((x) => x && Number.isFinite(x.weight)).map((x) => ({ weight: Number(x.weight), reps: String(x.reps ?? "") }));
+  } catch { /* ignore */ }
+  return [{ weight: 40, reps: "5" }, { weight: 30, reps: "15" }, { weight: 25, reps: "max" }]; // the owner's example as the seed
 }
-function setWorksetCustom(sets: number, reps: number): void {
-  try { localStorage.setItem("colosseum.worksetCustom", JSON.stringify({ sets: Math.max(1, Math.min(12, sets | 0)), reps: Math.max(1, Math.min(50, reps | 0)) })); } catch { /* ignore */ }
+function safetyText(): string { return getSafetyList().map((s) => `${s.weight} ${s.reps}`).join("\n"); }
+function setSafetyText(text: string): void {
+  const list = text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^(-?\d+(?:\.\d+)?)\s*(?:kg)?\s*[x×*\s]\s*([a-z0-9]+)/i);
+    return m ? { weight: Number(m[1]), reps: m[2]!.toLowerCase() } : null;
+  }).filter((x): x is { weight: number; reps: string } => !!x);
+  try { localStorage.setItem("colosseum.worksetSafety.v1", JSON.stringify(list)); } catch { /* ignore */ }
 }
 function getWorksetPlan(): WorksetPlan {
   try { const v = localStorage.getItem("colosseum.worksetPlan"); return WORKSET_PLANS.find((p) => p.id === v) ?? WORKSET_PLANS[0]!; }
@@ -12777,19 +12792,15 @@ function getWorksetPlan(): WorksetPlan {
 }
 function setWorksetPlan(id: string): void { try { localStorage.setItem("colosseum.worksetPlan", id); } catch { /* ignore */ } }
 
-/** The working sets a hard-set plan prescribes for a 1RM: each set loaded at the weight
- *  for its rep target (plate-rounded); "Entered" keeps the typed set, "Custom" uses the
- *  owner's sets × reps. */
-function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number, bodyShare = 0): { weightKg: number; reps: number }[] {
-  const seq = plan.id === "custom" ? (() => { const c = getWorksetCustom(); return Array(c.sets).fill(c.reps); })() : plan.repsSeq;
-  if (seq == null) return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
-  // The load for a rep target is computed on the EFFECTIVE curve (orm + bodyShare), then the
-  // bodyweight share is peeled back so the displayed weight is ADDED. bodyShare 0 = bar lift,
-  // so weightForReps(orm, reps) is unchanged.
-  return seq.map((reps) => ({
-    weightKg: roundToIncrement((weightForReps(orm + bodyShare, reps, formula) ?? (workingWeightKg + bodyShare)) - bodyShare, increment),
-    reps,
-  }));
+/** The working sets a hard-set plan prescribes. A TIER plan loads every set at its rep-max
+ *  weight (`rm`) computed on the EFFECTIVE curve, peeled to ADDED kg (rule 49), and shows the
+ *  rep RANGE; "Entered" keeps the typed set; "Safety" returns the user's fixed back-off list. */
+function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number, bodyShare = 0): { weightKg: number; reps: number; repsLabel?: string }[] {
+  if (plan.id === "entered") return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
+  if (plan.id === "safety") return getSafetyList().map((s) => ({ weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }));
+  const added = roundToIncrement((weightForReps(orm + bodyShare, plan.rm, formula) ?? (workingWeightKg + bodyShare)) - bodyShare, increment);
+  const repsLabel = plan.repsLo === plan.repsHi ? `${plan.repsLo}` : `${plan.repsLo}–${plan.repsHi}`;
+  return Array.from({ length: Math.max(1, plan.sets) }, () => ({ weightKg: added, reps: plan.repsLo, repsLabel }));
 }
 
 // Last calc state captured by renderWarmup, so the plan popups can build their preview
@@ -12868,12 +12879,11 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
   const bwl = c.bwl ?? 0;
   const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment, bwl);
   // kg shown = ADDED weight; % computed on the EFFECTIVE load (added + bodyweight share).
-  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="muted">${c.orm + bwl > 0 ? Math.round(((s.weightKg + bwl) / (c.orm + bwl)) * 100) : 0}%</td></tr>`).join("");
-  // The Custom tab adds editable sets × reps inputs (owner: manipulate the numbers too).
+  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${c.orm + bwl > 0 ? Math.round(((s.weightKg + bwl) / (c.orm + bwl)) * 100) : 0}%</td></tr>`).join("");
+  // The Safety tab is a user-typed back-off list: one "weight reps" line each (reps may be "max").
   let customEdit = "";
-  if (cur.id === "custom") {
-    const cc = getWorksetCustom();
-    customEdit = `<div class="plan-custom"><input type="number" class="plan-cust-in" data-worksetcustom="sets" min="1" max="12" step="1" value="${cc.sets}" aria-label="Sets"> sets × <input type="number" class="plan-cust-in" data-worksetcustom="reps" min="1" max="50" step="1" value="${cc.reps}" aria-label="Reps"> reps</div>`;
+  if (cur.id === "safety") {
+    customEdit = `<div class="plan-custom"><textarea class="plan-safety" data-worksetsafety rows="4" placeholder="40 5&#10;30 15&#10;25 max" aria-label="Safety back-off sets">${escapeHtml(safetyText())}</textarea><div class="plan-blurb muted">One set per line: weight reps (“max” = AMRAP). Fixed kg.</div></div>`;
   }
   return `<div class="plan-tabs">${tabs}</div>` + customEdit +
     `<table class="plan-tbl"><thead><tr><th>Set</th><th>kg</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${rows}</tbody></table>` +
@@ -15417,20 +15427,16 @@ async function init() {
     }
     if (!menu.contains(t)) closePlanPopup();
   });
-  // Custom hard-set inputs inside the popup (sets × reps): commit on blur, refresh the
-  // popup table + the owning view (owner: manipulate the numbers).
+  // Safety back-off list inside the popup (a textarea of "weight reps" lines): commit on
+  // blur, refresh the popup table + the owning view.
   document.addEventListener("change", (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-worksetcustom]");
+    const inp = (e.target as HTMLElement).closest<HTMLTextAreaElement>("[data-worksetsafety]");
     const menu = document.getElementById("planPopup");
     if (!inp || !menu) return;
-    const sets = Number(menu.querySelector<HTMLInputElement>('[data-worksetcustom="sets"]')?.value);
-    const reps = Number(menu.querySelector<HTMLInputElement>('[data-worksetcustom="reps"]')?.value);
-    if (sets >= 1 && reps >= 1) {
-      setWorksetCustom(sets, reps);
-      setWorksetPlan("custom");
-      lastWuRerender();
-      menu.innerHTML = planPopupHtml("workset");
-    }
+    setSafetyText(inp.value);
+    setWorksetPlan("safety");
+    lastWuRerender();
+    menu.innerHTML = planPopupHtml("workset");
   });
 
   setupBottomNav();
