@@ -3032,6 +3032,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    tight labels, small rounding (rule #design / #cram). */
 .lt-wrap { display: flex; flex-direction: column; gap: 0.4rem; margin: 0 0 0.6rem; padding: 0 0 0.6rem; border-bottom: 2px solid var(--line); }
 .lt-empty { font-size: 0.82rem; margin: 0.2rem 0; }
+/* Focus dials at the top of the card (only for a focus lift): the weekly-set TARGET stepper,
+   the avg done, and the set INTENSITY pill — moved here from the Priorities-row detail. Reuses
+   the .prio-* control styles; this is just the row layout. */
+.lt-focus { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.6rem; }
+.lt-focus .prio-eff-inline { display: inline-flex; align-items: center; gap: 0.4rem; }
 .lt-sec { display: flex; flex-direction: column; gap: 0.25rem; }
 .lt-sec-h { font-size: 0.68rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 /* Working weights: ONE horizontally-scrolling row (swipe sideways, like the athlete
@@ -5009,12 +5014,16 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .prio-name { font-size: 0.82rem; font-weight: 700; color: var(--accent); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* Body-part: a small muted sub-line under the name (was inline, squeezing the name). */
 .prio-mg { font-size: 0.6rem; line-height: 1; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Open-card button inside the expanded detail (replaces the old name→card tap). */
+/* Open-card ⓘ — a compact icon button in the row header, right after the title. Opens the
+   full exercise card (where the target + intensity dials now live). */
 .prio-opencard {
-  align-self: flex-start; font: inherit; font-size: 0.66rem; font-weight: 600; cursor: pointer;
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--tap-min); min-height: var(--tap-min); padding: 0 6px;
+  font: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer;
   color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent);
-  border-radius: var(--r-pill); padding: 2px 8px; min-height: var(--tap-min);
+  border-radius: var(--r-pill);
 }
+.prio-opencard:hover { background: var(--accent); color: #fff; }
 /* Group/pattern priorities are marked only by the ✦ diamond (gold = combinable mix,
    teal = comparable pattern) — no row tint or coloured border (owner). */
 .prio-grp-mark { flex: none; font-size: 0.7rem; align-self: center; }

@@ -10940,7 +10940,6 @@ function renderWorkoutPlan(): void {
   const rowHtml = (ex: string): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
-    const avg = exerciseMonthAvg(user, ex);
     const st = staleOf(ex);
     const agoTxt = st.daysAgo >= 999 ? "never" : st.daysAgo === 0 ? "today" : `${st.daysAgo}d`;
     const staleWarn = st.daysAgo >= 21 || st.drop >= 8;
@@ -10972,28 +10971,11 @@ function renderWorkoutPlan(): void {
         }).join("") + `</div>`
       : "";
     const gk = groupKind(ex); // combinable / comparable group → highlight the row
-    // The recency · avg · weekly-target stepper used to sit on the main row and pushed
-    // it onto a second line. They now live in the ▸ dropdown so the row is ONE line
-    // (caret · title · effort · ✕); the target also gets a label there since it's no
-    // longer self-evident from position.
-    const statsHtml =
-      `<div class="prio-stats">` +
-      staleHtml +
-      `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${avg.toFixed(1)}/wk</span>` +
-      `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
-        `<span class="prio-tgt-lbl muted">target</span>` +
-        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
-        `<span class="prio-tgt-val" title="Weekly sets target">${fmtTarget(e.target)}</span>` +
-        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
-      `</span></div>`;
-    // Set INTENSITY — the target sets count assumes HARD sets; this says how hard each
-    // set needs to be (Hard near failure · Mid 3–8 RIR · Half ½ max reps for maintenance),
-    // defaulting from the level. Lives in the detail panel so the row stays one line.
-    const eff = effortOf(e);
-    const effHtml =
-      `<div class="prio-eff-row"><span class="prio-eff-lbl muted">intensity</span>` +
-      `<button type="button" class="prio-effort prio-effort-${eff}" data-prioeffort="${escapeHtml(ex)}" title="${EFFORT_TIP[eff]} Tap to cycle Hard → Mid → Half.">${EFFORT_LABEL[eff]}</button>` +
-      `<span class="prio-eff-hint muted">${EFFORT_HINT[eff]}</span></div>`;
+    // Only the recency badge stays in the row's detail now — the weekly TARGET stepper and
+    // the set INTENSITY pill moved INTO the full exercise card (data-planopen overlay), where
+    // they sit beside the working weights / warm-up they prescribe. The Open-card button
+    // moved up next to the title (header), so the detail is just recency · goal · related.
+    const statsHtml = `<div class="prio-stats">${staleHtml}</div>`;
     // Drag handle — grab to reorder the focus lifts into a custom order (persisted as
     // `order`). touch-action:none (CSS) so dragging the grip doesn't scroll the popup.
     // Drag grip — only in "Drag" (manual) sort mode; touch-action:none (CSS) so dragging
@@ -11009,6 +10991,9 @@ function renderWorkoutPlan(): void {
       `<span class="prio-main-name">${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
       `<span class="prio-name">${escapeHtml(displayName(ex))}</span></span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
+      // Open-card ⓘ sits right next to the title (always visible, no need to expand) — opens
+      // the full exercise card where the target + intensity dials now live (data-planopen).
+      `<button type="button" class="prio-opencard" data-planopen="${escapeHtml(ex)}" title="Open the full exercise card — how to train, target sets, intensity, warm-up, working weights…" aria-label="Open card">ⓘ</button>` +
       // CRAM (owner): ONE control around the tags for BOTH dials — rank + effort show as
       // small TAGS, and tapping opens a single pick-menu with both sections. Replaces the
       // two full-size pills.
@@ -11017,11 +11002,9 @@ function renderWorkoutPlan(): void {
         `<span class="prio-tag prio-level-${e.level}">${PRIORITY_LABEL[e.level]}</span>` +
       `</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
-      // The row tap now EXPANDS; the full exercise card is reached from a small button
-      // inside the detail (data-planopen — the old name-tap action).
+      // The row tap EXPANDS to recency + goal + related; target/intensity moved to the card.
       (open ? `<div class="prio-detail">` +
-        `<button type="button" class="prio-opencard" data-planopen="${escapeHtml(ex)}" title="Open the full exercise card (how to train, warm-up, working weights…)">ⓘ Open card</button>` +
-        `${statsHtml}${effHtml}${goalHtml}${relPanel}</div>` : "") +
+        `${statsHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
   // FREE-SORT state (owner): in Drag mode the list is a FLAT, freely-draggable list.
@@ -11541,6 +11524,27 @@ function paintExInfo(name: string): void {
 function liftTrainingHtml(name: string): string {
   const formula = currentFormula();
   const user = els.athlete.value;
+  // FOCUS dials — moved here from the Priorities-row detail (owner): when this lift is one
+  // of the athlete's focus lifts, the card shows its weekly-set TARGET stepper and its set
+  // INTENSITY pill, beside the avg sets/week actually done. Reuses the same data-priotgt /
+  // data-prioeffort markup so the existing global handlers drive it (the intensity handler
+  // also calls refreshExerciseInfo so the pill updates here). Empty for non-focus lifts.
+  const focusE = athletePriorities(user)[name];
+  const focusEff = focusE ? effortOf(focusE) : "hard";
+  const focusHtml = focusE
+    ? `<div class="lt-focus">` +
+        `<span class="prio-target" title="Weekly sets you want to do — tap −/+ to tune">` +
+          `<span class="prio-tgt-lbl muted">target</span>` +
+          `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(name)}" data-d="-1" aria-label="Fewer">−</button>` +
+          `<span class="prio-tgt-val">${fmtTarget(focusE.target)}</span>` +
+          `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(name)}" data-d="1" aria-label="More">+</button>` +
+        `</span>` +
+        `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${exerciseMonthAvg(user, name).toFixed(1)}/wk</span>` +
+        `<span class="prio-eff-inline"><span class="prio-eff-lbl muted">intensity</span>` +
+          `<button type="button" class="prio-effort prio-effort-${focusEff}" data-prioeffort="${escapeHtml(name)}" title="${EFFORT_TIP[focusEff]} Tap to cycle Hard → Mid → Half.">${EFFORT_LABEL[focusEff]}</button>` +
+          `<span class="prio-eff-hint muted">${EFFORT_HINT[focusEff]}</span></span>` +
+      `</div>`
+    : "";
   const loggedE1rm = currentLiftE1RM(user, name, formula);
   // A manual weight×reps typed on the card OVERRIDES the logged best — so a never-logged
   // lift can still compute a 1RM + warm-up + working sets right here (PB-21 parity).
@@ -11589,6 +11593,7 @@ function liftTrainingHtml(name: string): string {
     // still works) + the always-editable setup notes.
     const note = setupNoteFor(name);
     return `<div class="lt-wrap">` +
+      focusHtml +
       sec("Calculate", calcRow) +
       sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
       `</div>`;
@@ -11729,6 +11734,7 @@ function liftTrainingHtml(name: string): string {
 
   const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
+    focusHtml +
     // Logged lift → the 1RM-fit graph IS the calculator (slider + real points on the
     // Nuzzo curve). Never-logged-but-typed → the kg×reps mini-calc + the plain curve.
     (hasLogged
@@ -13777,7 +13783,7 @@ async function init() {
       const ex = effBtn.dataset.prioeffort;
       const cur = effortOf(pri[ex]!);
       pri[ex]!.effort = EFFORT_LEVELS[(EFFORT_LEVELS.indexOf(cur) + 1) % EFFORT_LEVELS.length]!;
-      savePriorities(); renderWorkoutPlan(); return;
+      savePriorities(); renderWorkoutPlan(); refreshExerciseInfo(); return;
     }
     // Target −/+ stepper — update IN PLACE (no re-sort, so the row doesn't jump as you tap).
     // Sub-1 steps of 0.5 below 2 (0.5 = one set / 2 weeks); whole sets above.
