@@ -17331,21 +17331,21 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // Quick title toolbar (graph + history identical): + add an exercise · ✕ remove all ·
   // = match the OTHER view's selection. Reuse the existing capture handlers (data-title*).
   const otherLabel = remove === "graph" ? "history" : "graph";
-  // The +/✕/= toolbar is only useful once something is picked; when EMPTY the title
-  // carries the pick prompt instead (emptyCta below), so drop the toolbar then.
-  const titleTools = remove && sel.length
+  // The +/✕/= toolbar stays even when EMPTY (owner: "when all exercises are removed I
+  // should still see the title, all the buttons and the pick slider"), so you can always
+  // add / match without first finding the picker. ✕ no-ops when nothing's picked.
+  const titleTools = remove
     ? `<span class="wa-title-tools">` +
         `<button type="button" class="wa-title-tool" data-titlepicker="${remove}" title="Add an exercise" aria-label="Add an exercise">+</button>` +
         `<button type="button" class="wa-title-tool" data-titledeselect="${remove}" title="Remove all — clear the ${remove === "graph" ? "graph" : "history"} selection" aria-label="Remove all">✕</button>` +
         `<button type="button" class="wa-title-tool" data-titlematch="${remove}" title="Match the ${otherLabel} selection" aria-label="Match ${otherLabel}">=</button>` +
       `</span>`
     : "";
-  // Nothing picked → the title ITSELF is the pick prompt: a full-width, in-flow button
-  // that FILLS the title (so it can't collapse) and opens the picker drawer. Owner:
-  // "move this inside the title if there are no exercises so it doesn't collapse" — this
-  // replaces the bottom-of-graph note (PB-20) with an in-title affordance.
+  // Nothing picked → the title ITSELF is the pick prompt: a button that FILLS the title
+  // (so it can't collapse) and opens the picker drawer. Shown ALONGSIDE the +/✕/= tools
+  // and the Pick tab so the empty state still carries the title + every control (owner).
   const emptyCta = remove && sel.length === 0
-    ? `<button type="button" class="wa-title-pickcta" data-titlepicker="${remove}">No lifts picked — tap to pick.</button>`
+    ? `<button type="button" class="wa-title-pickcta" data-titlepicker="${remove}">Select an exercise</button>`
     : "";
   // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
   // removing a lift never changes the title's height — otherwise the reflow shoves the

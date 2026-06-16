@@ -203,7 +203,7 @@ const LT: Record<string, string> = {
   // ---- Personal benchmarks ----
   "Your benchmarks": "Jūsų etalonai",
   "Benchmarks": "Etalonai",
-  "No lifts picked — tap to pick.": "Nepasirinkta pratimų — bakstelėkite, kad pasirinktumėte.",
+  "Select an exercise": "Pasirinkite pratimą",
   "+ add": "+ pridėti",
   "No benchmarks yet — set your own targets for this lift.":
     "Dar nėra etalonų — nustatykite savo tikslus šiam pratimui.",
