@@ -11657,7 +11657,7 @@ function liftTrainingHtml(name: string): string {
     lastWuRerender = () => { if (currentExInfo) paintExInfo(currentExInfo); };
   }
   const warmRows = hs
-    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm - bodyShare, hs.weightKg - bodyShare, hs.reps, formula, 2.5, bodyShare)}</div>`
+    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm - bodyShare, hs.weightKg - bodyShare, hs.reps, formula, 2.5, bodyShare, name)}</div>`
     : `<p class="muted lt-mini">—</p>`;
 
   // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
@@ -12689,32 +12689,61 @@ function cycleWarmupValMode(): void {
 function bandNums(label: string | undefined): number[] {
   return (label ?? "").replace("%", "").split("–").map((x) => Number(x)).filter((n) => Number.isFinite(n));
 }
+// Per-set warm-up/work nudges (owner: "+/- buttons to make each set heavier/lighter and
+// adjust reps"). A device-local delta per row, keyed by exercise|plan|kind|index, applied
+// on top of the computed set: dw = weight steps (× the increment), dr = rep steps. Keying by
+// plan means a nudge belongs to that plan; switching plans starts fresh (cleared on reset).
+const WARMUP_ADJ_KEY = "colosseum.warmupAdj.v1";
+function warmupAdjAll(): Record<string, { dw: number; dr: number }> {
+  try { const o = JSON.parse(localStorage.getItem(WARMUP_ADJ_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+}
+function getWarmupAdj(key: string): { dw: number; dr: number } {
+  const a = warmupAdjAll()[key]; return { dw: a?.dw ?? 0, dr: a?.dr ?? 0 };
+}
+function bumpWarmupAdj(key: string, field: "dw" | "dr", delta: number): void {
+  const all = warmupAdjAll(); const cur = all[key] ?? { dw: 0, dr: 0 };
+  cur[field] = (cur[field] ?? 0) + delta;
+  if (cur.dw === 0 && cur.dr === 0) delete all[key]; else all[key] = cur;
+  try { localStorage.setItem(WARMUP_ADJ_KEY, JSON.stringify(all)); } catch { /* ignore */ }
+}
+/** The 4 per-row nudge buttons (− + weight, − + reps) for one warm-up/work row. */
+function warmupAdjButtons(key: string): string {
+  return `<span class="rx-wu-adj">` +
+    `<button type="button" class="rx-wu-bump" data-wuadj="${escapeHtml(key)}|dw|-1" title="Lighter" aria-label="Lighter">−</button>` +
+    `<button type="button" class="rx-wu-bump" data-wuadj="${escapeHtml(key)}|dw|1" title="Heavier" aria-label="Heavier">+</button>` +
+    `<button type="button" class="rx-wu-bump rx-wu-bump-r" data-wuadj="${escapeHtml(key)}|dr|-1" title="Fewer reps" aria-label="Fewer reps">−ʳ</button>` +
+    `<button type="button" class="rx-wu-bump rx-wu-bump-r" data-wuadj="${escapeHtml(key)}|dr|1" title="More reps" aria-label="More reps">+ʳ</button>` +
+    `</span>`;
+}
 /** One warm-up row's value^reps cell for the current value mode, paired so the LIGHT end
  * shows more reps and the HEAVY end fewer (owner: "increasing the weight decreases the
  * reps" — never the ambiguous 25–55 ^10–20). Bands render as "light^more–heavy^fewer";
  * a single load (work set) renders as one "value^reps". */
-function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula, bodyShare = 0): string {
+function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula, bodyShare = 0, dwKg = 0, dr = 0): string {
   const sup = (r: string | number) => `<sup class="rx-wu-reps">${r}</sup>`;
   const single = s.downKg === s.upKg;
+  const adjusted = dwKg !== 0 || dr !== 0; // a per-set nudge → recompute %/RM from the new load
   // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit. INVARIANT: %1RM
   // and RM are computed on the EFFECTIVE load (added kg + bodyweight share), the kg shown is
   // the ADDED weight. So a pull-up's "20%" is 20% of (added + bodyweight), not of the plate.
-  const valAt = (kg: number, lightEnd: boolean): string => {
+  const valAt = (kg0: number, lightEnd: boolean): string => {
+    const kg = kg0 + dwKg; // apply the weight nudge
     if (mode === "kg") return `${Math.round(kg * 100) / 100}`;
     if (mode === "pct") {
       const p = bandNums(s.pctLabel);
-      const pct = p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round(((kg + bodyShare) / (orm + bodyShare)) * 100);
+      const pct = !adjusted && p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round(((kg + bodyShare) / (orm + bodyShare)) * 100);
       return `${pct}%`;
     }
     // rm: the load as a rep-max — light load = MORE max reps. Prefer the precomputed band.
     const n = bandNums(s.maxRepsLabel); // [heavyEnd, lightEnd]
-    const rm = n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm + bodyShare, kg + bodyShare, formula) ?? s.reps));
+    const rm = !adjusted && n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm + bodyShare, kg + bodyShare, formula) ?? s.reps));
     return `${rm}RM`;
   };
-  if (single) return `<b>${valAt(s.weightKg, true)}</b>${sup(s.repsLabel ?? s.reps)}`;
+  const adjReps = (n: number) => Math.max(1, n + dr); // apply the rep nudge
+  if (single) return `<b>${valAt(s.weightKg, true)}</b>${sup(adjReps(Number(s.repsLabel ?? s.reps)))}`;
   // reps band: repsLabel "lo–hi" = [heavyEndReps, lightEndReps].
   const r = bandNums(s.repsLabel);
-  const repsHeavy = r[0] ?? s.reps, repsLight = r[1] ?? r[0] ?? s.reps;
+  const repsHeavy = adjReps(r[0] ?? s.reps), repsLight = adjReps(r[1] ?? r[0] ?? s.reps);
   return `<b>${valAt(s.downKg, true)}</b>${sup(repsLight)}<span class="rx-wu-dash">–</span><b>${valAt(s.upKg, false)}</b>${sup(repsHeavy)}`;
 }
 
@@ -12772,14 +12801,20 @@ let lastWuRerender: () => void = () => {};
 
 /** The shared warm-up + working-set table (warm-up ramp continuing into the hard sets) —
  *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
-function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0): string {
+function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0, ctx = ""): string {
   const mode = getWarmupValMode();
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
+  // Per-set nudge (owner: +/- buttons): a device-local delta per row, applied here and shown
+  // with the 4 buttons. Keyed by ctx|plan|kind|idx; only when ctx is set (the card passes the
+  // exercise; the Formulas calc passes "" → no buttons there).
+  const wuPlan = getWarmupPlan(), wsPlan = getWorksetPlan().id;
+  const adjFor = (kind: string, plan: string, i: number) => ctx ? getWarmupAdj(`${ctx}|${plan}|${kind}|${i}`) : { dw: 0, dr: 0 };
+  const btns = (kind: string, plan: string, i: number) => ctx ? warmupAdjButtons(`${ctx}|${plan}|${kind}|${i}`) : "";
   // ONE value column (owner): each row is value^reps in the toggled unit (kg / %1RM / RM),
   // paired so the lighter end carries more reps. No "kg" text — the column header is the unit.
-  const wuRows = wu.map((s) => `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula, bodyweightLoad)}</td></tr>`).join("");
+  const wuRows = wu.map((s, i) => { const a = adjFor("wu", wuPlan, i); return `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula, bodyweightLoad, a.dw * increment, a.dr)}${btns("wu", wuPlan, i)}</td></tr>`; }).join("");
   const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment, bodyweightLoad);
-  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula, bodyweightLoad)} <span class="rx-wu-worktag">work</span></td></tr>`).join("");
+  const workRows = sets.map((s, i) => { const a = adjFor("ws", wsPlan, i); return `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula, bodyweightLoad, a.dw * increment, a.dr)} <span class="rx-wu-worktag">work</span>${btns("ws", wsPlan, i)}</td></tr>`; }).join("");
   return (wu.length || sets.length)
     ? `<table class="rx-wu"><thead><tr><th>Set · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
     : "";
@@ -13512,6 +13547,19 @@ async function init() {
     debounceCardOrmRender();
   });
   els.exInfoBody.addEventListener("click", (e) => {
+    // Per-set warm-up nudge buttons (− + weight, − + reps): bump the row's delta + re-render.
+    const bump = (e.target as HTMLElement).closest<HTMLElement>("[data-wuadj]");
+    if (bump?.dataset.wuadj) {
+      e.preventDefault(); e.stopPropagation();
+      const idx = bump.dataset.wuadj.lastIndexOf("|");
+      const delta = Number(bump.dataset.wuadj.slice(idx + 1));
+      const rest = bump.dataset.wuadj.slice(0, idx);
+      const fidx = rest.lastIndexOf("|");
+      const field = rest.slice(fidx + 1) as "dw" | "dr";
+      bumpWarmupAdj(rest.slice(0, fidx), field, delta);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
     // "fit" chip: snap the 1RM to the value that best fits the logged sets to the curve.
     const fitBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-cardorm="best"]');
     if (fitBtn?.dataset.best) {

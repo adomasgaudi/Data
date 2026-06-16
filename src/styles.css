@@ -2867,6 +2867,14 @@ table.rx-wu tr.rx-wu-general td, table.rx-wu tr.rx-wu-ramp td { color: var(--mut
 /* The warm-up table continues into the WORK sets (owner) — set off with an accent rule. */
 table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top: 1px solid var(--accent); }
 .rx-wu-worktag { color: var(--accent); font-size: 0.7rem; font-weight: 700; }
+/* Per-set nudge buttons (− + weight, −ʳ +ʳ reps) on the right of each row — compact pressable
+   pills (owner: make each set heavier/lighter or adjust reps). The ʳ marks the rep pair. */
+.rx-wu-adj { float: right; display: inline-flex; gap: 3px; margin-left: 0.5rem; }
+.rx-wu-bump { font: inherit; font-size: 0.8rem; font-weight: 700; line-height: 1; min-width: 22px; min-height: 22px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); padding: 0 4px; }
+.rx-wu-bump:hover, .rx-wu-bump:active { border-color: var(--accent); color: var(--accent); }
+.rx-wu-bump-r { color: var(--muted); }
 /* Hard-set plan pill sits right after the "Work sets" label (not pushed to the edge). */
 .rx-ws-plan { margin-left: 0; }
 /* Tabbed plan POPUP (owner): warm-up / hard-set type tabs → a live table → an explanation. */
