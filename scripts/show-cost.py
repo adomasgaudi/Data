@@ -190,7 +190,7 @@ def current_version():
        src/versionName.ts; the name tables are duplicated here, so if the owner adds a
        MINOR update both."""
     ESPADA = ["Glotonería", "Fornicarás", "Brujería", "Pantera", "Santa Teresa",
-              "Murciélago", "Tiburón", "Arrogante", "Los Lobos", "Kyōka Suigetsu"]
+              "Murciélago", "Tiburón", "Arrogante", "Los Lobos", "Suigetsu"]
     CAPTAIN = ["Sōgyo no Kotowari", "Ashisogi Jizō", "Nozarashi", "Hyōrinmaru", "Tachikaze",
                "Katen Kyōkotsu", "Tenken", "Senbonzakura", "Sakanade", "Minazuki",
                "Kinshara", "Suzumebachi", "Ryūjin Jakka"]

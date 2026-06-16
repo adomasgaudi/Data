@@ -28,7 +28,7 @@ export const ESPADA_NAMES: readonly string[] = [
   "Tiburón", //        minor 6 · Espada 3 — Harribel
   "Arrogante", //      minor 7 · Espada 2 — Baraggan
   "Los Lobos", //      minor 8 · Espada 1 — Starrk
-  "Kyōka Suigetsu", // minor 9 · AIZEN — above the Espada, the v2 finale
+  "Suigetsu", //       minor 9 · AIZEN — above the Espada, the v2 finale (shown "Suigetsu")
 ];
 
 /** MAJOR 3 minors → Gotei-13 captain zanpakutō, reverse squad order (13 → 1). */
