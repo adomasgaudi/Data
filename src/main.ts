@@ -18353,13 +18353,17 @@ function graphCarouselLifts(): string[] {
 /** Draw ONE single-exercise, single-athlete chart into `container`, reusing the full
  * graph engine + the current global options (so a slide looks like the full graph minus
  * the multi-select). */
-/** Graph-TYPE toggle (owner): a pill next to the exercise graph that flips the whole plot
- * between the weight-over-time graph (default) and the reps × weight scatter. Drives the
- * SAME state as the Options-menu "Reps versus weight" toggle (one source of truth, two
- * surfaces), so they stay in lockstep; the existing data-warvw handler does the flip. */
-function graphTypeToggleHtml(): string {
+/** Graph-TYPE TABS (owner): a 2-tab strip sitting ON TOP of the plot (like the
+ * Stats/Graph/History tabs) that flips the whole graph between the weight-over-time view
+ * and the reps × weight scatter. Drives the SAME state as the Options-menu "Reps versus
+ * weight" toggle (one source of truth). Each tab SETS its mode (data-warvwset); tabs are an
+ * explicit owner request here (overriding the usual single cycling pill). */
+function graphTypeTabsHtml(): string {
   const on = S.waRepsVsWeight;
-  return `<button type="button" class="wa-clear wa-graph-typebtn${on ? " is-on" : ""}" data-warvw="1" aria-pressed="${on}" title="Switch between the weight-over-time graph and the reps × weight scatter">${on ? "✦ Reps×kg" : "↗ vs time"}</button>`;
+  return `<div class="wa-graphtabs" role="tablist" aria-label="Graph type">` +
+    `<button type="button" class="wa-graphtab${on ? "" : " is-on"}" data-warvwset="time" role="tab" aria-selected="${!on}" title="Plot weight / strength over time">↗ Over time</button>` +
+    `<button type="button" class="wa-graphtab${on ? " is-on" : ""}" data-warvwset="rvw" role="tab" aria-selected="${on}" title="Plot every set at weight (x) × reps (y)">✦ Reps × kg</button>` +
+  `</div>`;
 }
 function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   waGraphConfig.formula = currentFormula();
@@ -18567,6 +18571,7 @@ function renderGraphMini(): void {
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
   host.innerHTML =
     `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button></div>` +
+    graphTypeTabsHtml() +
     `<div class="gmini-stagewrap">` +
       `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
       // On-chart corner toolbar (top-right edge), like the multi-graph view: the chart's
@@ -18578,7 +18583,6 @@ function renderGraphMini(): void {
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
-      graphTypeToggleHtml() +
       optionsFold +
       `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">Multi ▾</button>` +
     `</div>`;
@@ -18673,7 +18677,6 @@ function renderWaGraph(): void {
     // Graph options · Legend (relocated in below) · Compare share ONE row — the fold's
     // metric summary truncates so Compare never wraps to its own line.
     `<div class="wa-graph-ctrls">` +
-    graphTypeToggleHtml() +
     graphOptionsFoldHtml(graphExercises, box) +
     compareBtn +
     // "Single ▴" — mirror of the carousel's "Multi ▾": flips the full multi graph back
@@ -18695,7 +18698,7 @@ function renderWaGraph(): void {
   let preservedLegend: Element | null = null;
   if (!chartBox) {
     box.innerHTML =
-      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
+      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphTabs"></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
     // The legend node was relocated (into the chart overlay or the bar); the SVG
@@ -18719,6 +18722,11 @@ function renderWaGraph(): void {
     overlayEl = box.querySelector<HTMLElement>("#waGraphOverlay");
   }
   if (overlayEl) overlayEl.innerHTML = overlayHtml;
+  // Graph-type tabs sit ON TOP of the plot; rebuilt each render so their active state
+  // tracks the toggle even on the partial (bar-only) update path.
+  let tabsEl = box.querySelector<HTMLElement>("#waGraphTabs");
+  if (!tabsEl && chartBox) { chartBox.insertAdjacentHTML("beforebegin", `<div id="waGraphTabs"></div>`); tabsEl = box.querySelector<HTMLElement>("#waGraphTabs"); }
+  if (tabsEl) tabsEl.innerHTML = graphTypeTabsHtml();
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
@@ -19885,6 +19893,8 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // "Reps versus weight" scatter mode + its best-fit line.
+    const rvwTab = t.closest<HTMLElement>("[data-warvwset]");
+    if (rvwTab) { S.waRepsVsWeight = rvwTab.dataset.warvwset === "rvw"; scheduleWaGraph(); return; }
     if (t.closest<HTMLElement>("[data-warvw]")) { S.waRepsVsWeight = !S.waRepsVsWeight; scheduleWaGraph(); return; }
     if (t.closest<HTMLElement>("[data-warvwfit]")) { S.waRepsVsWeightFit = !S.waRepsVsWeightFit; scheduleWaGraph(); return; }
     // "Per bodyweight (×BW)" lens (pill). Auto-Fit after the rescale so the data fills

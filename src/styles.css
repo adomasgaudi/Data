@@ -4629,11 +4629,17 @@ html.wa-pick-dragging, html.wa-pick-dragging * { -webkit-user-select: none; user
 .wa-graph-ctrls { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.4rem 0.5rem; width: 100%; min-width: 0; }
 .wa-graph-ctrls .wa-graph-fold { flex: 0 1 auto; min-width: 4.5rem; }
 .wa-graph-ctrls .wa-graph-compare-btn { flex: 0 0 auto; }
-/* Graph-type toggle (vs-time ⇄ reps×weight) — a clear control sitting first in the row;
-   the on (reps×weight) state fills accent like the Compare toggle. */
-.wa-graph-typebtn { flex: 0 0 auto; white-space: nowrap; }
-.wa-graph-typebtn.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
-.gmini-foot .wa-graph-typebtn { font-size: 0.72rem; padding: 3px 8px; }
+/* Graph-type TABS — a 2-tab strip sitting ON TOP of the plot (owner: "like tabs"), so you
+   flip the whole graph between over-time and reps×weight. Active tab fills accent like the
+   Stats/Graph/History tabs; sits flush above the chart. */
+.wa-graphtabs { display: flex; gap: 4px; margin: 0.1rem 0 0.3rem; }
+.wa-graphtab {
+  flex: 0 0 auto; white-space: nowrap; cursor: pointer; font: inherit; font-size: 0.76rem; font-weight: 700;
+  min-height: var(--tap-min); display: inline-flex; align-items: center; padding: 4px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted);
+}
+.wa-graphtab:hover { border-color: var(--accent); color: var(--accent); }
+.wa-graphtab.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
 /* "Single ▴" toggle sits at the FAR RIGHT of the bar — the same bottom-right spot the
    carousel's "Multi ▾" button occupies, so the single ⇄ multi switch stays put. */
 .wa-graph-ctrls .wa-graph-single { flex: 0 0 auto; margin-left: auto; }
