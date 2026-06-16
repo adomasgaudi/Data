@@ -12617,6 +12617,50 @@ function getWarmupPlan(): WarmupPlan {
 }
 function setWarmupPlan(p: WarmupPlan): void { try { localStorage.setItem("colosseum.warmupPlan", p); } catch { /* ignore */ } }
 
+// How the warm-up loads are SHOWN (owner: one value column + a toggle): the bar weight
+// in kg, the % of 1RM, or the load as a rep-max (RM). Reps ride each value as weight^reps.
+type WarmupValMode = "kg" | "pct" | "rm";
+const WARMUP_VAL_MODES: WarmupValMode[] = ["kg", "pct", "rm"];
+const WARMUP_VAL_LABEL: Record<WarmupValMode, string> = { kg: "kg", pct: "%1RM", rm: "RM" };
+function getWarmupValMode(): WarmupValMode {
+  try { const v = localStorage.getItem("colosseum.warmupValMode"); return v === "pct" || v === "rm" ? v : "kg"; }
+  catch { return "kg"; }
+}
+function cycleWarmupValMode(): void {
+  const i = WARMUP_VAL_MODES.indexOf(getWarmupValMode());
+  try { localStorage.setItem("colosseum.warmupValMode", WARMUP_VAL_MODES[(i + 1) % WARMUP_VAL_MODES.length]!); } catch { /* ignore */ }
+}
+/** Pull the two band ENDS out of a "lo–hi" label ("60–80%" → [60,80]); [] if not a band. */
+function bandNums(label: string | undefined): number[] {
+  return (label ?? "").replace("%", "").split("–").map((x) => Number(x)).filter((n) => Number.isFinite(n));
+}
+/** One warm-up row's value^reps cell for the current value mode, paired so the LIGHT end
+ * shows more reps and the HEAVY end fewer (owner: "increasing the weight decreases the
+ * reps" — never the ambiguous 25–55 ^10–20). Bands render as "light^more–heavy^fewer";
+ * a single load (work set) renders as one "value^reps". */
+function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula): string {
+  const sup = (r: string | number) => `<sup class="rx-wu-reps">${r}</sup>`;
+  const single = s.downKg === s.upKg;
+  // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit.
+  const valAt = (kg: number, lightEnd: boolean): string => {
+    if (mode === "kg") return `${Math.round(kg * 100) / 100}`;
+    if (mode === "pct") {
+      const p = bandNums(s.pctLabel);
+      const pct = p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round((kg / orm) * 100);
+      return `${pct}%`;
+    }
+    // rm: the load as a rep-max — light load = MORE max reps. Prefer the precomputed band.
+    const n = bandNums(s.maxRepsLabel); // [heavyEnd, lightEnd]
+    const rm = n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm, kg, formula) ?? s.reps));
+    return `${rm}RM`;
+  };
+  if (single) return `<b>${valAt(s.weightKg, true)}</b>${sup(s.repsLabel ?? s.reps)}`;
+  // reps band: repsLabel "lo–hi" = [heavyEndReps, lightEndReps].
+  const r = bandNums(s.repsLabel);
+  const repsHeavy = r[0] ?? s.reps, repsLight = r[1] ?? r[0] ?? s.reps;
+  return `<b>${valAt(s.downKg, true)}</b>${sup(repsLight)}<span class="rx-wu-dash">–</span><b>${valAt(s.upKg, false)}</b>${sup(repsHeavy)}`;
+}
+
 // Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). "Entered"
 // keeps the typed weight × reps; the others prescribe a per-set rep sequence, each set
 // loaded at the weight for that rep target (from 1RM). Device-local pref.
@@ -12669,30 +12713,24 @@ let lastWuRerender: () => void = () => {};
 /** The shared warm-up + working-set table (warm-up ramp continuing into the hard sets) —
  *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
 function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0): string {
-  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const mode = getWarmupValMode();
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
-  const wuRows = wu.map((s) => {
-    const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
-    // Reps fold into the weight as weight^reps (superscript), like the workout history —
-    // so the table is just Set | %1RM. The zone bands carry no spuriously-precise exact kg.
-    const repsSup = `<sup class="rx-wu-reps">${s.repsLabel ?? s.reps}</sup>`;
-    // Max reps achievable (an "NRM") next to the %1RM, so the ⅓-max ramp reps are
-    // self-explanatory (e.g. "60–80% · 9–20RM" → do 3–6). Band when present, else single.
-    const xrmText = s.maxRepsLabel ?? (s.maxReps ? String(s.maxReps) : "");
-    const xrm = xrmText ? ` <span class="rx-wu-xrm">· ${xrmText}RM</span>` : "";
-    return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b>${repsSup}</td><td class="muted">${s.pctLabel ?? `${s.pctOf1RM}%`}${xrm}</td></tr>`;
-  }).join("");
+  // ONE value column (owner): each row is value^reps in the toggled unit (kg / %1RM / RM),
+  // paired so the lighter end carries more reps. No "kg" text — the column header is the unit.
+  const wuRows = wu.map((s) => `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula)}</td></tr>`).join("");
   const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment);
-  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td><b>${r2(s.weightKg)} kg</b><sup class="rx-wu-reps">${s.reps}</sup></td><td class="rx-wu-worktag">work</td></tr>`).join("");
+  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula)} <span class="rx-wu-worktag">work</span></td></tr>`).join("");
   return (wu.length || sets.length)
-    ? `<table class="rx-wu"><thead><tr><th>Set</th><th>%1RM</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
+    ? `<table class="rx-wu"><thead><tr><th>Set · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
     : "";
 }
 
-/** The warm-up + hard-set PLAN PILLS (open the tabbed popups) — shared by the calc & card. */
+/** The warm-up + hard-set PLAN PILLS (open the tabbed popups) — shared by the calc & card.
+ *  Plus the value-mode toggle: cycle the warm-up loads between kg / %1RM / RM. */
 function planPillsHtml(): string {
   return `<button type="button" class="calc-wu-plan" data-warmupplan title="Warm-up plan — tap to choose">${WARMUP_PLAN_LABEL[getWarmupPlan()]}</button> ` +
-    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose">${escapeHtml(getWorksetPlan().label)}</button>`;
+    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose">${escapeHtml(getWorksetPlan().label)}</button> ` +
+    `<button type="button" class="calc-wu-plan rx-valmode" data-warmupvalmode title="Show loads as kg / %1RM / RM — tap to cycle">${WARMUP_VAL_LABEL[getWarmupValMode()]}</button>`;
 }
 
 /** Close any open warm-up / hard-set plan popup. */
@@ -12723,15 +12761,10 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
     const tabs = WARMUP_PLANS.map((p) =>
       `<button type="button" class="plan-tab${p === cur ? " is-on" : ""}" data-plantab="${p}">${WARMUP_PLAN_LABEL[p]}</button>`).join("");
     const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
-    const rows = wu.map((s) => {
-      const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
-      const repsSup = `<sup class="rx-wu-reps">${s.repsLabel ?? s.reps}</sup>`;
-      const xrmText = s.maxRepsLabel ?? (s.maxReps ? String(s.maxReps) : "");
-      const xrm = xrmText ? ` <span class="rx-wu-xrm">· ${xrmText}RM</span>` : "";
-      return `<tr><td><b>${range}</b>${repsSup}</td><td class="muted">${s.pctLabel ?? `${s.pctOf1RM}%`}${xrm}</td></tr>`;
-    }).join("");
+    const mode = getWarmupValMode();
+    const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula)}</td></tr>`).join("");
     return `<div class="plan-tabs">${tabs}</div>` +
-      `<table class="plan-tbl"><thead><tr><th>Warm-up</th><th>%1RM</th></tr></thead><tbody>${rows}</tbody></table>` +
+      `<table class="plan-tbl"><thead><tr><th>Warm-up · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${rows}</tbody></table>` +
       `<p class="plan-blurb">${escapeHtml(WARMUP_PLAN_BLURB[cur])}</p>`;
   }
   const cur = getWorksetPlan();
@@ -15244,6 +15277,16 @@ async function init() {
   // a click elsewhere closes it.
   document.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    // Value-mode toggle: cycle the warm-up loads between kg / %1RM / RM, then refresh the
+    // owning view (card or calc) + any open plan popup. Owner: one value column, toggleable.
+    if (t.closest<HTMLElement>("[data-warmupvalmode]")) {
+      e.stopPropagation();
+      cycleWarmupValMode();
+      lastWuRerender();
+      const menu = document.getElementById("planPopup");
+      if (menu) menu.innerHTML = planPopupHtml(menu.dataset.kind as "warmup" | "workset");
+      return;
+    }
     const wuPill = t.closest<HTMLElement>("[data-warmupplan]");
     const wsPill = t.closest<HTMLElement>("[data-worksetplan]");
     if (wuPill || wsPill) {
