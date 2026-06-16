@@ -11336,20 +11336,19 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     fitPts.push({ x: kg(pct), y: r });
     if (pct <= minPct) break;
   }
-  const studyPts: SvgPoint[] = BENCH_REPS_STUDY
-    .filter(([pct]) => pct >= minPct)
-    .map(([pct, reps]) => ({ x: kg(pct), y: Math.round(reps * 10) / 10, meta: `${reps.toFixed(1)} reps @ ${kg(pct)}kg (${Math.round(pct)}%)` }));
+  // Owner: the Nuzzo curve is a LINE only — the study-estimate points (non-real) are
+  // dropped, so the only DOTS are YOUR lifts (teal) and the suggested set (gold). The
+  // series keep their names + show in the LEGEND so green vs gold is explained.
   const series: SvgSeries[] = [
-    { name: "Best-fit curve", color: "#284e86", type: "line", points: fitPts, noLegend: true },
-    { name: "Study estimates (Nuzzo et al.)", color: "#5b6472", type: "scatter", points: studyPts, noLegend: true },
+    { name: "Nuzzo curve", color: "#284e86", type: "line", points: fitPts },
   ];
   // Your REAL rep-maxes at their FIXED actual kg — drag the 1RM and the CURVE moves to
   // them; the 1RM where the curve passes through your dots is your true 1RM (teal dots).
   if (realPts.length) {
-    series.push({ name: "Your lifts", color: "#2f8f88", type: "scatter", points: realPts, noLegend: true });
+    series.push({ name: "Your lifts", color: "#2f8f88", type: "scatter", points: realPts });
   }
   if (markReps && markPct) {
-    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }], noLegend: true });
+    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }] });
   }
   return {
     series, xKind: "linear", height: 300,
