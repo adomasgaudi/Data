@@ -105,6 +105,10 @@ export interface WarmupSet {
   downKg: number;
   upKg: number;
   reps: number;
+  /** Max reps achievable at this load (to FAILURE), per the 1RM curve — the ramp's `reps`
+   * is ⅓ of this. Shown as an "NRM" next to the %1RM so you see why ⅓ is e.g. 3 reps.
+   * Only set for the precise RAMP sets (the flexible primer shows its own rep band). */
+  maxReps?: number;
   /** Display override for the %1RM column — e.g. the primer's "30–60%" band. Falls back
    * to `pctOf1RM%` when absent (the ramp sets, which are precise). */
   pctLabel?: string;
@@ -222,6 +226,7 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
       downKg: b.down,
       upKg: b.up,
       reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
+      ...(achievable === null ? {} : { maxReps: Math.max(1, Math.round(achievable)) }),
     });
     lastEff = effRounded;
   }

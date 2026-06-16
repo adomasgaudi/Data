@@ -2850,6 +2850,8 @@ table.rx-wu td { padding: 2px 0.9rem 2px 0; border-top: 1px solid var(--line); }
 table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 /* The exact (unrounded) warm-up load — small + grey beside the plate-rounded weight. */
 .rx-wu-exact { font-size: 0.72rem; color: var(--muted); font-weight: 400; }
+/* The max-reps "NRM" beside the %1RM — slightly smaller/dimmer so the % stays the headline. */
+.rx-wu-xrm { font-size: 0.78rem; opacity: 0.75; }
 /* The warm-up table continues into the WORK sets (owner) — set off with an accent rule. */
 table.rx-wu tr.rx-wu-work td { color: var(--text); border-top: 1px solid var(--accent); }
 .rx-wu-worktag { color: var(--accent); font-size: 0.7rem; font-weight: 700; }

@@ -136,6 +136,11 @@ describe("warmupRamp", () => {
     const ramp = sets.find((s) => s.kind === "ramp")!;
     expect(ramp.pctLabel).toBeUndefined();
     expect(ramp.repsLabel).toBeUndefined();
+    // a ramp set exposes the max reps at its load (for the "NRM" display), and its
+    // prescribed reps are ~⅓ of that max — the primer carries no maxReps (it's a band).
+    expect(ramp.maxReps).toBeGreaterThan(0);
+    expect(ramp.reps).toBe(Math.max(1, Math.round(ramp.maxReps! / 3)));
+    expect(primer.maxReps).toBeUndefined();
   });
 
   it("returns [] on invalid input", () => {
