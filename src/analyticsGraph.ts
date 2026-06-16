@@ -229,6 +229,11 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           if (r.weight != null && add != null) { shareSum += r.weight - add; shareN++; }
         }
         const bodyShare = shareN ? shareSum / shareN : 0;
+        // The Nuzzo fit needs a POSITIVE effective load. For an assisted lift whose bodyweight
+        // share isn't known (no bodyweight on file → share 0), the effective weights go ≤0 and
+        // bestFitNuzzo1RM returns garbage — a curve disconnected from the dots ("pull-ups nuzzo
+        // broken"). Skip the curve then (the dots still plot); it draws once a real load exists.
+        if (pts.some((p) => p.x + bodyShare <= 0)) return;
         const exName = g.records[0]?.exerciseName ?? g.label;
         // A manually-dragged fit 1RM (single lift only) POSITIONS the curve; else auto best-fit.
         const auto = bestFitNuzzo1RM(pts.map((p) => ({ reps: p.y, weight: p.x + bodyShare }))); // effective 1RM
