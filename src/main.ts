@@ -11418,7 +11418,7 @@ function cardNuzzoConfig(
     : unitOn === "bw" ? (x: number) => `${Math.round(x * 100) / 100}×`
     : (x: number) => `${Math.round(x)}`;
   return {
-    series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones,
+    series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones, leftMargin: 30,
     xTitle, yTitle: "reps",
     formatX: fmtX, formatTipX: fmtX,
   };

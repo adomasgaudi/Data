@@ -124,6 +124,9 @@ export interface SvgSeries {
 export interface SvgChartConfig {
   series: SvgSeries[];
   height?: number;
+  /** Override the left margin (px) — narrow it when the y-tick labels are short (e.g.
+   * 2-digit reps) so the plot fills more width. Outer-label charts only; default 46. */
+  leftMargin?: number;
   /** Force the (left) y-axis to include 0. */
   yBeginAtZero?: boolean;
   /** Pin the left y-axis to this exact range on (re)fit, instead of auto-fitting to
@@ -424,7 +427,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // PB-33: axis titles sit INLINE in the existing tick margins (y-title top-left above
   // the value column, x-title bottom-right after the last tick) — NO extra reserved
   // space (owner: "the axis names take up too much space, keep them inline").
-  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
+  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: cfg.leftMargin ?? 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
