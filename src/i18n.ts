@@ -337,6 +337,7 @@ const LT: Record<string, string> = {
   "no band": "be gumos",
   "banded": "su guma",
   "shoulders": "pečiai",
+  "back support": "nugaros atrama",
   "⇄ unilateral": "⇄ vienpusis",
   "⇄ unilateral?": "⇄ vienpusis?",
   "⌁ assisted ½": "⌁ su pagalba ½",

@@ -53,6 +53,23 @@ describe("HSPU one-hand / low-ROM variation tokens", () => {
   });
 });
 
+describe("back support (shoulderDist) — blue 6cm / 30cm / 45cm", () => {
+  for (const fam of ["HSPU", "HANDSTAND"] as const) {
+    it(`${fam} offers the blue / 30cm / 45cm back-support levels`, () => {
+      const levels = FAMILIES[fam]!.dims.shoulderDist!;
+      expect(Object.keys(levels)).toEqual(expect.arrayContaining(["0cm", "blue", "30cm", "45cm"]));
+    });
+    it(`${fam} parses a 'blue' note → back-to-wall + the blue block`, () => {
+      const r = resolveNote(fam, "blue", DEFAULT_VARIATION_CONFIG);
+      expect(r.vec.shoulderDist).toBe("blue");
+      expect(r.vec.support).toBe("back_to_wall");
+    });
+    it(`${fam} parses a '30cm back' note → the 30cm support`, () => {
+      expect(resolveNote(fam, "30cm back", DEFAULT_VARIATION_CONFIG).vec.shoulderDist).toBe("30cm");
+    });
+  }
+});
+
 describe("defaultLeanTable", () => {
   it("returns the base lean table unchanged for non-back-to-wall supports", () => {
     const base = FAMILIES.HSPU!.dims.lean!;

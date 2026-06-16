@@ -79,10 +79,11 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // RANGE: a "low ROM" partial (only the short top portion — a more scapular,
       // shrug-like press) is an easier press → <1. full = the whole press (×1).
       range: { full: 1.0, low: 0.7 },
-      // BACK-TO-WALL ONLY: how far the shoulders sit OFF the wall, in cm. The "blue
-      // block" is 6cm thick (a named reference shown with a diagram/photo). Multipliers
-      // are NEUTRAL for now (calibrate later — likely farther = slightly harder).
-      shoulderDist: { "0cm": 1.0, blue: 1.0 },
+      // BACK-TO-WALL ONLY: the BACK SUPPORT — how far the shoulders/back sit OFF the
+      // wall, in cm, set by what's behind you. "blue" = the 6cm blue block (a named
+      // reference shown with a diagram/photo); 30cm / 45cm = a taller box/support.
+      // Multipliers are NEUTRAL for now (calibrate later — likely farther = harder).
+      shoulderDist: { "0cm": 1.0, blue: 1.0, "30cm": 1.0, "45cm": 1.0 },
     },
     defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "uninterrupted", hands: "two", range: "full", shoulderDist: "0cm" },
   },
@@ -164,7 +165,8 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // dim the knee-raise uses; neutral ×1 placeholders for now (calibrate).
       obstacle: { none: 1.0, S: 1.0, M: 1.0, L: 1.0 },
       lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
-      shoulderDist: { "0cm": 1.0, blue: 1.0 },
+      // BACK SUPPORT (back-to-wall) — same as HSPU: blue 6cm block, or a 30/45cm box.
+      shoulderDist: { "0cm": 1.0, blue: 1.0, "30cm": 1.0, "45cm": 1.0 },
     },
     defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm" },
   },
@@ -208,6 +210,11 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     lsit: { support: "ladder", ladderGrip: "lsit" },
     hooked: { support: "ladder", ladderGrip: "hooked" },
     "užkabintos kojos": { support: "ladder", ladderGrip: "hooked" }, // hooked legs (assisted)
+    // BACK SUPPORT — the blue 6cm block, or a 30/45cm box behind the back (back-to-wall).
+    blue: { support: "back_to_wall", shoulderDist: "blue" },
+    "blue block": { support: "back_to_wall", shoulderDist: "blue" },
+    "30cm back": { support: "back_to_wall", shoulderDist: "30cm" },
+    "45cm back": { support: "back_to_wall", shoulderDist: "45cm" },
     // lean / continuity
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
@@ -334,6 +341,11 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     yoga: { obstacle: "M" },
     // Shoulders touching the wall (back-to-wall, shoulders on it).
     "shoulders to wall": { support: "back_to_wall", shoulderDist: "0cm" },
+    // BACK SUPPORT — the blue 6cm block, or a 30/45cm box behind the back (back-to-wall).
+    blue: { support: "back_to_wall", shoulderDist: "blue" },
+    "blue block": { support: "back_to_wall", shoulderDist: "blue" },
+    "30cm back": { support: "back_to_wall", shoulderDist: "30cm" },
+    "45cm back": { support: "back_to_wall", shoulderDist: "45cm" },
     // Forward lean.
     "forward lean": { lean: "15cm" },
     // Ladder rung height (+ the ladder support it implies).
@@ -356,7 +368,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 16;
+export const CONFIG_VERSION = 17;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many

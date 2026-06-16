@@ -12170,17 +12170,17 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
     );
   };
   const isLadder = (effVec.support ?? "free") === "ladder";
-  // Back-to-wall only: how far the shoulders sit off the wall (cm). "blue" = the 6cm block,
-  // which shows a reference diagram/photo (the owner stands on a known-thickness block).
+  // Back-to-wall only: the BACK SUPPORT — how far the back sits off the wall (cm).
+  // "blue" = the 6cm block (shows a reference diagram/photo); 30/45cm = a taller box.
   const isB2W = (effVec.support ?? "free") === "back_to_wall" && Object.keys(famLevels(fam, "shoulderDist") ?? {}).length > 0;
-  const SHD_LBL: Record<string, string> = { "0cm": "0cm (wall)", blue: "blue 6cm" };
+  const SHD_LBL: Record<string, string> = { "0cm": "0cm (wall)", blue: "blue 6cm", "30cm": "30cm", "45cm": "45cm" };
   const shdRef = isB2W && String(effVec.shoulderDist ?? "0cm") === "blue" ? hspuShoulderRef() : "";
   const supPicked = override.support !== undefined || override.ladderGrip !== undefined || override.ladderH !== undefined || override.shoulderDist !== undefined;
   const supportBlock =
     `<div class="ex-var-dim${supPicked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">support</span>` +
     `<div class="ex-var-selrow">${vecSelect("support", SUPPORT_LBL)}` +
     (isLadder ? vecSelect("ladderGrip", GRIP_LBL) + vecSelect("ladderH", HT_LBL) : "") +
-    (isB2W ? `<span class="ex-shd-lbl muted">shoulders</span>${vecSelect("shoulderDist", SHD_LBL)}` : "") +
+    (isB2W ? `<span class="ex-shd-lbl muted">back support</span>${vecSelect("shoulderDist", SHD_LBL)}` : "") +
     `</div>${shdRef}</div>`;
   // ROM (depth, ↓) × LEAN (forward, →) are two directions of one body position, set
   // with a VERTICAL depth slider + a HORIZONTAL lean slider (each step = a defined
@@ -16135,10 +16135,12 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 
 // Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
 // order. Ladder sub-dims (grip/height) are left to the full per-set editor.
-const AF_DIM_ORDER = ["support", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { support: "support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["support", "shoulderDist", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { support: "support", shoulderDist: "back support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
   support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder", hanging: "hanging", dips_bar: "dips bar" },
+  // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.
+  shoulderDist: { "0cm": "none", blue: "blue 6cm", "30cm": "30cm", "45cm": "45cm" },
   backrest: { none: "none", "30cm": "30cm rest" },
   obstacle: { none: "none", S: "yoga S (6cm)", M: "yoga M (15cm)", L: "yoga L (23cm)" },
   continuity: { paused: "paused", uninterrupted: "uninterrupted" },
