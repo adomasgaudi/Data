@@ -17,6 +17,11 @@ export interface GraphConfig {
   decay: boolean;
   /** 1RM formula for the strength/1RM metrics (matches the app-wide choice). */
   formula: OneRepMaxFormula;
+  /** REPS-VERSUS-WEIGHT mode: swap the graph to a scatter of every set at
+   * (x = weight kg, y = reps) per exercise, instead of the time-series metrics. */
+  repsVsWeight?: boolean;
+  /** Draw a per-exercise least-squares best-fit line on the reps-vs-weight scatter. */
+  repsVsWeightFit?: boolean;
   /** How far ahead the Predicted Strength metric projects, in days. */
   predictionDays: number;
   /** What logged points feed the projection fit:

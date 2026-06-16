@@ -10,10 +10,11 @@
  * demonstrably alive. Multi-exercise, combined and comparison names all flow
  * through identically (it's name-based).
  */
-import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint, type SvgShape } from "./svgChart";
+import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint, type SvgShape, type SvgChartConfig } from "./svgChart";
 import { decayedStrengthSeries, effectiveE1RM } from "./aggregate";
 import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
+import { linearFit } from "./metrics";
 import type { GraphConfig } from "./graphConfig";
 
 // Series palette built around the app's "Girl with a Pearl Earring" theme: the two
@@ -121,6 +122,11 @@ function movingAverage(points: GraphPoint[], win: number): GraphPoint[] {
 }
 
 const charts = new WeakMap<HTMLElement, SvgChart>();
+// Which MODE the mounted chart is in ("ts" time-series / "rvw" reps-vs-weight). The
+// two configs differ fundamentally (time vs linear X, totally different keys), and
+// update() MERGES configs (PB-8) — so on a mode switch we drop the instance and
+// remount fresh (mountSvgChart clears the container) rather than merge stale keys.
+const chartMode = new WeakMap<HTMLElement, string>();
 
 /** Render the universal graph into `container`. Returns how many series were
  * drawn, so the caller can show a missing-data note (0 = nothing to plot). */
@@ -157,6 +163,51 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           })),
         )
       : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
+
+  // ---- REPS vs WEIGHT mode (owner) -------------------------------------------
+  // A non-time scatter: every set of each selected exercise plotted at (x = weight
+  // kg, y = reps), one colour per exercise (or per athlete×exercise overlaid), with
+  // an optional per-exercise least-squares best-fit line. Bypasses the whole metric/
+  // time-series pipeline below — it's a fundamentally different plot.
+  if (input.config.repsVsWeight) {
+    const rvw: SvgSeries[] = [];
+    groups.forEach((g, gi2) => {
+      const base = multiUser ? harmoniousColor(g.userIdx ?? gi2, input.users!.length) : harmoniousColor(gi2, groups.length);
+      const pts = g.records
+        .filter((r) => r.weight != null && r.reps != null && r.reps > 0)
+        .map((r) => ({ x: Math.round(r.weight! * 10) / 10, y: r.reps!, meta: `${g.label}: ${Math.round(r.weight! * 10) / 10}kg × ${r.reps}` }));
+      if (!pts.length) return;
+      rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: pts as SvgPoint[] });
+      if (input.config.repsVsWeightFit) {
+        const fit = linearFit(pts.map((p) => ({ x: p.x, y: p.y })));
+        if (fit) {
+          const xs = pts.map((p) => p.x);
+          const x0 = Math.min(...xs), x1 = Math.max(...xs);
+          if (x1 > x0) {
+            rvw.push({
+              name: `${g.label} fit`, color: base, type: "line", noLegend: true,
+              points: [
+                { x: x0, y: Math.round((fit.slope * x0 + fit.intercept) * 100) / 100 },
+                { x: x1, y: Math.round((fit.slope * x1 + fit.intercept) * 100) / 100 },
+              ] as SvgPoint[],
+            });
+          }
+        }
+      }
+    });
+    const cfg: SvgChartConfig = {
+      series: rvw, xKind: "linear", height: 300, panMode: "xy", yBeginAtZero: true,
+      formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
+    };
+    if (chartMode.get(container) !== "rvw") { charts.delete(container); chartMode.set(container, "rvw"); }
+    container.classList.add("svgc-freepan");
+    const existingRvw = charts.get(container);
+    if (existingRvw) existingRvw.update(cfg);
+    else charts.set(container, mountSvgChart(container, cfg));
+    return rvw.filter((s) => s.type === "scatter").length;
+  }
+  // Switching back to the time-series plot from reps-vs-weight → remount fresh too.
+  if (chartMode.get(container) !== "ts") { charts.delete(container); chartMode.set(container, "ts"); }
 
   const series: SvgSeries[] = [];
   // Per-bodyweight: track the RAW kg MAX of the left-axis series so the y-axis can be

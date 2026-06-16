@@ -18404,11 +18404,16 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
           ? `<button type="button" class="wa-name-opt is-on" data-waprojwinreset title="Reset the fit window back to all your data.">Window: custom ✕</button>`
           : `<span class="muted wa-proj-hint">drag the ⟵ ⟶ lines to set the fit window</span>`)
       : ""));
+  // Reps versus weight — a whole-different plot: every set at weight(x) × reps(y) per
+  // lift, with an optional per-lift best-fit line. When ON it replaces the time graph.
+  const cfgRepsWeight = cfgGroup("Reps versus weight", S.waRepsVsWeight ? (S.waRepsVsWeightFit ? "on · best-fit" : "on") : "",
+    onoff(S.waRepsVsWeight, `data-warvw="1"`, "Weight × reps scatter", "Plot every set at weight (x) × reps (y) for each selected lift, instead of the time graph. Add more lifts to overlay them.") +
+    onoff(S.waRepsVsWeightFit, `data-warvwfit="1"`, "Best-fit line", "Draw a straight best-fit line through each lift's points."));
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}${cfgRepsWeight}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
     `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
     `</div>`;
@@ -18482,6 +18487,9 @@ function renderWaGraph(): void {
   // Work out the plotted exercises FIRST, so the metric chips can reflect what's
   // allowed for them (everything is blocked until reviewed in More info).
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  // Reps-versus-weight scatter mode (owner): swaps the whole plot to weight(x)/reps(y).
+  waGraphConfig.repsVsWeight = S.waRepsVsWeight;
+  waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
   // Per-set RIR resolver so the scatter sizes each dot by effort (logged grade,
   // else predicted). Built per render — the strength map is shared across all sets.
   {
@@ -19770,6 +19778,9 @@ function setupWorkoutAnalysis(): void {
       deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
       return;
     }
+    // "Reps versus weight" scatter mode + its best-fit line.
+    if (t.closest<HTMLElement>("[data-warvw]")) { S.waRepsVsWeight = !S.waRepsVsWeight; scheduleWaGraph(); return; }
+    if (t.closest<HTMLElement>("[data-warvwfit]")) { S.waRepsVsWeightFit = !S.waRepsVsWeightFit; scheduleWaGraph(); return; }
     // "Per bodyweight (×BW)" lens (pill). Auto-Fit after the rescale so the data fills
     // the view without a manual ⤢ — the rAF runs AFTER scheduleWaGraph's render (same
     // frame, registered later), when the chart's own re-fit button (.svgc-center) exists.

@@ -25,6 +25,9 @@ export const S: {
   waCogOpen: boolean;
   waGraphFoldOpen: boolean;
   waPerBodyweight: boolean;
+  /** Graph "Reps versus weight" scatter mode + its per-exercise best-fit line. */
+  waRepsVsWeight: boolean;
+  waRepsVsWeightFit: boolean;
   // Workouts heatmap (year analysis) state.
   heatYear: number;
   heatScope: "ribbon" | "single" | "all";
@@ -54,6 +57,8 @@ export const S: {
   waCogOpen: false,
   waGraphFoldOpen: false,
   waPerBodyweight: false,
+  waRepsVsWeight: false,
+  waRepsVsWeightFit: true,
   heatYear: 2026,
   heatScope: "ribbon",
   heatFilters: [],
