@@ -11640,21 +11640,24 @@ function liftTrainingHtml(name: string): string {
       nuzzoBox(aBase) +
       realSrc +
     `</div>`;
-  // Working weights: true rep-maxes for common targets (load to FAILURE at N reps).
+  // Working weights: true rep-maxes for common targets (load to FAILURE at N reps). Computed
+  // on the EFFECTIVE 1RM, shown as ADDED weight (rule 49) — bodyShare 0 leaves bar lifts as-is.
   const repTargets = [3, 5, 8, 12];
   const workPills = repTargets.map((reps) => {
     const w = weightForReps(e1rm, reps, formula);
-    return w === null ? "" : pill(`${reps}RM`, `${fmt(w)}kg`);
+    return w === null ? "" : pill(`${reps}RM`, `${fmt(w - bodyShare)}kg`);
   }).join("");
   // Warm-up + working sets — the SAME rich table + plan pickers as the calculator (owner:
   // the card should have everything the calculator has). The pills open the shared tabbed
   // popups; lastWuCalc/lastWuRerender let the popup compute + refresh THIS card.
   if (hs && currentExInfo === name) {
-    lastWuCalc = { orm: e1rm, work: hs.weightKg, reps: hs.reps, formula, increment: 2.5 };
+    // ADDED 1RM + ADDED work + the bodyweight share, so the plan popup matches the card's
+    // own warm-up table (rule 49: effective maths, added-weight display). bar lift = share 0.
+    lastWuCalc = { orm: e1rm - bodyShare, work: hs.weightKg - bodyShare, reps: hs.reps, formula, increment: 2.5, bwl: bodyShare };
     lastWuRerender = () => { if (currentExInfo) paintExInfo(currentExInfo); };
   }
   const warmRows = hs
-    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm, hs.weightKg, hs.reps, formula, 2.5)}</div>`
+    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm - bodyShare, hs.weightKg - bodyShare, hs.reps, formula, 2.5, bodyShare)}</div>`
     : `<p class="muted lt-mini">—</p>`;
 
   // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
@@ -12690,20 +12693,22 @@ function bandNums(label: string | undefined): number[] {
  * shows more reps and the HEAVY end fewer (owner: "increasing the weight decreases the
  * reps" — never the ambiguous 25–55 ^10–20). Bands render as "light^more–heavy^fewer";
  * a single load (work set) renders as one "value^reps". */
-function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula): string {
+function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula, bodyShare = 0): string {
   const sup = (r: string | number) => `<sup class="rx-wu-reps">${r}</sup>`;
   const single = s.downKg === s.upKg;
-  // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit.
+  // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit. INVARIANT: %1RM
+  // and RM are computed on the EFFECTIVE load (added kg + bodyweight share), the kg shown is
+  // the ADDED weight. So a pull-up's "20%" is 20% of (added + bodyweight), not of the plate.
   const valAt = (kg: number, lightEnd: boolean): string => {
     if (mode === "kg") return `${Math.round(kg * 100) / 100}`;
     if (mode === "pct") {
       const p = bandNums(s.pctLabel);
-      const pct = p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round((kg / orm) * 100);
+      const pct = p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round(((kg + bodyShare) / (orm + bodyShare)) * 100);
       return `${pct}%`;
     }
     // rm: the load as a rep-max — light load = MORE max reps. Prefer the precomputed band.
     const n = bandNums(s.maxRepsLabel); // [heavyEnd, lightEnd]
-    const rm = n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm, kg, formula) ?? s.reps));
+    const rm = n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm + bodyShare, kg + bodyShare, formula) ?? s.reps));
     return `${rm}RM`;
   };
   if (single) return `<b>${valAt(s.weightKg, true)}</b>${sup(s.repsLabel ?? s.reps)}`;
@@ -12746,11 +12751,14 @@ function setWorksetPlan(id: string): void { try { localStorage.setItem("colosseu
 /** The working sets a hard-set plan prescribes for a 1RM: each set loaded at the weight
  *  for its rep target (plate-rounded); "Entered" keeps the typed set, "Custom" uses the
  *  owner's sets × reps. */
-function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number): { weightKg: number; reps: number }[] {
+function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number, bodyShare = 0): { weightKg: number; reps: number }[] {
   const seq = plan.id === "custom" ? (() => { const c = getWorksetCustom(); return Array(c.sets).fill(c.reps); })() : plan.repsSeq;
   if (seq == null) return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
+  // The load for a rep target is computed on the EFFECTIVE curve (orm + bodyShare), then the
+  // bodyweight share is peeled back so the displayed weight is ADDED. bodyShare 0 = bar lift,
+  // so weightForReps(orm, reps) is unchanged.
   return seq.map((reps) => ({
-    weightKg: roundToIncrement(weightForReps(orm, reps, formula) ?? workingWeightKg, increment),
+    weightKg: roundToIncrement((weightForReps(orm + bodyShare, reps, formula) ?? (workingWeightKg + bodyShare)) - bodyShare, increment),
     reps,
   }));
 }
@@ -12769,9 +12777,9 @@ function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRe
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
   // ONE value column (owner): each row is value^reps in the toggled unit (kg / %1RM / RM),
   // paired so the lighter end carries more reps. No "kg" text — the column header is the unit.
-  const wuRows = wu.map((s) => `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula)}</td></tr>`).join("");
-  const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment);
-  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula)} <span class="rx-wu-worktag">work</span></td></tr>`).join("");
+  const wuRows = wu.map((s) => `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula, bodyweightLoad)}</td></tr>`).join("");
+  const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment, bodyweightLoad);
+  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula, bodyweightLoad)} <span class="rx-wu-worktag">work</span></td></tr>`).join("");
   return (wu.length || sets.length)
     ? `<table class="rx-wu"><thead><tr><th>Set · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
     : "";
@@ -12814,7 +12822,7 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
       `<button type="button" class="plan-tab${p === cur ? " is-on" : ""}" data-plantab="${p}">${WARMUP_PLAN_LABEL[p]}</button>`).join("");
     const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
     const mode = getWarmupValMode();
-    const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula)}</td></tr>`).join("");
+    const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula, c.bwl ?? 0)}</td></tr>`).join("");
     return `<div class="plan-tabs">${tabs}</div>` +
       `<table class="plan-tbl"><thead><tr><th>Warm-up · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${rows}</tbody></table>` +
       `<p class="plan-blurb">${escapeHtml(WARMUP_PLAN_BLURB[cur])}</p>`;
@@ -12822,8 +12830,10 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
   const cur = getWorksetPlan();
   const tabs = WORKSET_PLANS.map((p) =>
     `<button type="button" class="plan-tab${p.id === cur.id ? " is-on" : ""}" data-plantab="${escapeHtml(p.id)}">${escapeHtml(p.label)}</button>`).join("");
-  const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment);
-  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="muted">${c.orm > 0 ? Math.round((s.weightKg / c.orm) * 100) : 0}%</td></tr>`).join("");
+  const bwl = c.bwl ?? 0;
+  const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment, bwl);
+  // kg shown = ADDED weight; % computed on the EFFECTIVE load (added + bodyweight share).
+  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="muted">${c.orm + bwl > 0 ? Math.round(((s.weightKg + bwl) / (c.orm + bwl)) * 100) : 0}%</td></tr>`).join("");
   // The Custom tab adds editable sets × reps inputs (owner: manipulate the numbers too).
   let customEdit = "";
   if (cur.id === "custom") {
