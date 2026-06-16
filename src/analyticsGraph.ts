@@ -103,6 +103,13 @@ export interface AnalyticsGraphInput {
   xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
   /** Called on release after dragging a fit-window marker (id + new ms timestamp). */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
+  /** Reps-vs-weight fit: a manual EFFECTIVE 1RM that POSITIONS the Nuzzo curve for an
+   * exercise (null = auto best-fit). Lets the green curve be DRAGGED to adjust, the same
+   * way the projection fit-window markers work. Only consulted for a SINGLE plotted lift. */
+  rvwFitOf?: (exercise: string) => number | null;
+  /** Called on release after dragging the reps-vs-weight fit line (exercise + new
+   * effective 1RM). */
+  onRvwFitDrag?: (exercise: string, effOneRm: number) => void;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -171,6 +178,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   // time-series pipeline below — it's a fundamentally different plot.
   if (input.config.repsVsWeight) {
     const rvw: SvgSeries[] = [];
+    const singleGroup = groups.length === 1; // a draggable fit only makes sense for ONE curve
+    const RVW_FIT_GREEN = "#2e9b57";
+    let fitMarker: { exercise: string; addedOneRm: number; bodyShare: number } | null = null;
     groups.forEach((g, gi2) => {
       const base = multiUser ? harmoniousColor(g.userIdx ?? gi2, input.users!.length) : harmoniousColor(gi2, groups.length);
       // Plot the LOGGED dial weight (origWeight) the athlete actually used — NOT the
@@ -199,7 +209,10 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           if (r.weight != null && add != null) { shareSum += r.weight - add; shareN++; }
         }
         const bodyShare = shareN ? shareSum / shareN : 0;
-        const oneRm = bestFitNuzzo1RM(pts.map((p) => ({ reps: p.y, weight: p.x + bodyShare }))); // effective 1RM
+        const exName = g.records[0]?.exerciseName ?? g.label;
+        // A manually-dragged fit 1RM (single lift only) POSITIONS the curve; else auto best-fit.
+        const auto = bestFitNuzzo1RM(pts.map((p) => ({ reps: p.y, weight: p.x + bodyShare }))); // effective 1RM
+        const oneRm = (singleGroup ? input.rvwFitOf?.(exName) ?? null : null) ?? auto;
         const ys = pts.map((p) => p.y);
         const r0 = Math.max(1, Math.floor(Math.min(...ys)));
         const r1 = Math.ceil(Math.max(...ys));
@@ -211,7 +224,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
             if (eff != null) curve.push({ x: Math.round((eff - bodyShare) * 100) / 100, y: Math.round(r * 100) / 100 } as SvgPoint);
           }
           if (curve.length > 1) {
-            rvw.push({ name: `${g.label} fit`, color: base, type: "line", noLegend: true, points: curve });
+            // The single-lift fit curve is GREEN + draggable (owner); multi-lift keeps per-lift colour.
+            rvw.push({ name: `${g.label} fit`, color: singleGroup ? RVW_FIT_GREEN : base, type: "line", noLegend: true, points: curve });
+            if (singleGroup) fitMarker = { exercise: exName, addedOneRm: Math.round((oneRm - bodyShare) * 100) / 100, bodyShare };
           }
         }
       }
@@ -221,6 +236,14 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
       xTitle: "weight (kg)", yTitle: "reps",
     };
+    // Drag the green Nuzzo curve to adjust its fit — a draggable vertical line at the
+    // curve's 1RM (x where reps→1), reusing the projection fit-marker mechanism. Releasing
+    // commits a new EFFECTIVE 1RM (added-x + bodyweight share) for that lift.
+    if (fitMarker) {
+      const fm: { exercise: string; addedOneRm: number; bodyShare: number } = fitMarker;
+      cfg.xMarkers = [{ id: "rvwfit", x: fm.addedOneRm, color: RVW_FIT_GREEN, label: "fit ⟷" }];
+      cfg.onMarkerDrag = (id, x) => { if (id === "rvwfit") input.onRvwFitDrag?.(fm.exercise, x + fm.bodyShare); };
+    }
     if (chartMode.get(container) !== "rvw") { charts.delete(container); chartMode.set(container, "rvw"); }
     container.classList.add("svgc-freepan");
     const existingRvw = charts.get(container);

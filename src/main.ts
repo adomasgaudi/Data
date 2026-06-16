@@ -17189,6 +17189,25 @@ function onProjMarkerDrag(id: string, x: number): void {
   if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
   scheduleWaGraph();
 }
+// Manual reps-vs-weight fit: dragging the green Nuzzo curve sets a per-(athlete|exercise)
+// EFFECTIVE 1RM that POSITIONS the curve (view-only — like the projection fit window, it
+// doesn't touch logged data). Persisted device-local (a display pref, rule 41).
+const RVW_FIT_KEY = "colosseum.rvwFit.v1";
+const rvwFitOverrides: Record<string, number> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(RVW_FIT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+const rvwFitKey = (exercise: string) => `${els.athlete.value}|${exercise}`;
+function rvwFitOf(exercise: string): number | null {
+  const v = rvwFitOverrides[rvwFitKey(exercise)];
+  return typeof v === "number" && v > 0 ? v : null;
+}
+function onRvwFitDrag(exercise: string, effOneRm: number): void {
+  if (!(effOneRm > 0)) return; // dragged past zero → ignore (keep the last sensible fit)
+  rvwFitOverrides[rvwFitKey(exercise)] = Math.round(effOneRm * 10) / 10;
+  try { localStorage.setItem(RVW_FIT_KEY, JSON.stringify(rvwFitOverrides)); } catch { /* ignore */ }
+  scheduleWaGraph();
+}
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
@@ -18427,6 +18446,8 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
     config: waGraphConfig,
     xMarkers: projMarkers,
     onMarkerDrag: onProjMarkerDrag,
+    rvwFitOf,
+    onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"),
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(user)?.weight ?? null,
@@ -18777,6 +18798,8 @@ function renderWaGraph(): void {
     config: waGraphConfig,
     xMarkers: projMarkers,
     onMarkerDrag: onProjMarkerDrag,
+    rvwFitOf,
+    onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"), // legend follows the GRAPH area's name mode (fired after the render pass)
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(els.athlete.value)?.weight ?? null,
