@@ -17057,6 +17057,32 @@ const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
 // is off; clamped so from < to.
 let projFitFrom: number | null = null;
 let projFitTo: number | null = null;
+// Build the projection fit-window markers for whatever records a graph is drawing, and
+// set the matching config bounds. Shared by the full multi-graph AND the single-lift
+// carousel so the draggable lines + ceiling-approach window behave identically (PROJ-1).
+// Returns undefined (and clears the bounds) when the forecast isn't drawn.
+function projectionFitMarkers(records: readonly SetRecord[], drawMetricIds: readonly string[]): { id: string; x: number; color?: string; label?: string }[] | undefined {
+  if (!drawMetricIds.includes("predicted")) { waGraphConfig.projectionFrom = undefined; waGraphConfig.projectionTo = undefined; return undefined; }
+  let lo = Infinity, hi = -Infinity;
+  for (const r of records) { const t = Date.parse(r.date); if (Number.isFinite(t)) { if (t < lo) lo = t; if (t > hi) hi = t; } }
+  if (!(Number.isFinite(lo) && Number.isFinite(hi) && hi > lo)) { waGraphConfig.projectionFrom = undefined; waGraphConfig.projectionTo = undefined; return undefined; }
+  // Clamp any saved window into THIS lift's span (a window set on another lift must not
+  // bound a different lift's data into emptiness).
+  const clamp = (v: number | null, dflt: number) => (v == null || v < lo || v > hi ? dflt : v);
+  const from = clamp(projFitFrom, lo), to = clamp(projFitTo, hi);
+  waGraphConfig.projectionFrom = from;
+  waGraphConfig.projectionTo = to;
+  return [
+    { id: "from", x: from, color: "#2f8f88", label: "fit ⟵" },
+    { id: "to", x: to, color: "#2f8f88", label: "⟶ fit" },
+  ];
+}
+// Commit a dragged fit-window line, then re-render (both graph views go through scheduleWaGraph).
+function onProjMarkerDrag(id: string, x: number): void {
+  if (id === "from") projFitFrom = x; else projFitTo = x;
+  if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
+  scheduleWaGraph();
+}
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
@@ -18260,11 +18286,21 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   const exs = lensExpand("graph", [exercise]);
   const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  // Same forecast ceiling + draggable fit-window as the full graph, so a projection viewed
+  // on the carousel curves toward the ceiling and gets the same period control (PROJ-1).
+  waGraphConfig.ceilingOf = (rs) => {
+    const r = rs[0];
+    if (!r) return null;
+    return worldRecordKg(r.exerciseName, athProfile(r.username)?.sex ?? "m", r.bodyweight ?? null);
+  };
+  const projMarkers = projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
   renderAnalyticsGraph(container, {
     exercises: exs,
     records: recs,
     metrics: drawMetricIds,
     config: waGraphConfig,
+    xMarkers: projMarkers,
+    onMarkerDrag: onProjMarkerDrag,
     codeOf: (ex: string) => displayName(ex, "graph"),
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(user)?.weight ?? null,
@@ -18599,39 +18635,16 @@ function renderWaGraph(): void {
   // Projection fit-window: when the forecast is on, two draggable lines bound which sets
   // feed the fit. Default the lines to the plotted data's span; dragging re-fits to the
   // window. Cleared (and the config bounds dropped) when the forecast is off.
-  const projOnNow = drawMetricIds.includes("predicted");
-  let projMarkers: { id: string; x: number; color?: string; label?: string }[] | undefined;
-  if (projOnNow) {
-    let lo = Infinity, hi = -Infinity;
-    for (const r of athleteRecs) { const t = Date.parse(r.date); if (Number.isFinite(t)) { if (t < lo) lo = t; if (t > hi) hi = t; } }
-    if (Number.isFinite(lo) && Number.isFinite(hi) && hi > lo) {
-      // Clamp any saved window into THIS lift's span (a window set on another lift must
-      // not bound a different lift's data into emptiness).
-      const clamp = (v: number | null, dflt: number) => (v == null || v < lo || v > hi ? dflt : v);
-      const from = clamp(projFitFrom, lo), to = clamp(projFitTo, hi);
-      waGraphConfig.projectionFrom = from;
-      waGraphConfig.projectionTo = to;
-      projMarkers = [
-        { id: "from", x: from, color: "#2f8f88", label: "fit ⟵" },
-        { id: "to", x: to, color: "#2f8f88", label: "⟶ fit" },
-      ];
-    }
-  } else {
-    waGraphConfig.projectionFrom = undefined;
-    waGraphConfig.projectionTo = undefined;
-  }
+  // Projection fit-window: when the forecast is on, two draggable lines bound which sets
+  // feed the fit (shared with the carousel via projectionFitMarkers / onProjMarkerDrag).
+  const projMarkers = projectionFitMarkers(athleteRecs, drawMetricIds);
   const analyticsInput = {
     exercises: graphExercises,
     records: athleteRecs,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
-    onMarkerDrag: (id: string, x: number) => {
-      if (id === "from") projFitFrom = x; else projFitTo = x;
-      // Keep from < to (swap if dragged past each other).
-      if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
-      scheduleWaGraph();
-    },
+    onMarkerDrag: onProjMarkerDrag,
     codeOf: (ex: string) => displayName(ex, "graph"), // legend follows the GRAPH area's name mode (fired after the render pass)
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(els.athlete.value)?.weight ?? null,
