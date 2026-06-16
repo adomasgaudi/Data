@@ -1,5 +1,15 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-36 — Graph exercise picker drawer opens blank/white (no chips visible)
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph → tap "▦ Pick". Owner: "can't choose exercises side graph not working / side menu / out of bounds css #persistent". Saw a white rectangle on the right (~307px wide) but it was blank — no controls, no chips.
+- **Root cause (confirmed partially, diagnostic in place):** `#waPickCard-graph` is a DOM child of `#waGraphFull`. When `graphFullShown=false` (carousel mode), `#waGraphFull` has the `hidden` attribute → `display:none`. CSS rule: a `position:fixed` child of a `display:none` ancestor generates NO box and is completely invisible. The `[data-titlepicker]` handler that opens the drawer never checked `graphFullShown`, so in the carousel-with-empty-selection state (where the Pick tab IS shown but `#waGraphFull` is hidden), opening the drawer produced an invisible card. A second code path — the athlete-toggle handler — called `renderSelector("graph")` without `applyPickDrawer()`, leaving the picker hidden after re-render. A PB-36 diagnostic banner is included until confirmed fixed on device.
+- **Fix (b.2.9.23):** (1) `openPickDrawer("graph")` now checks `!graphFullShown` and calls `graphFullShown=true; renderWaGraph()` first (same pattern CHART-155 applied to the ⇆ switch button). (2) The athlete-toggle handler (`wa-ath-pill` click) now calls `applyPickDrawer()` after `renderSelector("graph")`. (3) On-screen PB-36 diagnostic banner shows `full.hidden`, `card.offsetHeight`, and `chips.length` at the moment the drawer opens — leave it until the fix is confirmed on owner's device.
+- **Watch:** ANY code that calls `openPickDrawer("graph")` when `graphFullShown` might be false needs the same guard. ANY standalone `renderSelector("graph")` call (outside `renderWorkoutAnalysis`) needs `applyPickDrawer()` afterward. See CHART-155 (the ⇆ switch path) for the established pattern.
+- **Recurrences:** 0 (first log).
+
+---
+
 Bugs that came back after being "fixed". Logged via the **`#persistent`** command
 (CLAUDE.md). Each is a standing reminder to fix the ROOT, not the symptom — and a
 record so the next AI doesn't repeat the same shallow patch.

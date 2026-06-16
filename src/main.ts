@@ -14071,6 +14071,7 @@ async function init() {
         waGraphAthletes = waGraphAthletes.includes(u) ? waGraphAthletes.filter((x) => x !== u) : [...waGraphAthletes, u];
         renderWaGraph();
         renderSelector("graph"); // refresh the 📈 cap marks for the new athlete count
+        applyPickDrawer(); // PB-36: restore drawer if it was open (renderSelector rebuilt the card)
       }
       return;
     }
@@ -18313,6 +18314,13 @@ function ensurePickBackdrop(): void {
 }
 function openPickDrawer(scope: SelScope): void {
   if (pickDrawerScope === scope) return;
+  // PB-36: the graph picker card lives INSIDE #waGraphFull; if graphFullShown=false that
+  // parent is display:none, making even a position:fixed child invisible. Ensure full mode
+  // is shown first so the card has a rendered box when we make it the drawer.
+  if (scope === "graph" && !graphFullShown) {
+    graphFullShown = true;
+    renderWaGraph(); // unhides #waGraphFull and re-renders the summary (Pick tab stays)
+  }
   pickDrawerScope = scope;
   curSelScope = scope; // chip taps in the drawer act on THIS selector's selection
   document.body.classList.add("wa-pick-open"); // free the drawer from the sticky selector's stacking context
@@ -18322,6 +18330,13 @@ function openPickDrawer(scope: SelScope): void {
   box.hidden = false;
   box.classList.add("is-pick-drawer", "is-entering"); // start off the right edge…
   requestAnimationFrame(() => box.classList.remove("is-entering")); // …then slide in
+  // PB-36 diagnostic — remove once root cause confirmed on device
+  { const gf = document.getElementById("waGraphFull"), card = box, ch = document.getElementById("waChips-graph");
+    const d = Object.assign(document.createElement("div"), { id: "pb36dbg" });
+    d.style.cssText = "position:fixed;top:0;left:0;z-index:99999;background:#c00;color:#fff;font:11px monospace;padding:2px 6px;white-space:pre;pointer-events:none";
+    d.textContent = `PB-36 scope=${scope} full.hidden=${gf?.hidden} card.oh=${card.offsetHeight} chips=${ch?.children.length ?? "?"}`;
+    document.getElementById("pb36dbg")?.remove();
+    document.body.appendChild(d); }
 }
 function closePickDrawer(): void {
   if (pickDrawerScope === null) return;
