@@ -11424,16 +11424,24 @@ function cardNuzzoConfig(
   };
 }
 
+/** The current athlete's computed records that belong to this lift's card — matched by
+ * exerciseName OR originalExerciseName, so it covers a plain lift, a synthetic combine/
+ * compare lift (exerciseName = the derived name), AND a spelling-merge VARIANT whose sets
+ * live under the canonical name but kept their original spelling (e.g. "Chin Ups" sets
+ * stored as "Pull Ups" with originalExerciseName "Chin Ups" — they'd otherwise vanish). */
+function cardLiftRecords(name: string): SetRecord[] {
+  const user = els.athlete.value;
+  return computedRecordsAllLifts().filter((r) => r.username === user && (r.exerciseName === name || r.originalExerciseName === name));
+}
+
 /** Every logged set for this lift in the card graph's ADDED-weight space (x = added
  * plate, negative = assisted). The added weight mirrors addedWeight1RM's convention:
  * the bar-only lift's whole load IS added (origWeight undefined), else the entered
- * plate (origWeight). Reps 1..60 (matches the curve range, PB-30). Uses the COMPUTED
- * records (bodyweight folded into `weight`, synthetic combine/compare groups included)
- * so `weight` is the EFFECTIVE load AND a combined/comparable lift ("SQ mix") gets its
- * members' sets — a plain lift's raw data would mis-read `weight` as added & show none. */
+ * plate (origWeight). Reps 1..60 (matches the curve range, PB-30). `weight` is the
+ * EFFECTIVE bodyweight-folded load (computed records). */
 function cardNuzzoRealSets(name: string): CardNuzzoSet[] {
   const out: CardNuzzoSet[] = [];
-  for (const s of setsForUserExercise(computedRecordsAllLifts(), els.athlete.value, name)) {
+  for (const s of cardLiftRecords(name)) {
     const reps = s.reps;
     if (reps == null || reps < 1 || reps > 60) continue;
     if (s.weight == null || !(s.weight > 0)) continue; // need a real effective load
@@ -11503,10 +11511,10 @@ function liftTrainingHtml(name: string): string {
   // The lift's real rep-maxes (for the Nuzzo fit-graph) and the 1RM that best fits them
   // to the curve. When sets are logged, the card's 1RM is the adjustable slider value
   // (cardOrm) — defaulting to the logged best — instead of the kg×reps mini-calculator.
-  // Computed records: `weight` is the EFFECTIVE (bodyweight-folded) load and synthetic
-  // combine/compare lifts are included, so the fit is correct for bodyweight lifts AND a
-  // combined/comparable lift ("SQ mix") has rep-maxes to fit (owner: they need graphs too).
-  const repMaxes = nuzzoRepMaxes(setsForUserExercise(computedRecordsAllLifts(), user, name));
+  // cardLiftRecords: EFFECTIVE (bodyweight-folded) loads, synthetic combine/compare lifts
+  // included, AND spelling-merge variants (chin-ups under pull-ups) matched — so the fit is
+  // right for bodyweight lifts and composite/variant lifts have rep-maxes to fit + a graph.
+  const repMaxes = nuzzoRepMaxes(cardLiftRecords(name));
   const bestFit = bestFitNuzzo1RM(repMaxes); // EFFECTIVE 1RM (bodyweight folded in)
   const hasLogged = repMaxes.length > 0;
   // BODYWEIGHT-aware 1RM (#major): the graph + slider work in ADDED-weight space — the
