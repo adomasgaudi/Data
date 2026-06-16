@@ -173,9 +173,14 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     const rvw: SvgSeries[] = [];
     groups.forEach((g, gi2) => {
       const base = multiUser ? harmoniousColor(g.userIdx ?? gi2, input.users!.length) : harmoniousColor(gi2, groups.length);
+      // Plot the LOGGED dial weight (origWeight) the athlete actually used — NOT the
+      // bodyweight-inclusive effective load that computeRecord stamps onto `weight`
+      // (which showed loads they never lifted, e.g. a bodyweight-folded DL at 60 vs the
+      // 40 on the bar). Matches the workout history's display rule (WO-194).
+      const dispW = (r: SetRecord): number | null => (r.origWeight != null ? r.origWeight : r.weight);
       const pts = g.records
-        .filter((r) => r.weight != null && r.reps != null && r.reps > 0)
-        .map((r) => ({ x: Math.round(r.weight! * 10) / 10, y: r.reps!, meta: `${g.label}: ${Math.round(r.weight! * 10) / 10}kg × ${r.reps}` }));
+        .filter((r) => dispW(r) != null && r.reps != null && r.reps > 0)
+        .map((r) => { const w = Math.round(dispW(r)! * 10) / 10; return { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}` }; });
       if (!pts.length) return;
       rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: pts as SvgPoint[] });
       if (input.config.repsVsWeightFit) {
@@ -198,6 +203,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     const cfg: SvgChartConfig = {
       series: rvw, xKind: "linear", height: 300, panMode: "xy", yBeginAtZero: true,
       formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
+      xTitle: "weight (kg)", yTitle: "reps",
     };
     if (chartMode.get(container) !== "rvw") { charts.delete(container); chartMode.set(container, "rvw"); }
     container.classList.add("svgc-freepan");

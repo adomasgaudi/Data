@@ -160,6 +160,10 @@ export interface SvgChartConfig {
   formatTipX?: (x: number) => string;
   /** Draw axis values inside the plot (wider) vs in outer margins. */
   insideLabels?: boolean;
+  /** Axis TITLES (e.g. "weight (kg)" / "reps"). Outer-label charts only; they widen
+   *  the bottom/left margins to make room. Ignored when insideLabels is on. */
+  xTitle?: string;
+  yTitle?: string;
   /** Allow pan/zoom (default true). */
   interactive?: boolean;
   /** "xy" (default) = free 2-D pan/zoom; "x" = horizontal only (y stays put). */
@@ -405,7 +409,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   let pinned = false; // the detail popup is pinned to a point (stays until dismissed)
   /** Re-fit the view to the data (undo any pan/zoom). */
   const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
-  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
+  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46 + (cfg.yTitle ? 14 : 0), r: hasRight() ? 40 : 14, t: 12, b: 26 + (cfg.xTitle ? 15 : 0) });
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
@@ -924,6 +928,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     });
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
+    // Axis titles (outer-label charts only) — centred under the x-axis / rotated up the
+    // left, in the muted axis colour. They sit in the widened margins (see margins()).
+    let axisTitles = "";
+    if (!inside()) {
+      const cx = (M.l + (W - M.r)) / 2, cy = (M.t + (h - M.b)) / 2;
+      if (cfg.xTitle) axisTitles += `<text x="${cx.toFixed(1)}" y="${(h - 3).toFixed(1)}" text-anchor="middle" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
+      if (cfg.yTitle) axisTitles += `<text x="11" y="${cy.toFixed(1)}" text-anchor="middle" transform="rotate(-90 11 ${cy.toFixed(1)})" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
+    }
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
       `<defs><clipPath id="${clipId}"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath>` +
@@ -931,6 +943,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       `<g clip-path="url(#${clipId})">${bands}${grid}${body}${inside() ? xLabels + yLabels : ""}</g>` +
       frame +
       (inside() ? "" : xLabels + yLabels) +
+      axisTitles +
       `</svg>`;
   }
 
