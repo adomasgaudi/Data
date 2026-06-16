@@ -65,17 +65,19 @@ equipment mobility + setup cost + gym etiquette (can't hog more than 2–3 stati
   no-way-graded pairs. Device-local view prefs (`colosseum.pairSort`,
   `colosseum.pairHideAvoid`); apply only on render so a grade tap never re-sorts
   (rule 47). — b.2.8.476 (SEL-58)
-- [ ] 12. **Equipment + practicality tags — FULL SEPARATE TAGS (owner's chosen depth).**
-  NOT derive-from-equipment: the owner picked four INDEPENDENT per-exercise tags —
-  **Equipment** (already a taxonomy in `exerciseMeta.ts`, only ~6 seeded) + **Station**
-  (which fixed station it occupies / none) + **Setup** (teardown cost: none/light/heavy —
-  e.g. deadlift heavy) + **Occupancy** (how many stations it ties up, for the 2–3-place
-  etiquette rule). Populate across the whole library (keyword inference like
-  `INFER_RULES`, plus a manage-tags UI), then a `pairPracticality(A,B)` score replaces
-  the name-regex `pairEaseScore()` and feeds the Practical sort + a new practicality grade.
-- [ ] 13. **Wire practicality into suggestions** — the Practical sort uses the real
-  (A,B) station/setup/occupancy score; optionally auto-demote pairs that need >2 busy
-  stations. i18n + tests for the new tags.
+- [x] 12. **Equipment + practicality tags — FULL SEPARATE TAGS (owner's chosen depth).**
+  Station + Setup + Occupancy per lift, in pure tested `src/practicality.ts` (12 tests).
+  Seeded by name-keyword inference across the WHOLE library (deadlift→Platform+Heavy,
+  dumbbell→Free portable, leg press→Machine no-setup…) with an equipment-tag fallback —
+  no hand-entry. `pairPracticalityScore(A,B)` replaces the deleted name-regex
+  `pairEaseScore()`. — b.2.8.478 (SEL-60)
+- [x] 13. **Wire practicality into suggestions** — the "Practical" sort now ranks by the
+  real (A,B) station/setup/occupancy score; each chip's tooltip shows the cost via
+  `pairPracticalityHint`. — b.2.8.478 (SEL-60)
+- [ ] 14. **Manage-tags UI (deferred).** A small editor to hand-override any lift's
+  Station/Setup/Occupancy (only the UI is missing). Also optional: auto-DEMOTE / flag
+  pairs needing >2 busy stations rather than only sorting them down. Owner to confirm
+  the etiquette threshold when wanted.
 
-Step 11 is shipped; 12–13 are the real data-model work (4 tags × whole library +
-a manage UI) — a separate #careful pass, not one prompt.
+Steps 11–13 are SHIPPED (sort/hide + the real practicality model + wiring). Step 14
+(hand-edit UI + hard etiquette demotion) waits on owner input on the threshold.

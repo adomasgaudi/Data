@@ -98,6 +98,7 @@ import {
 } from "./pairing";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
+import { pairPracticalityScore, pairPracticalityHint } from "./practicality";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
@@ -11290,13 +11291,6 @@ function closePairGradeMenu(): void {
  *  tiebreaker behind priority and the user's own flags. Portable kit (dumbbell /
  *  kettlebell / band) is easiest; a fixed station (machine / smith / press) is
  *  hardest; barbell & bodyweight sit in the middle. */
-function pairEaseScore(name: string): number {
-  const n = name.toLowerCase();
-  if (/dumb?bell|\bdb\b|kettlebell|\bkb\b|\bband\b/.test(n)) return 0;
-  if (/machine|smith|hack|leg press|pec deck|pulldown|cable|\brc\b/.test(n)) return 3;
-  return 2;
-}
-
 /** This athlete's CURRENT (decay-faded) estimated 1RM for one lift — the same
  *  per-day-best → decayingStrengthPoints model the live plan uses, so the brief
  *  agrees with the plan. null when they've never logged it. */
@@ -11525,9 +11519,10 @@ function liftTrainingHtml(name: string): string {
         return displayName(p.name).localeCompare(displayName(q.name));
       case "trained": // most-trained first
         return (q.sets - p.sets) || displayName(p.name).localeCompare(displayName(q.name));
-      default: // "practical": priority → ease-to-pair → most-trained (the original order)
+      default: // "practical": priority → real station/setup practicality of pairing with
+        // THIS lift (Phase-5 model) → most-trained.
         return (focusRank(p) - focusRank(q)) ||
-          (pairEaseScore(p.name) - pairEaseScore(q.name)) ||
+          (pairPracticalityScore(name, p.name) - pairPracticalityScore(name, q.name)) ||
           (q.sets - p.sets);
     }
   };
@@ -11539,7 +11534,7 @@ function liftTrainingHtml(name: string): string {
     .sort(pairCmp);                            // tiebreak: most-trained
   const pairChip = (le: { name: string }): string =>
     `<span class="lt-paircell pg-${pairGradeFor(name, le.name)}">` +
-    `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest">${escapeHtml(shortFor(le.name))}</button>` +
+    `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest · ${escapeHtml(pairPracticalityHint(name, le.name))}">${escapeHtml(shortFor(le.name))}</button>` +
     pairFlagBtn(name, le.name) +
     `</span>`;
   // Item 3: the SUPER/GOOD pairs (directional name → candidate), surfaced near the top.
