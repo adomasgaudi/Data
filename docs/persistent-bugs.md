@@ -11,7 +11,15 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
-## PB-28 — Calendar (custom-date) picker won't open from the add-exercise popup
+## PB-29 — Removing every lift from the graph/history leaves no placeholder + no add buttons
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph/History with all lifts removed. Owner: "when I remove exercises from the history or from the graph there's no placeholder text and I cannot see the buttons to add more exercises." Tagged `#persistent #debug`. Same CLASS as PB-20 (the empty-graph prompt) — it had been "fixed" by moving the prompt INTO the title, but the fix never held because of the bug below.
+- **Root cause (an early-return shadowing the empty-state code):** `liftSelectionTitle(sel, remove)` opened with `if (sel.length === 0) return "";` — bailing on EVERY empty selection. But ~80 lines lower the SAME function carefully builds the empty-state markup: the `+/✕/=` toolbar (kept "even when EMPTY"), the "Select an exercise" CTA (`emptyCta`, guarded on `sel.length === 0`), and the Pick tab. The early-out at the top short-circuited all of it, so an empty graph/history rendered an empty string — no title, no placeholder, no add buttons. The history call site even passes `liftSelectionTitle([], "hist")` EXPECTING those controls. A later fix added the empty-state markup but nobody removed the contradicting early-return — the classic "two halves of the function disagree" bug (#debug: the real value at the top contradicts the assumption at the bottom).
+- **Fix (b.2.8.x):** narrowed the early-out to `if (sel.length === 0 && !remove) return "";` — only the non-removable PLAIN-TEXT title collapses when empty; the removable graph/hist titles fall through and render their `+/✕/=` tools, the "Select an exercise" placeholder, and the Pick tab. Comment `PB-29` at the fix site.
+- **Watch:** when an empty-state branch "doesn't show", grep the function for an EARLY RETURN on the same emptiness condition before assuming the markup is wrong — a guard at the top silently beats the handling at the bottom.
+- **Recurrences:** 0 as PB-29 (but it's the second life of PB-20's empty-graph-prompt intent — the prompt existed but was never reachable).
+
+---
 
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → "+ exercise" popup → tapping the 📅 (pick a date) button. Owner: "I can't press the calendar icon to enter a custom date it's not working." Same CLASS as PB-17 / PB-32 (floating thing in the wrong layer / bounds).
 - **Root cause:** a z-index stacking bug. `.dp-pop` (the date picker, appended to `<body>`) used `z-index: var(--z-modal)` (= 60), but the add-set popup `.addm-overlay` uses a RAW `z-index: 120` (it bypasses the semantic z-token scale `--z-drop 40 / --z-modal 60 / --z-top 200`). Since the picker is launched from INSIDE that modal, it opened at 60 — behind the 120 overlay — so it was covered by the modal's backdrop + card: invisible and unpressable.

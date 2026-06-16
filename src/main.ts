@@ -17304,7 +17304,12 @@ const TITLE_NAME_CAP = 5;
 // When a title is expanded its selector hides the now-redundant picked-lift pills.
 const titleExpanded: Record<"graph" | "hist", boolean> = { graph: false, hist: false };
 function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | null = null): string {
-  if (sel.length === 0) return "";
+  // PB-29: an empty graph/history selection MUST still render its title controls (the
+  // +/✕/= toolbar, the "Select an exercise" CTA, the Pick tab) so you can always add a
+  // lift back. Only the NON-removable (plain-text) title collapses to nothing when empty —
+  // the early-out used to fire for EVERY empty selection, short-circuiting the empty-state
+  // markup built below (the recurring "removed all lifts → no placeholder, no add buttons").
+  if (sel.length === 0 && !remove) return "";
   // The title names lifts for its area (graph / hist), so it shows that area's mode.
   const prevNameScope = nameScope;
   if (remove) nameScope = remove;
