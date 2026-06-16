@@ -11,6 +11,17 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-36 — "Can't add variations" for a lift that has no variation MODEL (only the generic ROM% shows)
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, coloseum.netlify.app), the "Add exercise" / "Add set" popup. Owner: "cant add variations for hs wall tap (and hspu) #persistent" (screenshot: the popup for a handstand lift showing only a "Range of motion 90%" picker, no Variant block).
+- **Same CLASS as PB-25** ("a created exercise doesn't appear — exercise list is data-only"): adding metadata to `variationConfig.ts` alone is a silent no-op, and a lift only gets the structured Variant pickers if it has a **family** model. The difference here: the handstand skill lifts already HAD logged sets (so they appeared in pickers) but had **no family**, so the add-popup's `addmVariantField` returned "" → only the universal ROM% picker showed. There was no way to log support / ladder / yoga-block / lean as structured variations.
+- **Root cause:** structured variation pickers are gated on `familyOf(ex)` being non-null (`afVariationField` → `addmVariantField`). Only HSPU/PUSHUP/PULLUP/etc. had families; `Handstand wall touch` (HS Wall Tap), `Handstand touch shoulders`, `Handstand kicks`, `Handstand hold`, `Handstand walk` and the bare `Handstand` all returned null → no pickers, just a free-text note + ROM%.
+- **Fix (b.2.9.20, LIFT-95):** added a shared **`HANDSTAND`** family in `variationConfig.ts` reusing HSPU's SETUP dims (support / ladderGrip / ladderH / obstacle = yoga block S·M·L / lean / shoulderDist) but NONE of the pressing-only dims (band, rom-depth pad, low/full range, one-/two-hand). `familyOf` maps every handstand spelling to it (`n.includes("handstand")`, AFTER the `handstandpush`→HSPU check so push-ups stay HSPU). The per-set editor already renders any family generically (`hasGrid` skips the depth×lean pad when a family has no `rom`), and the quick-add form's `AF_DIM_ORDER` already lists support/obstacle/lean, so the pickers appear with no main.ts change. Comment `PB-36` at the family in `variationConfig.ts`.
+- **Watch:** "I can't add variations for lift X" → X needs a **family** in `variationConfig.ts` (`EXERCISE_FAMILY` or the `familyOf` pattern). Adding only a bodyweight coeff / token / changelog line does NOT add pickers. New family dims must also be in `AF_DIM_ORDER` (support/obstacle/lean already are; ladder + shoulderDist are full-editor only, by design).
+- **Recurrences:** 0 (first report; sibling of the PB-25 "metadata ≠ visible feature" class).
+
+---
+
 ## PB-34 — Bottom search/command bar lifts up / jumps half-screen while scrolling
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Workouts (the always-on bottom "Search exercises…" command bar). Owner: "the search bar lifts up sometimes when scrolling or sometimes unexpectedly jumps half screen height #note #debug".

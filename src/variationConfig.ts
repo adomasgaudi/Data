@@ -142,6 +142,32 @@ export const FAMILIES: Record<string, FamilyDef> = {
     },
     defaults: { band: "none" },
   },
+  // PB-36 — without this family the handstand skill lifts had NO variation pickers
+  // (only the generic ROM%); the owner "couldn't add variations for HS Wall Tap".
+  HANDSTAND: {
+    // The non-press handstand SKILL lifts — wall TAP (wall touch), touch-shoulders,
+    // kicks, hold, walk… — share the SAME setup variations as the handstand PUSH-UP
+    // (owner: "give wall tap the same variations HSPU has"), MINUS the pressing-only
+    // dims (band assist, press depth in cm, low/full press range, one-/two-hand
+    // press). What's left is the SETUP: wall orientation, the ladder (grip + rung
+    // height), a yoga BLOCK prop (S/M/L like the knee-raise obstacle), forward lean,
+    // and — back-to-wall only — shoulder distance. Support/ladder/lean factors mirror
+    // HSPU's so difficulty reads consistently across all handstand work; the yoga
+    // block is a neutral ×1 placeholder. Calibrate the numbers in ⚙ Difficulty
+    // multipliers. No "rom" dim → the depth×lean pad is skipped (it's HSPU-press only);
+    // lean shows as its own chip row, and the universal per-set ROM% covers range.
+    dims: {
+      support: { free: 1.0, front_to_wall: 0.92, back_to_wall: 0.82, ladder: 0.55 },
+      ladderGrip: { none: 1.0, lsit: 1.1, hooked: 0.8 },
+      ladderH: { none: 1.0, lad3: 0.72, lad5: 0.6, lad6: 0.55, lad9: 0.42 },
+      // Yoga block used as a prop / target (S 6cm · M 15cm · L 23cm) — same obstacle
+      // dim the knee-raise uses; neutral ×1 placeholders for now (calibrate).
+      obstacle: { none: 1.0, S: 1.0, M: 1.0, L: 1.0 },
+      lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
+      shoulderDist: { "0cm": 1.0, blue: 1.0 },
+    },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm" },
+  },
 };
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
@@ -284,6 +310,45 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "band assisted": { band: "5" },
     guma: { band: "5" },
   },
+  HANDSTAND: {
+    // Wall orientation (same cues as HSPU). Bare "wall" = back-to-wall; "butt to wall"
+    // too; chest/face cues = front-to-wall; "no wall" wins.
+    wall: { support: "back_to_wall" },
+    "back to wall": { support: "back_to_wall", priority: 4 },
+    "butt to wall": { support: "back_to_wall", priority: 4 },
+    "front to wall": { support: "front_to_wall", priority: 4 },
+    "navel to wall": { support: "front_to_wall", priority: 4 },
+    "close to wall": { support: "front_to_wall", priority: 4 },
+    "no wall": { support: "free", priority: 5 },
+    freestanding: { support: "free" },
+    ladder: { support: "ladder" },
+    // Yoga BLOCK prop → the obstacle dim (S/M/L). Longest-match-first means "yoga l"
+    // beats bare "yoga". (Bare single letters M/L aren't tokens — too collision-prone.)
+    "l yoga": { obstacle: "L" },
+    "yoga l": { obstacle: "L" },
+    "m yoga": { obstacle: "M" },
+    "yoga m": { obstacle: "M" },
+    "s yoga": { obstacle: "S" },
+    "yoga s": { obstacle: "S" },
+    "yoga block": { obstacle: "M" },
+    yoga: { obstacle: "M" },
+    // Shoulders touching the wall (back-to-wall, shoulders on it).
+    "shoulders to wall": { support: "back_to_wall", shoulderDist: "0cm" },
+    // Forward lean.
+    "forward lean": { lean: "15cm" },
+    // Ladder rung height (+ the ladder support it implies).
+    lad3: { support: "ladder", ladderH: "lad3" },
+    lad5: { support: "ladder", ladderH: "lad5" },
+    lad6: { support: "ladder", ladderH: "lad6" },
+    "ladder 5": { support: "ladder", ladderH: "lad5" },
+    "ladder 6": { support: "ladder", ladderH: "lad6" },
+    "5 lygis": { support: "ladder", ladderH: "lad5" },
+    // Legs on the ladder → a grip (and the ladder setup).
+    hooked: { support: "ladder", ladderGrip: "hooked" },
+    "l sit": { support: "ladder", ladderGrip: "lsit" },
+    "l-sit": { support: "ladder", ladderGrip: "lsit" },
+    lsit: { support: "ladder", ladderGrip: "lsit" },
+  },
 };
 
 /** The bundled config (passed by default to the resolver; callers may pass their
@@ -291,7 +356,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 15;
+export const CONFIG_VERSION = 16;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -322,6 +387,17 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Cross-leg Squat": "CROSSSQUAT",
   "Cross-leg squat": "CROSSSQUAT",
   "Cross Legged Squat": "CROSSSQUAT",
+  // Non-press handstand SKILL lifts → the shared HANDSTAND setup model (wall tap /
+  // touch-shoulders, kicks, hold, walk, the bare "Handstand"). The pattern fallback
+  // below catches every other handstand spelling/variant too; these explicit entries
+  // document the common ones. (The PUSH-UP variants stay HSPU — matched first.)
+  "Handstand wall touch": "HANDSTAND",
+  "Handstand touch shoulders": "HANDSTAND",
+  "Handstand touch shoulder": "HANDSTAND",
+  "Handstand kicks": "HANDSTAND",
+  "Handstand hold": "HANDSTAND",
+  "Handstand walk": "HANDSTAND",
+  Handstand: "HANDSTAND",
 };
 
 export function familyOf(
@@ -344,6 +420,11 @@ export function familyOf(
   // kg like HSPU — however it's spelled (assisted, wide/neutral grip, weighted…). Lat
   // PULLDOWNs contain "pull" but not "pullup", so they're correctly excluded.
   if (n.includes("pullup") || n.includes("chinup")) return "PULLUP";
+  // Any OTHER handstand (wall tap / touch / kicks / hold / walk / steps / leg curls /
+  // on head / dance…) uses the HANDSTAND setup model — "handstand" anywhere. The
+  // push-up variants were already returned as HSPU above ("handstandpush" is caught
+  // first), so this only catches the non-press handstand skill work.
+  if (n.includes("handstand")) return "HANDSTAND";
   return null;
 }
 

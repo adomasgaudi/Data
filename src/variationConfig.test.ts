@@ -19,10 +19,16 @@ describe("familyOf", () => {
       "HSPU-B",
     ]) expect(familyOf(name)).toBe("HSPU");
   });
-  it("does NOT treat non-press handstands (holds/walks/kicks) as HSPU", () => {
-    expect(familyOf("Handstand Hold")).toBeNull();
-    expect(familyOf("Handstand Walk")).toBeNull();
-    expect(familyOf("Handstand Kicks")).toBeNull();
+  it("treats non-press handstands (holds/walks/kicks/wall tap) as the HANDSTAND setup model, NOT HSPU", () => {
+    // They get the shared handstand SETUP variations (support/ladder/yoga/lean), but
+    // never the pressing model — so they're HANDSTAND, distinct from HSPU.
+    expect(familyOf("Handstand Hold")).toBe("HANDSTAND");
+    expect(familyOf("Handstand Walk")).toBe("HANDSTAND");
+    expect(familyOf("Handstand Kicks")).toBe("HANDSTAND");
+    expect(familyOf("Handstand wall touch")).toBe("HANDSTAND");
+    expect(familyOf("Handstand touch shoulders")).toBe("HANDSTAND");
+    // The push-up variants are still matched FIRST → HSPU, not HANDSTAND.
+    expect(familyOf("Wall Handstand Push Up")).toBe("HSPU");
   });
   it("treats the scapular handstand push-up variant as HSPU", () => {
     expect(familyOf("Scapular Handstand Push Up")).toBe("HSPU");
