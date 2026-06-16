@@ -18307,8 +18307,19 @@ function graphCarouselLifts(): string[] {
 /** Draw ONE single-exercise, single-athlete chart into `container`, reusing the full
  * graph engine + the current global options (so a slide looks like the full graph minus
  * the multi-select). */
+/** Graph-TYPE toggle (owner): a pill next to the exercise graph that flips the whole plot
+ * between the weight-over-time graph (default) and the reps × weight scatter. Drives the
+ * SAME state as the Options-menu "Reps versus weight" toggle (one source of truth, two
+ * surfaces), so they stay in lockstep; the existing data-warvw handler does the flip. */
+function graphTypeToggleHtml(): string {
+  const on = S.waRepsVsWeight;
+  return `<button type="button" class="wa-clear wa-graph-typebtn${on ? " is-on" : ""}" data-warvw="1" aria-pressed="${on}" title="Switch between the weight-over-time graph and the reps × weight scatter">${on ? "✦ Reps×kg" : "↗ vs time"}</button>`;
+}
 function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   waGraphConfig.formula = currentFormula();
+  // Honour the graph-type toggle on the carousel too (it shares waGraphConfig with the full graph).
+  waGraphConfig.repsVsWeight = S.waRepsVsWeight;
+  waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
   const fm = waGraphConfig.formula;
   const sm = currentStrengthByUserExercise(fm);
   waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
@@ -18521,6 +18532,7 @@ function renderGraphMini(): void {
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
+      graphTypeToggleHtml() +
       optionsFold +
       `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">Multi ▾</button>` +
     `</div>`;
@@ -18615,6 +18627,7 @@ function renderWaGraph(): void {
     // Graph options · Legend (relocated in below) · Compare share ONE row — the fold's
     // metric summary truncates so Compare never wraps to its own line.
     `<div class="wa-graph-ctrls">` +
+    graphTypeToggleHtml() +
     graphOptionsFoldHtml(graphExercises, box) +
     compareBtn +
     // "Single ▴" — mirror of the carousel's "Multi ▾": flips the full multi graph back
