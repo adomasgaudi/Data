@@ -2853,7 +2853,9 @@ sup.wr-bw { font-size: 0.85em; }
 table.rx-wu { border-collapse: collapse; font-size: var(--fs-base); font-variant-numeric: tabular-nums; }
 table.rx-wu th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.9rem 2px 0; }
 table.rx-wu td { padding: 2px 0.9rem 2px 0; border-top: 1px solid var(--line); }
-table.rx-wu tr.rx-wu-general td { color: var(--muted); }
+/* Warm-up rows (primer + ramp) read GREY, the WORK rows dark + bold — so the actual
+   working sets stand out from the warm-up (owner). The work-row rule below sets the dark. */
+table.rx-wu tr.rx-wu-general td, table.rx-wu tr.rx-wu-ramp td { color: var(--muted); font-weight: 400; }
 /* The exact (unrounded) warm-up load — small + grey beside the plate-rounded weight. */
 .rx-wu-exact { font-size: 0.72rem; color: var(--muted); font-weight: 400; }
 /* The max-reps "NRM" beside the %1RM — slightly smaller/dimmer so the % stays the headline. */
@@ -2863,8 +2865,16 @@ table.rx-wu tr.rx-wu-general td { color: var(--muted); }
 /* The "–" between the two paired ends (light^more – heavy^fewer) — quiet, a little breathing room. */
 .rx-wu-dash { color: var(--muted); margin: 0 0.35rem; }
 /* The warm-up table continues into the WORK sets (owner) — set off with an accent rule. */
-table.rx-wu tr.rx-wu-work td { color: var(--text); border-top: 1px solid var(--accent); }
+table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top: 1px solid var(--accent); }
 .rx-wu-worktag { color: var(--accent); font-size: 0.7rem; font-weight: 700; }
+/* Per-set nudge buttons (− + weight, −ʳ +ʳ reps) on the right of each row — compact pressable
+   pills (owner: make each set heavier/lighter or adjust reps). The ʳ marks the rep pair. */
+.rx-wu-adj { float: right; display: inline-flex; gap: 3px; margin-left: 0.5rem; }
+.rx-wu-bump { font: inherit; font-size: 0.8rem; font-weight: 700; line-height: 1; min-width: 22px; min-height: 22px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); padding: 0 4px; }
+.rx-wu-bump:hover, .rx-wu-bump:active { border-color: var(--accent); color: var(--accent); }
+.rx-wu-bump-r { color: var(--muted); }
 /* Hard-set plan pill sits right after the "Work sets" label (not pushed to the edge). */
 .rx-ws-plan { margin-left: 0; }
 /* Tabbed plan POPUP (owner): warm-up / hard-set type tabs → a live table → an explanation. */
@@ -2877,9 +2887,9 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); border-top: 1px solid var(--a
 .plan-tbl th { text-align: left; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 700; padding: 0 0.7rem 2px 0; }
 .plan-tbl td { padding: 2px 0.7rem 2px 0; border-top: 1px solid var(--line); }
 .plan-blurb { font-size: 0.78rem; color: var(--text); margin: 0.5rem 0 0.1rem; line-height: 1.4; }
-/* Custom hard-set editor inside the plan popup (sets × reps). */
-.plan-custom { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.45rem; }
-.plan-cust-in { width: 3.4rem; font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); text-align: center; }
+/* Safety back-off editor inside the plan popup (a textarea of "weight reps" lines). */
+.plan-custom { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); margin: 0.1rem 0 0.45rem; }
+.plan-safety { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.85rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); resize: vertical; }
 /* Guide / training-advice page */
 .guide { max-width: 720px; }
 /* Each guide topic is a collapsible <details> section. The summary is styled

@@ -110,6 +110,9 @@ export interface AnalyticsGraphInput {
   /** Called on release after dragging the reps-vs-weight fit line (exercise + new
    * effective 1RM). */
   onRvwFitDrag?: (exercise: string, effOneRm: number) => void;
+  /** The FULL (all-windows) reps×weight extent — pins the rvw axes so paging a 2-week
+   * window (or dragging the fit) keeps a STABLE frame instead of re-fitting/jumping. */
+  rvwAxis?: { xMin: number; xMax: number; yMax: number } | undefined;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -263,10 +266,17 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         }
       }
     });
+    // Pin the axes to the FULL extent (single lift) so paging a 2-week window — or dragging
+    // the fit — keeps a STABLE frame and you can SEE the points move (owner: "shouldn't jump,
+    // I can't tell the change … no autofit"). Set explicitly (undefined when off) — update()
+    // merges, so a stale forced range must be cleared (PB-8).
+    const axis = singleGroup ? input.rvwAxis : undefined;
     const cfg: SvgChartConfig = {
       series: rvw, xKind: "linear", height: 360, panMode: "xy", yBeginAtZero: true, leftMargin: 30,
       formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
       xTitle: "weight (kg)", yTitle: "reps",
+      forceXRange: axis ? { min: axis.xMin, max: axis.xMax } : undefined,
+      forceLeftRange: axis ? { min: 0, max: axis.yMax } : undefined,
     };
     // RIR effort zones (single lift): ribbons stepping DOWN from the failure curve in REPS —
     // 0–3 RIR (a hard set), 3–6, 6–12 — teal, fading out the easier they get (matches the card).

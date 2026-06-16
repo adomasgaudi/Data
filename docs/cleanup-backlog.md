@@ -100,7 +100,7 @@ Everything else is optional. A cleanup backlog regenerates itself — don't grin
 - 🔴 **ARCH-1** [Architecture] (SP:30) — Split `main.ts` (jsdom net → `let`→state-object → ~7 feature modules). The one big-ticket item that genuinely matters: you edit with AIs and a 10k-line file blocks that. *(IN PROGRESS: `appState` container + 2 state clusters migrated — b.2.6.60/61, ~11/95 globals on `S`. Paused while `main.ts` is hot with concurrent edits, per #co-work.)*
 - 🟠 **ARCH-2** [Architecture] (SP:8) — Test + move untested compute (strength-fade, world-record, difficulty maths) into tested modules.
 - 🟠 **DEL-1** [Code] (SP:3) — Warehouse/delete speculative scaffolding (`DISSOLVABLE_TAGS`, empty `EXERCISE_GROUPS`, unused identity model, 8 dead exports).
-- 🟠 **DOC-1** [Docs] (SP:2) — Reconcile docs that actively MISLEAD AIs (README/CLAUDE "Chart.js" gone, stale Netlify steps).
+- ✅ **DOC-1** [Docs] (SP:2) — DONE (b.2.9.x): fixed CLAUDE.md's stack line ("+ Chart.js" → in-house SVG engine `svgChart.ts`); the only genuinely misleading claim. README's Netlify steps verified ACCURATE (the site runs on Netlify — `netlify.toml`, `coloseum.netlify.app`), and README has no Chart.js. Other "Chart.js" mentions in src/changelog are correct (they describe the *replacement* engine or are historical removal notes).
 - 🟢 **ARCH-3** [Architecture] (SP:5) — Merge over-split clusters (`exercise*` + `profile`; `variation*`) — the over-split is mild.
 
 ## 🔵 CEO / ROI — a priority LENS, not a task bucket

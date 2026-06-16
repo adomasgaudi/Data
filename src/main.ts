@@ -11640,21 +11640,24 @@ function liftTrainingHtml(name: string): string {
       nuzzoBox(aBase) +
       realSrc +
     `</div>`;
-  // Working weights: true rep-maxes for common targets (load to FAILURE at N reps).
+  // Working weights: true rep-maxes for common targets (load to FAILURE at N reps). Computed
+  // on the EFFECTIVE 1RM, shown as ADDED weight (rule 49) — bodyShare 0 leaves bar lifts as-is.
   const repTargets = [3, 5, 8, 12];
   const workPills = repTargets.map((reps) => {
     const w = weightForReps(e1rm, reps, formula);
-    return w === null ? "" : pill(`${reps}RM`, `${fmt(w)}kg`);
+    return w === null ? "" : pill(`${reps}RM`, `${fmt(w - bodyShare)}kg`);
   }).join("");
   // Warm-up + working sets — the SAME rich table + plan pickers as the calculator (owner:
   // the card should have everything the calculator has). The pills open the shared tabbed
   // popups; lastWuCalc/lastWuRerender let the popup compute + refresh THIS card.
   if (hs && currentExInfo === name) {
-    lastWuCalc = { orm: e1rm, work: hs.weightKg, reps: hs.reps, formula, increment: 2.5 };
+    // ADDED 1RM + ADDED work + the bodyweight share, so the plan popup matches the card's
+    // own warm-up table (rule 49: effective maths, added-weight display). bar lift = share 0.
+    lastWuCalc = { orm: e1rm - bodyShare, work: hs.weightKg - bodyShare, reps: hs.reps, formula, increment: 2.5, bwl: bodyShare };
     lastWuRerender = () => { if (currentExInfo) paintExInfo(currentExInfo); };
   }
   const warmRows = hs
-    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm, hs.weightKg, hs.reps, formula, 2.5)}</div>`
+    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm - bodyShare, hs.weightKg - bodyShare, hs.reps, formula, 2.5, bodyShare, name)}</div>`
     : `<p class="muted lt-mini">—</p>`;
 
   // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
@@ -12686,56 +12689,102 @@ function cycleWarmupValMode(): void {
 function bandNums(label: string | undefined): number[] {
   return (label ?? "").replace("%", "").split("–").map((x) => Number(x)).filter((n) => Number.isFinite(n));
 }
+// Per-set warm-up/work nudges (owner: "+/- buttons to make each set heavier/lighter and
+// adjust reps"). A device-local delta per row, keyed by exercise|plan|kind|index, applied
+// on top of the computed set: dw = weight steps (× the increment), dr = rep steps. Keying by
+// plan means a nudge belongs to that plan; switching plans starts fresh (cleared on reset).
+const WARMUP_ADJ_KEY = "colosseum.warmupAdj.v1";
+function warmupAdjAll(): Record<string, { dw: number; dr: number }> {
+  try { const o = JSON.parse(localStorage.getItem(WARMUP_ADJ_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+}
+function getWarmupAdj(key: string): { dw: number; dr: number } {
+  const a = warmupAdjAll()[key]; return { dw: a?.dw ?? 0, dr: a?.dr ?? 0 };
+}
+function bumpWarmupAdj(key: string, field: "dw" | "dr", delta: number): void {
+  const all = warmupAdjAll(); const cur = all[key] ?? { dw: 0, dr: 0 };
+  cur[field] = (cur[field] ?? 0) + delta;
+  if (cur.dw === 0 && cur.dr === 0) delete all[key]; else all[key] = cur;
+  try { localStorage.setItem(WARMUP_ADJ_KEY, JSON.stringify(all)); } catch { /* ignore */ }
+}
+/** The 4 per-row nudge buttons (− + weight, − + reps) for one warm-up/work row. */
+function warmupAdjButtons(key: string): string {
+  return `<span class="rx-wu-adj">` +
+    `<button type="button" class="rx-wu-bump" data-wuadj="${escapeHtml(key)}|dw|-1" title="Lighter" aria-label="Lighter">−</button>` +
+    `<button type="button" class="rx-wu-bump" data-wuadj="${escapeHtml(key)}|dw|1" title="Heavier" aria-label="Heavier">+</button>` +
+    `<button type="button" class="rx-wu-bump rx-wu-bump-r" data-wuadj="${escapeHtml(key)}|dr|-1" title="Fewer reps" aria-label="Fewer reps">−ʳ</button>` +
+    `<button type="button" class="rx-wu-bump rx-wu-bump-r" data-wuadj="${escapeHtml(key)}|dr|1" title="More reps" aria-label="More reps">+ʳ</button>` +
+    `</span>`;
+}
 /** One warm-up row's value^reps cell for the current value mode, paired so the LIGHT end
  * shows more reps and the HEAVY end fewer (owner: "increasing the weight decreases the
  * reps" — never the ambiguous 25–55 ^10–20). Bands render as "light^more–heavy^fewer";
  * a single load (work set) renders as one "value^reps". */
-function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula): string {
+function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula, bodyShare = 0, dwKg = 0, dr = 0): string {
   const sup = (r: string | number) => `<sup class="rx-wu-reps">${r}</sup>`;
   const single = s.downKg === s.upKg;
-  // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit.
-  const valAt = (kg: number, lightEnd: boolean): string => {
+  const adjusted = dwKg !== 0 || dr !== 0; // a per-set nudge → recompute %/RM from the new load
+  // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit. INVARIANT: %1RM
+  // and RM are computed on the EFFECTIVE load (added kg + bodyweight share), the kg shown is
+  // the ADDED weight. So a pull-up's "20%" is 20% of (added + bodyweight), not of the plate.
+  const valAt = (kg0: number, lightEnd: boolean): string => {
+    const kg = kg0 + dwKg; // apply the weight nudge
     if (mode === "kg") return `${Math.round(kg * 100) / 100}`;
     if (mode === "pct") {
       const p = bandNums(s.pctLabel);
-      const pct = p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round((kg / orm) * 100);
+      const pct = !adjusted && p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round(((kg + bodyShare) / (orm + bodyShare)) * 100);
       return `${pct}%`;
     }
     // rm: the load as a rep-max — light load = MORE max reps. Prefer the precomputed band.
     const n = bandNums(s.maxRepsLabel); // [heavyEnd, lightEnd]
-    const rm = n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm, kg, formula) ?? s.reps));
+    const rm = !adjusted && n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm + bodyShare, kg + bodyShare, formula) ?? s.reps));
     return `${rm}RM`;
   };
-  if (single) return `<b>${valAt(s.weightKg, true)}</b>${sup(s.repsLabel ?? s.reps)}`;
+  const adjReps = (n: number) => Math.max(1, n + dr); // apply the rep nudge
+  if (single) {
+    // A single load may carry a rep RANGE ("15–30") or a non-numeric "max" (safety AMRAP).
+    const rr = bandNums(s.repsLabel);
+    const repsDisp = rr.length === 2 ? `${adjReps(rr[0]!)}–${adjReps(rr[1]!)}`
+      : (s.repsLabel && !Number.isFinite(Number(s.repsLabel))) ? s.repsLabel
+      : adjReps(Number(s.repsLabel ?? s.reps));
+    return `<b>${valAt(s.weightKg, true)}</b>${sup(repsDisp)}`;
+  }
   // reps band: repsLabel "lo–hi" = [heavyEndReps, lightEndReps].
   const r = bandNums(s.repsLabel);
-  const repsHeavy = r[0] ?? s.reps, repsLight = r[1] ?? r[0] ?? s.reps;
+  const repsHeavy = adjReps(r[0] ?? s.reps), repsLight = adjReps(r[1] ?? r[0] ?? s.reps);
   return `<b>${valAt(s.downKg, true)}</b>${sup(repsLight)}<span class="rx-wu-dash">–</span><b>${valAt(s.upKg, false)}</b>${sup(repsHeavy)}`;
 }
 
-// Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). "Entered"
-// keeps the typed weight × reps; the others prescribe a per-set rep sequence, each set
-// loaded at the weight for that rep target (from 1RM). Device-local pref.
-interface WorksetPlan { id: string; label: string; blurb: string; repsSeq: number[] | null }
+// Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). Each plan is
+// a TIER: the load = the weight you could do `rm` times (its rep-max), do a rep RANGE for
+// `sets` sets. "Entered" keeps the typed set; "Safety" is a user-typed back-off list (fixed
+// kg per line, incl. "max"). Device-local pref. (Owner redesign, replacing the old schemes.)
+interface WorksetPlan { id: string; label: string; blurb: string; rm: number; repsLo: number; repsHi: number; sets: number }
 const WORKSET_PLANS: WorksetPlan[] = [
-  { id: "entered", label: "Entered", blurb: "Just the set you typed — your actual work set, no scheme applied.", repsSeq: null },
-  { id: "5x5", label: "Strength 5×5", blurb: "Classic strength block — 5 sets of 5 (~80% of 1RM). A great all-round strength and size driver for novice→intermediate lifters.", repsSeq: [5, 5, 5, 5, 5] },
-  { id: "3x5", label: "Strength 3×5", blurb: "Leaner strength dose — 3 hard sets of 5. Less fatigue than 5×5; good when you're managing weekly volume.", repsSeq: [5, 5, 5] },
-  { id: "5x3", label: "Power 5×3", blurb: "Heavier, lower-rep power work — 5×3 (~87%). Builds top-end strength with crisp, fast, sub-maximal reps.", repsSeq: [3, 3, 3, 3, 3] },
-  { id: "peak", label: "Peaking 3·2·1", blurb: "Powerlifting peak — ascending sets of 3, 2, then 1 climbing toward a near-max single. Used in the last weeks before a test or meet.", repsSeq: [3, 2, 1] },
-  { id: "3x8", label: "Hypertrophy 3×8", blurb: "Muscle-building staple — 3×8 (~72%). Enough load to grow, enough reps for volume. The bread-and-butter of size work.", repsSeq: [8, 8, 8] },
-  { id: "4x10", label: "Volume 4×10", blurb: "Higher-volume hypertrophy — 4×10 (~65%). More total work per session; good for lagging muscles that respond to volume.", repsSeq: [10, 10, 10, 10] },
-  { id: "3x20", label: "Pump 3×20", blurb: "High-rep pump work for glutes, calves and accessories — 3×20 light. Metabolic stress + muscular endurance.", repsSeq: [20, 20, 20] },
-  { id: "2x30", label: "Endurance 2×30", blurb: "Very high-rep endurance — 2×30 very light. Conditioning, rehab, or a burnout finisher.", repsSeq: [30, 30] },
-  { id: "custom", label: "Custom", blurb: "Your own scheme — set the number of sets and reps below; the loads are computed off your 1RM.", repsSeq: null },
+  { id: "entered", label: "Entered", blurb: "Just the set you typed — your actual work set, no scheme applied.", rm: 0, repsLo: 0, repsHi: 0, sets: 1 },
+  { id: "end1", label: "Endurance 1", blurb: "A load you could do 30× (a 30RM), for 15–30 reps × 2 — muscular endurance / conditioning.", rm: 30, repsLo: 15, repsHi: 30, sets: 2 },
+  { id: "end2", label: "Endurance 2", blurb: "A 20RM load for 10–20 reps × 2 — endurance edging into hypertrophy.", rm: 20, repsLo: 10, repsHi: 20, sets: 2 },
+  { id: "str1", label: "Strength 1", blurb: "A 15RM load for 5–12 reps × 2 — hypertrophy-strength.", rm: 15, repsLo: 5, repsHi: 12, sets: 2 },
+  { id: "str2", label: "Strength 2", blurb: "A 10RM load for 3–8 reps × 2 — strength.", rm: 10, repsLo: 3, repsHi: 8, sets: 2 },
+  { id: "pow1", label: "Power 1", blurb: "An 8RM load for 1–3 reps × 2 — power.", rm: 8, repsLo: 1, repsHi: 3, sets: 2 },
+  { id: "pow2", label: "Power 2", blurb: "A 6RM load for 1–3 reps × 2 — heavy power.", rm: 6, repsLo: 1, repsHi: 3, sets: 2 },
+  { id: "elite", label: "Elite", blurb: "Near-max — a 1–5RM load for 1–5 reps × 2.", rm: 3, repsLo: 1, repsHi: 5, sets: 2 },
+  { id: "safety", label: "Safety", blurb: "Your own back-off list — type weight × reps per line (use “max” for AMRAP). Fixed kg, not computed from 1RM.", rm: 0, repsLo: 0, repsHi: 0, sets: 0 },
 ];
-// Owner-editable custom hard-set scheme (sets × reps) for the "Custom" tab.
-function getWorksetCustom(): { sets: number; reps: number } {
-  try { const o = JSON.parse(localStorage.getItem("colosseum.worksetCustom") ?? "null"); if (o && o.sets >= 1 && o.reps >= 1) return { sets: Math.min(12, o.sets | 0), reps: Math.min(50, o.reps | 0) }; } catch { /* ignore */ }
-  return { sets: 4, reps: 6 };
+// The user-typed "Safety" back-off list: fixed (weight, reps) lines; reps may be "max".
+function getSafetyList(): { weight: number; reps: string }[] {
+  try {
+    const a = JSON.parse(localStorage.getItem("colosseum.worksetSafety.v1") ?? "null");
+    if (Array.isArray(a)) return a.filter((x) => x && Number.isFinite(x.weight)).map((x) => ({ weight: Number(x.weight), reps: String(x.reps ?? "") }));
+  } catch { /* ignore */ }
+  return [{ weight: 40, reps: "5" }, { weight: 30, reps: "15" }, { weight: 25, reps: "max" }]; // the owner's example as the seed
 }
-function setWorksetCustom(sets: number, reps: number): void {
-  try { localStorage.setItem("colosseum.worksetCustom", JSON.stringify({ sets: Math.max(1, Math.min(12, sets | 0)), reps: Math.max(1, Math.min(50, reps | 0)) })); } catch { /* ignore */ }
+function safetyText(): string { return getSafetyList().map((s) => `${s.weight} ${s.reps}`).join("\n"); }
+function setSafetyText(text: string): void {
+  const list = text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^(-?\d+(?:\.\d+)?)\s*(?:kg)?\s*[x×*\s]\s*([a-z0-9]+)/i);
+    return m ? { weight: Number(m[1]), reps: m[2]!.toLowerCase() } : null;
+  }).filter((x): x is { weight: number; reps: string } => !!x);
+  try { localStorage.setItem("colosseum.worksetSafety.v1", JSON.stringify(list)); } catch { /* ignore */ }
 }
 function getWorksetPlan(): WorksetPlan {
   try { const v = localStorage.getItem("colosseum.worksetPlan"); return WORKSET_PLANS.find((p) => p.id === v) ?? WORKSET_PLANS[0]!; }
@@ -12743,16 +12792,15 @@ function getWorksetPlan(): WorksetPlan {
 }
 function setWorksetPlan(id: string): void { try { localStorage.setItem("colosseum.worksetPlan", id); } catch { /* ignore */ } }
 
-/** The working sets a hard-set plan prescribes for a 1RM: each set loaded at the weight
- *  for its rep target (plate-rounded); "Entered" keeps the typed set, "Custom" uses the
- *  owner's sets × reps. */
-function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number): { weightKg: number; reps: number }[] {
-  const seq = plan.id === "custom" ? (() => { const c = getWorksetCustom(); return Array(c.sets).fill(c.reps); })() : plan.repsSeq;
-  if (seq == null) return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
-  return seq.map((reps) => ({
-    weightKg: roundToIncrement(weightForReps(orm, reps, formula) ?? workingWeightKg, increment),
-    reps,
-  }));
+/** The working sets a hard-set plan prescribes. A TIER plan loads every set at its rep-max
+ *  weight (`rm`) computed on the EFFECTIVE curve, peeled to ADDED kg (rule 49), and shows the
+ *  rep RANGE; "Entered" keeps the typed set; "Safety" returns the user's fixed back-off list. */
+function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number, bodyShare = 0): { weightKg: number; reps: number; repsLabel?: string }[] {
+  if (plan.id === "entered") return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
+  if (plan.id === "safety") return getSafetyList().map((s) => ({ weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }));
+  const added = roundToIncrement((weightForReps(orm + bodyShare, plan.rm, formula) ?? (workingWeightKg + bodyShare)) - bodyShare, increment);
+  const repsLabel = plan.repsLo === plan.repsHi ? `${plan.repsLo}` : `${plan.repsLo}–${plan.repsHi}`;
+  return Array.from({ length: Math.max(1, plan.sets) }, () => ({ weightKg: added, reps: plan.repsLo, repsLabel }));
 }
 
 // Last calc state captured by renderWarmup, so the plan popups can build their preview
@@ -12764,14 +12812,20 @@ let lastWuRerender: () => void = () => {};
 
 /** The shared warm-up + working-set table (warm-up ramp continuing into the hard sets) —
  *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
-function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0): string {
+function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0, ctx = ""): string {
   const mode = getWarmupValMode();
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
+  // Per-set nudge (owner: +/- buttons): a device-local delta per row, applied here and shown
+  // with the 4 buttons. Keyed by ctx|plan|kind|idx; only when ctx is set (the card passes the
+  // exercise; the Formulas calc passes "" → no buttons there).
+  const wuPlan = getWarmupPlan(), wsPlan = getWorksetPlan().id;
+  const adjFor = (kind: string, plan: string, i: number) => ctx ? getWarmupAdj(`${ctx}|${plan}|${kind}|${i}`) : { dw: 0, dr: 0 };
+  const btns = (kind: string, plan: string, i: number) => ctx ? warmupAdjButtons(`${ctx}|${plan}|${kind}|${i}`) : "";
   // ONE value column (owner): each row is value^reps in the toggled unit (kg / %1RM / RM),
   // paired so the lighter end carries more reps. No "kg" text — the column header is the unit.
-  const wuRows = wu.map((s) => `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula)}</td></tr>`).join("");
-  const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment);
-  const workRows = sets.map((s) => `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula)} <span class="rx-wu-worktag">work</span></td></tr>`).join("");
+  const wuRows = wu.map((s, i) => { const a = adjFor("wu", wuPlan, i); return `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula, bodyweightLoad, a.dw * increment, a.dr)}${btns("wu", wuPlan, i)}</td></tr>`; }).join("");
+  const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment, bodyweightLoad);
+  const workRows = sets.map((s, i) => { const a = adjFor("ws", wsPlan, i); return `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula, bodyweightLoad, a.dw * increment, a.dr)} <span class="rx-wu-worktag">work</span>${btns("ws", wsPlan, i)}</td></tr>`; }).join("");
   return (wu.length || sets.length)
     ? `<table class="rx-wu"><thead><tr><th>Set · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
     : "";
@@ -12814,7 +12868,7 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
       `<button type="button" class="plan-tab${p === cur ? " is-on" : ""}" data-plantab="${p}">${WARMUP_PLAN_LABEL[p]}</button>`).join("");
     const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
     const mode = getWarmupValMode();
-    const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula)}</td></tr>`).join("");
+    const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula, c.bwl ?? 0)}</td></tr>`).join("");
     return `<div class="plan-tabs">${tabs}</div>` +
       `<table class="plan-tbl"><thead><tr><th>Warm-up · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${rows}</tbody></table>` +
       `<p class="plan-blurb">${escapeHtml(WARMUP_PLAN_BLURB[cur])}</p>`;
@@ -12822,13 +12876,14 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
   const cur = getWorksetPlan();
   const tabs = WORKSET_PLANS.map((p) =>
     `<button type="button" class="plan-tab${p.id === cur.id ? " is-on" : ""}" data-plantab="${escapeHtml(p.id)}">${escapeHtml(p.label)}</button>`).join("");
-  const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment);
-  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="muted">${c.orm > 0 ? Math.round((s.weightKg / c.orm) * 100) : 0}%</td></tr>`).join("");
-  // The Custom tab adds editable sets × reps inputs (owner: manipulate the numbers too).
+  const bwl = c.bwl ?? 0;
+  const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment, bwl);
+  // kg shown = ADDED weight; % computed on the EFFECTIVE load (added + bodyweight share).
+  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${c.orm + bwl > 0 ? Math.round(((s.weightKg + bwl) / (c.orm + bwl)) * 100) : 0}%</td></tr>`).join("");
+  // The Safety tab is a user-typed back-off list: one "weight reps" line each (reps may be "max").
   let customEdit = "";
-  if (cur.id === "custom") {
-    const cc = getWorksetCustom();
-    customEdit = `<div class="plan-custom"><input type="number" class="plan-cust-in" data-worksetcustom="sets" min="1" max="12" step="1" value="${cc.sets}" aria-label="Sets"> sets × <input type="number" class="plan-cust-in" data-worksetcustom="reps" min="1" max="50" step="1" value="${cc.reps}" aria-label="Reps"> reps</div>`;
+  if (cur.id === "safety") {
+    customEdit = `<div class="plan-custom"><textarea class="plan-safety" data-worksetsafety rows="4" placeholder="40 5&#10;30 15&#10;25 max" aria-label="Safety back-off sets">${escapeHtml(safetyText())}</textarea><div class="plan-blurb muted">One set per line: weight reps (“max” = AMRAP). Fixed kg.</div></div>`;
   }
   return `<div class="plan-tabs">${tabs}</div>` + customEdit +
     `<table class="plan-tbl"><thead><tr><th>Set</th><th>kg</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${rows}</tbody></table>` +
@@ -13502,6 +13557,19 @@ async function init() {
     debounceCardOrmRender();
   });
   els.exInfoBody.addEventListener("click", (e) => {
+    // Per-set warm-up nudge buttons (− + weight, − + reps): bump the row's delta + re-render.
+    const bump = (e.target as HTMLElement).closest<HTMLElement>("[data-wuadj]");
+    if (bump?.dataset.wuadj) {
+      e.preventDefault(); e.stopPropagation();
+      const idx = bump.dataset.wuadj.lastIndexOf("|");
+      const delta = Number(bump.dataset.wuadj.slice(idx + 1));
+      const rest = bump.dataset.wuadj.slice(0, idx);
+      const fidx = rest.lastIndexOf("|");
+      const field = rest.slice(fidx + 1) as "dw" | "dr";
+      bumpWarmupAdj(rest.slice(0, fidx), field, delta);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
     // "fit" chip: snap the 1RM to the value that best fits the logged sets to the curve.
     const fitBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-cardorm="best"]');
     if (fitBtn?.dataset.best) {
@@ -15359,20 +15427,16 @@ async function init() {
     }
     if (!menu.contains(t)) closePlanPopup();
   });
-  // Custom hard-set inputs inside the popup (sets × reps): commit on blur, refresh the
-  // popup table + the owning view (owner: manipulate the numbers).
+  // Safety back-off list inside the popup (a textarea of "weight reps" lines): commit on
+  // blur, refresh the popup table + the owning view.
   document.addEventListener("change", (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-worksetcustom]");
+    const inp = (e.target as HTMLElement).closest<HTMLTextAreaElement>("[data-worksetsafety]");
     const menu = document.getElementById("planPopup");
     if (!inp || !menu) return;
-    const sets = Number(menu.querySelector<HTMLInputElement>('[data-worksetcustom="sets"]')?.value);
-    const reps = Number(menu.querySelector<HTMLInputElement>('[data-worksetcustom="reps"]')?.value);
-    if (sets >= 1 && reps >= 1) {
-      setWorksetCustom(sets, reps);
-      setWorksetPlan("custom");
-      lastWuRerender();
-      menu.innerHTML = planPopupHtml("workset");
-    }
+    setSafetyText(inp.value);
+    setWorksetPlan("safety");
+    lastWuRerender();
+    menu.innerHTML = planPopupHtml("workset");
   });
 
   setupBottomNav();
@@ -17316,6 +17380,22 @@ function rvwWindowRecords(records: readonly SetRecord[]): SetRecord[] {
   const hi = latest - rvwWindowIdx * RVW_WINDOW_MS, lo = hi - RVW_WINDOW_MS;
   return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo && t <= hi; });
 }
+/** The FULL (all-windows) reps×weight extent for the plotted lift(s) — so the rvw axes can
+ * be pinned to it and paging a 2-week window (or dragging the fit) doesn't re-scale the
+ * frame (owner: "when changing weeks the graph shouldn't jump … no autofit"). */
+function rvwAxisExtent(records: readonly SetRecord[], exNames: readonly string[]): { xMin: number; xMax: number; yMax: number } | undefined {
+  const set = new Set(exNames);
+  let xMin = Infinity, xMax = -Infinity, yMax = 0;
+  for (const r of records) {
+    if (!set.has(r.exerciseName)) continue;
+    const w = r.origWeight != null ? r.origWeight : r.weight;
+    if (w == null || r.reps == null || r.reps <= 0) continue;
+    if (w < xMin) xMin = w; if (w > xMax) xMax = w; if (r.reps > yMax) yMax = r.reps;
+  }
+  if (!Number.isFinite(xMin) || xMax <= xMin) return undefined;
+  const pad = (xMax - xMin) * 0.04 || 1;
+  return { xMin: xMin - pad, xMax: xMax + pad, yMax: yMax + 1 };
+}
 function rvwWindowLabel(): string {
   if (rvwWindowIdx == null) return "All sets";
   if (rvwWindowIdx === 0) return "Last 2 wk";
@@ -18567,6 +18647,7 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   renderAnalyticsGraph(container, {
     exercises: exs,
     records: S.waRepsVsWeight ? rvwWindowRecords(recs) : recs,
+    rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
@@ -18935,6 +19016,7 @@ function renderWaGraph(): void {
   const analyticsInput = {
     exercises: graphExercises,
     records: S.waRepsVsWeight ? rvwWindowRecords(athleteRecs) : athleteRecs,
+    rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(athleteRecs, graphExercises) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
@@ -20068,7 +20150,7 @@ function setupWorkoutAnalysis(): void {
     if (t.closest<HTMLElement>("[data-gmsingle]")) { graphFullShown = false; renderWaGraph(); return; }
     // Single-view ⇆ SWITCH → open the picker drawer to choose a different lift (clears any
     // search-set single-view override so the new pick shows in the reel).
-    if (t.closest<HTMLElement>("[data-gmswitch]")) { graphCarOverride = null; openPickDrawer("graph"); return; }
+    if (t.closest<HTMLElement>("[data-gmswitch]")) { graphCarOverride = null; graphFullShown = true; renderWaGraph(); openPickDrawer("graph"); return; }
     // Single-view "=" → match the TOP history lift (only one): show it via the single-view
     // override, WITHOUT touching the multi-graph selection.
     if (t.closest<HTMLElement>("[data-gmmatch]")) {
