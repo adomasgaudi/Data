@@ -100,6 +100,7 @@ const LT: Record<string, string> = {
   "Reps → %1RM (Nuzzo)": "Kartojimai → %1RM (Nuzzo)",
   "%1RM → reps (Nuzzo)": "%1RM → kartojimai (Nuzzo)",
   "Real lifts on the graph": "Tikri kėliniai grafike",
+  "hard sets (≤3 RIR)": "sunkios serijos (≤3 RIR)",
   "Setup notes": "Pasiruošimo užrašai",
   "Pair with": "Derinti su",
   "⇄ Pair flags": "⇄ Derinimo žymės",

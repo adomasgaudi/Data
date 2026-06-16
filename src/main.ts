@@ -11336,6 +11336,15 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     fitPts.push({ x: kg(pct), y: r });
     if (pct <= minPct) break;
   }
+  // "Hard sets" zone: the band from the failure curve down to 3 reps below it — a set
+  // landing here was taken within ~3 reps of failure (RIR ≤ 3), i.e. a genuine hard set;
+  // a dot below the band was submaximal. Shaded behind the curve + dots (owner request).
+  const hardBand = {
+    points: fitPts.map((p) => ({ x: p.x, yTop: p.y as number, yBot: Math.max(0, (p.y as number) - 3) })),
+    fill: "rgba(47,143,136,0.13)",
+    label: "hard sets (≤3 RIR)",
+    labelColor: "#2f8f88",
+  };
   // Owner: the Nuzzo curve is a LINE only — the study-estimate points (non-real) are
   // dropped, so the only DOTS are YOUR lifts (teal) and the suggested set (gold). The
   // series keep their names + show in the LEGEND so green vs gold is explained.
@@ -11351,7 +11360,7 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }] });
   }
   return {
-    series, xKind: "linear", height: 300,
+    series, xKind: "linear", height: 300, areaBands: [hardBand],
     formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
   };
 }

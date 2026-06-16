@@ -182,6 +182,10 @@ export interface SvgChartConfig {
   /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
    * region as you approach a target. Drawn behind everything. */
   yBands?: { from: number; to?: number; fill: string }[] | undefined;
+  /** Filled ribbon(s) between two y-curves over x (left axis), e.g. the "hard sets"
+   * zone under the Nuzzo failure line. Each point gives the band's top & bottom y at
+   * that x; drawn behind the series. An optional label floats inside the band. */
+  areaBands?: { points: { x: number; yTop: number; yBot: number }[]; fill: string; label?: string; labelColor?: string }[] | undefined;
   /** Draggable VERTICAL markers in x (data) space — e.g. the projection fit-window
    * start/end lines. Each draws a labelled line + grab handle; dragging one calls
    * onMarkerDrag with its committed x. Inert (no extra interaction) when absent. */
@@ -524,6 +528,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const top = Math.max(M.t, Math.min(yTop, yBot));
       const bot = Math.min(h - M.b, Math.max(yTop, yBot));
       if (bot - top > 0.5) bands += `<rect x="${M.l}" y="${top.toFixed(1)}" width="${plotW.toFixed(1)}" height="${(bot - top).toFixed(1)}" fill="${b.fill}"/>`;
+    }
+    // Filled ribbons between two y-curves (e.g. the "hard sets" zone under the failure
+    // line): top edge left→right, then bottom edge right→left, closed. Left-axis y.
+    for (const ab of cfg.areaBands ?? []) {
+      const ps = ab.points;
+      if (ps.length < 2) continue;
+      const top = ps.map((p) => `${xPix(p.x).toFixed(1)},${yL(p.yTop).toFixed(1)}`);
+      const bot = ps.map((p) => `${xPix(p.x).toFixed(1)},${yL(p.yBot).toFixed(1)}`).reverse();
+      bands += `<polygon points="${top.concat(bot).join(" ")}" fill="${ab.fill}" stroke="none"/>`;
+      if (ab.label) {
+        const mid = ps[Math.floor(ps.length / 2)]!;
+        bands += `<text class="svgc-areaband-lbl" x="${xPix(mid.x).toFixed(1)}" y="${yL((mid.yTop + mid.yBot) / 2).toFixed(1)}" font-size="10" fill="${ab.labelColor ?? "#9c463a"}" text-anchor="middle">${esc(ab.label)}</text>`;
+      }
     }
     // x bands + gridlines + thinned labels.
     let xLabels = "";
