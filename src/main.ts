@@ -3512,6 +3512,9 @@ let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
 // the whole card (working weights, warm-up) and where the real rep-max points sit on
 // the Nuzzo curve, so the user can dial the 1RM until their lifts fit the curve.
 let cardOrm: number | null = null;
+/** Which sub-tab is active in the exercise info card — "curve" (default, the Nuzzo
+ *  fit graph + training brief) or "volume" (sets-per-weight-range bar chart). */
+let exInfoTab: "curve" | "volume" = "curve";
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
@@ -3572,6 +3575,7 @@ function openExerciseInfo(name: string, fromPlan = false): void {
   if (els.exInfoPage.hidden) { exInfoOrigin = currentTopTab(); exInfoFromPlan = fromPlan; }
   cardCalc = { weight: "", reps: "" }; // fresh manual-1RM input per lift
   cardOrm = null; // fresh 1RM-fit slider per lift (defaults to the logged best)
+  exInfoTab = "curve"; // always start on the curve tab for a fresh open
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
   const row = indexRowFor(name);
@@ -11513,11 +11517,123 @@ function updateCardNuzzoLive(): void {
     else cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
   });
 }
+/** Volume distribution chart for the exercise info card — grouped flat bars showing
+ *  how many sets were done in each weight range × rep range. */
+function cardVolDistHtml(name: string): string {
+  const sets = cardNuzzoRealSets(name);
+  if (sets.length === 0)
+    return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
+
+  const REP_RANGES: { label: string; min: number; max: number; color: string }[] = [
+    { label: "1–3",   min: 1,  max: 3,        color: "#9c463a" },
+    { label: "4–6",   min: 4,  max: 6,        color: "#b8902f" },
+    { label: "7–9",   min: 7,  max: 9,        color: "#34786f" },
+    { label: "10–12", min: 10, max: 12,       color: "#284e86" },
+    { label: "13+",   min: 13, max: Infinity,  color: "#5b4f96" },
+  ];
+
+  const minA = sets.reduce((m, s) => Math.min(m, s.added), Infinity);
+  const maxA = sets.reduce((m, s) => Math.max(m, s.added), -Infinity);
+  const lo = Math.floor(minA / 5) * 5;
+  const hi = Math.ceil(maxA / 5) * 5;
+  const range = hi - lo;
+  // bin size: at most 10 bins, rounded to nearest 5
+  const binSize = Math.max(5, Math.ceil(range / 10 / 5) * 5);
+
+  type Bin = { label: string; from: number; to: number; counts: number[] };
+  const bins: Bin[] = [];
+  for (let w = lo; w < hi; w += binSize)
+    bins.push({ label: String(w), from: w, to: w + binSize, counts: new Array(REP_RANGES.length).fill(0) });
+
+  for (const s of sets) {
+    const bi = bins.findIndex(b => s.added >= b.from && s.added < b.to);
+    if (bi < 0) continue;
+    const ri = REP_RANGES.findIndex(r => s.reps >= r.min && s.reps <= r.max);
+    if (ri >= 0) { const c = bins[bi]!.counts; c[ri] = (c[ri] ?? 0) + 1; }
+  }
+
+  const filled = bins.filter(b => b.counts.some(c => c > 0));
+  if (filled.length === 0)
+    return `<p class="muted" style="padding:1rem 0">No data to chart.</p>`;
+
+  // Active rep-range indices (have at least one set somewhere)
+  const activeRr = REP_RANGES.map((_, i) => filled.some(b => b.counts[i]! > 0) ? i : -1).filter(i => i >= 0);
+  const maxCount = filled.reduce((m, b) => Math.max(m, ...b.counts), 0);
+
+  // SVG layout
+  const svgW = 400, svgH = 210;
+  const ml = 32, mr = 8, mt = 12, mb = 52;
+  const cW = svgW - ml - mr;
+  const cH = svgH - mt - mb;
+  const nBins = filled.length;
+  const nRr = activeRr.length;
+  const groupW = cW / nBins;
+  const pad = groupW * 0.2;
+  const barW = (groupW - pad * 2) / nRr;
+  const yScale = (n: number) => cH - (n / maxCount) * cH;
+
+  let bars = "";
+  filled.forEach((bin, bi) => {
+    const gx = ml + bi * groupW + pad;
+    activeRr.forEach((ri, ari) => {
+      const count = bin.counts[ri]!;
+      if (count === 0) return;
+      const x = gx + ari * barW;
+      const bh = (count / maxCount) * cH;
+      const y = mt + yScale(count);
+      const r = REP_RANGES[ri]!;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, barW - 1).toFixed(1)}" height="${bh.toFixed(1)}" fill="${r.color}" rx="1"><title>${bin.from}–${bin.to}kg · ${r.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
+    });
+  });
+
+  // x-axis bin labels
+  let xLbls = "";
+  filled.forEach((bin, bi) => {
+    const cx = ml + bi * groupW + groupW / 2;
+    xLbls += `<text x="${cx.toFixed(1)}" y="${(svgH - mb + 13).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--muted)">${bin.label}</text>`;
+  });
+
+  // y-axis grid + labels (0, ½, max)
+  const yVals = [0, Math.round(maxCount / 2), maxCount].filter((v, i, a) => a.indexOf(v) === i);
+  let yLbls = "";
+  yVals.forEach(v => {
+    const y = mt + yScale(v);
+    yLbls += `<line x1="${ml}" y1="${y.toFixed(1)}" x2="${ml + cW}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>` +
+      `<text x="${(ml - 4).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="9" fill="var(--muted)">${v}</text>`;
+  });
+
+  const axes = `<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt + cH}" stroke="var(--muted)" stroke-width="1"/>` +
+    `<line x1="${ml}" y1="${mt + cH}" x2="${ml + cW}" y2="${mt + cH}" stroke="var(--muted)" stroke-width="1"/>`;
+  const xTitle = `<text x="${(ml + cW / 2).toFixed(1)}" y="${svgH - 4}" text-anchor="middle" font-size="9" fill="var(--muted)">Added weight (kg)</text>`;
+  const yTitle = `<text transform="rotate(-90) translate(${-(mt + cH / 2)},10)" text-anchor="middle" font-size="9" fill="var(--muted)">Sets</text>`;
+
+  const legendItems = activeRr.map(ri => {
+    const r = REP_RANGES[ri]!;
+    return `<span class="lt-vol-leg-item"><span class="lt-vol-leg-dot" style="background:${r.color}"></span>${r.label}</span>`;
+  }).join("");
+
+  return `<div class="lt-vol-wrap">` +
+    `<svg class="lt-vol-svg" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">` +
+    yLbls + bars + axes + xLbls + xTitle + yTitle +
+    `</svg>` +
+    `<div class="lt-vol-legend">${legendItems}</div>` +
+    `<div class="lt-vol-note muted">Sets per weight range</div>` +
+    `</div>`;
+}
+
 /** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
  *  card (re)render funnels through, so the embedded svgChart is never left un-mounted. */
 function paintExInfo(name: string): void {
-  els.exInfoBody.innerHTML = exerciseInfoHtml(name);
-  mountExInfoCharts();
+  const tabs = `<div class="lt-tabs">` +
+    `<button class="lt-tab${exInfoTab === "curve" ? " is-on" : ""}" data-exitab="curve">Curve</button>` +
+    `<button class="lt-tab${exInfoTab === "volume" ? " is-on" : ""}" data-exitab="volume">Volume</button>` +
+    `</div>`;
+  if (exInfoTab === "volume") {
+    els.exInfoBody.innerHTML = tabs + cardVolDistHtml(name);
+  } else {
+    els.exInfoBody.innerHTML = tabs + exerciseInfoHtml(name);
+    mountExInfoCharts();
+  }
 }
 
 /** The "How to train" brief for one lift — six panels, prepended to the info card. */
@@ -13563,6 +13679,17 @@ async function init() {
     debounceCardOrmRender();
   });
   els.exInfoBody.addEventListener("click", (e) => {
+    // Tab pills (Curve / Volume): switch the active sub-tab and re-render.
+    const tabBtn = (e.target as HTMLElement).closest<HTMLElement>("[data-exitab]");
+    if (tabBtn?.dataset.exitab) {
+      e.preventDefault(); e.stopPropagation();
+      const tab = tabBtn.dataset.exitab;
+      if ((tab === "curve" || tab === "volume") && tab !== exInfoTab) {
+        exInfoTab = tab;
+        if (currentExInfo) paintExInfo(currentExInfo);
+      }
+      return;
+    }
     // Per-set warm-up nudge buttons (− + weight, − + reps): bump the row's delta + re-render.
     const bump = (e.target as HTMLElement).closest<HTMLElement>("[data-wuadj]");
     if (bump?.dataset.wuadj) {

@@ -3172,6 +3172,23 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pairs-mgr-name { font-size: 0.74rem; font-weight: 700; padding: 2px 4px 2px 9px; }
 /* Nuzzo reps→%1RM curve — now the shared svgChart engine (.svgc) mounts into this box. */
 .lt-nuzzo { width: 100%; }
+/* Exercise info card sub-tabs (Curve / Volume). */
+.lt-tabs { display: flex; gap: 0.4rem; padding: 0.4rem 0 0.5rem; }
+.lt-tab {
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: none; color: var(--muted);
+  padding: 0 0.75rem; min-height: var(--tap-min);
+  font: inherit; font-size: var(--fs-md); cursor: pointer; line-height: 1;
+}
+.lt-tab.is-on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.lt-tab:hover:not(.is-on) { border-color: var(--accent); color: var(--accent); }
+/* Volume distribution chart wrapper. */
+.lt-vol-wrap { display: flex; flex-direction: column; gap: 0.45rem; }
+.lt-vol-svg { width: 100%; height: auto; display: block; }
+.lt-vol-legend { display: flex; flex-wrap: wrap; gap: 0.35rem 0.7rem; font-size: 0.75rem; }
+.lt-vol-leg-item { display: flex; align-items: center; gap: 0.3rem; }
+.lt-vol-leg-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+.lt-vol-note { font-size: 0.72rem; }
 /* Each field is its own STACKED section (label header on top, controls full-width
    below) instead of a cramped label|value 2-column row — gives editing room. */
 .ex-info-item { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
