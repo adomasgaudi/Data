@@ -21,6 +21,17 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-30 — High-rep sets (a 30-rep set) missing from the card's 1RM-fit graph
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), exercise card (Deadlift) → "1RM — fit to your lifts" graph. Owner: "I still don't see the 22×30 dots though they are in the history." The workout history clearly held `DL 22×30`, but the graph's "Real lifts on the graph" list topped out at 20 reps (35×20) — the 30-rep sets silently vanished.
+- **Root cause:** `nuzzoRepMaxes()` (metrics.ts) capped reps at `maxReps = 20` and dropped anything past it. But the Nuzzo curve itself is drawn out to ~60 reps (15% of 1RM, `repCap = 60` in `cardNuzzoConfig`), so any real set between 21–60 reps was excluded from the dots while the curve still covered that region — a silent data drop, the worst kind (the set IS in history, just not shown).
+- **Fix (b.2.8.x):** raised the `nuzzoRepMaxes` cap from 20 → 60 so it matches the curve's drawn rep range; high-rep sets now plot. Comment `PB-30` + a test asserting a 30-rep set is kept (and a 75-rep one still dropped). Lesson: a render that filters data MUST use the same bounds as what it draws, or it drops points the user can see elsewhere.
+- **Recurrences:** 0 (first report).
+
+---
+
+## PB-28 — Calendar (custom-date) picker won't open from the add-exercise popup
+
 - **First seen / reported:** 2026-06-15, mobile (Brave, Android), Analysis → "+ exercise" popup → tapping the 📅 (pick a date) button. Owner: "I can't press the calendar icon to enter a custom date it's not working." Same CLASS as PB-17 / PB-32 (floating thing in the wrong layer / bounds).
 - **Root cause:** a z-index stacking bug. `.dp-pop` (the date picker, appended to `<body>`) used `z-index: var(--z-modal)` (= 60), but the add-set popup `.addm-overlay` uses a RAW `z-index: 120` (it bypasses the semantic z-token scale `--z-drop 40 / --z-modal 60 / --z-top 200`). Since the picker is launched from INSIDE that modal, it opened at 60 — behind the 120 overlay — so it was covered by the modal's backdrop + card: invisible and unpressable.
 - **Fix (b.2.8.x):** `.dp-pop` → `z-index: var(--z-top)` (200), clearing the add modal (120). Comment `PB-28` at the rule. Flagged the deeper inconsistency (the add overlay's raw 120 sits off the token scale) for a later cleanup — any popup launched from the add modal that uses `--z-modal`/`--z-drop` will fall behind it the same way.

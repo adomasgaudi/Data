@@ -186,6 +186,9 @@ export interface SvgChartConfig {
    * zone under the Nuzzo failure line. Each point gives the band's top & bottom y at
    * that x; drawn behind the series. An optional label floats inside the band. */
   areaBands?: { points: { x: number; yTop: number; yBot: number }[]; fill: string; label?: string; labelColor?: string }[] | undefined;
+  /** Vertical background bands on the X axis (value zones), e.g. the 3–6RM / 6–12RM
+   * load zones. Drawn behind the series; an optional label floats at the top. */
+  xBands?: { from: number; to: number; fill: string; label?: string; labelColor?: string }[] | undefined;
   /** Draggable VERTICAL markers in x (data) space — e.g. the projection fit-window
    * start/end lines. Each draws a labelled line + grab handle; dragging one calls
    * onMarkerDrag with its committed x. Inert (no extra interaction) when absent. */
@@ -543,6 +546,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         const mid = ps[Math.floor(ps.length / 2)]!;
         bands += `<text class="svgc-areaband-lbl" x="${xPix(mid.x).toFixed(1)}" y="${yL((mid.yTop + mid.yBot) / 2).toFixed(1)}" font-size="10" fill="${ab.labelColor ?? "#9c463a"}" text-anchor="middle">${esc(ab.label)}</text>`;
       }
+    }
+    // Vertical value-zone bands on the X axis (e.g. the 3–6RM / 6–12RM load zones).
+    for (const xb of cfg.xBands ?? []) {
+      const x0 = xPix(Math.min(xb.from, xb.to)), x1 = xPix(Math.max(xb.from, xb.to));
+      const left = Math.max(M.l, Math.min(x0, x1)), right = Math.min(W - M.r, Math.max(x0, x1));
+      if (right - left <= 0.5) continue;
+      bands += `<rect x="${left.toFixed(1)}" y="${M.t}" width="${(right - left).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" fill="${xb.fill}"/>`;
+      if (xb.label) bands += `<text class="svgc-areaband-lbl" x="${((left + right) / 2).toFixed(1)}" y="${(M.t + 11).toFixed(1)}" font-size="10" fill="${xb.labelColor ?? "#9c463a"}" text-anchor="middle">${esc(xb.label)}</text>`;
     }
     // x bands + gridlines + thinned labels.
     let xLabels = "";

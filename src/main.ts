@@ -11345,11 +11345,20 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     label: "hard sets (≤3 RIR)",
     labelColor: "#2f8f88",
   };
+  // Training-load zones by rep-max: the WEIGHT range whose failure point is 3–6 reps
+  // (strength) and 6–12 reps (hypertrophy). Vertical bands at the loads for those RMs,
+  // so you can see which weight = which goal (and they move with the 1RM slider).
+  const wAt = (reps: number) => kg(benchPctForReps(reps));
+  const rmZones = [
+    { from: wAt(6), to: wAt(3), fill: "rgba(184,144,47,0.10)", label: "3–6RM", labelColor: "#b8902f" },
+    { from: wAt(12), to: wAt(6), fill: "rgba(91,79,150,0.10)", label: "6–12RM", labelColor: "#5b4f96" },
+  ];
   // Owner: the Nuzzo curve is a LINE only — the study-estimate points (non-real) are
   // dropped, so the only DOTS are YOUR lifts (teal) and the suggested set (gold). The
   // series keep their names + show in the LEGEND so green vs gold is explained.
   const series: SvgSeries[] = [
-    { name: "Nuzzo curve", color: "#284e86", type: "line", points: fitPts },
+    // Dashed (and dot-less) so the model curve reads as a reference, not data (owner).
+    { name: "Nuzzo curve", color: "#284e86", type: "line", points: fitPts, dashed: true },
   ];
   // Your REAL rep-maxes at their FIXED actual kg — drag the 1RM and the CURVE moves to
   // them; the 1RM where the curve passes through your dots is your true 1RM (teal dots).
@@ -11360,7 +11369,7 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }] });
   }
   return {
-    series, xKind: "linear", height: 300, areaBands: [hardBand],
+    series, xKind: "linear", height: 300, areaBands: [hardBand], xBands: rmZones,
     formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
   };
 }

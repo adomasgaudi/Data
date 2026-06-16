@@ -105,10 +105,12 @@ export function nuzzoWeightForReps(oneRepMax: number | null, reps: number | null
 
 /** The heaviest weight logged at each (rounded) rep count, 1..maxReps — the lifter's
  * real rep-maxes. These are the points that, plotted as %1RM vs reps, should sit ON
- * the Nuzzo curve when the assumed 1RM is right (the card's interactive fit). */
+ * the Nuzzo curve when the assumed 1RM is right (the card's interactive fit). The cap
+ * matches the Nuzzo curve's drawn range (~60 reps / 15% of 1RM) so high-rep sets — a
+ * 22kg×30 — still plot instead of vanishing (PB-30: "I don't see the 30-rep dots"). */
 export function nuzzoRepMaxes(
   sets: ReadonlyArray<{ weight: number | null; reps: number | null }>,
-  maxReps = 20,
+  maxReps = 60,
 ): { reps: number; weight: number }[] {
   const best = new Map<number, number>();
   for (const s of sets) {

@@ -270,12 +270,12 @@ describe("Nuzzo bench curve", () => {
   it("nuzzoRepMaxes keeps the heaviest weight per rep, drops junk + out-of-range", () => {
     const out = nuzzoRepMaxes([
       { weight: 100, reps: 5 }, { weight: 110, reps: 5 }, { weight: 90, reps: 5 }, // 5-rep best = 110
-      { weight: 120, reps: 3 }, { weight: 60, reps: 12 },
+      { weight: 120, reps: 3 }, { weight: 60, reps: 12 }, { weight: 22, reps: 30 }, // 30-rep set kept (PB fix)
       { weight: 0, reps: 4 }, { weight: 50, reps: null }, { weight: null, reps: 2 }, // junk dropped
-      { weight: 40, reps: 25 }, // past 20-rep cap → dropped
+      { weight: 40, reps: 75 }, // past the 60-rep cap → dropped
     ]);
     expect(out).toEqual([
-      { reps: 3, weight: 120 }, { reps: 5, weight: 110 }, { reps: 12, weight: 60 },
+      { reps: 3, weight: 120 }, { reps: 5, weight: 110 }, { reps: 12, weight: 60 }, { reps: 30, weight: 22 },
     ]);
     expect(nuzzoRepMaxes([])).toEqual([]);
   });
