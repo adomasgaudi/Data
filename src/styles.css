@@ -3033,7 +3033,24 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    curve below it showing the real rep-max dots slide to the fit. */
 .lt-ormfit { display: flex; flex-direction: column; gap: 6px; }
 .lt-ormfit-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.lt-ormfit-slider { flex: 1 1 8rem; min-width: 6rem; accent-color: var(--accent); min-height: var(--tap-min); touch-action: none; }
+/* Big, finger-friendly 1RM slider (owner: "make the knob easier to move, bigger").
+   Full-width on its own row, a thick track + a large round thumb; touch-action:none
+   so a horizontal drag isn't stolen by page scroll. */
+.lt-ormfit-slider {
+  flex: 1 1 100%; width: 100%; min-width: 0; height: 34px; margin: 2px 0; padding: 0;
+  -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; touch-action: none;
+}
+.lt-ormfit-slider::-webkit-slider-runnable-track { height: 10px; border-radius: var(--r-pill); background: var(--line); }
+.lt-ormfit-slider::-moz-range-track { height: 10px; border-radius: var(--r-pill); background: var(--line); }
+.lt-ormfit-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 30px; height: 30px; margin-top: -10px;
+  border-radius: 50%; background: var(--accent); border: 3px solid var(--card, #fff); box-shadow: 0 1px 5px rgba(0, 0, 0, 0.32);
+}
+.lt-ormfit-slider::-moz-range-thumb {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--accent); border: 3px solid var(--card, #fff); box-shadow: 0 1px 5px rgba(0, 0, 0, 0.32);
+}
+.lt-ormfit-slider:active::-webkit-slider-thumb { background: var(--accent); transform: scale(1.08); }
+.lt-ormfit-slider:active::-moz-range-thumb { background: var(--accent); transform: scale(1.08); }
 .lt-ormfit-num { width: 4.2rem; font: inherit; font-size: 0.82rem; padding: 4px 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--accent); font-weight: 800; text-align: center; }
 .lt-ormfit-unit { font-size: 0.78rem; color: var(--muted); font-weight: 700; }
 .lt-ormfit-best { font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer; padding: 4px 9px; min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }

@@ -11320,50 +11320,53 @@ function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormu
  *  on y; the best-fit curve as a line, the study point-estimates as dots, and the
  *  suggested working set as a gold dot. Bench-derived but the closest data-grounded
  *  rep curve we have, so shown for any lift. */
-function cardNuzzoConfig(markReps: number | null, markPct: number | null, realPts: SvgPoint[] = []): SvgChartConfig {
-  // Owner orientation: WEIGHT (as %1RM) on the X axis (increasing →), REPS on the Y
-  // axis (increasing ↑), with the curve extended ALL THE WAY DOWN to 15% of 1RM (the
-  // high-rep end). So every point is plotted as (pct, reps) — the transpose of the old
-  // reps→%1RM plot. A heavy load (≈100%) sits bottom-right at ~1 rep; a light load
-  // (15%) sits top-left at many reps.
+function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct: number | null, realPts: SvgPoint[] = []): SvgChartConfig {
+  // Owner orientation: WEIGHT IN KG on the X axis (increasing →), REPS on the Y axis
+  // (increasing ↑), curve extended down to 15% of 1RM (the high-rep end). The CURVE,
+  // study points and suggested set are scaled by the assumed 1RM (kg = pct% × 1RM), so
+  // dragging the 1RM slider MOVES THE CURVE; your real lifts are plotted at their fixed
+  // actual kg, so the curve slides under them — fit it by dragging (owner).
   const minPct = 15; // extend the curve down to 15% of 1RM
   const repCap = 60; // safety stop for the iteration
+  const orm = oneRM && oneRM > 0 ? oneRM : 100; // fallback scale when no 1RM yet
+  const kg = (pct: number) => Math.round((pct / 100) * orm * 10) / 10;
   const fitPts: SvgPoint[] = [];
   for (let r = 1; r <= repCap; r++) {
     const pct = Math.round(benchPctForReps(r) * 10) / 10;
-    fitPts.push({ x: pct, y: r });
+    fitPts.push({ x: kg(pct), y: r });
     if (pct <= minPct) break;
   }
   const studyPts: SvgPoint[] = BENCH_REPS_STUDY
     .filter(([pct]) => pct >= minPct)
-    .map(([pct, reps]) => ({ x: pct, y: Math.round(reps * 10) / 10, meta: `${reps.toFixed(1)} reps @ ${Math.round(pct)}%` }));
+    .map(([pct, reps]) => ({ x: kg(pct), y: Math.round(reps * 10) / 10, meta: `${reps.toFixed(1)} reps @ ${kg(pct)}kg (${Math.round(pct)}%)` }));
   const series: SvgSeries[] = [
     { name: "Best-fit curve", color: "#284e86", type: "line", points: fitPts, noLegend: true },
     { name: "Study estimates (Nuzzo et al.)", color: "#5b6472", type: "scatter", points: studyPts, noLegend: true },
   ];
-  // Your REAL rep-maxes, placed at (weight ÷ assumed-1RM, reps): drag the 1RM and they
-  // slide left/right — the 1RM that lands them ON the curve is your true 1RM (teal dots).
+  // Your REAL rep-maxes at their FIXED actual kg — drag the 1RM and the CURVE moves to
+  // them; the 1RM where the curve passes through your dots is your true 1RM (teal dots).
   if (realPts.length) {
     series.push({ name: "Your lifts", color: "#2f8f88", type: "scatter", points: realPts, noLegend: true });
   }
   if (markReps && markPct) {
-    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: markPct, y: markReps, meta: `${markReps} reps @ ${Math.round(markPct)}%` }], noLegend: true });
+    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }], noLegend: true });
   }
   return {
     series, xKind: "linear", height: 300,
-    formatX: (x) => `${Math.round(x)}%`, formatTipX: (x) => `${Math.round(x)}% of 1RM`,
+    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
   };
 }
 
-/** This lift's real rep-maxes as points for the Nuzzo fit-graph (transposed axes),
- * scaled by the given assumed 1RM. Each point: x = weight ÷ 1RM × 100 (%1RM), y = reps. */
+/** This lift's real rep-maxes for the Nuzzo fit-graph: plotted at their FIXED actual
+ * weight (x = kg, y = reps). The curve (not these dots) moves with the assumed 1RM. */
 function cardNuzzoRealPts(name: string, oneRM: number | null): SvgPoint[] {
-  if (oneRM == null || !(oneRM > 0)) return [];
   const repMaxes = nuzzoRepMaxes(setsForUserExercise(activeRecords(), els.athlete.value, name));
   return repMaxes.map((rm) => ({
-    x: Math.round((rm.weight / oneRM) * 1000) / 10,
+    x: Math.round(rm.weight * 10) / 10,
     y: rm.reps,
-    meta: `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg → ${Math.round((rm.weight / oneRM) * 100)}%`,
+    meta: oneRM && oneRM > 0
+      ? `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg (${Math.round((rm.weight / oneRM) * 100)}% of 1RM)`
+      : `${rm.reps} reps @ ${Math.round(rm.weight * 10) / 10}kg`,
   }));
 }
 /** Build the card's Nuzzo chart config from the live `.lt-nuzzo` box (its dataset carries
@@ -11372,8 +11375,10 @@ function cardNuzzoRealPts(name: string, oneRM: number | null): SvgPoint[] {
 function cardNuzzoConfigFromBox(box: HTMLElement): SvgChartConfig {
   const reps = Number(box.dataset.nzreps), pct = Number(box.dataset.nzpct);
   const orm = Number(box.dataset.nzorm);
-  const realPts = currentExInfo ? cardNuzzoRealPts(currentExInfo, Number.isFinite(orm) && orm > 0 ? orm : null) : [];
+  const oneRM = Number.isFinite(orm) && orm > 0 ? orm : null;
+  const realPts = currentExInfo ? cardNuzzoRealPts(currentExInfo, oneRM) : [];
   return cardNuzzoConfig(
+    oneRM,
     Number.isFinite(reps) && reps > 0 ? reps : null,
     Number.isFinite(pct) && pct > 0 ? pct : null,
     realPts,
