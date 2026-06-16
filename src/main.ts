@@ -20150,7 +20150,7 @@ function setupWorkoutAnalysis(): void {
     if (t.closest<HTMLElement>("[data-gmsingle]")) { graphFullShown = false; renderWaGraph(); return; }
     // Single-view ⇆ SWITCH → open the picker drawer to choose a different lift (clears any
     // search-set single-view override so the new pick shows in the reel).
-    if (t.closest<HTMLElement>("[data-gmswitch]")) { graphCarOverride = null; openPickDrawer("graph"); return; }
+    if (t.closest<HTMLElement>("[data-gmswitch]")) { graphCarOverride = null; graphFullShown = true; renderWaGraph(); openPickDrawer("graph"); return; }
     // Single-view "=" → match the TOP history lift (only one): show it via the single-view
     // override, WITHOUT touching the multi-graph selection.
     if (t.closest<HTMLElement>("[data-gmmatch]")) {
