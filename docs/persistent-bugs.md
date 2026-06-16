@@ -21,6 +21,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-35 — Draggable graph handle invisible/ungrabbable (placed outside the plot domain)
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Reps × kg graph. Owner: "i cant drag it and i should see an indication like the projection graph that its dragable with the small word 'fit' #persistent." The new draggable Nuzzo-fit line (CHART-143) didn't appear at all and couldn't be grabbed. Same CLASS as the floating-element-out-of-bounds family (PB-17/PB-28/PB-32).
+- **Root cause:** the fit marker was placed at the curve's **1RM** x (where reps→1), but the rvw curve is only sampled across the LOGGED rep span (~5–30 reps), so its 1-rep point sits well to the RIGHT of every plotted point. The chart auto-fits its x-domain to the series data, so the marker's x was OUTSIDE the visible domain → the vertical line + handle + "fit" label rendered off the right edge (invisible, nothing to grab). A draggable marker must sit at an x the domain actually covers.
+- **Fix (b.2.9.x):** anchor the handle at the curve's HEAVIEST DRAWN point (its r0-rep end, `curve[0]` — the rightmost VISIBLE point), not the off-screen 1RM. Dragging maps the new weight back to a 1RM via `nuzzo1RM(newX + bodyShare, r0)` (self-consistent: the re-fit curve's r0 point lands exactly under the finger). Colour switched to the shared teal accent `#2f8f88` (matching the projection markers / "Your lifts") and the label to a plain "fit", so it reads identically to the projection handle. Comment `PB-35` at the fit site.
+- **Watch:** any draggable xMarker / handle must be positioned at an x WITHIN the chart's fitted data domain — never at an extrapolated/edge value the auto-domain won't include, or it falls off-screen.
+- **Recurrences:** 0 (first report; sibling of the out-of-bounds floating-element class).
+
+---
+
 ## PB-33 — Graph axis NAMES not visible ("I don't see the axis names")
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), exercise card "1RM — fit to your lifts" graph (and the reps-vs-weight graph). Owner: "no i dont see the axis names #persistent". The axes show tick NUMBERS but nothing saying what they mean (weight kg / reps).
