@@ -11517,19 +11517,19 @@ function updateCardNuzzoLive(): void {
     else cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
   });
 }
-/** Volume distribution chart for the exercise info card — grouped flat bars showing
- *  how many sets were done in each weight range × rep range. */
+/** Volume distribution chart for the exercise info card — overlapping bars with
+ *  perspective illusion (front bars occlude back bars) to show sets per weight × rep range. */
 function cardVolDistHtml(name: string): string {
   const sets = cardNuzzoRealSets(name);
   if (sets.length === 0)
     return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
 
   const REP_RANGES: { label: string; min: number; max: number; color: string }[] = [
-    { label: "1–3",   min: 1,  max: 3,        color: "#9c463a" },
-    { label: "4–6",   min: 4,  max: 6,        color: "#b8902f" },
-    { label: "7–9",   min: 7,  max: 9,        color: "#34786f" },
-    { label: "10–12", min: 10, max: 12,       color: "#284e86" },
-    { label: "13+",   min: 13, max: Infinity,  color: "#5b4f96" },
+    { label: "1–3",   min: 1,  max: 3,        color: "#1e5a96" },  // darkest
+    { label: "4–6",   min: 4,  max: 6,        color: "#3b7ab8" },  // medium-dark
+    { label: "7–9",   min: 7,  max: 9,        color: "#5b9bd5" },  // medium-light
+    { label: "10–12", min: 10, max: 12,       color: "#7fb3e5" },  // light
+    { label: "13+",   min: 13, max: Infinity,  color: "#a8c8db" },  // lightest
   ];
 
   const minA = sets.reduce((m, s) => Math.min(m, s.added), Infinity);
@@ -11537,7 +11537,6 @@ function cardVolDistHtml(name: string): string {
   const lo = Math.floor(minA / 5) * 5;
   const hi = Math.ceil(maxA / 5) * 5;
   const range = hi - lo;
-  // bin size: at most 10 bins, rounded to nearest 5
   const binSize = Math.max(5, Math.ceil(range / 10 / 5) * 5);
 
   type Bin = { label: string; from: number; to: number; counts: number[] };
@@ -11556,33 +11555,34 @@ function cardVolDistHtml(name: string): string {
   if (filled.length === 0)
     return `<p class="muted" style="padding:1rem 0">No data to chart.</p>`;
 
-  // Active rep-range indices (have at least one set somewhere)
   const activeRr = REP_RANGES.map((_, i) => filled.some(b => b.counts[i]! > 0) ? i : -1).filter(i => i >= 0);
   const maxCount = filled.reduce((m, b) => Math.max(m, ...b.counts), 0);
 
-  // SVG layout
+  // SVG layout: wider bars that overlap with perspective
   const svgW = 400, svgH = 210;
   const ml = 32, mr = 8, mt = 12, mb = 52;
   const cW = svgW - ml - mr;
   const cH = svgH - mt - mb;
   const nBins = filled.length;
-  const nRr = activeRr.length;
   const groupW = cW / nBins;
-  const pad = groupW * 0.2;
-  const barW = (groupW - pad * 2) / nRr;
+  const barW = groupW * 0.65; // thicker bars (65% of bin width)
+  const barOffsets = [0, 8, 16, 24, 32]; // x-offsets for each rep range (creates overlap)
   const yScale = (n: number) => cH - (n / maxCount) * cH;
 
+  // Draw bars back-to-front (reverse order) so front bars occlude back
   let bars = "";
+  const drawOrder = activeRr.slice().reverse();
   filled.forEach((bin, bi) => {
-    const gx = ml + bi * groupW + pad;
-    activeRr.forEach((ri, ari) => {
+    const gx = ml + bi * groupW + (groupW - barW) / 2;
+    drawOrder.forEach(ri => {
       const count = bin.counts[ri]!;
       if (count === 0) return;
-      const x = gx + ari * barW;
+      const ari = activeRr.indexOf(ri);
+      const x = gx + barOffsets[ari]!;
       const bh = (count / maxCount) * cH;
       const y = mt + yScale(count);
       const r = REP_RANGES[ri]!;
-      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, barW - 1).toFixed(1)}" height="${bh.toFixed(1)}" fill="${r.color}" rx="1"><title>${bin.from}–${bin.to}kg · ${r.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="${r.color}" opacity="0.85" rx="1"><title>${bin.from}–${bin.to}kg · ${r.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
     });
   });
 
@@ -11593,7 +11593,7 @@ function cardVolDistHtml(name: string): string {
     xLbls += `<text x="${cx.toFixed(1)}" y="${(svgH - mb + 13).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--muted)">${bin.label}</text>`;
   });
 
-  // y-axis grid + labels (0, ½, max)
+  // y-axis grid + labels
   const yVals = [0, Math.round(maxCount / 2), maxCount].filter((v, i, a) => a.indexOf(v) === i);
   let yLbls = "";
   yVals.forEach(v => {
