@@ -208,6 +208,17 @@ const LT: Record<string, string> = {
   "⊕ Merged": "⊕ Sujungta",
   "⇄ Separated": "⇄ Atskirai",
   "✕ Remove": "✕ Pašalinti",
+  // ---- Graph carousel & customization (tabs, carousels, type/viewMode toggles) ----
+  "Previous graph": "Ankstesnis grafikas",
+  "Next graph": "Kitas grafikas",
+  "Scroll left": "Slinkti į kairę",
+  "Scroll right": "Slinkti į dešinę",
+  "Weight/Time ⇄ Reps/Weight": "Svoris/Laikas ⇄ Pakartojimų/Svoris",
+  "Reps/Weight ⇄ Weight/Time": "Pakartojimų/Svoris ⇄ Svoris/Laikas",
+  "Single ⇄ Multi": "Vienas ⇄ Keli",
+  "Multi ⇄ Single": "Keli ⇄ Vienas",
+  "Switch between weight-time and reps-weight": "Perjungti tarp svorio-laiko ir pakartojimų-svorio",
+  "Switch between single and multi view": "Perjungti tarp vieno ir kelių grafikų rodymo",
   // ---- Add-set variation pickers (dimension labels + levels) ----
   "support": "atrama",
   "ROM": "amplitudė",
