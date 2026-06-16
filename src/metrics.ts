@@ -103,6 +103,27 @@ export function nuzzoWeightForReps(oneRepMax: number | null, reps: number | null
   return (oneRepMax * benchPctForReps(reps)) / 100;
 }
 
+/**
+ * The ADDED weight (plate, or −assistance) you could lift for `reps` reps, given your
+ * added-weight 1RM and the bodyweight SHARE folded into the lift (coeff × bodyweight).
+ *
+ * The Nuzzo %-of-1RM relationship holds on the EFFECTIVE load (added + body share), so:
+ *   effective(reps) = (added1RM + bodyShare) × pct(reps)/100
+ *   added(reps)     = effective(reps) − bodyShare
+ * The result goes NEGATIVE once the effective load drops below the body share — i.e. the
+ * rep range where you'd need ASSISTANCE (high-rep pull-ups). For a bar-only lift
+ * (bodyShare = 0) it reduces to nuzzoWeightForReps. Null on missing/degenerate input.
+ */
+export function nuzzoAddedWeightForReps(
+  added1RM: number | null,
+  bodyShare: number,
+  reps: number | null,
+): number | null {
+  if (added1RM === null || reps === null || !Number.isFinite(bodyShare)) return null;
+  const eff = nuzzoWeightForReps(added1RM + bodyShare, reps);
+  return eff === null ? null : eff - bodyShare;
+}
+
 /** The heaviest weight logged at each (rounded) rep count, 1..maxReps — the lifter's
  * real rep-maxes. These are the points that, plotted as %1RM vs reps, should sit ON
  * the Nuzzo curve when the assumed 1RM is right (the card's interactive fit). The cap

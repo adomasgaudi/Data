@@ -11,6 +11,7 @@ import {
   BENCH_REPS_STUDY,
   nuzzo1RM,
   nuzzoWeightForReps,
+  nuzzoAddedWeightForReps,
   nuzzoRepsAtWeight,
   nuzzoRepMaxes,
   bestFitNuzzo1RM,
@@ -245,6 +246,25 @@ describe("Nuzzo bench curve", () => {
       expect(nuzzoWeightForReps(oneRm, reps)!).toBeCloseTo(100, 6);
     }
     expect(nuzzoWeightForReps(120, 1)).toBeCloseTo(120, 6); // a single is the full 1RM
+  });
+
+  it("nuzzoAddedWeightForReps translates the curve by the bodyweight share (pull-ups go negative)", () => {
+    // Bar-only lift (bodyShare 0) → identical to nuzzoWeightForReps.
+    for (const reps of [1, 3, 8, 15]) {
+      expect(nuzzoAddedWeightForReps(100, 0, reps)).toBeCloseTo(nuzzoWeightForReps(100, reps)!, 6);
+    }
+    // Pull-up: added 1RM +27, bodyweight share 80 → effective 1RM 107.
+    // At 1 rep the added weight IS the added 1RM (+27).
+    expect(nuzzoAddedWeightForReps(27, 80, 1)).toBeCloseTo(27, 6);
+    // Effective falls with reps; once effective < bodyweight share the ADDED weight is
+    // NEGATIVE (you'd need assistance) — the whole point of the reframe.
+    const hi = nuzzoAddedWeightForReps(27, 80, 25)!;
+    expect(hi).toBeLessThan(0);
+    // Monotonic: more reps ⇒ less added weight.
+    expect(nuzzoAddedWeightForReps(27, 80, 3)!).toBeGreaterThan(nuzzoAddedWeightForReps(27, 80, 6)!);
+    // The added curve = effective curve shifted down by exactly the body share.
+    expect(nuzzoAddedWeightForReps(27, 80, 10)!).toBeCloseTo(nuzzoWeightForReps(107, 10)! - 80, 6);
+    expect(nuzzoAddedWeightForReps(null, 80, 5)).toBeNull();
   });
 
   it("nuzzoRepsAtWeight reads the curve back at a given load", () => {
