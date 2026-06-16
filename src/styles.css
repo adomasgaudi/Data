@@ -537,6 +537,23 @@ main { padding-bottom: 5rem; }
   box-shadow: 0 8px 28px rgba(20, 24, 38, 0.2);
 }
 .cmd-palette[hidden] { display: none; }
+/* Autocomplete reel: ONE horizontally-scrolling row of exercise-name suggestions (swipe
+   sideways, like the athlete strip — #cram rule 16), never wrapped. Custom CSS, not a
+   native datalist. Sits at the top of the palette, sticky so it stays put while the
+   action rows scroll. */
+.cmd-suggreel {
+  display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: 2px 2px 6px; margin-bottom: 2px; position: sticky; top: 0; z-index: 1;
+  background: var(--panel); border-bottom: 1px solid var(--line); scrollbar-width: none;
+}
+.cmd-suggreel::-webkit-scrollbar { display: none; }
+.cmd-sugg {
+  flex: 0 0 auto; min-height: var(--tap-min); display: inline-flex; align-items: center;
+  padding: 0 11px; font: inherit; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); border: 1px solid var(--line);
+  border-radius: var(--r-pill); cursor: pointer;
+}
+.cmd-sugg:hover, .cmd-sugg:active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .cmd-opt {
   display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left;
   background: none; border: none; border-radius: var(--r-pill); padding: 9px 11px; cursor: pointer; font: inherit; color: var(--text);

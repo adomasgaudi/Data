@@ -19001,10 +19001,20 @@ function renderSearchPalette(value: string): void {
   }
   const matchNames = waChipListBase().map((e) => e.name);
   const n = matchNames.length;
-  // The single best match to the typed text (e.g. "Sq" → Squat) — names the "open in
-  // single view" suggestion and leads the carousel reel there.
-  const bestMatch = n ? rankMatchesByQuery(matchNames, q)[0]! : "";
+  // Ranked matches to the typed text (e.g. "Sq" → Squat first). The best one names the
+  // "open in single view" suggestion; the top dozen feed the horizontal AUTOCOMPLETE reel
+  // (owner: a scrollable suggestion strip that completes the exercise you're typing).
+  const ranked = n ? rankMatchesByQuery(matchNames, q) : [];
+  const bestMatch = ranked[0] ?? "";
   const bestLabel = bestMatch ? displayName(bestMatch) : "";
+  const suggNames = ranked.slice(0, 14);
+  const suggReel = suggNames.length
+    ? `<div class="cmd-suggreel" role="listbox" aria-label="Exercise suggestions">` +
+      suggNames
+        .map((nm) => `<button type="button" class="cmd-sugg" data-searchsugg="${escapeHtml(nm)}" role="option" title="${escapeHtml(displayName(nm))}">${escapeHtml(displayName(nm))}</button>`)
+        .join("") +
+      `</div>`
+    : "";
   // Page navigation: typing a page name (e.g. "index", "world", "formulas") offers to
   // SWITCH to it — shown first, so the bar doubles as a go-to-page jump, not just a
   // lift search. Matches the page's name (case-insensitive substring).
@@ -19043,7 +19053,9 @@ function renderSearchPalette(value: string): void {
     : opts;
   if (cmdActiveIdx >= finalOpts.length) cmdActiveIdx = 0;
   pal.hidden = false;
-  pal.innerHTML = finalOpts
+  // The autocomplete reel sits ABOVE the action rows (only when real lifts match — it's
+  // hidden in the create/no-match branch where finalOpts replaces opts).
+  pal.innerHTML = (wantCreate ? "" : suggReel) + finalOpts
     .map(
       (o, i) =>
         `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}${o.on ? " is-on" : ""}${"sub" in o && o.sub ? " cmd-opt-sub" : ""}" data-searchact="${o.act}" role="option">` +
@@ -19220,6 +19232,16 @@ function setupCommandBar(): void {
     // `cmdBar.contains(e.target)` check reads false and it wrongly hides the palette —
     // the recurring "clicking an option closes the menu" bug. Stop it here.
     e.stopPropagation();
+    // Autocomplete reel chip → complete the bar text with that exercise's name and
+    // re-render so the actions now target it (owner: finish what I'm typing).
+    const sugg = (e.target as HTMLElement).closest<HTMLElement>(".cmd-sugg");
+    if (sugg?.dataset.searchsugg) {
+      input.value = sugg.dataset.searchsugg;
+      cmdActiveIdx = 0;
+      renderPaletteFor(input.value);
+      input.focus();
+      return;
+    }
     const opt = (e.target as HTMLElement).closest<HTMLElement>(".cmd-opt");
     if (opt?.dataset.cmdmore) { input.value = "."; cmdActiveIdx = 0; renderCmdPalette("."); input.focus(); } // "did you mean…?" → all commands
     else if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
