@@ -206,7 +206,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       }
     });
     const cfg: SvgChartConfig = {
-      series: rvw, xKind: "linear", height: 300, panMode: "xy", yBeginAtZero: true,
+      series: rvw, xKind: "linear", height: 360, panMode: "xy", yBeginAtZero: true,
       formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
       xTitle: "weight (kg)", yTitle: "reps",
     };

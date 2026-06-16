@@ -777,7 +777,9 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .svgc-band-month { fill: var(--chart-band-month); }
 .svgc-frame { stroke: var(--chart-axis); fill: none; }
 .svgc-axislabel { fill: var(--chart-label); }
-.svgc-axistitle { fill: var(--chart-label); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+/* Inline axis names (tucked at the axis ends, see svgChart) — small + muted so they read
+   as a unit label beside the numbers, not a heading taking its own band. */
+.svgc-axistitle { fill: var(--muted); font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em; }
 .svgc-halo { fill: var(--chart-label); stroke: var(--chart-halo); stroke-width: 3; paint-order: stroke; }
 /* Draggable projection fit-window markers (vertical lines + grab tab). */
 .svgc-xmk { touch-action: none; }

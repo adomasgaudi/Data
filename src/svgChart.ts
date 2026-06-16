@@ -413,7 +413,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   let pinned = false; // the detail popup is pinned to a point (stays until dismissed)
   /** Re-fit the view to the data (undo any pan/zoom). */
   const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
-  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46 + (cfg.yTitle ? 14 : 0), r: hasRight() ? 40 : 14, t: 12, b: 26 + (cfg.xTitle ? 15 : 0) });
+  // Axis TITLES sit INLINE at the axis ends (y-title top-left, x-title bottom-right) in
+  // the EXISTING tick margins — they no longer widen l/b, so the plot stays big (owner).
+  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
@@ -945,13 +947,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     });
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
-    // Axis titles (outer-label charts only) — centred under the x-axis / rotated up the
-    // left, in the muted axis colour. They sit in the widened margins (see margins()).
+    // Axis titles (outer-label charts only) — tucked INLINE at the axis ends so they cost
+    // no extra margin (owner: "names move inline with numbers so they don't take up space"):
+    // the y-title at the top-left above the value column, the x-title at the bottom-right
+    // on the tick-number baseline.
     let axisTitles = "";
     if (!inside()) {
-      const cx = (M.l + (W - M.r)) / 2, cy = (M.t + (h - M.b)) / 2;
-      if (cfg.xTitle) axisTitles += `<text x="${cx.toFixed(1)}" y="${(h - 3).toFixed(1)}" text-anchor="middle" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
-      if (cfg.yTitle) axisTitles += `<text x="11" y="${cy.toFixed(1)}" text-anchor="middle" transform="rotate(-90 11 ${cy.toFixed(1)})" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
+      if (cfg.yTitle) axisTitles += `<text x="2" y="${(M.t - 3).toFixed(1)}" text-anchor="start" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
+      if (cfg.xTitle) axisTitles += `<text x="${(W - M.r).toFixed(1)}" y="${(h - 4).toFixed(1)}" text-anchor="end" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
     }
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
