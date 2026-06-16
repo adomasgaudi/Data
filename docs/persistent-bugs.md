@@ -11,6 +11,16 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 
 ---
 
+## PB-34 — Bottom search/command bar lifts up / jumps half-screen while scrolling
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Workouts (the always-on bottom "Search exercises…" command bar). Owner: "the search bar lifts up sometimes when scrolling or sometimes unexpectedly jumps half screen height #note #debug".
+- **Root cause:** `.cmd-bar` is `position: fixed; bottom: max(safe-area, var(--wa-kb-inset))` and `--wa-kb-inset` was recomputed on EVERY VisualViewport `scroll`/`resize` as `innerHeight − vv.height − vv.offsetTop` — with NO check that a field was focused. On Android the URL bar hides/shows during scroll (and overscroll-bounce moves `vv.offsetTop`), shrinking `vv.height`; that was misread as the keyboard, so the bar rode up mid-scroll — and when the spurious inset crossed the 80px `kb-open` threshold it also dropped the bottom nav, reading as a "half-screen jump".
+- **Fix (b.2.8.x):** gate the inset on an actually-focused text field — `const typing = activeElement is INPUT/TEXTAREA/contentEditable; inset = typing ? max(0, …) : 0`. The keyboard cannot be open with nothing focused, so scroll-driven viewport noise now yields 0 and the bar stays pinned to the bottom; it still rides above the keyboard while you type. Added `focusin`/`focusout` listeners so it settles immediately on blur. Comment `PB-34` at the fix site (`updateKbInset`).
+- **Watch:** any `position:fixed` bottom element keyed off VisualViewport height MUST gate on input focus — `innerHeight − vv.height` is NOT a clean keyboard signal on Android (URL-bar chrome moves it too).
+- **Recurrences:** 0 (first report).
+
+---
+
 ## PB-33 — Graph axis NAMES not visible ("I don't see the axis names")
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), exercise card "1RM — fit to your lifts" graph (and the reps-vs-weight graph). Owner: "no i dont see the axis names #persistent". The axes show tick NUMBERS but nothing saying what they mean (weight kg / reps).

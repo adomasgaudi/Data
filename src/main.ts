@@ -19563,7 +19563,14 @@ function setupWorkoutAnalysis(): void {
   const vv = window.visualViewport;
   if (vv) {
     const updateKbInset = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // PB-34: the keyboard only exists when a text field is FOCUSED. Without that gate,
+      // the Android URL bar showing/hiding during scroll (and overscroll-bounce offsetTop
+      // spikes) shrink vv.height and get misread as a keyboard — lifting the fixed command
+      // bar mid-scroll, sometimes far enough (>80px) to also drop the nav and "jump half a
+      // screen". So when nothing is being typed in, the inset is forced to 0.
+      const ae = document.activeElement as HTMLElement | null;
+      const typing = !!ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable);
+      const inset = typing ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
       document.documentElement.style.setProperty("--wa-kb-inset", `${Math.round(inset)}px`);
       // Keyboard open → hide the bottom nav so ONLY the search bar rides above the
       // keyboard (the nav otherwise floats up too). 80px guards against browser-
@@ -19572,6 +19579,10 @@ function setupWorkoutAnalysis(): void {
     };
     vv.addEventListener("resize", updateKbInset);
     vv.addEventListener("scroll", updateKbInset);
+    // Recompute the moment focus enters/leaves a field, so the bar settles back to the
+    // bottom on blur even if no viewport resize fires.
+    document.addEventListener("focusin", updateKbInset);
+    document.addEventListener("focusout", updateKbInset);
     updateKbInset();
   }
   // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
