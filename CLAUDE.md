@@ -146,7 +146,7 @@ StrengthLevel data and shows leaderboards, personal records and estimated 1RMs.
 - Data flow: StrengthLevel → existing Apps Script → Google Sheet "UD" →
   `doGet` JSON → website (validate → compute → render). The scraper is **not**
   re-implemented on purpose.
-- Stack: TypeScript + Vite + Zod + Vitest/fast-check + Chart.js.
+- Stack: TypeScript + Vite + Zod + Vitest/fast-check + an **in-house SVG chart engine** (`src/svgChart.ts` — NOT Chart.js; the old Chart.js dependency is long gone).
 - All filter/sort/compute logic lives in pure, tested functions
   (`src/metrics.ts`, `src/aggregate.ts`); `src/main.ts` is thin DOM glue.
 - See `README.md` for full architecture, the AI-error-reduction rationale, and
