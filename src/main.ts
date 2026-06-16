@@ -11333,7 +11333,7 @@ type CardNuzzoSet = { date: string; setNumber: number; added: number; reps: numb
 function cardNuzzoConfig(
   addedOneRM: number | null,
   bodyShare: number,
-  suggested: { reps: number; added: number } | null,
+  planned: { reps: number; added: number; warm: boolean }[] | null,
   realSets: CardNuzzoSet[] = [],
   xUnit: CardNuzzoXUnit = "kg",
   bodyweight: number | null = null,
@@ -11410,17 +11410,38 @@ function cardNuzzoConfig(
       })),
     });
   }
-  if (suggested) {
-    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: tx(suggested.added), y: suggested.reps, meta: `Suggested set — ${suggested.reps} reps @ ${Math.round(suggested.added * 10) / 10}${unit}` }] });
+  // PLANNED sets (owner: "suggested points based on the warm-ups and hard sets I choose"):
+  // the actual warm-up ramp + work sets as dots, so the plan you picked below shows ON the
+  // curve. Warm-ups lighter, the work sets the solid gold — replacing the lone suggested dot.
+  const warms = (planned ?? []).filter((p) => p.warm);
+  const works = (planned ?? []).filter((p) => !p.warm);
+  if (warms.length) {
+    series.push({ name: "Warm-up", color: "#d8b25a", type: "scatter", points: warms.map((p) => ({ x: tx(p.added), y: p.reps, meta: `Warm-up — ${p.reps} reps @ ${Math.round(p.added * 10) / 10}${unit}` })) });
+  }
+  if (works.length) {
+    series.push({ name: "Work sets", color: "#b8902f", type: "scatter", points: works.map((p) => ({ x: tx(p.added), y: p.reps, meta: `Work — ${p.reps} reps @ ${Math.round(p.added * 10) / 10}${unit}` })) });
   }
   const xTitle = unitOn === "pct" ? "% of 1RM" : unitOn === "bw" ? "× bodyweight" : (b > 0 ? "added weight (kg)" : "weight (kg)");
   const fmtX = unitOn === "pct" ? (x: number) => `${Math.round(x)}%`
     : unitOn === "bw" ? (x: number) => `${Math.round(x * 100) / 100}×`
     : (x: number) => `${Math.round(x)}`;
+  // DRAGGABLE 1RM (owner: "make the nuzzo graph adjustable with the dashed line inside the
+  // graph"): a green vertical marker at the curve's 1RM (where reps→1, x = added 1RM),
+  // reusing the same xMarkers/onMarkerDrag mechanism as the projection + reps×kg fit
+  // (CHART-143). Dragging it sets cardOrm, so the curve, working weights AND warm-ups all
+  // re-derive (the warm-up already reads cardOrm). Only in kg mode, where x = added kg
+  // directly (so the released x maps straight back to the 1RM); pct/×BW keep the slider.
+  const markers = unitOn === "kg" && addedOneRM != null
+    ? [{ id: "card1rm", x: Math.round(A * 10) / 10, color: "#2f8f88", label: "1RM" }]
+    : undefined;
   return {
     series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones, leftMargin: 30,
     xTitle, yTitle: "reps",
     formatX: fmtX, formatTipX: fmtX,
+    ...(markers ? { xMarkers: markers, onMarkerDrag: (_id: string, newX: number) => {
+      cardOrm = Math.round(newX * 10) / 10;
+      if (currentExInfo) paintExInfo(currentExInfo);
+    } } : {}),
   };
 }
 
@@ -11460,11 +11481,28 @@ function cardNuzzoConfigFromBox(box: HTMLElement): SvgChartConfig {
   const sugReps = Number(box.dataset.nzsugreps), sugAdded = Number(box.dataset.nzsugadded);
   const addedOneRM = Number.isFinite(orm) ? orm : null;
   const bodyShare = Number.isFinite(body) ? body : 0;
-  const suggested = Number.isFinite(sugReps) && sugReps > 0 && Number.isFinite(sugAdded)
-    ? { reps: sugReps, added: sugAdded } : null;
+  // The PLANNED points = the SAME warm-up ramp + work sets the table below shows, in the
+  // graph's added-weight space, so picking a warm-up/hard-set plan re-plots the dots. Uses
+  // the card's bar-only warm-up frame (bwl 0, matching the table), then peels the body share
+  // for added-x. Falls back to the single suggested set's reps/added when there's no plan.
+  const formula = currentFormula();
+  const effOrm = (addedOneRM ?? 0) + bodyShare;
+  let planned: { reps: number; added: number; warm: boolean }[] | null = null;
+  if (effOrm > 0) {
+    const hs = hardSetWeight(effOrm, { kind: "repsRIR", reps: 5, rir: 2 }, formula);
+    if (hs) {
+      planned = [];
+      for (const s of warmupRamp({ oneRepMax: effOrm, workingWeightKg: hs.weightKg, formula, increment: 2.5, plan: getWarmupPlan() }))
+        planned.push({ reps: s.reps, added: Math.round((s.weightKg - bodyShare) * 10) / 10, warm: true });
+      for (const s of worksetRows(getWorksetPlan(), effOrm, hs.weightKg, hs.reps, formula, 2.5))
+        planned.push({ reps: s.reps, added: Math.round((s.weightKg - bodyShare) * 10) / 10, warm: false });
+    }
+  }
+  if (!planned && Number.isFinite(sugReps) && sugReps > 0 && Number.isFinite(sugAdded))
+    planned = [{ reps: sugReps, added: sugAdded, warm: false }];
   const realSets = currentExInfo ? cardNuzzoRealSets(currentExInfo) : [];
   const bw = athProfile(els.athlete.value)?.weight ?? null;
-  return cardNuzzoConfig(addedOneRM, bodyShare, suggested, realSets, cardNuzzoXUnit, bw);
+  return cardNuzzoConfig(addedOneRM, bodyShare, planned, realSets, cardNuzzoXUnit, bw);
 }
 /** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
  *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
