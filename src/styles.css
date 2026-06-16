@@ -1463,6 +1463,8 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
    It's a label, not a link, so it reads in muted grey — blue is reserved for
    things you can actually tap through to. */
 .set-lvl { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--muted); margin-right: 3px; }
+/* Per-set range-of-motion chip (universal "ROM X%" note token). */
+.set-rom { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); margin-right: 3px; }
 /* Variation difficulty multiplier on a set row (e.g. ×0.85). */
 .set-scale { display: inline-block; font-size: 0.72em; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 0 5px; margin-right: 3px; }
 .set-scale.is-editable { cursor: pointer; border: 1px solid var(--accent); line-height: 1.4; }

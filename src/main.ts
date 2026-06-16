@@ -8252,7 +8252,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     predRir === null
       ? "—"
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
-  const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, s.notes ?? "")].filter(Boolean).join(" · ");
+  // Per-set range of motion is logged as a universal "ROM X%" note token (any
+  // exercise); show it as its own chip and peel it out of the displayed note text.
+  const romMatch = (s.notes ?? "").match(/\bROM\s*(\d+)\s*%/i);
+  const romTag = romMatch ? `<span class="set-rom" title="Range of motion for this set">ROM ${romMatch[1]}%</span>` : "";
+  const notesNoRom = (s.notes ?? "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
+  const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, notesNoRom)].filter(Boolean).join(" · ");
   // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
   // load for X reps, computed from this set's 1RM. Shown as value^X (matching the weight
   // column's weight^reps). The reps come from the header, so the whole column re-reads.
@@ -8332,7 +8337,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // this set's edit panel. No separate ✎ pencil button.
   // The leading cell always carries the set's identity prefix (info button, variation /
   // scale / machine chips), whatever metric column 0 is set to show.
-  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
+  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${romTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
   const cellFor = (id: string): string => {
     switch (id) {
       // Always show the LOGGED dial value (s.weight); a machine set gets a "not real"
@@ -16050,12 +16055,22 @@ function openAddModal(exerciseName: string | null, date: string): void {
   // form, the lookup returned null, the name fell back to the empty data-addex, and
   // Add silently no-op'd ("nothing happens" on a new exercise).
   const exField = isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "";
+  // Universal RANGE OF MOTION picker (owner: every exercise has a ROM variance,
+  // default 90%). Shown for every lift; defaults to this exercise's default ROM.
+  // Recorded per-set as a "ROM X%" note token only when it differs from the default.
+  const romDef = romDefaultFor(ex || "");
+  const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
+    .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
+  const romField =
+    `<div class="addm-field"><span class="addm-flbl">Range of motion</span>` +
+    `<select class="wo-af-rom" data-romdefault="${romDef}" aria-label="Range of motion">${romOpts}</select></div>`;
   const form =
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     exField +
     afWhenToggle(date, today) +
     `<div class="addm-variant-slot">${variantBlock}</div>` +
     `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps · sets</span><div class="addm-inputs">${AF_INPUTS}</div></div></div>` +
+    romField +
     noteField +
     `<div class="addm-actions">${AF_BUTTONS}</div>` +
     `</span>`;
@@ -16177,6 +16192,14 @@ function onInlineAddGo(form: HTMLElement): boolean {
     note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
   } else {
     note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
+  }
+  // Universal per-set ROM: record "ROM X%" in the note ONLY when it differs from this
+  // exercise's default (so default-ROM sets stay clean; a partial-ROM set is captured).
+  const romSel = form.querySelector<HTMLSelectElement>(".wo-af-rom");
+  if (romSel) {
+    const romPct = parseInt(romSel.value, 10);
+    const romDef = parseInt(romSel.dataset.romdefault ?? "", 10);
+    if (Number.isFinite(romPct) && romPct !== romDef) note = note ? `${note} ROM ${romPct}%` : `ROM ${romPct}%`;
   }
   const username = els.athlete.value;
   const user = athleteLabel();
