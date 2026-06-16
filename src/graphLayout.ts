@@ -3,6 +3,7 @@
  * The structure that defines how graphs are organized: tabs → carousels → graphs.
  * Persisted to localStorage; locked users receive a fixed default.
  */
+import { z } from "zod";
 
 /** Configuration for a single graph instance. */
 export interface GraphInstance {
@@ -149,4 +150,80 @@ export function defaultLayout(): UserGraphLayout {
  */
 export function lockedDefaultLayout(): UserGraphLayout {
   return defaultLayout();
+}
+
+// ============================================================================================
+// PERSISTENCE LAYER
+// ============================================================================================
+
+const STORAGE_KEY = "colosseum.graphLayout.v1";
+
+const GraphInstanceSchema = z.object({
+  id: z.string(),
+  exerciseName: z.string(),
+  type: z.enum(["weight-time", "reps-weight"]),
+  viewMode: z.enum(["single", "multi"]),
+});
+
+const CarouselGroupSchema = z.object({
+  id: z.string(),
+  graphs: z.array(GraphInstanceSchema),
+  scrollOffset: z.number().optional(),
+}).strict();
+
+const TabLayoutSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  carousels: z.array(CarouselGroupSchema),
+});
+
+const UserGraphLayoutSchema = z.object({
+  tabs: z.array(TabLayoutSchema),
+  activeTabId: z.string(),
+});
+
+/**
+ * Load the saved graph layout from localStorage, validating the schema.
+ * Falls back to the default layout if no saved layout exists or validation fails.
+ */
+export function loadLayout(): UserGraphLayout {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return defaultLayout();
+    const parsed = JSON.parse(stored);
+    const validated = UserGraphLayoutSchema.parse(parsed) as UserGraphLayout;
+    return validated;
+  } catch {
+    return defaultLayout();
+  }
+}
+
+/** Debounce timer for saveLayout. */
+let saveLayoutTimer: number | null = null;
+
+/**
+ * Save the graph layout to localStorage. Debounced (200ms) to avoid thrashing.
+ * Errors (storage unavailable, quota exceeded) are silent.
+ */
+export function saveLayout(layout: UserGraphLayout, delayMs = 200): void {
+  if (saveLayoutTimer !== null) clearTimeout(saveLayoutTimer);
+  saveLayoutTimer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    } catch {
+      /* storage may be unavailable or quota exceeded */
+    }
+    saveLayoutTimer = null;
+  }, delayMs);
+}
+
+/** Immediately flush any pending save. */
+export function flushSaveLayout(layout: UserGraphLayout): void {
+  if (saveLayoutTimer !== null) clearTimeout(saveLayoutTimer);
+  saveLayoutTimer = null;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+  } catch {
+    /* storage may be unavailable */
+  }
 }
