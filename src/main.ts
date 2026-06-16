@@ -11336,15 +11336,20 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     fitPts.push({ x: kg(pct), y: r });
     if (pct <= minPct) break;
   }
-  // "Hard sets" zone: the band from the failure curve down to 3 reps below it — a set
-  // landing here was taken within ~3 reps of failure (RIR ≤ 3), i.e. a genuine hard set;
-  // a dot below the band was submaximal. Shaded behind the curve + dots (owner request).
-  const hardBand = {
-    points: fitPts.map((p) => ({ x: p.x, yTop: p.y as number, yBot: Math.max(0, (p.y as number) - 3) })),
-    fill: "rgba(47,143,136,0.13)",
-    label: "hard sets (≤3 RIR)",
-    labelColor: "#2f8f88",
-  };
+  // EFFORT (RIR) zones: successive ribbons stepping DOWN from the failure curve, since
+  // a set's RIR = how many reps short of failure it stopped. ≤3 RIR (the curve down to
+  // 3 reps below) is a genuine hard set; 3–6 and 6–12 RIR are progressively more in the
+  // tank. The teal fill fades as RIR grows, so darkest = hardest (owner request). Bands
+  // tile (each yBot = the next yTop), so they don't overlap.
+  const effortBand = (top: number, bot: number, fill: string, label: string) => ({
+    points: fitPts.map((p) => ({ x: p.x, yTop: Math.max(0, (p.y as number) - top), yBot: Math.max(0, (p.y as number) - bot) })),
+    fill, label, labelColor: "#2f8f88",
+  });
+  const effortBands = [
+    effortBand(0, 3, "rgba(47,143,136,0.15)", "hard sets (≤3 RIR)"),
+    effortBand(3, 6, "rgba(47,143,136,0.09)", "3–6 RIR"),
+    effortBand(6, 12, "rgba(47,143,136,0.045)", "6–12 RIR"),
+  ];
   // Training-load zones by rep-max: the WEIGHT range whose failure point is 3–6 reps
   // (strength) and 6–12 reps (hypertrophy). Vertical bands at the loads for those RMs,
   // so you can see which weight = which goal (and they move with the 1RM slider).
@@ -11369,7 +11374,7 @@ function cardNuzzoConfig(oneRM: number | null, markReps: number | null, markPct:
     series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: kg(markPct), y: markReps, meta: `Suggested set — ${markReps} reps @ ${kg(markPct)}kg (${Math.round(markPct)}%)` }] });
   }
   return {
-    series, xKind: "linear", height: 300, areaBands: [hardBand], xBands: rmZones,
+    series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones,
     formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} kg`,
   };
 }
