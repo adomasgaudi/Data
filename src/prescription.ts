@@ -236,20 +236,28 @@ export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
     const effRounded = roundToIncrement(exactEff, increment);
     if (effRounded <= lastEff || effRounded >= effWork) continue; // strictly increasing, below work
     const achievable = repsForWeight(eff1rm, effRounded, formula);
-    const b = band(pct);
     const loPct = Math.min(floor5(prevPct), floor5(pct)); // guard: never an inverted band
     const hiPct = Math.max(ceil5(pct), loPct + 5);
+    // The WEIGHT must span the SAME zone the %1RM shows (owner: "the weight isn't what the
+    // percent is") — so the band is loPct→hiPct of 1RM, not the plate-rounding of one load.
+    const wLo = band(loPct / 100).down;
+    const wHi = band(hiPct / 100).up;
+    // Reps = ⅓ of the achievable band (owner: "9–20RM ⇒ 3–6, not just 3"), floored so a
+    // warm-up never over-reaches; collapses to a single number when the ⅓ ends coincide.
+    const loReps = Math.max(1, Math.floor(maxRepsAt(pct) / 3));
+    const hiReps = Math.max(1, Math.floor(maxRepsAt(prevPct) / 3));
     sets.push({
       kind: "ramp",
       pctOf1RM: Math.round(pct * 100),
       exactKg: Math.round((exactEff - bwl) * 10) / 10,
       weightKg: roundToIncrement(exactEff - bwl, increment),
-      downKg: b.down,
-      upKg: b.up,
+      downKg: wLo,
+      upKg: wHi,
       reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
       ...(achievable === null ? {} : { maxReps: Math.max(1, Math.round(achievable)) }),
       pctLabel: `${loPct}–${hiPct}%`,
       maxRepsLabel: `${maxRepsAt(pct)}–${maxRepsAt(prevPct)}`,
+      repsLabel: loReps === hiReps ? `${loReps}` : `${loReps}–${hiReps}`,
     });
     lastEff = effRounded;
     prevPct = pct;

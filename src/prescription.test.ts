@@ -137,17 +137,23 @@ describe("warmupRamp", () => {
     expect(primer.maxReps).toBeUndefined();
   });
 
-  it("a ramp set reads as a ZONE band: %1RM + NRM ranges, ⅓-max prescribed reps", () => {
+  it("a ramp set reads as a ZONE band: weight, %1RM, NRM and reps all span the zone", () => {
     const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, plan: "quick" });
     const ramp = sets.find((s) => s.kind === "ramp")!;
     // owner: the single ramp step reads "60–80%", not a bare "78%"
     expect(ramp.pctLabel).toMatch(/^\d+–\d+%$/);
     expect(ramp.pctLabel!.startsWith("60–")).toBe(true);
-    // an NRM band beside it, and the prescribed reps stay the concrete ⅓-of-max number
+    // the WEIGHT band must match that %1RM zone (owner: "the weight isn't what the % is").
+    // For a 100 1RM the band edges equal the zone %s in kg (e.g. 60–75%), plate-rounded —
+    // NOT a single ~75% load (which would make down==up).
+    const [loPct, hiPct] = ramp.pctLabel!.replace("%", "").split("–").map(Number);
+    expect(ramp.downKg).toBeLessThanOrEqual(loPct! + 2.5);
+    expect(ramp.upKg).toBeGreaterThanOrEqual(hiPct! - 2.5);
+    expect(ramp.upKg).toBeGreaterThan(ramp.downKg); // a real band, not a point
+    // reps are a ⅓-of-max BAND (owner: "9–20RM ⇒ 3–6, not just 3"), not a single number
+    expect(ramp.repsLabel).toMatch(/^\d+–\d+$/);
     expect(ramp.maxRepsLabel).toMatch(/^\d+–\d+$/);
-    expect(ramp.repsLabel).toBeUndefined();
     expect(ramp.maxReps).toBeGreaterThan(0);
-    expect(ramp.reps).toBe(Math.max(1, Math.round(ramp.maxReps! / 3)));
   });
 
   it("returns [] on invalid input", () => {
