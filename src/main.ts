@@ -11570,8 +11570,10 @@ function cardVolDistHtml(name: string): string {
   const yScale = (n: number) => cH - (n / maxCount) * cH;
 
   // Draw bars back-to-front (reverse order) so front bars occlude back
+  // Vertical offset: back bars (higher indices) start higher, creating isometric perspective
   let bars = "";
   const drawOrder = activeRr.slice().reverse();
+  const yOffsets = [0, 8, 16, 24, 32]; // vertical offset per rep range
   filled.forEach((bin, bi) => {
     const gx = ml + bi * groupW + (groupW - barW) / 2;
     drawOrder.forEach(ri => {
@@ -11580,7 +11582,8 @@ function cardVolDistHtml(name: string): string {
       const ari = activeRr.indexOf(ri);
       const x = gx + barOffsets[ari]!;
       const bh = (count / maxCount) * cH;
-      const y = mt + yScale(count);
+      const yBase = mt + yScale(count);
+      const y = yBase - yOffsets[ari]!; // offset back bars higher
       const r = REP_RANGES[ri]!;
       bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" fill="${r.color}" opacity="0.85" rx="1"><title>${bin.from}–${bin.to}kg · ${r.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
     });
