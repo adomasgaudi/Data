@@ -12567,7 +12567,9 @@ function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRe
   const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
   const wuRows = wu.map((s) => {
     const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
-    return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b> <span class="rx-wu-exact">${s.exactKg}</span></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
+    // The primer is a band (30–60% / 10–20 reps) so it shows no spuriously-precise exact kg.
+    const exact = s.kind === "general" ? "" : ` <span class="rx-wu-exact">${s.exactKg}</span>`;
+    return `<tr class="rx-wu-${s.kind}"><td><b>${range}</b>${exact}</td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${s.pctLabel ?? `${s.pctOf1RM}%`}</td></tr>`;
   }).join("");
   const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment);
   const workRows = sets.map((s) => `<tr class="rx-wu-work"><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.reps}</td><td class="rx-wu-worktag">work</td></tr>`).join("");
@@ -12612,7 +12614,7 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
     const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
     const rows = wu.map((s) => {
       const range = s.downKg === s.upKg ? `${s.weightKg} kg` : `${s.downKg}–${s.upKg} kg`;
-      return `<tr><td><b>${range}</b></td><td>× ${s.reps}</td><td class="muted">${s.pctOf1RM}%</td></tr>`;
+      return `<tr><td><b>${range}</b></td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${s.pctLabel ?? `${s.pctOf1RM}%`}</td></tr>`;
     }).join("");
     return `<div class="plan-tabs">${tabs}</div>` +
       `<table class="plan-tbl"><thead><tr><th>Warm-up</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${rows}</tbody></table>` +

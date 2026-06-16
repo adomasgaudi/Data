@@ -124,6 +124,20 @@ describe("warmupRamp", () => {
     expect(heavy.length).toBeGreaterThan(quick.length);
   });
 
+  it("first set is a light primer shown as a 30–60% / 10–20-rep band", () => {
+    const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, plan: "quick" });
+    const primer = sets[0]!;
+    expect(primer.kind).toBe("general");
+    expect(primer.repsLabel).toBe("10–20");
+    expect(primer.pctLabel).toBe("30–60%");
+    // the band's load range spans ~30%→60% of the 1RM (not a single point)
+    expect(primer.upKg).toBeGreaterThan(primer.downKg);
+    // the ramp set(s) stay precise — no band labels, ⅓-max reps
+    const ramp = sets.find((s) => s.kind === "ramp")!;
+    expect(ramp.pctLabel).toBeUndefined();
+    expect(ramp.repsLabel).toBeUndefined();
+  });
+
   it("returns [] on invalid input", () => {
     expect(warmupRamp({ oneRepMax: 0, workingWeightKg: 80 })).toEqual([]);
     expect(warmupRamp({ oneRepMax: 100, workingWeightKg: 0 })).toEqual([]);
