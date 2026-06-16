@@ -133,6 +133,11 @@ export interface SvgChartConfig {
   /** Override the left margin (px) — narrow it when the y-tick labels are short (e.g.
    * 2-digit reps) so the plot fills more width. Outer-label charts only; default 46. */
   leftMargin?: number;
+  /** Pin the X axis to this exact range on (re)fit, instead of auto-fitting to the data —
+   * used by the reps×weight view so paging 2-week windows (or dragging the fit) keeps a
+   * STABLE frame (the points move within it) instead of re-fitting and jumping. Pass
+   * undefined to clear (PB-8 — set it explicitly per render). */
+  forceXRange?: { min: number; max: number } | undefined;
   /** Force the (left) y-axis to include 0. */
   yBeginAtZero?: boolean;
   /** Pin the left y-axis to this exact range on (re)fit, instead of auto-fitting to
@@ -444,19 +449,24 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const xe = useCompact()
       ? xExtent(geomSeries().filter(visible))
       : dataXExtent(geomSeries());
-    if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
+    const fx = cfg.forceXRange;
+    if (!fx && !Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
     // Small domain breathing only; the ~10px visible side margin is added at the
     // transform (xPix, PB-23) so it holds on EVERY view, not just this fit.
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
+    // Pinned X range (reps×weight): use the caller's bounds verbatim so window/fit changes
+    // don't re-scale the frame; else the data extent + a little breathing room.
+    const xMin0 = fx ? fx.min : xe.xMin - xPad;
+    const xMax0 = fx ? fx.max : xe.xMax + xPad;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
     if (cfg.forceLeftRange) {
       // Pinned left axis (per-bodyweight): use the caller's range verbatim.
-      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: cfg.forceLeftRange.min, yMax: cfg.forceLeftRange.max };
+      view = { xMin: xMin0, xMax: xMax0, yMin: cfg.forceLeftRange.min, yMax: cfg.forceLeftRange.max };
     } else if (Number.isFinite(le.yMin)) {
       const yPad = (le.yMax - le.yMin) * 0.08 || 1;
-      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
+      view = { xMin: xMin0, xMax: xMax0, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
     } else {
-      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: 0, yMax: 1 };
+      view = { xMin: xMin0, xMax: xMax0, yMin: 0, yMax: 1 };
     }
     fitRight();
   }

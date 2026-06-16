@@ -17380,6 +17380,22 @@ function rvwWindowRecords(records: readonly SetRecord[]): SetRecord[] {
   const hi = latest - rvwWindowIdx * RVW_WINDOW_MS, lo = hi - RVW_WINDOW_MS;
   return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo && t <= hi; });
 }
+/** The FULL (all-windows) reps×weight extent for the plotted lift(s) — so the rvw axes can
+ * be pinned to it and paging a 2-week window (or dragging the fit) doesn't re-scale the
+ * frame (owner: "when changing weeks the graph shouldn't jump … no autofit"). */
+function rvwAxisExtent(records: readonly SetRecord[], exNames: readonly string[]): { xMin: number; xMax: number; yMax: number } | undefined {
+  const set = new Set(exNames);
+  let xMin = Infinity, xMax = -Infinity, yMax = 0;
+  for (const r of records) {
+    if (!set.has(r.exerciseName)) continue;
+    const w = r.origWeight != null ? r.origWeight : r.weight;
+    if (w == null || r.reps == null || r.reps <= 0) continue;
+    if (w < xMin) xMin = w; if (w > xMax) xMax = w; if (r.reps > yMax) yMax = r.reps;
+  }
+  if (!Number.isFinite(xMin) || xMax <= xMin) return undefined;
+  const pad = (xMax - xMin) * 0.04 || 1;
+  return { xMin: xMin - pad, xMax: xMax + pad, yMax: yMax + 1 };
+}
 function rvwWindowLabel(): string {
   if (rvwWindowIdx == null) return "All sets";
   if (rvwWindowIdx === 0) return "Last 2 wk";
@@ -18631,6 +18647,7 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   renderAnalyticsGraph(container, {
     exercises: exs,
     records: S.waRepsVsWeight ? rvwWindowRecords(recs) : recs,
+    rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
@@ -18999,6 +19016,7 @@ function renderWaGraph(): void {
   const analyticsInput = {
     exercises: graphExercises,
     records: S.waRepsVsWeight ? rvwWindowRecords(athleteRecs) : athleteRecs,
+    rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(athleteRecs, graphExercises) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
     xMarkers: projMarkers,
