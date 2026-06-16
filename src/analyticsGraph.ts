@@ -185,10 +185,21 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       rvw.push({ name: groups.length > 1 ? g.label : "Sets", color: base, type: "scatter", points: pts as SvgPoint[] });
       if (input.config.repsVsWeightFit) {
         // Best-fit NUZZO curve (owner), not a straight line: find the 1RM that best
-        // places the Nuzzo reps↔%1RM curve through these sets, then sample weight =
-        // 1RM·pct(reps) across the data's rep span — a smooth load-rep curve that bows
-        // the way real strength does, instead of a flat regression line.
-        const oneRm = bestFitNuzzo1RM(pts.map((p) => ({ reps: p.y, weight: p.x })));
+        // places the Nuzzo reps↔%1RM curve through these sets, then sample it across the
+        // data's rep span — a smooth load-rep curve that bows the way real strength does.
+        // BODYWEIGHT-AWARE (#prune, sibling of the card fix): the dots are the ADDED dial
+        // weight, but the Nuzzo % applies to the EFFECTIVE load (added + bodyweight share),
+        // so fit on effective and translate the curve back down by the share — for a
+        // pull-up the curve then bows AND drops into negative (assisted) kg. The share is
+        // the bodyweight folded into `weight` (weight − added), ~constant per lift; 0 for
+        // bar-only lifts, so they're unchanged.
+        let shareSum = 0, shareN = 0;
+        for (const r of g.records) {
+          const add = r.origWeight != null ? r.origWeight : r.weight;
+          if (r.weight != null && add != null) { shareSum += r.weight - add; shareN++; }
+        }
+        const bodyShare = shareN ? shareSum / shareN : 0;
+        const oneRm = bestFitNuzzo1RM(pts.map((p) => ({ reps: p.y, weight: p.x + bodyShare }))); // effective 1RM
         const ys = pts.map((p) => p.y);
         const r0 = Math.max(1, Math.floor(Math.min(...ys)));
         const r1 = Math.ceil(Math.max(...ys));
@@ -196,8 +207,8 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           const curve: SvgPoint[] = [];
           const step = (r1 - r0) / 48; // ~48 samples → visually smooth
           for (let r = r0; r <= r1 + 1e-9; r += step) {
-            const w = nuzzoWeightForReps(oneRm, r);
-            if (w != null) curve.push({ x: Math.round(w * 100) / 100, y: Math.round(r * 100) / 100 } as SvgPoint);
+            const eff = nuzzoWeightForReps(oneRm, r);
+            if (eff != null) curve.push({ x: Math.round((eff - bodyShare) * 100) / 100, y: Math.round(r * 100) / 100 } as SvgPoint);
           }
           if (curve.length > 1) {
             rvw.push({ name: `${g.label} fit`, color: base, type: "line", noLegend: true, points: curve });
