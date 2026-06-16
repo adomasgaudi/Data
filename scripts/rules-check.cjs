@@ -18,7 +18,8 @@
  *   When a RELEASE was touched (src/changelog.ts or index.html):
  *     1. the newest RELEASES entry has a `model:` stamp (rule: STAMP YOUR MODEL);
  *     2. index.html <span class="version"> matches the newest release (lockstep);
- *     3. the newest version is a clean patch bump b.X.Y.Z — no 4th digit (rule 1).
+ *     3. the newest version is a clean patch bump b.X.Y.Z — no 4th digit (rule 1);
+ *     3b. the newest entry's shortTitle is a 2–5-word label, not a sentence (rule 48).
  *   When the UI was touched (src/main.ts or src/styles.css):
  *     4. every class the Coach UI catalogue documents still has a rule in
  *        styles.css — so the "UI page" can't silently drift from the real
@@ -154,6 +155,15 @@ if (touchedRelease) {
 
   if (entry && !/\bmodel\s*:/.test(entry)) {
     violations.push("the newest RELEASES entry has NO `model:` field — stamp it with the model you are running as (Haiku 4.5 on haiku-4.5, Opus 4.8 on opus-4.8, …).");
+  }
+
+  // shortTitle must be a SCANNABLE 2–5-word label, not a sentence (owner: "names are
+  // starting to become long again"). The version-history tree shows the shortTitle, so a
+  // long one makes the whole list read as paragraphs. Flag the newest entry over 5 words.
+  const shortT = (entry.match(/shortTitle\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1] || "";
+  const stWords = shortT.split(/\s+/).filter(Boolean).length;
+  if (shortT && stWords > 5) {
+    violations.push(`the newest RELEASES entry's shortTitle is ${stWords} words ("${shortT.slice(0, 44)}…") — keep it 2–5 words (a scannable label, not a sentence). Put the detail in the \`title\`/\`note\` fields, not the shortTitle.`);
   }
 
   const newestVer = (entry.match(/version\s*:\s*["']([^"']+)["']/) || [])[1] || "";
