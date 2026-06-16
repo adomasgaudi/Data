@@ -971,7 +971,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // axis names without stealing plot space (just made dark+bold so they're visible).
     let axisTitles = "";
     if (!inside()) {
-      if (cfg.yTitle) axisTitles += `<text x="2" y="${(M.t - 3).toFixed(1)}" text-anchor="start" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
+      if (cfg.yTitle) axisTitles += `<text x="${M.l.toFixed(1)}" y="${(M.t - 3).toFixed(1)}" text-anchor="start" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
       if (cfg.xTitle) axisTitles += `<text x="${(W - M.r).toFixed(1)}" y="${(h - 4).toFixed(1)}" text-anchor="end" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
     }
     plotEl.innerHTML =

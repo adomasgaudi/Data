@@ -352,6 +352,11 @@ let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SV
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 let cardNuzzoSvg: SvgChart | null = null; // Exercise-card 1RM-fit (Nuzzo) graph (SVG engine)
 let cardNuzzoRaf = false; // rAF coalescer so a slider drag re-plots at most once/frame
+// Card graph X-axis unit (owner toggle): kg (added weight) · % of 1RM · × bodyweight.
+type CardNuzzoXUnit = "kg" | "pct" | "bw";
+let cardNuzzoXUnit: CardNuzzoXUnit = (() => {
+  try { const v = localStorage.getItem("colosseum.cardNuzzoXUnit"); return v === "pct" || v === "bw" ? v : "kg"; } catch { return "kg"; }
+})();
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
@@ -11330,6 +11335,8 @@ function cardNuzzoConfig(
   bodyShare: number,
   suggested: { reps: number; added: number } | null,
   realSets: CardNuzzoSet[] = [],
+  xUnit: CardNuzzoXUnit = "kg",
+  bodyweight: number | null = null,
 ): SvgChartConfig {
   // Owner orientation: ADDED WEIGHT (the plate / −assistance) on the X axis, REPS on Y.
   // The Nuzzo % applies to the EFFECTIVE load (added + bodyweight share), so the curve
@@ -11342,9 +11349,20 @@ function cardNuzzoConfig(
   // Fall back to an effective-100 scale when there's no 1RM yet (added = 100 − share).
   const A = addedOneRM != null && addedOneRM + b > 0 ? addedOneRM : 100 - b;
   const addedAt = (reps: number) => Math.round((nuzzoAddedWeightForReps(A, b, reps) ?? 0) * 10) / 10;
+  // X-UNIT toggle (owner): show the X axis as kg (added weight), % of 1RM, or × bodyweight.
+  // Everything is computed in added-kg space, then `tx()` maps it to the chosen unit.
+  const BW = bodyweight && bodyweight > 0 ? bodyweight : null;
+  const effOneRM = A + b; // effective (added + bodyweight share) 1RM
+  const unitOn: CardNuzzoXUnit = (xUnit === "pct" && effOneRM > 0) || (xUnit === "bw" && BW) ? xUnit : "kg";
+  const tx = (added: number): number => {
+    if (unitOn === "pct") return Math.round(((added + b) / effOneRM) * 1000) / 10;
+    if (unitOn === "bw") return Math.round(((added + b) / BW!) * 100) / 100;
+    return Math.round(added * 10) / 10;
+  };
+  const atx = (reps: number) => tx(addedAt(reps)); // curve x at N reps, in the chosen unit
   const fitPts: SvgPoint[] = [];
   for (let r = 1; r <= repCap; r++) {
-    fitPts.push({ x: addedAt(r), y: r });
+    fitPts.push({ x: atx(r), y: r });
     if (benchPctForReps(r) <= minPct) break;
   }
   // EFFORT (RIR) zones: ribbons stepping DOWN from the failure curve (RIR = reps short of
@@ -11360,8 +11378,8 @@ function cardNuzzoConfig(
   ];
   // Load zones by rep-max, now in ADDED-weight space too (added weight at the 3/6/12 RM).
   const rmZones = [
-    { from: addedAt(6), to: addedAt(3), fill: "rgba(184,144,47,0.10)", label: "3–6RM", labelColor: "#b8902f" },
-    { from: addedAt(12), to: addedAt(6), fill: "rgba(91,79,150,0.10)", label: "6–12RM", labelColor: "#5b4f96" },
+    { from: atx(6), to: atx(3), fill: "rgba(184,144,47,0.10)", label: "3–6RM", labelColor: "#b8902f" },
+    { from: atx(12), to: atx(6), fill: "rgba(91,79,150,0.10)", label: "6–12RM", labelColor: "#5b4f96" },
   ];
   const series: SvgSeries[] = [
     // Dashed (dot-less) reference curve.
@@ -11374,7 +11392,7 @@ function cardNuzzoConfig(
   for (const s of realSets) { const a = byDay.get(s.date) ?? []; a.push(s); byDay.set(s.date, a); }
   for (const [, daySets] of byDay) {
     if (daySets.length < 2) continue;
-    const pts = [...daySets].sort((p, q) => p.setNumber - q.setNumber).map((s) => ({ x: s.added, y: s.reps }));
+    const pts = [...daySets].sort((p, q) => p.setNumber - q.setNumber).map((s) => ({ x: tx(s.added), y: s.reps }));
     series.push({ name: "session", color: "#8fc4be", type: "line", points: pts, noLegend: true, noDots: true });
   }
   // EVERY logged set (not just rep-maxes) — the full cloud, so submaximal sets land in
@@ -11385,7 +11403,7 @@ function cardNuzzoConfig(
     series.push({
       name: "Your lifts", color: "#2f8f88", type: "scatter",
       points: realSets.map((s) => ({
-        x: s.added, y: s.reps,
+        x: tx(s.added), y: s.reps,
         meta: addedOneRM != null && addedOneRM + b > 0
           ? `${s.reps} reps @ ${s.added}${unit} (${Math.round((eff(s) / (addedOneRM + b)) * 100)}% of 1RM)`
           : `${s.reps} reps @ ${s.added}${unit}`,
@@ -11393,12 +11411,16 @@ function cardNuzzoConfig(
     });
   }
   if (suggested) {
-    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: Math.round(suggested.added * 10) / 10, y: suggested.reps, meta: `Suggested set — ${suggested.reps} reps @ ${Math.round(suggested.added * 10) / 10}${unit}` }] });
+    series.push({ name: "Suggested set", color: "#b8902f", type: "scatter", points: [{ x: tx(suggested.added), y: suggested.reps, meta: `Suggested set — ${suggested.reps} reps @ ${Math.round(suggested.added * 10) / 10}${unit}` }] });
   }
+  const xTitle = unitOn === "pct" ? "% of 1RM" : unitOn === "bw" ? "× bodyweight" : (b > 0 ? "added weight (kg)" : "weight (kg)");
+  const fmtX = unitOn === "pct" ? (x: number) => `${Math.round(x)}%`
+    : unitOn === "bw" ? (x: number) => `${Math.round(x * 100) / 100}×`
+    : (x: number) => `${Math.round(x)}`;
   return {
     series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones,
-    xTitle: b > 0 ? "added weight (kg)" : "weight (kg)", yTitle: "reps",
-    formatX: (x) => `${Math.round(x)}`, formatTipX: (x) => `${Math.round(x)} ${unit}`,
+    xTitle, yTitle: "reps",
+    formatX: fmtX, formatTipX: fmtX,
   };
 }
 
@@ -11430,7 +11452,8 @@ function cardNuzzoConfigFromBox(box: HTMLElement): SvgChartConfig {
   const suggested = Number.isFinite(sugReps) && sugReps > 0 && Number.isFinite(sugAdded)
     ? { reps: sugReps, added: sugAdded } : null;
   const realSets = currentExInfo ? cardNuzzoRealSets(currentExInfo) : [];
-  return cardNuzzoConfig(addedOneRM, bodyShare, suggested, realSets);
+  const bw = athProfile(els.athlete.value)?.weight ?? null;
+  return cardNuzzoConfig(addedOneRM, bodyShare, suggested, realSets, cardNuzzoXUnit, bw);
 }
 /** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
  *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
@@ -11560,6 +11583,7 @@ function liftTrainingHtml(name: string): string {
         (bestFitAdded != null && Math.abs(bestFitAdded - aBase) > 0.5
           ? `<button type="button" class="lt-ormfit-best" data-cardorm="best" data-best="${fmt(bestFitAdded)}" title="Snap the 1RM to the value that best fits your logged sets to the curve">fit ${fmt(bestFitAdded)}</button>`
           : "") +
+        `<button type="button" class="lt-ormfit-best lt-xunit" data-cardxunit title="Graph X-axis unit — tap to cycle kg → %1RM → ×BW">${cardNuzzoXUnit === "pct" ? "%1RM" : cardNuzzoXUnit === "bw" ? "×BW" : "kg"}</button>` +
       `</div>` +
       nuzzoBox(aBase) +
       realSrc +
@@ -13396,6 +13420,14 @@ async function init() {
     if (fitBtn?.dataset.best) {
       e.preventDefault(); e.stopPropagation();
       cardOrm = parseFloat(fitBtn.dataset.best);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
+    // X-axis unit toggle: cycle kg → %1RM → ×BW, persist, re-plot the card graph.
+    if ((e.target as HTMLElement).closest<HTMLElement>("[data-cardxunit]")) {
+      e.preventDefault(); e.stopPropagation();
+      cardNuzzoXUnit = cardNuzzoXUnit === "kg" ? "pct" : cardNuzzoXUnit === "pct" ? "bw" : "kg";
+      try { localStorage.setItem("colosseum.cardNuzzoXUnit", cardNuzzoXUnit); } catch { /* ignore */ }
       if (currentExInfo) paintExInfo(currentExInfo);
       return;
     }
