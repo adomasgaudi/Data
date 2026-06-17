@@ -11468,7 +11468,8 @@ function cardNuzzoConfig(
     formatX: fmtX, formatTipX: fmtX,
     ...(markers ? { xMarkers: markers, onMarkerDrag: (_id: string, newX: number) => {
       cardOrm = Math.round(newX * 10) / 10;
-      if (currentExInfo) paintExInfo(currentExInfo);
+      // Persist the dragged 1RM as this lift's custom set strength (rule 50) — shared SSOT.
+      if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); }
     } } : {}),
   };
 }
@@ -12003,8 +12004,13 @@ function liftTrainingHtml(name: string): string {
   const bodyShare = Math.max(0, coeffFor(name) * (athProfile(user)?.weight ?? 0));
   const loggedAdded = loggedE1rm != null ? loggedE1rm - bodyShare : null;
   const bestFitAdded = bestFit != null ? bestFit - bodyShare : null;
+  // The hand-set "custom set strength" (rule 50): the 1RM the owner dialed in by dragging
+  // the Nuzzo fit — persisted per (athlete,exercise) and SHARED with the analysis reps×kg
+  // fit (ONE SSOT). It's the most-accurate estimate, so it wins over the auto best-fit here.
+  const customEff = rvwFitOf(name);
+  const persistedAdded = customEff != null ? customEff - bodyShare : null;
   const addedBase = hasLogged
-    ? (cardOrm ?? loggedAdded ?? bestFitAdded)
+    ? (cardOrm ?? persistedAdded ?? loggedAdded ?? bestFitAdded)
     : (manualOrm != null ? manualOrm - bodyShare : null);
   // Effective 1RM drives the working weights / warm-up / suggested set (same load space
   // as the logged sets). = added 1RM + the body share.
@@ -12049,10 +12055,8 @@ function liftTrainingHtml(name: string): string {
     `<div class="lt-nuzzo" data-nzorm="${added != null ? fmt(added) : ""}" data-nzbody="${fmt(bodyShare)}" data-nzsugreps="${hs?.reps ?? ""}" data-nzsugadded="${sugAdded != null ? fmt(sugAdded) : ""}"></div>`;
   const maxW = repMaxes.reduce((m, rm) => Math.max(m, rm.weight), 0); // heaviest EFFECTIVE
   const maxAdded = Math.round((maxW - bodyShare) * 10) / 10;          // heaviest ADDED
-  const aBase = addedBase ?? maxAdded;       // slider value (added 1RM, may be negative)
-  const headroom = Math.max(20, Math.round((e1rm ?? 100) * 0.6));
+  const aBase = addedBase ?? maxAdded;       // current 1RM-fit value (added 1RM, may be negative)
   const sMin = Math.floor(maxAdded);          // 1RM ≥ heaviest added single; negative when assisted
-  const sMax = Math.max(Math.ceil(aBase + headroom), sMin + 20);
   const unit = bodyShare > 0 ? "kg added" : "kg";
   // The dots' source data — EVERY logged set now (owner: "all points, not just top 10"),
   // heaviest-added first, in a collapsed list so the cloud behind the teal dots is legible.
@@ -12069,8 +12073,9 @@ function liftTrainingHtml(name: string): string {
     : "";
   const ormFit =
     `<div class="lt-ormfit">` +
+      // No slider here (owner: redundant) — drag the "1RM" line ON the graph below, or type
+      // the exact value. Either way it persists as this lift's custom set strength (rule 50).
       `<div class="lt-ormfit-row">` +
-        `<input type="range" class="lt-ormfit-slider" min="${sMin}" max="${sMax}" step="0.5" value="${fmt(aBase)}" data-cardorm="slider" aria-label="Assumed 1RM">` +
         `<input type="number" class="lt-ormfit-num" inputmode="decimal" step="0.5" min="${sMin}" value="${fmt(aBase)}" data-cardorm="num" aria-label="1RM in kilograms">` +
         `<span class="lt-ormfit-unit">${unit === "kg" ? "kg 1RM" : "kg added 1RM"}</span>` +
         (bestFitAdded != null && Math.abs(bestFitAdded - aBase) > 0.5
@@ -14017,17 +14022,14 @@ async function init() {
   // chart); DEFER the heavy whole-card re-render (working weights, warm-up table) to a
   // debounce so the drag stays smooth (snappy-render recipe).
   els.exInfoBody.addEventListener("input", (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLInputElement>('[data-cardorm="slider"],[data-cardorm="num"]');
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>('[data-cardorm="num"]');
     if (!inp) return;
     const v = parseFloat(inp.value);
     // cardOrm is the ADDED-weight 1RM now — it CAN be ≤ 0 for an assisted-only lift, so
     // only reject a non-finite value, not a negative one.
     if (!Number.isFinite(v)) return;
     cardOrm = v;
-    const slider = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardorm="slider"]');
-    const num = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardorm="num"]');
-    if (slider && slider !== inp) slider.value = String(v);
-    if (num && num !== inp) num.value = String(Math.round(v * 10) / 10);
+    if (currentExInfo) setCustomStrengthAdded(currentExInfo, v); // persist (rule 50)
     const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
     if (box) { box.dataset.nzorm = String(Math.round(v * 10) / 10); updateCardNuzzoLive(); }
     debounceCardOrmRender();
@@ -14078,7 +14080,7 @@ async function init() {
     if (fitBtn?.dataset.best) {
       e.preventDefault(); e.stopPropagation();
       cardOrm = parseFloat(fitBtn.dataset.best);
-      if (currentExInfo) paintExInfo(currentExInfo);
+      if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); } // persist (rule 50)
       return;
     }
     // X-axis unit toggle: cycle kg → %1RM → ×BW, persist, re-plot the card graph.
@@ -17854,23 +17856,43 @@ function onProjMarkerDrag(id: string, x: number): void {
   if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
   scheduleWaGraph();
 }
-// Manual reps-vs-weight fit: dragging the green Nuzzo curve sets a per-(athlete|exercise)
-// EFFECTIVE 1RM that POSITIONS the curve (view-only — like the projection fit window, it
-// doesn't touch logged data). Persisted device-local (a display pref, rule 41).
+// CUSTOM SET STRENGTH (rule 50): the hand-set per-(athlete|exercise) EFFECTIVE 1RM the owner
+// dials in by dragging the Nuzzo fit — on the analysis reps×kg graph (green curve) OR on the
+// exercise card's Curve graph (the "1RM" line). ONE persisted SSOT shared by both, the
+// most-accurate strength estimate. Positions the curve view; doesn't touch logged data.
+// Persisted device-local (a display pref, rule 41).
 const RVW_FIT_KEY = "colosseum.rvwFit.v1";
 const rvwFitOverrides: Record<string, number> = (() => {
   try { const o = JSON.parse(localStorage.getItem(RVW_FIT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
   catch { return {}; }
 })();
 const rvwFitKey = (exercise: string) => `${els.athlete.value}|${exercise}`;
+function saveRvwFit(): void {
+  try { localStorage.setItem(RVW_FIT_KEY, JSON.stringify(rvwFitOverrides)); } catch { /* ignore */ }
+}
+/** The hand-set "CUSTOM SET STRENGTH" (rule 50): the EFFECTIVE 1RM the owner dialed in by
+ * dragging the Nuzzo fit — the most-accurate per-(athlete,exercise) strength estimate, or
+ * null if never set. ONE SSOT, shared by the exercise-card Curve fit AND the analysis
+ * reps×kg fit. */
 function rvwFitOf(exercise: string): number | null {
   const v = rvwFitOverrides[rvwFitKey(exercise)];
   return typeof v === "number" && v > 0 ? v : null;
 }
-function onRvwFitDrag(exercise: string, effOneRm: number): void {
+/** Persist the custom set strength from an EFFECTIVE 1RM (analysis reps×kg fit path). */
+function setCustomStrength(exercise: string, effOneRm: number): void {
   if (!(effOneRm > 0)) return; // dragged past zero → ignore (keep the last sensible fit)
   rvwFitOverrides[rvwFitKey(exercise)] = Math.round(effOneRm * 10) / 10;
-  try { localStorage.setItem(RVW_FIT_KEY, JSON.stringify(rvwFitOverrides)); } catch { /* ignore */ }
+  saveRvwFit();
+}
+/** Persist the custom set strength from an ADDED-weight 1RM (the card's Curve fit path,
+ * which works in added-weight space). Folds the bodyweight share back in to store the
+ * EFFECTIVE 1RM, so the card fit and the analysis fit stay ONE value. */
+function setCustomStrengthAdded(exercise: string, addedOrm: number): void {
+  const share = Math.max(0, coeffFor(exercise) * (athProfile(els.athlete.value)?.weight ?? 0));
+  setCustomStrength(exercise, addedOrm + share);
+}
+function onRvwFitDrag(exercise: string, effOneRm: number): void {
+  setCustomStrength(exercise, effOneRm);
   scheduleWaGraph();
 }
 // Reps×weight 2-week WINDOW pager (owner): null = all sets; 0 = the most recent 14-day
