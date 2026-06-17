@@ -225,7 +225,13 @@ function bucketCenter(t: number, interval: GraphConfig["interval"]): number {
     const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
     return (start + next) / 2;
   }
-  return Math.floor(t / WEEK) * WEEK + WEEK / 2; // week
+  // WEEK buckets start on MONDAY (matching the workout history + heatmap), NOT the raw
+  // epoch week (floor(t/WEEK) starts THURSDAY, since epoch day 0 is a Thursday) — else a
+  // set lands in a different week than the history shows it ("days don't match"). Shift the
+  // epoch-day to the Monday on/before: Monday-as-0 index = (dayOfEpoch + 3) % 7.
+  const day = Math.floor(t / DAY);
+  const mondayDay = day - ((day + 3) % 7);
+  return mondayDay * DAY + WEEK / 2; // week (Monday-anchored)
 }
 /** Sum a per-set value into one point per time bucket (volume / reps "by date").
  * Buckets by the configured interval — week by default — so the count/volume bars
@@ -255,7 +261,7 @@ function sessionsPerWeek(records: readonly SetRecord[]): GraphPoint[] {
   }
   const weeks = new Map<number, Set<number>>();
   for (const d of days) {
-    const wk = Math.floor((d * DAY) / (7 * DAY)) * (7 * DAY);
+    const wk = (d - ((d + 3) % 7)) * DAY + WEEK / 2; // Monday-anchored week centre (matches bucketCenter)
     (weeks.get(wk) ?? weeks.set(wk, new Set()).get(wk)!).add(d);
   }
   return [...weeks.entries()].sort((a, b) => a[0] - b[0]).map(([x, set]) => ({ x, y: set.size }));
@@ -309,7 +315,10 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
   // Interval — WEEK by default — and read as bars (a column per bucket); switch
   // Interval to Day for daily columns. Only Frequency is a smoothed cadence (line).
-  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps)), cfg.interval) },
+  // Volume = added (bar) weight × reps — the SAME basis as the workout-history weekly
+  // summary, so the bars match it. (Was r.weight = bodyweight-inclusive effective load,
+  // which double-counted bodyweight lifts like Hip Thrust — graph 12k vs history 6k.)
+  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
   { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
   { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => r.reps, cfg.interval) },
   { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs, cfg) => setsPerBucket(rs, cfg.interval) },

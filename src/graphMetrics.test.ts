@@ -38,6 +38,25 @@ describe("graph metric registry (TASK 26)", () => {
     expect(graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBe(2);
   });
 
+  it("volume uses ADDED (bar) weight, not the bodyweight-folded effective load", () => {
+    // A Hip-Thrust-like set: 60 kg on the bar (origWeight) folds to a 120 kg effective load
+    // (weight). Volume must match the workout history (added × reps), not double it.
+    const recs = [rec({ date: "2024-01-01", weight: 120, origWeight: 60, reps: 10 })];
+    expect(graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG)[0]!.y).toBe(600); // 60×10, not 1200
+  });
+
+  it("weekly buckets are Monday-start (matches the history), not epoch/Thursday weeks", () => {
+    // Mon Jan 1 2024 & Sun Jan 7 are the SAME Monday-week; Mon Jan 8 starts the next.
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-07", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-08", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const vol = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(vol.length).toBe(2); // two Monday-weeks (epoch/Thursday weeks would split Jan 1 / Jan 7)
+    expect(vol.map((p) => p.y)).toEqual([1000, 500]); // {Jan1+Jan7}, {Jan8}
+  });
+
   it("every registered metric now has a compute (TASKS 31–41)", () => {
     // pctWR is computed specially in analyticsGraph (needs sex/bodyweight/the WR),
     // so it deliberately carries no registry compute.
