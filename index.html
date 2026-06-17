@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.91</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.92</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -913,18 +913,6 @@
       </div>
 
       <div id=”tab-data” class=”tab-panel” hidden>
-        <div id=”slSyncCard” class=”sl-admin-only panel sl-sync-card”>
-          <h2>StrengthLevel sync</h2>
-          <div class=”sl-pat-row”>
-            <input type=”password” id=”slGhPat” class=”sl-pat-input” placeholder=”GitHub PAT (actions:write)” autocomplete=”off” />
-          </div>
-          <div class=”sl-btn-row”>
-            <button type=”button” id=”slSyncBtn” class=”pill” disabled>Sync</button>
-            <button type=”button” id=”slRebuildBtn” class=”pill” disabled>Rebuild all</button>
-            <span id=”slStatus” class=”gh-sync” hidden></span>
-          </div>
-          <div id=”slLastRun” class=”muted sl-last-run”></div>
-        </div>
         <section class=”panel”>
           <h2>Data — raw vs processed</h2>
           <p class="muted" id="dataIntro" style="margin: 0 0 1rem">
@@ -949,6 +937,28 @@
           </div>
           <div id="dataTableWrap" class="data-table-wrap"></div>
           <div id="dataPager" class="pager"></div>
+        </section>
+      </div>
+
+      <div id="tab-slsync" class="tab-panel" hidden>
+        <section id="slSyncCard" class="panel sl-sync-card">
+          <h2>StrengthLevel sync</h2>
+          <p class="muted" style="margin:0 0 1rem">
+            Pull the latest workouts from StrengthLevel into the dashboard. This runs the
+            <strong>fetch-data</strong> GitHub Action — it only updates the reference CSV and
+            <strong>never touches</strong> the sets you or other users have added in the app.
+            <strong>Sync</strong> grabs only new workouts (fast); <strong>Rebuild all</strong>
+            re-scrapes everything (slow).
+          </p>
+          <div class="sl-pat-row">
+            <input type="password" id="slGhPat" class="sl-pat-input" placeholder="GitHub PAT (actions:write)" autocomplete="off" />
+          </div>
+          <div class="sl-btn-row">
+            <button type="button" id="slSyncBtn" class="pill" disabled>Sync</button>
+            <button type="button" id="slRebuildBtn" class="pill" disabled>Rebuild all</button>
+            <span id="slStatus" class="gh-sync" hidden></span>
+          </div>
+          <div id="slLastRun" class="muted sl-last-run"></div>
         </section>
       </div>
 
@@ -1227,6 +1237,7 @@
           </div>
           <div class="other-row">
             <button class="other-item" data-tab="data" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"/><path d="M4.5 5v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V5"/><path d="M4.5 11v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-6"/></svg> Data</button>
+            <button class="other-item" data-tab="slsync" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> StrengthLevel sync</button>
           </div>
           <div class="other-row">
             <!-- Data health is an OVERLAY page (data-open opens it via openHealth()). Moved here from Settings. -->

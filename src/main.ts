@@ -14097,6 +14097,7 @@ async function init() {
     rerenderBenchmarks(host, ex);
   });
   setupDataTab();
+  setupSlSyncCard();
   renderDataTab();
   populateAddExerciseList();
   void setupBackup();
@@ -16621,7 +16622,6 @@ function setupSlSyncCard(): void {
 }
 
 function setupDataTab() {
-  setupSlSyncCard();
   populateDataFilters();
   document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {

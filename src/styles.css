@@ -664,8 +664,7 @@ body.admin-only-hidden .other-section--coach,
 body.admin-only-hidden .other-section-lbl { display: none; }
 /* Coach tab — admin-only */
 body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
-/* StrengthLevel sync card — admin-only */
-body.admin-only-hidden .sl-admin-only { display: none !important; }
+/* StrengthLevel sync page — reached from the admin-only Coach menu section */
 .sl-sync-card { margin-bottom: 1rem; }
 .sl-pat-row { margin-bottom: 0.6rem; }
 .sl-pat-input { width: 100%; max-width: 320px; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--fg); font: inherit; font-size: 0.85rem; }
