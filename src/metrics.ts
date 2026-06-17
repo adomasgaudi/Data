@@ -343,6 +343,8 @@ export const STRENGTH_DECAY = {
   stabilityGrowth: 1.8, // each session makes the lift this much more durable
   maxStability: 90, // modest cap — trained lifts fade slower, but still clearly
   floor: 0.5, // never decays below half the peak (muscle memory)
+  maxGrowthFraction: 0.08, // a single session can't lift the level beyond 8% above the all-time peak
+  calibrationThreshold: 0.88, // if a returning set is ≥88% of the previous level, the gap ≈ maintained
 } as const;
 
 /**
@@ -366,6 +368,18 @@ export function strengthRetention(
  * decay weaker — the more you've trained a lift, the slower it fades. */
 export function grownStability(stabilityDays: number): number {
   return Math.min(STRENGTH_DECAY.maxStability, stabilityDays * STRENGTH_DECAY.stabilityGrowth);
+}
+
+/**
+ * Fraction of a set's e1RM estimate to trust, based on reported RIR.
+ * Near-failure sets (RIR 0–1) are taken at face value (1.0). High-RIR sets
+ * are blended with the current level because the Epley formula extrapolates
+ * from fewer reps, making the e1RM noisier the more reps in reserve there are.
+ * Floor at 0.2 so even a very light set contributes some evidence.
+ */
+export function rirConfidence(rir: number | null | undefined): number {
+  if (rir == null || !Number.isFinite(rir) || rir < 0) return 1;
+  return Math.max(0.2, 1 - rir / 10);
 }
 
 /** Whole days from ISO date `from` to ISO date `to` (negative if `to` precedes

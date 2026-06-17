@@ -743,6 +743,78 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
   it("is empty for no points", () => {
     expect(decayedStrengthSeries([], at(10))).toEqual([]);
   });
+
+  // Adaptive mechanisms (A / B / C) — added with the RIR-confidence / rate-limit / calibration update
+
+  it("A) a high-RIR set contributes less to the level than a near-failure set of the same weight", () => {
+    // Both scenarios: peak 100 on day 0, gap to day 100, then a set showing e1rm=95.
+    // RIR 0 (failure) → full credit; RIR 8 (very easy) → blended with decayed level.
+    const lineHard = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 95, rir: 0 }], at(100), 4);
+    const lineEasy = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 95, rir: 8 }], at(100), 4);
+    const hardLevel = lineHard[lineHard.length - 1]!.y;
+    const easyLevel = lineEasy[lineEasy.length - 1]!.y;
+    // Hard set is trusted fully → level rises to the full 95.
+    // Easy set is blended with decayed level (which is lower) → level is lower.
+    expect(hardLevel).toBeGreaterThan(easyLevel);
+  });
+
+  it("A) without RIR info, the series matches a RIR-0 set of the same value (full confidence)", () => {
+    // A set with no RIR behaves identically to a RIR-0 set (fully trusted).
+    const noRir = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 90 }], at(150), 4);
+    const rir0 = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 90, rir: 0 }], at(150), 4);
+    expect(noRir).toEqual(rir0);
+  });
+
+  it("B) a single-session jump beyond 8% above the all-time peak is rate-limited", () => {
+    // Peak 100 on day 0; after a long layoff, user shows an e1rm of 130 (30% jump).
+    // Rate-limiting caps this at 108 (8% above 100), not 130.
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(90), y: 130, rir: 0 }], at(90), 4);
+    const levelAfter = line[line.length - 1]!.y;
+    expect(levelAfter).toBeLessThanOrEqual(100 * 1.08 + 0.1); // capped near 108
+    expect(levelAfter).toBeGreaterThan(100); // but still higher than the old peak
+  });
+
+  it("B) a set WITHIN the all-time peak is NOT rate-limited", () => {
+    // Peak 100; after a layoff user shows 95 — no rate-limiting needed.
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(90), y: 95, rir: 0 }], at(90), 4);
+    const levelAfter = line[line.length - 1]!.y;
+    expect(levelAfter).toBeCloseTo(95, 1); // no cap — recovery to previous level is fine
+  });
+
+  it("C) a strength level maintained through a long gap calibrates stability upward → slower future decay", () => {
+    // User peaked 100 on day 0, then maintained 96+ for 80 days (one set on day 80 shows 96 at RIR 2).
+    // Stability should be updated to ≥ 80 days → future decay is slower than the base 30-day model.
+    const withLongGap = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(80), y: 96, rir: 2 }],
+      at(200), 4,
+    );
+    // Compare to a user with the same history but at a much shorter gap (no calibration triggered).
+    const withShortGap = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(10), y: 96, rir: 2 }],
+      at(200), 4,
+    );
+    const longEnd = withLongGap[withLongGap.length - 1]!.y;
+    const shortEnd = withShortGap[withShortGap.length - 1]!.y;
+    // After the same total time, the user with the calibrated long gap retains more strength.
+    expect(longEnd).toBeGreaterThan(shortEnd);
+  });
+
+  it("C) a high-RIR set (> 4) does NOT trigger stability calibration even if strength appears maintained", () => {
+    // RIR 8 is unreliable evidence; its observed ratio should not update stability.
+    const withHighRir = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(80), y: 96, rir: 8 }],
+      at(200), 4,
+    );
+    // Compare to a near-failure set (RIR 2) that does calibrate.
+    const withLowRir = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(80), y: 96, rir: 2 }],
+      at(200), 4,
+    );
+    const highRirEnd = withHighRir[withHighRir.length - 1]!.y;
+    const lowRirEnd = withLowRir[withLowRir.length - 1]!.y;
+    // Low-RIR triggers calibration → stability boosted → slower future decay → higher end value.
+    expect(lowRirEnd).toBeGreaterThanOrEqual(highRirEnd);
+  });
 });
 
 describe("originals stay selectable when variants/groups exist (TASK 11)", () => {

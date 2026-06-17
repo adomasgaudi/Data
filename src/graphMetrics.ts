@@ -163,9 +163,18 @@ function perSet(
   return out;
 }
 
-/** est. 1RM points for an exercise under the configured formula. */
-function e1rmPoints(records: readonly SetRecord[], formula: OneRepMaxFormula): { x: number; y: number }[] {
-  return perSet(records, (r) => addedWeight1RM(r, formula)).map((p) => ({ x: p.x, y: p.y! }));
+/** est. 1RM points for an exercise under the configured formula.
+ * Pass `cfg` to include RIR values — used by the adaptive decay series (strengthDecay). */
+function e1rmPoints(
+  records: readonly SetRecord[],
+  formula: OneRepMaxFormula,
+  cfg?: GraphConfig,
+): { x: number; y: number; rir?: number }[] {
+  return perSet(records, (r) => addedWeight1RM(r, formula), undefined, cfg).map((p) => ({
+    x: p.x,
+    y: p.y!,
+    ...(p.rir != null ? { rir: p.rir } : {}),
+  }));
 }
 
 /** Running maximum — the legacy "Strength Score" line that never drops. */
@@ -326,7 +335,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // FRACTION of the record (1.0 = world record), so it shares the left value axis.
   { id: "pctWR", label: "WR%", type: "scatter" },
   { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
-  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
+  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula, cfg), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays, cfg.potentialCeiling ?? cfg.ceilingOf?.(rs) ?? null) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
