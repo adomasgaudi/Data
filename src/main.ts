@@ -19872,7 +19872,7 @@ function renderDbg(): void {
     `<span style="color:${hasErr ? "#f55" : "#3f6"}">dbg ${collapsed ? "▸" : "▾"}</span><span style="margin-left:auto">${dbgLines.length}</span><span id="dbgClear" style="padding:0 4px">✕</span></div>` +
     (collapsed ? "" : `<div id="dbgBody" style="max-height:18vh;overflow:auto;padding:0 6px 3px;white-space:pre-wrap;word-break:break-all">${lines}</div>`);
   const body = document.getElementById("dbgBody");
-  if (body) body.scrollTop = body.scrollHeight; // keep the newest line in view
+  if (body) body.scrollTop = 0; // owner: auto-scroll to the TOP (show the start of the trace)
 }
 function dbg(msg: string, isErr = false): void {
   try { if (localStorage.getItem("colosseum.dbg") === "off") return; } catch { /* ignore */ }
