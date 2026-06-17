@@ -4389,25 +4389,50 @@ function ensureHistoryTabApplied(): void {
   }
 }
 /** Build the tab bar: one chip per tab (active one editable inline) + a "+" to add. */
+// The history tab whose name is being inline-edited (null = none) — mirrors the
+// graph dashboard's dashEditTab so the two tab strips behave identically.
+let histEditTab: string | null = null;
 function renderWoTabs(): void {
   const host = document.getElementById("woTabs");
   if (!host) return;
+  // Don't rebuild while a rename <input> is live (a re-render would destroy the focused
+  // field mid-type) — the same guard the graph tabs use.
+  if (histEditTab && host.querySelector<HTMLInputElement>(".gdash-tabedit")) return;
   const act = activeHistoryTab(historyDash);
-  const canDelete = historyDash.tabs.length > 1;
-  host.innerHTML =
-    historyDash.tabs.map((t) => {
-      const on = t.id === act.id;
-      return `<span class="wo-tab-wrap${on ? " is-active" : ""}">` +
-        `<button type="button" class="wo-tab${on ? " is-active" : ""}" role="tab" aria-selected="${on}" data-hwtab="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>` +
-        (on
-          ? `<button type="button" class="wo-tab-edit" data-hwrename="${escapeHtml(t.id)}" title="Rename this tab" aria-label="Rename tab">✎</button>` +
-            `<button type="button" class="wo-tab-dup" data-hwdup="${escapeHtml(t.id)}" title="Duplicate this tab" aria-label="Duplicate tab">⧉</button>` +
-            (canDelete ? `<button type="button" class="wo-tab-del" data-hwdel="${escapeHtml(t.id)}" title="Delete this tab" aria-label="Delete tab">✕</button>` : "")
-          : "") +
-        `</span>`;
-    }).join("") +
-    `<button type="button" class="wo-tab-add" data-hwadd="1" title="Add a new history tab" aria-label="Add tab">＋</button>`;
+  // SAME logic + styles as the graph tabs: each tab is a pill (name + ⋯ options button);
+  // the ⋯ opens a floating menu to Duplicate / Rename / Add / Delete (no inline icons).
+  // The only difference from the graph strip is that this one sits ABOVE the title.
+  host.innerHTML = historyDash.tabs.map((t) => {
+    const on = t.id === act.id;
+    if (on && histEditTab === t.id) {
+      return `<input class="gdash-tab gdash-tabedit" data-hwtabname="${escapeHtml(t.id)}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
+    }
+    return `<span class="gdash-tab-wrap${on ? " is-on" : ""}">` +
+      `<button type="button" class="gdash-tab${on ? " is-on" : ""}" role="tab" aria-selected="${on}" data-hwtab="${escapeHtml(t.id)}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>` +
+      `<button type="button" class="gdash-tab-more" data-hwmenu="${escapeHtml(t.id)}" aria-label="${escapeHtml(t.name)} options" title="Tab options — duplicate, rename, add, delete">⋯</button>` +
+      `</span>`;
+  }).join("");
+  if (histEditTab) {
+    const inp = host.querySelector<HTMLInputElement>(".gdash-tabedit");
+    inp?.focus(); inp?.select();
+  }
 }
+/** The history tab ⋯ options menu — mirrors openDashTabMenu (graph), reusing the same
+ * .dash-tab-menu styles (rule 32: fixed + clampMenuIntoView). */
+function openHistTabMenu(anchor: HTMLElement, tabId: string): void {
+  closeHistTabMenu();
+  const canDelete = historyDash.tabs.length > 1;
+  const m = document.createElement("div");
+  m.id = "histTabMenu"; m.className = "dash-tab-menu";
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-htabmenu="duplicate" data-tab="${escapeHtml(tabId)}">⧉ Duplicate</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-htabmenu="rename" data-tab="${escapeHtml(tabId)}">✎ Rename</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-htabmenu="add">＋ Add tab</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-htabmenu="delete" data-tab="${escapeHtml(tabId)}">✕ Delete</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+}
+function closeHistTabMenu(): void { document.getElementById("histTabMenu")?.remove(); }
 /** Switch to a tab: apply its config (incl. its exercise selection), mark active, then
  * re-render the WHOLE history section — the selection title + exercise picker + the list
  * (renderWorkoutAnalysis), so the swapped-in exercises + grouping all show at once. */
@@ -5181,6 +5206,13 @@ function applySectionToggle(s: SectionToggle): void {
   const shown = sectionShown[s.key] ?? true;
   const fold = document.getElementById(s.foldId);
   if (fold) fold.hidden = !shown;
+  // The History toggle hides the WHOLE history section — including its tab strip
+  // (#woTabs, which lives ABOVE the fold), so "hide history" leaves nothing behind
+  // (owner: "the top history btn should completely hide the history including all tabs").
+  if (s.foldId === "waHistFold") {
+    const tabs = document.getElementById("woTabs");
+    if (tabs) tabs.hidden = !shown;
+  }
   const btn = document.getElementById(s.btnId);
   if (btn) {
     btn.classList.toggle("is-on", shown);
@@ -15629,27 +15661,50 @@ async function init() {
   // duplicate / delete. Each tab is its own independent history view.
   document.addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
+    // ⋯ options button → toggle the tab menu (same as the graph strip).
+    const menuBtn = el.closest<HTMLElement>("[data-hwmenu]");
+    if (menuBtn?.dataset.hwmenu) {
+      if (document.getElementById("histTabMenu")) closeHistTabMenu();
+      else openHistTabMenu(menuBtn, menuBtn.dataset.hwmenu);
+      return;
+    }
     const sw = el.closest<HTMLElement>("[data-hwtab]");
     if (sw?.dataset.hwtab) {
+      histEditTab = null;
       if (sw.dataset.hwtab !== activeHistoryTab(historyDash).id) switchHistoryTab(sw.dataset.hwtab);
       return;
     }
-    if (el.closest("[data-hwadd]")) {
-      historyDash = addHistoryTab(historyDash);
-      switchHistoryTab(activeHistoryTab(historyDash).id);
+  });
+  // History tab MENU ACTIONS (Duplicate / Rename / Add / Delete) — the menu is appended to
+  // <body>, so handle at document level (same pattern + PB-38 lesson as the graph tabs).
+  document.addEventListener("click", (e) => {
+    const tgt = e.target as Element | null;
+    const item = tgt?.closest<HTMLElement>("[data-htabmenu]");
+    if (item?.dataset.htabmenu) {
+      const act = item.dataset.htabmenu, tid = item.dataset.tab;
+      closeHistTabMenu();
+      if (act === "add") { historyDash = addHistoryTab(historyDash); histEditTab = null; switchHistoryTab(activeHistoryTab(historyDash).id); }
+      else if (act === "duplicate" && tid) { historyDash = duplicateHistoryTab(historyDash, tid); histEditTab = null; switchHistoryTab(activeHistoryTab(historyDash).id); }
+      else if (act === "rename" && tid) { historyDash = setActiveHistoryTab(historyDash, tid); histEditTab = tid; if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash); renderWoTabs(); }
+      else if (act === "delete" && tid) { historyDash = removeHistoryTab(historyDash, tid); histEditTab = null; switchHistoryTab(activeHistoryTab(historyDash).id); }
       return;
     }
-    const dup = el.closest<HTMLElement>("[data-hwdup]");
-    if (dup?.dataset.hwdup) { historyDash = duplicateHistoryTab(historyDash, dup.dataset.hwdup); switchHistoryTab(activeHistoryTab(historyDash).id); return; }
-    const del = el.closest<HTMLElement>("[data-hwdel]");
-    if (del?.dataset.hwdel) { historyDash = removeHistoryTab(historyDash, del.dataset.hwdel); switchHistoryTab(activeHistoryTab(historyDash).id); return; }
-    const ren = el.closest<HTMLElement>("[data-hwrename]");
-    if (ren?.dataset.hwrename) {
-      const cur = activeHistoryTab(historyDash);
-      const name = prompt("Rename this history tab", cur.name);
-      if (name != null && name.trim()) { historyDash = renameHistoryTab(historyDash, cur.id, name.trim()); if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash); renderWoTabs(); }
-      return;
-    }
+    if (document.getElementById("histTabMenu") && !tgt?.closest("#histTabMenu, [data-hwmenu]")) closeHistTabMenu();
+  });
+  // Inline history-tab rename input: Enter/blur commits the name, Esc cancels.
+  document.addEventListener("keydown", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-hwtabname]");
+    if (!inp) return;
+    if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+    else if (e.key === "Escape") { e.preventDefault(); histEditTab = null; renderWoTabs(); }
+  });
+  document.addEventListener("focusout", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-hwtabname]");
+    if (!inp?.dataset.hwtabname) return;
+    historyDash = renameHistoryTab(historyDash, inp.dataset.hwtabname, inp.value.trim() || "History");
+    histEditTab = null;
+    if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash);
+    renderWoTabs();
   });
   // EXPERIMENTAL horizontal history: its grouping cycle mirrors the ⚙ toggle
   // (same shared S.workoutViewMode). Delegated since the button is re-rendered.
