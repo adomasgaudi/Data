@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.93</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.94</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -943,22 +943,13 @@
       <div id="tab-slsync" class="tab-panel" hidden>
         <section id="slSyncCard" class="panel sl-sync-card">
           <h2>StrengthLevel sync</h2>
-          <p class="muted" style="margin:0 0 1rem">
-            Pull the latest workouts from StrengthLevel into the dashboard. This runs the
-            <strong>fetch-data</strong> GitHub Action — it only updates the reference CSV and
-            <strong>never touches</strong> the sets you or other users have added in the app.
-            <strong>Sync</strong> grabs only new workouts (fast); <strong>Rebuild all</strong>
-            re-scrapes everything (slow).
+          <p class="muted" style="margin:0 0 1.2rem">
+            Pull the latest workouts from StrengthLevel into the dashboard. The button opens the
+            <strong>fetch-data</strong> GitHub Action — tap <strong>Run workflow</strong> there to start it.
+            It only updates the reference data and <strong>never touches</strong> the sets you or
+            other users have added in the app.
           </p>
-          <div class="sl-pat-row">
-            <input type="password" id="slGhPat" class="sl-pat-input" placeholder="GitHub PAT (actions:write)" autocomplete="off" />
-          </div>
-          <div class="sl-btn-row">
-            <button type="button" id="slSyncBtn" class="pill" disabled>Sync</button>
-            <button type="button" id="slRebuildBtn" class="pill" disabled>Rebuild all</button>
-            <span id="slStatus" class="gh-sync" hidden></span>
-          </div>
-          <div id="slLastRun" class="muted sl-last-run"></div>
+          <a id="slActionLink" class="pill sl-action-link" href="https://github.com/adomasgaudi/Data/actions/workflows/fetch-data.yml" target="_blank" rel="noopener">Open GitHub Action ↗</a>
         </section>
       </div>
 

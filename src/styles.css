@@ -666,11 +666,7 @@ body.admin-only-hidden .other-section-lbl { display: none; }
 body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 /* StrengthLevel sync page — reached from the admin-only Coach menu section */
 .sl-sync-card { margin-bottom: 1rem; }
-.sl-pat-row { margin-bottom: 0.6rem; }
-.sl-pat-input { width: 100%; max-width: 320px; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--fg); font: inherit; font-size: 0.85rem; }
-.sl-btn-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.sl-last-run { margin-top: 0.5rem; font-size: 0.8rem; }
-.sl-last-run a { color: var(--accent); }
+.sl-action-link { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* ── Coach panel ─────────────────────────────────────────────────────────── */
 .coach-panel { padding: 1rem; }
