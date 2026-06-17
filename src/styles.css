@@ -4435,6 +4435,16 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
 }
 .wa-analysis-panel > #waHistFold { margin-top: 0; }
 
+/* ≥100px between the major Analysis sections (Graph · Plan · History · the experimental
+   Horizontal / Calendar) so each reads as a clearly separated block (owner: "more space,
+   100px min"). The gap sits BEFORE each section's start — #woTabs is the History section's
+   start, so the gap goes there, never between #woTabs and its own #waHistFold. Toggled-off
+   sections are `hidden` (no box), so the gap always falls between the VISIBLE sections. */
+.wa-analysis-panel > #waPlanFold,
+.wa-analysis-panel > #woTabs,
+.wa-analysis-panel > #waHistHorizFold,
+.wa-analysis-panel > #waCalendarFold { margin-top: 100px; }
+
 /* ── Align the non-card folds (Workout history + the experimental ones) to the
    same content inset as the Graph card, so they don't read as visually wider.
    The pick-tab bleed matches the card so it still reaches the panel edge. ── */
