@@ -20373,6 +20373,13 @@ function renderGraphDashboard(): void {
   let keepStage = document.getElementById("gdashStage");
   if (keepStage) keepStage.remove(); // detach (keeps the element + its chart instance alive)
   if (dashStageBubbleId !== bubble.id) keepStage = null; // bubble switched → force a fresh mount
+  // PRESERVE the relocated Legend across the box.innerHTML rebuild. On a SAME-bubble re-render
+  // the engine reuses its live .svgc-legend node (it only rewrites the node's innerHTML, never
+  // recreates it), but that node was moved OUT of the stage into the overlay — which the rebuild
+  // below destroys. Holding a JS ref keeps the node alive so we can re-attach it (else the legend
+  // vanishes after the first re-render — owner: "the legend button is gone, can't see what I'm
+  // looking at").
+  const preservedLegend = box.querySelector<HTMLElement>(".svgc-legend");
   // Stage + a top-right corner overlay holding the kg/×BW unit + ℹ info (owner: "move the fit
   // and kg/bw btns to the right top corner of the graph"). The chart engine's own Legend + ⤢ Fit
   // bar is RELOCATED into this overlay after the render (see below), like the carousel does. The
@@ -20410,8 +20417,11 @@ function renderGraphDashboard(): void {
       // live ref to .svgc-legend (only rewrites its innerHTML on redraw) + binds its handlers to
       // that node, so moving it is safe — same trick as the carousel's paintGraphSlide.
       const overlay = box.querySelector<HTMLElement>(".gdash-overlay");
-      const legend = stage.querySelector<HTMLElement>(".svgc-legend");
+      // Fresh mount → the engine just made the legend inside the stage; same-bubble update →
+      // reuse the preserved node (it lives nowhere in the DOM after the rebuild).
+      const legend = stage.querySelector<HTMLElement>(".svgc-legend") ?? preservedLegend;
       if (overlay && legend) {
+        if (legend.parentElement && legend.parentElement !== overlay) legend.remove();
         overlay.querySelector(".svgc-legend")?.remove(); // drop a previous render's relocated bar
         overlay.insertBefore(legend, overlay.firstChild); // Legend + Fit first, then kg/×BW + ℹ
       }
