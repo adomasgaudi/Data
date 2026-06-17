@@ -117,12 +117,29 @@ export function normalizeDashboard(raw: unknown): GraphDashboard {
   return d;
 }
 
-// ---- persistence -----------------------------------------------------------
-export function loadDashboard(): GraphDashboard {
-  return normalizeDashboard(loadJsonObject<Record<string, unknown>>(GRAPH_DASH_KEY));
+// ---- persistence (PER ATHLETE) ---------------------------------------------
+// v2 stores a MAP of athlete username → their own dashboard, so each user has completely
+// separate tabs/bubbles. (v1 was a single shared dashboard; it's intentionally ignored.)
+export const GRAPH_DASH_KEY_V2 = "colosseum.graphDash.v2";
+
+function loadAllDashboards(): Record<string, GraphDashboard> {
+  const raw = loadJsonObject<Record<string, unknown>>(GRAPH_DASH_KEY_V2);
+  const out: Record<string, GraphDashboard> = {};
+  for (const [user, d] of Object.entries(raw)) {
+    const parsed = DashboardSchema.safeParse(d);
+    if (parsed.success) out[user] = normalizeDashboard(parsed.data);
+  }
+  return out;
 }
-export function saveDashboard(d: GraphDashboard): void {
-  saveJson(GRAPH_DASH_KEY, d);
+/** The stored dashboard for one athlete, or null if they have none yet (→ caller seeds one). */
+export function loadDashboardFor(user: string): GraphDashboard | null {
+  return loadAllDashboards()[user] ?? null;
+}
+export function saveDashboardFor(user: string, d: GraphDashboard): void {
+  if (!user) return;
+  const all = loadAllDashboards();
+  all[user] = d;
+  saveJson(GRAPH_DASH_KEY_V2, all);
 }
 
 // ---- pure transforms (return a NEW dashboard; never mutate in place) --------

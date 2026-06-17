@@ -105,7 +105,7 @@ import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMe
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
-  loadDashboard, saveDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
+  loadDashboardFor, saveDashboardFor, defaultDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
   addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble,
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
@@ -18866,7 +18866,11 @@ let graphCarOverride: string[] | null = null;
 // graphDash is the SSOT (per bubble); each bubble renders through the SAME pure
 // analyticsGraph engine via buildBubbleInput — never a stub. dashBubbleIdx is the
 // reel position within the active tab (which bubble's slide is showing).
-let graphDash: GraphDashboard = loadDashboard();
+// PER-ATHLETE dashboards (owner): each athlete has completely separate tabs/bubbles. graphDash
+// holds the CURRENT athlete's dashboard; dashUser tracks whose it is, so ensureDashUser() can
+// swap it when the athlete changes (saving the outgoing one first).
+let graphDash: GraphDashboard = defaultDashboard();
+let dashUser = "";
 let dashBubbleIdx = 0;
 let dashEditTab: string | null = null; // the tab whose name is being inline-edited (null = none)
 // PB-37: which bubble's lifts are currently LOADED into the shared graph selection (waGraphSel).
@@ -18882,7 +18886,26 @@ function currentBubble(): GraphBubble {
   if (dashBubbleIdx >= t.bubbles.length) dashBubbleIdx = 0;
   return t.bubbles[dashBubbleIdx]!;
 }
-function persistDash(): void { saveDashboard(graphDash); }
+function persistDash(): void { saveDashboardFor(dashUser || els.athlete.value, graphDash); }
+/** A brand-new athlete's dashboard: 1 tab, 1 bubble showing their TOP-3 most-frequent lifts
+ * (multi-overlay so all three plot). Owner: "all start with 1 tab 1 bubble of top 3 frequent." */
+function freshDashboardFor(): GraphDashboard {
+  const top3 = defaultGraphSelection().slice(0, 3);
+  const d0 = defaultDashboard();
+  const t0 = d0.tabs[0]!;
+  return updateBubble(d0, t0.id, t0.bubbles[0]!.id, { exercises: top3, view: top3.length > 1 ? "multi" : "single" });
+}
+/** Make graphDash match the CURRENT athlete — load theirs (or seed a fresh one), saving the
+ * outgoing athlete's first. Cheap no-op when the athlete hasn't changed. */
+function ensureDashUser(): void {
+  const user = els.athlete.value;
+  if (user === dashUser && dashUser !== "") return;
+  if (dashUser) saveDashboardFor(dashUser, graphDash);
+  dashUser = user;
+  graphDash = loadDashboardFor(user) ?? freshDashboardFor();
+  dashBubbleIdx = 0;
+  dashLoadedBubbleId = null;
+}
 /** The carousel reel: the search-chosen lifts if "plot on single view" set them, else the
  * current athlete's top lifts by frequency (last 90d). */
 function graphCarouselLifts(): string[] {
@@ -19245,6 +19268,7 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
 function renderGraphDashboard(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
+  ensureDashUser(); // graphDash must match the current athlete (per-athlete dashboards)
   const tab = activeTab(graphDash);
   if (dashBubbleIdx >= tab.bubbles.length) dashBubbleIdx = 0;
   let bubble = tab.bubbles[dashBubbleIdx]!;
