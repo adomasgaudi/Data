@@ -1478,7 +1478,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // the right axis to the (possibly new) bar metric, so its bars never overflow a
       // stale right-axis scale left over from a different metric.
       D(`svgc update seriesChg=${seriesChanged ? "Y" : "n"} userAdj=${userAdjusted ? "Y" : "n"} x=${Math.round(view.xMin / 86400000)}..${Math.round(view.xMax / 86400000)}`); // PB-39
-      if (seriesChanged) { rebuildCompactor(); if (!userAdjusted) resetView(); else fitRight(); }
+      // PB-39 ROOT FIX: the dashboard sends a fresh series every render (seriesChanged always
+      // true), so a reused chart used to resetView() to the data fit on EVERY re-render —
+      // discarding the saved pan/zoom, because update() ignored cfg.initialView (it was only
+      // honored on a fresh mount). Now the update path HONORS the saved view too: keep the live
+      // pan if the user is mid-adjust (fitRight only); else restore the saved initialView if one
+      // is supplied; else fall back to the data fit. So "remember my view" holds across the
+      // same-bubble re-renders the stage-reuse fix routes through update().
+      if (seriesChanged) {
+        rebuildCompactor();
+        if (userAdjusted) fitRight();
+        else if (finiteBox(cfg.initialView)) { view = { ...cfg.initialView }; userAdjusted = true; fitRight(); }
+        else resetView();
+      }
       hideTip();
       draw();
     },
