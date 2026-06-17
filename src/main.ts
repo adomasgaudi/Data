@@ -12904,7 +12904,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
             `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">${facLabel(l)}</span></button>`,
         )
         .join("");
-      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
+      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
     })
     .join("");
   // The "final multiplier" folds in any extra factor (the per-set incline level shown
