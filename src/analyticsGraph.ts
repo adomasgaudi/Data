@@ -518,6 +518,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   };
   const existing = charts.get(container);
   container.classList.add("svgc-freepan");
+  // PB-39 trace: did we reuse the chart (update — keeps live view) or fresh-mount (re-applies
+  // initialView)? Logged to the on-screen dbg console via the global bridge.
+  (globalThis as { dbg?: (m: string) => void }).dbg?.(`aG ${existing ? "UPDATE" : "MOUNT"}`);
   if (existing) existing.update(config);
   else charts.set(container, mountSvgChart(container, config));
   return series.length;

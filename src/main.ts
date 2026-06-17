@@ -19859,6 +19859,7 @@ function renderGraphDashboard(): void {
   let keepStage = document.getElementById("gdashStage");
   if (keepStage) keepStage.remove(); // detach (keeps the element + its chart instance alive)
   if (dashStageBubbleId !== bubble.id) keepStage = null; // bubble switched → force a fresh mount
+  dbg(`rGD b=${bubble.id.slice(-4)} was=${dashStageBubbleId?.slice(-4) ?? "-"} reuse=${keepStage ? "Y" : "n"}`); // PB-39 trace
   box.innerHTML =
     `<div class="gdash-titlerow wa-seltitle-host">${titleHtml}</div>` +
     `<div class="gdash-head">` +

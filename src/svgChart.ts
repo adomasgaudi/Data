@@ -478,7 +478,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: cfg.leftMargin ?? 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
+  // PB-39 trace bridge to the on-screen dbg console (svgChart can't import main's dbg).
+  const D = (m: string) => (globalThis as { dbg?: (msg: string) => void }).dbg?.(m);
   function resetView() {
+    D("svgc resetView"); // PB-39: catch every re-fit (this is what wipes a saved/live view)
     userAdjusted = false; // re-fitting to data → auto-fit re-enabled
     // TIME axis = the stable extent of ALL real data (visibility-independent), so
     // toggling a legend entry never slides it (bars stop "moving"). Compact mode is
@@ -1454,6 +1457,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // it as a user adjustment so a later series update keeps it (double-tap re-fits). ry (the
   // dependent right axis) stays freshly fitted by resetView above.
   if (finiteBox(cfg.initialView)) { view = { ...cfg.initialView }; userAdjusted = true; }
+  D(`svgc mount init=${finiteBox(cfg.initialView) ? "Y" : "n"} x=${Math.round(view.xMin / 86400000)}..${Math.round(view.xMax / 86400000)}`); // PB-39
   draw();
 
   return {
@@ -1471,6 +1475,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // Re-fit the whole view only if the user hasn't panned/zoomed; but ALWAYS re-fit
       // the right axis to the (possibly new) bar metric, so its bars never overflow a
       // stale right-axis scale left over from a different metric.
+      D(`svgc update seriesChg=${seriesChanged ? "Y" : "n"} userAdj=${userAdjusted ? "Y" : "n"} x=${Math.round(view.xMin / 86400000)}..${Math.round(view.xMax / 86400000)}`); // PB-39
       if (seriesChanged) { rebuildCompactor(); if (!userAdjusted) resetView(); else fitRight(); }
       hideTip();
       draw();
