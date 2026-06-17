@@ -112,6 +112,16 @@ function checkReplyFormat(text) {
       }
     }
   }
+  // (d) NEVER claim a thing the AI CAN'T OBSERVE (visual / scroll / PERFORMANCE) as DONE
+  // — rule 19. The owner alone sees the live site, so "the lag is gone / now snappy / no
+  // more jank / it scrolls right" is hallucinated certainty (esp. in the Summary labels).
+  // Hedge as "I changed X, please check". High-signal phrasings only, to avoid false hits.
+  const overclaim = text.match(
+    /\b(?:lag|jank|stutter|flicker|jitter|jumpiness)\s+(?:is|are)\s+(?:gone|fixed|solved|resolved)\b|\bno (?:more )?(?:lag|jank|stutter|jitter|flicker)\b|\bnow (?:instant|snappy|smooth|fluid|lag-?free|buttery)\b|\b(?:it|this|that|they)\s+(?:now\s+)?(?:scrolls?|renders?|displays?|looks?|aligns?)\s+(?:correctly|right|perfectly|great|fine|properly)\b/i,
+  );
+  if (overclaim) {
+    violations.push(`reply claims an unobservable visual/performance result as DONE ("${overclaim[0]}") — you CAN'T see the live site (rule 19); say "I changed X, please check", never "it's fixed / the lag is gone / now snappy".`);
+  }
   // (c) A substantive reply (≥200 chars) must end with the token block + version line.
   if (text.length >= 200) {
     if (!/%5h/.test(text)) violations.push("reply has NO token block — end every reply with the show-cost.py output (Tokens / Prompt … / …%5h - …%W), rule 39.");
