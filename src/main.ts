@@ -18753,6 +18753,8 @@ let dashEditTab: string | null = null; // the tab whose name is being inline-edi
 // title toolbar or picker changed waGraphSel → write picker→bubble). Without this the render
 // kept mirroring the bubble back over the toolbar's edit, so changing the exercise never stuck.
 let dashLoadedBubbleId: string | null = null;
+let dashTabPressTimer: number | null = null;   // long-press timer for the tab menu
+let dashTabSuppressClick = false;               // swallow the release-click after a long-press
 /** The bubble currently showing in the reel (active tab, clamped index). */
 function currentBubble(): GraphBubble {
   const t = activeTab(graphDash);
@@ -19099,6 +19101,22 @@ function refreshDash(): void {
   renderWaGraph();
 }
 
+// Long-press tab menu (owner): a small floating menu — Add tab / Rename / Delete — opened by a
+// long-press or right-click on a tab (no inline icons cluttering the strip).
+function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remove(); }
+function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
+  closeDashTabMenu();
+  const canDelete = graphDash.tabs.length > 1;
+  const m = document.createElement("div");
+  m.id = "dashTabMenu"; m.className = "dash-tab-menu";
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-tabmenu="rename" data-tab="${escapeHtml(tabId)}">✎ Rename</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-tabmenu="add">＋ Add tab</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-tabmenu="delete" data-tab="${escapeHtml(tabId)}">✕ Delete</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+}
+
 /** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
  * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
  * projection). One bubble shows at a time (swipe reel, owner's pick); each draws a REAL chart
@@ -19134,19 +19152,16 @@ function renderGraphDashboard(): void {
     persistDash();
     bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
   }
-  // TABS live ABOVE the graph (owner): rendered into their own host at the TOP of #waGraphFull,
-  // above the picker + chart. The ACTIVE tab carries a ✎ rename (inline input) + ✕ delete.
+  // TABS live ABOVE the graph (owner): a clean strip of just the tab NAMES — no ✎/✕/＋ icons.
+  // Tap a tab to switch; LONG-PRESS (or right-click) a tab opens a small menu: Add / Rename /
+  // Delete. The active tab being renamed turns into an inline input.
   const tabsHtml = graphDash.tabs
     .map((t) => {
       const on = t.id === graphDash.activeTabId;
       if (on && dashEditTab === t.id) {
         return `<input class="gdash-tab gdash-tabedit" data-dashtabname="${t.id}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
       }
-      const del = on && graphDash.tabs.length > 1
-        ? `<button type="button" class="gdash-tabmini gdash-tabdel" data-dashtabdel="${t.id}" title="Delete this tab" aria-label="Delete tab">✕</button>`
-        : "";
-      const ren = on ? `<button type="button" class="gdash-tabmini" data-dashtabrename="${t.id}" title="Rename this tab" aria-label="Rename tab">✎</button>` : "";
-      return `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>${ren}${del}`;
+      return `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)} — long-press for options">${escapeHtml(t.name)}</button>`;
     })
     .join("");
   const full = document.getElementById("waGraphFull");
@@ -19157,7 +19172,7 @@ function renderGraphDashboard(): void {
     full.insertBefore(tabsHost, full.firstChild);
   }
   if (tabsHost) {
-    tabsHost.innerHTML = `${tabsHtml}<button type="button" class="gdash-tab gdash-tabadd" data-dashtabadd="1" aria-label="Add a tab" title="Add a tab">＋</button>`;
+    tabsHost.innerHTML = tabsHtml;
     if (dashEditTab) tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit")?.focus();
   }
   // Project the active bubble onto the shared graph state so the Options menu + buildBubbleInput
@@ -20506,25 +20521,23 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // ── Custom graph DASHBOARD interactions (CHART-160) ─────────────────────────
-    // Rename the active tab — turn its pill into an inline input (saved on Enter/blur).
-    const dashRen = t.closest<HTMLElement>("[data-dashtabrename]");
-    if (dashRen?.dataset.dashtabrename) { dashEditTab = dashRen.dataset.dashtabrename; renderGraphDashboard(); return; }
-    // Delete the active tab (guarded: a dashboard always keeps one tab).
-    const dashDel = t.closest<HTMLElement>("[data-dashtabdel]");
-    if (dashDel?.dataset.dashtabdel) {
-      graphDash = removeTab(graphDash, dashDel.dataset.dashtabdel); dashEditTab = null; dashBubbleIdx = 0;
-      persistDash(); refreshDash(); return;
+    // Tab long-press menu actions: Add tab / Rename / Delete.
+    const tabMenu = t.closest<HTMLElement>("[data-tabmenu]");
+    if (tabMenu?.dataset.tabmenu) {
+      const act = tabMenu.dataset.tabmenu, tid = tabMenu.dataset.tab;
+      closeDashTabMenu();
+      if (act === "add") { graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      else if (act === "rename" && tid) { graphDash = setActiveTab(graphDash, tid); dashBubbleIdx = 0; dashEditTab = tid; persistDash(); renderGraphDashboard(); }
+      else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      return;
     }
-    // Switch to a tab (resets the reel to its first bubble).
+    // Switch to a tab (resets the reel to its first bubble). Long-press opened the menu instead
+    // → the capture listener swallows that release-click, so this only fires on a real tap.
     const dashTab = t.closest<HTMLElement>("[data-dashtab]");
     if (dashTab?.dataset.dashtab) {
       dashEditTab = null;
       graphDash = setActiveTab(graphDash, dashTab.dataset.dashtab); dashBubbleIdx = 0; persistDash();
       refreshDash(); return;
-    }
-    // Add a new tab (becomes active).
-    if (t.closest<HTMLElement>("[data-dashtabadd]")) {
-      graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); return;
     }
     // Prev / next bubble in the reel (wraps).
     const dashNav = t.closest<HTMLElement>("[data-dashnav]");
@@ -20700,6 +20713,32 @@ function setupWorkoutAnalysis(): void {
     graphDash = renameTab(graphDash, inp.dataset.dashtabname, inp.value.trim() || "Tab");
     dashEditTab = null; persistDash(); refreshDash();
   });
+  // Long-press (or right-click) a dashboard tab → its options menu (Add / Rename / Delete).
+  const cancelTabPress = () => { if (dashTabPressTimer) { clearTimeout(dashTabPressTimer); dashTabPressTimer = null; } };
+  document.addEventListener("touchstart", (e) => {
+    const tabEl = (e.target as HTMLElement).closest<HTMLElement>("[data-dashtab]");
+    if (!tabEl?.dataset.dashtab) return;
+    const id = tabEl.dataset.dashtab;
+    cancelTabPress();
+    dashTabPressTimer = window.setTimeout(() => {
+      dashTabPressTimer = null;
+      dashTabSuppressClick = true; // the finger's still down; swallow the release-click
+      openDashTabMenu(tabEl, id);
+    }, 450);
+  }, { passive: true });
+  document.addEventListener("touchend", cancelTabPress);
+  document.addEventListener("touchmove", cancelTabPress);
+  document.addEventListener("contextmenu", (e) => {
+    const tabEl = (e.target as HTMLElement).closest<HTMLElement>("[data-dashtab]");
+    if (tabEl?.dataset.dashtab) { e.preventDefault(); openDashTabMenu(tabEl, tabEl.dataset.dashtab); }
+  });
+  // Capture-phase: swallow the post-long-press release-click (so it neither switches the tab
+  // nor closes the just-opened menu); otherwise close the menu on any click outside it.
+  document.addEventListener("click", (e) => {
+    if (dashTabSuppressClick) { dashTabSuppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
+    const m = document.getElementById("dashTabMenu");
+    if (m && !(e.target as Element | null)?.closest("#dashTabMenu")) closeDashTabMenu();
+  }, true);
 }
 
 /** Validate the create form and store a new user exercise def (dissolved /
