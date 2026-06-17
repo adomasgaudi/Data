@@ -38,6 +38,7 @@ const LT: Record<string, string> = {
   "More": "Daugiau",
   "Filter": "Filtras",
   "Exercises": "Pratimai",
+  "exercises": "pratimai",
   "Guide": "Vadovas",
   "Settings": "Nustatymai",
   // ---- "More" menu ----

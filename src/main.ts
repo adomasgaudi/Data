@@ -2733,6 +2733,35 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
   menu.style.top = `${Math.round(r.bottom + 4)}px`;
   menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
 }
+// "N exercises ▾" title dropdown (rule 32: fixed + clampMenuIntoView, appended to <body>
+// per the PB-38 lesson). Lists EVERY picked lift as the SAME tap-to-act chip the title
+// uses (data-liftmenu → Info / Combine / Compare / Remove), so a long selection stays one
+// compact label that opens the full list on demand. Closed by the next analysis re-render.
+function closeTitleExListMenu(): void {
+  document.getElementById("titleExList")?.remove();
+  document.removeEventListener("click", titleExListOutside, true);
+}
+function titleExListOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest("#titleExList") || t.closest("[data-titlelist]") || t.closest("#liftMenu")) return;
+  closeTitleExListMenu();
+}
+function openTitleExListMenu(anchor: HTMLElement, scope: SelScope): void {
+  const existing = document.getElementById("titleExList");
+  if (existing && existing.dataset.scope === scope) { closeTitleExListMenu(); return; }
+  closeTitleExListMenu();
+  const sel = scope === "graph" ? waGraphSel : waSelected;
+  const sizeClass = (n: string): string => { const L = displayName(n).length; return L <= 12 ? " wa-tl-s1" : L <= 17 ? " wa-tl-s2" : " wa-tl-s3"; };
+  const chips = sel
+    .map((n) => `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`)
+    .join("");
+  const m = document.createElement("div");
+  m.id = "titleExList"; m.className = "title-exlist"; m.dataset.scope = scope;
+  m.innerHTML = `<div class="title-exlist-grid">${chips}</div>`;
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+  setTimeout(() => document.addEventListener("click", titleExListOutside, true), 0);
+}
 /** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
 /** User-created combinable/comparable groups (userExerciseDefs) of one kind. */
 function userGroupsOfKind(kind: "combine" | "compare"): UserExerciseDef[] {
@@ -4717,8 +4746,8 @@ function renderAthlete() {
     statsFullShown = false; // new athlete → lead with the mini facts again
     miniIdx = 0;
     graphCarOverride = null; // drop any search-chosen single-view reel for the old athlete
-    // Restore this athlete's last-used picker "Group by" mode (default if none saved).
-    waGroupBy = (waGroupByByUser[els.athlete.value] as WaGroupBy | undefined) ?? "bestlifts";
+    // Restore this athlete's last-used per-scope "Group by" modes (defaults if none saved).
+    loadWaGroupByForUser();
   }
   initHeatYear();
   renderAthleteProfile();
@@ -18147,7 +18176,7 @@ function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel 
 //   • bestlifts — only the powerlifting trio (squat / bench / deadlift), sorted by
 //     how close the athlete is to the world record for their optimal weight class.
 type FreqPeriod = "1w" | "1mo" | "3mo" | "1y" | "all";
-let waFreqPeriod: FreqPeriod = "1mo";
+let waFreqPeriod: FreqPeriod = "3mo"; // owner: the graph's frequency view defaults to the last 3 months
 let waFreqMetric: "sets" | "hard" = "sets";
 const FREQ_PERIOD_NEXT: Record<FreqPeriod, FreqPeriod> = { "1w": "1mo", "1mo": "3mo", "3mo": "1y", "1y": "all", all: "1w" };
 const FREQ_PERIOD_LABEL: Record<FreqPeriod, string> = { "1w": "1 week", "1mo": "1 month", "3mo": "3 months", "1y": "1 year", all: "all time" };
@@ -18318,13 +18347,24 @@ let searchFindHistory = false;
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
 type WaGroupBy = "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness" | "priorities";
-let waGroupBy: WaGroupBy = "bestlifts"; // default: rank the powerlifting trio by world-record %
-// The picker's "Group by" mode is REMEMBERED PER ATHLETE (owner request): switching
-// to an athlete restores the last mode they used; a fresh athlete falls back to the default.
-const WA_GROUPBY_KEY = "colosseum.waGroupBy.byUser.v1";
-const waGroupByByUser = loadJsonObject<Record<string, string>>(WA_GROUPBY_KEY);
+// Group-by is now PER SCOPE (owner defaults): the GRAPH picker groups by FREQUENCY (last 3
+// months), the HISTORY picker by DISCIPLINE. `waGroupBy` mirrors whichever scope is currently
+// rendering — renderSelector / the category menu set it from waGroupByScope[scope] — so every
+// picker-grouping read still uses the plain `waGroupBy` it always did.
+const WA_GROUPBY_DEFAULT: Record<SelScope, WaGroupBy> = { graph: "frequency", hist: "discipline" };
+const waGroupByScope: Record<SelScope, WaGroupBy> = { ...WA_GROUPBY_DEFAULT };
+let waGroupBy: WaGroupBy = waGroupByScope.hist;
+// Remembered PER ATHLETE × scope (owner): switching athlete restores their last modes; a
+// fresh athlete falls back to the per-scope defaults above.
+const WA_GROUPBY_KEY = "colosseum.waGroupBy.byScope.v1";
+const waGroupByByUser = loadJsonObject<Record<string, { graph?: WaGroupBy; hist?: WaGroupBy }>>(WA_GROUPBY_KEY);
 function saveWaGroupByForUser(): void {
-  if (els.athlete.value) { waGroupByByUser[els.athlete.value] = waGroupBy; saveJson(WA_GROUPBY_KEY, waGroupByByUser); }
+  if (els.athlete.value) { waGroupByByUser[els.athlete.value] = { ...waGroupByScope }; saveJson(WA_GROUPBY_KEY, waGroupByByUser); }
+}
+function loadWaGroupByForUser(): void {
+  const saved = waGroupByByUser[els.athlete.value];
+  waGroupByScope.graph = (saved?.graph as WaGroupBy) ?? WA_GROUPBY_DEFAULT.graph;
+  waGroupByScope.hist = (saved?.hist as WaGroupBy) ?? WA_GROUPBY_DEFAULT.hist;
 }
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
@@ -18688,13 +18728,12 @@ function refreshHistorySearch(): void {
   waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected));
 }
 
-/** A big section title from a lift selection: a big total-COUNT badge, then the first
- * 5 lift NAMES, then "… +N" when there are more (never a wall of text, but always
- * shows the count up front and up to 5 names). `removable` makes each name a
- * tap-to-remove-from-graph button (graph title) vs plain text (history title). Shared
- * so the graph and Calendar/history titles look IDENTICAL (the recurring "one has the
- * count / cap, the other doesn't" bug). */
-const TITLE_NAME_CAP = 5;
+/** A section title from a lift selection (owner redesign, no count badge): up to
+ * TITLE_NAME_CAP lifts list every one as a tap-to-act chip; MORE than that collapse to a
+ * single "N exercises ▾" dropdown opening the full clickable list. `removable` makes each
+ * name a tap-to-act button (graph / history) vs plain text. Shared so the graph and
+ * Calendar/history titles look IDENTICAL. */
+const TITLE_NAME_CAP = 6;
 // Whether each title is EXPANDED to show ALL its lift names (tap the "… +N" to toggle).
 // When a title is expanded its selector hides the now-redundant picked-lift pills.
 const titleExpanded: Record<"graph" | "hist", boolean> = { graph: false, hist: false };
@@ -18710,117 +18749,71 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   if (remove) nameScope = remove;
   try {
   const sep = `<span class="wa-title-sep"> · </span>`;
-  // Each name is a tap-to-REMOVE button (from the graph OR the history selection); the
-  // capture handler (PB-5) removes it instead of collapsing the section. Tapping EMPTY
-  // space / the caret still toggles the fold. `remove` doubles as the SelScope for the
-  // per-lift Combine / Compare lens toggles appended to each.
-  const expanded = remove ? titleExpanded[remove] : false;
-  const shown = expanded ? sel.length : TITLE_NAME_CAP;
-  const shownSel = sel.slice(0, shown);
   // Per-title font STEP: longer names shrink (s1→s2→s3) so more shows before the hard
   // CLIP (owner: 2–3 sizes, then truncate — and NO "…" ellipsis, a subtle cut-off). A
   // char-length heuristic picks the step; the CSS clip is the real guarantee that every
   // title stays a single line whatever its length.
   const sizeClass = (n: string): string => { const L = displayName(n).length; return L <= 12 ? " wa-tl-s1" : L <= 17 ? " wa-tl-s2" : " wa-tl-s3"; };
-  // Removable form → TWO INDEPENDENT columns (even/odd split so it still reads row-major:
-  // name0 | name1 / name2 | name3 …), each a single-line clipped list — a long name in
-  // one column NEVER widens or heightens the other (owner: "two separate columns, not a
-  // table"). The plain-text (non-removable) form stays inline with " · " separators.
-  let colsHtml = "";
+  // The title BODY (owner redesign): no count badge ever. With ≤ TITLE_NAME_CAP lifts list
+  // every one as a tap-to-act chip (two balanced columns). With MORE, collapse to a single
+  // "N exercises ▾" dropdown button that opens the whole clickable list (data-titlelist) —
+  // each entry keeps the same Info / Combine / Compare / Remove popup as the inline chips.
+  let bodyHtml = "";
+  let exlistBtn = "";
   if (remove) {
     const scope = remove; // narrowed to a non-null SelScope
     // Each name opens a small popup (Info / Combine / Compare / Remove) and is COLOURED by
     // its lens state — replaces the old inline ⓘ ⊕ ⇄ button cluster.
     const liftChip = (n: string): string =>
       `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
-    const c0: string[] = [], c1: string[] = [];
-    shownSel.forEach((n, i) => (i % 2 === 0 ? c0 : c1).push(liftChip(n)));
-    colsHtml = `<span class="wa-tlcols"><span class="wa-tlcol">${c0.join("")}</span><span class="wa-tlcol">${c1.join("")}</span></span>`;
+    if (sel.length > TITLE_NAME_CAP) {
+      exlistBtn = `<button type="button" class="wa-title-exlist" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove">${sel.length} <span class="wa-exlist-lbl">exercises</span><span class="xdd-caret">▾</span></button>`;
+    } else {
+      // ≤ cap → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
+      // name in one column NEVER widens or heightens the other (owner: "two separate columns").
+      const c0: string[] = [], c1: string[] = [];
+      sel.forEach((n, i) => (i % 2 === 0 ? c0 : c1).push(liftChip(n)));
+      bodyHtml = `<span class="wa-tlcols"><span class="wa-tlcol">${c0.join("")}</span><span class="wa-tlcol">${c1.join("")}</span></span>`;
+    }
+  } else {
+    // Plain-text (non-removable) form: inline names with " · " separators, "… +N" trailer.
+    bodyHtml = sel.slice(0, TITLE_NAME_CAP).map((n) => escapeHtml(displayName(n))).join(sep);
+    if (sel.length > TITLE_NAME_CAP) bodyHtml += `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
-  const names = remove ? "" : shownSel.map((n) => escapeHtml(displayName(n))).join(sep);
-  // The "… +N" trailer is a TOGGLE: tap to expand the title to ALL names (which hides
-  // the redundant picked-lift pills below), tap again ("less") to collapse it.
-  let more = "";
-  if (sel.length > TITLE_NAME_CAP) {
-    more = remove
-      ? (expanded
-          ? `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show fewer">… less</button>`
-          : `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show all ${sel.length} — and hide the pills below">… +${sel.length - TITLE_NAME_CAP}</button>`)
-      : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
-  }
-  // When EVERY selectable lift is picked, show a single big "All Exercises" title
-  // instead of listing the top 5 + "+N" (owner request) — and drop the count with it.
-  const allNames = waSelectorExercises().map((e) => e.name);
-  const isAll = sel.length > TITLE_NAME_CAP && allNames.length > 0 && sel.length >= allNames.length && allNames.every((n) => sel.includes(n));
-  // The count badge is only useful when the title is TRUNCATED (names hidden behind
-  // "… +N"). When every name fits, or it's the "All Exercises" title, drop it
-  // (owner request) — the names (or "All Exercises") already say how many.
-  const truncated = sel.length > TITLE_NAME_CAP && !expanded;
-  const count = (truncated && !isAll) ? `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>` : "";
-  // "All Exercises" — a big, plain-BLACK title (not the small grey italic "all
-  // exercises"); tapping it still expands to the full list to remove individual lifts.
-  const allLabel = isAll && !expanded
-    ? (remove
-        ? `<button type="button" class="wa-title-allbig" data-titleexpand="${remove}" title="All ${sel.length} exercises selected — tap to list them">All Exercises</button>`
-        : `<span class="wa-title-allbig">All Exercises</span>`)
-    : "";
-  // "Deselect all" and "Match" are no longer in the title — both moved into the picker
-  // slide-in drawer as small text buttons beside Select all / Complete (their family),
-  // sized by tier (docs/ui-taste.md). See `clearBtn` / `matchTool` in renderSelector.
   // "Pick" — a thin WHITE PAPER sticky-note TAB peeking from the right screen edge of the
   // title row (the visible edge of the picker note). DRAG it left (or tap) to pull the full
-  // drawer out — the handle now LOOKS like the drawer it opens (PB-13). A "‹" pull-hint +
-  // grip make the drag obvious (the open concern logged in PB-13). The drag/tap handlers key
-  // off `.wa-title-picker[data-titlepicker]`, so the gesture wiring is unchanged. Capture-
-  // handled so it doesn't toggle the fold it sits in.
+  // drawer out — the handle now LOOKS like the drawer it opens (PB-13). The "=" Match tool
+  // moved INTO that drawer (the ⚙ menu's "≈ Match" button) so the title carries no toolbar.
   const pickerBtn = remove
     ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">+</span></button>`
     : "";
-  // Quick title toolbar (graph + history identical): + add an exercise · ✕ remove all ·
-  // = match the OTHER view's selection. Reuse the existing capture handlers (data-title*).
-  const otherLabel = remove === "graph" ? "history" : "graph";
-  // The +/✕/= toolbar stays even when EMPTY (owner: "when all exercises are removed I
-  // should still see the title, all the buttons and the pick slider"), so you can always
-  // add / match without first finding the picker. ✕ no-ops when nothing's picked.
-  const titleTools = remove
-    ? `<span class="wa-title-tools">` +
-        `<button type="button" class="wa-title-tool" data-titlematch="${remove}" title="Match the ${otherLabel} selection" aria-label="Match ${otherLabel}">=</button>` +
-      `</span>`
-    : "";
   // Nothing picked → the title ITSELF is the pick prompt: a button that FILLS the title
-  // (so it can't collapse) and opens the picker drawer. Shown ALONGSIDE the +/✕/= tools
-  // and the Pick tab so the empty state still carries the title + every control (owner).
+  // (so it can't collapse) and opens the picker drawer.
   const emptyCta = remove && sel.length === 0
     ? `<button type="button" class="wa-title-pickcta" data-titlepicker="${remove}">Select an exercise</button>`
     : "";
-  // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
-  // removing a lift never changes the title's height — otherwise the reflow shoves the
-  // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
-  // out of the clamp to show every name.
-  // The picked-lift names (tappable buttons) lay out as TWO INDEPENDENT columns of
-  // single-line, left-aligned, hard-clipped titles (.wa-seltitle--cols); the "all
-  // exercises" / plain-text forms stay inline.
-  const cols = !!remove && !allLabel;
+  // Two-column layout only while listing chips (≤ cap, non-empty); the dropdown / empty /
+  // plain-text forms stay inline.
+  const cols = !!remove && sel.length > 0 && sel.length <= TITLE_NAME_CAP;
   const seltitleAttrs = cols
     ? ` class="wa-seltitle wa-seltitle--cols"`
     : ` class="wa-seltitle"`;
-  const body = remove ? `${colsHtml}${more}` : `${names}${more}`;
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${titleTools}${count}<span${seltitleAttrs}>${allLabel || emptyCta || body}</span>${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${remove ? " has-pick" : ""}"><span${seltitleAttrs}>${exlistBtn || emptyCta || bodyHtml}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
   return waSelectorExercises().map((e) => e.name);
 }
-/** Graph DEFAULT: the TOP 5 most-frequently-trained lifts of the LAST 3 MONTHS for the
- * current athlete (what they're working on now), falling back to the all-time default
+/** Graph DEFAULT (owner): the TOP 3 most-frequently-trained lifts of the LAST 3 MONTHS for
+ * the current athlete (what they're working on now), falling back to the all-time default
  * if nothing's been logged recently. */
 function defaultGraphSelection(): string[] {
   const has = new Set(waSelectorExercises().map((e) => e.name));
   const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
   const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
-  return (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
+  return (byFreq.length ? byFreq : defaultSelection()).slice(0, 3);
 }
 function renderWorkoutAnalysis(): void {
   ensureHistoryTabApplied(); // active history tab's selection drives the title/picker below
@@ -18989,6 +18982,7 @@ function renderSelector(scope: SelScope): void {
   const sel = document.getElementById(scope === "graph" ? "waExerciseSelector" : "waExerciseSelectorHist");
   if (!sel) return;
   curSelScope = scope;
+  waGroupBy = waGroupByScope[scope]; // this scope's grouping drives every picker read below
   // This selector (and the chips/pills it draws) shows THIS area's name mode.
   const prevNameScope = nameScope;
   nameScope = scope;
@@ -19602,6 +19596,7 @@ function renderWaCatMenu(): void {
   const m = document.getElementById("waCatMenu");
   if (!m || waCatMenuKey === null) return;
   curSelScope = waCatMenuScope;
+  waGroupBy = waGroupByScope[waCatMenuScope]; // the menu groups by its opener scope's mode
   const key = waCatMenuKey;
   const items = sortCatMenuItems(waCatItems(key), key);
   const sel = waSelCount(items);
@@ -20026,9 +20021,15 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   const formula = currentFormula();
   const user = els.athlete.value;
   const isRvw = bubble.type === "rvw";
+  // COMPARE other athletes (owner): when the Compare row is open, overlay every athlete on
+  // the pill row; otherwise just the primary. The exercise cap shrinks so users × exercises
+  // never exceeds WA_GRAPH_MAX, exactly like the legacy full graph.
+  const athletes = waCompareOpen ? graphAthleteList() : [user];
+  const multiAthlete = athletes.length > 1;
+  const exCap = Math.max(1, Math.floor(WA_GRAPH_MAX / athletes.length));
   const exsBase = bubble.exercises; // always multi-lift overlay (owner: the single/multi toggle is gone)
-  const exs = lensExpand("graph", exsBase).slice(0, graphExerciseCap());
-  const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
+  const exs = lensExpand("graph", exsBase).slice(0, exCap);
+  const recs = applyHardSetsFilter(computedRecords().filter((r) => athletes.includes(r.username)));
   const sm = currentStrengthByUserExercise(formula);
   // Per-bubble config CLONE so a bubble's type/×BW never leak to its neighbours (the bug the
   // owner hit). The shared Options knobs (aggregation/decay…) ride the base config for now.
@@ -20058,7 +20059,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   // restored ONLY while the plotted CONTENT is unchanged (this signature) — change the lift /
   // metric / type / athlete / time-compaction and it re-fits instead of keeping a stale frame.
   const tabId = activeTab(graphDash).id;
-  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), user]);
+  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), athletes]);
   const initialView = bubble.savedView && bubble.savedView.sig === sig ? bubble.savedView.box : null;
   return {
     exercises: exs,
@@ -20085,6 +20086,14 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
       return worldRecordKg(ex, athProfile(uu)?.sex ?? "m", athProfile(uu)?.weight ?? null);
     },
     emptyOnNoExercises: true,
+    // Multi-athlete overlay: each series scales to its OWN athlete's bodyweight / sex.
+    ...(multiAthlete
+      ? {
+          users: athletes,
+          userLabelOf: (u: string) => rosterUsers().find((r) => r.username === u)?.user ?? u,
+          bodyweightOf: (u: string) => athProfile(u)?.weight ?? null,
+        }
+      : {}),
   };
 }
 
@@ -20242,6 +20251,7 @@ function infoBtn(key: string): string {
 function renderGraphDashboard(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
+  closeTitleExListMenu(); // a stale "N exercises" dropdown can't survive the title rebuild
   ensureDashUser(); // graphDash must match the current athlete (per-athlete dashboards)
   const tab = activeTab(graphDash);
   if (dashBubbleIdx >= tab.bubbles.length) dashBubbleIdx = 0;
@@ -20316,8 +20326,24 @@ function renderGraphDashboard(): void {
   // View bubbles: tap one to JUMP to that view (active one filled). Owner redesign — the bubbles
   // ARE the navigation now (no ‹ › arrows, no separate ⧉/✕/＋ buttons): bigger tappable circles,
   // then a final "＋" bubble that opens a small menu (duplicate / delete / add this view).
+  // Each view bubble is a tiny CODE NAME (owner): split in half — TOP a single letter for
+  // the view type (T = over time · R = reps×kg), BOTTOM one letter per exercise (first 3 if
+  // they don't fit), each letter coloured by that lift's dominant body part (muscleColor).
   const dots = tab.bubbles
-    .map((_, i) => `<button type="button" class="gdash-bub${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="View ${i + 1}">${i + 1}</button>`)
+    .map((b, i) => {
+      const typeLetter = b.type === "rvw" ? "R" : "T";
+      const exs = b.exercises;
+      const exLetters = exs
+        .slice(0, 3)
+        .map((n) => `<span class="gdash-bub-ex" style="color:${muscleColor(mgFor(n))}">${escapeHtml(displayName(n).trim().charAt(0).toUpperCase() || "?")}</span>`)
+        .join("");
+      const names = exs.map((n) => displayName(n)).join(", ");
+      const title = `View ${i + 1} · ${b.type === "rvw" ? "reps × kg" : "over time"}${names ? ` · ${names}` : " · empty"}`;
+      return `<button type="button" class="gdash-bub${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="${escapeHtml(title)}" title="${escapeHtml(title)}">` +
+        `<span class="gdash-bub-type">${typeLetter}</span>` +
+        `<span class="gdash-bub-exs">${exLetters || "·"}</span>` +
+        `</button>`;
+    })
     .join("");
   // The FULL lift-selection title toolbar (owner: "no big title, no + / = / ✕ button") — the
   // SAME one the old graph had: big title naming the lift(s) (each tap-to-remove), the + add /
@@ -20328,6 +20354,15 @@ function renderGraphDashboard(): void {
   // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
   // per-bubble "type" pill owns that switch).
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true, dashType: bubble.type });
+  // "Compare" (next to Options, owner): overlay other athletes on this bubble's graph. The
+  // toggle reveals a sideways-scrolling athlete-pill row above the foot; hidden in locked
+  // views / with nobody to compare (rule 21). Same data-wacompare / data-waath wiring as the
+  // legacy full graph, now wired into the dashboard's buildBubbleInput (multi-athlete records).
+  const canCompare = lockedUsername() === null && rosterUsers().length >= 2;
+  const compareBtn = canCompare
+    ? `<button type="button" class="wa-graph-compare-btn wa-clear${waCompareOpen ? " is-on" : ""}" data-wacompare="1" aria-pressed="${waCompareOpen}" title="${waCompareOpen ? "Hide the other-athlete compare row" : "Compare other athletes on this graph"}">Compare</button>`
+    : "";
+  const comparePills = waCompareOpen && canCompare ? graphAthletesPillsHtml() : "";
   // PB-39: PRESERVE the chart stage element across re-renders of the SAME bubble. Rebuilding
   // box.innerHTML would destroy #gdashStage (and its live chart instance) every render, so an
   // incidental re-render re-mounted the chart and re-applied a stale saved view — snapping the
@@ -20350,11 +20385,13 @@ function renderGraphDashboard(): void {
         `<button type="button" class="wa-gov-btn${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
       `</div>` +
     `</div>` +
+    comparePills +
     `<div class="gdash-foot">` +
       `<div class="gdash-bubbles">${dots}` +
         // The trailing "＋" bubble: tap → menu (duplicate current · delete current · add new view).
         `<button type="button" class="gdash-bub gdash-bub-add" data-dashbubmenu="1" aria-label="Add or manage views" title="Duplicate, delete or add a view">＋</button>` +
       `</div>` +
+      compareBtn +
       optionsFold +
     `</div>`;
   // Slot the (preserved or new) stage element into place.
@@ -21368,8 +21405,10 @@ function setupWorkoutAnalysis(): void {
     const target = e.target as HTMLElement;
     const grp = target.closest<HTMLSelectElement>(".wa-groupby");
     if (grp) {
-      waGroupBy = (grp.value === "none" ? "none" : grp.value) as typeof waGroupBy;
-      saveWaGroupByForUser(); // remember this athlete's choice
+      const val = (grp.value === "none" ? "none" : grp.value) as WaGroupBy;
+      waGroupByScope[curSelScope] = val; // per-scope: changing the graph picker never moves history's
+      waGroupBy = val;
+      saveWaGroupByForUser(); // remember this athlete's per-scope choice
       deferRender(renderWorkoutAnalysis); // rebuild both selectors so they stay in sync
       return;
     }
@@ -21450,6 +21489,14 @@ function setupWorkoutAnalysis(): void {
     if (tPick?.dataset.titlepicker) {
       e.preventDefault(); e.stopPropagation();
       openPickDrawer(tPick.dataset.titlepicker as SelScope);
+      return;
+    }
+    // "N exercises ▾" title button → floating dropdown of every picked lift (each a
+    // tap-to-act chip). Capture-handled so it doesn't toggle the fold it sits in.
+    const tList = t.closest<HTMLElement>("[data-titlelist]");
+    if (tList?.dataset.titlelist) {
+      e.preventDefault(); e.stopPropagation();
+      openTitleExListMenu(tList, tList.dataset.titlelist as SelScope);
       return;
     }
     // The big ✕ at the end of a selection title = Deselect all (capture: it lives in the

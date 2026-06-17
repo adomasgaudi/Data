@@ -1,5 +1,15 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-41 — "Compare other athletes" button missing from the graph
+
+- **First seen / reported:** 2026-06-17, mobile, Analysis → Graph. Owner: "i don't see the comparison btn to compare with other users #persistent."
+- **Root cause:** the "Compare" toggle (`data-wacompare` → reveal the other-athlete pill row + overlay them) was only rendered in the LEGACY full-graph path (`renderWaGraph`'s `graphBarHtml`), which went DORMANT when `useGraphDashboard = true` replaced it with the bubble dashboard (`renderGraphDashboard`). The dashboard's foot only had the bubbles + Options, so the button vanished — and even its DATA path was single-athlete (`buildBubbleInput` filtered records to `r.username === user`).
+- **Fix (b.2.9.114, CHART-198):** re-added a `compareBtn` to the dashboard foot beside Options (owner: "next to options just like before"), plus the `graphAthletesPillsHtml()` row above the foot when open. Wired the DATA too: `buildBubbleInput` now uses `athletes = waCompareOpen ? graphAthleteList() : [user]`, filters records to all of them, shrinks the exercise cap so users×lifts ≤ WA_GRAPH_MAX, and passes `users / userLabelOf / bodyweightOf` so each series scales to its own athlete.
+- **Watch:** when a feature is REBUILT on a new render path (the bubble dashboard), audit the OLD path's controls — anything only in the dormant branch silently disappears. Grep the dormant code for buttons/handlers the new path forgot.
+- **Recurrences:** 0 as PB-41 (the compare feature itself existed before; it was dropped, not broken).
+
+---
+
 ## PB-40 — Strength projection doesn't fit the points (floats below the data) / not smooth
 
 - **First seen / reported:** 2026-06-17, mobile (Brave, Android), Analysis → Graph → Predicted Strength (Hip Thrust). Owner #super-persistent #max-debug: "projection is broken. the graph doesnt fit points and is not smooth. remember hard limit is the world record, but the steepness can be much higher it just needs to level out more aggressively too at WR." Iterated several times before (CHART-117 log fit, CHART-121 ceiling approach, CHART-122 fit window, CHART-127 carousel parity) and still wrong.
