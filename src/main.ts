@@ -19586,11 +19586,18 @@ function refreshDash(): void {
 // Long-press tab menu (owner): a small floating menu — Duplicate / Add tab / Rename / Delete —
 // opened by a long-press or right-click on a tab (no inline icons cluttering the strip).
 function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remove(); }
-// ON-SCREEN debug log (PB-38 #super-persistent): mobile has no console, so paint the last few
-// events to a fixed corner panel. Proves which handler each tap reaches. Temporary — remove
-// once the tab menu is confirmed working on device. Tap the panel to clear it.
+/**
+ * ON-SCREEN debug console — the mobile-debug tool (full guide: docs/onscreen-debug.md).
+ * Phones have NO devtools console, so `dbg("msg")` paints the last ~9 lines to a fixed green
+ * panel bottom-left. Instrument every step of a failing flow with it, then ONE screenshot shows
+ * exactly where it breaks — this is how PB-38's root (panel-scoped handler vs body-appended menu)
+ * was finally found (owner: "#super persistent and #max debug worked, keep the green console").
+ * Tap the panel to clear. Disable with `localStorage.setItem("colosseum.dbg","off")` then reload.
+ * Also exposed as `window.dbg` for ad-hoc desktop-console use.
+ */
 const dbgLines: string[] = [];
 function dbg(msg: string): void {
+  try { if (localStorage.getItem("colosseum.dbg") === "off") return; } catch { /* ignore */ }
   dbgLines.push(`${new Date().toTimeString().slice(0, 8)} ${msg}`);
   while (dbgLines.length > 9) dbgLines.shift();
   let el = document.getElementById("dbgOverlay");
@@ -19603,6 +19610,8 @@ function dbg(msg: string): void {
   }
   el.textContent = dbgLines.join("\n");
 }
+// Expose for ad-hoc use from a desktop console or other modules.
+(window as unknown as { dbg?: (m: string) => void }).dbg = dbg;
 function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   closeDashTabMenu();
   const canDelete = graphDash.tabs.length > 1;
