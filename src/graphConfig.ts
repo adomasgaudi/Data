@@ -3,7 +3,7 @@
  * plain data object SEPARATE from rendering — the Universal Analytics Graph reads
  * it, and future settings plug in here without touching the renderer.
  */
-import type { OneRepMaxFormula } from "./metrics";
+import type { OneRepMaxFormula, DecayParams } from "./metrics";
 import type { SetRecord } from "./domain";
 
 export interface GraphConfig {
@@ -15,6 +15,9 @@ export interface GraphConfig {
   smoothing: number;
   /** Apply the strength-fade (detraining) model to strength metrics. */
   decay: boolean;
+  /** The strength-decay MODEL to use (complexity level + its variables) for the
+   *  Strength Decay metric and the `decay` fade. Omitted = the shipped full model. */
+  decayParams?: DecayParams | undefined;
   /** 1RM formula for the strength/1RM metrics (matches the app-wide choice). */
   formula: OneRepMaxFormula;
   /** REPS-VERSUS-WEIGHT mode: swap the graph to a scatter of every set at

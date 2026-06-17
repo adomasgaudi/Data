@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.124</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.125</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -481,7 +481,9 @@
               shown as ×BW, so people of different sizes compare fairly.</p>
             <p><strong>7. Strength fade — the dashed "Strength Decay" line.</strong> Between sessions a lift's
               strength sags on a "use it or lose it" curve; each session re-proves it and restarts the clock.
-              That's why the dashed line dips during gaps and jumps back up on training days.</p>
+              That's why the dashed line dips during gaps and jumps back up on training days. You can DIAL this
+              model in the graph Options → <em>Decay model</em>: pick a complexity level (Linear → Log → Full)
+              and adjust every variable below, live on your data. The defaults (the Full model) are described next.</p>
             <p><strong>7a. Grace, then a log decline.</strong> The first <code>14</code> days after a session keep
               <code>100%</code> (no fade). After that the fraction still held is
               <code>retention = 1 − k · ln(1 + (days − 14) / S)</code>, where <code>k = 0.1 / ln2 ≈ 0.144</code> and

@@ -74,6 +74,9 @@ import {
   strengthRetention,
   grownStability,
   STRENGTH_DECAY,
+  DEFAULT_DECAY_PARAMS,
+  type DecayParams,
+  type DecayLevel,
   type OneRepMaxFormula,
 } from "./metrics";
 import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
@@ -18553,6 +18556,24 @@ let waShowMissing = false;
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm", "strength"]); // default graph view: 1RM + Strength score (no decay)
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+// Adjustable strength-decay MODEL (device-local): the owner dials the fade curve's
+// complexity level + variables in the graph Options to SEE it on their data. Persisted so
+// the chosen experiment sticks; merged over the defaults so older saves get any new fields.
+const DECAY_PARAMS_KEY = "colosseum.decayParams.v1";
+function loadDecayParams(): DecayParams {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DECAY_PARAMS_KEY) ?? "null") as Partial<DecayParams> | null;
+    if (raw && typeof raw === "object") {
+      const lvl = raw.level === 1 || raw.level === 2 || raw.level === 3 ? raw.level : DEFAULT_DECAY_PARAMS.level;
+      return { ...DEFAULT_DECAY_PARAMS, ...raw, level: lvl };
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_DECAY_PARAMS };
+}
+function saveDecayParams(): void {
+  try { localStorage.setItem(DECAY_PARAMS_KEY, JSON.stringify(waGraphConfig.decayParams)); } catch { /* ignore */ }
+}
+waGraphConfig.decayParams = loadDecayParams();
 // Projection fit-window (ms timestamps): the two draggable vertical lines bounding which
 // logged sets feed the forecast. null = open (data start / end). Reset when the forecast
 // is off; clamped so from < to.
@@ -20109,11 +20130,39 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
         onoff(rvwWindowMode === "2w", `data-rvwmode="1"`, rvwWindowMode === "2w" ? "Rolling 2-week" : "Increasing", rvwWindowMode === "2w" ? "Fixed 2-week periods (last 2 wk, 2–4 wk ago…). Tap for increasing windows." : "Increasing windows anchored to now (last day → … → all time). Tap for fixed 2-week periods.") +
         `<button type="button" class="wa-name-opt" data-rvwcycle="1" title="Cycle which time window the reps×kg scatter shows.">${escapeHtml(rvwWindowLabel())}</button>`, "window")
     : "";
+  // Strength-decay MODEL controls (owner): pick a complexity level (Linear → Log → Full)
+  // and dial ITS variables, live on the data — so the fade curve can be checked. Shown when
+  // the Strength Decay metric or the Decay fade is on. Percent fields (floor / loss-per-day /
+  // growth cap / calibration) display ×100; the input handler converts them back.
+  const dp = c.decayParams ?? DEFAULT_DECAY_PARAMS;
+  const decayShown = waMetrics.has("strengthDecay") || c.decay;
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
+  const dField = (field: string, label: string, value: number, step: number, title: string) =>
+    `<label class="wa-gcfg-f" title="${escapeHtml(title)}">${label}<input class="wa-cfg" data-wadecay="${field}" type="number" step="${step}" inputmode="decimal" value="${value}" /></label>`;
+  const dLvlLabel = dp.level === 1 ? "Linear" : dp.level === 2 ? "Log" : "Full";
+  const dCommon =
+    dField("graceDays", "Grace (days)", dp.graceDays, 1, "Days of full strength after a session before any fade begins.") +
+    dField("floor", "Floor %", Math.round(dp.floor * 100), 1, "Never fades below this % of the peak (muscle memory).");
+  const dByLevel = dp.level === 1
+    ? dField("linearLossPerDay", "Loss %/day", r3(dp.linearLossPerDay * 100), 0.1, "Percent of the peak lost each day after the grace (a straight-line fade).")
+    : dp.level === 2
+      ? dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
+        dField("stabilityDays", "Stability (days)", dp.stabilityDays, 1, "Durability: bigger = a flatter, slower fade.")
+      : dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
+        dField("stabilityDays", "Base stability", dp.stabilityDays, 1, "Starting durability (days); grows with each session.") +
+        dField("stabilityGrowth", "Stability ×/session", r3(dp.stabilityGrowth), 0.1, "Durability is multiplied by this each session — the more you train it, the slower it fades.") +
+        dField("maxStability", "Max stability", dp.maxStability, 5, "Cap on durability (days).") +
+        dField("maxGrowthFraction", "Growth cap %", r3(dp.maxGrowthFraction * 100), 1, "A single session can't raise the level beyond this % above your all-time peak.") +
+        dField("calibrationThreshold", "Calibration %", Math.round(dp.calibrationThreshold * 100), 1, "A returning set at ≥ this % of the prior level proves the gap was 'maintained' — bumps stability up to the gap's length.");
+  const decayLevelPill = `<button type="button" class="wa-name-opt" data-wadecaylevel="1" title="Decay model complexity — Linear (grace + straight decline) → Log (a durability curve) → Full (adds training-grown durability, RIR trust, a growth cap and gap calibration). Tap to cycle.">Model: ${dLvlLabel}</button>`;
+  const cfgDecay = decayShown
+    ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + dCommon + dByLevel, "decaymodel")
+    : "";
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}${opts?.skipRvw ? "" : cfgRepsWeight}${cfgWindow}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgDecay}${cfgProjection}${opts?.skipRvw ? "" : cfgRepsWeight}${cfgWindow}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
     `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${infoBtn("allgraphs")}${cfgAssist}${infoBtn("assist")}</div>` +
     `</div>`;
@@ -20394,6 +20443,7 @@ const SETTING_INFO: Record<string, string> = {
   window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
   mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
   mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
+  decaymodel: "Strength-fade model — pick how the decay curve works and dial its variables, live on the data. Linear: full for the grace days, then lose a flat %/day. Log: a slowing logarithmic fade with a fixed durability. Full: the log fade PLUS durability that grows with training, an RIR-confidence blend, a per-session growth cap and gap calibration. All levels share the grace days and the floor (a muscle-memory minimum). Full formulas: Plan → Formulas → 'How the numbers work'.",
   mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
   allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
   assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",
@@ -21629,6 +21679,34 @@ function setupWorkoutAnalysis(): void {
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
       else if (key === "potentialCeiling") { const v = Number((el as HTMLInputElement).value); waGraphConfig.potentialCeiling = v > 0 ? v : undefined; }
       scheduleWaGraph();
+      return;
+    }
+    // Strength-decay model variables (owner): one number field per param. Percent fields
+    // (floor / loss-per-day / growth cap / calibration) are entered ×100; all are clamped
+    // to a sane range so a typo can't break the curve. Live-redraws the graph.
+    if (cfg?.dataset.wadecay) {
+      const field = cfg.dataset.wadecay;
+      const raw = Number((cfg as HTMLInputElement).value);
+      if (Number.isFinite(raw)) {
+        const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+        const isPct = field === "floor" || field === "linearLossPerDay" || field === "maxGrowthFraction" || field === "calibrationThreshold";
+        let v = isPct ? raw / 100 : raw;
+        const clamp = (lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+        if (field === "graceDays") v = clamp(0, 365);
+        else if (field === "floor") v = clamp(0, 1);
+        else if (field === "linearLossPerDay") v = clamp(0, 1);
+        else if (field === "lossPerLog") v = clamp(0, 2);
+        else if (field === "stabilityDays") v = clamp(1, 1000);
+        else if (field === "stabilityGrowth") v = clamp(1, 5);
+        else if (field === "maxStability") v = clamp(1, 2000);
+        else if (field === "maxGrowthFraction") v = clamp(0, 2);
+        else if (field === "calibrationThreshold") v = clamp(0, 1);
+        (dpc as unknown as Record<string, number>)[field] = v;
+        waGraphConfig.decayParams = dpc;
+        saveDecayParams();
+        scheduleWaGraph();
+      }
+      return;
     }
   });
   // PB-5: tapping a lift NAME in the graph OR Calendar/history fold title removes it
@@ -21896,6 +21974,16 @@ function setupWorkoutAnalysis(): void {
       const steps = [0, 1, 2, 5, 10, 20, 50];
       const i = steps.indexOf(waGraphConfig.smoothing);
       waGraphConfig.smoothing = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
+      return;
+    }
+    // Decay-model complexity: cycle Linear (1) → Log (2) → Full (3) → Linear. The new
+    // level shows its own variable set in the Decay model group; redraws live.
+    if (t.closest<HTMLElement>("[data-wadecaylevel]")) {
+      const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+      dpc.level = ((dpc.level % 3) + 1) as DecayLevel;
+      waGraphConfig.decayParams = dpc;
+      saveDecayParams();
       scheduleWaGraph();
       return;
     }

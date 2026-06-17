@@ -22,6 +22,8 @@ import {
   linearFit,
   strengthRetention,
   grownStability,
+  retentionWith,
+  DEFAULT_DECAY_PARAMS,
   daysBetweenIso,
   STRENGTH_DECAY,
 } from "./metrics";
@@ -479,6 +481,22 @@ describe("grownStability", () => {
     );
     expect(grownStability(STRENGTH_DECAY.maxStability)).toBe(STRENGTH_DECAY.maxStability);
     expect(grownStability(STRENGTH_DECAY.maxStability * 5)).toBe(STRENGTH_DECAY.maxStability);
+  });
+});
+
+describe("retentionWith (adjustable decay model)", () => {
+  it("level 1 is a straight line after the grace, floored", () => {
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 1 as const, graceDays: 14, linearLossPerDay: 0.01, floor: 0.5 };
+    expect(retentionWith(14, 30, p)).toBe(1); // still in the grace
+    expect(retentionWith(24, 30, p)).toBeCloseTo(0.9, 6); // 10 days × 1%/day lost
+    expect(retentionWith(34, 30, p)).toBeCloseTo(0.8, 6); // 20 days × 1%/day
+    expect(retentionWith(10_000, 30, p)).toBe(0.5); // floored, never below 50%
+    expect(retentionWith(24, 30, p)).toBeGreaterThan(retentionWith(24, 999, p) - 1e-9); // S is ignored at level 1
+  });
+  it("level 2/3 reproduce the logarithmic strengthRetention curve for matching params", () => {
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 2 as const };
+    expect(retentionWith(60, 30, p)).toBeCloseTo(strengthRetention(60, 30), 6);
+    expect(retentionWith(120, 45, p)).toBeCloseTo(strengthRetention(120, 45), 6);
   });
 });
 

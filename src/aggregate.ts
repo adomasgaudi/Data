@@ -10,9 +10,10 @@ import {
   MAX_1RM_REPS,
   daysBetweenIso,
   strengthRetention,
-  grownStability,
   rirConfidence,
-  STRENGTH_DECAY,
+  retentionWith,
+  DEFAULT_DECAY_PARAMS,
+  type DecayParams,
   type OneRepMaxFormula,
 } from "./metrics";
 import { isIsometric } from "./profile";
@@ -758,6 +759,7 @@ export function decayedStrengthSeries(
   points: readonly { x: number; y: number; rir?: number }[],
   todayMs: number,
   stepDays = 4,
+  params: DecayParams = DEFAULT_DECAY_PARAMS,
 ): { x: number; y: number }[] {
   if (points.length === 0) return [];
   const sorted = points.slice().sort((a, b) => a.x - b.x);
@@ -765,17 +767,21 @@ export function decayedStrengthSeries(
   const dayOf = (x: number) => Math.round(x / MS_PER_DAY); // group same-day sets into one session
   const out: { x: number; y: number }[] = [];
   const push = (x: number, y: number) => out.push({ x, y: Math.round(y * 10) / 10 });
+  // The per-session guards (RIR blend, growth cap, stability growth + calibration) are the
+  // FULL model only — levels 1 (linear) & 2 (log) just sag on the retention curve and step
+  // straight to each set's e1RM, so the simpler curves read exactly as their formula says.
+  const full = params.level === 3;
 
   let anchorX = sorted[0]!.x; // the last training day — where the decay clock restarts
   let level = sorted[0]!.y; // strength carried from that day
   let allTimePeak = level; // highest level ever reached — used for rate-limiting (B)
-  let stability: number = STRENGTH_DECAY.baseStability; // durability; grows with each session
+  let stability: number = params.stabilityDays; // durability; grows with each session (L3)
   let prevDay = dayOf(anchorX);
   // Strength at time x given the current anchor + stability (grace from the anchor).
-  const decayedAt = (x: number) => level * strengthRetention((x - anchorX) / MS_PER_DAY, stability);
+  const decayedAt = (x: number) => level * retentionWith((x - anchorX) / MS_PER_DAY, stability, params);
   push(anchorX, level);
 
-  const { maxGrowthFraction, calibrationThreshold, maxStability } = STRENGTH_DECAY;
+  const { maxGrowthFraction, calibrationThreshold, maxStability } = params;
 
   for (let i = 1; i < sorted.length; i++) {
     const s = sorted[i]!;
@@ -784,33 +790,33 @@ export function decayedStrengthSeries(
 
     for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag
 
-    // A) RIR confidence: blend the set's e1RM with the current decayed level.
+    // A) RIR confidence (L3): blend the set's e1RM with the current decayed level.
     //    Near-failure sets (low RIR) are trusted fully; high-RIR sets are noisy
     //    e1RM extrapolations and contribute less to sudden jumps.
-    const conf = rirConfidence(s.rir);
+    const conf = full ? rirConfidence(s.rir) : 1;
     const effectiveE1rm = conf * s.y + (1 - conf) * decayedAt(s.x);
 
-    // B) Rate-limited growth: cap upward jumps to 8% above the all-time peak.
+    // B) Rate-limited growth (L3): cap upward jumps to 8% above the all-time peak.
     //    Larger single-session jumps indicate prior underperformance, not new
     //    muscle — so they accrue across sessions rather than all at once.
-    const cappedE1rm = Math.min(effectiveE1rm, allTimePeak * (1 + maxGrowthFraction));
+    const cappedE1rm = full ? Math.min(effectiveE1rm, allTimePeak * (1 + maxGrowthFraction)) : effectiveE1rm;
 
     level = Math.max(decayedAt(s.x), cappedE1rm); // decay over the gap, set re-proves strength
     allTimePeak = Math.max(allTimePeak, level);
     anchorX = s.x; // training resets the grace clock
 
     const day = dayOf(s.x);
-    if (day !== prevDay) {
-      stability = grownStability(stability); // a new session makes future decay weaker
+    if (full && day !== prevDay) {
+      stability = Math.min(maxStability, stability * params.stabilityGrowth); // a session makes future decay weaker (L3)
       prevDay = day;
     }
 
-    // C) Observed-interval stability calibration: if the incoming set shows the
+    // C) Observed-interval stability calibration (L3): if the incoming set shows the
     //    lift was maintained through a gap longer than our stability estimate, update
     //    stability upward. Only use near-failure sets (RIR ≤ 4 or unknown) as
     //    reliable evidence of the true strength level.
     const isReliableEvidence = s.rir == null || !Number.isFinite(s.rir) || s.rir <= 4;
-    if (isReliableEvidence && s.y / prevLevel >= calibrationThreshold && gapDays > stability) {
+    if (full && isReliableEvidence && s.y / prevLevel >= calibrationThreshold && gapDays > stability) {
       stability = Math.min(maxStability, gapDays);
     }
 

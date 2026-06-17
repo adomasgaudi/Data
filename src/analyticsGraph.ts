@@ -396,7 +396,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       let pts: GraphPoint[] = m.compute(g.records, input.config);
       // Decay can also be applied to plain strength/1RM lines via the config.
       if (input.config.decay && (m.id === "strength" || m.id === "e1rm")) {
-        pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now());
+        pts = decayedStrengthSeries(pts.map((p) => ({ x: p.x, y: p.y ?? 0 })), Date.now(), 4, input.config.decayParams);
       }
       if (m.type !== "range" && input.config.smoothing > 0) pts = movingAverage(pts, input.config.smoothing);
       // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
