@@ -17,13 +17,20 @@
 
 /** Device/display prefs that must NEVER sync — they'd fight across users/devices. */
 export const LOCAL_ONLY_KEYS: ReadonlySet<string> = new Set([
+  // SESSION IDENTITY — strictly per-DEVICE: who you logged in as, which athlete you're
+  // viewing, and the view mode. These must never sync, or one device's login leaks to
+  // everyone (the bug: every visitor inherited the admin's role.v1 → saw the admin pages
+  // + the admin's current athlete). The current top-tab/page isn't persisted at all, so
+  // it's already device-local. (`colosseum.role.v1` was missing here — that was the leak.)
+  "colosseum.role.v1", "colosseum.signedIn", "colosseum.viewUser.v1", "colosseum.viewMode",
+  "colosseum.lastAthlete.v1",
   "colosseum.lang", "colosseum.theme", "colosseum.nameMode.v1",
   "colosseum.showAddSets", "colosseum.statsSectionShown", "colosseum.bcShowRange",
-  "colosseum.idxSubMode.v1", "colosseum.woShowAll", "colosseum.lastAthlete.v1",
-  "colosseum.showAloneTags", "colosseum.maintGroupBy", "colosseum.signedIn",
+  "colosseum.idxSubMode.v1", "colosseum.woShowAll",
+  "colosseum.showAloneTags", "colosseum.maintGroupBy",
   "colosseum.bcMassUnit", "colosseum.asExcOpen", "colosseum.simplifiedView",
   "colosseum.idxEditAttr.v1", "colosseum.timeCompact.v1", "colosseum.bwReviewOpen",
-  "colosseum.xrmReps", "colosseum.viewUser.v1", "colosseum.viewMode",
+  "colosseum.xrmReps",
   "colosseum.faintLines", "colosseum.hardSetsOnly", "colosseum.hideUgly",
   "colosseum.allGraphsAllowed",
   "colosseum.activeSet.include.v1", "colosseum.activeSet.exclude.v1",

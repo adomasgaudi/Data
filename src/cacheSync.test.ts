@@ -17,6 +17,16 @@ describe("cacheSync key classification", () => {
     expect(isSyncable("colosseum._kvBase.v1")).toBe(false);
     expect(isSyncable("other.thing")).toBe(false);
   });
+
+  it("NEVER syncs session identity — who you logged in as / are viewing (privacy)", () => {
+    // The leak: role.v1 (admin/user/spectator) used to sync, so every visitor inherited
+    // the admin's role and landed on the admin pages with the admin's current athlete.
+    expect(isSyncable("colosseum.role.v1")).toBe(false);
+    expect(isSyncable("colosseum.signedIn")).toBe(false);
+    expect(isSyncable("colosseum.viewUser.v1")).toBe(false);
+    expect(isSyncable("colosseum.viewMode")).toBe(false);
+    expect(isSyncable("colosseum.lastAthlete.v1")).toBe(false);
+  });
 });
 
 describe("deepEq", () => {
