@@ -46,7 +46,8 @@ globals), then `renderAnalyticsGraph(bubbleEl, input)` per slide.
 - [x] **P2 — input-assembly seam**: `buildBubbleInput(bubble)` produces a real `AnalyticsGraphInput` from one bubble's config (modelled on `renderGraphSlideChart`). [b.2.9.30]
 - [x] **P3 — render real bubbles**: `renderGraphDashboard` draws each bubble through the real engine — NOT a stub. Lives in #waGraphFull (kept visible) so the existing picker edits the bubble. Gated by `useGraphDashboard` (legacy mini/full kept dormant as fallback). [b.2.9.30]
 - [x] **P4 (core) — tabs + bubble reel + controls**: tab strip (switch + add), bubble swipe reel + dots, add/remove bubble, per-bubble cycle type, cycle view, ×BW, and lift-pick via the projected picker. All persisted per bubble. [b.2.9.30]
-- [ ] **P4 (rest)**: tab rename/delete; per-bubble metrics/Options menu; per-bubble multi-athlete COMPARE; the draggable fit markers + rvw 2-week pager wired per bubble; fullscreen.
+- [x] **P4 (rest, partial)** [b.2.9.32]: per-bubble TITLE (lift name, taps to pick) + picker sync (selector shows the bubble's lifts); tab RENAME (inline) + DELETE; per-bubble METRICS (Options menu metrics now write to the active bubble). Options menu restored [b.2.9.31].
+- [ ] **P4 (remaining)**: per-bubble OTHER config (aggregation/decay/… still global); per-bubble multi-athlete COMPARE; draggable fit markers + rvw 2-week pager wired per bubble; fullscreen.
 - [ ] **P5 — cutover/cleanup**: once proven on-device, retire the dormant legacy `renderGraphMini`/full body (→ attic). Decide sync (local vs rule-41).
 - [ ] **P6 — polish**: loading states (rule 46), snappy/scroll-preserving re-render (rules 17/24 — the stage currently rebuilds each render, resetting pan/zoom), locked/spectator views show only the logged-in athlete + hide customization (rule 21).
 

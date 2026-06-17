@@ -105,8 +105,8 @@ import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMe
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
-  loadDashboard, saveDashboard, activeTab, addTab, setActiveTab, addBubble, removeBubble,
-  cycleBubbleType, cycleBubbleView, updateBubble,
+  loadDashboard, saveDashboard, activeTab, addTab, removeTab, renameTab, setActiveTab,
+  addBubble, removeBubble, cycleBubbleType, cycleBubbleView, updateBubble,
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
@@ -18753,6 +18753,7 @@ let graphCarOverride: string[] | null = null;
 // reel position within the active tab (which bubble's slide is showing).
 let graphDash: GraphDashboard = loadDashboard();
 let dashBubbleIdx = 0;
+let dashEditTab: string | null = null; // the tab whose name is being inline-edited (null = none)
 /** The bubble currently showing in the reel (active tab, clamped index). */
 function currentBubble(): GraphBubble {
   const t = activeTab(graphDash);
@@ -19082,6 +19083,12 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   };
 }
 
+/** Persist the global waMetrics selection onto the active bubble (per-bubble metrics). */
+function dashWriteMetrics(): void {
+  const tab = activeTab(graphDash);
+  graphDash = updateBubble(graphDash, tab.id, currentBubble().id, { metrics: [...waMetrics] });
+  persistDash();
+}
 /** Re-sync the shared graph picker + S.* flags to the active bubble, then re-render. Called
  * by the dashboard control handlers after they mutate graphDash. */
 function refreshDash(): void {
@@ -19114,19 +19121,35 @@ function renderGraphDashboard(): void {
     }
   }
   // SSOT = the bubble. The picker is open → the owner is editing this bubble's lifts, so write
-  // the picker's selection BACK to the bubble; otherwise mirror the bubble into the picker.
+  // the picker's selection BACK to the bubble; otherwise mirror the bubble into the picker AND
+  // re-render the selector so its title/chips actually show THIS bubble's lifts (the selector
+  // renders before this fn in the analysis flow, so without this it showed a stale/empty pick).
   if (pickDrawerScope === "graph") {
     if (JSON.stringify(waGraphSel) !== JSON.stringify(bubble.exercises)) {
       graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [...waGraphSel] });
       persistDash();
     }
   } else {
-    waGraphSel = [...bubble.exercises];
+    const want = [...bubble.exercises];
+    if (JSON.stringify(waGraphSel) !== JSON.stringify(want)) {
+      waGraphSel = want;
+      renderSelector("graph"); // refresh the picker + its lift title to this bubble
+    }
   }
   // TABS live ABOVE the graph (owner): rendered into their own host at the TOP of #waGraphFull,
-  // above the picker + chart — so they read as top-level navigation, not part of the plot.
+  // above the picker + chart. The ACTIVE tab carries a ✎ rename (inline input) + ✕ delete.
   const tabsHtml = graphDash.tabs
-    .map((t) => `<button type="button" class="gdash-tab${t.id === graphDash.activeTabId ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>`)
+    .map((t) => {
+      const on = t.id === graphDash.activeTabId;
+      if (on && dashEditTab === t.id) {
+        return `<input class="gdash-tab gdash-tabedit" data-dashtabname="${t.id}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
+      }
+      const del = on && graphDash.tabs.length > 1
+        ? `<button type="button" class="gdash-tabmini gdash-tabdel" data-dashtabdel="${t.id}" title="Delete this tab" aria-label="Delete tab">✕</button>`
+        : "";
+      const ren = on ? `<button type="button" class="gdash-tabmini" data-dashtabrename="${t.id}" title="Rename this tab" aria-label="Rename tab">✎</button>` : "";
+      return `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>${ren}${del}`;
+    })
     .join("");
   const full = document.getElementById("waGraphFull");
   let tabsHost = document.getElementById("gdashTabs");
@@ -19135,9 +19158,15 @@ function renderGraphDashboard(): void {
     tabsHost.id = "gdashTabs"; tabsHost.className = "gdash-tabs";
     full.insertBefore(tabsHost, full.firstChild);
   }
-  if (tabsHost) tabsHost.innerHTML = `${tabsHtml}<button type="button" class="gdash-tab gdash-tabadd" data-dashtabadd="1" aria-label="Add a tab" title="Add a tab">＋</button>`;
-  // Metrics + the rest of the Options menu are GLOBAL (shared) for now; per-bubble are the
-  // type, view, lifts and ×BW. S.* flags project the active bubble so the menu reads right.
+  if (tabsHost) {
+    tabsHost.innerHTML = `${tabsHtml}<button type="button" class="gdash-tab gdash-tabadd" data-dashtabadd="1" aria-label="Add a tab" title="Add a tab">＋</button>`;
+    if (dashEditTab) tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit")?.focus();
+  }
+  // Project the active bubble onto the shared graph state so the Options menu + buildBubbleInput
+  // read THIS bubble: metrics are per-bubble (waMetrics ← bubble.metrics); the other Options
+  // knobs (aggregation/decay/…) stay global/shared for now.
+  waMetrics.clear();
+  for (const m of bubble.metrics) waMetrics.add(m);
   S.waRepsVsWeight = bubble.type === "rvw";
   S.waPerBodyweight = bubble.perBodyweight;
   const dots = tab.bubbles
@@ -19145,15 +19174,21 @@ function renderGraphDashboard(): void {
     .join("");
   const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
   const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
+  // Per-bubble TITLE (owner: "what exercise is this?") — the lift name(s) this bubble graphs,
+  // tappable to open the lift picker. single → the one lift; multi → all, dotted.
+  const exNames = bubble.exercises.map((e) => displayName(e, "graph"));
+  const titleTxt = exNames.length === 0
+    ? "Pick a lift…"
+    : bubble.view === "single" ? exNames[0]! : exNames.join(" · ");
   // The shared Options ▾ menu (metrics + aggregation/decay/projection…), scoped to this
   // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
   // per-bubble "type" pill owns that switch).
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true });
   box.innerHTML =
+    `<div class="gdash-titlerow"><button type="button" class="gdash-title wa-title-lift${bubble.exercises.length ? "" : " is-empty"}" data-dashpick="1" title="Tap to change this bubble's lift(s)">${escapeHtml(titleTxt)}</button></div>` +
     `<div class="gdash-head">` +
       `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
       `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +
-      `<button type="button" class="gdash-pill" data-dashpick="1" title="Pick which lift(s) this bubble shows">⇆ Lifts</button>` +
       `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
       (tab.bubbles.length > 1 ? `<button type="button" class="gdash-pill gdash-rm" data-dashremove="1" title="Remove this bubble" aria-label="Remove bubble">✕</button>` : "") +
     `</div>` +
@@ -20437,6 +20472,7 @@ function setupWorkoutAnalysis(): void {
           }
         }
       }
+      dashWriteMetrics(); // metrics are per-bubble — persist this bubble's selection
       scheduleWaGraph();
       return;
     }
@@ -20473,15 +20509,25 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // ── Custom graph DASHBOARD interactions (CHART-160) ─────────────────────────
+    // Rename the active tab — turn its pill into an inline input (saved on Enter/blur).
+    const dashRen = t.closest<HTMLElement>("[data-dashtabrename]");
+    if (dashRen?.dataset.dashtabrename) { dashEditTab = dashRen.dataset.dashtabrename; renderGraphDashboard(); return; }
+    // Delete the active tab (guarded: a dashboard always keeps one tab).
+    const dashDel = t.closest<HTMLElement>("[data-dashtabdel]");
+    if (dashDel?.dataset.dashtabdel) {
+      graphDash = removeTab(graphDash, dashDel.dataset.dashtabdel); dashEditTab = null; dashBubbleIdx = 0;
+      persistDash(); refreshDash(); return;
+    }
     // Switch to a tab (resets the reel to its first bubble).
     const dashTab = t.closest<HTMLElement>("[data-dashtab]");
     if (dashTab?.dataset.dashtab) {
+      dashEditTab = null;
       graphDash = setActiveTab(graphDash, dashTab.dataset.dashtab); dashBubbleIdx = 0; persistDash();
       refreshDash(); return;
     }
     // Add a new tab (becomes active).
     if (t.closest<HTMLElement>("[data-dashtabadd]")) {
-      graphDash = addTab(graphDash); dashBubbleIdx = 0; persistDash(); refreshDash(); return;
+      graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); return;
     }
     // Prev / next bubble in the reel (wraps).
     const dashNav = t.closest<HTMLElement>("[data-dashnav]");
@@ -20643,6 +20689,19 @@ function setupWorkoutAnalysis(): void {
         renderWorkoutAnalysis();
       }
     }
+  });
+  // Inline tab-rename input (dashboard): Enter/blur commits the name, Esc cancels.
+  document.addEventListener("keydown", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-dashtabname]");
+    if (!inp) return;
+    if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+    else if (e.key === "Escape") { e.preventDefault(); dashEditTab = null; renderGraphDashboard(); }
+  });
+  document.addEventListener("focusout", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-dashtabname]");
+    if (!inp?.dataset.dashtabname) return;
+    graphDash = renameTab(graphDash, inp.dataset.dashtabname, inp.value.trim() || "Tab");
+    dashEditTab = null; persistDash(); refreshDash();
   });
 }
 

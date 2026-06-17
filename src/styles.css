@@ -1129,6 +1129,29 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 }
 .gdash-tab.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 .gdash-tabadd { font-size: 1rem; padding: 2px 8px; color: var(--muted); }
+/* ✎ rename / ✕ delete mini-buttons beside the active tab. */
+.gdash-tabmini {
+  flex: 0 0 auto; min-height: var(--tap-min); min-width: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 4px;
+  font-size: 0.8rem; cursor: pointer; color: var(--muted); background: none; border: none;
+}
+.gdash-tabmini:hover { color: var(--accent); }
+.gdash-tabdel:hover { color: var(--remove); }
+.gdash-tabedit {
+  flex: 0 0 auto; max-width: 9rem; min-height: var(--tap-min); padding: 2px 8px;
+  font: inherit; font-size: 0.78rem; font-weight: 700; color: var(--accent);
+  background: var(--bg); border: 1px solid var(--accent); border-radius: var(--r-pill);
+}
+.gdash-tabedit:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Per-bubble exercise title — the lift name(s) this bubble graphs, tappable to pick. */
+.gdash-titlerow { margin: 0 0 0.25rem; }
+.gdash-title {
+  font-size: 1.05rem; font-weight: 800; color: var(--accent); cursor: pointer;
+  background: none; border: none; padding: 2px 0; text-align: left; line-height: 1.15;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gdash-title:hover { text-decoration: underline; }
+.gdash-title.is-empty { color: var(--muted); font-weight: 700; }
 .gdash-head {
   display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
   overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; margin-bottom: 0.2rem;
