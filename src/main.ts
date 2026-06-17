@@ -13107,11 +13107,32 @@ const WARMUP_PLAN_BLURB: Record<WarmupPlan, string> = {
   standard: "4 ramp sets from ~40% of 1RM up to just under your work weight — the all-round default for most sessions.",
   heavy: "A 6-set pyramid grooving the heavy load up to ~90% — for powerlifting, peaking and heavy singles/triples where the neural warm-up matters.",
 };
-function getWarmupPlan(): WarmupPlan {
-  try { const v = localStorage.getItem("colosseum.warmupPlan"); return v === "quick" || v === "heavy" ? v : "standard"; }
-  catch { return "standard"; }
+// The stored warm-up plan id may be a built-in (quick/standard/heavy) OR "custom" — a
+// user-typed warm-up (its own back-off list, like the Safety hard-set plan). getWarmupPlan
+// maps "custom" to standard for the ramp math (unused when custom; warmupTableHtml branches).
+function getWarmupPlanId(): string {
+  try { return localStorage.getItem("colosseum.warmupPlan") ?? "standard"; } catch { return "standard"; }
 }
-function setWarmupPlan(p: WarmupPlan): void { try { localStorage.setItem("colosseum.warmupPlan", p); } catch { /* ignore */ } }
+function getWarmupPlan(): WarmupPlan {
+  const v = getWarmupPlanId(); return v === "quick" || v === "heavy" ? v : "standard";
+}
+function setWarmupPlan(p: string): void { try { localStorage.setItem("colosseum.warmupPlan", p); } catch { /* ignore */ } }
+// The user-typed "Custom" warm-up: fixed (weight, reps) lines, exactly like the Safety plan.
+function getWarmupCustomList(): { weight: number; reps: string }[] {
+  try {
+    const a = JSON.parse(localStorage.getItem("colosseum.warmupCustom.v1") ?? "null");
+    if (Array.isArray(a)) return a.filter((x) => x && Number.isFinite(x.weight)).map((x) => ({ weight: Number(x.weight), reps: String(x.reps ?? "") }));
+  } catch { /* ignore */ }
+  return [{ weight: 20, reps: "10" }, { weight: 40, reps: "5" }];
+}
+function warmupCustomText(): string { return getWarmupCustomList().map((s) => `${s.weight} ${s.reps}`).join("\n"); }
+function setWarmupCustomText(text: string): void {
+  const list = text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^(-?\d+(?:\.\d+)?)\s*(?:kg)?\s*[x×*\s]\s*([a-z0-9]+)/i);
+    return m ? { weight: Number(m[1]), reps: m[2]!.toLowerCase() } : null;
+  }).filter((x): x is { weight: number; reps: string } => !!x);
+  try { localStorage.setItem("colosseum.warmupCustom.v1", JSON.stringify(list)); } catch { /* ignore */ }
+}
 
 // How the warm-up loads are SHOWN (owner: one value column + a toggle): the bar weight
 // in kg, the % of 1RM, or the load as a rep-max (RM). Reps ride each value as weight^reps.
@@ -13255,11 +13276,17 @@ let lastWuRerender: () => void = () => {};
  *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
 function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0, ctx = ""): string {
   const mode = getWarmupValMode();
-  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
+  // A "custom" warm-up is the user's own fixed (weight, reps) lines — exactly like the Safety
+  // hard-set plan. Otherwise the computed ramp. Both render through warmupValueCell as single
+  // value^reps rows, so the value-mode toggle + per-set nudge still work.
+  const wuPlan = getWarmupPlanId();
+  const wu = wuPlan === "custom"
+    ? getWarmupCustomList().map((s) => ({ kind: "ramp" as const, downKg: s.weight, upKg: s.weight, weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }))
+    : warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
   // Per-set nudge (owner: +/- buttons): a device-local delta per row, applied here and shown
   // with the 4 buttons. Keyed by ctx|plan|kind|idx; only when ctx is set (the card passes the
   // exercise; the Formulas calc passes "" → no buttons there).
-  const wuPlan = getWarmupPlan(), wsPlan = getWorksetPlan().id;
+  const wsPlan = getWorksetPlan().id;
   const adjFor = (kind: string, plan: string, i: number) => ctx ? getWarmupAdj(`${ctx}|${plan}|${kind}|${i}`) : { dw: 0, dr: 0 };
   const btns = (kind: string, plan: string, i: number) => ctx ? warmupAdjButtons(`${ctx}|${plan}|${kind}|${i}`) : "";
   // ONE value column (owner): each row is value^reps in the toggled unit (kg / %1RM / RM),
@@ -13275,7 +13302,7 @@ function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRe
 /** The warm-up + hard-set PLAN PILLS (open the tabbed popups) — shared by the calc & card.
  *  Plus the value-mode toggle: cycle the warm-up loads between kg / %1RM / RM. */
 function planPillsHtml(): string {
-  return `<button type="button" class="calc-wu-plan" data-warmupplan title="Warm-up plan — tap to choose">${WARMUP_PLAN_LABEL[getWarmupPlan()]}</button> ` +
+  return `<button type="button" class="calc-wu-plan" data-warmupplan title="Warm-up plan — tap to choose">${getWarmupPlanId() === "custom" ? "Custom" : WARMUP_PLAN_LABEL[getWarmupPlan()]}</button> ` +
     `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose">${escapeHtml(getWorksetPlan().label)}</button> ` +
     `<button type="button" class="calc-wu-plan rx-valmode" data-warmupvalmode title="Show loads as kg / %1RM / RM — tap to cycle">${WARMUP_VAL_LABEL[getWarmupValMode()]}</button>`;
 }
@@ -13304,15 +13331,23 @@ function planPopupHtml(kind: "warmup" | "workset"): string {
   const c = lastWuCalc!;
   const r2 = (n: number) => Math.round(n * 100) / 100;
   if (kind === "warmup") {
-    const cur = getWarmupPlan();
-    const tabs = WARMUP_PLANS.map((p) =>
-      `<button type="button" class="plan-tab${p === cur ? " is-on" : ""}" data-plantab="${p}">${WARMUP_PLAN_LABEL[p]}</button>`).join("");
-    const wu = warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: cur, bodyweightLoad: c.bwl ?? 0 });
+    const curId = getWarmupPlanId();
+    const tabIds: string[] = [...WARMUP_PLANS, "custom"];
+    const tabLabel = (p: string) => p === "custom" ? "Custom" : WARMUP_PLAN_LABEL[p as WarmupPlan];
+    const tabs = tabIds.map((p) =>
+      `<button type="button" class="plan-tab${p === curId ? " is-on" : ""}" data-plantab="${p}">${tabLabel(p)}</button>`).join("");
     const mode = getWarmupValMode();
+    const wu = curId === "custom"
+      ? getWarmupCustomList().map((s) => ({ kind: "ramp" as const, downKg: s.weight, upKg: s.weight, weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }))
+      : warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: getWarmupPlan(), bodyweightLoad: c.bwl ?? 0 });
     const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula, c.bwl ?? 0)}</td></tr>`).join("");
-    return `<div class="plan-tabs">${tabs}</div>` +
-      `<table class="plan-tbl"><thead><tr><th>Warm-up · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${rows}</tbody></table>` +
-      `<p class="plan-blurb">${escapeHtml(WARMUP_PLAN_BLURB[cur])}</p>`;
+    // A "Custom" warm-up gets the same user-typed back-off editor as Safety (above the table);
+    // built-ins show their blurb below the table.
+    const tableHtml = `<table class="plan-tbl"><thead><tr><th>Warm-up · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const editor = `<div class="plan-custom"><textarea class="plan-safety" data-warmupcustom rows="4" placeholder="20 10&#10;40 5&#10;60 3" aria-label="Custom warm-up sets">${escapeHtml(warmupCustomText())}</textarea><div class="plan-blurb muted">One set per line: weight reps. Fixed kg.</div></div>`;
+    return `<div class="plan-tabs">${tabs}</div>` + (curId === "custom"
+      ? editor + tableHtml
+      : tableHtml + `<p class="plan-blurb">${escapeHtml(WARMUP_PLAN_BLURB[getWarmupPlan()])}</p>`);
   }
   const cur = getWorksetPlan();
   const tabs = WORKSET_PLANS.map((p) =>
@@ -15889,23 +15924,23 @@ async function init() {
     if (tab && menu.contains(tab)) {
       e.stopPropagation();
       const kind = menu.dataset.kind as "warmup" | "workset";
-      if (kind === "warmup") setWarmupPlan(tab.dataset.plantab as WarmupPlan); else setWorksetPlan(tab.dataset.plantab!);
+      if (kind === "warmup") setWarmupPlan(tab.dataset.plantab!); else setWorksetPlan(tab.dataset.plantab!);
       lastWuRerender();
       menu.innerHTML = planPopupHtml(kind);
       return;
     }
     if (!menu.contains(t)) closePlanPopup();
   });
-  // Safety back-off list inside the popup (a textarea of "weight reps" lines): commit on
-  // blur, refresh the popup table + the owning view.
+  // Safety / custom-warm-up back-off lists inside the popup (a textarea of "weight reps"
+  // lines): commit on blur, refresh the popup table + the owning view.
   document.addEventListener("change", (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLTextAreaElement>("[data-worksetsafety]");
+    const t = e.target as HTMLElement;
     const menu = document.getElementById("planPopup");
-    if (!inp || !menu) return;
-    setSafetyText(inp.value);
-    setWorksetPlan("safety");
-    lastWuRerender();
-    menu.innerHTML = planPopupHtml("workset");
+    if (!menu) return;
+    const safe = t.closest<HTMLTextAreaElement>("[data-worksetsafety]");
+    if (safe) { setSafetyText(safe.value); setWorksetPlan("safety"); lastWuRerender(); menu.innerHTML = planPopupHtml("workset"); return; }
+    const wuc = t.closest<HTMLTextAreaElement>("[data-warmupcustom]");
+    if (wuc) { setWarmupCustomText(wuc.value); setWarmupPlan("custom"); lastWuRerender(); menu.innerHTML = planPopupHtml("warmup"); return; }
   });
 
   setupBottomNav();
