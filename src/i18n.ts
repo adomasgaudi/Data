@@ -219,6 +219,7 @@ const LT: Record<string, string> = {
   "Hide the Plan section": "Slėpti plano skiltį",
   "Horizontal": "Horizontali",
   "Calendar": "Kalendorius",
+  "soon": "netrukus",
   "Show the Horizontal history section": "Rodyti horizontalios istorijos skiltį",
   "Hide the Horizontal history section": "Slėpti horizontalios istorijos skiltį",
   "Show the Calendar section": "Rodyti kalendoriaus skiltį",

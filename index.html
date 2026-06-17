@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.103</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.104</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -1089,10 +1089,10 @@
         <div id="waSelectedRow" class="wa-selected-row">
           <button type="button" id="statsToggleBtn" class="wa-topact-btn" aria-pressed="false" title="Show the Stats section">Stats</button>
           <button type="button" id="graphToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the Graph section">Graph</button>
-          <button type="button" id="planToggleBtn" class="wa-topact-btn admin-only is-on" aria-pressed="true" title="Hide the Plan section">Plan</button>
+          <button type="button" id="planToggleBtn" class="wa-topact-btn wa-soon is-on" aria-pressed="true" title="Hide the Plan section">Plan<span class="wa-soon-tag"><span class="wa-soon-word">soon</span> v.3.0</span></button>
           <button type="button" id="histToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the History section">History</button>
-          <button type="button" id="histHorizToggleBtn" class="wa-topact-btn admin-only" aria-pressed="false" title="Show the Horizontal history section">Horizontal</button>
-          <button type="button" id="calToggleBtn" class="wa-topact-btn admin-only" aria-pressed="false" title="Show the Calendar section">Calendar</button>
+          <button type="button" id="histHorizToggleBtn" class="wa-topact-btn wa-soon" aria-pressed="false" title="Show the Horizontal history section">Horizontal<span class="wa-soon-tag"><span class="wa-soon-word">soon</span> v.3.1</span></button>
+          <button type="button" id="calToggleBtn" class="wa-topact-btn wa-soon" aria-pressed="false" title="Show the Calendar section">Calendar<span class="wa-soon-tag"><span class="wa-soon-word">soon</span> v.3.2</span></button>
         </div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,
              just under the athlete picker and above the Analysis card. -->
@@ -1124,12 +1124,12 @@
               <h3 class="live-h plan-planner-hd">Focus lifts</h3>
               <div id="planBody"></div>
             </div>
+            <!-- Formulas now lives INSIDE the Plan card (owner: "move the formulas into the plan
+                 section, hidden in user view") — so it's admin-only along with the Plan. -->
+            <div class="wa-inter-gap">
+              <button type="button" id="formulasBtn" class="wo-plan-btn" title="Formulas — the 1RM calculator, the Coach working-weight & warm-up tool, the strength-fade curve and how every number is worked out">🧮 Formulas</button>
+            </div>
           </details>
-          <!-- Inter-section gap: the Formulas shortcut sits here, between the plan/graph
-               and history sections, with enough breathing room to visually separate them. -->
-          <div class="wa-inter-gap">
-            <button type="button" id="formulasBtn" class="wo-plan-btn" title="Formulas — the 1RM calculator, the Coach working-weight & warm-up tool, the strength-fade curve and how every number is worked out">🧮 Formulas</button>
-          </div>
           <!-- CALENDAR + HISTORY: one JOINT collapsible. The calendar leads (collapsed
                by default); the history/calendar lift selector (drives both) sits BELOW
                it; the calendar and the history are each their OWN nested fold so they

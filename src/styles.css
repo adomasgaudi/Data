@@ -1020,6 +1020,21 @@ body.admin-only-hidden .admin-only { display: none !important; }
 .wa-topact-btn:hover { color: var(--text); border-color: var(--accent); }
 /* Stats ON = the panel is shown: filled accent (the only one that toggles a state). */
 .wa-topact-btn.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* "Soon" preview buttons (Plan / Horizontal / Calendar): ADMIN uses them as live toggles, but
+   locked USER/spectator views see them GRAYED + inactive with a "soon v.x" roadmap sub-tag
+   (owner: "add the buttons to user but gray + write 'soon' + a relevant version sub-tag"). The
+   sections themselves stay hidden (admin-only), so this is purely a teaser. */
+.wa-soon-tag { display: none; }
+body.admin-only-hidden .wa-soon {
+  flex-direction: column; align-items: center; gap: 1px;
+  color: var(--muted) !important; border-color: var(--line); background: none !important;
+  opacity: 0.6; pointer-events: none; cursor: default;
+}
+body.admin-only-hidden .wa-soon .wa-soon-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 0.58rem; font-weight: 700; line-height: 1; letter-spacing: 0.02em; color: var(--accent);
+}
+body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 .ath-sex-toggle[hidden] { display: none; }
 /* Locked (user/spectator) view: just YOU. Drop the full-bleed sticky bar look so a
    lone name chip doesn't sit in an empty white band — it reads as a plain label. */
