@@ -19049,8 +19049,13 @@ function renderSelector(scope: SelScope): void {
   // the picker's current group / search / identity filter (vs "Select all" = shown only).
   const everyEx = scope === "graph" ? [] : waSelectorExercises().map((e) => e.name);
   const completeOn = everyEx.length > 0 && everyEx.every((n) => cur.includes(n));
+  // GRAPH has a fixed lift budget, so there's no real "Select all" — "First N" is the
+  // graph's equivalent. But people LOOK for "Select all" (it's in the history picker), so
+  // we still show it, permanently DISABLED (grey), with a tooltip pointing at First N —
+  // discoverable, not functional (owner: "people might search for it so put it back, grey").
   const selAllToggle = scope === "graph"
-    ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
+    ? `<button type="button" class="wa-clear wa-selall" disabled title="The graph plots a fixed budget of ${graphExerciseCap()} lifts, so there's no “select all” — use “First ${graphExerciseCap()}” instead">Select all</button>` +
+      `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
     : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
       `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>`;
   // "Deselect all" — the title's old oversized ✕, demoted into the drawer next to its
