@@ -70,6 +70,34 @@ describe("back support (shoulderDist) — blue 6cm / 30cm / 45cm", () => {
   }
 });
 
+describe("Leverbell leverage model (EXR-163)", () => {
+  it("maps all four Leverbell lifts to the LEVERBELL family", () => {
+    expect(familyOf("Leverbell Pronation")).toBe("LEVERBELL");
+    expect(familyOf("Leverbell Supination")).toBe("LEVERBELL");
+    expect(familyOf("Leverbell Radial Deviation")).toBe("LEVERBELL");
+    expect(familyOf("Leverbell Ulnar Deviation")).toBe("LEVERBELL");
+  });
+  it("the lever factor is EXACT moment-arm scaling: factor = cm / 40 reference", () => {
+    const lever = FAMILIES.LEVERBELL!.dims.lever!;
+    expect(lever["40cm"]).toBeCloseTo(1.0, 6); // the ×1 reference
+    expect(lever["20cm"]).toBeCloseTo(20 / 40, 6); // half the arm → half the torque
+    expect(lever["60cm"]).toBeCloseTo(60 / 40, 6); // 1.5× the arm → 1.5× the torque
+    expect(lever["70cm"]).toBeCloseTo(70 / 40, 6);
+  });
+  it("the neutral default resolves to scalar 1 (plate kg = effort until a knob is picked)", () => {
+    const r = resolveNote("LEVERBELL", "", DEFAULT_VARIATION_CONFIG);
+    expect(r.vec.lever).toBe("40cm");
+    expect(r.vec.reach).toBe("neutral");
+    expect(r.scalar).toBeCloseTo(1, 6);
+  });
+  it("arm reach gets harder as it extends (forward easier, further harder)", () => {
+    const reach = FAMILIES.LEVERBELL!.dims.reach!;
+    expect(reach.tucked!).toBeLessThan(reach.neutral!);
+    expect(reach.neutral!).toBeLessThan(reach.extended!);
+    expect(reach.extended!).toBeLessThan(reach.far!);
+  });
+});
+
 describe("defaultLeanTable", () => {
   it("returns the base lean table unchanged for non-back-to-wall supports", () => {
     const base = FAMILIES.HSPU!.dims.lean!;

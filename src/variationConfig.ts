@@ -170,6 +170,30 @@ export const FAMILIES: Record<string, FamilyDef> = {
     },
     defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm" },
   },
+  // The owner's "Leverbell" (EXR-163) — an adjustable one-sided loaded handle: a
+  // plate on a movable collar near one END, gripped at the other, swung like a
+  // mace/axe. Its whole point is LEVERAGE, so the resistance a wrist/forearm
+  // rotation feels is a TORQUE = plate mass × moment arm (the distance from the
+  // wrist pivot to the plate). The owner asked for "exact torque", so the LEVER
+  // factor is the moment-arm RATIO (cm ÷ a 40cm reference = ×1) — true physics, not
+  // a guessed multiplier — and it scales the logged plate kg into an effective-
+  // torque effort, so a 5kg plate held far out lines up against 5kg pulled in.
+  // Shared by all four Leverbell lifts (pronation/supination forearm rotations +
+  // radial/ulnar wrist deviations) — they differ only by axis, not by the knobs.
+  //  • lever — plate distance from the grip, in cm (owner's "weight-distance"). EXACT
+  //    moment-arm scaling: factor = cm ÷ 40. Recalibrate the reference/numbers (e.g.
+  //    your real handle geometry) in ⚙ Difficulty multipliers.
+  //  • reach — how far the whole arm is held out (owner's "very important" distance:
+  //    forward = easier, further = harder). Arm reach changes posture/stabiliser
+  //    leverage, which is NOT a clean single-measurement torque like the lever — so
+  //    these are a calibratable gradient (placeholder, tune by feel), not exact.
+  LEVERBELL: {
+    dims: {
+      lever: { "20cm": 0.5, "30cm": 0.75, "40cm": 1.0, "50cm": 1.25, "60cm": 1.5, "70cm": 1.75 },
+      reach: { tucked: 0.85, neutral: 1.0, extended: 1.15, far: 1.3 },
+    },
+    defaults: { lever: "40cm", reach: "neutral" },
+  },
 };
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
@@ -368,7 +392,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 17;
+export const CONFIG_VERSION = 18;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -410,6 +434,12 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Handstand hold": "HANDSTAND",
   "Handstand walk": "HANDSTAND",
   Handstand: "HANDSTAND",
+  // The four "Leverbell" wrist/forearm rotations (EXR-163) share ONE leverage model
+  // — lever length (plate distance) × arm reach; see the LEVERBELL family above.
+  "Leverbell Pronation": "LEVERBELL",
+  "Leverbell Supination": "LEVERBELL",
+  "Leverbell Radial Deviation": "LEVERBELL",
+  "Leverbell Ulnar Deviation": "LEVERBELL",
 };
 
 export function familyOf(
