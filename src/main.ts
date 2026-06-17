@@ -847,6 +847,42 @@ function setRomDefault(exerciseName: string, value: number) {
   try { localStorage.setItem(ROM_DEFAULT_KEY, JSON.stringify(exerciseRomDefaults)); } catch { /* private mode */ }
 }
 
+// ---- Machine base weight: per-exercise, editable + saved ---------------------
+// Some machines carry a base resistance the dialed plate doesn't show — a leg
+// extension's lever/stack adds ~20 kg even at the lowest pin (owner). This per-
+// exercise "machine weight" (kg) is FOLDED INTO THE EFFECTIVE LOAD for strength /
+// 1RM (like the bodyweight share), so a set logged at 30 kg computes as 30 + base.
+// The DISPLAYED weight stays what you dialed (origWeight), and volume — which reads
+// the dialed/added weight — is unchanged. Editable on EVERY exercise in the Index;
+// 0 = a normal machine/free weight with no hidden base. Layered like the coeff/ROM:
+// a built-in default, the owner's per-lift edit wins.
+const MACHINE_WEIGHT_KEY = "colosseum.machineWeights.v1";
+const MACHINE_WEIGHT_DEFAULTS: Record<string, number> = { "Leg Extension": 20 };
+const machineWeightOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(MACHINE_WEIGHT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+/** The per-exercise machine base weight (kg) folded into the effective load — the
+ * owner's pin, else the built-in default, else 0. */
+function machineWeightFor(exerciseName: string): number {
+  if (Object.prototype.hasOwnProperty.call(machineWeightOverrides, exerciseName)) {
+    const v = machineWeightOverrides[exerciseName]!;
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  }
+  return MACHINE_WEIGHT_DEFAULTS[exerciseName] ?? 0;
+}
+/** Set (or clear, with null/blank) a lift's machine base weight. Admin-only metadata. */
+function setMachineWeight(exerciseName: string, value: number | null) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
+  if (value === null || !Number.isFinite(value)) delete machineWeightOverrides[exerciseName];
+  else machineWeightOverrides[exerciseName] = Math.max(0, value);
+  try { localStorage.setItem(MACHINE_WEIGHT_KEY, JSON.stringify(machineWeightOverrides)); } catch { /* private mode */ }
+}
+
 
 // Same layering as the coefficient: profile.ts derives a default from the lift's
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
@@ -2501,8 +2537,13 @@ function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   // false so the per-set list always reflects real effort regardless of the graph.
   const viewAdded = viewAddedWeight(r.exerciseName, r.weight, logged);
   const bwMult = viewBwMult(r.exerciseName, r.weight, logged);
+  // Machine base weight (e.g. Leg Extension +20 kg): folded into the EFFECTIVE load for
+  // strength / 1RM, but NOT into origWeight — so the displayed kg + volume stay on the
+  // dialed value, while the 1RM peels it back like a bodyweight share (machineWeightFor).
+  const mw = machineWeightFor(r.exerciseName);
+  const effAdded = mw > 0 && viewAdded != null ? viewAdded + mw : viewAdded;
   if (coeff <= 0) {
-    const base = viewAdded === r.weight ? r : { ...r, weight: viewAdded, origWeight: viewAdded };
+    const base = mw <= 0 && viewAdded === r.weight ? r : { ...r, weight: effAdded, origWeight: viewAdded };
     return applyMachineMode(base);
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
@@ -2510,7 +2551,7 @@ function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   const bw0 = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
   const bw = bw0 === null ? null : bw0 * bwMult;
   // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-  return applyMachineMode({ ...r, weight: effectiveLoad(viewAdded, bw, coeff), origWeight: viewAdded });
+  return applyMachineMode({ ...r, weight: effectiveLoad(effAdded, bw, coeff), origWeight: viewAdded });
 }
 
 // ---- Owner-editable combinable/comparable membership ------------------------
@@ -12874,6 +12915,13 @@ function exerciseInfoHtml(name: string): string {
     `<input class="ex-edit-rom" type="number" step="5" min="10" max="100" value="${romDefaultFor(name)}" data-editex="${escapeHtml(name)}" aria-label="Default range of motion percent for ${escapeHtml(name)}" />` +
     `<span class="ex-rom-unit">% of full ROM</span>` +
     `</span>`;
+  // Machine base weight (kg) — a hidden resistance the machine adds even at the lowest
+  // pin (e.g. Leg Extension ≈ 20). Folded into strength/1RM only; 0 = none. Blank to reset.
+  const mwInput =
+    `<span class="ex-mw-range">` +
+    `<input class="ex-edit-mw" type="number" step="1" min="0" max="200" value="${machineWeightFor(name) || ""}" placeholder="0" data-editex="${escapeHtml(name)}" aria-label="Machine base weight (kg) for ${escapeHtml(name)}" />` +
+    `<span class="ex-mw-unit">kg base</span>` +
+    `</span>`;
 
   // Code + Short name share one row (two compact columns) — they're the two tiny
   // name fields, so side-by-side reads tighter than two stacked rows.
@@ -12911,6 +12959,7 @@ function exerciseInfoHtml(name: string): string {
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
     item("Default ROM", romInput),
+    item("Machine weight", mwInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -15565,6 +15614,15 @@ async function init() {
     if (romEl?.dataset.editex) {
       const ex = romEl.dataset.editex;
       setRomDefault(ex, parseFloat(romEl.value));
+      scheduleRender(() => reopenIndexDetail(ex));
+      return;
+    }
+    // Machine base weight (kg) for this exercise — folds into strength/1RM. Blank = clear.
+    const mwEl = t.closest<HTMLInputElement>(".ex-edit-mw");
+    if (mwEl?.dataset.editex) {
+      const ex = mwEl.dataset.editex;
+      const txt = mwEl.value.trim();
+      setMachineWeight(ex, txt === "" ? null : parseFloat(txt));
       scheduleRender(() => reopenIndexDetail(ex));
       return;
     }

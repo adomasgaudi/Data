@@ -3487,6 +3487,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-rom-range { display: inline-flex; align-items: center; gap: 5px; }
 .ex-rom-range > input { width: 4rem; }
 .ex-rom-unit { font-size: 0.78rem; color: var(--muted); }
+.ex-mw-range { display: inline-flex; align-items: center; gap: 5px; }
+.ex-mw-range > input { width: 4rem; }
+.ex-mw-unit { font-size: 0.78rem; color: var(--muted); }
 /* World-record editor: per-sex row of compact bordered fields + the gold
    scaled-to-this-athlete calculation. Guess values show faint with an "≈est" tag. */
 .wr-editor .wr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; margin: 0.4rem 0; }

@@ -69,6 +69,17 @@ describe("addedWeight1RM", () => {
     expect(addedWeight1RM(r, "epley")).toBeCloseTo(epley1RM(100, 5)!, 6);
   });
 
+  it("folds a machine base weight into the rep-curve, then peels it back (dialed-basis 1RM)", () => {
+    // Leg Extension dialed at 30 kg × 10, with a 20 kg machine base → effective load 50,
+    // displayed (origWeight) 30. effective 1RM = 50 × (1 + 10/30) = 66.667; the machine base
+    // (50 − 30 = 20) peels back → 46.667 — higher than the dialed-only 40, so the hidden
+    // resistance counts toward strength while the shown weight stays the dialed value.
+    const machine = rec({ weight: 50, origWeight: 30, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")).toBeCloseTo(epley1RM(50, 10)! - 20, 6);
+    const dialedOnly = rec({ weight: 30, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")!).toBeGreaterThan(addedWeight1RM(dialedOnly, "epley")!);
+  });
+
   it("peels the bodyweight share back off for a bodyweight lift", () => {
     // Squat: effective load 200 (= 60 bodyweight share + 140 bar), 3 reps.
     // effective 1RM = 200 × (1 + 3/30) = 220; added-weight 1RM = 220 − 60 = 160.
