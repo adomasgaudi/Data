@@ -4231,6 +4231,11 @@ S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 // lift this athlete logged (the lifts the filter hides come back), so you can see
 // a hidden lift's sets without disabling the whole-app filter.
 let woShowAllExercises = localStorage.getItem("colosseum.woShowAll") === "1";
+// History "By exercise" tab: group the log by LIFT (one expandable row per exercise,
+// its sets across all dates) instead of by day/week/month. A separate axis from the
+// period (Day/Week/Month) modes, so it's its own flag rather than a workoutViewMode value.
+let historyByExercise = localStorage.getItem("colosseum.histByExercise") === "1";
+function saveHistByExercise() { try { localStorage.setItem("colosseum.histByExercise", historyByExercise ? "1" : "0"); } catch { /* ignore */ } }
 // Short labels for the compact "Alone filter" DJ button (cycles through these).
 const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
 /** Reflect every workout display toggle on its single button: the label shows the
@@ -4278,6 +4283,21 @@ function syncWorkoutToggles(): void {
   els.woShowAllToggle.setAttribute("aria-pressed", woShowAllExercises ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
+  syncWoTabs();
+}
+/** Light up the history view tab matching the current grouping: By exercise when that
+ * flag is on, else the period (Sessions=day / By week / By month). 2-week & 3-month
+ * (set via the ⚙ toggle) light no tab — they live only on the ⚙ cycle. */
+function syncWoTabs(): void {
+  const active = historyByExercise ? "exercise"
+    : S.workoutViewMode === "day" ? "sessions"
+    : S.workoutViewMode === "week" ? "week"
+    : S.workoutViewMode === "month" ? "month" : "";
+  for (const t of document.querySelectorAll<HTMLElement>("#woTabs .wo-tab")) {
+    const on = t.dataset.wotab === active;
+    t.classList.toggle("is-active", on);
+    t.setAttribute("aria-selected", on ? "true" : "false");
+  }
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -6598,6 +6618,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   // "Show all" (the history's "Hidden" toggle) bypasses the Index app-wide filter
   // for this list only, so lifts the filter hides reappear here.
   const recs = remapRegistryCombined(woShowAllExercises ? liveRecords() : activeRecords());
+  if (historyByExercise) return buildExerciseHistoryGroups(recs);
   const period = historyPeriod(S.workoutViewMode);
   if (period) {
     // Period grouping (week / 2-week / month / 3-month). Inactive periods show as
@@ -6639,6 +6660,32 @@ function buildWorkoutGroups(): WorkoutGroup[] {
       }))
       .filter(keep),
   ), WO_REST_UNIT.day);
+}
+
+/** "By exercise" history grouping: ONE expandable row per lift (its sets across every
+ * date), most-trained first. Reuses the WorkoutGroup shape (label "" so the exercise
+ * line itself is the row) + the history lens filter; the expanded table shows day
+ * dividers (divMode), the collapsed line a capped recent run (setListHtml). */
+function buildExerciseHistoryGroups(recs: SetRecord[]): WorkoutGroup[] {
+  const user = els.athlete.value;
+  const byEx = new Map<string, SetRecord[]>();
+  for (const r of recs) {
+    if (r.username !== user || !r.exerciseName) continue;
+    (byEx.get(r.exerciseName) ?? byEx.set(r.exerciseName, []).get(r.exerciseName)!).push(r);
+  }
+  const groups: WorkoutGroup[] = [...byEx].map(([ex, sets]) => {
+    const sorted = [...sets].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.setNumber ?? 0) - (b.setNumber ?? 0)));
+    return {
+      label: "", // no date header — the single exercise line IS the row
+      date: sorted[sorted.length - 1]?.date ?? "", // latest, for the calendar jump
+      totalSets: sorted.length,
+      exercises: [{ exerciseName: ex, count: sorted.length }],
+      sets: sorted,
+      rest: false,
+    };
+  });
+  groups.sort((a, b) => b.totalSets - a.totalSets || (a.exercises[0]!.exerciseName < b.exercises[0]!.exerciseName ? -1 : 1));
+  return scopeWorkoutGroups(groups); // honour the history lens filter
 }
 
 // History view modes (the ⚙ "Day/Week/…" toggle cycles these). A non-"day" mode
@@ -7325,6 +7372,16 @@ function setListHtml(setsAsc: readonly SetRecord[]): string {
   // Newest-first everywhere (matches the history order): reverse the date-sorted
   // sets so the latest day/week/set leads and a session's warmup reads at the end.
   const sets = setsAsc.slice().reverse();
+  // "By exercise" view: a lift can have hundreds of sets, so the collapsed line shows
+  // only the most-recent run (date-banded) with a "+N" count; expand for the full table.
+  if (historyByExercise) {
+    if (sets.length === 0) return "";
+    const CAP = 14;
+    const banded = groupByKey(sets.slice(0, CAP), (s) => s.date)
+      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s)).join(" ")}</span>`)
+      .join(" ");
+    return banded + (sets.length > CAP ? ` <span class="muted wo-more">+${sets.length - CAP}</span>` : "");
+  }
   if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
   const byWeekBand = mode === "month" || mode === "3month";
   if (!byWeekBand) {
@@ -7431,7 +7488,7 @@ function renderWorkoutsPage() {
       g.exercises ? { ...g, exercises: [...g.exercises].sort((x, y) => cmp(x.exerciseName, y.exerciseName)) } : g);
   }
   const workoutFormula = currentFormula();
-  const period = historyPeriod(S.workoutViewMode);
+  const period = historyByExercise ? null : historyPeriod(S.workoutViewMode);
   const byWeek = period !== null;
   // SORE Phase 2 — soreness "overreach" indicator (DAY view only; period rows pool many
   // days so a per-day record comparison wouldn't line up). A lift gets a 💢 dot when this
@@ -7440,7 +7497,7 @@ function renderWorkoutsPage() {
   // scales by the lift's susceptibility × how far past the record you went. Records come
   // from the athlete's FULL log (liveRecords), not the active-filter view. Memoised per
   // (lift, date) because the collapsed line is reused (active + hidden-reveal lists).
-  const soreVol = byWeek ? null : exerciseDailyVolumes(liveRecords(), els.athlete.value);
+  const soreVol = (byWeek || historyByExercise) ? null : exerciseDailyVolumes(liveRecords(), els.athlete.value);
   const soreCache = new Map<string, Overreach | null>();
   const soreFor = (ex: string, date: string): Overreach | null => {
     if (!soreVol) return null;
@@ -7455,7 +7512,7 @@ function renderWorkoutsPage() {
   const active = workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — workouts ` +
-    `<span class="muted">(${active} ${byWeek ? "periods" : "sessions"} · tap to expand)</span>`;
+    `<span class="muted">(${active} ${historyByExercise ? "exercises" : byWeek ? "periods" : "sessions"} · tap to expand)</span>`;
 
   // No column header row — the "Session / Sets" labels were redundant noise above
   // a list whose rows are self-explanatory (a date + its set count).
@@ -7475,7 +7532,7 @@ function renderWorkoutsPage() {
   // Each day/week's LIVE (unfiltered) exercises+sets, so a per-day "hidden N/M"
   // reveal can render JUST that day's hidden lifts inline — never a global unhide.
   const liveByKey = new Map<string, { exercises: ExerciseCount[]; sets: SetRecord[] }>();
-  if (!woShowAllExercises && activeSet && hiddenByIndexCount(els.athlete.value) > 0) {
+  if (!woShowAllExercises && activeSet && !historyByExercise && hiddenByIndexCount(els.athlete.value) > 0) {
     const allow = activeSet;
     const liveBase = period
       ? periodsForUser(liveRecords(), els.athlete.value, period).map((w) => ({ key: w.periodStart, exercises: w.exercises, sets: w.sets }))
@@ -7491,7 +7548,7 @@ function renderWorkoutsPage() {
   // one ABOVE it (later in time — the list is newest-first). Seed from the last active
   // day before this page so a boundary at the page top still shows.
   let prevRowDate: string | null = workoutGroups.slice(0, start).reverse().find((g) => !g.rest)?.date ?? null;
-  const dayBoundaries = S.workoutViewMode === "day"; // week lines only matter in the day view
+  const dayBoundaries = S.workoutViewMode === "day" && !historyByExercise; // week lines only matter in the day view (not the per-lift view)
   const rows = workoutGroups
     .slice(start, end)
     .map((g, i) => {
@@ -7939,7 +7996,8 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   // day → no dividers.
   const mode = S.workoutViewMode;
   const divMode: "day" | "week" | null =
-    mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
+    historyByExercise ? "day" // by-exercise spans many days → date dividers between sets
+    : mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
   // One exercise's header + set-rows; reused for the day's active lifts AND for its
   // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest.
   const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string => {
@@ -15394,6 +15452,20 @@ async function init() {
     // Cycle Day → Week → 2 wks → Month → 3 mo → Day.
     const i = WO_VIEW_MODES.indexOf(S.workoutViewMode);
     S.workoutViewMode = WO_VIEW_MODES[(i + 1) % WO_VIEW_MODES.length]!;
+    historyByExercise = false; // a period grouping turns the by-exercise view off
+    saveHistByExercise();
+    S.workoutsPage = 0;
+    renderWorkoutsPage();
+  });
+  // History view tabs (Sessions / By exercise / By week / By month) — the same log,
+  // grouped differently. Sessions/week/month set the period; By exercise flips the flag.
+  document.addEventListener("click", (e) => {
+    const tab = (e.target as HTMLElement).closest<HTMLElement>("#woTabs .wo-tab");
+    if (!tab?.dataset.wotab) return;
+    const which = tab.dataset.wotab;
+    historyByExercise = which === "exercise";
+    if (!historyByExercise) S.workoutViewMode = which === "week" ? "week" : which === "month" ? "month" : "day";
+    saveHistByExercise();
     S.workoutsPage = 0;
     renderWorkoutsPage();
   });

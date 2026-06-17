@@ -1426,6 +1426,16 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 }
 .ex-tab:hover { color: var(--text); }
 .ex-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+/* History view tabs (Sessions / By exercise / By week / By month) — underline tabs, a
+   horizontally-scrollable row so they stay one line on phones (#cram). */
+.wo-tabs { display: flex; gap: 0.15rem; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0.3rem 0 0.2rem; -webkit-overflow-scrolling: touch; }
+.wo-tab {
+  background: none; border: none; color: var(--muted); font: inherit; font-size: var(--fs-sm);
+  cursor: pointer; padding: 0.4rem 0.7rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  white-space: nowrap; flex: 0 0 auto; min-height: var(--tap-min);
+}
+.wo-tab:hover { color: var(--text); }
+.wo-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 .ex-filters-wrap { position: relative; flex: none; }
 .ex-filters-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);
