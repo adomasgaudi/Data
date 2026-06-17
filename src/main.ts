@@ -19117,21 +19117,6 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   document.body.appendChild(m);
   clampMenuIntoView(m, anchor);
 }
-// Bubble options menu (owner): tap the active bubble's ⋯ indicator to open it. Duplicate first;
-// room for Match etc. later. Same floating-menu pattern as the tab menu.
-function closeDashBubbleMenu(): void { document.getElementById("dashBubbleMenu")?.remove(); }
-function openDashBubbleMenu(anchor: HTMLElement): void {
-  closeDashBubbleMenu();
-  const m = document.createElement("div");
-  m.id = "dashBubbleMenu"; m.className = "dash-tab-menu";
-  const canDelete = activeTab(graphDash).bubbles.length > 1;
-  m.innerHTML =
-    `<button type="button" class="dash-tab-menu-opt" data-bubblemenu="duplicate">⧉ Duplicate</button>` +
-    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-bubblemenu="delete">✕ Delete</button>` : "");
-  document.body.appendChild(m);
-  clampMenuIntoView(m, anchor);
-}
-
 /** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
  * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
  * projection). One bubble shows at a time (swipe reel, owner's pick); each draws a REAL chart
@@ -19187,8 +19172,17 @@ function renderGraphDashboard(): void {
     full.insertBefore(tabsHost, full.firstChild);
   }
   if (tabsHost) {
-    tabsHost.innerHTML = tabsHtml;
-    if (dashEditTab) tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit")?.focus();
+    // Don't rebuild the strip while a rename <input> is already live — a re-render (e.g. a
+    // deferred graph paint) would destroy the focused field mid-type, which is the "rename
+    // won't let me type" bug. Rebuild only when not actively editing.
+    const liveEdit = dashEditTab && tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit");
+    if (!liveEdit) {
+      tabsHost.innerHTML = tabsHtml;
+      if (dashEditTab) {
+        const inp = tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit");
+        inp?.focus(); inp?.select();
+      }
+    }
   }
   // Project the active bubble onto the shared graph state so the Options menu + buildBubbleInput
   // read THIS bubble: metrics are per-bubble (waMetrics ← bubble.metrics); the other Options
@@ -19197,13 +19191,11 @@ function renderGraphDashboard(): void {
   for (const m of bubble.metrics) waMetrics.add(m);
   S.waRepsVsWeight = bubble.type === "rvw";
   S.waPerBodyweight = bubble.perBodyweight;
-  // Reel indicators: a non-active bubble is a dot you tap to JUMP to it; the ACTIVE bubble is a
-  // bigger clickable ⋯ pill that opens its options menu (Duplicate / Delete) — owner wanted the
-  // indicator bigger + clickable, not just a dot.
+  // Reel dots: tap one to JUMP to that bubble (active one is bigger). The per-bubble Duplicate
+  // (⧉) and Delete (✕) live as direct buttons in the foot right next to these dots (owner:
+  // "the deletion btn should be next to the bubble").
   const dots = tab.bubbles
-    .map((_, i) => i === dashBubbleIdx
-      ? `<button type="button" class="gmini-dot is-on gdash-bubble-opt" data-dashbubblemenu="1" aria-label="Bubble ${i + 1} of ${tab.bubbles.length} — options" title="Bubble options (Duplicate…)">⋯</button>`
-      : `<button type="button" class="gmini-dot" data-dashdot="${i}" aria-label="Go to bubble ${i + 1}"></button>`)
+    .map((_, i) => `<button type="button" class="gmini-dot${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="Go to bubble ${i + 1}"></button>`)
     .join("");
   const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
   const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
@@ -19222,7 +19214,6 @@ function renderGraphDashboard(): void {
       `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
       `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +
       `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
-      (tab.bubbles.length > 1 ? `<button type="button" class="gdash-pill gdash-rm" data-dashremove="1" title="Remove this bubble" aria-label="Remove bubble">✕</button>` : "") +
     `</div>` +
     `<div id="gdashStage" class="gdash-stage wa-graph-chart"></div>` +
     (S.waRepsVsWeight ? rvwPagerHtml() : "") +
@@ -19230,6 +19221,9 @@ function renderGraphDashboard(): void {
       `<button type="button" class="gmini-nav" data-dashnav="-1" aria-label="Previous bubble">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-dashnav="1" aria-label="Next bubble">›</button>` +
+      // Per-bubble actions, right next to the dots: ⧉ duplicate · ✕ delete (when >1).
+      `<button type="button" class="gmini-nav gdash-bubdup" data-dashbubdup="1" aria-label="Duplicate this bubble" title="Duplicate this bubble">⧉</button>` +
+      (tab.bubbles.length > 1 ? `<button type="button" class="gmini-nav gdash-bubdel" data-dashremove="1" aria-label="Delete this bubble" title="Delete this bubble">✕</button>` : "") +
       optionsFold +
       `<button type="button" class="gmini-nav gdash-addbubble" data-dashadd="1" aria-label="Add a graph bubble to this tab" title="Add a graph bubble to this tab">＋</button>` +
     `</div>`;
@@ -20552,29 +20546,6 @@ function setupWorkoutAnalysis(): void {
       else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
       return;
     }
-    // Toggle the active bubble's options menu (⋯ indicator), then handle its actions.
-    const bubbleOpt = t.closest<HTMLElement>("[data-dashbubblemenu]");
-    if (bubbleOpt) {
-      if (document.getElementById("dashBubbleMenu")) closeDashBubbleMenu();
-      else openDashBubbleMenu(bubbleOpt);
-      return;
-    }
-    const bubbleMenu = t.closest<HTMLElement>("[data-bubblemenu]");
-    if (bubbleMenu?.dataset.bubblemenu) {
-      const act = bubbleMenu.dataset.bubblemenu;
-      const tb = activeTab(graphDash), bid = tb.bubbles[dashBubbleIdx]?.id;
-      closeDashBubbleMenu();
-      if (act === "duplicate" && bid) {
-        graphDash = duplicateBubble(graphDash, tb.id, bid);
-        dashBubbleIdx = Math.min(dashBubbleIdx + 1, activeTab(graphDash).bubbles.length - 1); // show the copy
-        persistDash(); refreshDash();
-      } else if (act === "delete" && bid) {
-        graphDash = removeBubble(graphDash, tb.id, bid);
-        if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
-        persistDash(); refreshDash();
-      }
-      return;
-    }
     // Switch to a tab (resets the reel to its first bubble). Long-press opened the menu instead
     // → the capture listener swallows that release-click, so this only fires on a real tap.
     const dashTab = t.closest<HTMLElement>("[data-dashtab]");
@@ -20604,6 +20575,13 @@ function setupWorkoutAnalysis(): void {
       const tab = activeTab(graphDash);
       graphDash = removeBubble(graphDash, tab.id, currentBubble().id);
       if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+      persistDash(); refreshDash(); return;
+    }
+    // Duplicate the current bubble (a fresh-id copy, same config) and jump the reel to it.
+    if (t.closest<HTMLElement>("[data-dashbubdup]")) {
+      const tab = activeTab(graphDash);
+      graphDash = duplicateBubble(graphDash, tab.id, currentBubble().id);
+      dashBubbleIdx = Math.min(dashBubbleIdx + 1, activeTab(graphDash).bubbles.length - 1);
       persistDash(); refreshDash(); return;
     }
     // Per-bubble: cycle graph type (Over time ⇄ Reps × kg) — independent, persisted.
@@ -20782,7 +20760,6 @@ function setupWorkoutAnalysis(): void {
     if (dashTabSuppressClick) { dashTabSuppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
     const tgt = e.target as Element | null;
     if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu")) closeDashTabMenu();
-    if (document.getElementById("dashBubbleMenu") && !tgt?.closest("#dashBubbleMenu, [data-dashbubblemenu]")) closeDashBubbleMenu();
   }, true);
 }
 
