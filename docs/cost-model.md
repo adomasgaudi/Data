@@ -119,3 +119,32 @@ the right ORDER of magnitude but the script can only see ONE transcript, so it
 weekly bar for the real total. To re-measure the Opus anchor cleanly, run ONE isolated
 session and read the weekly delta it alone caused. Anchor left at 5.2M output/5h pending
 such a clean single-session measurement (don't fabricate a "measured" number).
+
+## Token EFFICIENCY — how to spend the least, and when to flag the owner
+
+Cost-reporting (above) is about *measuring* the burn. This section is about *reducing* it,
+and is enforced by **HARD RULE 57** (the token-efficiency watchdog) plus the SessionStart /
+UserPromptSubmit watchdog reminders in `.claude/settings.json`.
+
+**The real lever is OUTPUT tokens, not the conversation length.** Cache-reads (the big
+reloaded system prompt + `CLAUDE.md`) barely touch the limits, so a long chat is NOT the
+main cost — what *you write* is. Concretely:
+
+- **Right model for the work.** Default per rule 36 is Haiku → Sonnet → (Opus only when
+  asked). If the owner says a cheaper model "ends up costing more" (more re-work than it
+  saves) or that a model switch "won't stick", DON'T fight it — note it and move on.
+- **New chat ≠ re-reading the whole repo.** A fresh session loads only the cached
+  `CLAUDE.md`; source is read **on demand** (a grep + a ~100-line read), never all ~21k
+  lines of `main.ts`. So a new chat is *cheap* for UNRELATED work, and only loses the small
+  "re-ramp" of the regions already warm in the current chat. Continuing the same chat wins
+  only when the next task reuses what's already loaded.
+- **Batch + trim.** Group related edits into ONE commit (fewer build/test/push round-trips)
+  and keep changelog notes tight — long notes are pure output cost every commit.
+- **Co-work churn is real cost.** Each rebase collision = re-resolving giant changelog
+  conflicts. Push small and often, but expect the re-derive (rule 8) tax.
+
+**When to POP a question (rule 57).** The owner CANNOT see token waste, so staying silent
+while burning is complicity. Raise an `AskUserQuestion` (with concrete cheaper options) when
+you notice: an expensive model on trivial work · a very long chat · repeated re-work/churn ·
+a big unverifiable batch. Lead the ask with a one-line plain recap (rule 53) and a
+recommended option first.
