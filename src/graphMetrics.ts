@@ -353,7 +353,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     },
   },
   { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
-  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula, cfg), Date.now(), 4, cfg.decayParams) },
+  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula, cfg), Date.now(), 4, cfg.decayParams, cfg.decayParams?.level === 4 ? (cfg.ceilingOf?.(rs) ?? null) : null) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays, cfg.potentialCeiling ?? cfg.ceilingOf?.(rs) ?? null) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured

@@ -33,7 +33,7 @@ import {
   athleteSummary,
   decayedStrengthSeries,
 } from "./aggregate";
-import { epley1RM, strengthRetention } from "./metrics";
+import { epley1RM, strengthRetention, DEFAULT_DECAY_PARAMS } from "./metrics";
 
 /** Minimal record factory for readable fixtures. */
 function rec(p: Partial<SetRecord>): SetRecord {
@@ -676,6 +676,18 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
   const DAY = 86_400_000;
   const base = Date.parse("2024-01-01");
   const at = (d: number) => base + d * DAY;
+
+  it("level 4 (phases) damps each upward jump by its phase pace, capped only by the WR", () => {
+    // Four sessions one day apart (inside the grace, so no fade between), rising e1RM.
+    // phase 1 (pace 1) accepts the jump fully, phase 2 (0.5) half, phase 3 (0.25) a quarter.
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 4 as const, phase1EndSets: 2, phase2EndSets: 3, phase1Pace: 1, phase2Pace: 0.5, phase3Pace: 0.25 };
+    const pts = [0, 1, 2, 3].map((k) => ({ x: at(k), y: [100, 200, 400, 800][k]!, rir: 0 }));
+    const last = decayedStrengthSeries(pts, at(4), 4, p).at(-1)!.y;
+    expect(last).toBeCloseTo(425, 0); // 100 →200 (×1) →300 (×0.5) →425 (×0.25)
+    expect(last).toBeLessThan(800); // damped vs a full jump to the latest e1RM
+    const capped = decayedStrengthSeries(pts, at(4), 4, p, 350).at(-1)!.y; // WR ceiling 350
+    expect(capped).toBeCloseTo(350, 1);
+  });
 
   it("sags during a layoff: a lone peak fades below itself by the end", () => {
     // One 100 kg peak on day 0, no training since; 'today' is day 200.

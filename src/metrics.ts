@@ -363,27 +363,39 @@ export function strengthRetention(
   return Math.max(floor, 1 - loss);
 }
 
-// ---- Adjustable strength-decay model (3 complexity levels) ------------------
+// ---- Adjustable strength-decay model (4 complexity levels) ------------------
 // The owner can dial the strength-fade curve in the graph Options to SEE the model on
-// their data and check it. Three levels, simplest → fullest:
+// their data and check it. Four levels, simplest → fullest:
 //   1 LINEAR — flat for `graceDays`, then lose `linearLossPerDay` of the peak each day.
 //   2 LOG    — flat, then the logarithmic decline at a FIXED durability `stabilityDays`.
 //   3 FULL   — the log decline PLUS durability that grows with training, the RIR-confidence
 //              blend, the per-session growth cap and gap calibration.
-// Every level shares `graceDays` + `floor`. retentionWith() handles 1 vs 2/3; the per-session
-// guards (growth/RIR/calibration) only fire at level 3 (see decayedStrengthSeries).
-export type DecayLevel = 1 | 2 | 3;
+//   4 PHASES — three training PHASES by hard-set count (beginner → intermediate → advanced),
+//              each with its own GROWTH PACE (how fast the line accepts upward jumps): the
+//              beginner phase rises fast & chaotic, the advanced phase barely moves. No cap on
+//              gains except the world record. Phase 1 trusts the (user / assumed) RIR fully.
+// Every level shares `graceDays` + `floor`. retentionWith() handles 1 (linear) vs 2/3/4 (log);
+// the per-session guards differ by level inside decayedStrengthSeries.
+export type DecayLevel = 1 | 2 | 3 | 4;
 export interface DecayParams {
   level: DecayLevel;
   graceDays: number;            // all: days of full strength after a session
   linearLossPerDay: number;     // L1: fraction of the peak lost per day past the grace
-  lossPerLog: number;           // L2/L3: loss per ln-unit of (days past grace ÷ S)
-  stabilityDays: number;        // L2 fixed durability / L3 base durability (days)
+  lossPerLog: number;           // L2/L3/L4: loss per ln-unit of (days past grace ÷ S)
+  stabilityDays: number;        // L2/L4 fixed durability / L3 base durability (days)
   stabilityGrowth: number;      // L3: durability ×factor each session
   maxStability: number;         // L3: durability cap (days)
   floor: number;                // all: never below this fraction of the peak (muscle memory)
   maxGrowthFraction: number;    // L3: one session can't raise the level beyond this above the peak
   calibrationThreshold: number; // L3: a returning set ≥ this × the prior level "maintained" the gap
+  // ---- L4 PHASES ----
+  phase1EndSets: number;        // hard-set count ending the beginner phase (≈ 10)
+  phase2EndSets: number;        // hard-set count ending the intermediate phase (≈ 300)
+  phase1Pace: number;           // 0..1 fraction of an upward jump accepted per session (beginner — fast)
+  phase2Pace: number;           // intermediate — moderate
+  phase3Pace: number;           // advanced — slow
+  phase1RirUpper: number;       // assumed RIR for an un-graded UPPER-body set in phase 1
+  phase1RirLower: number;       // assumed RIR for legs / lower back / erectors in phase 1
 }
 /** Defaults = the shipped FULL model (level 3), so an un-touched decay matches before. */
 export const DEFAULT_DECAY_PARAMS: DecayParams = {
@@ -397,8 +409,15 @@ export const DEFAULT_DECAY_PARAMS: DecayParams = {
   floor: STRENGTH_DECAY.floor,
   maxGrowthFraction: STRENGTH_DECAY.maxGrowthFraction,
   calibrationThreshold: STRENGTH_DECAY.calibrationThreshold,
+  phase1EndSets: 10,
+  phase2EndSets: 300,
+  phase1Pace: 1,
+  phase2Pace: 0.5,
+  phase3Pace: 0.25,
+  phase1RirUpper: 3,
+  phase1RirLower: 6,
 };
-/** Retention under a chosen model: linear (level 1) or logarithmic (level 2/3). Flat
+/** Retention under a chosen model: linear (level 1) or logarithmic (level 2/3/4). Flat
  * through the grace, floored. `stabilityDays` is passed in so the series can grow it. */
 export function retentionWith(daysSinceTrained: number, stabilityDays: number, params: DecayParams): number {
   const { graceDays, floor } = params;

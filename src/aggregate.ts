@@ -760,6 +760,7 @@ export function decayedStrengthSeries(
   todayMs: number,
   stepDays = 4,
   params: DecayParams = DEFAULT_DECAY_PARAMS,
+  wrCeiling: number | null = null,
 ): { x: number; y: number }[] {
   if (points.length === 0) return [];
   const sorted = points.slice().sort((a, b) => a.x - b.x);
@@ -771,6 +772,13 @@ export function decayedStrengthSeries(
   // FULL model only — levels 1 (linear) & 2 (log) just sag on the retention curve and step
   // straight to each set's e1RM, so the simpler curves read exactly as their formula says.
   const full = params.level === 3;
+  // PHASES (L4): three phases by hard-set COUNT (beginner → intermediate → advanced); each
+  // accepts only its `pace` fraction of an upward jump per session (beginner fast, advanced
+  // slow), the rest accrues. No cap on gains EXCEPT the world record. Phase 1 trusts the RIR.
+  const phased = params.level === 4;
+  const paceForIndex = (n: number): number =>
+    n < params.phase1EndSets ? params.phase1Pace : n < params.phase2EndSets ? params.phase2Pace : params.phase3Pace;
+  const capWr = (v: number): number => (wrCeiling != null && wrCeiling > 0 ? Math.min(v, wrCeiling) : v);
 
   let anchorX = sorted[0]!.x; // the last training day — where the decay clock restarts
   let level = sorted[0]!.y; // strength carried from that day
@@ -790,18 +798,23 @@ export function decayedStrengthSeries(
 
     for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag
 
-    // A) RIR confidence (L3): blend the set's e1RM with the current decayed level.
-    //    Near-failure sets (low RIR) are trusted fully; high-RIR sets are noisy
+    // A) RIR confidence (L3 + L4 phase 1): blend the set's e1RM with the current decayed
+    //    level. Near-failure sets (low RIR) are trusted fully; high-RIR sets are noisy
     //    e1RM extrapolations and contribute less to sudden jumps.
-    const conf = full ? rirConfidence(s.rir) : 1;
+    const conf = full || phased ? rirConfidence(s.rir) : 1;
     const effectiveE1rm = conf * s.y + (1 - conf) * decayedAt(s.x);
 
-    // B) Rate-limited growth (L3): cap upward jumps to 8% above the all-time peak.
-    //    Larger single-session jumps indicate prior underperformance, not new
-    //    muscle — so they accrue across sessions rather than all at once.
-    const cappedE1rm = full ? Math.min(effectiveE1rm, allTimePeak * (1 + maxGrowthFraction)) : effectiveE1rm;
-
-    level = Math.max(decayedAt(s.x), cappedE1rm); // decay over the gap, set re-proves strength
+    if (phased) {
+      // Accept only this phase's PACE of the upward jump (the rest accrues over sessions),
+      // capped only by the world record. Downward moves never lower the decayed level.
+      const base = decayedAt(s.x);
+      const pace = paceForIndex(i);
+      level = capWr(base + pace * Math.max(0, effectiveE1rm - base));
+    } else {
+      // B) Rate-limited growth (L3): cap upward jumps to 8% above the all-time peak.
+      const cappedE1rm = full ? Math.min(effectiveE1rm, allTimePeak * (1 + maxGrowthFraction)) : effectiveE1rm;
+      level = Math.max(decayedAt(s.x), cappedE1rm); // decay over the gap, set re-proves strength
+    }
     allTimePeak = Math.max(allTimePeak, level);
     anchorX = s.x; // training resets the grace clock
 

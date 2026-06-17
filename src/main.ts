@@ -1047,6 +1047,15 @@ function discsFor(name: string): Discipline[] {
 function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
 function mgFor(name: string): MuscleGroup { return mgsFor(name)[0]!; }
 function tierFor(name: string): ExerciseTier { return tiersFor(name)[0]!; }
+// Lower-body / lower-back muscle groups — the "legs / lower / erectors" that hold more reps
+// back, so the Phase-1 decay model assumes a higher RIR for them when none is logged.
+const LOWER_BODY_MG = new Set<MuscleGroup>(["Quads", "Hamstrings", "Glutes", "Abductors", "Adductors", "Calves", "Lower back"] as MuscleGroup[]);
+/** Assumed reps-in-reserve for an un-graded set in the Phase-1 decay model: the per-region
+ * default (3 upper / 6 lower) from the decay params. */
+function assumedPhase1Rir(exerciseName: string): number {
+  const dp = waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS;
+  return LOWER_BODY_MG.has(mgFor(exerciseName)) ? dp.phase1RirLower : dp.phase1RirUpper;
+}
 /** The auto-default value for a dimension (used when seeding a fresh toggle). */
 function metaDefault(kind: MetaKind, name: string): string {
   // Tier's default is the RECENCY-aware autoTier (what the UI actually shows), not the
@@ -19951,7 +19960,7 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
   const fm = waGraphConfig.formula;
   const sm = currentStrengthByUserExercise(fm);
-  waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+  waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? (waGraphConfig.decayParams?.level === 4 ? assumedPhase1Rir(r.exerciseName) : predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm));
   const user = els.athlete.value;
   const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
   const exs = lensExpand("graph", [exercise]);
@@ -20139,7 +20148,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const r3 = (n: number) => Math.round(n * 1000) / 1000;
   const dField = (field: string, label: string, value: number, step: number, title: string) =>
     `<label class="wa-gcfg-f" title="${escapeHtml(title)}">${label}<input class="wa-cfg" data-wadecay="${field}" type="number" step="${step}" inputmode="decimal" value="${value}" /></label>`;
-  const dLvlLabel = dp.level === 1 ? "Linear" : dp.level === 2 ? "Log" : "Full";
+  const dLvlLabel = dp.level === 1 ? "Linear" : dp.level === 2 ? "Log" : dp.level === 3 ? "Full" : "Phases";
   const dCommon =
     dField("graceDays", "Grace (days)", dp.graceDays, 1, "Days of full strength after a session before any fade begins.") +
     dField("floor", "Floor %", Math.round(dp.floor * 100), 1, "Never fades below this % of the peak (muscle memory).");
@@ -20148,18 +20157,31 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     : dp.level === 2
       ? dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
         dField("stabilityDays", "Stability (days)", dp.stabilityDays, 1, "Durability: bigger = a flatter, slower fade.")
-      : dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
-        dField("stabilityDays", "Base stability", dp.stabilityDays, 1, "Starting durability (days); grows with each session.") +
-        dField("stabilityGrowth", "Stability ×/session", r3(dp.stabilityGrowth), 0.1, "Durability is multiplied by this each session — the more you train it, the slower it fades.") +
-        dField("maxStability", "Max stability", dp.maxStability, 5, "Cap on durability (days).") +
-        dField("maxGrowthFraction", "Growth cap %", r3(dp.maxGrowthFraction * 100), 1, "A single session can't raise the level beyond this % above your all-time peak.") +
-        dField("calibrationThreshold", "Calibration %", Math.round(dp.calibrationThreshold * 100), 1, "A returning set at ≥ this % of the prior level proves the gap was 'maintained' — bumps stability up to the gap's length.");
-  const decayLevelPill = `<button type="button" class="wa-name-opt" data-wadecaylevel="1" title="Decay model complexity — Linear (grace + straight decline) → Log (a durability curve) → Full (adds training-grown durability, RIR trust, a growth cap and gap calibration). Tap to cycle.">Model: ${dLvlLabel}</button>`;
+      : dp.level === 3
+        ? dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
+          dField("stabilityDays", "Base stability", dp.stabilityDays, 1, "Starting durability (days); grows with each session.") +
+          dField("stabilityGrowth", "Stability ×/session", r3(dp.stabilityGrowth), 0.1, "Durability is multiplied by this each session — the more you train it, the slower it fades.") +
+          dField("maxStability", "Max stability", dp.maxStability, 5, "Cap on durability (days).") +
+          dField("maxGrowthFraction", "Growth cap %", r3(dp.maxGrowthFraction * 100), 1, "A single session can't raise the level beyond this % above your all-time peak.") +
+          dField("calibrationThreshold", "Calibration %", Math.round(dp.calibrationThreshold * 100), 1, "A returning set at ≥ this % of the prior level proves the gap was 'maintained' — bumps stability up to the gap's length.")
+        : // LEVEL 4 — PHASES: fade fields (log) + the three phases + the phase-1 RIR assumption.
+          dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Fade speed between sessions (logarithmic).") +
+          dField("stabilityDays", "Stability (days)", dp.stabilityDays, 1, "Durability of the between-session fade: bigger = slower fade.") +
+          dField("phase1EndSets", "Phase 1 end (sets)", dp.phase1EndSets, 1, "Hard-set count where the BEGINNER phase ends (≈ 5–10).") +
+          dField("phase2EndSets", "Phase 2 end (sets)", dp.phase2EndSets, 5, "Hard-set count where the INTERMEDIATE phase ends (≈ 100–300).") +
+          dField("phase1Pace", "Pace 1 · beginner", r3(dp.phase1Pace), 0.05, "How much of an upward jump the line accepts per session in phase 1 (1 = full = fast & chaotic).") +
+          dField("phase2Pace", "Pace 2 · interm.", r3(dp.phase2Pace), 0.05, "Upward-jump acceptance in phase 2 (moderate, the odd bigger jump).") +
+          dField("phase3Pace", "Pace 3 · advanced", r3(dp.phase3Pace), 0.05, "Upward-jump acceptance in phase 3 (small — slow, stable).") +
+          dField("phase1RirUpper", "RIR · upper", dp.phase1RirUpper, 1, "Assumed reps-in-reserve for an un-graded UPPER-body set in phase 1.") +
+          dField("phase1RirLower", "RIR · lower", dp.phase1RirLower, 1, "Assumed RIR for un-graded legs / lower back / erector sets in phase 1.");
+  const decayLevelPill = `<button type="button" class="wa-name-opt" data-wadecaylevel="1" title="Decay model complexity — Linear → Log → Full → Phases (3 growth phases by hard-set count, each with its own pace; only the world record caps gains). Tap to cycle.">Model: ${dLvlLabel}</button>`;
   // Owner: show the FORMULA + what each variable does INLINE (mobile has no hover for the
   // field tooltips). Level-aware: the active model's equation, then a one-line gloss per knob.
   const dFormula = dp.level === 1
     ? "retention = 1 − r · (days − grace)"
-    : "retention = 1 − k · ln(1 + (days − grace) ÷ S)";
+    : dp.level === 4
+      ? "level = decayed + pace · (set − decayed) · capped only by the world record"
+      : "retention = 1 − k · ln(1 + (days − grace) ÷ S)";
   const dGlossCommon =
     "<li><b>Grace</b> — days of full strength after a session before any fade starts.</li>" +
     "<li><b>Floor</b> — the lowest % of your peak it can fade to (muscle memory).</li>";
@@ -20168,14 +20190,21 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     : dp.level === 2
       ? "<li><b>Loss / log (k)</b> — fade speed: strength lost per ln-unit of (days past grace ÷ S).</li>" +
         "<li><b>Stability (S)</b> — durability in days; bigger = a flatter, slower fade.</li>"
-      : "<li><b>Loss / log (k)</b> — fade speed per ln-unit of (days past grace ÷ S).</li>" +
-        "<li><b>Base / Max stability (S)</b> — durability in days; starts at Base, capped at Max.</li>" +
-        "<li><b>Stability ×/session</b> — S is multiplied by this each session (trained lifts fade slower).</li>" +
-        "<li><b>Growth cap</b> — one session can't raise the level beyond this % above your all-time peak.</li>" +
-        "<li><b>Calibration</b> — a returning set ≥ this % of the prior level raises S to the gap's length.</li>";
+      : dp.level === 3
+        ? "<li><b>Loss / log (k)</b> — fade speed per ln-unit of (days past grace ÷ S).</li>" +
+          "<li><b>Base / Max stability (S)</b> — durability in days; starts at Base, capped at Max.</li>" +
+          "<li><b>Stability ×/session</b> — S is multiplied by this each session (trained lifts fade slower).</li>" +
+          "<li><b>Growth cap</b> — one session can't raise the level beyond this % above your all-time peak.</li>" +
+          "<li><b>Calibration</b> — a returning set ≥ this % of the prior level raises S to the gap's length.</li>"
+        : "<li><b>Phase ends (sets)</b> — beginner runs to the 1st count, intermediate to the 2nd, then advanced. Boundary lines mark them on the graph.</li>" +
+          "<li><b>Pace 1/2/3</b> — the fraction of an upward jump accepted per session in each phase: beginner fast (1), advanced slow. The rest accrues over later sessions.</li>" +
+          "<li><b>RIR upper / lower</b> — when a phase-1 set has no logged RIR, assume this (3 upper, 6 lower) to judge true effort. Log your RIR to override it.</li>" +
+          "<li><b>Loss / log · Stability</b> — the between-session fade, same as the Log model.</li>";
   const dExtra = dp.level === 3
     ? `<p class="wa-decay-note">The Full model also blends noisy high-RIR sets toward the current level, and each training day steps the line to that set's estimated 1RM (capped).</p>`
-    : `<p class="wa-decay-note">The line steps to each session's estimated 1RM, then sags by the formula above until the next session.</p>`;
+    : dp.level === 4
+      ? `<p class="wa-decay-note">Three phases by hard-set count — beginner (fast, chaotic) → intermediate (predictable, the odd jump) → advanced (slow, stable). Gains are capped ONLY by the world record. Boundary lines show where each phase ends. (Dragging them + the phase-1 level is coming next.)</p>`
+      : `<p class="wa-decay-note">The line steps to each session's estimated 1RM, then sags by the formula above until the next session.</p>`;
   const decayExplain = `<div class="wa-decay-explain"><p class="wa-decay-formula"><code>${dFormula}</code></p><ul class="wa-decay-gloss">${dGlossCommon}${dGlossLevel}</ul>${dExtra}</div>`;
   const cfgDecay = decayShown
     ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + dCommon + dByLevel + decayExplain, "decaymodel")
@@ -20303,6 +20332,18 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   for (const r of plotted) { if (r.date && r.date > dataMax) dataMax = r.date; dataSum += (r.weight ?? 0) * 31 + (r.reps ?? 0); }
   const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), athletes, dataSum, dataMax]);
   const initialView = bubble.savedView && bubble.savedView.sig === sig ? bubble.savedView.box : null;
+  // PHASES (decay level 4): mark where the beginner / intermediate phases end, placed by
+  // cumulative set count (first phase1End sets = beginner, up to phase2End = intermediate).
+  // Auto-placed for now; dragging them is the next increment. Only on the time chart, when
+  // the Strength Decay metric is on. (Multi-lift uses the combined set timeline.)
+  const phaseLines: { x: number; color?: string; label?: string }[] = [];
+  if (!isRvw && cfg.decayParams?.level === 4 && drawMetricIds.includes("strengthDecay")) {
+    const dpp = cfg.decayParams;
+    const dates = plotted.map((r) => Date.parse(r.date)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+    const at = (n: number) => dates[Math.min(dates.length - 1, Math.max(0, n))]!;
+    if (dates.length > dpp.phase1EndSets) phaseLines.push({ x: at(dpp.phase1EndSets), color: "#8a6d3b", label: "beginner→inter." });
+    if (dates.length > dpp.phase2EndSets) phaseLines.push({ x: at(dpp.phase2EndSets), color: "#6c4ab0", label: "inter.→advanced" });
+  }
   return {
     exercises: exs,
     records: isRvw ? rvwWindowRecords(recs) : recs,
@@ -20313,7 +20354,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     // A thin red "today" reference line on the time axis (owner: "mark today as a little red").
     // Anchored to midnight today so it lines up with today's datapoint; meaningless on the
     // reps×kg (weight-axis) view, so only on time charts.
-    xRefLines: isRvw ? undefined : [{ x: Date.parse(todayIso()), color: "#cf5a4a", label: "today" }],
+    xRefLines: isRvw ? undefined : [{ x: Date.parse(todayIso()), color: "#cf5a4a", label: "today" }, ...phaseLines],
     onViewChange: (box) => {
       // Persist only — never re-render here (that would destroy the chart mid-gesture).
       graphDash = setBubbleView(graphDash, tabId, bubble.id, box ? { sig, box } : null);
@@ -20465,7 +20506,7 @@ const SETTING_INFO: Record<string, string> = {
   window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
   mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
   mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
-  decaymodel: "Strength-fade model — pick how the decay curve works and dial its variables, live on the data. Linear: full for the grace days, then lose a flat %/day. Log: a slowing logarithmic fade with a fixed durability. Full: the log fade PLUS durability that grows with training, an RIR-confidence blend, a per-session growth cap and gap calibration. All levels share the grace days and the floor (a muscle-memory minimum). Full formulas: Plan → Formulas → 'How the numbers work'.",
+  decaymodel: "Strength-fade model — pick how the decay curve works and dial its variables, live on the data. Linear: full for the grace days, then lose a flat %/day. Log: a slowing logarithmic fade with a fixed durability. Full: the log fade PLUS durability that grows with training, an RIR-confidence blend, a per-session growth cap and gap calibration. Phases: three growth phases by hard-set count (beginner → intermediate → advanced), each with its own growth PACE (how fast it accepts gains); only the world record caps gains, and phase 1 reads your RIR (assumes 3 upper / 6 lower when none is logged). Boundary lines mark each phase on the graph. All levels share the grace days and the floor. Full formulas: Plan → Formulas → 'How the numbers work'.",
   mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
   allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
   assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",
@@ -20738,7 +20779,7 @@ function renderWaGraph(): void {
   {
     const fm = waGraphConfig.formula;
     const sm = currentStrengthByUserExercise(fm);
-    waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+    waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? (waGraphConfig.decayParams?.level === 4 ? assumedPhase1Rir(r.exerciseName) : predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm));
     // Projection ceiling: the lift's world-record level (scaled to the athlete's
     // bodyweight) for THIS group's exercise — what the forecast flattens toward when
     // the user hasn't set an explicit Potential ceiling. Resolved per group's records.
@@ -21723,6 +21764,10 @@ function setupWorkoutAnalysis(): void {
         else if (field === "maxStability") v = clamp(1, 2000);
         else if (field === "maxGrowthFraction") v = clamp(0, 2);
         else if (field === "calibrationThreshold") v = clamp(0, 1);
+        else if (field === "phase1EndSets") v = Math.round(clamp(1, 100000));
+        else if (field === "phase2EndSets") v = Math.round(clamp(1, 100000));
+        else if (field === "phase1Pace" || field === "phase2Pace" || field === "phase3Pace") v = clamp(0, 1);
+        else if (field === "phase1RirUpper" || field === "phase1RirLower") v = clamp(0, 10);
         (dpc as unknown as Record<string, number>)[field] = v;
         waGraphConfig.decayParams = dpc;
         saveDecayParams();
@@ -21999,11 +22044,11 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
-    // Decay-model complexity: cycle Linear (1) → Log (2) → Full (3) → Linear. The new
-    // level shows its own variable set in the Decay model group; redraws live.
+    // Decay-model complexity: cycle Linear (1) → Log (2) → Full (3) → Phases (4) → Linear.
+    // The new level shows its own variable set in the Decay model group; redraws live.
     if (t.closest<HTMLElement>("[data-wadecaylevel]")) {
       const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
-      dpc.level = ((dpc.level % 3) + 1) as DecayLevel;
+      dpc.level = ((dpc.level % 4) + 1) as DecayLevel;
       waGraphConfig.decayParams = dpc;
       saveDecayParams();
       scheduleWaGraph();
