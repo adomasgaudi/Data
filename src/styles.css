@@ -1180,7 +1180,13 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .gdash-title.is-empty { color: var(--muted); font-weight: 700; }
 .gdash-head {
   display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
-  overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; margin-bottom: 0.2rem;
+  /* overflow-y:hidden + touch-action:pan-x pan-y — overflow-x:auto SILENTLY forces overflow-y
+     to `auto` too, turning this thin pill strip into a vertical scroll-TRAP: a vertical swipe
+     on its empty middle was captured instead of scrolling the page (owner: "can't use this
+     area to scroll"). Same fix as .hm-year / the athlete strip: keep horizontal pan for the
+     pills, let a vertical drag CHAIN to the page (pan-x alone disables vertical entirely). */
+  overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; margin-bottom: 0.2rem;
 }
 .gdash-pill {
   flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 10px; cursor: pointer;
