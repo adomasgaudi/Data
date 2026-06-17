@@ -13,6 +13,7 @@ import {
   duplicateBubble,
   duplicateTab,
   updateBubble,
+  setBubbleView,
   cycleBubbleType,
   cycleBubbleView,
   activeTab,
@@ -187,5 +188,43 @@ describe("graphDash — normalize (load-boundary validation)", () => {
     const t = makeTab("A");
     const n = normalizeDashboard({ tabs: [t], activeTabId: "ghost" });
     expect(n.activeTabId).toBe(t.id);
+  });
+});
+
+describe("graphDash — savedView (remembered pan/zoom)", () => {
+  it("new bubble starts with no saved view", () => {
+    expect(makeBubble().savedView ?? null).toBeNull();
+  });
+
+  it("setBubbleView stores and clears the view without touching config", () => {
+    let d: GraphDashboard = defaultDashboard();
+    const tab = d.tabs[0]!;
+    const b = tab.bubbles[0]!;
+    const box = { xMin: 1, xMax: 10, yMin: 0, yMax: 5 };
+    d = setBubbleView(d, tab.id, b.id, { sig: "abc", box });
+    const stored = activeTab(d).bubbles[0]!;
+    expect(stored.savedView).toEqual({ sig: "abc", box });
+    expect(stored.type).toBe(b.type); // config untouched
+    d = setBubbleView(d, tab.id, b.id, null);
+    expect(activeTab(d).bubbles[0]!.savedView).toBeNull();
+  });
+
+  it("a saved view survives the Zod load boundary", () => {
+    const box = { xMin: 1700000000000, xMax: 1710000000000, yMin: 20, yMax: 80 };
+    const d: GraphDashboard = {
+      tabs: [makeTab("V", [makeBubble({ savedView: { sig: "s1", box } })])],
+      activeTabId: "",
+    };
+    d.activeTabId = d.tabs[0]!.id;
+    const n = normalizeDashboard(JSON.parse(JSON.stringify(d)));
+    expect(n.tabs[0]!.bubbles[0]!.savedView).toEqual({ sig: "s1", box });
+  });
+
+  it("a malformed saved view is rejected at the boundary (→ default)", () => {
+    const bad = {
+      tabs: [{ id: "t", name: "x", bubbles: [{ ...makeBubble(), savedView: { sig: "s", box: { xMin: "no" } } }] }],
+      activeTabId: "t",
+    };
+    expect(normalizeDashboard(bad).tabs[0]!.bubbles[0]!.savedView ?? null).toBeNull();
   });
 });

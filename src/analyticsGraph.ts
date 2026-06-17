@@ -10,7 +10,7 @@
  * demonstrably alive. Multi-exercise, combined and comparison names all flow
  * through identically (it's name-based).
  */
-import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint, type SvgShape, type SvgChartConfig } from "./svgChart";
+import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint, type SvgShape, type SvgChartConfig, type ViewBox } from "./svgChart";
 import { decayedStrengthSeries, effectiveE1RM } from "./aggregate";
 import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
@@ -117,6 +117,11 @@ export interface AnalyticsGraphInput {
   /** The FULL (all-windows) reps×weight extent — pins the rvw axes so paging a 2-week
    * window (or dragging the fit) keeps a STABLE frame instead of re-fitting/jumping. */
   rvwAxis?: { xMin: number; xMax: number; yMax: number } | undefined;
+  /** Restore a saved pan/zoom view on mount (the dashboard remembers each bubble's view
+   * across switches / refresh); null / absent = auto-fit to the data. */
+  initialView?: ViewBox | null | undefined;
+  /** Persist the user's pan/zoom (the new view), or null when they re-fit. */
+  onViewChange?: ((view: ViewBox | null) => void) | undefined;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -296,6 +301,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // bodyweight so the ×BW view pins to the matching BW range (axisScale = 1 in kg mode).
       forceXRange: axis ? { min: axis.xMin / axisScale, max: axis.xMax / axisScale } : undefined,
       forceLeftRange: axis ? { min: 0, max: axis.yMax } : undefined,
+      initialView: input.initialView, onViewChange: input.onViewChange, // remember pan/zoom
     };
     // RIR effort zones (single lift): ribbons stepping DOWN from the failure curve in REPS —
     // 0–3 RIR (a hard set), 3–6, 6–12 — teal, fading out the easier they get (matches the card).
@@ -504,6 +510,8 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     // Projection fit-window lines (always present so the merge clears them when off — PB-8).
     xMarkers: input.xMarkers,
     onMarkerDrag: input.onMarkerDrag,
+    initialView: input.initialView, // restore the bubble's saved pan/zoom on mount
+    onViewChange: input.onViewChange, // persist the user's pan/zoom (null = re-fit)
   };
   const existing = charts.get(container);
   container.classList.add("svgc-freepan");

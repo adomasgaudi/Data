@@ -106,7 +106,7 @@ import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
   loadDashboardFor, saveDashboardFor, defaultDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
-  addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble,
+  addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble, setBubbleView,
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
@@ -19233,12 +19233,24 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   // Metrics come from the GLOBAL Options menu (shared across bubbles for now); type/view/
   // lifts/×BW are the per-bubble dials. (bubble.metrics is reserved for future per-bubble metrics.)
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  // "Remember my pan/zoom across bubble/tab switches + refresh" (owner). The saved view is
+  // restored ONLY while the plotted CONTENT is unchanged (this signature) — change the lift /
+  // metric / type / athlete / time-compaction and it re-fits instead of keeping a stale frame.
+  const tabId = activeTab(graphDash).id;
+  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), user]);
+  const initialView = bubble.savedView && bubble.savedView.sig === sig ? bubble.savedView.box : null;
   return {
     exercises: exs,
     records: isRvw ? rvwWindowRecords(recs) : recs,
     rvwAxis: isRvw ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: cfg,
+    initialView,
+    onViewChange: (box) => {
+      // Persist only — never re-render here (that would destroy the chart mid-gesture).
+      graphDash = setBubbleView(graphDash, tabId, bubble.id, box ? { sig, box } : null);
+      persistDash();
+    },
     height: 300, // one constant plot height across all bubble types (stable reel, owner)
     rvwFitOf,
     onRvwFitDrag,

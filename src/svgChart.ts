@@ -212,7 +212,17 @@ export interface SvgChartConfig {
   xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
   /** Called on release after a marker drag, with the marker id and its new x value. */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
+  /** Restore a previously-saved pan/zoom view ON MOUNT instead of auto-fitting to the
+   * data — lets the dashboard remember each bubble's view across switches / refresh.
+   * Read once at mount (inert on update()); invalid / absent → normal auto-fit. */
+  initialView?: ViewBox | null | undefined;
+  /** Fired (debounced) when the USER pans/zooms — with the new view to persist; fired
+   * with null when the user RE-FITS (double-tap / Fit) so the caller drops the saved
+   * view. NOT fired for programmatic fits (mount / series update / compact toggle). */
+  onViewChange?: ((view: ViewBox | null) => void) | undefined;
 }
+/** The chart's pan/zoom window in DATA space (x = time ms or weight; y = the left axis). */
+export type ViewBox = { xMin: number; xMax: number; yMin: number; yMax: number };
 export interface SvgChart {
   update(cfg: Partial<SvgChartConfig>): void;
 }
@@ -425,6 +435,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // metric) keeps the current view instead of re-fitting, so adding/removing metrics
   // no longer resets the pan/zoom. Cleared by resetView (fitView / double-tap / mount).
   let userAdjusted = false;
+  // Persist the user's pan/zoom (the dashboard remembers a bubble's view across switches /
+  // refresh). Debounced so a pan/zoom stream writes once it settles, not every frame.
+  let viewCommitTimer = 0;
+  const finiteBox = (v: ViewBox | null | undefined): v is ViewBox =>
+    !!v && [v.xMin, v.xMax, v.yMin, v.yMax].every((n) => Number.isFinite(n)) && v.xMax > v.xMin && v.yMax > v.yMin;
+  const commitView = () => {
+    if (!cfg.onViewChange) return; // opt-in: zero cost for charts that don't persist
+    if (viewCommitTimer) clearTimeout(viewCommitTimer);
+    viewCommitTimer = window.setTimeout(() => {
+      viewCommitTimer = 0;
+      cfg.onViewChange?.({ xMin: view.xMin, xMax: view.xMax, yMin: view.yMin, yMax: view.yMax });
+    }, 250);
+  };
   let lastTap: { t: number; x: number } | null = null; // for double-tap-to-reset
   // Click-to-pin: every drawn datapoint's pixel box (in SVG user units), rebuilt
   // each draw, so a tap can hit-test the nearest one and pin a sticky detail popup.
@@ -432,7 +455,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   let hitPoints: HitPoint[] = [];
   let pinned = false; // the detail popup is pinned to a point (stays until dismissed)
   /** Re-fit the view to the data (undo any pan/zoom). */
-  const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
+  const fitView = () => {
+    rebuildCompactor(); resetView(); hideTip(); draw();
+    if (viewCommitTimer) { clearTimeout(viewCommitTimer); viewCommitTimer = 0; }
+    cfg.onViewChange?.(null); // user re-fit (double-tap / Fit) → drop any saved view
+  };
   // Axis TITLES sit INLINE at the axis ends (y-title top-left, x-title bottom-right) in
   // the EXISTING tick margins — they no longer widen l/b, so the plot stays big (owner).
   // PB-33: axis titles sit INLINE in the existing tick margins (y-title top-left above
@@ -1153,6 +1180,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     }
     view = { xMin, xMax, yMin, yMax };
     userAdjusted = true; // remember the user's pan/zoom across series updates
+    commitView(); // persist (covers wheel zoom + pinch zoom)
   }
 
   const SPREAD = 26; // min finger spread (px) on an axis before that axis stretches
@@ -1206,6 +1234,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: py.yMin, yMax: py.yMax };
       if (!panX()) { const rr = pan.r.yMax - pan.r.yMin; ry = { yMin: pan.r.yMin + fracY * rr, yMax: pan.r.yMax + fracY * rr }; }
       userAdjusted = true; // remember the user's pan across series updates
+      commitView(); // persist the user's pan (1-finger / mouse drag)
       hideTip();
       draw();
     }
@@ -1409,6 +1438,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
   rebuildCompactor();
   resetView();
+  // Restore a saved pan/zoom instead of the auto-fit (dashboard "remember my view"). Treat
+  // it as a user adjustment so a later series update keeps it (double-tap re-fits). ry (the
+  // dependent right axis) stays freshly fitted by resetView above.
+  if (finiteBox(cfg.initialView)) { view = { ...cfg.initialView }; userAdjusted = true; }
   draw();
 
   return {

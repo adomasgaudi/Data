@@ -36,6 +36,11 @@ export interface GraphBubble {
   perBodyweight: boolean;
   /** Metric ids for the time view (e.g. "e1rm", "volume"); ignored by rvw. */
   metrics: string[];
+  /** Remembered pan/zoom (chart DATA-space box) + a `sig` of the plotted CONTENT it was
+   * captured at. Restored on mount ONLY while `sig` still matches the current content — so
+   * navigating away / refreshing keeps the view, but changing the lift / metric / type
+   * re-fits. Cleared (null) when the user re-fits (double-tap / Fit). Absent = auto-fit. */
+  savedView?: { sig: string; box: { xMin: number; xMax: number; yMin: number; yMax: number } } | null | undefined;
 }
 
 /** A named tab holding a reel of bubbles. */
@@ -73,6 +78,7 @@ export function makeBubble(partial: Partial<GraphBubble> = {}): GraphBubble {
     athletes: partial.athletes ? [...partial.athletes] : [],
     perBodyweight: partial.perBodyweight ?? false,
     metrics: partial.metrics ? [...partial.metrics] : ["e1rm"],
+    savedView: partial.savedView ?? null,
   };
 }
 
@@ -96,6 +102,13 @@ const BubbleSchema: z.ZodType<GraphBubble> = z.object({
   athletes: z.array(z.string()),
   perBodyweight: z.boolean(),
   metrics: z.array(z.string()),
+  // nullish() = optional + nullable, so dashboards saved before this field still validate.
+  savedView: z
+    .object({
+      sig: z.string(),
+      box: z.object({ xMin: z.number(), xMax: z.number(), yMin: z.number(), yMax: z.number() }),
+    })
+    .nullish(),
 });
 const TabSchema: z.ZodType<GraphTab> = z.object({
   id: z.string(),
@@ -218,6 +231,17 @@ export function updateBubble(
   patch: Partial<GraphBubble>,
 ): GraphDashboard {
   return mapBubble(d, tabId, bubbleId, (b) => ({ ...b, ...patch, id: b.id }));
+}
+
+/** Remember (or clear, with null) a bubble's pan/zoom view. Kept separate from
+ * updateBubble so a view write never touches the bubble's config fields. */
+export function setBubbleView(
+  d: GraphDashboard,
+  tabId: string,
+  bubbleId: string,
+  view: GraphBubble["savedView"],
+): GraphDashboard {
+  return mapBubble(d, tabId, bubbleId, (b) => ({ ...b, savedView: view ?? null }));
 }
 
 /** Cycle a bubble's graph type (time ⇄ rvw) — the #toggle pill. */
