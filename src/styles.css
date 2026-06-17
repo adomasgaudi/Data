@@ -490,9 +490,10 @@ body.on-s-anl .appfoot { display: none; }
 main { padding-bottom: 5rem; }
 
 /* Persistent command / search bar, pinned at the bottom of the screen. */
-/* Floating "grade recent updates" button + its panel (owner). Small, constant, left-edge. */
+/* Floating "grade recent updates" button + its panel (owner). Small, constant; sits at the
+   BOTTOM-RIGHT, just above the command bar (owner: "moved to bottom right"). */
 .grade-fab {
-  position: fixed; left: 6px; top: 50%; transform: translateY(-50%); z-index: 60;
+  position: fixed; right: 8px; bottom: calc(3.4rem + env(safe-area-inset-bottom, 0px)); z-index: 60;
   min-width: var(--tap-min); min-height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center;
   font-size: 1.05rem; cursor: pointer; color: var(--accent); background: var(--panel);
   border: 1px solid var(--line); border-radius: var(--r-pill); box-shadow: var(--shadow-sm); opacity: 0.82;
