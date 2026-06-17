@@ -3525,6 +3525,19 @@ let exInfoTab: "curve" | "volume" | "map" = "curve";
  *  re-paint keeps the angle the owner dragged to. */
 let vol3dYaw = -0.62;
 let vol3dPitch = 0.52;
+// Map-tab controls (owner): merge the floor by a weight bin (2/5/10 kg) and a rep bin
+// (every rep · 1–3/4–6 · 1–10/11–20), choose the time range of sets, and make the pin
+// HEIGHT count sets OR total reps. Device-local display prefs.
+const VOL3D_WTBINS = [2, 5, 10] as const;
+type Vol3dRepBin = "each" | "3s" | "10s";
+type Vol3dRange = "all" | "3mo" | "1mo";
+type Vol3dHeight = "sets" | "reps";
+const mapPref = (k: string, dflt: string): string => { try { return localStorage.getItem(`colosseum.map.${k}`) ?? dflt; } catch { return dflt; } };
+const setMapPref = (k: string, v: string): void => { try { localStorage.setItem(`colosseum.map.${k}`, v); } catch { /* ignore */ } };
+let vol3dWtBin: number = (() => { const v = Number(mapPref("wtBin", "5")); return (VOL3D_WTBINS as readonly number[]).includes(v) ? v : 5; })();
+let vol3dRepBin: Vol3dRepBin = ((v) => (v === "3s" || v === "10s" ? v : "each"))(mapPref("repBin", "each")) as Vol3dRepBin;
+let vol3dRange: Vol3dRange = ((v) => (v === "3mo" || v === "1mo" ? v : "all"))(mapPref("range", "all")) as Vol3dRange;
+let vol3dHeight: Vol3dHeight = ((v) => (v === "reps" ? v : "sets"))(mapPref("height", "sets")) as Vol3dHeight;
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
@@ -11778,28 +11791,42 @@ function cardVolDistHtml(name: string): string {
 // raised by how many sets were logged there over time — a 3D terrain of green pins.
 
 interface SetsMap {
-  pts: { w: number; reps: number; count: number }[];
+  pts: { w: number; reps: number; count: number; repLabel?: string }[];
   loW: number; hiW: number; maxReps: number; maxCount: number;
+  /** What the pin HEIGHT (count) measures — "sets" or total "reps" (axis + tooltip label). */
+  unit: Vol3dHeight;
 }
 
 /** Count a lift's sets per (weight-bin, reps) cell — the height of each map pin. */
 function cardSetsMapData(name: string): SetsMap | null {
-  const sets = cardNuzzoRealSets(name);
+  const all = cardNuzzoRealSets(name);
+  // Time range: keep only sets within the chosen window (anchored to now).
+  const cutoff = vol3dRange === "1mo" ? Date.now() - 30 * 86_400_000 : vol3dRange === "3mo" ? Date.now() - 91 * 86_400_000 : 0;
+  const sets = cutoff ? all.filter((s) => { const t = Date.parse(s.date); return Number.isFinite(t) && t >= cutoff; }) : all;
   if (sets.length === 0) return null;
-  const m = new Map<string, { w: number; reps: number; count: number }>();
+  const bin = vol3dWtBin > 0 ? vol3dWtBin : 5;
+  // Rep bin → the floor's rep coordinate (bin upper bound) + a readable label.
+  const repCell = (reps: number): { reps: number; label?: string } => {
+    if (vol3dRepBin === "3s") { const b = Math.ceil(reps / 3); return { reps: b * 3, label: `${b * 3 - 2}–${b * 3}` }; }
+    if (vol3dRepBin === "10s") { const b = Math.ceil(reps / 10); return { reps: b * 10, label: `${b * 10 - 9}–${b * 10}` }; }
+    return { reps };
+  };
+  const m = new Map<string, { w: number; reps: number; count: number; repLabel?: string }>();
   let loW = Infinity, hiW = -Infinity, maxReps = 1;
   for (const s of sets) {
-    const w = Math.round(s.added / 5) * 5; // 5 kg bins, like the city's X
+    const w = Math.round(s.added / bin) * bin;
+    const rc = repCell(s.reps);
     loW = Math.min(loW, w); hiW = Math.max(hiW, w);
-    maxReps = Math.max(maxReps, s.reps);
-    const k = `${w}|${s.reps}`;
-    const e = m.get(k) ?? { w, reps: s.reps, count: 0 };
-    e.count++; m.set(k, e);
+    maxReps = Math.max(maxReps, rc.reps);
+    const k = `${w}|${rc.reps}`;
+    const e = m.get(k) ?? { w, reps: rc.reps, count: 0, ...(rc.label !== undefined ? { repLabel: rc.label } : {}) };
+    e.count += vol3dHeight === "reps" ? s.reps : 1; // height = total reps OR # sets
+    m.set(k, e);
   }
-  if (hiW === loW) hiW = loW + 5;
+  if (hiW === loW) hiW = loW + bin;
   const pts = [...m.values()];
-  const maxCount = Math.max(...pts.map(p => p.count));
-  return { pts, loW, hiW, maxReps, maxCount };
+  const maxCount = Math.max(...pts.map((p) => p.count));
+  return { pts, loW, hiW, maxReps, maxCount, unit: vol3dHeight };
 }
 
 /** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
@@ -11823,12 +11850,12 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const mapZ = (r: number) => (r / d.maxReps) * Dp - Dp / 2;
   const mapH = (c: number) => (c / d.maxCount) * maxBarH;
 
-  type Pin = { bx: number; by: number; tx: number; ty: number; depth: number; count: number; w: number; reps: number };
+  type Pin = { bx: number; by: number; tx: number; ty: number; depth: number; count: number; w: number; reps: number; repLabel?: string };
   const pins: Pin[] = [];
   for (const p of d.pts) {
     const x = mapX(p.w), z = mapZ(p.reps), h = mapH(p.count);
     const b = rot(x, cy0, z), t = rot(x, cy0 + h, z);
-    pins.push({ bx: b.X, by: b.Y, tx: t.X, ty: t.Y, depth: b.Z, count: p.count, w: p.w, reps: p.reps });
+    pins.push({ bx: b.X, by: b.Y, tx: t.X, ty: t.Y, depth: b.Z, count: p.count, w: p.w, reps: p.reps, ...(p.repLabel !== undefined ? { repLabel: p.repLabel } : {}) });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
@@ -11874,8 +11901,10 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const GREEN = "#2f8f88"; // the "Your lifts" teal
   for (const p of pins) {
     const r = 2.5 + 2.5 * (p.count / d.maxCount); // taller = bigger dot too
+    const repTip = p.repLabel ?? String(p.reps);
+    const unit = d.unit === "reps" ? "rep" : "set";
     out += `<line x1="${sx(p.bx).toFixed(1)}" y1="${sy(p.by).toFixed(1)}" x2="${sx(p.tx).toFixed(1)}" y2="${sy(p.ty).toFixed(1)}" stroke="${GREEN}" stroke-width="1.6" opacity="0.55"/>`;
-    out += `<circle cx="${sx(p.tx).toFixed(1)}" cy="${sy(p.ty).toFixed(1)}" r="${r.toFixed(1)}" fill="${GREEN}"><title>${p.w}kg · ${p.reps} reps · ${p.count} set${p.count !== 1 ? "s" : ""}</title></circle>`;
+    out += `<circle cx="${sx(p.tx).toFixed(1)}" cy="${sy(p.ty).toFixed(1)}" r="${r.toFixed(1)}" fill="${GREEN}"><title>${p.w}kg · ${repTip} reps · ${p.count} ${unit}${p.count !== 1 ? "s" : ""}</title></circle>`;
   }
 
   // Axis lines + labels.
@@ -11886,19 +11915,33 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   out += lbl(axW, 0, 13, `${d.hiW}kg`);
   out += lbl(axO, 0, 13, `${d.loW}kg`);
   out += lbl(axR, 0, 13, `${d.maxReps} reps`);
-  out += lbl(axS, 0, -5, `${d.maxCount} sets`);
+  out += lbl(axS, 0, -5, `${d.maxCount} ${d.unit === "reps" ? "reps" : "sets"}`);
   return out;
 }
 
+/** The Map-tab merge/range/height control pills (one compact sideways-scrolling row). */
+function cardMapCtrlsHtml(): string {
+  const repLbl = vol3dRepBin === "each" ? "reps: each" : vol3dRepBin === "3s" ? "reps: by 3" : "reps: by 10";
+  const rangeLbl = vol3dRange === "all" ? "all time" : vol3dRange === "3mo" ? "3 months" : "1 month";
+  return `<div class="lt-map-ctrls">` +
+    `<button type="button" class="lt-map-pill" data-mapwt title="Merge weights into bins — tap to cycle 2 / 5 / 10 kg">wt: ${vol3dWtBin}kg</button>` +
+    `<button type="button" class="lt-map-pill" data-maprep title="Merge reps — tap to cycle every rep / by 3 / by 10">${repLbl}</button>` +
+    `<button type="button" class="lt-map-pill" data-mapheight title="Pin height — tap to switch total sets / total reps">tall: ${vol3dHeight}</button>` +
+    `<button type="button" class="lt-map-pill" data-maprange title="Time range — tap to cycle all time / last 3 months / last month">${rangeLbl}</button>` +
+    `</div>`;
+}
 /** Sets-map tab body. */
 function cardSetsMapHtml(name: string): string {
   const d = cardSetsMapData(name);
-  if (!d) return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
-  return `<div class="lt-vol-wrap">` +
+  const ctrls = cardMapCtrlsHtml();
+  if (!d) return ctrls + `<p class="muted" style="padding:1rem 0">No logged sets in this range.</p>`;
+  const tall = vol3dHeight === "reps" ? "total reps" : "sets";
+  const range = vol3dRange === "all" ? "over all time" : vol3dRange === "3mo" ? "in the last 3 months" : "in the last month";
+  return `<div class="lt-vol-wrap">` + ctrls +
     `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
     renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
     `</svg>` +
-    `<div class="lt-vol-note muted">Drag to rotate · the Curve laid flat · pin height = sets done there over time</div>` +
+    `<div class="lt-vol-note muted">Drag to rotate · floor = weight × reps · pin height = ${tall} done there ${range}</div>` +
     `</div>`;
 }
 
@@ -14035,6 +14078,17 @@ async function init() {
     debounceCardOrmRender();
   });
   els.exInfoBody.addEventListener("click", (e) => {
+    // Map-tab merge/range/height pills (cycle the value, persist, re-render the map).
+    const mapCtl = (e.target as HTMLElement).closest<HTMLElement>("[data-mapwt],[data-maprep],[data-maprange],[data-mapheight]");
+    if (mapCtl) {
+      e.preventDefault(); e.stopPropagation();
+      if (mapCtl.hasAttribute("data-mapwt")) { vol3dWtBin = VOL3D_WTBINS[(VOL3D_WTBINS.indexOf(vol3dWtBin as 2 | 5 | 10) + 1) % VOL3D_WTBINS.length]!; setMapPref("wtBin", String(vol3dWtBin)); }
+      else if (mapCtl.hasAttribute("data-maprep")) { vol3dRepBin = vol3dRepBin === "each" ? "3s" : vol3dRepBin === "3s" ? "10s" : "each"; setMapPref("repBin", vol3dRepBin); }
+      else if (mapCtl.hasAttribute("data-maprange")) { vol3dRange = vol3dRange === "all" ? "3mo" : vol3dRange === "3mo" ? "1mo" : "all"; setMapPref("range", vol3dRange); }
+      else { vol3dHeight = vol3dHeight === "sets" ? "reps" : "sets"; setMapPref("height", vol3dHeight); }
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
     // Tab pills (Curve / Volume): switch the active sub-tab and re-render.
     const tabBtn = (e.target as HTMLElement).closest<HTMLElement>("[data-exitab]");
     if (tabBtn?.dataset.exitab) {

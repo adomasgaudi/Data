@@ -3292,6 +3292,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .lt-vol-leg-item { display: flex; align-items: center; gap: 0.3rem; }
 .lt-vol-leg-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
 .lt-vol-note { font-size: 0.72rem; }
+/* Map-tab merge/range/height controls — ONE tight sideways-scrolling row of cycling pills
+   (#cram rule 16), like the rest of the app's compact pill rows. */
+.lt-map-ctrls { display: flex; flex-wrap: nowrap; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.lt-map-pill { flex: 0 0 auto; white-space: nowrap; cursor: pointer; font: inherit; font-size: 0.7rem; font-weight: 700; min-height: var(--tap-min); display: inline-flex; align-items: center; padding: 3px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted); }
+.lt-map-pill:hover { border-color: var(--accent); color: var(--accent); }
 /* Each field is its own STACKED section (label header on top, controls full-width
    below) instead of a cramped label|value 2-column row — gives editing room. */
 .ex-info-item { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
