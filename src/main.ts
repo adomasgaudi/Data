@@ -3775,10 +3775,14 @@ function renderChangelog() {
     const modelTag = modelLabel
       ? `<span class="cl-model cl-model--${modelClass(modelLabel)}" title="${models.length > 1 ? `Made across ${models.length} models: ${escapeHtml(models.join(", "))}` : `Made by ${escapeHtml(modelLabel)}`}">${escapeHtml(modelLabel)}</span>`
       : "";
+    // AI session CODE-NAME chip (rule 50): which AI chat made this version. Several AIs share the
+    // one model on the branch, so the throwaway per-chat code-name disambiguates them. Leaf-only.
+    const aiTag = r.ai ? `<span class="cl-ai" title="Made by AI session “${escapeHtml(r.ai)}”">${escapeHtml(r.ai)}</span>` : "";
     const spOrTag = r.soon
       ? `<span class="cl-meta"><span class="cl-soon">soon</span></span>`
       : `<span class="cl-meta">` +
         modelTag +
+        aiTag +
         `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>` +
         `<span class="cl-cost" title="Real cost: this ${r.children?.length ? "collection's" : "update's"} share of the project's actual subscription spend, weighted by the model that made it (not API list price)">${fmtEur(costForNode(r))}</span>` +
         `</span>`;
