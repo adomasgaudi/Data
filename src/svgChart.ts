@@ -1279,6 +1279,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           else { hideTip(); showTip(e.clientX); }
         }
       } else {
+        D(`svgc panEnd flush x=${Math.round(view.xMin / 86400000)}..${Math.round(view.xMax / 86400000)}`); // PB-39
         flushView(); // PB-39: a real pan/zoom just ended → persist it NOW, before any re-mount
       }
     }
@@ -1329,6 +1330,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       }
     }
     if (pts.size === 0) {
+      D("svgc panStart"); // PB-39: a render between this and panEnd = a mid-gesture re-mount
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
       window.addEventListener("pointercancel", onUp);

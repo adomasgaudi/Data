@@ -19199,6 +19199,7 @@ function renderWaCatMenu(): void {
 // = one redraw, and it never blocks the tap (see the #senior rule in CLAUDE.md).
 let waGraphRaf = 0;
 function scheduleWaGraph(): void {
+  dbg("schedWG"); // PB-39: trace what re-renders the graph (a pan must NOT trigger this)
   if (waGraphRaf) return;
   const y = window.scrollY; // renderWaGraph rebuilds the graph block (innerHTML) →
   waGraphRaf = requestAnimationFrame(() => { // would shift the page; pin scroll.
