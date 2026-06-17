@@ -1256,6 +1256,15 @@ body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 .gdash-foot .wa-graph-fold-cur { display: none; }
 .gdash-addbubble { font-size: 1.2rem; }
 .gdash-info-btn { flex: 0 0 auto; font-size: 0.85rem; }
+/* Per-setting ℹ button inside the Options menu groups + its small popup (replaces the old
+   whole-graph info button). The ℹ is a faint inline help affordance in each group summary. */
+.wa-set-info {
+  flex: 0 0 auto; margin-left: 5px; min-width: var(--tap-min); min-height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
+  font-size: 0.82rem; line-height: 1; color: var(--muted); background: none; border: none; cursor: pointer;
+}
+.wa-set-info:hover { color: var(--accent); }
+.set-info-popup { width: 230px; }
 /* Graph info popup (ℹ button) — position:fixed + clampMenuIntoView (rule 32). */
 .gdash-info-popup {
   position: fixed; z-index: 130; width: 260px; max-width: 90vw; max-height: 72vh; overflow-y: auto;

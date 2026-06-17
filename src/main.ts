@@ -18413,18 +18413,44 @@ function onRvwFitDrag(exercise: string, effOneRm: number): void {
   setCustomStrength(exercise, effOneRm);
   scheduleWaGraph();
 }
-// Reps×weight 2-week WINDOW pager (owner): null = all sets; 0 = the most recent 14-day
-// block; n = n blocks before that. Bottom ‹ › arrows page it, the rvw render filters the
-// plotted sets to the window. Anchored to the latest logged set so blocks align with data.
-let rvwWindowIdx: number | null = null;
+// Reps×weight time WINDOW (owner: two toggles in the Options menu, not a pager). The MODE
+// picks the window family: "inc" = increasing windows anchored to now (last day → … → all);
+// "2w" = fixed rolling 2-week blocks (last 2wk, 2–4 wk ago, …). A second toggle cycles WHICH
+// window within the mode. The rvw render filters the plotted sets to it; anchored to the
+// latest logged set.
+type RvwMode = "inc" | "2w";
+let rvwWindowMode: RvwMode = "inc";
+let rvwIncIdx = 0;     // index into RVW_INC_WINDOWS — 0 = All time (default: all sets)
+let rvw2wIdx = 0;      // rolling 2-week bucket: 0 = last 2 wk, 1 = 2–4 wk ago, …
+let rvw2wMaxIdx = 0;   // furthest bucket with data (computed from span) — bounds the cycle
 const RVW_WINDOW_MS = 14 * 86_400_000;
+const RVW_INC_WINDOWS: { label: string; ms: number | null }[] = [
+  { label: "All time", ms: null },
+  { label: "Last day", ms: 86_400_000 },
+  { label: "Last week", ms: 7 * 86_400_000 },
+  { label: "Last 2 wk", ms: 14 * 86_400_000 },
+  { label: "Last month", ms: 30 * 86_400_000 },
+  { label: "Last 3 mo", ms: 91 * 86_400_000 },
+  { label: "Last 6 mo", ms: 182 * 86_400_000 },
+  { label: "Last year", ms: 365 * 86_400_000 },
+];
 function rvwWindowRecords(records: readonly SetRecord[]): SetRecord[] {
-  if (rvwWindowIdx == null) return records as SetRecord[];
-  let latest = 0;
-  for (const r of records) { const t = Date.parse(r.date); if (Number.isFinite(t) && t > latest) latest = t; }
+  let latest = 0, earliest = Infinity;
+  for (const r of records) { const t = Date.parse(r.date); if (Number.isFinite(t)) { if (t > latest) latest = t; if (t < earliest) earliest = t; } }
   if (!latest) return records as SetRecord[];
-  const hi = latest - rvwWindowIdx * RVW_WINDOW_MS, lo = hi - RVW_WINDOW_MS;
+  rvw2wMaxIdx = Number.isFinite(earliest) ? Math.max(0, Math.floor((latest - earliest) / RVW_WINDOW_MS)) : 0;
+  if (rvwWindowMode === "inc") {
+    const w = RVW_INC_WINDOWS[rvwIncIdx] ?? RVW_INC_WINDOWS[0]!;
+    if (w.ms == null) return records as SetRecord[];
+    const lo = latest - w.ms;
+    return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo; });
+  }
+  const hi = latest - rvw2wIdx * RVW_WINDOW_MS, lo = hi - RVW_WINDOW_MS;
   return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo && t <= hi; });
+}
+function cycleRvwWindow(): void {
+  if (rvwWindowMode === "inc") rvwIncIdx = (rvwIncIdx + 1) % RVW_INC_WINDOWS.length;
+  else rvw2wIdx = rvw2wIdx >= rvw2wMaxIdx ? 0 : rvw2wIdx + 1;
 }
 /** The FULL (all-windows) reps×weight extent for the plotted lift(s) — so the rvw axes can
  * be pinned to it and paging a 2-week window (or dragging the fit) doesn't re-scale the
@@ -18443,17 +18469,8 @@ function rvwAxisExtent(records: readonly SetRecord[], exNames: readonly string[]
   return { xMin: xMin - pad, xMax: xMax + pad, yMax: yMax + 1 };
 }
 function rvwWindowLabel(): string {
-  if (rvwWindowIdx == null) return "All sets";
-  if (rvwWindowIdx === 0) return "Last 2 wk";
-  return `${rvwWindowIdx * 2}–${(rvwWindowIdx + 1) * 2} wk ago`;
-}
-/** The 2-week window pager strip — shown under the reps×weight chart only. */
-function rvwPagerHtml(): string {
-  return `<div class="rvw-pager">` +
-    `<button type="button" class="rvw-pg" data-rvwwin="older" aria-label="Older 2 weeks">‹</button>` +
-    `<span class="rvw-pg-lbl">${escapeHtml(rvwWindowLabel())}</span>` +
-    `<button type="button" class="rvw-pg" data-rvwwin="newer" aria-label="Newer 2 weeks"${rvwWindowIdx == null ? " disabled" : ""}>›</button>` +
-    `</div>`;
+  if (rvwWindowMode === "inc") return (RVW_INC_WINDOWS[rvwIncIdx] ?? RVW_INC_WINDOWS[0]!).label;
+  return rvw2wIdx === 0 ? "Last 2 wk" : `${rvw2wIdx * 2}–${(rvw2wIdx + 1) * 2} wk ago`;
 }
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
@@ -19844,9 +19861,10 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
       })
       .join("");
     const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
+    const mInfo = g.label === "Weight" ? "mWeight" : g.label === "Strength" ? "mStrength" : "mVolume";
     return (
       `<details class="wa-metric-group"${nOn || openMetricGroups.has(g.label) ? " open" : ""}>` +
-      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
+      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}${infoBtn(mInfo)}</summary>` +
       `<div class="wa-metric-chips">${chips}</div></details>`
     );
   }).join("");
@@ -19859,26 +19877,26 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const openCfgGroups = new Set<string>();
   if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
     if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
-  const cfgGroup = (label: string, sub: string, body: string) =>
-    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
+  const cfgGroup = (label: string, sub: string, body: string, infoKey?: string) =>
+    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}${infoKey ? infoBtn(infoKey) : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
     `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("biweek", c.interval, "Bi-week")}${opt("month", c.interval, "Month")}</select></label>` +
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
-    onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."));
+    onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."), "data");
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
     onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
-    onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."));
+    onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."), "lines");
   const cfgBars = hasBarMetric
     ? cfgGroup("Bars & axes", "",
         `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
         `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
         `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
-        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`)
+        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`, "bars")
     : "";
   const cfgSpread = hasSetMetric
     ? cfgGroup("Set spread", "",
-        `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
+        `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`, "spread")
     : "";
   const cfgAllGraphs = onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.");
   const cfgAssist = onoff(assistLoggedView, `data-assistview="1"`, assistLoggedView ? "Assist: logged ×2" : "Assist: real ½",
@@ -19888,7 +19906,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `axis · ceiling ${c.potentialCeiling ?? "—"}` : c.potentialNativeLog ? `native · ceiling ${c.potentialCeiling ?? "—"}` : "",
     onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength AXIS by distance to a lifetime-potential ceiling — values stay in kg, the axis just compresses near the ceiling. An approach-to-ceiling reads straight; a true plateau still flattens.") +
     onoff(!!c.potentialNativeLog, `data-wacfgtoggle="potentialNativeLog"`, "Native log (exp.)", "EXPERIMENTAL: transform each data POINT's value to its log-distance from the ceiling and plot THAT on a normal linear axis (the plotted numbers become the log values).") +
-    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
+    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`, "potential");
   // Projection — the log-curve forecast line (ln(x+a)+b fit). Lives right under the
   // Volume & frequency metric group. ON/OFF reuses the "predicted" metric so it draws
   // through the existing render path; horizon + basis are cycle pills.
@@ -19906,19 +19924,26 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
       ? (windowSet
           ? `<button type="button" class="wa-name-opt is-on" data-waprojwinreset title="Reset the fit window back to all your data.">Window: custom ✕</button>`
           : `<span class="muted wa-proj-hint">drag the ⟵ ⟶ lines to set the fit window</span>`)
-      : ""));
+      : ""), "projection");
   // Reps versus weight — a whole-different plot: every set at weight(x) × reps(y) per
   // lift, with an optional per-lift best-fit line. When ON it replaces the time graph.
   const cfgRepsWeight = cfgGroup("Reps versus weight", S.waRepsVsWeight ? (S.waRepsVsWeightFit ? "on · best-fit" : "on") : "",
     onoff(S.waRepsVsWeight, `data-warvw="1"`, "Weight × reps scatter", "Plot every set at weight (x) × reps (y) for each selected lift, instead of the time graph. Add more lifts to overlay them.") +
-    onoff(S.waRepsVsWeightFit, `data-warvwfit="1"`, "Best-fit line", "Draw a straight best-fit line through each lift's points."));
+    onoff(S.waRepsVsWeightFit, `data-warvwfit="1"`, "Best-fit line", "Draw a straight best-fit line through each lift's points."), "repsweight");
+  // Reps×kg time window — two toggles (mode + which window), shown only when the rvw scatter
+  // is active. Replaces the old ‹ › pager (owner: "all of this should be in the options menu").
+  const cfgWindow = S.waRepsVsWeight
+    ? cfgGroup("Set window", rvwWindowLabel(),
+        onoff(rvwWindowMode === "2w", `data-rvwmode="1"`, rvwWindowMode === "2w" ? "Rolling 2-week" : "Increasing", rvwWindowMode === "2w" ? "Fixed 2-week periods (last 2 wk, 2–4 wk ago…). Tap for increasing windows." : "Increasing windows anchored to now (last day → … → all time). Tap for fixed 2-week periods.") +
+        `<button type="button" class="wa-name-opt" data-rvwcycle="1" title="Cycle which time window the reps×kg scatter shows.">${escapeHtml(rvwWindowLabel())}</button>`, "window")
+    : "";
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}${opts?.skipRvw ? "" : cfgRepsWeight}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}${opts?.skipRvw ? "" : cfgRepsWeight}${cfgWindow}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
-    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
+    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${infoBtn("allgraphs")}${cfgAssist}${infoBtn("assist")}</div>` +
     `</div>`;
   if (container) { const prevGcfg = container.querySelector<HTMLDetailsElement>(".wa-graph-fold"); if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open; }
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
@@ -19926,7 +19951,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   // Graph-TYPE toggle, moved INTO the menu (owner: "the reps×kg / over-time button should be
   // in the options menu"). data-dashtype cycles the per-bubble type via the existing handler.
   const typeRow = opts?.dashType !== undefined
-    ? `<div class="wa-gmenu-typerow"><button type="button" class="wa-name-opt gmenu-type" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${opts.dashType === "rvw" ? "✦ Reps × kg" : "↗ Over time"}</button></div>`
+    ? `<div class="wa-gmenu-typerow"><button type="button" class="wa-name-opt gmenu-type" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${opts.dashType === "rvw" ? "✦ Reps × kg" : "↗ Over time"}</button>${infoBtn("type")}</div>`
     : "";
   return `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
@@ -19963,7 +19988,6 @@ function renderGraphMini(): void {
       // toggle beside them — so the controls ride the graph edge instead of a row above it.
       `<div class="gmini-overlay">${bw}</div>` +
     `</div>` +
-    (S.waRepsVsWeight ? rvwPagerHtml() : "") +
     `<div class="gmini-foot">` +
       `<button type="button" class="gmini-nav" data-gmnav="-1" aria-label="Previous lift">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
@@ -20150,84 +20174,51 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   clampMenuIntoView(m, anchor);
   dbg(`menu OPEN (in <body>, ${m.querySelectorAll("[data-tabmenu]").length} items)`);
 }
-function closeDashInfoPopup(): void {
-  document.getElementById("gdashInfoPopup")?.remove();
-  document.removeEventListener("click", dashInfoOutside, true);
+// PER-SETTING info (owner: "a separate info button for each setting, not a general one").
+// Each group/control in the Options menu carries a small ℹ; tapping it shows just that
+// setting's explanation in a small popup. Keyed lookup keeps the long text out of attributes.
+const SETTING_INFO: Record<string, string> = {
+  type: "Over time — track the metrics across dates. Reps × kg — plot every set as weight (x) × reps (y) instead.",
+  data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width (day / week / bi-week / month). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
+  lines: "Hard sets only — drop easy / warm-up sets (high reps-in-reserve); also applies to the calendar. Decay — fade strength during time off training (use-it-or-lose-it).",
+  bars: "Opacity — bar transparency. Bar girth — bar thickness. Right axis — bar height vs the kg axis. Volume shift — move the bars up or down, away from the lines.",
+  spread: "Set spread — how far a session's sets fan out on the per-set views: 0 = stacked on one line, higher = spread across days.",
+  potential: "Log to potential — compress the strength axis near a lifetime ceiling so an approach reads straight. Native log — transform each point's value (experimental). Ceiling — the kg target both converge on.",
+  projection: "Show forecast — a curve that rises early then flattens toward your ceiling. Ahead — how far it projects. Fit — which logged sets it's fitted to. Window — drag the ⟵ ⟶ lines to limit the fit range.",
+  repsweight: "Weight × reps scatter — plot every set as weight (x) × reps (y) instead of the time graph. Best-fit — a straight line through each lift's points.",
+  window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
+  mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
+  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record.",
+  mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
+  allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
+  assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",
+};
+function closeSettingInfo(): void {
+  document.getElementById("setInfoPopup")?.remove();
+  document.removeEventListener("click", settingInfoOutside, true);
 }
-function dashInfoOutside(e: MouseEvent): void {
+function settingInfoOutside(e: MouseEvent): void {
   const t = e.target as HTMLElement;
-  if (t.closest("[data-dashinfocls]")) { closeDashInfoPopup(); return; }
-  if (t.closest("#gdashInfoPopup") || t.closest("[data-dashinfo]")) return;
-  closeDashInfoPopup();
+  if (t.closest("[data-setinfocls]")) { closeSettingInfo(); return; }
+  if (t.closest("#setInfoPopup") || t.closest("[data-setinfo]")) return;
+  closeSettingInfo();
 }
-function openDashInfoPopup(anchor: HTMLElement): void {
-  if (document.getElementById("gdashInfoPopup")) { closeDashInfoPopup(); return; }
-  const bubble = currentBubble();
-  const c = waGraphConfig;
-  // A GLOSSARY of every graph metric/setting (not just the active ones) — on mobile the
-  // chip `title` tooltips never show, so this popup is the only way to learn what each
-  // circled metric/option means. Grouped to mirror the Options ▾ menu's layout; the
-  // metric the bubble currently shows is marked ✓.
-  const MDESC: Record<string, string> = {
-    e1rm: "Estimated 1RM of every set",
-    weightRange: "Each set's weight up to its 1RM, banded per rep",
-    pctWR: "Your 1RM as a fraction of the world record",
-    strength: "Your best 1RM so far (running max)",
-    strengthDecay: "Strength fading during time off training",
-    volume: "Weight × reps summed per interval (bars)",
-    volumeLoad: "Weight × reps summed per interval (bars)",
-    reps: "Total reps done per interval (bars)",
-    sets: "Number of sets per interval (bars)",
-    frequency: "Sessions per week (rolling cadence)",
-  };
-  const GROUPS: { label: string; ids: string[] }[] = [
-    { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR"] },
-    { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
-  ];
-  const metricSection = GROUPS.map((g) => {
-    const rows = g.ids.map((id) => {
-      const m = GRAPH_METRICS.find((x) => x.id === id);
-      if (!m) return "";
-      const on = waMetrics.has(id);
-      return `<div class="gi-row${on ? " gi-on" : ""}"><span class="gi-lbl">${on ? "✓ " : ""}${escapeHtml(m.label)}</span><span class="gi-desc">${escapeHtml(MDESC[id] ?? "")}</span></div>`;
-    }).join("");
-    return `<div class="gi-subhdr">${escapeHtml(g.label)}</div>${rows}`;
-  }).join("");
-  const typeLabel = bubble.type === "rvw" ? "Reps × kg" : "Over time";
-  const typeDesc = bubble.type === "rvw" ? "Every set plotted as weight × reps" : "Metrics tracked across dates";
-  const viewLabel = bubble.view === "multi" ? "Multi" : "Single";
-  const viewDesc = bubble.view === "multi" ? "All picked lifts overlaid" : "One lift shown";
-  const bwDesc = bubble.perBodyweight ? "Values shown ÷ bodyweight" : "Values shown in kg";
-  const projOn = waMetrics.has("predicted");
-  const projBasisLbl = (c.projectionBasis ?? "records") === "records" ? "Records" : (c.projectionBasis === "hard" ? "Hard sets" : "All sets");
-  const projMonths = Math.round((c.predictionDays ?? 365) / 30);
-  const projDesc = projOn
-    ? `On · ${projMonths} mo ahead · fit ${projBasisLbl.toLowerCase()}`
-    : "Off — forecast curve toward your ceiling";
-  const dataLine = `${c.aggregation === "none" ? "Every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · smoothing ~${c.smoothing}` : ""}`;
+function openSettingInfo(anchor: HTMLElement, key: string): void {
+  const existing = document.getElementById("setInfoPopup");
+  if (existing && existing.dataset.key === key) { closeSettingInfo(); return; }
+  closeSettingInfo();
   const el = document.createElement("div");
-  el.id = "gdashInfoPopup"; el.className = "gdash-info-popup";
+  el.id = "setInfoPopup"; el.className = "gdash-info-popup set-info-popup"; el.dataset.key = key;
   el.innerHTML =
-    `<div class="gi-head"><span>Graph info</span><button class="gi-close" data-dashinfocls aria-label="Close">✕</button></div>` +
-    `<div class="gi-section">This graph</div>` +
-    `<div class="gi-row"><span class="gi-lbl">${escapeHtml(typeLabel)}</span><span class="gi-desc">${escapeHtml(typeDesc)}</span></div>` +
-    `<div class="gi-row"><span class="gi-lbl">${escapeHtml(viewLabel)}</span><span class="gi-desc">${escapeHtml(viewDesc)}</span></div>` +
-    `<div class="gi-row"><span class="gi-lbl">${bubble.perBodyweight ? "×BW" : "kg"}</span><span class="gi-desc">${escapeHtml(bwDesc)}</span></div>` +
-    `<div class="gi-sep"></div>` +
-    `<div class="gi-section">Metrics — what each shows</div>` +
-    metricSection +
-    `<div class="gi-sep"></div>` +
-    `<div class="gi-section">Projection</div>` +
-    `<div class="gi-row gi-desc">${escapeHtml(projDesc)}</div>` +
-    `<div class="gi-sep"></div>` +
-    `<div class="gi-section">Data</div>` +
-    `<div class="gi-row gi-desc">${escapeHtml(dataLine)}</div>` +
-    `<div class="gi-sep"></div>` +
-    `<div class="gi-tip">Tip: drag ⟵⟶ to set the fit window · pinch / drag the chart to zoom & pan</div>`;
+    `<div class="gi-head"><span>Info</span><button class="gi-close" data-setinfocls aria-label="Close">✕</button></div>` +
+    `<div class="gi-row gi-desc">${escapeHtml(SETTING_INFO[key] ?? "")}</div>`;
   document.body.appendChild(el);
   clampMenuIntoView(el, anchor);
-  setTimeout(() => document.addEventListener("click", dashInfoOutside, true), 0);
+  setTimeout(() => document.addEventListener("click", settingInfoOutside, true), 0);
+}
+/** A small ℹ button for a setting group — opens openSettingInfo(key). */
+function infoBtn(key: string): string {
+  return `<button type="button" class="wa-set-info" data-setinfo="${key}" aria-label="What's this?" title="What's this?">ℹ</button>`;
 }
 /** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
  * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
@@ -20342,10 +20333,8 @@ function renderGraphDashboard(): void {
       `<div id="gdashStageSlot"></div>` +
       `<div class="gdash-overlay">` +
         `<button type="button" class="wa-gov-btn${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
-        `<button type="button" class="wa-gov-btn gdash-info-btn" data-dashinfo="1" title="About this graph" aria-label="Graph info">ℹ</button>` +
       `</div>` +
     `</div>` +
-    (S.waRepsVsWeight ? rvwPagerHtml() : "") +
     `<div class="gdash-foot">` +
       `<div class="gdash-bubbles">${dots}` +
         // The trailing "＋" bubble: tap → menu (duplicate current · delete current · add new view).
@@ -20536,7 +20525,7 @@ function renderWaGraph(): void {
   if (tabsEl) tabsEl.innerHTML = graphTypeTabsHtml();
   // 2-week window pager (reps×weight only) — refreshed each render so its label tracks state.
   const pagerEl = box.querySelector<HTMLElement>("#waGraphRvwPager");
-  if (pagerEl) pagerEl.innerHTML = S.waRepsVsWeight ? rvwPagerHtml() : "";
+  if (pagerEl) pagerEl.innerHTML = ""; // rvw window now lives in the Options menu (toggles)
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
@@ -21728,9 +21717,6 @@ function setupWorkoutAnalysis(): void {
       graphDash = updateBubble(graphDash, tab.id, currentBubble().id, { perBodyweight: !currentBubble().perBodyweight });
       persistDash(); refreshDash(); return;
     }
-    // Per-bubble: ℹ info popup — shows type/view/BW/metrics/data settings at a glance.
-    const dashInfoBtn = t.closest<HTMLElement>("[data-dashinfo]");
-    if (dashInfoBtn) { openDashInfoPopup(dashInfoBtn); return; }
     // Per-bubble: pick which lift(s) this bubble shows (the picker writes back via the
     // waGraphSel projection in renderGraphDashboard).
     if (t.closest<HTMLElement>("[data-dashpick]")) {
@@ -21796,13 +21782,8 @@ function setupWorkoutAnalysis(): void {
     // "Reps versus weight" scatter mode + its best-fit line.
     const rvwTab = t.closest<HTMLElement>("[data-warvwset]");
     if (rvwTab) { S.waRepsVsWeight = rvwTab.dataset.warvwset === "rvw"; scheduleWaGraph(); return; }
-    const rvwPg = t.closest<HTMLElement>("[data-rvwwin]");
-    if (rvwPg) {
-      if (rvwPg.dataset.rvwwin === "older") rvwWindowIdx = rvwWindowIdx == null ? 0 : rvwWindowIdx + 1;
-      else if (rvwWindowIdx != null) rvwWindowIdx = rvwWindowIdx <= 0 ? null : rvwWindowIdx - 1; // newer → toward All
-      scheduleWaGraph();
-      return;
-    }
+    if (t.closest<HTMLElement>("[data-rvwmode]")) { rvwWindowMode = rvwWindowMode === "inc" ? "2w" : "inc"; scheduleWaGraph(); return; }
+    if (t.closest<HTMLElement>("[data-rvwcycle]")) { cycleRvwWindow(); scheduleWaGraph(); return; }
     if (t.closest<HTMLElement>("[data-warvw]")) { S.waRepsVsWeight = !S.waRepsVsWeight; scheduleWaGraph(); return; }
     if (t.closest<HTMLElement>("[data-warvwfit]")) { S.waRepsVsWeightFit = !S.waRepsVsWeightFit; scheduleWaGraph(); return; }
     // "Per bodyweight (×BW)" lens (pill). Auto-Fit after the rescale so the data fills
@@ -22434,6 +22415,14 @@ function setupGradeButton(): void {
 
 void init();
 setupGradeButton();
+// Per-setting ℹ buttons in the graph Options menu — capture phase + preventDefault so a tap
+// opens the info popup WITHOUT toggling the <details> group the ℹ sits in.
+document.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-setinfo]");
+  if (!btn?.dataset.setinfo) return;
+  e.preventDefault(); e.stopPropagation();
+  openSettingInfo(btn, btn.dataset.setinfo);
+}, true);
 // Fetch other users' manual sets from Supabase after the app loads.
 // Silent no-op if Supabase is unreachable or RLS blocks access.
 setTimeout(async () => { await loadManualFromSupabase(); await syncManualToSupabase(); await pullMergeKv(); }, 1500);
