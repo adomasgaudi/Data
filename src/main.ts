@@ -19273,6 +19273,11 @@ let dashEditTab: string | null = null; // the tab whose name is being inline-edi
 // title toolbar or picker changed waGraphSel → write picker→bubble). Without this the render
 // kept mirroring the bubble back over the toolbar's edit, so changing the exercise never stuck.
 let dashLoadedBubbleId: string | null = null;
+// PB-39: which bubble the LIVE chart stage element currently holds. While it's the SAME
+// bubble we REUSE the stage element across re-renders (so analyticsGraph.update() keeps the
+// user's live pan/zoom instead of a fresh mount re-applying a stale saved view) — only a real
+// bubble SWITCH builds a new stage, whose fresh mount restores that bubble's saved view.
+let dashStageBubbleId: string | null = null;
 /** The bubble currently showing in the reel (active tab, clamped index). */
 function currentBubble(): GraphBubble {
   const t = activeTab(graphDash);
@@ -19844,6 +19849,16 @@ function renderGraphDashboard(): void {
   // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
   // per-bubble "type" pill owns that switch).
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true });
+  // PB-39: PRESERVE the chart stage element across re-renders of the SAME bubble. Rebuilding
+  // box.innerHTML would destroy #gdashStage (and its live chart instance) every render, so an
+  // incidental re-render re-mounted the chart and re-applied a stale saved view — snapping the
+  // user's pan/zoom back to the auto-fit. Instead: detach the existing stage, rebuild only the
+  // header/foot around a slot, then slot the SAME element back (→ analyticsGraph.update() keeps
+  // the live view). A real bubble SWITCH drops the old stage so a fresh mount restores the new
+  // bubble's saved view.
+  let keepStage = document.getElementById("gdashStage");
+  if (keepStage) keepStage.remove(); // detach (keeps the element + its chart instance alive)
+  if (dashStageBubbleId !== bubble.id) keepStage = null; // bubble switched → force a fresh mount
   box.innerHTML =
     `<div class="gdash-titlerow wa-seltitle-host">${titleHtml}</div>` +
     `<div class="gdash-head">` +
@@ -19851,7 +19866,7 @@ function renderGraphDashboard(): void {
       `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +
       `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
     `</div>` +
-    `<div id="gdashStage" class="gdash-stage wa-graph-chart"></div>` +
+    `<div id="gdashStageSlot"></div>` +
     (S.waRepsVsWeight ? rvwPagerHtml() : "") +
     `<div class="gdash-foot">` +
       `<button type="button" class="gmini-nav" data-dashnav="-1" aria-label="Previous bubble">‹</button>` +
@@ -19863,12 +19878,17 @@ function renderGraphDashboard(): void {
       optionsFold +
       `<button type="button" class="gmini-nav gdash-addbubble" data-dashadd="1" aria-label="Add a graph bubble to this tab" title="Add a graph bubble to this tab">＋</button>` +
     `</div>`;
-  const stage = document.getElementById("gdashStage");
+  // Slot the (preserved or new) stage element into place.
+  const slot = document.getElementById("gdashStageSlot");
+  const stage = keepStage ?? (() => { const d = document.createElement("div"); d.id = "gdashStage"; d.className = "gdash-stage wa-graph-chart"; return d; })();
+  slot?.replaceWith(stage);
   if (stage) {
     if (bubble.exercises.length === 0) {
       stage.innerHTML = `<p class="muted wa-placeholder">No lift picked — tap “⇆ Lifts” to choose what this bubble shows.</p>`;
+      dashStageBubbleId = null; // placeholder wiped any chart → next render must fresh-mount
     } else {
       renderAnalyticsGraph(stage, buildBubbleInput(bubble));
+      dashStageBubbleId = bubble.id;
     }
   }
 }
