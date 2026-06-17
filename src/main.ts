@@ -15254,22 +15254,35 @@ async function init() {
     // feels instant and the page keeps its scroll, then reopen the inline panel.
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
   });
-  // Muscle INVOLVEMENT level chips: cycle 0→1→2→3→4→0 (≥3 = shown in that muscle's
-  // category); the ↺ resets all of this lift's muscle levels to the auto guess.
+  // Muscle INVOLVEMENT level chips. ADD-FIRST cycle: an OFF muscle jumps straight to 4
+  // (top → gold) so ONE tap visibly adds it; each further tap dials DOWN 4→3→2→1→0
+  // (every level reachable, ending at off). The ↺ resets all of this lift's levels.
+  // SNAPPY (rule 17 — owner: "working but very laggy"): repaint just the tapped chip IN
+  // PLACE instantly, and DEBOUNCE the heavy panel + muscle-map rebuild — cycling a level
+  // used to re-render the WHOLE editor on every tap.
+  let mgSyncTimer: number | undefined;
+  const mgSync = (ex: string) => {
+    if (mgSyncTimer) clearTimeout(mgSyncTimer);
+    mgSyncTimer = window.setTimeout(() => { reopenIndexDetail(ex); refreshPoseViz(); }, 260);
+  };
   document.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-mglvl-chip, .ex-mglvl-reset");
     const ex = chip?.dataset.mglvlEx;
     if (!ex) return;
-    if (chip!.classList.contains("ex-mglvl-reset")) { dbg(`mglvl RESET ${ex} admin=${canEditGlobalMeta()}`); resetMgLevel(ex); }
-    else {
-      const m = chip!.dataset.mglvlMuscle as MuscleGroup;
-      const before = mgLevelOf(ex, m);
-      setMgLevel(ex, m, (before + 1) % 5);
-      // #debug (muscle-group chips "can't change"): one screenshot of this line tells us
-      // if the tap fired, whether it's admin-gated, and if the level actually moved.
-      dbg(`mglvl TAP ${ex}·${m} ${before}->${mgLevelOf(ex, m)} admin=${canEditGlobalMeta()}`);
-    }
-    scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
+    if (chip!.classList.contains("ex-mglvl-reset")) { resetMgLevel(ex); scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); }); return; }
+    const m = chip!.dataset.mglvlMuscle as MuscleGroup;
+    const before = mgLevelOf(ex, m);
+    const after = before === 0 ? 4 : before - 1;
+    setMgLevel(ex, m, after);
+    if (mgLevelOf(ex, m) !== after) return; // edit was blocked (non-admin) — don't fake the UI
+    // Instant in-place repaint of THIS chip only (no panel rebuild) — keeps the tap snappy.
+    chip!.classList.toggle("is-on", after >= 3);
+    chip!.classList.toggle("is-partial", after > 0 && after < 3);
+    chip!.classList.toggle("is-top", after === 4);
+    const badge = chip!.querySelector<HTMLElement>(".ex-mglvl-n");
+    if (after > 0) { if (badge) badge.textContent = String(after); else chip!.insertAdjacentHTML("beforeend", `<span class="ex-mglvl-n">${after}</span>`); }
+    else badge?.remove();
+    mgSync(ex); // muscle map / fold hint / ↺ button catch up once tapping settles
   });
   // Combinable / Comparable membership chips — toggle this lift in/out of a group.
   document.addEventListener("click", (e) => {
