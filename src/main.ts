@@ -11973,8 +11973,10 @@ function cardVolDistHtml(name: string): string {
 interface SetsMap {
   pts: { w: number; reps: number; count: number; repLabel?: string }[];
   loW: number; hiW: number; maxReps: number; maxCount: number;
-  /** What the pin HEIGHT (count) measures — "sets" or total "reps" (axis + tooltip label). */
+  /** What the bar HEIGHT (count) measures — "sets" or total "reps" (axis + tooltip label). */
   unit: Vol3dHeight;
+  /** The chosen weight-bin (kg) and rep-bin sizes — drive the bar width/depth (bigger group = chunkier bar). */
+  binW: number; binR: number;
 }
 
 /** Count a lift's sets per (weight-bin, reps) cell — the height of each map pin. */
@@ -11986,28 +11988,36 @@ function cardSetsMapData(name: string): SetsMap | null {
   const sets = cutoff ? all.filter((s) => { const t = Date.parse(s.date); return Number.isFinite(t) && t >= cutoff; }) : all;
   if (sets.length === 0) return null;
   const bin = vol3dWtBin > 0 ? vol3dWtBin : 5;
-  // Rep bin → the floor's rep coordinate (bin upper bound) + a readable label.
-  const repCell = (reps: number): { reps: number; label?: string } => {
-    const sz = vol3dRepBin > 1 ? vol3dRepBin : 1;
-    if (sz === 1) return { reps };
-    const b = Math.ceil(reps / sz); return { reps: b * sz, label: `${b * sz - sz + 1}–${b * sz}` };
-  };
-  const m = new Map<string, { w: number; reps: number; count: number; repLabel?: string }>();
-  let loW = Infinity, hiW = -Infinity, maxReps = 1;
+  const sz = vol3dRepBin > 1 ? vol3dRepBin : 1;
+  // Group each set's rep count by its weight bin.
+  const byW = new Map<number, number[]>();
+  let loW = Infinity, hiW = -Infinity;
   for (const s of sets) {
     const w = Math.round(s.added / bin) * bin;
-    const rc = repCell(s.reps);
     loW = Math.min(loW, w); hiW = Math.max(hiW, w);
-    maxReps = Math.max(maxReps, rc.reps);
-    const k = `${w}|${rc.reps}`;
-    const e = m.get(k) ?? { w, reps: rc.reps, count: 0, ...(rc.label !== undefined ? { repLabel: rc.label } : {}) };
-    e.count += vol3dHeight === "reps" ? s.reps : 1; // height = total reps OR # sets
-    m.set(k, e);
+    const list = byW.get(w); if (list) list.push(s.reps); else byW.set(w, [s.reps]);
+  }
+  // CUMULATIVE rep-survival (owner-confirmed): at (weight, rep-bin k) the height = how many sets
+  // REACHED that rep — a set of R reps counts toward every rep position 1..R, so rep 1 is tallest.
+  // "reps" height sums the reaching sets' reps (volume) instead of counting the sets.
+  const pts: { w: number; reps: number; count: number; repLabel?: string }[] = [];
+  let maxReps = 1, maxCount = 1;
+  for (const [w, repList] of byW) {
+    const wMax = Math.max(...repList);
+    const nBins = Math.max(1, Math.ceil(wMax / sz));
+    for (let k = 1; k <= nBins; k++) {
+      const binLow = (k - 1) * sz + 1;
+      const reaching = repList.filter((r) => r >= binLow);
+      if (reaching.length === 0) continue;
+      const count = vol3dHeight === "reps" ? reaching.reduce((a, r) => a + r, 0) : reaching.length;
+      const repCoord = k * sz;
+      pts.push({ w, reps: repCoord, count, repLabel: sz > 1 ? `${binLow}–${repCoord}` : `${k}` });
+      maxReps = Math.max(maxReps, repCoord);
+      maxCount = Math.max(maxCount, count);
+    }
   }
   if (hiW === loW) hiW = loW + bin;
-  const pts = [...m.values()];
-  const maxCount = Math.max(...pts.map((p) => p.count));
-  return { pts, loW, hiW, maxReps, maxCount, unit: vol3dHeight };
+  return { pts, loW, hiW, maxReps, maxCount, unit: vol3dHeight, binW: bin, binR: sz };
 }
 
 /** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
@@ -12027,16 +12037,30 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     return { X: x1, Y: y2, Z: z2 };
   };
   // World mappers (centred on the origin).
-  const mapX = (w: number) => ((w - d.loW) / (d.hiW - d.loW)) * Wd - Wd / 2;
+  const mapX = (w: number) => Wd / 2 - ((w - d.loW) / (d.hiW - d.loW)) * Wd; // weight increases to the RIGHT (owner)
   const mapZ = (r: number) => (r / d.maxReps) * Dp - Dp / 2;
   const mapH = (c: number) => (c / d.maxCount) * maxBarH;
 
-  type Pin = { bx: number; by: number; tx: number; ty: number; depth: number; count: number; w: number; reps: number; repLabel?: string };
-  const pins: Pin[] = [];
+  // BARS (owner: "bars with volume, not lines with a sphere"): a 3D box per (weight, rep) cell,
+  // its width/depth growing with the chosen bins (chunkier groups), its height = the count.
+  type Face = { c: { X: number; Y: number; Z: number }[]; z: number; fill: string };
+  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string };
+  const GREEN = "#2f8f88", GREEN_D = "#226b66"; // teal top, darker sides
+  const unitW = d.hiW > d.loW ? (d.binW / (d.hiW - d.loW)) * Wd : Wd;
+  const unitR = d.maxReps > 0 ? (d.binR / d.maxReps) * Dp : Dp;
+  const hwx = Math.max(0.09, Math.min(Wd * 0.46, unitW * 0.42));
+  const hwz = Math.max(0.09, Math.min(Dp * 0.46, unitR * 0.42));
+  const bars: Bar[] = [];
   for (const p of d.pts) {
-    const x = mapX(p.w), z = mapZ(p.reps), h = mapH(p.count);
-    const b = rot(x, cy0, z), t = rot(x, cy0 + h, z);
-    pins.push({ bx: b.X, by: b.Y, tx: t.X, ty: t.Y, depth: b.Z, count: p.count, w: p.w, reps: p.reps, ...(p.repLabel !== undefined ? { repLabel: p.repLabel } : {}) });
+    const cx = mapX(p.w), cz = mapZ(p.reps), topY = cy0 + mapH(p.count);
+    const cn = (dx: number, dz: number, y: number) => rot(cx + dx, y, cz + dz);
+    const bot = [cn(-hwx, -hwz, cy0), cn(hwx, -hwz, cy0), cn(hwx, hwz, cy0), cn(-hwx, hwz, cy0)];
+    const top = [cn(-hwx, -hwz, topY), cn(hwx, -hwz, topY), cn(hwx, hwz, topY), cn(-hwx, hwz, topY)];
+    const faces: Face[] = [];
+    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; const f = [bot[i]!, bot[j]!, top[j]!, top[i]!]; faces.push({ c: f, z: (f[0]!.Z + f[1]!.Z + f[2]!.Z + f[3]!.Z) / 4, fill: GREEN_D }); }
+    faces.push({ c: top, z: (top[0]!.Z + top[1]!.Z + top[2]!.Z + top[3]!.Z) / 4 + 0.02, fill: GREEN });
+    const unit = d.unit === "reps" ? "rep" : "set";
+    bars.push({ corners: [...bot, ...top], faces, depth: (bot[0]!.Z + bot[2]!.Z) / 2, tip: `${p.w}kg · ${p.repLabel ?? p.reps} reps · ${p.count} ${unit}${p.count !== 1 ? "s" : ""}` });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
@@ -12062,7 +12086,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   // Fit over pins (base+top), grid, axes.
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const see = (X: number, Y: number) => { if (X < minX) minX = X; if (X > maxX) maxX = X; if (Y < minY) minY = Y; if (Y > maxY) maxY = Y; };
-  for (const p of pins) { see(p.bx, p.by); see(p.tx, p.ty); }
+  for (const bar of bars) for (const c of bar.corners) see(c.X, c.Y);
   for (const g of grid) { see(g.ax, g.ay); see(g.bx, g.by); }
   for (const q of [axO, axW, axR, axS]) see(q.X, q.Y);
   const spanX = Math.max(0.001, maxX - minX), spanY = Math.max(0.001, maxY - minY);
@@ -12077,15 +12101,16 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   for (const g of grid)
     out += `<line x1="${sx(g.ax).toFixed(1)}" y1="${sy(g.ay).toFixed(1)}" x2="${sx(g.bx).toFixed(1)}" y2="${sy(g.by).toFixed(1)}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
 
-  // Pins far→near so nearer ones overlap farther.
-  pins.sort((a, b) => a.depth - b.depth);
-  const GREEN = "#2f8f88"; // the "Your lifts" teal
-  for (const p of pins) {
-    const r = 2.5 + 2.5 * (p.count / d.maxCount); // taller = bigger dot too
-    const repTip = p.repLabel ?? String(p.reps);
-    const unit = d.unit === "reps" ? "rep" : "set";
-    out += `<line x1="${sx(p.bx).toFixed(1)}" y1="${sy(p.by).toFixed(1)}" x2="${sx(p.tx).toFixed(1)}" y2="${sy(p.ty).toFixed(1)}" stroke="${GREEN}" stroke-width="1.6" opacity="0.55"/>`;
-    out += `<circle cx="${sx(p.tx).toFixed(1)}" cy="${sy(p.ty).toFixed(1)}" r="${r.toFixed(1)}" fill="${GREEN}"><title>${p.w}kg · ${repTip} reps · ${p.count} ${unit}${p.count !== 1 ? "s" : ""}</title></circle>`;
+  // Bars far→near; within each, far faces first then the top (camera looks down on the table).
+  bars.sort((a, b) => a.depth - b.depth);
+  for (const bar of bars) {
+    bar.faces.sort((a, b) => a.z - b.z);
+    for (const f of bar.faces) {
+      const poly = f.c.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
+      out += `<polygon points="${poly}" fill="${f.fill}" stroke="${GREEN_D}" stroke-width="0.5" stroke-linejoin="round"/>`;
+    }
+    const tc = bar.faces[bar.faces.length - 1]!.c;
+    out += `<circle cx="${sx((tc[0]!.X + tc[2]!.X) / 2).toFixed(1)}" cy="${sy((tc[0]!.Y + tc[2]!.Y) / 2).toFixed(1)}" r="4" fill="transparent"><title>${bar.tip}</title></circle>`;
   }
 
   // Axis lines + labels.
@@ -12093,8 +12118,8 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const lbl = (a: { X: number; Y: number }, dx: number, dy: number, text: string) =>
     `<text x="${(sx(a.X) + dx).toFixed(1)}" y="${(sy(a.Y) + dy).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#46647f" paint-order="stroke" stroke="#fff" stroke-width="2.5" stroke-linejoin="round">${text}</text>`;
   out += axLine(axW) + axLine(axR) + axLine(axS);
-  out += lbl(axW, 0, 13, `${d.hiW}kg`);
-  out += lbl(axO, 0, 13, `${d.loW}kg`);
+  out += lbl(axW, 0, 13, `${d.loW}kg`);
+  out += lbl(axO, 0, 13, `${d.hiW}kg`);
   out += lbl(axR, 0, 13, `${d.maxReps} reps`);
   out += lbl(axS, 0, -5, `${d.maxCount} ${d.unit === "reps" ? "reps" : "sets"}`);
   return out;
@@ -12123,7 +12148,7 @@ function cardSetsMapHtml(name: string): string {
     `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
     renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
     `</svg>` +
-    `<div class="lt-vol-note muted">Drag to rotate · floor = weight × reps · pin height = ${tall} done there ${range}</div>` +
+    `<div class="lt-vol-note muted">Drag to rotate · floor = weight × rep number · bar height = ${tall} that reached that rep, ${range} (so rep 1 is tallest)</div>` +
     `</div>`;
 }
 
