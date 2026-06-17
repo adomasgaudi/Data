@@ -19451,6 +19451,13 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   // Metrics come from the GLOBAL Options menu (shared across bubbles for now); type/view/
   // lifts/×BW are the per-bubble dials. (bubble.metrics is reserved for future per-bubble metrics.)
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  // PROJECTION fit-window: the dashboard bubble was missing the draggable "fit ⟵ / ⟶ fit"
+  // lines the carousel/full graph have (owner: "fit data points for the projection graph not
+  // working"). Build them here too — projectionFitMarkers also sets the projection window
+  // bounds on waGraphConfig, so copy those onto this bubble's cloned cfg. (rvw ignores xMarkers.)
+  const projMarkers = isRvw ? undefined : projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
+  cfg.projectionFrom = waGraphConfig.projectionFrom;
+  cfg.projectionTo = waGraphConfig.projectionTo;
   // "Remember my pan/zoom across bubble/tab switches + refresh" (owner). The saved view is
   // restored ONLY while the plotted CONTENT is unchanged (this signature) — change the lift /
   // metric / type / athlete / time-compaction and it re-fits instead of keeping a stale frame.
@@ -19470,6 +19477,8 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
       persistDash();
     },
     height: 300, // one constant plot height across all bubble types (stable reel, owner)
+    xMarkers: projMarkers, // projection fit-window lines (drag to set the forecast fit range)
+    onMarkerDrag: onProjMarkerDrag,
     rvwFitOf,
     onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"),
@@ -21163,9 +21172,16 @@ function setupWorkoutAnalysis(): void {
   // Capture-phase: swallow the post-long-press release-click (so it neither switches the tab
   // nor closes the just-opened menu); otherwise close either dash menu on a click outside it.
   document.addEventListener("click", (e) => {
-    if (dashTabSuppressClick) { dashTabSuppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
     const tgt = e.target as Element | null;
-    if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu")) closeDashTabMenu();
+    // PB-38 recurrence 2 (ROOT): a click INSIDE the menu is ALWAYS a menu action — never let
+    // the suppress flag swallow it. On mobile the menu opens under the finger, so the release
+    // (or a quick tap) lands on a menu item while dashTabSuppressClick is still true (a
+    // continuous press fires no fresh touchstart to reset it) — the old code stopPropagation'd
+    // that click in capture phase, so the action never ran. Bailing here lets the delegated
+    // handler run the action regardless of the flag.
+    if (tgt?.closest("#dashTabMenu")) return;
+    if (dashTabSuppressClick) { dashTabSuppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
+    if (document.getElementById("dashTabMenu")) closeDashTabMenu();
   }, true);
 }
 
