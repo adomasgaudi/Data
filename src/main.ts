@@ -19995,6 +19995,85 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   clampMenuIntoView(m, anchor);
   dbg(`menu OPEN (in <body>, ${m.querySelectorAll("[data-tabmenu]").length} items)`);
 }
+function closeDashInfoPopup(): void {
+  document.getElementById("gdashInfoPopup")?.remove();
+  document.removeEventListener("click", dashInfoOutside, true);
+}
+function dashInfoOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest("[data-dashinfocls]")) { closeDashInfoPopup(); return; }
+  if (t.closest("#gdashInfoPopup") || t.closest("[data-dashinfo]")) return;
+  closeDashInfoPopup();
+}
+function openDashInfoPopup(anchor: HTMLElement): void {
+  if (document.getElementById("gdashInfoPopup")) { closeDashInfoPopup(); return; }
+  const bubble = currentBubble();
+  const c = waGraphConfig;
+  // A GLOSSARY of every graph metric/setting (not just the active ones) — on mobile the
+  // chip `title` tooltips never show, so this popup is the only way to learn what each
+  // circled metric/option means. Grouped to mirror the Options ▾ menu's layout; the
+  // metric the bubble currently shows is marked ✓.
+  const MDESC: Record<string, string> = {
+    e1rm: "Estimated 1RM of every set",
+    weightRange: "Each set's weight up to its 1RM, banded per rep",
+    pctWR: "Your 1RM as a fraction of the world record",
+    strength: "Your best 1RM so far (running max)",
+    strengthDecay: "Strength fading during time off training",
+    volume: "Weight × reps summed per interval (bars)",
+    volumeLoad: "Weight × reps summed per interval (bars)",
+    reps: "Total reps done per interval (bars)",
+    sets: "Number of sets per interval (bars)",
+    frequency: "Sessions per week (rolling cadence)",
+  };
+  const GROUPS: { label: string; ids: string[] }[] = [
+    { label: "Weight", ids: ["e1rm", "weightRange"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR"] },
+    { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
+  ];
+  const metricSection = GROUPS.map((g) => {
+    const rows = g.ids.map((id) => {
+      const m = GRAPH_METRICS.find((x) => x.id === id);
+      if (!m) return "";
+      const on = waMetrics.has(id);
+      return `<div class="gi-row${on ? " gi-on" : ""}"><span class="gi-lbl">${on ? "✓ " : ""}${escapeHtml(m.label)}</span><span class="gi-desc">${escapeHtml(MDESC[id] ?? "")}</span></div>`;
+    }).join("");
+    return `<div class="gi-subhdr">${escapeHtml(g.label)}</div>${rows}`;
+  }).join("");
+  const typeLabel = bubble.type === "rvw" ? "Reps × kg" : "Over time";
+  const typeDesc = bubble.type === "rvw" ? "Every set plotted as weight × reps" : "Metrics tracked across dates";
+  const viewLabel = bubble.view === "multi" ? "Multi" : "Single";
+  const viewDesc = bubble.view === "multi" ? "All picked lifts overlaid" : "One lift shown";
+  const bwDesc = bubble.perBodyweight ? "Values shown ÷ bodyweight" : "Values shown in kg";
+  const projOn = waMetrics.has("predicted");
+  const projBasisLbl = (c.projectionBasis ?? "records") === "records" ? "Records" : (c.projectionBasis === "hard" ? "Hard sets" : "All sets");
+  const projMonths = Math.round((c.predictionDays ?? 365) / 30);
+  const projDesc = projOn
+    ? `On · ${projMonths} mo ahead · fit ${projBasisLbl.toLowerCase()}`
+    : "Off — forecast curve toward your ceiling";
+  const dataLine = `${c.aggregation === "none" ? "Every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · smoothing ~${c.smoothing}` : ""}`;
+  const el = document.createElement("div");
+  el.id = "gdashInfoPopup"; el.className = "gdash-info-popup";
+  el.innerHTML =
+    `<div class="gi-head"><span>Graph info</span><button class="gi-close" data-dashinfocls aria-label="Close">✕</button></div>` +
+    `<div class="gi-section">This graph</div>` +
+    `<div class="gi-row"><span class="gi-lbl">${escapeHtml(typeLabel)}</span><span class="gi-desc">${escapeHtml(typeDesc)}</span></div>` +
+    `<div class="gi-row"><span class="gi-lbl">${escapeHtml(viewLabel)}</span><span class="gi-desc">${escapeHtml(viewDesc)}</span></div>` +
+    `<div class="gi-row"><span class="gi-lbl">${bubble.perBodyweight ? "×BW" : "kg"}</span><span class="gi-desc">${escapeHtml(bwDesc)}</span></div>` +
+    `<div class="gi-sep"></div>` +
+    `<div class="gi-section">Metrics — what each shows</div>` +
+    metricSection +
+    `<div class="gi-sep"></div>` +
+    `<div class="gi-section">Projection</div>` +
+    `<div class="gi-row gi-desc">${escapeHtml(projDesc)}</div>` +
+    `<div class="gi-sep"></div>` +
+    `<div class="gi-section">Data</div>` +
+    `<div class="gi-row gi-desc">${escapeHtml(dataLine)}</div>` +
+    `<div class="gi-sep"></div>` +
+    `<div class="gi-tip">Tip: drag ⟵⟶ to set the fit window · pinch / drag the chart to zoom & pan</div>`;
+  document.body.appendChild(el);
+  clampMenuIntoView(el, anchor);
+  setTimeout(() => document.addEventListener("click", dashInfoOutside, true), 0);
+}
 /** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
  * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
  * projection). One bubble shows at a time (swipe reel, owner's pick); each draws a REAL chart
@@ -20104,6 +20183,7 @@ function renderGraphDashboard(): void {
     `<div class="gdash-head">` +
       `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
       `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
+      `<button type="button" class="wa-gov-btn gdash-info-btn" data-dashinfo="1" title="About this graph" aria-label="Graph info">ℹ</button>` +
     `</div>` +
     `<div id="gdashStageSlot"></div>` +
     (S.waRepsVsWeight ? rvwPagerHtml() : "") +
@@ -21473,6 +21553,9 @@ function setupWorkoutAnalysis(): void {
       graphDash = updateBubble(graphDash, tab.id, currentBubble().id, { perBodyweight: !currentBubble().perBodyweight });
       persistDash(); refreshDash(); return;
     }
+    // Per-bubble: ℹ info popup — shows type/view/BW/metrics/data settings at a glance.
+    const dashInfoBtn = t.closest<HTMLElement>("[data-dashinfo]");
+    if (dashInfoBtn) { openDashInfoPopup(dashInfoBtn); return; }
     // Per-bubble: pick which lift(s) this bubble shows (the picker writes back via the
     // waGraphSel projection in renderGraphDashboard).
     if (t.closest<HTMLElement>("[data-dashpick]")) {
