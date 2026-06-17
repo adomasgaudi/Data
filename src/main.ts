@@ -11601,21 +11601,22 @@ function volWeightRgb(f: number): [number, number, number] {
   ];
 }
 
-/** Render the 3D city as an SVG string at the given camera angles. */
+/** Render the 3D city as an SVG string at the given camera angles. Bars are SOLID
+ *  Lambert-shaded blocks (no wireframe look); axis lines + labels show what's what. */
 function renderVol3d(d: VolGrid, yaw: number, pitch: number): string {
-  const svgW = 400, svgH = 240, margin = 14;
+  const svgW = 400, svgH = 240, margin = 22;
   const nW = d.wBins.length, nR = d.rLabels.length;
 
   // World layout (centred on the origin so rotation pivots about the middle).
-  const cellX = 1.4, barW = 1.0;   // along X (weight)
-  const cellZ = 1.0, barD = 0.55;  // along Z (rep range) — thinner in z
+  const cellX = 1.4, barW = 1.05;  // along X (weight)
+  const cellZ = 1.0, barD = 0.7;   // along Z (rep range)
   const maxBarH = 3.4;             // tallest bar in world units
   const totalX = nW * cellX, totalZ = nR * cellZ;
   const cx0 = -totalX / 2, cz0 = -totalZ / 2, cy0 = -maxBarH / 2;
 
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
   const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
-  // Rotate a world point → screen-space {X, Y up, Z depth (bigger = nearer)}.
+  // Rotate a world point/vector → screen-space {X, Y up, Z depth (bigger = nearer)}.
   const rot = (x: number, y: number, z: number) => {
     const x1 = x * cosY + z * sinY;
     const z1 = -x * sinY + z * cosY;
@@ -11624,7 +11625,11 @@ function renderVol3d(d: VolGrid, yaw: number, pitch: number): string {
     return { X: x1, Y: y2, Z: z2 };
   };
 
-  type Face = { pts: { X: number; Y: number }[]; depth: number; up: number; fill: [number, number, number] };
+  // Fixed light (screen space): top-front, slightly left. Lambert: ambient + diffuse·max(0,N·L).
+  const ll = Math.hypot(-0.35, 0.85, 0.45);
+  const L = { x: -0.35 / ll, y: 0.85 / ll, z: 0.45 / ll };
+
+  type Face = { pts: { X: number; Y: number }[]; depth: number; fill: [number, number, number]; ground?: boolean };
   const faces: Face[] = [];
   // Ground tile (faint) so the bars read as a city on a floor.
   {
@@ -11632,21 +11637,20 @@ function renderVol3d(d: VolGrid, yaw: number, pitch: number): string {
       rot(cx0, cy0, cz0), rot(cx0 + totalX, cy0, cz0),
       rot(cx0 + totalX, cy0, cz0 + totalZ), rot(cx0, cy0, cz0 + totalZ),
     ];
-    faces.push({ pts: g, depth: (g[0]!.Z + g[2]!.Z) / 2 - 0.01, up: 1, fill: [-1, -1, -1] });
+    faces.push({ pts: g, depth: (g[0]!.Z + g[2]!.Z) / 2 - 0.02, fill: [0, 0, 0], ground: true });
   }
 
-  // Box faces (top + 4 sides; bottom is never seen from above).
-  const FACES: [number, number, number, number, number][] = [
-    // indices into the 8 corners, last entry = "is top face" flag (1) else 0
-    [4, 5, 6, 7, 1], // +Y top
-    [0, 1, 5, 4, 0], // -Z front
-    [3, 7, 6, 2, 0], // +Z back
-    [0, 4, 7, 3, 0], // -X left
-    [1, 2, 6, 5, 0], // +X right
+  // Box faces (top + 4 sides; bottom is never seen from above) with outward normals.
+  const FACES: { idx: [number, number, number, number]; n: [number, number, number] }[] = [
+    { idx: [4, 5, 6, 7], n: [0, 1, 0] },   // top  +Y
+    { idx: [0, 1, 5, 4], n: [0, 0, -1] },  // front -Z
+    { idx: [3, 7, 6, 2], n: [0, 0, 1] },   // back  +Z
+    { idx: [0, 4, 7, 3], n: [-1, 0, 0] },  // left  -X
+    { idx: [1, 2, 6, 5], n: [1, 0, 0] },   // right +X
   ];
 
   for (let wi = 0; wi < nW; wi++) {
-    const f = nW > 1 ? wi / (nW - 1) : 0; // weight fraction for colour (already left→right = light→heavy)
+    const f = nW > 1 ? wi / (nW - 1) : 0; // weight fraction for colour (left→right = light→heavy)
     const base = volWeightRgb(f);
     const x0 = cx0 + wi * cellX + (cellX - barW) / 2, x1 = x0 + barW;
     for (let ri = 0; ri < nR; ri++) {
@@ -11659,49 +11663,70 @@ function renderVol3d(d: VolGrid, yaw: number, pitch: number): string {
         rot(x0, y0, z0), rot(x1, y0, z0), rot(x1, y0, z1), rot(x0, y0, z1),
         rot(x0, y1, z0), rot(x1, y1, z0), rot(x1, y1, z1), rot(x0, y1, z1),
       ];
-      for (const [a, b, c, dd] of FACES) {
-        const p = [C[a]!, C[b]!, C[c]!, C[dd]!];
+      for (const { idx, n } of FACES) {
+        const p = [C[idx[0]]!, C[idx[1]]!, C[idx[2]]!, C[idx[3]]!];
         // Backface cull via projected signed area (screen Y is down).
         const area = (p[1]!.X - p[0]!.X) * (p[2]!.Y - p[0]!.Y) - (p[1]!.Y - p[0]!.Y) * (p[2]!.X - p[0]!.X);
         if (area <= 0) continue; // facing away
         const depth = (p[0]!.Z + p[1]!.Z + p[2]!.Z + p[3]!.Z) / 4;
-        const up = (p[0]!.Y + p[2]!.Y) / 2; // crude "how up-facing" for shading
-        faces.push({ pts: p, depth, up, fill: base });
+        // Lambert: rotate the face normal into screen space, light it.
+        const rn = rot(n[0], n[1], n[2]);
+        const lambert = 0.5 + 0.5 * Math.max(0, rn.X * L.x + rn.Y * L.y + rn.Z * L.z);
+        faces.push({
+          pts: p, depth,
+          fill: [Math.round(base[0] * lambert), Math.round(base[1] * lambert), Math.round(base[2] * lambert)],
+        });
       }
     }
   }
 
-  // Fit: project once, find the 2D bbox, scale to the viewBox (stable enough that
-  // a drag never clips — recomputed each frame so any angle stays in view).
+  // Axis anchors (kept in world space; projected after the fit so labels sit right).
+  const axO: [number, number, number] = [cx0, cy0, cz0];
+  const axW: [number, number, number] = [cx0 + totalX, cy0, cz0];               // weight axis end (+X)
+  const axR: [number, number, number] = [cx0, cy0, cz0 + totalZ];               // reps axis end (+Z)
+  const axS: [number, number, number] = [cx0, cy0 + maxBarH, cz0];              // sets axis end (+Y)
+  const axPts = [axO, axW, axR, axS].map(([x, y, z]) => rot(x, y, z));
+
+  // Fit: include bar faces + axis anchors so nothing clips at any angle.
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const fc of faces) for (const p of fc.pts) {
-    if (p.X < minX) minX = p.X; if (p.X > maxX) maxX = p.X;
-    if (p.Y < minY) minY = p.Y; if (p.Y > maxY) maxY = p.Y;
-  }
+  const see = (q: { X: number; Y: number }) => {
+    if (q.X < minX) minX = q.X; if (q.X > maxX) maxX = q.X;
+    if (q.Y < minY) minY = q.Y; if (q.Y > maxY) maxY = q.Y;
+  };
+  for (const fc of faces) for (const p of fc.pts) see(p);
+  for (const q of axPts) see(q);
   const spanX = Math.max(0.001, maxX - minX), spanY = Math.max(0.001, maxY - minY);
   const scale = Math.min((svgW - 2 * margin) / spanX, (svgH - 2 * margin) / spanY);
   const offX = (svgW - spanX * scale) / 2 - minX * scale;
   const offY = (svgH - spanY * scale) / 2 + maxY * scale; // +Y up → flip
-  const sx = (X: number) => (X * scale + offX).toFixed(1);
-  const sy = (Y: number) => (-Y * scale + offY).toFixed(1);
+  const sx = (X: number) => X * scale + offX;
+  const sy = (Y: number) => -Y * scale + offY;
+  const pt = (q: { X: number; Y: number }) => `${sx(q.X).toFixed(1)},${sy(q.Y).toFixed(1)}`;
 
   // Painter's algorithm: far (small depth) first.
   faces.sort((p, q) => p.depth - q.depth);
 
   let out = "";
   for (const fc of faces) {
-    const poly = fc.pts.map(p => `${sx(p.X)},${sy(p.Y)}`).join(" ");
-    if (fc.fill[0] < 0) { // ground tile
-      out += `<polygon points="${poly}" fill="var(--line)" opacity="0.35"/>`;
-      continue;
-    }
-    // Shade each face by how up-facing it is (top brightest, sides darker).
-    const upN = Math.max(0, Math.min(1, (fc.up - minY) / spanY));
-    const light = 0.62 + 0.38 * upN;
+    const poly = fc.pts.map(pt).join(" ");
+    if (fc.ground) { out += `<polygon points="${poly}" fill="var(--line)" opacity="0.3"/>`; continue; }
     const [r, g, b] = fc.fill;
-    const col = `rgb(${Math.round(r * light)},${Math.round(g * light)},${Math.round(b * light)})`;
-    out += `<polygon points="${poly}" fill="${col}" stroke="rgba(255,255,255,0.25)" stroke-width="0.5"/>`;
+    // Solid block: fill only, with a thin SAME-hue darker edge for definition (no white wireframe).
+    out += `<polygon points="${poly}" fill="rgb(${r},${g},${b})" stroke="rgb(${Math.round(r * 0.7)},${Math.round(g * 0.7)},${Math.round(b * 0.7)})" stroke-width="0.4" stroke-linejoin="round"/>`;
   }
+
+  // Axis lines + labels on top (so they're always legible). Halo via paint-order stroke.
+  const O = axPts[0]!;
+  const axLine = (to: { X: number; Y: number }) => `<line x1="${sx(O.X).toFixed(1)}" y1="${sy(O.Y).toFixed(1)}" x2="${sx(to.X).toFixed(1)}" y2="${sy(to.Y).toFixed(1)}" stroke="var(--muted)" stroke-width="1" opacity="0.7"/>`;
+  const lbl = (anchor: { X: number; Y: number }, dx: number, dy: number, text: string) =>
+    `<text x="${(sx(anchor.X) + dx).toFixed(1)}" y="${(sy(anchor.Y) + dy).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#46647f" paint-order="stroke" stroke="#fff" stroke-width="2.5" stroke-linejoin="round">${text}</text>`;
+  out += axLine(axPts[1]!) + axLine(axPts[2]!) + axLine(axPts[3]!);
+  // Tick values for scale + axis titles.
+  out += lbl(axPts[1]!, 0, 13, `${d.hiW}kg`);
+  out += lbl(axPts[2]!, 0, 13, `${d.rLabels[d.rLabels.length - 1]} reps`);
+  out += lbl(axPts[3]!, 0, -5, `${d.maxCount} sets`);
+  out += lbl(axPts[0]!, 0, 13, `${d.loW}kg`);
+
   return out;
 }
 
