@@ -1459,16 +1459,24 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 }
 .ex-tab:hover { color: var(--text); }
 .ex-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-/* History view tabs (Sessions / By exercise / By week / By month) — underline tabs, a
-   horizontally-scrollable row so they stay one line on phones (#cram). */
-.wo-tabs { display: flex; gap: 0.15rem; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0.3rem 0 0.2rem; -webkit-overflow-scrolling: touch; }
+/* User-managed history tabs (like the graph dashboard): a scrollable underline-tab row,
+   the active tab growing inline ✎ rename / ⧉ duplicate / ✕ delete controls + a ＋ to add. */
+.wo-tabs { display: flex; align-items: center; gap: 0.1rem; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0 0 0.3rem; -webkit-overflow-scrolling: touch; }
+.wo-tab-wrap { display: inline-flex; align-items: center; flex: 0 0 auto; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.wo-tab-wrap.is-active { border-bottom-color: var(--accent); }
 .wo-tab {
   background: none; border: none; color: var(--muted); font: inherit; font-size: var(--fs-sm);
-  cursor: pointer; padding: 0.4rem 0.7rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
-  white-space: nowrap; flex: 0 0 auto; min-height: var(--tap-min);
+  cursor: pointer; padding: 0.4rem 0.55rem; white-space: nowrap; min-height: var(--tap-min);
 }
 .wo-tab:hover { color: var(--text); }
-.wo-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.wo-tab.is-active { color: var(--accent); font-weight: 600; }
+.wo-tab-edit, .wo-tab-dup, .wo-tab-del, .wo-tab-add {
+  background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem;
+  padding: 0.3rem 0.25rem; min-height: var(--tap-min); flex: 0 0 auto; line-height: 1;
+}
+.wo-tab-edit:hover, .wo-tab-dup:hover, .wo-tab-del:hover, .wo-tab-add:hover { color: var(--accent); }
+.wo-tab-del:hover { color: var(--remove); }
+.wo-tab-add { font-size: 1rem; color: var(--accent); padding: 0.3rem 0.5rem; }
 .ex-filters-wrap { position: relative; flex: none; }
 .ex-filters-btn {
   background: none; border: 1px solid var(--line); color: var(--muted);

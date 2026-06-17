@@ -109,6 +109,11 @@ import {
   addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble, setBubbleView,
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
+import {
+  loadHistoryDashboard, saveHistoryDashboard, activeHistoryTab, addHistoryTab, removeHistoryTab,
+  renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig, HISTORY_DASH_KEY,
+  type HistoryDashboard, type HistoryTabConfig,
+} from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
@@ -4291,21 +4296,88 @@ function syncWorkoutToggles(): void {
   els.woShowAllToggle.setAttribute("aria-pressed", woShowAllExercises ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
-  syncWoTabs();
+  renderWoTabs();
 }
-/** Light up the history view tab matching the current grouping: By exercise when that
- * flag is on, else the period (Sessions=day / By week / By month). 2-week & 3-month
- * (set via the ⚙ toggle) light no tab — they live only on the ⚙ cycle. */
-function syncWoTabs(): void {
-  const active = historyByExercise ? "exercise"
-    : S.workoutViewMode === "day" ? "sessions"
-    : S.workoutViewMode === "week" ? "week"
-    : S.workoutViewMode === "month" ? "month" : "";
-  for (const t of document.querySelectorAll<HTMLElement>("#woTabs .wo-tab")) {
-    const on = t.dataset.wotab === active;
-    t.classList.toggle("is-active", on);
-    t.setAttribute("aria-selected", on ? "true" : "false");
-  }
+/** ===== History dashboard (user-managed tabs, like the graph's) =================
+ * Each tab is a fully INDEPENDENT history view: switching a tab APPLIES its config to
+ * the live history state; on every history render the live state is SNAPSHOT back into
+ * the active tab (so any setting you change is saved to the tab you're on, and tabs
+ * never bleed into each other). graph-style add / rename / duplicate / delete. */
+let historyDash: HistoryDashboard = loadHistoryDashboard();
+let historyDashReady = false; // becomes true after the first applyHistoryTab on startup
+
+/** Read the live history view state into a config (the full shape; the exercise lens is
+ * carried through unchanged so it round-trips even though it's not re-applied live yet). */
+function snapshotHistoryLive(prev: HistoryTabConfig): HistoryTabConfig {
+  return {
+    viewMode: S.workoutViewMode,
+    byExercise: historyByExercise,
+    sortByPriority: woSortByPriority,
+    showRest: S.showRestDays,
+    restCompact: S.restCompact,
+    showAddSets: S.showAddSets,
+    showVariants: S.showVariants,
+    showAloneTags: S.showAloneTags,
+    showMode: S.workoutShowMode,
+    grouping: els.workoutGrouping?.value || prev.grouping,
+    rmReps: xrmReps,
+    aloneFilter,
+    lensFilter: prev.lensFilter, // shared selection — not applied live yet (Part 3)
+    showAll: woShowAllExercises,
+  };
+}
+/** Apply a tab's config to the live history state (the inverse of snapshot). */
+function applyHistoryTabConfig(c: HistoryTabConfig): void {
+  S.workoutViewMode = c.viewMode;
+  historyByExercise = c.byExercise; saveHistByExercise();
+  woSortByPriority = c.sortByPriority;
+  S.showRestDays = c.showRest;
+  S.restCompact = c.restCompact;
+  S.showAddSets = c.showAddSets;
+  S.showVariants = c.showVariants;
+  S.showAloneTags = c.showAloneTags;
+  S.workoutShowMode = c.showMode;
+  if (els.workoutGrouping) els.workoutGrouping.value = c.grouping;
+  xrmReps = c.rmReps;
+  aloneFilter = c.aloneFilter;
+  woShowAllExercises = c.showAll;
+}
+/** Save the live state into the active tab + persist. Called at the end of every history
+ * render, so the active tab always mirrors what's on screen. */
+function saveActiveHistoryTab(): void {
+  if (!historyDashReady) return; // don't overwrite a tab before the active one is applied
+  const act = activeHistoryTab(historyDash);
+  historyDash = setHistoryTabConfig(historyDash, act.id, snapshotHistoryLive(act.config));
+  saveHistoryDashboard(historyDash);
+}
+/** Build the tab bar: one chip per tab (active one editable inline) + a "+" to add. */
+function renderWoTabs(): void {
+  const host = document.getElementById("woTabs");
+  if (!host) return;
+  const act = activeHistoryTab(historyDash);
+  const canDelete = historyDash.tabs.length > 1;
+  host.innerHTML =
+    historyDash.tabs.map((t) => {
+      const on = t.id === act.id;
+      return `<span class="wo-tab-wrap${on ? " is-active" : ""}">` +
+        `<button type="button" class="wo-tab${on ? " is-active" : ""}" role="tab" aria-selected="${on}" data-hwtab="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>` +
+        (on
+          ? `<button type="button" class="wo-tab-edit" data-hwrename="${escapeHtml(t.id)}" title="Rename this tab" aria-label="Rename tab">✎</button>` +
+            `<button type="button" class="wo-tab-dup" data-hwdup="${escapeHtml(t.id)}" title="Duplicate this tab" aria-label="Duplicate tab">⧉</button>` +
+            (canDelete ? `<button type="button" class="wo-tab-del" data-hwdel="${escapeHtml(t.id)}" title="Delete this tab" aria-label="Delete tab">✕</button>` : "")
+          : "") +
+        `</span>`;
+    }).join("") +
+    `<button type="button" class="wo-tab-add" data-hwadd="1" title="Add a new history tab" aria-label="Add tab">＋</button>`;
+}
+/** Switch to a tab: apply its config, mark active, render. */
+function switchHistoryTab(id: string): void {
+  historyDash = setActiveHistoryTab(historyDash, id);
+  applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+  saveHistoryDashboard(historyDash);
+  S.workoutsPage = 0;
+  syncWorkoutToggles();
+  renderWorkoutsPage();
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -7486,6 +7558,15 @@ function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): s
 }
 
 function renderWorkoutsPage() {
+  // First history render: if a dashboard was saved, adopt the active tab's view; if NOT
+  // (first run after this feature), SEED the default tab from the user's existing live
+  // prefs so their old display settings carry over instead of being reset. Thereafter
+  // snapshot-on-render keeps the active tab mirrored.
+  if (!historyDashReady) {
+    historyDashReady = true;
+    if (localStorage.getItem(HISTORY_DASH_KEY) != null) applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+    else saveActiveHistoryTab(); // seed from current live state + persist
+  }
   workoutGroups = buildWorkoutGroups();
   // Default: order each group's exercises by the athlete's plan priority (the SAME order
   // as the Plan page; non-priority lifts last). New group objects so no cached source is
@@ -7679,6 +7760,7 @@ function renderWorkoutsPage() {
   renderWoHiddenNote();
   reopenSetEdit(); // PB-12: keep the set-edit panel open across the rebuild a control triggered
   renderHorizontalHistory(); // EXPERIMENTAL sideways view — reuses the same groups
+  saveActiveHistoryTab(); // mirror the live view back into the active history tab
 }
 
 /**
@@ -15465,17 +15547,31 @@ async function init() {
     S.workoutsPage = 0;
     renderWorkoutsPage();
   });
-  // History view tabs (Sessions / By exercise / By week / By month) — the same log,
-  // grouped differently. Sessions/week/month set the period; By exercise flips the flag.
+  // History dashboard tabs (user-managed, like the graph): switch / add / rename /
+  // duplicate / delete. Each tab is its own independent history view.
   document.addEventListener("click", (e) => {
-    const tab = (e.target as HTMLElement).closest<HTMLElement>("#woTabs .wo-tab");
-    if (!tab?.dataset.wotab) return;
-    const which = tab.dataset.wotab;
-    historyByExercise = which === "exercise";
-    if (!historyByExercise) S.workoutViewMode = which === "week" ? "week" : which === "month" ? "month" : "day";
-    saveHistByExercise();
-    S.workoutsPage = 0;
-    renderWorkoutsPage();
+    const el = e.target as HTMLElement;
+    const sw = el.closest<HTMLElement>("[data-hwtab]");
+    if (sw?.dataset.hwtab) {
+      if (sw.dataset.hwtab !== activeHistoryTab(historyDash).id) switchHistoryTab(sw.dataset.hwtab);
+      return;
+    }
+    if (el.closest("[data-hwadd]")) {
+      historyDash = addHistoryTab(historyDash);
+      switchHistoryTab(activeHistoryTab(historyDash).id);
+      return;
+    }
+    const dup = el.closest<HTMLElement>("[data-hwdup]");
+    if (dup?.dataset.hwdup) { historyDash = duplicateHistoryTab(historyDash, dup.dataset.hwdup); switchHistoryTab(activeHistoryTab(historyDash).id); return; }
+    const del = el.closest<HTMLElement>("[data-hwdel]");
+    if (del?.dataset.hwdel) { historyDash = removeHistoryTab(historyDash, del.dataset.hwdel); switchHistoryTab(activeHistoryTab(historyDash).id); return; }
+    const ren = el.closest<HTMLElement>("[data-hwrename]");
+    if (ren?.dataset.hwrename) {
+      const cur = activeHistoryTab(historyDash);
+      const name = prompt("Rename this history tab", cur.name);
+      if (name != null && name.trim()) { historyDash = renameHistoryTab(historyDash, cur.id, name.trim()); saveHistoryDashboard(historyDash); renderWoTabs(); }
+      return;
+    }
   });
   // EXPERIMENTAL horizontal history: its grouping cycle mirrors the ⚙ toggle
   // (same shared S.workoutViewMode). Delegated since the button is re-rendered.
