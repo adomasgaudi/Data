@@ -12025,11 +12025,18 @@ function cardVolDistHtml(name: string): string {
 // raised by how many sets were logged there over time — a 3D terrain of green pins.
 
 interface SetsMap {
-  pts: { w: number; reps: number; count: number; repLabel?: string }[];
+  /** Each occupied cell: tiers = the count split by RECENCY (recent→old) so the bar can fade
+   *  the older portion (opaque recent at the bottom, faint old on top). count = Σ tiers. */
+  pts: { w: number; reps: number; count: number; repLabel?: string; tiers: number[] }[];
   loW: number; hiW: number; maxReps: number; maxCount: number;
   /** The chosen weight-bin (kg) and rep-bin sizes — drive the bin grid. */
   binW: number; binR: number;
+  /** The Nuzzo strength curve (weight you could do for N reps), drawn on the floor. */
+  curve?: { reps: number; w: number }[];
 }
+/** Recency tiers (days-ago upper bound) + the opacity each gets — recent solid → old faint. */
+const MAP_TIER_DAYS = [14, 30, 91, 182, 365, Infinity];
+const MAP_TIER_OP = [1, 0.8, 0.62, 0.46, 0.33, 0.22];
 
 /** Count a lift's sets per (weight-bin, reps) cell — the height of each map bar. */
 function cardSetsMapData(name: string): SetsMap | null {
@@ -12047,27 +12054,33 @@ function cardSetsMapData(name: string): SetsMap | null {
   // 60kg set, "60kg rep 7" only the 60kg sets that got to a 7th rep — rep 1 is tallest, tapering
   // up. (Owner: "count how many of EACH rep was done; a 16-rep set did the 1st rep only once" —
   // the old sets/total-reps toggle is gone.)
-  type Pt = { w: number; reps: number; count: number; repLabel?: string };
+  type Pt = { w: number; reps: number; count: number; repLabel?: string; tiers: number[] };
+  const now = Date.now();
+  const tierOf = (ageDays: number): number => { for (let i = 0; i < MAP_TIER_DAYS.length; i++) if (ageDays <= MAP_TIER_DAYS[i]!) return i; return MAP_TIER_DAYS.length - 1; };
   const binSets = (list: typeof sets): { pts: Pt[]; loW: number; hiW: number; maxReps: number; maxCount: number } => {
-    const byW = new Map<number, number[]>();
+    const byW = new Map<number, { reps: number; tier: number }[]>();
     let loW = Infinity, hiW = -Infinity;
     for (const s of list) {
       const w = Math.round(s.added / bin) * bin;
       loW = Math.min(loW, w); hiW = Math.max(hiW, w);
-      const a = byW.get(w); if (a) a.push(s.reps); else byW.set(w, [s.reps]);
+      const t = Date.parse(s.date); const ageDays = Number.isFinite(t) ? (now - t) / 86_400_000 : 0;
+      const e = { reps: s.reps, tier: tierOf(ageDays) };
+      const a = byW.get(w); if (a) a.push(e); else byW.set(w, [e]);
     }
     const pts: Pt[] = [];
     let maxReps = 1, maxCount = 1;
-    for (const [w, repList] of byW) {
-      const wMax = Math.max(...repList);
+    for (const [w, list2] of byW) {
+      const wMax = Math.max(...list2.map((x) => x.reps));
       const nBins = Math.max(1, Math.ceil(wMax / sz));
       for (let k = 1; k <= nBins; k++) {
         const binLow = (k - 1) * sz + 1;
-        const reaching = repList.filter((r) => r >= binLow); // sets that performed this rep
+        const reaching = list2.filter((x) => x.reps >= binLow); // sets that performed this rep
         if (reaching.length === 0) continue;
+        const tiers = new Array(MAP_TIER_OP.length).fill(0) as number[];
+        for (const x of reaching) tiers[x.tier]!++;
         const count = reaching.length; // how many TIMES this rep was done at this weight
         const repCoord = k * sz;
-        pts.push({ w, reps: repCoord, count, repLabel: sz > 1 ? `${binLow}–${repCoord}` : `${k}` });
+        pts.push({ w, reps: repCoord, count, repLabel: sz > 1 ? `${binLow}–${repCoord}` : `${k}`, tiers });
         maxReps = Math.max(maxReps, repCoord);
         maxCount = Math.max(maxCount, count);
       }
@@ -12081,7 +12094,17 @@ function cardSetsMapData(name: string): SetsMap | null {
   const disp = cutoff ? binSets(sets) : frame;
   let loW = frame.loW, hiW = frame.hiW;
   if (hiW === loW) hiW = loW + bin;
-  return { pts: disp.pts, loW, hiW, maxReps: frame.maxReps, maxCount: frame.maxCount, binW: bin, binR: sz };
+  // Nuzzo strength curve on the floor: the added weight you could lift for N reps, from the
+  // best-fit 1RM (bodyweight folded in via bodyShare, then peeled back to added like the card).
+  let curve: { reps: number; w: number }[] | undefined;
+  const fit = bestFitNuzzo1RM(nuzzoRepMaxes(cardLiftRecords(name)));
+  if (fit != null) {
+    const bodyShare = Math.max(0, coeffFor(name) * (athProfile(els.athlete.value)?.weight ?? 0));
+    const pts: { reps: number; w: number }[] = [];
+    for (let r = 1; r <= frame.maxReps; r++) { const w = nuzzoAddedWeightForReps(fit - bodyShare, bodyShare, r); if (w != null) pts.push({ reps: r, w }); }
+    if (pts.length > 1) curve = pts;
+  }
+  return { pts: disp.pts, loW, hiW, maxReps: frame.maxReps, maxCount: frame.maxCount, binW: bin, binR: sz, ...(curve ? { curve } : {}) };
 }
 
 /** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
@@ -12110,7 +12133,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   // reads (flat identical teal was unreadable), with a darker edge and a soft ground shadow.
   // (Owner: "2× thinner, top spheres → cubes 2× thicker than the bar but smaller, light
   // shadows + different side shadings, darker edges, real colour theory".)
-  type Face = { pts: { X: number; Y: number }[]; z: number; t: number };
+  type Face = { pts: { X: number; Y: number }[]; z: number; t: number; op: number };
   type BarColor = { hue: number; sat: number; baseL: number };
   type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; shadow: { X: number; Y: number }; count: number; color: BarColor };
   // COLOUR ENCODES THE DATA (owner: "darker with increasing weight, hue more red at higher
@@ -12134,23 +12157,35 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const SIDE_N: [number, number, number][] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
   const hwx = 0.055, hwz = 0.055;        // stick half-width — 2× thinner than before (owner)
   const cubeHalf = 0.11;                  // cube head half-size — 2× the bar's thickness, small
-  // Append one box's lit faces (4 sides + top) to `faces`; returns its 8 corners.
-  const addBox = (faces: Face[], cx: number, cz: number, yLo: number, yHi: number, hx: number, hz: number): { X: number; Y: number; Z: number }[] => {
+  // Append one box's lit faces (4 sides + optional top) to `faces` at opacity `op`; returns
+  // its 8 corners. `skipTop` omits the top face (for stacked recency segments, where an
+  // intermediate top would be hidden under the segment above and only muddy the transparency).
+  const addBox = (faces: Face[], cx: number, cz: number, yLo: number, yHi: number, hx: number, hz: number, op = 1, skipTop = false): { X: number; Y: number; Z: number }[] => {
     const cn = (dx: number, dz: number, y: number) => rot(cx + dx, y, cz + dz);
     const bot = [cn(-hx, -hz, yLo), cn(hx, -hz, yLo), cn(hx, hz, yLo), cn(-hx, hz, yLo)];
     const top = [cn(-hx, -hz, yHi), cn(hx, -hz, yHi), cn(hx, hz, yHi), cn(-hx, hz, yHi)];
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4, f = [bot[i]!, bot[j]!, top[j]!, top[i]!], n = SIDE_N[i]!;
-      faces.push({ pts: f, z: (f[0]!.Z + f[1]!.Z + f[2]!.Z + f[3]!.Z) / 4, t: faceT(n[0], n[1], n[2]) });
+      faces.push({ pts: f, z: (f[0]!.Z + f[1]!.Z + f[2]!.Z + f[3]!.Z) / 4, t: faceT(n[0], n[1], n[2]), op });
     }
-    faces.push({ pts: top, z: (top[0]!.Z + top[1]!.Z + top[2]!.Z + top[3]!.Z) / 4 + 0.02, t: faceT(0, 1, 0) });
+    if (!skipTop) faces.push({ pts: top, z: (top[0]!.Z + top[1]!.Z + top[2]!.Z + top[3]!.Z) / 4 + 0.02, t: faceT(0, 1, 0), op });
     return [...bot, ...top];
   };
   const bars: Bar[] = [];
   for (const p of d.pts) {
     const cx = mapX(p.w), cz = mapZ(p.reps), topY = cy0 + mapH(p.count);
     const faces: Face[] = [];
-    const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz);
+    // Stick = stacked RECENCY segments (recent at the bottom solid, older above and fading):
+    // a tier of t occurrences is mapH(t) tall, at that tier's opacity (owner: older = fainter).
+    let cum = 0; const lastTier = p.tiers.reduce((m, c, i) => (c > 0 ? i : m), 0);
+    const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz, MAP_TIER_OP[0]); // base footprint (corners + solid base)
+    faces.length = 0; // rebuilt as segments below; keep `stick` corners for bounds
+    for (let i = 0; i < p.tiers.length; i++) {
+      const c = p.tiers[i]!; if (c <= 0) continue;
+      const yLo = cy0 + mapH(cum), yHi = cy0 + mapH(cum + c);
+      addBox(faces, cx, cz, yLo, yHi, hwx, hwz, MAP_TIER_OP[i] ?? 0.22, i !== lastTier);
+      cum += c;
+    }
     const cube = addBox(faces, cx, cz, topY - cubeHalf, topY + cubeHalf, cubeHalf, cubeHalf);
     const hd = rot(cx, topY, cz), sh = rot(cx, cy0, cz);
     bars.push({ corners: [...stick, ...cube], faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, shadow: { X: sh.X, Y: sh.Y }, count: p.count, color: barColor(p.w, p.reps) });
@@ -12211,6 +12246,30 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   for (const g of grid)
     out += `<line x1="${sx(g.ax).toFixed(1)}" y1="${sy(g.ay).toFixed(1)}" x2="${sx(g.bx).toFixed(1)}" y2="${sy(g.by).toFixed(1)}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
 
+  // GRAY empty-cell markers (owner): every (weight-bin, rep) cell with NO data gets a faint
+  // gray flat footprint on the floor (a 0-height bar), so gaps in the grid are visible.
+  const hwx2 = 0.055;
+  const have = new Set(d.pts.map((p) => `${p.w}|${p.reps}`));
+  for (let w = d.loW; w <= d.hiW + 1e-6; w += d.binW) {
+    for (let k = 1; k * d.binR <= d.maxReps + 1e-6; k++) {
+      const repCoord = k * d.binR;
+      if (have.has(`${w}|${repCoord}`)) continue;
+      const cx = mapX(w), cz = mapZ(repCoord);
+      const q = [rot(cx - hwx2, cy0, cz - hwx2), rot(cx + hwx2, cy0, cz - hwx2), rot(cx + hwx2, cy0, cz + hwx2), rot(cx - hwx2, cy0, cz + hwx2)];
+      out += `<polygon points="${q.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ")}" fill="#9aa6b0" opacity="0.18"/>`;
+    }
+  }
+
+  // NUZZO strength curve on the floor (owner: "see the nuzzo curve on the 2D bottom map") —
+  // the weight you could do for each rep count, projected onto the weight×rep floor UNDER the
+  // bars (drawn before them). Clipped to the weight frame.
+  if (d.curve && d.curve.length > 1) {
+    const cpts = d.curve
+      .filter((c) => c.w >= d.loW - d.binW && c.w <= d.hiW + d.binW)
+      .map((c) => { const q = rot(mapX(c.w), cy0 + 0.012, mapZ(c.reps)); return `${sx(q.X).toFixed(1)},${sy(q.Y).toFixed(1)}`; });
+    if (cpts.length > 1) out += `<polyline points="${cpts.join(" ")}" fill="none" stroke="#e0573a" stroke-width="1.8" stroke-opacity="0.85" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+
   // Far→near: each bar draws a soft ground shadow first, then its faces sorted far→near so
   // near faces overpaint far ones (painter's algorithm).
   bars.sort((a, b) => a.depth - b.depth);
@@ -12222,7 +12281,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     const edge = edgeFill(bar.color);
     for (const f of bar.faces) {
       const poly = f.pts.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
-      out += `<polygon points="${poly}" fill="${faceFill(bar.color, f.t)}" stroke="${edge}" stroke-width="0.5" stroke-linejoin="round"/>`;
+      out += `<polygon points="${poly}" fill="${faceFill(bar.color, f.t)}" fill-opacity="${f.op.toFixed(2)}" stroke="${edge}" stroke-width="0.5" stroke-opacity="${f.op.toFixed(2)}" stroke-linejoin="round"/>`;
     }
     // Number ON TOP of the cube = how many times that rep was done (owner). White-haloed
     // so it stays legible over any bar; a transparent hit-circle carries the hover tooltip.
