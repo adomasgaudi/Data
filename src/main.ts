@@ -246,9 +246,6 @@ const els = {
   backupClose: $<HTMLButtonElement>("backupClose"),
   changelog: $("changelog"),
   backlog: $("backlog"),
-  planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
-  planPage: $("planPage"),
-  planClose: $<HTMLButtonElement>("planClose"),
   planBody: $("planBody"),
   formulasBtn: $<HTMLButtonElement>("formulasBtn"),
   formulasPage: $("formulasPage"),
@@ -5196,9 +5193,11 @@ function setupStatsToggle(): void {
 // Both default to SHOWN (they're visible normally); the button just hides them. The
 // folds are static in the DOM (only their inner sections re-render), so a one-time
 // apply on init + on click keeps the hidden state — no per-render reapply needed.
-type SectionToggle = { btnId: string; foldId: string; key: string; label: string };
+type SectionToggle = { btnId: string; foldId: string; key: string; label: string; onShow?: () => void };
 const SECTION_TOGGLES: SectionToggle[] = [
   { btnId: "graphToggleBtn", foldId: "waGraphFold", key: "colosseum.graphSectionShown", label: "Graph" },
+  // Plan is its own card now (moved out of the old overlay) — render it when shown.
+  { btnId: "planToggleBtn", foldId: "waPlanFold", key: "colosseum.planSectionShown", label: "Plan", onShow: () => renderWorkoutPlan() },
   { btnId: "histToggleBtn", foldId: "waHistFold", key: "colosseum.histSectionShown", label: "History" },
 ];
 const sectionShown: Record<string, boolean> = {};
@@ -5219,6 +5218,14 @@ function applySectionToggle(s: SectionToggle): void {
     btn.setAttribute("aria-pressed", String(shown));
     btn.setAttribute("title", shown ? `Hide the ${s.label} section` : `Show the ${s.label} section`);
   }
+  if (shown) s.onShow?.();
+}
+/** Re-render the Plan card only when it's the visible analysis section (cheap no-op
+ * otherwise). Used by renderWorkoutAnalysis + data-change handlers so the plan stays
+ * fresh now that it's an always-present card rather than an on-demand overlay. */
+function renderWorkoutPlanIfShown(): void {
+  const fold = document.getElementById("waPlanFold");
+  if (fold && !fold.hidden) renderWorkoutPlan();
 }
 function setupSectionToggles(): void {
   for (const s of SECTION_TOGGLES) {
@@ -11373,14 +11380,27 @@ function renderWorkoutPlan(): void {
         if (sum) sum.textContent = addSumLabel(query);
       }
     : null;
-  const planTitle = document.getElementById("planTitle");
-  if (planTitle) planTitle.textContent = `${athleteLabel()} plan`;
+  // The Plan card's summary doubles as its title — name the athlete it's planning for.
+  const planSummary = document.getElementById("waPlanSummary");
+  if (planSummary) planSummary.textContent = `${athleteLabel()} plan`;
   els.planBody.innerHTML = summary + list + addBlock;
 }
 
 function openWorkoutPlan(): void {
-  renderWorkoutPlan(); // the manual focus-lifts planner
-  els.planPage.hidden = false;
+  // Plan is an inline card now (not an overlay): make sure its section is toggled ON
+  // and the fold is open, render it, then scroll it into view.
+  const s = SECTION_TOGGLES.find((x) => x.foldId === "waPlanFold");
+  if (s) {
+    sectionShown[s.key] = true;
+    try { localStorage.setItem(s.key, "1"); } catch { /* storage may be unavailable */ }
+    applySectionToggle(s);
+  }
+  const fold = document.getElementById("waPlanFold") as HTMLDetailsElement | null;
+  if (fold) {
+    fold.open = true;
+    renderWorkoutPlan();
+    fold.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 // Remember which taxonomy sections (Discipline / Muscle group / Tier / Combinable /
 // Comparable) the owner has expanded, per exercise, so the card's re-render after a
@@ -14283,7 +14303,7 @@ async function init() {
       setPairGrade(pairMenuFrom, pairMenuTo, opt.dataset.setgrade as PairGrade, pairMenuLayer);
       closePairGradeMenu();
       if (!els.exInfoPage.hidden) refreshExerciseInfo();
-      if (els.planPage && !els.planPage.hidden) renderWorkoutPlan();
+      renderWorkoutPlanIfShown();
       return;
     }
     const m = document.getElementById("pairGradeMenu");
@@ -14436,13 +14456,10 @@ async function init() {
     if (pickDrawerScope !== null) { closePickDrawer(); return; } // topmost overlay closes first
     if (!els.statseditPage.hidden) { els.statseditPage.hidden = true; return; }
     if (!els.formulasPage.hidden) { els.formulasPage.hidden = true; return; }
-    if (!els.planPage.hidden) { els.planPage.hidden = true; return; }
     if (!els.exInfoPage.hidden) closeExerciseInfo();
     else if (document.body.classList.contains("wa-graph-full")) { document.body.classList.remove("wa-graph-full"); renderWaGraph(); }
   });
-  // "Plan workout" — suggest what to train today (top of the workout history).
-  els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
-  els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
+  // Plan is now an inline card toggled by the "Plan" tab (handled by setupSectionToggles).
   els.statseditClose.addEventListener("click", () => { els.statseditPage.hidden = true; });
   // Formulas popup (was the Test tab) — sits beside the Plan button.
   els.formulasBtn.addEventListener("click", openFormulas);
@@ -14608,7 +14625,7 @@ async function init() {
     if (pf2?.dataset.pairfrom && pf2.dataset.pairto) { openPairGradeMenu(pf2.dataset.pairfrom, pf2.dataset.pairto, pf2); return; }
     // Tap the name → open the exercise's info.
     const row = t.closest<HTMLElement>("[data-planopen]");
-    if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen, true); }
+    if (row?.dataset.planopen) { openExerciseInfo(row.dataset.planopen, true); }
   });
   // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
   // exercise's settings in the floating overlay.
@@ -18655,6 +18672,7 @@ function renderWorkoutAnalysis(): void {
     if (waGraphSel.length === 0) waGraphSel = defaultGraphSelection();
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
+  renderWorkoutPlanIfShown(); // keep the Plan card fresh for the current athlete/data
   const mode = waMode();
   // The Workout-history section's collapsible summary doubles as its title, so it
   // reflects the current mode (Exercise analysis / Compare / Exercise list / …).

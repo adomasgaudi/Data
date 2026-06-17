@@ -215,6 +215,8 @@ const LT: Record<string, string> = {
   "Hide the Graph section": "Slėpti grafiko skiltį",
   "Show the History section": "Rodyti istorijos skiltį",
   "Hide the History section": "Slėpti istorijos skiltį",
+  "Show the Plan section": "Rodyti plano skiltį",
+  "Hide the Plan section": "Slėpti plano skiltį",
   "No athletes with a height & sex on file to place in a weight class.":
     "Nėra sportininkų su įrašytu ūgiu ir lytimi, kad būtų galima priskirti svorio kategoriją.",
   // ---- Strength-percentile panel ----

@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.98</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.99</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -1089,6 +1089,7 @@
         <div id="waSelectedRow" class="wa-selected-row">
           <button type="button" id="statsToggleBtn" class="wa-topact-btn" aria-pressed="false" title="Show the Stats section">Stats</button>
           <button type="button" id="graphToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the Graph section">Graph</button>
+          <button type="button" id="planToggleBtn" class="wa-topact-btn admin-only is-on" aria-pressed="true" title="Hide the Plan section">Plan</button>
           <button type="button" id="histToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the History section">History</button>
         </div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,
@@ -1110,10 +1111,21 @@
               <div id="waGraph" class="wa-section"></div>
             </div>
           </details>
-          <!-- Inter-section gap: Plan + Formulas shortcuts sit here, between the graph
+          <!-- PLAN section: its own collapsible card (like Graph / History), toggled by the
+               "Plan" tab above. ADMIN-ONLY — hidden for locked user/spectator views via
+               body.admin-only-hidden (rule 21). The manual focus-lifts planner #planBody
+               lives here now (moved out of the old overlay); all its handlers are delegated
+               on #planBody so relocating the node keeps them working. -->
+          <details class="wa-fold wa-fold-titled admin-only" id="waPlanFold" open>
+            <summary class="wa-fold-sum" id="waPlanSummary">Plan</summary>
+            <div class="plan-planner">
+              <h3 class="live-h plan-planner-hd">Focus lifts</h3>
+              <div id="planBody"></div>
+            </div>
+          </details>
+          <!-- Inter-section gap: the Formulas shortcut sits here, between the plan/graph
                and history sections, with enough breathing room to visually separate them. -->
           <div class="wa-inter-gap">
-            <button type="button" id="planWorkoutBtn" class="wo-plan-btn" title="Your training plan — what to train today by tier, antagonist supersets, warm-ups and watch-outs, plus up to 10 manual focus lifts with a level and weekly target">📋 Plan</button>
             <button type="button" id="formulasBtn" class="wo-plan-btn" title="Formulas — the 1RM calculator, the Coach working-weight & warm-up tool, the strength-fade curve and how every number is worked out">🧮 Formulas</button>
           </div>
           <!-- CALENDAR + HISTORY: one JOINT collapsible. The calendar leads (collapsed
@@ -1278,20 +1290,6 @@
           <button type="button" id="clearCacheBtn" class="settings-link">🧹 Clear cache (keep my data)</button>
         </div>
         <p class="settings-hint">Resets the throwaway stuff — settings, filters, who you're signed in as. Your hand-logged sets, body stats, renames and overrides are never touched.</p>
-      </div>
-    </div>
-
-    <div id="planPage" class="overlay-page plan-modal" hidden>
-      <div class="overlay-inner">
-        <div class="overlay-head">
-          <h2 id="planTitle">Plan</h2>
-          <button type="button" id="planClose" class="overlay-close" aria-label="Close">✕</button>
-        </div>
-        <!-- The manual focus-lifts planner — at the top (owner request). -->
-        <div class="plan-planner">
-          <h3 class="live-h plan-planner-hd">Focus lifts</h3>
-          <div id="planBody"></div>
-        </div>
       </div>
     </div>
 
