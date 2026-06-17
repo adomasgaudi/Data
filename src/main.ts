@@ -11547,7 +11547,7 @@ function cardNuzzoConfig(
     formatX: fmtX, formatTipX: fmtX,
     ...(markers ? { xMarkers: markers, onMarkerDrag: (_id: string, newX: number) => {
       cardOrm = Math.round(newX * 10) / 10;
-      // Persist the dragged 1RM as this lift's custom set strength (rule 50) — shared SSOT.
+      // Persist the dragged 1RM as this lift's custom set strength (rule 55) — shared SSOT.
       if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); }
     } } : {}),
   };
@@ -12113,7 +12113,7 @@ function liftTrainingHtml(name: string): string {
   const bodyShare = Math.max(0, coeffFor(name) * (athProfile(user)?.weight ?? 0));
   const loggedAdded = loggedE1rm != null ? loggedE1rm - bodyShare : null;
   const bestFitAdded = bestFit != null ? bestFit - bodyShare : null;
-  // The hand-set "custom set strength" (rule 50): the 1RM the owner dialed in by dragging
+  // The hand-set "custom set strength" (rule 55): the 1RM the owner dialed in by dragging
   // the Nuzzo fit — persisted per (athlete,exercise) and SHARED with the analysis reps×kg
   // fit (ONE SSOT). It's the most-accurate estimate, so it wins over the auto best-fit here.
   const customEff = rvwFitOf(name);
@@ -12183,7 +12183,7 @@ function liftTrainingHtml(name: string): string {
   const ormFit =
     `<div class="lt-ormfit">` +
       // No slider here (owner: redundant) — drag the "1RM" line ON the graph below, or type
-      // the exact value. Either way it persists as this lift's custom set strength (rule 50).
+      // the exact value. Either way it persists as this lift's custom set strength (rule 55).
       `<div class="lt-ormfit-row">` +
         `<input type="number" class="lt-ormfit-num" inputmode="decimal" step="0.5" min="${sMin}" value="${fmt(aBase)}" data-cardorm="num" aria-label="1RM in kilograms">` +
         `<span class="lt-ormfit-unit">${unit === "kg" ? "kg 1RM" : "kg added 1RM"}</span>` +
@@ -14138,7 +14138,7 @@ async function init() {
     // only reject a non-finite value, not a negative one.
     if (!Number.isFinite(v)) return;
     cardOrm = v;
-    if (currentExInfo) setCustomStrengthAdded(currentExInfo, v); // persist (rule 50)
+    if (currentExInfo) setCustomStrengthAdded(currentExInfo, v); // persist (rule 55)
     const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
     if (box) { box.dataset.nzorm = String(Math.round(v * 10) / 10); updateCardNuzzoLive(); }
     debounceCardOrmRender();
@@ -14200,7 +14200,7 @@ async function init() {
     if (fitBtn?.dataset.best) {
       e.preventDefault(); e.stopPropagation();
       cardOrm = parseFloat(fitBtn.dataset.best);
-      if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); } // persist (rule 50)
+      if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); } // persist (rule 55)
       return;
     }
     // X-axis unit toggle: cycle kg → %1RM → ×BW, persist, re-plot the card graph.
@@ -17990,7 +17990,7 @@ function onProjMarkerDrag(id: string, x: number): void {
   if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
   scheduleWaGraph();
 }
-// CUSTOM SET STRENGTH (rule 50): the hand-set per-(athlete|exercise) EFFECTIVE 1RM the owner
+// CUSTOM SET STRENGTH (rule 55): the hand-set per-(athlete|exercise) EFFECTIVE 1RM the owner
 // dials in by dragging the Nuzzo fit — on the analysis reps×kg graph (green curve) OR on the
 // exercise card's Curve graph (the "1RM" line). ONE persisted SSOT shared by both, the
 // most-accurate strength estimate. Positions the curve view; doesn't touch logged data.
@@ -18004,7 +18004,7 @@ const rvwFitKey = (exercise: string) => `${els.athlete.value}|${exercise}`;
 function saveRvwFit(): void {
   try { localStorage.setItem(RVW_FIT_KEY, JSON.stringify(rvwFitOverrides)); } catch { /* ignore */ }
 }
-/** The hand-set "CUSTOM SET STRENGTH" (rule 50): the EFFECTIVE 1RM the owner dialed in by
+/** The hand-set "CUSTOM SET STRENGTH" (rule 55): the EFFECTIVE 1RM the owner dialed in by
  * dragging the Nuzzo fit — the most-accurate per-(athlete,exercise) strength estimate, or
  * null if never set. ONE SSOT, shared by the exercise-card Curve fit AND the analysis
  * reps×kg fit. */
