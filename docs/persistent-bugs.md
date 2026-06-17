@@ -1,5 +1,15 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-40 — Strength projection doesn't fit the points (floats below the data) / not smooth
+
+- **First seen / reported:** 2026-06-17, mobile (Brave, Android), Analysis → Graph → Predicted Strength (Hip Thrust). Owner #super-persistent #max-debug: "projection is broken. the graph doesnt fit points and is not smooth. remember hard limit is the world record, but the steepness can be much higher it just needs to level out more aggressively too at WR." Iterated several times before (CHART-117 log fit, CHART-121 ceiling approach, CHART-122 fit window, CHART-127 carousel parity) and still wrong.
+- **Root cause:** `fitCeiling` modelled `y = ceiling − e^(m·t + b)` and used BOTH the slope `m` AND the intercept `b` from a least-squares regression of `ln(ceiling − y)` on `t`. The log transform minimises error in LOG-GAP space, not real-y space, so the free intercept let the curve settle at a level that DRIFTS below the actual data — the projection floated under the points (screenshot: curve at ~20 while the data sat at ~50–100). With a narrow fit window it fit only old points and extrapolated off the recent cloud entirely.
+- **Fix (b.2.9.x, PB-40):** keep the fitted SLOPE (the approach shape) but ANCHOR the level to the most recent point — `gap(t) = gapNow · e^(m·(t − tNow))`, so the curve passes through the lifter's CURRENT strength and projects forward from there, always asymptoting to (never exceeding) the ceiling = world record. Bail (→ log-fit fallback) when `m ≥ 0` (a flat/declining window can't approach the ceiling). Added `dbg('proj …')` (#max-debug) printing `ceil / cur / fit@cur / fit@end` to the on-screen console so the anchor is verifiable on device (`fit@cur` must ≈ `cur`). 2 new tests (anchors on noisy data; null on declining).
+- **Watch:** a linearised exponential/log fit (regressing a transformed y) systematically misfits in real-y space — never trust its free intercept for a curve that must pass through the data; anchor the level to a real point and only fit the shape. If the owner wants the flatten EVEN more aggressive near WR, steepen the approach rate `m` (the dbg readout shows it) rather than reverting to a floating fit.
+- **Recurrences:** 0 as PB-40 (but the 4th rework of the projection curve overall).
+
+---
+
 ## PB-39 — Dashboard graph pan/zoom doesn't persist across view/tab change + refresh
 
 - **First seen / reported:** 2026-06-17, mobile (Brave, Android), Analysis → Graph dashboard. Owner (two screenshots of a Volume bubble at different time-windows): "if i move the graph it should persist with changing views, refresh, tab change etc. #max debug #super persistent."

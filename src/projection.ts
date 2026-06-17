@@ -95,11 +95,19 @@ export function fitLog(pts: readonly { x: number; y: number }[]): LogFit | null 
 }
 
 /**
- * Ceiling-approach fit: y = ceiling − e^(m·t + b), the curve the owner wants —
- * rises steeply early and FLATTENS toward `ceiling` (a lifetime-potential / world-
- * record level). Linearised by regressing ln(ceiling − y) on t (days), so a lifter
- * climbing toward the ceiling has a shrinking gap → m < 0 → an asymptotic approach.
- * Requires ≥ 3 points strictly BELOW the ceiling. Returns null otherwise.
+ * Ceiling-approach fit: y = ceiling − gap, where the gap to the ceiling shrinks
+ * exponentially over time — the curve the owner wants: rises steeply early and
+ * FLATTENS toward `ceiling` (a lifetime-potential / world-record level).
+ *
+ * The SHAPE (decay rate `m`) is found by regressing ln(ceiling − y) on t (days):
+ * a lifter climbing toward the ceiling has a shrinking gap → m < 0 → asymptotic.
+ * The LEVEL is then ANCHORED to the most recent point — the curve continues from
+ * where the lifter actually IS, instead of the floating least-squares intercept that
+ * left it drifting below the data (the recurring "projection doesn't fit the points"
+ * bug — PB-40). So gap(t) = gapNow · e^(m·(t − tNow)); at tNow it equals the real gap.
+ *
+ * Requires ≥ 3 points strictly BELOW the ceiling, and a genuine approach (m < 0) —
+ * flat/declining windows return null so the caller falls back to the plain log fit.
  */
 export function fitCeiling(pts: readonly { x: number; y: number }[], ceiling: number): CurveFit | null {
   if (!Number.isFinite(ceiling)) return null;
@@ -111,12 +119,17 @@ export function fitCeiling(pts: readonly { x: number; y: number }[], ceiling: nu
   if (usable.length < 3) return null;
   const fit = linearFit(usable.map((p) => ({ x: p.t, y: Math.log(p.gap) })));
   if (!fit) return null;
-  const { slope: m, intercept: b } = fit;
-  if (!Number.isFinite(m) || !Number.isFinite(b)) return null;
+  const m = fit.slope;
+  // m ≥ 0 means the gap isn't shrinking (flat/declining window) — the ceiling-approach
+  // model doesn't apply, so bail and let predict() fall back to the log fit.
+  if (!Number.isFinite(m) || m >= 0) return null;
+  // ANCHOR at the latest usable point so the curve passes through the lifter's CURRENT
+  // strength and projects forward from there (root fix, PB-40).
+  const anchor = usable[usable.length - 1]!;
   return {
     predict(x: number): number | null {
       const t = (x - x0) / DAY;
-      const gap = Math.exp(m * t + b);
+      const gap = anchor.gap * Math.exp(m * (t - anchor.t));
       if (!Number.isFinite(gap)) return null;
       const y = ceiling - gap;
       return Number.isFinite(y) ? y : null;

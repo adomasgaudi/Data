@@ -129,4 +129,25 @@ describe("fitCeiling", () => {
       if (y !== null) expect(y).toBeLessThanOrEqual(ceiling);
     }
   });
+
+  it("ANCHORS the curve to the latest point on NOISY data (PB-40: must fit the points)", () => {
+    // Noisy rising data far below the ceiling — the old free-intercept fit floated below
+    // the data. The anchored fit must pass through the most recent point exactly.
+    const days = [0, 30, 60, 90, 120, 150];
+    const ys = [52, 61, 58, 74, 80, 95]; // climbing, with wobble; all ≪ 200
+    const pts = days.map((d, i) => ({ x: T0 + d * DAY, y: ys[i]! }));
+    const fit = fitCeiling(pts, ceiling)!;
+    expect(fit).not.toBeNull();
+    const lastX = T0 + 150 * DAY;
+    expect(Math.abs(fit.predict(lastX)! - 95)).toBeLessThan(1e-6); // sits ON the current point
+    // …and still rises toward (never past) the ceiling beyond the data.
+    const future = fit.predict(T0 + 900 * DAY)!;
+    expect(future).toBeGreaterThan(95);
+    expect(future).toBeLessThan(ceiling);
+  });
+
+  it("returns null for a flat/declining window (no approach → caller uses the log fit)", () => {
+    const declining = [0, 30, 60, 90].map((d) => ({ x: T0 + d * DAY, y: 120 - d * 0.1 }));
+    expect(fitCeiling(declining, ceiling)).toBeNull();
+  });
 });

@@ -204,10 +204,20 @@ function predict(pts: { x: number; y: number }[], horizonDays: number, ceiling: 
   if (pts.length < 3) return [];
   // Ceiling must sit ABOVE the latest point, else there's nothing to approach.
   const last = pts[pts.length - 1]!.y;
-  const fit = (ceiling != null && ceiling > last ? fitCeiling(pts, ceiling) : null) ?? fitLog(pts);
+  const usedCeiling = ceiling != null && ceiling > last;
+  const fit = (usedCeiling ? fitCeiling(pts, ceiling!) : null) ?? fitLog(pts);
   if (!fit) return [];
   const t0 = pts[0]!.x;
   const end = pts[pts.length - 1]!.x + Math.max(0, horizonDays) * DAY;
+  // #max-debug (PB-40): surface the projection fit on the on-screen dbg console so the
+  // owner can SEE whether the curve actually passes through the current strength and
+  // approaches the ceiling. `fit@cur` should ≈ `cur` now that fitCeiling anchors there.
+  const dbg = (globalThis as { dbg?: (m: string) => void }).dbg;
+  if (dbg) {
+    const lastX = pts[pts.length - 1]!.x;
+    const at = (x: number) => { const v = fit.predict(x); return v == null ? "–" : Math.round(v); };
+    dbg(`proj n=${pts.length} ceil=${usedCeiling ? Math.round(ceiling!) : "log"} cur=${Math.round(last)} fit@cur=${at(lastX)} fit@end=${at(end)}`);
+  }
   return sampleProjection(fit, t0, end, 24).map((p) => ({ x: p.x, y: r1(p.y) }));
 }
 
