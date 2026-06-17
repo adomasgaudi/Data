@@ -4394,7 +4394,13 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    the SAME height: same vertical + horizontal padding as the .wa-card-fold (0.7rem
    sides) and its closed summary (0.4rem top/bottom). */
 .wa-stats-top .athlete-details:not([open]) { padding: 0.4rem 0.7rem; }
-.wa-analysis-panel > #waHistFold { margin-top: 1.8rem; }       /* push history away from the Graph card */
+/* Inter-section gap between the Graph card and the History section: holds the
+   Plan + Formulas shortcuts and provides ≥100px of visual breathing room. */
+.wa-inter-gap {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.75rem; min-height: 110px; padding: 0 0.7rem;
+}
+.wa-analysis-panel > #waHistFold { margin-top: 0; }
 
 /* ── Align the non-card folds (Workout history + the experimental ones) to the
    same content inset as the Graph card, so they don't read as visually wider.
