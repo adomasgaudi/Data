@@ -15521,6 +15521,16 @@ async function init() {
     if (d.classList.contains("ex-index-fold")) exIndexFoldOpen = d.open;
     else if (d.classList.contains("lt-pair-fold")) pairFoldOpen = d.open;
   }, true);
+  // When the graph "Options" sheet OPENS, scroll the chart up so it sits ABOVE the bottom
+  // sheet — owner: "auto scroll the graph so it's above it, so I can see both". The sheet is
+  // a height-capped fixed bottom panel; pinning the chart's top to the viewport top keeps the
+  // whole graph visible in the gap above it. Capture phase — `toggle` doesn't bubble.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!(d instanceof HTMLDetailsElement) || !d.classList.contains("wa-graph-fold") || !d.open) return;
+    const stage = document.getElementById("gdashStage") ?? document.querySelector<HTMLElement>(".wa-graph-chart");
+    requestAnimationFrame(() => stage?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }, true);
   // Editable SOURCES (spelling-merge): split a folded spelling into its own lift, or
   // merge a split-out sibling back in. Mutates the split set, rebuilds the records +
   // merge report, then refreshes the picker + the open card.
