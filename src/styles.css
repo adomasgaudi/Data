@@ -1228,31 +1228,28 @@ body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 }
 .gdash-title:hover { text-decoration: underline; }
 .gdash-title.is-empty { color: var(--muted); font-weight: 700; }
-.gdash-head {
-  display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
-  /* overflow-y:hidden + touch-action:pan-x pan-y — overflow-x:auto SILENTLY forces overflow-y
-     to `auto` too, turning this thin pill strip into a vertical scroll-TRAP: a vertical swipe
-     on its empty middle was captured instead of scrolling the page (owner: "can't use this
-     area to scroll"). Same fix as .hm-year / the athlete strip: keep horizontal pan for the
-     pills, let a vertical drag CHAIN to the page (pan-x alone disables vertical entirely). */
-  overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y;
-  -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; margin-bottom: 0.2rem;
-}
-.gdash-pill {
-  flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 10px; cursor: pointer;
-  font-size: 0.78rem; font-weight: 600; white-space: nowrap;
-  color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill);
-}
-.gdash-pill:hover { background: var(--accent); color: #fff; }
-.gdash-rm { color: var(--remove); background: var(--bg); border-color: var(--line); }
-.gdash-rm:hover { color: #fff; background: var(--remove); border-color: var(--remove); }
-.gdash-bw { flex: 0 0 auto; margin-left: auto; }
 /* STABLE height (owner): every bubble's chart draws at ONE constant plot height (300px, set
    via buildBubbleInput → input.height) so switching bubbles/tabs doesn't resize the frame —
    otherwise it feels like buttons snapping the view, not swiping a stable reel. min-height
    reserves the space (incl. the empty-state) so the foot never jumps up. */
 .gdash-stage { min-height: 300px; position: relative; }
 .gdash-stage .wa-placeholder { padding-top: 5rem; text-align: center; }
+/* Stage wrapper + top-right corner overlay — the kg/×BW + ℹ buttons and the relocated
+   Legend/⤢ Fit bar sit ON the chart edge (owner: "move fit and kg/bw to the top corner"),
+   mirroring the carousel's .gmini-overlay. */
+.gdash-stagewrap { position: relative; }
+.gdash-overlay {
+  position: absolute; top: 4px; right: 5px; z-index: 7;
+  display: flex; align-items: flex-start; gap: 4px; flex-wrap: nowrap;
+}
+.gdash-overlay .svgc-legend {
+  margin: 0; flex-wrap: nowrap; gap: 4px; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.82); border-radius: var(--r-pill); padding: 2px 4px;
+}
+:root[data-theme="dark"] .gdash-overlay .svgc-legend { background: rgba(30, 34, 48, 0.82); }
+/* Graph-type toggle pill at the top of the Options sheet. */
+.wa-gmenu-typerow { margin: 0.1rem 0 0.35rem; }
+.gmenu-type { font-weight: 700; }
 .gdash-foot { display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap; margin-top: 0.3rem; }
 /* The Options ▾ menu in the foot — compact, its long metric-summary readout hidden (#cram). */
 .gdash-foot .wa-graph-fold { flex: 0 0 auto; }

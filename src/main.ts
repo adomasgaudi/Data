@@ -19758,7 +19758,7 @@ function stepGraphSlide(d: number): void {
  * `scopeExercises` (the multi-graph's picked lifts, or the carousel's single lift), reading
  * the open state of its sub-folds from `container` so a tap doesn't snap them shut (rule 24).
  * Used by BOTH the full multi-graph bar and the single-lift carousel foot. */
-function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null, opts?: { skipRvw?: boolean }): string {
+function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null, opts?: { skipRvw?: boolean; dashType?: string }): string {
   const scopeAllowed = allGraphsAllowed
     ? new Set(ALL_GRAPH_METRIC_IDS)
     : metricsAllowedForScope(graphPerms, scopeExercises);
@@ -19864,9 +19864,14 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   if (container) { const prevGcfg = container.querySelector<HTMLDetailsElement>(".wa-graph-fold"); if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open; }
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
+  // Graph-TYPE toggle, moved INTO the menu (owner: "the reps×kg / over-time button should be
+  // in the options menu"). data-dashtype cycles the per-bubble type via the existing handler.
+  const typeRow = opts?.dashType !== undefined
+    ? `<div class="wa-gmenu-typerow"><button type="button" class="wa-name-opt gmenu-type" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${opts.dashType === "rvw" ? "✦ Reps × kg" : "↗ Over time"}</button></div>`
+    : "";
   return `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
-    `<div class="wa-graph-menu"><button type="button" class="wa-gmenu-close" data-wagmenuclose title="Close options" aria-label="Close options">✕</button>${cfgUi}</div>` +
+    `<div class="wa-graph-menu"><button type="button" class="wa-gmenu-close" data-wagmenuclose title="Close options" aria-label="Close options">✕</button>${typeRow}${cfgUi}</div>` +
     `</details>`;
 }
 /** Build the graph "min" carousel: title + ×BW quick-option + chart stage + prev/next +
@@ -20249,7 +20254,6 @@ function renderGraphDashboard(): void {
   const dots = tab.bubbles
     .map((_, i) => `<button type="button" class="gdash-bub${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="View ${i + 1}">${i + 1}</button>`)
     .join("");
-  const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
   // The FULL lift-selection title toolbar (owner: "no big title, no + / = / ✕ button") — the
   // SAME one the old graph had: big title naming the lift(s) (each tap-to-remove), the + add /
   // = match / ✕ remove-all tools, and the "Pick" drawer tab. Operates on waGraphSel, which the
@@ -20258,7 +20262,7 @@ function renderGraphDashboard(): void {
   // The shared Options ▾ menu (metrics + aggregation/decay/projection…), scoped to this
   // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
   // per-bubble "type" pill owns that switch).
-  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true });
+  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true, dashType: bubble.type });
   // PB-39: PRESERVE the chart stage element across re-renders of the SAME bubble. Rebuilding
   // box.innerHTML would destroy #gdashStage (and its live chart instance) every render, so an
   // incidental re-render re-mounted the chart and re-applied a stale saved view — snapping the
@@ -20269,14 +20273,19 @@ function renderGraphDashboard(): void {
   let keepStage = document.getElementById("gdashStage");
   if (keepStage) keepStage.remove(); // detach (keeps the element + its chart instance alive)
   if (dashStageBubbleId !== bubble.id) keepStage = null; // bubble switched → force a fresh mount
+  // Stage + a top-right corner overlay holding the kg/×BW unit + ℹ info (owner: "move the fit
+  // and kg/bw btns to the right top corner of the graph"). The chart engine's own Legend + ⤢ Fit
+  // bar is RELOCATED into this overlay after the render (see below), like the carousel does. The
+  // graph TYPE pill moved into the Options menu, so the old .gdash-head row is gone entirely.
   box.innerHTML =
     `<div class="gdash-titlerow wa-seltitle-host">${titleHtml}</div>` +
-    `<div class="gdash-head">` +
-      `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
-      `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
-      `<button type="button" class="wa-gov-btn gdash-info-btn" data-dashinfo="1" title="About this graph" aria-label="Graph info">ℹ</button>` +
+    `<div class="gdash-stagewrap">` +
+      `<div id="gdashStageSlot"></div>` +
+      `<div class="gdash-overlay">` +
+        `<button type="button" class="wa-gov-btn${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
+        `<button type="button" class="wa-gov-btn gdash-info-btn" data-dashinfo="1" title="About this graph" aria-label="Graph info">ℹ</button>` +
+      `</div>` +
     `</div>` +
-    `<div id="gdashStageSlot"></div>` +
     (S.waRepsVsWeight ? rvwPagerHtml() : "") +
     `<div class="gdash-foot">` +
       `<div class="gdash-bubbles">${dots}` +
@@ -20296,6 +20305,16 @@ function renderGraphDashboard(): void {
     } else {
       renderAnalyticsGraph(stage, buildBubbleInput(bubble));
       dashStageBubbleId = bubble.id;
+      // Relocate the chart engine's Legend + ⤢ Fit bar into the top-right corner overlay (beside
+      // the kg/×BW + ℹ buttons), so Fit sits ON the graph edge (owner request). The engine keeps a
+      // live ref to .svgc-legend (only rewrites its innerHTML on redraw) + binds its handlers to
+      // that node, so moving it is safe — same trick as the carousel's paintGraphSlide.
+      const overlay = box.querySelector<HTMLElement>(".gdash-overlay");
+      const legend = stage.querySelector<HTMLElement>(".svgc-legend");
+      if (overlay && legend) {
+        overlay.querySelector(".svgc-legend")?.remove(); // drop a previous render's relocated bar
+        overlay.insertBefore(legend, overlay.firstChild); // Legend + Fit first, then kg/×BW + ℹ
+      }
     }
   }
 }
