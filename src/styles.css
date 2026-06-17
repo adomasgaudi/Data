@@ -1112,6 +1112,36 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .gmini-foot .wa-graph-fold-cur { display: none; }
 .gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s ; }
 .gmini-dot.is-on { background: var(--accent); transform: scale(1.25); }
+/* ── Custom graph dashboard (CHART-160) ──────────────────────────────────────
+   A tab strip + a per-bubble control row + the bubble's chart + the reel foot. Compact,
+   one horizontally-scrolling row each (#cram), reusing the carousel dots/nav for the reel. */
+.gdash-tabs {
+  display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.25rem; margin-bottom: 0.3rem;
+}
+.gdash-tab {
+  flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 10px; cursor: pointer;
+  font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+  color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill);
+  max-width: 9rem; overflow: hidden; text-overflow: ellipsis;
+}
+.gdash-tab.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.gdash-tabadd { font-size: 1rem; padding: 2px 8px; color: var(--muted); }
+.gdash-head {
+  display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; margin-bottom: 0.2rem;
+}
+.gdash-pill {
+  flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 10px; cursor: pointer;
+  font-size: 0.78rem; font-weight: 600; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill);
+}
+.gdash-pill:hover { background: var(--accent); color: #fff; }
+.gdash-rm { color: var(--remove); background: var(--bg); border-color: var(--line); }
+.gdash-rm:hover { color: #fff; background: var(--remove); border-color: var(--remove); }
+.gdash-bw { flex: 0 0 auto; margin-left: auto; }
+.gdash-stage { min-height: 220px; position: relative; }
+.gdash-foot { display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap; margin-top: 0.3rem; }
 .athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: var(--fs-base); font-weight: 600; }
 .athlete-profile:empty { display: none; }
 .profile-specs { color: var(--text); }

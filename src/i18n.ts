@@ -187,6 +187,11 @@ const LT: Record<string, string> = {
   "Graph": "Grafikas",
   "↗ Over time": "↗ Pagal laiką",
   "✦ Reps × kg": "✦ Kart. × kg",
+  // Custom graph dashboard (CHART-160) — per-bubble controls + reel.
+  "Single": "Vienas",
+  "Multi": "Keli",
+  "⇆ Lifts": "⇆ Pratimai",
+  "＋ Bubble": "＋ Burbulas",
   "History": "Istorija",
   "Close options": "Uždaryti parinktis",
   "Show the Graph section": "Rodyti grafiko skiltį",

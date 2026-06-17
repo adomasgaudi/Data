@@ -42,12 +42,13 @@ globals), then `renderAnalyticsGraph(bubbleEl, input)` per slide.
 
 ## Phases (each shippable; old path stays working until cutover)
 - [x] **P0 — plan** (this doc) + harvest haiku ideas.
-- [ ] **P1 — data model + persistence + tests** (`graphDash.ts`, dead code, zero behaviour change). ← current
-- [ ] **P2 — input-assembly seam**: extract `buildAnalyticsInputFor(cfg)` from `renderWaGraph`; verify the EXISTING graph still renders through it (refactor in place, no behaviour change).
-- [ ] **P3 — render one real bubble**: `renderBubble(el, bubble)` → real chart (NOT a stub). New dashboard view behind a toggle; prove charts draw.
-- [ ] **P4 — tabs + bubble reel + controls**: tab reel (add/rename/delete), bubble swipe reel + dots, add/remove bubble, per-bubble config (cycle type, cycle view, exercise picker, athlete compare, ×BW) reusing the existing picker drawer.
-- [ ] **P5 — cutover**: make the dashboard the default Analysis graph; seed a default dashboard from the current selection; retire old `renderWaGraph` (→ attic if large).
-- [ ] **P6 — polish**: loading states (rule 46), snappy/scroll-preserving re-render (rules 17/24), locked/spectator views show only the logged-in athlete + hide customization (rule 21).
+- [x] **P1 — data model + persistence + tests** (`graphDash.ts`, dead code, zero behaviour change). [b.2.9.29]
+- [x] **P2 — input-assembly seam**: `buildBubbleInput(bubble)` produces a real `AnalyticsGraphInput` from one bubble's config (modelled on `renderGraphSlideChart`). [b.2.9.30]
+- [x] **P3 — render real bubbles**: `renderGraphDashboard` draws each bubble through the real engine — NOT a stub. Lives in #waGraphFull (kept visible) so the existing picker edits the bubble. Gated by `useGraphDashboard` (legacy mini/full kept dormant as fallback). [b.2.9.30]
+- [x] **P4 (core) — tabs + bubble reel + controls**: tab strip (switch + add), bubble swipe reel + dots, add/remove bubble, per-bubble cycle type, cycle view, ×BW, and lift-pick via the projected picker. All persisted per bubble. [b.2.9.30]
+- [ ] **P4 (rest)**: tab rename/delete; per-bubble metrics/Options menu; per-bubble multi-athlete COMPARE; the draggable fit markers + rvw 2-week pager wired per bubble; fullscreen.
+- [ ] **P5 — cutover/cleanup**: once proven on-device, retire the dormant legacy `renderGraphMini`/full body (→ attic). Decide sync (local vs rule-41).
+- [ ] **P6 — polish**: loading states (rule 46), snappy/scroll-preserving re-render (rules 17/24 — the stage currently rebuilds each render, resetting pan/zoom), locked/spectator views show only the logged-in athlete + hide customization (rule 21).
 
 ## Carry-forward checklist (must survive cutover — what CHART-109 silently dropped)
 metric-permission gating · multi-athlete overlay + colour key · kg/×BW toggle · fullscreen ·

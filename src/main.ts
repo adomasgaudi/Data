@@ -104,6 +104,11 @@ import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } fr
 import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
+import {
+  loadDashboard, saveDashboard, activeTab, addTab, setActiveTab, addBubble, removeBubble,
+  cycleBubbleType, cycleBubbleView, updateBubble,
+  type GraphDashboard, type GraphBubble,
+} from "./graphDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
@@ -18740,6 +18745,21 @@ let graphCarLifts: string[] = [];
 // When the search "Graph → Plot on single view" action runs, the carousel cycles THESE
 // matched lifts instead of the default top-by-frequency reel. Cleared on athlete change.
 let graphCarOverride: string[] | null = null;
+// ---- Custom graph dashboard (CHART-160+, docs/graph-dashboard-plan.md) -------------------
+// The owner's build-your-own setup: tabs → a swipe reel of bubbles, each bubble an
+// independent graph (type × view × exercises × ×BW), persisted at colosseum.graphDash.v1.
+// graphDash is the SSOT (per bubble); each bubble renders through the SAME pure
+// analyticsGraph engine via buildBubbleInput — never a stub. dashBubbleIdx is the
+// reel position within the active tab (which bubble's slide is showing).
+let graphDash: GraphDashboard = loadDashboard();
+let dashBubbleIdx = 0;
+/** The bubble currently showing in the reel (active tab, clamped index). */
+function currentBubble(): GraphBubble {
+  const t = activeTab(graphDash);
+  if (dashBubbleIdx >= t.bubbles.length) dashBubbleIdx = 0;
+  return t.bubbles[dashBubbleIdx]!;
+}
+function persistDash(): void { saveDashboard(graphDash); }
 /** The carousel reel: the search-chosen lifts if "plot on single view" set them, else the
  * current athlete's top lifts by frequency (last 90d). */
 function graphCarouselLifts(): string[] {
@@ -19013,11 +19033,151 @@ function renderGraphMini(): void {
   paintGraphSlide();
 }
 
+// ===== Custom graph dashboard render (CHART-160+) ==========================================
+/** Assemble the pure analyticsGraph input for ONE bubble from its OWN config — the reuse seam
+ * that lets every bubble render through the SAME proven engine (renderGraphSlideChart's input,
+ * parameterised on the bubble instead of globals). single → first lift only; multi → all. */
+function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalyticsGraph>[1] {
+  const formula = currentFormula();
+  const user = els.athlete.value;
+  const isRvw = bubble.type === "rvw";
+  const exsBase = bubble.view === "single" ? bubble.exercises.slice(0, 1) : bubble.exercises;
+  const exs = lensExpand("graph", exsBase).slice(0, graphExerciseCap());
+  const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
+  const sm = currentStrengthByUserExercise(formula);
+  // Per-bubble config CLONE so a bubble's type/×BW never leak to its neighbours (the bug the
+  // owner hit). The shared Options knobs (aggregation/decay…) ride the base config for now.
+  const cfg: GraphConfig = {
+    ...waGraphConfig,
+    formula,
+    repsVsWeight: isRvw,
+    repsVsWeightFit: isRvw ? S.waRepsVsWeightFit : false,
+    rirOf: (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, formula),
+    ceilingOf: (rs) => {
+      const r = rs[0];
+      return r ? worldRecordKg(r.exerciseName, athProfile(r.username)?.sex ?? "m", r.bodyweight ?? null) : null;
+    },
+  };
+  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
+  const drawMetricIds = bubble.metrics.filter((id) => scopeAllowed.has(id));
+  return {
+    exercises: exs,
+    records: isRvw ? rvwWindowRecords(recs) : recs,
+    rvwAxis: isRvw ? rvwAxisExtent(recs, exs) : undefined,
+    metrics: drawMetricIds,
+    config: cfg,
+    rvwFitOf,
+    onRvwFitDrag,
+    codeOf: (ex: string) => displayName(ex, "graph"),
+    perBodyweight: bubble.perBodyweight,
+    bodyweight: athProfile(user)?.weight ?? null,
+    worldRecordKg: (ex: string, u?: string) => {
+      const uu = u ?? user;
+      return worldRecordKg(ex, athProfile(uu)?.sex ?? "m", athProfile(uu)?.weight ?? null);
+    },
+    emptyOnNoExercises: true,
+  };
+}
+
+/** Re-sync the shared graph picker + S.* flags to the active bubble, then re-render. Called
+ * by the dashboard control handlers after they mutate graphDash. */
+function refreshDash(): void {
+  const b = currentBubble();
+  waGraphSel = [...b.exercises];
+  S.waRepsVsWeight = b.type === "rvw";
+  S.waPerBodyweight = b.perBodyweight;
+  renderSelector("graph");
+  renderWaGraph();
+}
+
+/** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
+ * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
+ * projection). One bubble shows at a time (swipe reel, owner's pick); each draws a REAL chart
+ * from its own stored config — never a stub. */
+function renderGraphDashboard(): void {
+  const box = document.getElementById("waGraph");
+  if (!box) return;
+  const tab = activeTab(graphDash);
+  if (dashBubbleIdx >= tab.bubbles.length) dashBubbleIdx = 0;
+  let bubble = tab.bubbles[dashBubbleIdx]!;
+  // Friendly first-run: an unconfigured (empty) bubble seeds from the athlete's top lift so the
+  // graph shows something immediately rather than a blank placeholder. Only when not editing.
+  if (bubble.exercises.length === 0 && pickDrawerScope !== "graph") {
+    const seed = graphCarouselLifts()[0];
+    if (seed) {
+      graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [seed] });
+      persistDash();
+      bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
+    }
+  }
+  // SSOT = the bubble. The picker is open → the owner is editing this bubble's lifts, so write
+  // the picker's selection BACK to the bubble; otherwise mirror the bubble into the picker.
+  if (pickDrawerScope === "graph") {
+    if (JSON.stringify(waGraphSel) !== JSON.stringify(bubble.exercises)) {
+      graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [...waGraphSel] });
+      persistDash();
+    }
+  } else {
+    waGraphSel = [...bubble.exercises];
+  }
+  const tabsHtml = graphDash.tabs
+    .map((t) => `<button type="button" class="gdash-tab${t.id === graphDash.activeTabId ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>`)
+    .join("");
+  const dots = tab.bubbles
+    .map((_, i) => `<button type="button" class="gmini-dot${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="Bubble ${i + 1}"></button>`)
+    .join("");
+  const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
+  const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
+  box.innerHTML =
+    `<div class="gdash-tabs">${tabsHtml}<button type="button" class="gdash-tab gdash-tabadd" data-dashtabadd="1" aria-label="Add a tab" title="Add a tab">＋</button></div>` +
+    `<div class="gdash-head">` +
+      `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
+      `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +
+      `<button type="button" class="gdash-pill" data-dashpick="1" title="Pick which lift(s) this bubble shows">⇆ Lifts</button>` +
+      `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
+      (tab.bubbles.length > 1 ? `<button type="button" class="gdash-pill gdash-rm" data-dashremove="1" title="Remove this bubble" aria-label="Remove bubble">✕</button>` : "") +
+    `</div>` +
+    `<div id="gdashStage" class="gdash-stage wa-graph-chart"></div>` +
+    (S.waRepsVsWeight ? rvwPagerHtml() : "") +
+    `<div class="gdash-foot">` +
+      `<button type="button" class="gmini-nav" data-dashnav="-1" aria-label="Previous bubble">‹</button>` +
+      `<div class="gmini-dots">${dots}</div>` +
+      `<button type="button" class="gmini-nav" data-dashnav="1" aria-label="Next bubble">›</button>` +
+      `<button type="button" class="ms-more" data-dashadd="1" title="Add a graph bubble to this tab">＋ Bubble</button>` +
+    `</div>`;
+  const stage = document.getElementById("gdashStage");
+  if (stage) {
+    if (bubble.exercises.length === 0) {
+      stage.innerHTML = `<p class="muted wa-placeholder">No lift picked — tap “⇆ Lifts” to choose what this bubble shows.</p>`;
+    } else {
+      renderAnalyticsGraph(stage, buildBubbleInput(bubble));
+    }
+  }
+}
+
 function renderWaGraph(): void {
   // ROUTER: lead with the single-lift carousel ("min" view); "More" flips to the full
   // multi-exercise / multi-athlete graph. All existing renderWaGraph() callers route here.
   // The section title reads a plain "Graph" in carousel mode (the carousel has its own
   // per-slide title); the multi-lift selection title shows only in the full view.
+  // NEW (CHART-160): the build-your-own dashboard replaces the fixed single-carousel + full
+  // multi views. It lives in #waGraphFull (kept visible) so the existing #waExerciseSelector
+  // picker edits the current bubble; #waGraph holds the bubble reel. The legacy mini/full code
+  // below stays DORMANT (reachable only if useGraphDashboard is flipped off — kept as a safety
+  // fallback per the "build alongside, don't delete the working path" lesson).
+  const useGraphDashboard = true;
+  if (useGraphDashboard) {
+    const summEl = document.getElementById("waGraphSummary");
+    if (summEl) { summEl.textContent = "Graph"; summEl.classList.remove("is-bigtitle"); }
+    const mini = document.getElementById("waGraphMini");
+    const full = document.getElementById("waGraphFull");
+    if (mini) mini.hidden = true;
+    if (full) full.hidden = false;
+    const foldEl = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
+    if (!foldEl?.open) return; // collapsed → skip the (hidden) chart work
+    renderGraphDashboard();
+    return;
+  }
   const summ = document.getElementById("waGraphSummary");
   if (summ) {
     // Show the multi-lift title (with the + / ✕ / = toolbar + Pick tab) in the full view,
@@ -20291,7 +20451,65 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
-    // ── Graph "min" carousel interactions ──────────────────────────────────────
+    // ── Custom graph DASHBOARD interactions (CHART-160) ─────────────────────────
+    // Switch to a tab (resets the reel to its first bubble).
+    const dashTab = t.closest<HTMLElement>("[data-dashtab]");
+    if (dashTab?.dataset.dashtab) {
+      graphDash = setActiveTab(graphDash, dashTab.dataset.dashtab); dashBubbleIdx = 0; persistDash();
+      refreshDash(); return;
+    }
+    // Add a new tab (becomes active).
+    if (t.closest<HTMLElement>("[data-dashtabadd]")) {
+      graphDash = addTab(graphDash); dashBubbleIdx = 0; persistDash(); refreshDash(); return;
+    }
+    // Prev / next bubble in the reel (wraps).
+    const dashNav = t.closest<HTMLElement>("[data-dashnav]");
+    if (dashNav?.dataset.dashnav) {
+      const n = activeTab(graphDash).bubbles.length;
+      dashBubbleIdx = (dashBubbleIdx + Number(dashNav.dataset.dashnav) + n) % n;
+      refreshDash(); return;
+    }
+    // Jump to a bubble via its dot.
+    const dashDot = t.closest<HTMLElement>("[data-dashdot]");
+    if (dashDot?.dataset.dashdot != null) { dashBubbleIdx = Number(dashDot.dataset.dashdot) || 0; refreshDash(); return; }
+    // Add a bubble to the active tab (jump the reel to it).
+    if (t.closest<HTMLElement>("[data-dashadd]")) {
+      const tab = activeTab(graphDash);
+      graphDash = addBubble(graphDash, tab.id, { exercises: [...currentBubble().exercises] });
+      dashBubbleIdx = activeTab(graphDash).bubbles.length - 1; persistDash(); refreshDash(); return;
+    }
+    // Remove the current bubble (guarded: a tab always keeps one).
+    if (t.closest<HTMLElement>("[data-dashremove]")) {
+      const tab = activeTab(graphDash);
+      graphDash = removeBubble(graphDash, tab.id, currentBubble().id);
+      if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+      persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: cycle graph type (Over time ⇄ Reps × kg) — independent, persisted.
+    if (t.closest<HTMLElement>("[data-dashtype]")) {
+      const tab = activeTab(graphDash);
+      graphDash = cycleBubbleType(graphDash, tab.id, currentBubble().id); persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: cycle view (Single ⇄ Multi) — independent, persisted.
+    if (t.closest<HTMLElement>("[data-dashview]")) {
+      const tab = activeTab(graphDash);
+      graphDash = cycleBubbleView(graphDash, tab.id, currentBubble().id); persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: ×BW toggle — independent, persisted.
+    if (t.closest<HTMLElement>("[data-dashbw]")) {
+      const tab = activeTab(graphDash);
+      graphDash = updateBubble(graphDash, tab.id, currentBubble().id, { perBodyweight: !currentBubble().perBodyweight });
+      persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: pick which lift(s) this bubble shows (the picker writes back via the
+    // waGraphSel projection in renderGraphDashboard).
+    if (t.closest<HTMLElement>("[data-dashpick]")) {
+      waGraphSel = [...currentBubble().exercises];
+      renderSelector("graph");
+      openPickDrawer("graph");
+      return;
+    }
+    // ── Graph "min" carousel interactions (LEGACY — dormant while the dashboard is on) ──
     // "Multi ▾" → expand the single-lift carousel into the full multi-exercise graph.
     if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
     // "Compare" (carousel) → open the Multi graph with the athlete-compare row on.
