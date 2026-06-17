@@ -18772,7 +18772,6 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // "N exercises ▾" dropdown button that opens the whole clickable list (data-titlelist) —
   // each entry keeps the same Info / Combine / Compare / Remove popup as the inline chips.
   let bodyHtml = "";
-  let exlistBtn = "";
   if (remove) {
     const scope = remove; // narrowed to a non-null SelScope
     // Each name opens a small popup (Info / Combine / Compare / Remove) and is COLOURED by
@@ -18780,7 +18779,10 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     const liftChip = (n: string): string =>
       `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
     if (sel.length > TITLE_NAME_CAP) {
-      exlistBtn = `<button type="button" class="wa-title-exlist" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove">${sel.length} <span class="wa-exlist-lbl">exercises</span><span class="xdd-caret">▾</span></button>`;
+      // Owner: NOT a boxy "N exercises ▾" button — show the FIRST lift as a normal (subtle)
+      // title, with a small ▾ dropdown beside it that reveals the REST as titles too (not
+      // bordered buttons). The caret reuses the data-titlelist floating menu.
+      bodyHtml = `<span class="wa-tl-lead">${liftChip(sel[0]!)}<button type="button" class="wa-title-exmore" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove"><span class="xdd-caret">▾</span></button></span>`;
     } else {
       // ≤ cap → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
       // name in one column NEVER widens or heightens the other (owner: "two separate columns").
@@ -18811,7 +18813,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const seltitleAttrs = cols
     ? ` class="wa-seltitle wa-seltitle--cols"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${remove ? " has-pick" : ""}"><span${seltitleAttrs}>${exlistBtn || emptyCta || bodyHtml}</span>${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${remove ? " has-pick" : ""}"><span${seltitleAttrs}>${emptyCta || bodyHtml}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
