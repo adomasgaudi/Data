@@ -334,6 +334,24 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // sex + bodyweight + the per-exercise record); carries no compute. Shown as a
   // FRACTION of the record (1.0 = world record), so it shares the left value axis.
   { id: "pctWR", label: "WR%", type: "scatter" },
+  // "% of your top performance" — each set's added-weight 1RM as a FRACTION of the best
+  // 1RM in view (the peak = 1.0 = 100%). Self-contained (no WR/sex/bodyweight needed), so
+  // unlike pctWR it carries a real compute. A fraction (0–1), shares the left value axis;
+  // analyticsGraph skips the per-bodyweight divide for it (it's already relative).
+  {
+    id: "pctBest",
+    label: "Best%",
+    type: "scatter",
+    compute: (rs, cfg) => {
+      const pts = perSet(rs, (r) => addedWeight1RM(r, cfg.formula), undefined, cfg);
+      let peak = -Infinity;
+      for (const p of pts) if (p.y != null && p.y > peak) peak = p.y;
+      if (!Number.isFinite(peak) || peak <= 0) return [];
+      return pts.map((p) =>
+        p.y == null ? p : { ...p, y: Math.round((p.y / peak) * 1000) / 1000, meta: `${Math.round((p.y / peak) * 100)}% of best (${r1(p.y)} 1RM)` },
+      );
+    },
+  },
   { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
   { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula, cfg), Date.now()) },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays, cfg.potentialCeiling ?? cfg.ceilingOf?.(rs) ?? null) },

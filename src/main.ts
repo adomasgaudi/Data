@@ -19873,7 +19873,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const hasSetMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "range" || m.type === "scatter"); });
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "pctBest"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
   const openMetricGroups = new Set<string>();
@@ -20238,7 +20238,7 @@ const SETTING_INFO: Record<string, string> = {
   repsweight: "Weight × reps scatter — plot every set as weight (x) × reps (y) instead of the time graph. Best-fit — a straight line through each lift's points.",
   window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
   mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
-  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record.",
+  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
   mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
   allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
   assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",
