@@ -140,11 +140,11 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
  */
 export const EXTRA_EXERCISES: readonly string[] = [
   "Knee Raise", "Cross-Legged Squats",
-  // Leverbell — an adjustable one-sided loaded handle held like a sword/axe (the weight sits
+  // Lever — an adjustable one-sided loaded handle held like a sword/axe (the weight sits
   // toward one end on a movable plate, you grip the other), for forearm/wrist leverage. Four
   // movements across the two rotational axes the owner trains (NOT wrist flexion/extension):
-  // forearm rotation (pronation/supination) + wrist deviation (radial/ulnar).
-  "Leverbell Pronation", "Leverbell Supination", "Leverbell Radial Deviation", "Leverbell Ulnar Deviation",
+  // forearm rotation (pronation/supination) + wrist deviation (abduction = radial, adduction = ulnar).
+  "Lever Pronation", "Lever Supination", "Lever Abduction", "Lever Adduction",
 ];
 
 /**

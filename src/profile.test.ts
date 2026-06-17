@@ -348,11 +348,11 @@ describe("muscleGroup (fine split)", () => {
     expect(muscleGroup("Bench Press")).toBe("Chest");
     expect(muscleGroup("Seated Shoulder Press")).toBe("Shoulders");
   });
-  it("the Leverbell wrist/forearm rotations are Forearms", () => {
-    expect(muscleGroup("Leverbell Pronation")).toBe("Forearms");
-    expect(muscleGroup("Leverbell Supination")).toBe("Forearms");
-    expect(muscleGroup("Leverbell Radial Deviation")).toBe("Forearms");
-    expect(muscleGroup("Leverbell Ulnar Deviation")).toBe("Forearms");
+  it("the Lever wrist/forearm rotations are Forearms", () => {
+    expect(muscleGroup("Lever Pronation")).toBe("Forearms");
+    expect(muscleGroup("Lever Supination")).toBe("Forearms");
+    expect(muscleGroup("Lever Abduction")).toBe("Forearms");
+    expect(muscleGroup("Lever Adduction")).toBe("Forearms");
   });
   it("splits the back into lower / upper / lats (pulls and rows are one Lats group)", () => {
     expect(muscleGroup("Bent Over Row")).toBe("Lats");

@@ -344,10 +344,12 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
   // as its own muscle rather than being lumped into the glutes.
   { id: "muscle.abductors", kind: "muscle-group", label: "Abductors",
     why: "Hip abduction — driving the leg out to the side: hip-abduction machine, cable/band abductions, clamshells.",
-    keywords: ["hip abduction", "abduction", "abductor", "clamshell", "clam shell"] },
+    keywords: ["hip abduction", "abduction", "abductor", "clamshell", "clam shell"],
+    exclude: ["Lever Abduction"] }, // wrist abduction (radial deviation) → Forearms, not the hip
   { id: "muscle.adductors", kind: "muscle-group", label: "Adductors",
     why: "Hip adduction — drawing the leg in toward the midline: adductor machine, cable/band adductions, Copenhagen plank.",
-    keywords: ["hip adduction", "adduction", "adductor", "copenhagen"] },
+    keywords: ["hip adduction", "adduction", "adductor", "copenhagen"],
+    exclude: ["Lever Adduction"] }, // wrist adduction (ulnar deviation) → Forearms, not the hip
   { id: "muscle.glutes", kind: "muscle-group", label: "Glutes",
     why: "Hip-extension dominant: thrusts, bridges, hip extension.",
     keywords: ["hip thrust", "glute", "hip extension", "bridge"] },
@@ -361,9 +363,9 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
     why: "Elbow-extension: pushdowns, skulls, JM press, close-grip bench. Before chest so close-grip bench reads triceps.",
     keywords: ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"] },
   { id: "muscle.forearms", kind: "muscle-group", label: "Forearms",
-    why: "Grip & wrist work: wrist curls, dead hangs, farmer's carries, pinch/finger and forearm work, plus Leverbell wrist/forearm rotations. Before biceps so a 'wrist curl' isn't read as a biceps curl.",
-    keywords: ["forearm", "wrist", "grip", "dead hang", "farmer", "suitcase", "pinch", "finger", "reverse curl", "leverbell", "pronation", "supination", "radial deviation", "ulnar deviation"],
-    include: ["Leverbell Pronation", "Leverbell Supination", "Leverbell Radial Deviation", "Leverbell Ulnar Deviation"] },
+    why: "Grip & wrist work: wrist curls, dead hangs, farmer's carries, pinch/finger and forearm work, plus the Lever wrist/forearm rotations. Before biceps so a 'wrist curl' isn't read as a biceps curl.",
+    keywords: ["forearm", "wrist", "grip", "dead hang", "farmer", "suitcase", "pinch", "finger", "reverse curl", "pronation", "supination"],
+    include: ["Lever Pronation", "Lever Supination", "Lever Abduction", "Lever Adduction"] },
   { id: "muscle.biceps", kind: "muscle-group", label: "Biceps",
     why: "Elbow-flexion: curls, preacher, hammer.",
     keywords: ["curl", "preacher", "hammer"] },
