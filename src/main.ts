@@ -19497,6 +19497,13 @@ function renderGraphMini(): void {
 }
 
 // ===== Custom graph dashboard render (CHART-160+) ==========================================
+/** Tiny stable fingerprint of a (long) signature string — only for the dbg console, so
+ *  the saved vs current view signatures can be eyeballed in one short token (PB-39). */
+function sigHash(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 /** Assemble the pure analyticsGraph input for ONE bubble from its OWN config — the reuse seam
  * that lets every bubble render through the SAME proven engine (renderGraphSlideChart's input,
  * parameterised on the bubble instead of globals). single → first lift only; multi → all. */
@@ -19536,8 +19543,22 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   // restored ONLY while the plotted CONTENT is unchanged (this signature) — change the lift /
   // metric / type / athlete / time-compaction and it re-fits instead of keeping a stale frame.
   const tabId = activeTab(graphDash).id;
-  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), user]);
+  const sigParts: unknown[] = [bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), user];
+  const sig = JSON.stringify(sigParts);
   const initialView = bubble.savedView && bubble.savedView.sig === sig ? bubble.savedView.box : null;
+  // PB-39 diagnostic (#super-persistent: pan/zoom not persisting): on each chart mount log
+  // whether a view was saved + whether its signature still matches the current content, so a
+  // screenshot of the green console shows exactly where the chain breaks (save vs sig vs apply).
+  dbg(`vMOUNT have=${bubble.savedView ? sigHash(bubble.savedView.sig) : "-"} want=${sigHash(sig)} init=${initialView ? "Y" : "n"}`);
+  // On a signature MISMATCH, name the first differing component (type/view/bw/exs/metrics/
+  // compact/user) so one screenshot reveals WHY the saved view was dropped — no extra round-trip.
+  if (bubble.savedView && bubble.savedView.sig !== sig) {
+    const SIG_KEYS = ["type", "view", "bw", "exs", "metrics", "compact", "user"];
+    let had: unknown[] = [];
+    try { had = JSON.parse(bubble.savedView.sig) as unknown[]; } catch { /* ignore */ }
+    const diff = SIG_KEYS.find((_, i) => JSON.stringify(had[i]) !== JSON.stringify(sigParts[i])) ?? "?";
+    dbg(`vDIFF ${diff}: ${JSON.stringify(had[SIG_KEYS.indexOf(diff)])} -> ${JSON.stringify(sigParts[SIG_KEYS.indexOf(diff)])}`.slice(0, 60));
+  }
   return {
     exercises: exs,
     records: isRvw ? rvwWindowRecords(recs) : recs,
@@ -19547,6 +19568,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     initialView,
     onViewChange: (box) => {
       // Persist only — never re-render here (that would destroy the chart mid-gesture).
+      dbg(`vSAVE ${box ? "box" : "nul"} sig=${sigHash(sig)}`);
       graphDash = setBubbleView(graphDash, tabId, bubble.id, box ? { sig, box } : null);
       persistDash();
     },

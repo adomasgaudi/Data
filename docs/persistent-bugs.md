@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-39 — Dashboard graph pan/zoom doesn't persist across view/tab change + refresh
+
+- **First seen / reported:** 2026-06-17, mobile (Brave, Android), Analysis → Graph dashboard. Owner (two screenshots of a Volume bubble at different time-windows): "if i move the graph it should persist with changing views, refresh, tab change etc. #max debug #super persistent."
+- **Recurrence count:** 1 (the prior CHART-171 "remember pan/zoom" fix did not hold on device).
+- **Prior fix that didn't hold (b.2.9.41, CHART-171):** added `initialView` + debounced `onViewChange` to svgChart, and a per-bubble `savedView = { sig, box }` persisted per-athlete. On a fresh mount the saved box is restored only while a content SIGNATURE (type · view · ×BW · lifts · metrics · time-compaction · athlete) still matches; double-tap/Fit clears it. Owner reports it still reverts to the auto-fit.
+- **Investigation (this pass):** read the whole chain — pan commits (`commitView()` → debounced `onViewChange`, svgChart.ts ~1237), the dashboard rebuilds `#gdashStage` every render so the chart always re-mounts fresh and reads `initialView` (main.ts renderGraphDashboard), the Zod schema preserves `savedView` across the localStorage round-trip, and the apply path (`view = {...initialView}` at mount, ResizeObserver only `draw()`s) is sound. By inspection the save + restore look structurally correct, so the failing link is a RUNTIME value — most likely the signature differs between save-time and restore-time (so `initialView` comes back null), or the save never fires on device.
+- **Diagnostic added (this version):** on-screen `dbg()` lines via the green console — `vSAVE box|nul sig=<hash>` when the view is persisted, `vMOUNT have=<hash> want=<hash> init=Y|n` on every chart mount, and on a mismatch `vDIFF <component>: <was> -> <now>` naming the first differing signature component. One screenshot after pan→tab-switch will show exactly where the chain breaks (save not firing / not persisting / signature drift / apply). Remove once the root is confirmed.
+- **Watch:** a "remember my view" feature has four independent links — (1) the gesture commits, (2) the commit persists, (3) the persisted value survives reload, (4) the restore key (signature) still matches. Instrument all four before patching any one.
+
+---
+
 ## PB-38 — Dashboard floating-menu actions don't fire (long-press tab menu: rename/duplicate/add do nothing)
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph dashboard. Owner across several msgs: "duplicate bubble doesnt do anything", then "tab rename duplicated add, dont work", "#persistent". The floating menus (tab long-press menu; earlier the bubble ⋯ menu) OPEN fine but tapping an item does nothing.
