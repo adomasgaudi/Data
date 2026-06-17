@@ -4199,22 +4199,27 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-seltitle-box.is-expanded {
   min-height: 0;
 }
-/* Picked-lift names as a vertically-aligned GRID: equal auto-fit columns whose width
-   tracks the longest name (--gcols-min, set per render) — so long names give 2 columns
-   and short ones 3, with the names lining up in columns instead of free-flowing text.
-   max(…,5.5rem) caps it at ~3 columns; the names list is full-width so the ✕/≈ actions
-   sit just below it. */
-.wa-seltitle--grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(max(var(--gcols-min, 6rem), 5.5rem), calc(50% - 0.3rem)), 1fr));
-  gap: 0.15rem 0.6rem; align-items: baseline; width: 100%;
+/* Picked-lift names as TWO INDEPENDENT columns (NOT a grid/table): each column is its
+   own vertical list of single-line, LEFT-aligned, hard-CLIPPED names, so a long name in
+   one column never widens or heightens the other, and nothing ever wraps to a 2nd line.
+   Owner: "two separate columns of titles… truncate too-long ones, no … ellipsis, just a
+   subtle cut-off; all left-aligned." Same renderer drives graph AND history titles. */
+.wa-seltitle--cols { display: block; width: 100%; }
+.wa-tlcols { display: flex; gap: 0.6rem; align-items: flex-start; width: 100%; }
+.wa-tlcol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 0.05rem; }
+/* min-width:0 above lets a column shrink below its content so the clip can bite. */
+.wa-seltitle--cols .wa-title-lift {
+  display: block; max-width: 100%; text-align: left; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: clip; /* hard cut, no "…" */
 }
-.wa-seltitle--grid > .wa-title-lift, .wa-seltitle--grid > .wa-title-more { justify-self: start; }
-/* In the grid, a long name must NEVER force a single column: the column min is capped
-   at ~half the row (above) so 2+ columns always fit, and a name wider than its capped
-   column WRAPS within the cell (overriding the inline-form nowrap) instead of spilling
-   over. Owner: "this title should be never less than 2 cols." */
-.wa-seltitle--grid > .wa-title-lift { white-space: normal; overflow-wrap: break-word; }
+.wa-seltitle--cols .wa-title-more { display: block; margin: 0.1rem 0 0; }
+/* Three font STEPS (owner: 2–3 sizes) — longer names shrink a little before they clip;
+   em-relative so they scale with the title context (1.4rem big title, smaller elsewhere).
+   The kept size floor (s3) stays readable; anything still too long is clipped, not shrunk
+   further. */
+.wa-tl-s1 { font-size: 1em; }
+.wa-tl-s2 { font-size: 0.8em; }
+.wa-tl-s3 { font-size: 0.64em; }
 /* A bigger caret with clear margin from the title, so there's an obvious "empty"
    spot (the caret) to COLLAPSE — distinct from the lift names, which REMOVE. */
 .wa-fold-titled[open] > .wa-fold-sum.is-bigtitle::before { font-size: 1.4rem; margin-right: 0.5em; opacity: 0.55; }
