@@ -5235,6 +5235,15 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 .wa-gcfg-f { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); }
 .wa-gcfg-f select, .wa-gcfg-f input { font: inherit; font-size: var(--fs-sm); padding: 2px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); }
 .wa-gcfg-f input[type="number"] { width: 3.2rem; }
+/* Inline decay-model formula + per-variable explanation (owner: mobile has no hover, so
+   show what each knob does). Spans the whole group; the formula is highlighted, the glosses
+   are a tight muted list. */
+.wa-decay-explain { flex: 1 1 100%; margin: 0.2rem 0 0; font-size: 0.74rem; color: var(--muted); }
+.wa-decay-formula { margin: 0 0 0.3rem; }
+.wa-decay-formula code { font-size: 0.78rem; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; display: inline-block; }
+.wa-decay-gloss { margin: 0; padding-left: 1.1rem; line-height: 1.45; }
+.wa-decay-gloss b { color: var(--text); font-weight: 600; }
+.wa-decay-note { margin: 0.3rem 0 0; font-style: italic; }
 
 /* Unified selector: search + group-by + grouped chips (TASKS 43, 45). */
 .wa-sel-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.6rem; }

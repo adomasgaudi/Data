@@ -20155,8 +20155,30 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
         dField("maxGrowthFraction", "Growth cap %", r3(dp.maxGrowthFraction * 100), 1, "A single session can't raise the level beyond this % above your all-time peak.") +
         dField("calibrationThreshold", "Calibration %", Math.round(dp.calibrationThreshold * 100), 1, "A returning set at ≥ this % of the prior level proves the gap was 'maintained' — bumps stability up to the gap's length.");
   const decayLevelPill = `<button type="button" class="wa-name-opt" data-wadecaylevel="1" title="Decay model complexity — Linear (grace + straight decline) → Log (a durability curve) → Full (adds training-grown durability, RIR trust, a growth cap and gap calibration). Tap to cycle.">Model: ${dLvlLabel}</button>`;
+  // Owner: show the FORMULA + what each variable does INLINE (mobile has no hover for the
+  // field tooltips). Level-aware: the active model's equation, then a one-line gloss per knob.
+  const dFormula = dp.level === 1
+    ? "retention = 1 − r · (days − grace)"
+    : "retention = 1 − k · ln(1 + (days − grace) ÷ S)";
+  const dGlossCommon =
+    "<li><b>Grace</b> — days of full strength after a session before any fade starts.</li>" +
+    "<li><b>Floor</b> — the lowest % of your peak it can fade to (muscle memory).</li>";
+  const dGlossLevel = dp.level === 1
+    ? "<li><b>Loss %/day (r)</b> — % of the peak lost each day past the grace (a straight line).</li>"
+    : dp.level === 2
+      ? "<li><b>Loss / log (k)</b> — fade speed: strength lost per ln-unit of (days past grace ÷ S).</li>" +
+        "<li><b>Stability (S)</b> — durability in days; bigger = a flatter, slower fade.</li>"
+      : "<li><b>Loss / log (k)</b> — fade speed per ln-unit of (days past grace ÷ S).</li>" +
+        "<li><b>Base / Max stability (S)</b> — durability in days; starts at Base, capped at Max.</li>" +
+        "<li><b>Stability ×/session</b> — S is multiplied by this each session (trained lifts fade slower).</li>" +
+        "<li><b>Growth cap</b> — one session can't raise the level beyond this % above your all-time peak.</li>" +
+        "<li><b>Calibration</b> — a returning set ≥ this % of the prior level raises S to the gap's length.</li>";
+  const dExtra = dp.level === 3
+    ? `<p class="wa-decay-note">The Full model also blends noisy high-RIR sets toward the current level, and each training day steps the line to that set's estimated 1RM (capped).</p>`
+    : `<p class="wa-decay-note">The line steps to each session's estimated 1RM, then sags by the formula above until the next session.</p>`;
+  const decayExplain = `<div class="wa-decay-explain"><p class="wa-decay-formula"><code>${dFormula}</code></p><ul class="wa-decay-gloss">${dGlossCommon}${dGlossLevel}</ul>${dExtra}</div>`;
   const cfgDecay = decayShown
-    ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + dCommon + dByLevel, "decaymodel")
+    ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + dCommon + dByLevel + decayExplain, "decaymodel")
     : "";
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
