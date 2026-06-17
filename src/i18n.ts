@@ -103,6 +103,7 @@ const LT: Record<string, string> = {
   "hard sets (≤3 RIR)": "sunkios serijos (≤3 RIR)",
   "Curve": "Kreivė",
   "Sets per weight range": "Serijos pagal svorį",
+  "Drag to rotate · ↔ weight · ↕ reps · height = sets · darker = heavier": "Sukite pirštu · ↔ svoris · ↕ kartojimai · aukštis = serijos · tamsesnė = sunkesnė",
   "Setup notes": "Pasiruošimo užrašai",
   "Pair with": "Derinti su",
   "⇄ Pair flags": "⇄ Derinimo žymės",

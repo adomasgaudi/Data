@@ -3518,8 +3518,13 @@ let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
 // the Nuzzo curve, so the user can dial the 1RM until their lifts fit the curve.
 let cardOrm: number | null = null;
 /** Which sub-tab is active in the exercise info card — "curve" (default, the Nuzzo
- *  fit graph + training brief) or "volume" (sets-per-weight-range bar chart). */
+ *  fit graph + training brief) or "volume" (the 3D rotatable volume "city"). */
 let exInfoTab: "curve" | "volume" = "curve";
+/** Camera angles (radians) for the rotatable 3D Volume chart — yaw spins around the
+ *  vertical axis, pitch tilts the view down from above. Persist across re-renders so a
+ *  re-paint keeps the angle the owner dragged to. */
+let vol3dYaw = -0.62;
+let vol3dPitch = 0.52;
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
@@ -11523,108 +11528,223 @@ function updateCardNuzzoLive(): void {
     else cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
   });
 }
-/** Volume distribution chart for the exercise info card — grouped flat bars showing
- *  how many sets were done in each weight range × rep range. */
-function cardVolDistHtml(name: string): string {
-  const sets = cardNuzzoRealSets(name);
-  if (sets.length === 0)
-    return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
+// ── 3D Volume "city" ────────────────────────────────────────────────────────
+// A rotatable grid of bars: X = weight range, Z = rep range, height = #sets.
+// Pure SVG (no Three.js — rule 9): each bar is a box whose 8 corners are rotated
+// by yaw+pitch, orthographically projected, backface-culled, then every visible
+// face is depth-sorted (painter's algorithm) and drawn as a shaded polygon.
 
-  const REP_RANGES: { label: string; min: number; max: number; color: string }[] = [
-    { label: "1–3",   min: 1,  max: 3,        color: "#9c463a" },
-    { label: "4–6",   min: 4,  max: 6,        color: "#b8902f" },
-    { label: "7–9",   min: 7,  max: 9,        color: "#34786f" },
-    { label: "10–12", min: 10, max: 12,       color: "#284e86" },
-    { label: "13+",   min: 13, max: Infinity,  color: "#5b4f96" },
-  ];
+interface VolGrid {
+  wBins: { from: number; to: number; mid: number }[]; // X axis (weight)
+  rLabels: string[];                                   // Z axis (rep ranges)
+  grid: number[][];                                    // grid[wi][ri] = set count
+  maxCount: number;
+  loW: number; hiW: number;
+}
+
+const VOL_REP_RANGES: { label: string; min: number; max: number }[] = [
+  { label: "1–3",   min: 1,  max: 3 },
+  { label: "4–6",   min: 4,  max: 6 },
+  { label: "7–9",   min: 7,  max: 9 },
+  { label: "10–12", min: 10, max: 12 },
+  { label: "13+",   min: 13, max: Infinity },
+];
+
+/** Bucket a lift's logged sets into the weight × rep-range grid, dropping empty
+ *  rows/cols so the city is only as big as the real data. null = nothing to show. */
+function cardVolDistData(name: string): VolGrid | null {
+  const sets = cardNuzzoRealSets(name);
+  if (sets.length === 0) return null;
 
   const minA = sets.reduce((m, s) => Math.min(m, s.added), Infinity);
   const maxA = sets.reduce((m, s) => Math.max(m, s.added), -Infinity);
-  const lo = Math.floor(minA / 5) * 5;
-  const hi = Math.ceil(maxA / 5) * 5;
-  const range = hi - lo;
-  // bin size: at most 10 bins, rounded to nearest 5
-  const binSize = Math.max(5, Math.ceil(range / 10 / 5) * 5);
+  const loW = Math.floor(minA / 5) * 5;
+  const hiW = Math.max(loW + 5, Math.ceil(maxA / 5) * 5);
+  const binSize = Math.max(5, Math.ceil((hiW - loW) / 10 / 5) * 5);
 
-  type Bin = { label: string; from: number; to: number; counts: number[] };
-  const bins: Bin[] = [];
-  for (let w = lo; w < hi; w += binSize)
-    bins.push({ label: String(w), from: w, to: w + binSize, counts: new Array(REP_RANGES.length).fill(0) });
+  const allBins: { from: number; to: number; mid: number }[] = [];
+  for (let w = loW; w < hiW; w += binSize) allBins.push({ from: w, to: w + binSize, mid: w + binSize / 2 });
 
+  // Full grid first, then drop empty weight bins + empty rep ranges.
+  const full: number[][] = allBins.map(() => new Array(VOL_REP_RANGES.length).fill(0));
   for (const s of sets) {
-    const bi = bins.findIndex(b => s.added >= b.from && s.added < b.to);
-    if (bi < 0) continue;
-    const ri = REP_RANGES.findIndex(r => s.reps >= r.min && s.reps <= r.max);
-    if (ri >= 0) { const c = bins[bi]!.counts; c[ri] = (c[ri] ?? 0) + 1; }
+    const wi = allBins.findIndex(b => s.added >= b.from && s.added < b.to);
+    if (wi < 0) continue;
+    const ri = VOL_REP_RANGES.findIndex(r => s.reps >= r.min && s.reps <= r.max);
+    if (ri >= 0) full[wi]![ri]!++;
   }
 
-  const filled = bins.filter(b => b.counts.some(c => c > 0));
-  if (filled.length === 0)
-    return `<p class="muted" style="padding:1rem 0">No data to chart.</p>`;
+  const keepW = allBins.map((_, wi) => full[wi]!.some(c => c > 0));
+  const keepR = VOL_REP_RANGES.map((_, ri) => full.some(row => row[ri]! > 0));
+  const wBins = allBins.filter((_, wi) => keepW[wi]);
+  const rIdx = VOL_REP_RANGES.map((_, ri) => ri).filter(ri => keepR[ri]);
+  if (wBins.length === 0 || rIdx.length === 0) return null;
 
-  // Active rep-range indices (have at least one set somewhere)
-  const activeRr = REP_RANGES.map((_, i) => filled.some(b => b.counts[i]! > 0) ? i : -1).filter(i => i >= 0);
-  const maxCount = filled.reduce((m, b) => Math.max(m, ...b.counts), 0);
+  const grid = allBins
+    .map((_, wi) => wi)
+    .filter(wi => keepW[wi])
+    .map(wi => rIdx.map(ri => full[wi]![ri]!));
+  const maxCount = Math.max(...grid.flat());
 
-  // SVG layout
-  const svgW = 400, svgH = 210;
-  const ml = 32, mr = 8, mt = 12, mb = 52;
-  const cW = svgW - ml - mr;
-  const cH = svgH - mt - mb;
-  const nBins = filled.length;
-  const nRr = activeRr.length;
-  const groupW = cW / nBins;
-  const pad = groupW * 0.2;
-  const barW = (groupW - pad * 2) / nRr;
-  const yScale = (n: number) => cH - (n / maxCount) * cH;
+  return { wBins, rLabels: rIdx.map(ri => VOL_REP_RANGES[ri]!.label), grid, maxCount, loW, hiW };
+}
 
-  let bars = "";
-  filled.forEach((bin, bi) => {
-    const gx = ml + bi * groupW + pad;
-    activeRr.forEach((ri, ari) => {
-      const count = bin.counts[ri]!;
-      if (count === 0) return;
-      const x = gx + ari * barW;
-      const bh = (count / maxCount) * cH;
-      const y = mt + yScale(count);
-      const r = REP_RANGES[ri]!;
-      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, barW - 1).toFixed(1)}" height="${bh.toFixed(1)}" fill="${r.color}" rx="1"><title>${bin.from}–${bin.to}kg · ${r.label} reps · ${count} set${count !== 1 ? "s" : ""}</title></rect>`;
-    });
-  });
+/** Linear-interpolate a blue ramp by weight fraction (0 light → 1 dark). Returns [r,g,b]. */
+function volWeightRgb(f: number): [number, number, number] {
+  const a: [number, number, number] = [196, 222, 245]; // light  #c4def5
+  const b: [number, number, number] = [20, 56, 95];    // dark   #14385f
+  const t = Math.max(0, Math.min(1, f));
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
 
-  // x-axis bin labels
-  let xLbls = "";
-  filled.forEach((bin, bi) => {
-    const cx = ml + bi * groupW + groupW / 2;
-    xLbls += `<text x="${cx.toFixed(1)}" y="${(svgH - mb + 13).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--muted)">${bin.label}</text>`;
-  });
+/** Render the 3D city as an SVG string at the given camera angles. */
+function renderVol3d(d: VolGrid, yaw: number, pitch: number): string {
+  const svgW = 400, svgH = 240, margin = 14;
+  const nW = d.wBins.length, nR = d.rLabels.length;
 
-  // y-axis grid + labels (0, ½, max)
-  const yVals = [0, Math.round(maxCount / 2), maxCount].filter((v, i, a) => a.indexOf(v) === i);
-  let yLbls = "";
-  yVals.forEach(v => {
-    const y = mt + yScale(v);
-    yLbls += `<line x1="${ml}" y1="${y.toFixed(1)}" x2="${ml + cW}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>` +
-      `<text x="${(ml - 4).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="9" fill="var(--muted)">${v}</text>`;
-  });
+  // World layout (centred on the origin so rotation pivots about the middle).
+  const cellX = 1.4, barW = 1.0;   // along X (weight)
+  const cellZ = 1.0, barD = 0.55;  // along Z (rep range) — thinner in z
+  const maxBarH = 3.4;             // tallest bar in world units
+  const totalX = nW * cellX, totalZ = nR * cellZ;
+  const cx0 = -totalX / 2, cz0 = -totalZ / 2, cy0 = -maxBarH / 2;
 
-  const axes = `<line x1="${ml}" y1="${mt}" x2="${ml}" y2="${mt + cH}" stroke="var(--muted)" stroke-width="1"/>` +
-    `<line x1="${ml}" y1="${mt + cH}" x2="${ml + cW}" y2="${mt + cH}" stroke="var(--muted)" stroke-width="1"/>`;
-  const xTitle = `<text x="${(ml + cW / 2).toFixed(1)}" y="${svgH - 4}" text-anchor="middle" font-size="9" fill="var(--muted)">Added weight (kg)</text>`;
-  const yTitle = `<text transform="rotate(-90) translate(${-(mt + cH / 2)},10)" text-anchor="middle" font-size="9" fill="var(--muted)">Sets</text>`;
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+  // Rotate a world point → screen-space {X, Y up, Z depth (bigger = nearer)}.
+  const rot = (x: number, y: number, z: number) => {
+    const x1 = x * cosY + z * sinY;
+    const z1 = -x * sinY + z * cosY;
+    const y2 = y * cosP - z1 * sinP;
+    const z2 = y * sinP + z1 * cosP;
+    return { X: x1, Y: y2, Z: z2 };
+  };
 
-  const legendItems = activeRr.map(ri => {
-    const r = REP_RANGES[ri]!;
-    return `<span class="lt-vol-leg-item"><span class="lt-vol-leg-dot" style="background:${r.color}"></span>${r.label}</span>`;
-  }).join("");
+  type Face = { pts: { X: number; Y: number }[]; depth: number; up: number; fill: [number, number, number] };
+  const faces: Face[] = [];
+  // Ground tile (faint) so the bars read as a city on a floor.
+  {
+    const g = [
+      rot(cx0, cy0, cz0), rot(cx0 + totalX, cy0, cz0),
+      rot(cx0 + totalX, cy0, cz0 + totalZ), rot(cx0, cy0, cz0 + totalZ),
+    ];
+    faces.push({ pts: g, depth: (g[0]!.Z + g[2]!.Z) / 2 - 0.01, up: 1, fill: [-1, -1, -1] });
+  }
 
+  // Box faces (top + 4 sides; bottom is never seen from above).
+  const FACES: [number, number, number, number, number][] = [
+    // indices into the 8 corners, last entry = "is top face" flag (1) else 0
+    [4, 5, 6, 7, 1], // +Y top
+    [0, 1, 5, 4, 0], // -Z front
+    [3, 7, 6, 2, 0], // +Z back
+    [0, 4, 7, 3, 0], // -X left
+    [1, 2, 6, 5, 0], // +X right
+  ];
+
+  for (let wi = 0; wi < nW; wi++) {
+    const f = nW > 1 ? wi / (nW - 1) : 0; // weight fraction for colour (already left→right = light→heavy)
+    const base = volWeightRgb(f);
+    const x0 = cx0 + wi * cellX + (cellX - barW) / 2, x1 = x0 + barW;
+    for (let ri = 0; ri < nR; ri++) {
+      const count = d.grid[wi]![ri]!;
+      if (count === 0) continue;
+      const h = (count / d.maxCount) * maxBarH;
+      const z0 = cz0 + ri * cellZ + (cellZ - barD) / 2, z1 = z0 + barD;
+      const y0 = cy0, y1 = cy0 + h;
+      const C = [
+        rot(x0, y0, z0), rot(x1, y0, z0), rot(x1, y0, z1), rot(x0, y0, z1),
+        rot(x0, y1, z0), rot(x1, y1, z0), rot(x1, y1, z1), rot(x0, y1, z1),
+      ];
+      for (const [a, b, c, dd] of FACES) {
+        const p = [C[a]!, C[b]!, C[c]!, C[dd]!];
+        // Backface cull via projected signed area (screen Y is down).
+        const area = (p[1]!.X - p[0]!.X) * (p[2]!.Y - p[0]!.Y) - (p[1]!.Y - p[0]!.Y) * (p[2]!.X - p[0]!.X);
+        if (area <= 0) continue; // facing away
+        const depth = (p[0]!.Z + p[1]!.Z + p[2]!.Z + p[3]!.Z) / 4;
+        const up = (p[0]!.Y + p[2]!.Y) / 2; // crude "how up-facing" for shading
+        faces.push({ pts: p, depth, up, fill: base });
+      }
+    }
+  }
+
+  // Fit: project once, find the 2D bbox, scale to the viewBox (stable enough that
+  // a drag never clips — recomputed each frame so any angle stays in view).
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const fc of faces) for (const p of fc.pts) {
+    if (p.X < minX) minX = p.X; if (p.X > maxX) maxX = p.X;
+    if (p.Y < minY) minY = p.Y; if (p.Y > maxY) maxY = p.Y;
+  }
+  const spanX = Math.max(0.001, maxX - minX), spanY = Math.max(0.001, maxY - minY);
+  const scale = Math.min((svgW - 2 * margin) / spanX, (svgH - 2 * margin) / spanY);
+  const offX = (svgW - spanX * scale) / 2 - minX * scale;
+  const offY = (svgH - spanY * scale) / 2 + maxY * scale; // +Y up → flip
+  const sx = (X: number) => (X * scale + offX).toFixed(1);
+  const sy = (Y: number) => (-Y * scale + offY).toFixed(1);
+
+  // Painter's algorithm: far (small depth) first.
+  faces.sort((p, q) => p.depth - q.depth);
+
+  let out = "";
+  for (const fc of faces) {
+    const poly = fc.pts.map(p => `${sx(p.X)},${sy(p.Y)}`).join(" ");
+    if (fc.fill[0] < 0) { // ground tile
+      out += `<polygon points="${poly}" fill="var(--line)" opacity="0.35"/>`;
+      continue;
+    }
+    // Shade each face by how up-facing it is (top brightest, sides darker).
+    const upN = Math.max(0, Math.min(1, (fc.up - minY) / spanY));
+    const light = 0.62 + 0.38 * upN;
+    const [r, g, b] = fc.fill;
+    const col = `rgb(${Math.round(r * light)},${Math.round(g * light)},${Math.round(b * light)})`;
+    out += `<polygon points="${poly}" fill="${col}" stroke="rgba(255,255,255,0.25)" stroke-width="0.5"/>`;
+  }
+  return out;
+}
+
+/** Volume tab body: a rotatable 3D "city" of bars (X weight · Z reps · height sets). */
+function cardVolDistHtml(name: string): string {
+  const d = cardVolDistData(name);
+  if (!d) return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
   return `<div class="lt-vol-wrap">` +
-    `<svg class="lt-vol-svg" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">` +
-    yLbls + bars + axes + xLbls + xTitle + yTitle +
+    `<svg class="lt-vol-svg lt-vol3d" data-vol3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
+    renderVol3d(d, vol3dYaw, vol3dPitch) +
     `</svg>` +
-    `<div class="lt-vol-legend">${legendItems}</div>` +
-    `<div class="lt-vol-note muted">Sets per weight range</div>` +
+    `<div class="lt-vol-note muted">Drag to rotate · ↔ weight · ↕ reps · height = sets · darker = heavier</div>` +
     `</div>`;
+}
+
+/** Wire pointer-drag rotation onto the mounted 3D Volume SVG. Re-rendered in place
+ *  (innerHTML swap) on a coalesced rAF so dragging stays snappy (rule 17). */
+function mountVolChart(name: string): void {
+  const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-vol3d]");
+  if (!svg) return;
+  const d = cardVolDistData(name);
+  if (!d) return;
+  let dragging = false, lastX = 0, lastY = 0, raf = 0;
+  const redraw = () => { raf = 0; svg.innerHTML = renderVol3d(d, vol3dYaw, vol3dPitch); };
+  svg.addEventListener("pointerdown", (e) => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    try { svg.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    e.preventDefault();
+  });
+  svg.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    vol3dYaw += (e.clientX - lastX) * 0.01;
+    vol3dPitch = Math.max(0.12, Math.min(1.45, vol3dPitch + (e.clientY - lastY) * 0.01));
+    lastX = e.clientX; lastY = e.clientY;
+    if (!raf) raf = requestAnimationFrame(redraw);
+    e.preventDefault();
+  });
+  const end = (e: PointerEvent) => {
+    dragging = false;
+    try { svg.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  svg.addEventListener("pointerup", end);
+  svg.addEventListener("pointercancel", end);
 }
 
 /** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
@@ -11636,6 +11756,7 @@ function paintExInfo(name: string): void {
     `</div>`;
   if (exInfoTab === "volume") {
     els.exInfoBody.innerHTML = tabs + cardVolDistHtml(name);
+    mountVolChart(name);
   } else {
     els.exInfoBody.innerHTML = tabs + exerciseInfoHtml(name);
     mountExInfoCharts();

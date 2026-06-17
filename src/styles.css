@@ -3258,6 +3258,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 /* Volume distribution chart wrapper. */
 .lt-vol-wrap { display: flex; flex-direction: column; gap: 0.45rem; }
 .lt-vol-svg { width: 100%; height: auto; display: block; }
+/* The 3D city captures drags to rotate, so it must not scroll the card. */
+.lt-vol3d { touch-action: none; cursor: grab; }
+.lt-vol3d:active { cursor: grabbing; }
 .lt-vol-legend { display: flex; flex-wrap: wrap; gap: 0.35rem 0.7rem; font-size: 0.75rem; }
 .lt-vol-leg-item { display: flex; align-items: center; gap: 0.3rem; }
 .lt-vol-leg-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
