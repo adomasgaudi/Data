@@ -677,6 +677,16 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
   const base = Date.parse("2024-01-01");
   const at = (d: number) => base + d * DAY;
 
+  it("EFF-1: fades the EFFECTIVE load, then peels the bodyweight share for the added display", () => {
+    // A 120 kg EFFECTIVE peak with a 20 kg bodyweight share → 100 kg added shown on day 0.
+    const onEffective = decayedStrengthSeries([{ x: at(0), y: 120 }], at(200), 4, DEFAULT_DECAY_PARAMS, null, 20);
+    expect(onEffective[0]!.y).toBeCloseTo(100, 6); // displayed peak = added weight
+    // Fading the effective 120 then peeling 20 ends LOWER than naively fading the added 100,
+    // i.e. the bodyweight share is correctly inside the fade (rule 58), not outside it.
+    const onAdded = decayedStrengthSeries([{ x: at(0), y: 100 }], at(200));
+    expect(onEffective.at(-1)!.y).toBeLessThan(onAdded.at(-1)!.y);
+  });
+
   it("level 4 (phases) damps each upward jump by its phase pace, capped only by the WR", () => {
     // Four sessions one day apart (inside the grace, so no fade between), rising e1RM.
     // phase 1 (pace 1) accepts the jump fully, phase 2 (0.5) half, phase 3 (0.25) a quarter.

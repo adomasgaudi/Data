@@ -6,7 +6,7 @@
  * future work can reference them) but not computed yet.
  */
 import type { SetRecord } from "./domain";
-import { addedWeight1RM, decayedStrengthSeries } from "./aggregate";
+import { addedWeight1RM, effectiveE1RM, decayedStrengthSeries } from "./aggregate";
 import { setVolume, type OneRepMaxFormula } from "./metrics";
 import { fitLog, fitCeiling, sampleProjection } from "./projection";
 import type { GraphConfig } from "./graphConfig";
@@ -175,6 +175,29 @@ function e1rmPoints(
     y: p.y!,
     ...(p.rir != null ? { rir: p.rir } : {}),
   }));
+}
+
+/** EFFECTIVE-1RM points for the decay/growth model (rule 58): the fade + the growth cap must
+ * run on the FULL effective load (bodyweight folded in), not the peeled added weight. Returns
+ * the effective points + a representative bodyweight SHARE (the most-recent comparable set's
+ * effective − added) for the caller to peel back so the plotted line stays the ADDED weight
+ * (rule 49). For bar-only lifts (coeff 0) the share is 0, so this is a no-op. */
+function effectiveDecayInput(
+  records: readonly SetRecord[],
+  formula: OneRepMaxFormula,
+  cfg?: GraphConfig,
+): { pts: { x: number; y: number; rir?: number }[]; offset: number } {
+  const pts = perSet(records, (r) => effectiveE1RM(r, formula), undefined, cfg).map((p) => ({
+    x: p.x,
+    y: p.y!,
+    ...(p.rir != null ? { rir: p.rir } : {}),
+  }));
+  const dated = records
+    .filter((r) => r.date && effectiveE1RM(r, formula) != null)
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+  const last = dated[0];
+  const offset = last ? (effectiveE1RM(last, formula)! - (addedWeight1RM(last, formula) ?? 0)) : 0;
+  return { pts, offset };
 }
 
 /** Running maximum — the legacy "Strength Score" line that never drops. */
@@ -353,7 +376,13 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     },
   },
   { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
-  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula, cfg), Date.now(), 4, cfg.decayParams, cfg.decayParams?.level === 4 ? (cfg.ceilingOf?.(rs) ?? null) : null) },
+  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => {
+      // EFF-1 (rule 58): run the fade + growth cap on the EFFECTIVE 1RM, then peel the
+      // bodyweight share back so the plotted line is the ADDED weight (rule 49).
+      const { pts, offset } = effectiveDecayInput(rs, cfg.formula, cfg);
+      const wr = cfg.decayParams?.level === 4 ? (cfg.ceilingOf?.(rs) ?? null) : null;
+      return decayedStrengthSeries(pts, Date.now(), 4, cfg.decayParams, wr, offset);
+    } },
   { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays, cfg.potentialCeiling ?? cfg.ceilingOf?.(rs) ?? null) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured

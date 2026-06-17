@@ -761,13 +761,16 @@ export function decayedStrengthSeries(
   stepDays = 4,
   params: DecayParams = DEFAULT_DECAY_PARAMS,
   wrCeiling: number | null = null,
+  displayOffset = 0,
 ): { x: number; y: number }[] {
   if (points.length === 0) return [];
   const sorted = points.slice().sort((a, b) => a.x - b.x);
   const step = stepDays * MS_PER_DAY;
   const dayOf = (x: number) => Math.round(x / MS_PER_DAY); // group same-day sets into one session
   const out: { x: number; y: number }[] = [];
-  const push = (x: number, y: number) => out.push({ x, y: Math.round(y * 10) / 10 });
+  // EFF-1 (rule 58/49): the model runs in EFFECTIVE load; `displayOffset` is the bodyweight
+  // share peeled back on OUTPUT so the plotted value is the ADDED weight. 0 for bar lifts.
+  const push = (x: number, y: number) => out.push({ x, y: Math.round((y - displayOffset) * 10) / 10 });
   // The per-session guards (RIR blend, growth cap, stability growth + calibration) are the
   // FULL model only — levels 1 (linear) & 2 (log) just sag on the retention curve and step
   // straight to each set's e1RM, so the simpler curves read exactly as their formula says.
