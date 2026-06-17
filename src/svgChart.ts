@@ -448,6 +448,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       cfg.onViewChange?.({ xMin: view.xMin, xMax: view.xMax, yMin: view.yMin, yMax: view.yMax });
     }, 250);
   };
+  // PB-39: persist the pan/zoom IMMEDIATELY when the gesture ENDS (pointer-up), not only on
+  // the 250ms debounce. The dashboard re-mounts the chart on incidental re-renders; a re-mount
+  // landing in the debounce window restored the PREVIOUS saved view (showing the auto-fit)
+  // before the just-finished pan ever committed — so the pan "didn't persist". Flushing on
+  // release saves the new view before any re-mount can read a stale one.
+  const flushView = () => {
+    if (!cfg.onViewChange || !viewCommitTimer) return;
+    clearTimeout(viewCommitTimer); viewCommitTimer = 0;
+    cfg.onViewChange?.({ xMin: view.xMin, xMax: view.xMax, yMin: view.yMin, yMax: view.yMax });
+  };
   let lastTap: { t: number; x: number } | null = null; // for double-tap-to-reset
   // Click-to-pin: every drawn datapoint's pixel box (in SVG user units), rebuilt
   // each draw, so a tap can hit-test the nearest one and pin a sticky detail popup.
@@ -1265,6 +1275,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           if (hp) pinDetail(hp);
           else { hideTip(); showTip(e.clientX); }
         }
+      } else {
+        flushView(); // PB-39: a real pan/zoom just ended → persist it NOW, before any re-mount
       }
     }
   };
