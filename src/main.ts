@@ -110,8 +110,9 @@ import {
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
 import {
-  loadHistoryDashboard, saveHistoryDashboard, activeHistoryTab, addHistoryTab, removeHistoryTab,
-  renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig, HISTORY_DASH_KEY,
+  loadHistoryDashboardFor, saveHistoryDashboardFor, defaultHistoryDashboard,
+  activeHistoryTab, addHistoryTab, removeHistoryTab,
+  renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig,
   type HistoryDashboard, type HistoryTabConfig,
 } from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
@@ -4303,8 +4304,11 @@ function syncWorkoutToggles(): void {
  * the live history state; on every history render the live state is SNAPSHOT back into
  * the active tab (so any setting you change is saved to the tab you're on, and tabs
  * never bleed into each other). graph-style add / rename / duplicate / delete. */
-let historyDash: HistoryDashboard = loadHistoryDashboard();
-let historyDashReady = false; // becomes true after the first applyHistoryTab on startup
+// Each ATHLETE has their OWN history tabs (a "glutes" tab made for one user must not show
+// for another). historyDash holds the CURRENTLY-loaded athlete's dashboard; historyDashUser
+// tracks who that is, so ensureHistoryTabApplied reloads when the athlete changes.
+let historyDash: HistoryDashboard = defaultHistoryDashboard();
+let historyDashUser: string | null = null;
 
 /** Read the live history view state into a config (the full shape; the exercise lens is
  * carried through unchanged so it round-trips even though it's not re-applied live yet). */
@@ -4348,19 +4352,40 @@ function applyHistoryTabConfig(c: HistoryTabConfig): void {
 /** Save the live state into the active tab + persist. Called at the end of every history
  * render, so the active tab always mirrors what's on screen. */
 function saveActiveHistoryTab(): void {
-  if (!historyDashReady) return; // don't overwrite a tab before the active one is applied
+  if (historyDashUser === null) return; // not loaded for an athlete yet
   const act = activeHistoryTab(historyDash);
   historyDash = setHistoryTabConfig(historyDash, act.id, snapshotHistoryLive(act.config));
-  saveHistoryDashboard(historyDash);
+  saveHistoryDashboardFor(historyDashUser, historyDash);
 }
-/** On the first history render, adopt the active tab's saved view; or, on the very first
- * run after this feature (no saved dashboard), SEED the default tab from the user's
- * existing live prefs so nothing resets. Idempotent (runs once). */
+/** Load the CURRENT athlete's history dashboard and apply its active tab — re-running
+ * whenever the athlete changes (their tabs are fully their own). The outgoing athlete's
+ * live view is saved first. A never-configured athlete gets a clean default; the very
+ * first athlete this session keeps their existing live prefs as their starter tab. */
 function ensureHistoryTabApplied(): void {
-  if (historyDashReady) return;
-  historyDashReady = true;
-  if (localStorage.getItem(HISTORY_DASH_KEY) != null) applyHistoryTabConfig(activeHistoryTab(historyDash).config);
-  else saveActiveHistoryTab();
+  const user = els.athlete.value;
+  if (historyDashUser === user) return; // already loaded + applied for this athlete
+  const outgoing = historyDashUser; // null on the very first athlete this session
+  if (outgoing !== null) {
+    const act = activeHistoryTab(historyDash);
+    historyDash = setHistoryTabConfig(historyDash, act.id, snapshotHistoryLive(act.config));
+    saveHistoryDashboardFor(outgoing, historyDash);
+  }
+  const loaded = loadHistoryDashboardFor(user);
+  if (loaded) {
+    historyDash = loaded;
+    historyDashUser = user;
+    applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+  } else {
+    historyDash = defaultHistoryDashboard();
+    historyDashUser = user;
+    if (outgoing === null) {
+      saveActiveHistoryTab(); // keep this athlete's existing live prefs as their first tab
+    } else {
+      // A different athlete with no tabs yet → clean default view (never another user's tabs).
+      applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+      saveHistoryDashboardFor(user, historyDash);
+    }
+  }
 }
 /** Build the tab bar: one chip per tab (active one editable inline) + a "+" to add. */
 function renderWoTabs(): void {
@@ -4388,7 +4413,7 @@ function renderWoTabs(): void {
 function switchHistoryTab(id: string): void {
   historyDash = setActiveHistoryTab(historyDash, id);
   applyHistoryTabConfig(activeHistoryTab(historyDash).config);
-  saveHistoryDashboard(historyDash);
+  if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash);
   S.workoutsPage = 0;
   syncWorkoutToggles();
   renderWorkoutAnalysis();
@@ -15575,7 +15600,7 @@ async function init() {
     if (ren?.dataset.hwrename) {
       const cur = activeHistoryTab(historyDash);
       const name = prompt("Rename this history tab", cur.name);
-      if (name != null && name.trim()) { historyDash = renameHistoryTab(historyDash, cur.id, name.trim()); saveHistoryDashboard(historyDash); renderWoTabs(); }
+      if (name != null && name.trim()) { historyDash = renameHistoryTab(historyDash, cur.id, name.trim()); if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash); renderWoTabs(); }
       return;
     }
   });

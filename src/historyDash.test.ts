@@ -1,9 +1,22 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   defaultHistoryDashboard, defaultHistoryConfig, makeHistoryTab,
   addHistoryTab, removeHistoryTab, renameHistoryTab, duplicateHistoryTab,
   setActiveHistoryTab, setHistoryTabConfig, activeHistoryTab, normalizeHistoryDashboard,
+  loadHistoryDashboardFor, saveHistoryDashboardFor,
 } from "./historyDash";
+
+/** In-memory localStorage stand-in (node test env has none). */
+function installFakeStorage(): void {
+  const map = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
+    setItem: (k: string, v: string) => map.set(k, v),
+    removeItem: (k: string) => map.delete(k),
+    clear: () => map.clear(),
+  };
+}
+beforeEach(() => { installFakeStorage(); });
 
 describe("historyDash model", () => {
   it("default dashboard has one active tab with default config", () => {
@@ -48,6 +61,22 @@ describe("historyDash model", () => {
     d = removeHistoryTab(d, second);
     expect(d.tabs.length).toBe(1);
     expect(d.activeTabId).toBe(only); // snapped back to the survivor
+  });
+
+  it("per-athlete storage is fully isolated — one user's tabs never appear for another", () => {
+    expect(loadHistoryDashboardFor("ada")).toBeNull(); // nobody has tabs yet
+    // Ada makes a "glutes" tab; Ben is untouched.
+    let ada = defaultHistoryDashboard();
+    ada = renameHistoryTab(ada, ada.activeTabId, "glutes");
+    saveHistoryDashboardFor("ada", ada);
+    expect(loadHistoryDashboardFor("ada")!.tabs[0]!.name).toBe("glutes");
+    expect(loadHistoryDashboardFor("ben")).toBeNull(); // the bug: Ben must NOT see "glutes"
+    // Ben makes his own — Ada's is unchanged.
+    const ben = defaultHistoryDashboard();
+    saveHistoryDashboardFor("ben", renameHistoryTab(ben, ben.activeTabId, "back"));
+    expect(loadHistoryDashboardFor("ben")!.tabs[0]!.name).toBe("back");
+    expect(loadHistoryDashboardFor("ada")!.tabs[0]!.name).toBe("glutes");
+    saveHistoryDashboardFor("", ada); // empty username is a no-op (never crashes)
   });
 
   it("normalize repairs a dangling activeTabId and rejects junk → default", () => {

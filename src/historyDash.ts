@@ -137,6 +137,32 @@ export function saveHistoryDashboard(d: HistoryDashboard): void {
   saveJson(HISTORY_DASH_KEY, d);
 }
 
+// ---- per-athlete persistence -----------------------------------------------
+// Each athlete gets their OWN history tabs (a "glutes" tab made for one user must NOT
+// appear for another). Stored as a MAP username → dashboard under a v2 key, mirroring
+// graphDash; the single-dashboard load/save above is kept for the pure tests.
+export const HISTORY_DASH_KEY_V2 = "colosseum.historyDash.v2";
+
+function loadAllHistoryDashboards(): Record<string, HistoryDashboard> {
+  const raw = loadJsonObject<Record<string, unknown>>(HISTORY_DASH_KEY_V2);
+  const out: Record<string, HistoryDashboard> = {};
+  for (const [user, d] of Object.entries(raw)) {
+    const parsed = DashboardSchema.safeParse(d);
+    if (parsed.success) out[user] = normalizeHistoryDashboard(parsed.data);
+  }
+  return out;
+}
+/** The stored dashboard for one athlete, or null if they have none yet (→ caller seeds). */
+export function loadHistoryDashboardFor(user: string): HistoryDashboard | null {
+  return loadAllHistoryDashboards()[user] ?? null;
+}
+export function saveHistoryDashboardFor(user: string, d: HistoryDashboard): void {
+  if (!user) return;
+  const all = loadAllHistoryDashboards();
+  all[user] = d;
+  saveJson(HISTORY_DASH_KEY_V2, all);
+}
+
 // ---- pure tab operations (return a NEW dashboard; never mutate) -------------
 export function activeHistoryTab(d: HistoryDashboard): HistoryTab {
   return d.tabs.find((t) => t.id === d.activeTabId) ?? d.tabs[0]!;
