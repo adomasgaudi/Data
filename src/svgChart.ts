@@ -212,6 +212,13 @@ export interface SvgChartConfig {
   xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
   /** Called on release after a marker drag, with the marker id and its new x value. */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
+  /** Draggable HORIZONTAL markers in y (LEFT-axis data) space — e.g. the projection's
+   * ceiling line the strength curve flattens toward. Each draws a labelled line + grab
+   * handle spanning the plot width; dragging one calls onYMarkerDrag with its committed y.
+   * Inert (no extra interaction) when absent. */
+  yMarkers?: { id: string; y: number; color?: string; label?: string }[] | undefined;
+  /** Called on release after a horizontal-marker drag, with the marker id + new y value. */
+  onYMarkerDrag?: ((id: string, y: number) => void) | undefined;
   /** Restore a previously-saved pan/zoom view ON MOUNT instead of auto-fitting to the
    * data — lets the dashboard remember each bubble's view across switches / refresh.
    * Read once at mount (inert on update()); invalid / absent → normal auto-fit. */
@@ -407,7 +414,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // Draggable x-markers: their last-drawn pixel x (viewBox units) for hit-testing, and
   // the in-flight drag. Empty/null unless cfg.xMarkers is set (inert for every other chart).
   let markerPx: { id: string; px: number }[] = [];
-  let mkDrag: { id: string; startX: number; origPx: number; g: SVGGElement | null; newX: number } | null = null;
+  // Horizontal (y) markers' last-drawn pixel y, for the ceiling-line drag (mirrors markerPx).
+  let markerPy: { id: string; py: number }[] = [];
+  let mkDrag: { id: string; axis: "x" | "y"; startX: number; startY: number; origPx: number; origPy: number; g: SVGGElement | null; newX: number; newY: number } | null = null;
 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
@@ -928,6 +937,26 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           `</g>`;
       }
     }
+    // Draggable HORIZONTAL markers (e.g. the projection ceiling the curve flattens toward):
+    // a dashed line spanning the plot width + a grip tab at the left + a fat transparent
+    // hit-line. Pixel y cached for pointer hit-testing. Uses the LEFT-axis mapper (yL).
+    markerPy = [];
+    if (cfg.yMarkers && cfg.yMarkers.length) {
+      for (const mk of cfg.yMarkers) {
+        const py = yL(mk.y);
+        if (py < M.t - 0.5 || py > h - M.b + 0.5) continue; // off-plot → skip (still draggable in range)
+        markerPy.push({ id: mk.id, py });
+        const col = mk.color ?? "#9c5a86";
+        const lbl = mk.label ? `<text class="svgc-ymk-lbl" x="${(W - M.r - 4).toFixed(1)}" y="${(py - 4).toFixed(1)}" text-anchor="end" font-size="10" fill="${col}">${esc(mk.label)}</text>` : "";
+        body +=
+          `<g class="svgc-ymk" data-mk="${esc(mk.id)}" style="cursor:ns-resize">` +
+          `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${(W - M.r).toFixed(1)}" y2="${py.toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.9"/>` +
+          `<rect x="${M.l.toFixed(1)}" y="${(py - 7).toFixed(1)}" width="14" height="14" rx="2" fill="${col}"/>` +
+          `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${(W - M.r).toFixed(1)}" y2="${py.toFixed(1)}" stroke="transparent" stroke-width="18"/>` +
+          lbl +
+          `</g>`;
+      }
+    }
 
     const frame = inside()
       ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" class="svgc-frame" stroke-width="1"/>`
@@ -1316,7 +1345,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       for (const m of markerPx) if (!near || Math.abs(m.px - lx) < Math.abs(near.px - lx)) near = m;
       if (near && Math.abs(near.px - lx) <= 16) {
         const g = plotEl.querySelector<SVGGElement>(`.svgc-xmk[data-mk="${CSS.escape(near.id)}"]`);
-        mkDrag = { id: near.id, startX: e.clientX, origPx: near.px, g, newX: pixInfo(e.clientX, 0).fx };
+        mkDrag = { id: near.id, axis: "x", startX: e.clientX, startY: 0, origPx: near.px, origPy: 0, g, newX: pixInfo(e.clientX, 0).fx, newY: 0 };
         window.addEventListener("pointermove", onMkMove);
         window.addEventListener("pointerup", onMkUp);
         window.addEventListener("pointercancel", onMkUp);
