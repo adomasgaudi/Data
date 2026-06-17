@@ -20738,6 +20738,11 @@ function setupWorkoutAnalysis(): void {
   // Long-press (or right-click) a dashboard tab → its options menu (Add / Rename / Delete).
   const cancelTabPress = () => { if (dashTabPressTimer) { clearTimeout(dashTabPressTimer); dashTabPressTimer = null; } };
   document.addEventListener("touchstart", (e) => {
+    // PB-38: a FRESH touch ends the prior long-press's "swallow next click" window. Mobile often
+    // fires NO release-click after a long-press, so the flag would stay stuck true and swallow
+    // the FIRST menu-item tap ("tab rename/duplicate/add don't work"). Clearing it here means a
+    // separate tap (the menu item) always lands; only the immediate release-click is swallowed.
+    dashTabSuppressClick = false;
     const tabEl = (e.target as HTMLElement).closest<HTMLElement>("[data-dashtab]");
     if (!tabEl?.dataset.dashtab) return;
     const id = tabEl.dataset.dashtab;
@@ -20745,6 +20750,7 @@ function setupWorkoutAnalysis(): void {
     dashTabPressTimer = window.setTimeout(() => {
       dashTabPressTimer = null;
       dashTabSuppressClick = true; // the finger's still down; swallow the release-click
+      window.setTimeout(() => { dashTabSuppressClick = false; }, 600); // fallback: never stay stuck
       openDashTabMenu(tabEl, id);
     }, 450);
   }, { passive: true });

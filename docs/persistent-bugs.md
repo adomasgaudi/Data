@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-38 — Dashboard floating-menu actions don't fire (long-press tab menu: rename/duplicate/add do nothing)
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph dashboard. Owner across several msgs: "duplicate bubble doesnt do anything", then "tab rename duplicated add, dont work", "#persistent". The floating menus (tab long-press menu; earlier the bubble ⋯ menu) OPEN fine but tapping an item does nothing.
+- **Root cause:** the `dashTabSuppressClick` flag. A long-press opens the menu while the finger is down and sets the flag to swallow the *release-click* (so it neither switches the tab nor closes the just-opened menu). But on mobile a long-press frequently fires **NO release-click** — so the flag stayed stuck `true`, and the capture-phase click listener swallowed the **first menu-item tap** instead. One tap = nothing happened.
+- **Prior shallow fix that didn't hold (b.2.9.36):** for the BUBBLE menu I sidestepped it by replacing the ⋯ pop-menu with direct foot buttons (⧉/✕) — but left the TAB long-press menu on the same fragile flag, so it kept failing.
+- **Fix (b.2.9.37):** (1) reset `dashTabSuppressClick = false` at the top of EVERY `touchstart` (ungated) — a fresh touch (the menu-item tap) clears any stuck flag before its click, so only the immediate release-click of the same press is ever swallowed. (2) Belt-and-suspenders: auto-clear the flag 600ms after a long-press fires, so it can never stay stuck. (3) Bubble duplicate/delete already moved to direct buttons (b.2.9.36).
+- **Watch:** any "swallow the next synthetic click" flag is fragile — mobile may not deliver that click. Tie suppression to a fresh-touch reset or a short timeout, never an open-ended boolean. Prefer DIRECT buttons over long-press pop-menus for primary actions.
+- **Recurrences:** 1 (bubble menu, then tab menu — same root).
+
+---
+
 ## PB-37 — Can't change the graph exercise in the new dashboard (no title toolbar; edits reverted)
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph (custom dashboard, CHART-160+). Owner: "i cant change the exercise #persistent #debug with error red logs on screen" then "can add but its not as it was before — no big title, no plus button, no equals button, no delete button."
