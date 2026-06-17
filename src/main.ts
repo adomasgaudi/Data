@@ -16871,8 +16871,8 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 
 // Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
 // order. Ladder sub-dims (grip/height) are left to the full per-set editor.
-const AF_DIM_ORDER = ["support", "shoulderDist", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { support: "support", shoulderDist: "back support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", shoulderDist: "back support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
   support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder", hanging: "hanging", dips_bar: "dips bar" },
   // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.
@@ -16882,6 +16882,8 @@ const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
   continuity: { paused: "paused", uninterrupted: "uninterrupted" },
   band: { none: "no band", "1": "band 1", "2": "band 2", "3": "band 3", "4": "band 4", "5": "band 5", "6": "band 6" },
   position: { floor: "floor (on feet)", knees: "on knees" },
+  // Lever (plate distance from the grip) levels are cm, left as-is; reach (arm held out) reads in words.
+  reach: { tucked: "tucked in", neutral: "neutral", extended: "extended", far: "far out" },
 };
 /** Readable label for a dimension level (cm levels like "+23cm" are left as-is). */
 function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level] ?? level; }
@@ -16897,8 +16899,12 @@ function afVariationField(exerciseName: string): string {
     const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
       const levels = famDef.dims[dim]!;
       const cur = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
+      // For the leverage knobs (lever / reach) show the torque factor in each option
+      // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
+      const showFactor = dim === "lever" || dim === "reach";
+      const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l)} ×${levels[l]}` : afLevelText(dim, l));
       const opts = Object.keys(levels)
-        .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, l))}</option>`)
+        .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(optLbl(l))}</option>`)
         .join("");
       return `<label class="wo-af-dimf"><span class="wo-af-dimlbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim" data-dim="${escapeHtml(dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></label>`;
     }).join("");
