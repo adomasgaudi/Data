@@ -108,6 +108,9 @@ export interface AnalyticsGraphInput {
   /** Static vertical reference lines (e.g. a "today" marker) in ms timestamps. Passed
    * straight to the chart; non-draggable. Omitted = none. */
   xRefLines?: { x: number; color?: string; label?: string }[] | undefined;
+  /** Horizontal value-zone bands on the left (kg) axis, e.g. the 60–80% / 80–100%-of-1RM
+   * intensity zones. Ignored on the %WR view (which sets its own bands). */
+  yBands?: { from: number; to?: number; fill: string }[] | undefined;
   /** Called on release after dragging a fit-window marker (id + new ms timestamp). */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
   /** Reps-vs-weight fit: a manual EFFECTIVE 1RM that POSITIONS the Nuzzo curve for an
@@ -514,7 +517,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
           { from: 0.6, fill: "rgba(120,120,120,0.12)" },
         ]
-      : undefined, // cleared when the %WR metric is turned off (no stale shading)
+      : input.yBands, // caller-supplied (e.g. 60–80% / 80–100%-of-1RM intensity zones)
     // Projection fit-window lines (always present so the merge clears them when off — PB-8).
     xMarkers: input.xMarkers,
     xRefLines: input.xRefLines,

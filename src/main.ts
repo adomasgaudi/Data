@@ -20344,6 +20344,26 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     if (dates.length > dpp.phase1EndSets) phaseLines.push({ x: at(dpp.phase1EndSets), color: "#8a6d3b", label: "beginner→inter." });
     if (dates.length > dpp.phase2EndSets) phaseLines.push({ x: at(dpp.phase2EndSets), color: "#6c4ab0", label: "inter.→advanced" });
   }
+  // 80% / 60%-of-1RM intensity ZONES (owner): shade the kg axis 60–80% and 80–100% of the
+  // lift's best EFFECTIVE 1RM, positioned in ADDED-weight terms (rule 49). Single lift, kg view.
+  let yBands: { from: number; to?: number; fill: string }[] | undefined;
+  if (!isRvw && !bubble.perBodyweight && exs.length === 1) {
+    let peakEff = -Infinity;
+    let shareAtPeak = 0;
+    for (const r of plotted) {
+      const eff = effectiveE1RM(r, cfg.formula);
+      if (eff == null || eff <= peakEff) continue;
+      peakEff = eff;
+      shareAtPeak = eff - (addedWeight1RM(r, cfg.formula) ?? eff);
+    }
+    if (Number.isFinite(peakEff) && peakEff > 0) {
+      const addedAt = (pct: number) => pct * peakEff - shareAtPeak; // effective % → shown added kg
+      yBands = [
+        { from: addedAt(0.6), to: addedAt(0.8), fill: "rgba(120,120,120,0.06)" }, // 60–80% hypertrophy
+        { from: addedAt(0.8), to: addedAt(1.0), fill: "rgba(120,120,120,0.12)" }, // 80–100% strength
+      ];
+    }
+  }
   return {
     exercises: exs,
     records: isRvw ? rvwWindowRecords(recs) : recs,
@@ -20351,6 +20371,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     metrics: drawMetricIds,
     config: cfg,
     initialView,
+    yBands,
     // A thin red "today" reference line on the time axis (owner: "mark today as a little red").
     // Anchored to midnight today so it lines up with today's datapoint; meaningless on the
     // reps×kg (weight-axis) view, so only on time charts.
