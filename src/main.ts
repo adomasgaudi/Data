@@ -442,6 +442,7 @@ const LOCAL_PASSWORDS: Record<string, string> = { admin: "ag" };
 function showLoginPage(): void {
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
+  document.documentElement.classList.remove("signed-in"); // un-reveal the app (DATA-24)
   document.body.classList.add("locked");
   const err = document.getElementById("loginErr") as HTMLElement | null;
   if (err) { err.hidden = true; err.textContent = ""; }
@@ -450,6 +451,7 @@ function showLoginPage(): void {
 function hideLoginPage(): void {
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = true;
+  document.documentElement.classList.add("signed-in"); // reveal the app (DATA-24)
   document.body.classList.remove("locked");
   try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
 }
@@ -483,7 +485,6 @@ function signIn(): void {
   hideLoginPage();
 }
 
-function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
 
 function setViewMode(mode: ViewMode) {
   const prev = viewMode;
@@ -14146,10 +14147,12 @@ async function init() {
   els.syncUpBtn.addEventListener("click", () => { void syncManualToSupabase(); });
   els.syncDownBtn.addEventListener("click", () => { void loadManualFromSupabase(); });
   document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
-  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") signIn();
   });
+  // Require login (DATA-24): a device that has never signed in is GATED — show the
+  // login page (the gate is opaque) until a valid profile + password. No spectate bypass.
+  try { if (localStorage.getItem("colosseum.signedIn") !== "1") showLoginPage(); } catch { /* ignore */ }
   // Populate login dropdown from ATHLETES registry — athletes go after admin.
   {
     const sel = document.getElementById("loginUser") as HTMLSelectElement | null;

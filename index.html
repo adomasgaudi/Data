@@ -8,12 +8,16 @@
     <!-- Apply the saved theme before first paint so there's no light-mode flash. -->
     <script>
       try { if (localStorage.getItem("colosseum.theme") === "dark") document.documentElement.setAttribute("data-theme", "dark"); } catch (e) {}
-      try { if (localStorage.getItem("colosseum.signedIn") !== "1") document.getElementById("loginGate").hidden = false; } catch (e) {}
+      // Login gate (DATA-24): the gate is VISIBLE by default; reveal the app only once
+      // signed in by flagging <html> here in <head> (documentElement exists; #loginGate
+      // does NOT yet — the old getElementById ran too early and silently failed, so the
+      // gate never showed and every visitor saw the admin app). No app flash either way.
+      try { if (localStorage.getItem("colosseum.signedIn") === "1") document.documentElement.classList.add("signed-in"); } catch (e) {}
     </script>
   </head>
   <body>
 
-    <div id="loginGate" class="login-gate" hidden>
+    <div id="loginGate" class="login-gate">
       <div class="login-card">
         <div class="login-logo" aria-hidden="true">
           <svg viewBox="0 0 80 58" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -41,7 +45,6 @@
           <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
           <p id="loginErr" class="login-err" hidden></p>
           <button id="loginSendBtn" type="button" class="login-btn login-btn--admin">Log in</button>
-          <button id="loginGuestBtn" type="button" class="login-spectate">spectate</button>
         </div>
       </div>
     </div>
@@ -52,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.83</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.84</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
