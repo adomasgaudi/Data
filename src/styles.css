@@ -1874,6 +1874,17 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 }
 .xdd-opt:hover { background: var(--accent-soft); color: var(--accent); }
 .xdd-opt.is-active { color: var(--accent); font-weight: 700; }
+.xdd-opt[hidden], .xdd-group[hidden] { display: none; }
+/* Sticky search box atop a long dropdown — filters the options as you type. Stays put
+   while the list scrolls; opaque background so options don't show through it. */
+.xdd-search {
+  position: sticky; top: 0; z-index: 1;
+  width: 100%; box-sizing: border-box; margin-bottom: 4px;
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); font: inherit; font-size: var(--fs-md); color: var(--text);
+}
+.xdd-search:focus { outline: none; border-color: var(--accent); }
+.xdd-search::placeholder { color: var(--muted); }
 .exercise-record {
   display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0 0 1rem;
 }

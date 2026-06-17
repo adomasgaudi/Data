@@ -21831,9 +21831,14 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       }
     }
     const wasOpen = dd.classList.contains("open");
+    // A long list gets a sticky SEARCH box that filters the options as you type — owner
+    // request (the combine/compare "Add exercise…" picker, and any 8+ option dropdown).
+    const search = sel.querySelectorAll("option").length > 8
+      ? `<input type="text" class="xdd-search" placeholder="Search…" aria-label="Search options" autocomplete="off" />`
+      : "";
     dd.innerHTML =
       `<button type="button" class="xdd-btn">${escapeHtml(sel.selectedOptions[0]?.textContent ?? "")}<span class="xdd-caret">▾</span></button>` +
-      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${menu}</div>`;
+      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${search}${menu}</div>`;
   };
   sync();
 
@@ -21844,13 +21849,33 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     // Undo any fixed-popup placement so the default absolute CSS resumes next open.
     if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
   };
+  // Type-to-filter for the long-list search box (built in sync()): hide options whose
+  // text doesn't contain the query, and any optgroup header left with no visible option.
+  const filterOpts = (q: string) => {
+    const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+    if (!menu) return;
+    const needle = q.trim().toLowerCase();
+    menu.querySelectorAll<HTMLElement>(".xdd-opt").forEach((o) => {
+      o.hidden = needle !== "" && !(o.textContent ?? "").toLowerCase().includes(needle);
+    });
+    menu.querySelectorAll<HTMLElement>(".xdd-group").forEach((g) => {
+      let vis = false;
+      for (let n = g.nextElementSibling; n && !n.classList.contains("xdd-group"); n = n.nextElementSibling) {
+        if (n.classList.contains("xdd-opt") && !(n as HTMLElement).hidden) { vis = true; break; }
+      }
+      g.hidden = needle !== "" && !vis;
+    });
+  };
   dd.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    if (t.closest(".xdd-search")) return; // tapping the search field never selects/closes
     if (t.closest(".xdd-btn")) {
       const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
       const opening = menu.hasAttribute("hidden");
       menu.toggleAttribute("hidden", !opening);
       dd.classList.toggle("open", opening);
+      // Opening starts from a clean, unfiltered list (the menu HTML persists between opens).
+      if (opening) { const srch = menu.querySelector<HTMLInputElement>(".xdd-search"); if (srch) { srch.value = ""; filterOpts(""); } }
       // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow:
       // the add-set pickers (squashed in a clipping scroll-row) and the login user
       // picker (low on a centred card → its long list ran off the bottom of the screen).
@@ -21871,6 +21896,17 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   });
   document.addEventListener("click", (e) => {
     if (!dd.contains(e.target as Node)) close();
+  });
+  // Search box: filter as you type; Enter picks the first match, Esc closes.
+  dd.addEventListener("input", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".xdd-search");
+    if (inp) filterOpts(inp.value);
+  });
+  dd.addEventListener("keydown", (e) => {
+    if (!(e.target as HTMLElement).closest(".xdd-search")) return;
+    const ke = e as KeyboardEvent;
+    if (ke.key === "Enter") { e.preventDefault(); dd.querySelector<HTMLElement>(".xdd-menu .xdd-opt:not([hidden])")?.click(); }
+    else if (ke.key === "Escape") { e.preventDefault(); close(); }
   });
   // Repopulating the select (new <option>s) or a code-driven change re-syncs.
   new MutationObserver(() => sync()).observe(sel, { childList: true, subtree: true });
