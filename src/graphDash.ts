@@ -165,6 +165,27 @@ export function addBubble(d: GraphDashboard, tabId: string, bubble?: Partial<Gra
   return mapTab(d, tabId, (t) => ({ ...t, bubbles: [...t.bubbles, makeBubble(bubble)] }));
 }
 
+/** Duplicate a bubble — insert a fresh-id copy (same config) right after it. */
+export function duplicateBubble(d: GraphDashboard, tabId: string, bubbleId: string): GraphDashboard {
+  return mapTab(d, tabId, (t) => {
+    const idx = t.bubbles.findIndex((b) => b.id === bubbleId);
+    if (idx < 0) return t;
+    const { id: _drop, ...cfg } = t.bubbles[idx]!; // fresh id, same config
+    const copy = makeBubble(cfg);
+    return { ...t, bubbles: [...t.bubbles.slice(0, idx + 1), copy, ...t.bubbles.slice(idx + 1)] };
+  });
+}
+
+/** Duplicate a tab — a fresh-id copy (all bubbles re-id'd, name + " copy"), inserted after it
+ * and made active. */
+export function duplicateTab(d: GraphDashboard, tabId: string): GraphDashboard {
+  const idx = d.tabs.findIndex((t) => t.id === tabId);
+  if (idx < 0) return d;
+  const src = d.tabs[idx]!;
+  const copy = makeTab(`${src.name} copy`, src.bubbles.map(({ id: _drop, ...cfg }) => makeBubble(cfg)));
+  return { tabs: [...d.tabs.slice(0, idx + 1), copy, ...d.tabs.slice(idx + 1)], activeTabId: copy.id };
+}
+
 /** Remove a bubble. Refuses to remove the last bubble in a tab (a tab always shows one). */
 export function removeBubble(d: GraphDashboard, tabId: string, bubbleId: string): GraphDashboard {
   return mapTab(d, tabId, (t) =>

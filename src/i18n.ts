@@ -192,10 +192,11 @@ const LT: Record<string, string> = {
   "Multi": "Keli",
   "⇆ Lifts": "⇆ Pratimai",
   "＋ Bubble": "＋ Burbulas",
-  // Tab long-press menu (CHART-164).
+  // Tab long-press menu (CHART-164) + bubble menu (CHART-165).
   "✎ Rename": "✎ Pervadinti",
   "＋ Add tab": "＋ Pridėti skirtuką",
   "✕ Delete": "✕ Ištrinti",
+  "⧉ Duplicate": "⧉ Dubliuoti",
   "History": "Istorija",
   "Close options": "Uždaryti parinktis",
   "Show the Graph section": "Rodyti grafiko skiltį",

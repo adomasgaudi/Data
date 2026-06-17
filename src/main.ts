@@ -105,8 +105,8 @@ import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMe
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
-  loadDashboard, saveDashboard, activeTab, addTab, removeTab, renameTab, setActiveTab,
-  addBubble, removeBubble, cycleBubbleType, cycleBubbleView, updateBubble,
+  loadDashboard, saveDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
+  addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble,
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
@@ -19101,8 +19101,8 @@ function refreshDash(): void {
   renderWaGraph();
 }
 
-// Long-press tab menu (owner): a small floating menu — Add tab / Rename / Delete — opened by a
-// long-press or right-click on a tab (no inline icons cluttering the strip).
+// Long-press tab menu (owner): a small floating menu — Duplicate / Add tab / Rename / Delete —
+// opened by a long-press or right-click on a tab (no inline icons cluttering the strip).
 function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remove(); }
 function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   closeDashTabMenu();
@@ -19110,9 +19110,24 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   const m = document.createElement("div");
   m.id = "dashTabMenu"; m.className = "dash-tab-menu";
   m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-tabmenu="duplicate" data-tab="${escapeHtml(tabId)}">⧉ Duplicate</button>` +
     `<button type="button" class="dash-tab-menu-opt" data-tabmenu="rename" data-tab="${escapeHtml(tabId)}">✎ Rename</button>` +
     `<button type="button" class="dash-tab-menu-opt" data-tabmenu="add">＋ Add tab</button>` +
     (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-tabmenu="delete" data-tab="${escapeHtml(tabId)}">✕ Delete</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+}
+// Bubble options menu (owner): tap the active bubble's ⋯ indicator to open it. Duplicate first;
+// room for Match etc. later. Same floating-menu pattern as the tab menu.
+function closeDashBubbleMenu(): void { document.getElementById("dashBubbleMenu")?.remove(); }
+function openDashBubbleMenu(anchor: HTMLElement): void {
+  closeDashBubbleMenu();
+  const m = document.createElement("div");
+  m.id = "dashBubbleMenu"; m.className = "dash-tab-menu";
+  const canDelete = activeTab(graphDash).bubbles.length > 1;
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-bubblemenu="duplicate">⧉ Duplicate</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-bubblemenu="delete">✕ Delete</button>` : "");
   document.body.appendChild(m);
   clampMenuIntoView(m, anchor);
 }
@@ -19182,8 +19197,13 @@ function renderGraphDashboard(): void {
   for (const m of bubble.metrics) waMetrics.add(m);
   S.waRepsVsWeight = bubble.type === "rvw";
   S.waPerBodyweight = bubble.perBodyweight;
+  // Reel indicators: a non-active bubble is a dot you tap to JUMP to it; the ACTIVE bubble is a
+  // bigger clickable ⋯ pill that opens its options menu (Duplicate / Delete) — owner wanted the
+  // indicator bigger + clickable, not just a dot.
   const dots = tab.bubbles
-    .map((_, i) => `<button type="button" class="gmini-dot${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="Bubble ${i + 1}"></button>`)
+    .map((_, i) => i === dashBubbleIdx
+      ? `<button type="button" class="gmini-dot is-on gdash-bubble-opt" data-dashbubblemenu="1" aria-label="Bubble ${i + 1} of ${tab.bubbles.length} — options" title="Bubble options (Duplicate…)">⋯</button>`
+      : `<button type="button" class="gmini-dot" data-dashdot="${i}" aria-label="Go to bubble ${i + 1}"></button>`)
     .join("");
   const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
   const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
@@ -20527,8 +20547,32 @@ function setupWorkoutAnalysis(): void {
       const act = tabMenu.dataset.tabmenu, tid = tabMenu.dataset.tab;
       closeDashTabMenu();
       if (act === "add") { graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      else if (act === "duplicate" && tid) { graphDash = duplicateTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
       else if (act === "rename" && tid) { graphDash = setActiveTab(graphDash, tid); dashBubbleIdx = 0; dashEditTab = tid; persistDash(); renderGraphDashboard(); }
       else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      return;
+    }
+    // Toggle the active bubble's options menu (⋯ indicator), then handle its actions.
+    const bubbleOpt = t.closest<HTMLElement>("[data-dashbubblemenu]");
+    if (bubbleOpt) {
+      if (document.getElementById("dashBubbleMenu")) closeDashBubbleMenu();
+      else openDashBubbleMenu(bubbleOpt);
+      return;
+    }
+    const bubbleMenu = t.closest<HTMLElement>("[data-bubblemenu]");
+    if (bubbleMenu?.dataset.bubblemenu) {
+      const act = bubbleMenu.dataset.bubblemenu;
+      const tb = activeTab(graphDash), bid = tb.bubbles[dashBubbleIdx]?.id;
+      closeDashBubbleMenu();
+      if (act === "duplicate" && bid) {
+        graphDash = duplicateBubble(graphDash, tb.id, bid);
+        dashBubbleIdx = Math.min(dashBubbleIdx + 1, activeTab(graphDash).bubbles.length - 1); // show the copy
+        persistDash(); refreshDash();
+      } else if (act === "delete" && bid) {
+        graphDash = removeBubble(graphDash, tb.id, bid);
+        if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+        persistDash(); refreshDash();
+      }
       return;
     }
     // Switch to a tab (resets the reel to its first bubble). Long-press opened the menu instead
@@ -20733,11 +20777,12 @@ function setupWorkoutAnalysis(): void {
     if (tabEl?.dataset.dashtab) { e.preventDefault(); openDashTabMenu(tabEl, tabEl.dataset.dashtab); }
   });
   // Capture-phase: swallow the post-long-press release-click (so it neither switches the tab
-  // nor closes the just-opened menu); otherwise close the menu on any click outside it.
+  // nor closes the just-opened menu); otherwise close either dash menu on a click outside it.
   document.addEventListener("click", (e) => {
     if (dashTabSuppressClick) { dashTabSuppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
-    const m = document.getElementById("dashTabMenu");
-    if (m && !(e.target as Element | null)?.closest("#dashTabMenu")) closeDashTabMenu();
+    const tgt = e.target as Element | null;
+    if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu")) closeDashTabMenu();
+    if (document.getElementById("dashBubbleMenu") && !tgt?.closest("#dashBubbleMenu, [data-dashbubblemenu]")) closeDashBubbleMenu();
   }, true);
 }
 

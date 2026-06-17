@@ -10,6 +10,8 @@ import {
   renameTab,
   addBubble,
   removeBubble,
+  duplicateBubble,
+  duplicateTab,
   updateBubble,
   cycleBubbleType,
   cycleBubbleView,
@@ -111,6 +113,33 @@ describe("graphDash — bubble transforms (immutable)", () => {
     expect(b.exercises).toEqual(["Bench"]);
     expect(b.id).toBe(bid); // id is not overwritable via patch
     expect(d0.tabs[0]!.bubbles[0]!.exercises).toEqual([]); // original untouched
+  });
+
+  it("duplicateBubble inserts a same-config copy with a fresh id right after", () => {
+    let d = defaultDashboard();
+    const tab = d.tabs[0]!.id;
+    d = updateBubble(d, tab, d.tabs[0]!.bubbles[0]!.id, { type: "rvw", exercises: ["Squat"] });
+    const srcId = d.tabs[0]!.bubbles[0]!.id;
+    d = duplicateBubble(d, tab, srcId);
+    const bs = tabById(d, tab)!.bubbles;
+    expect(bs).toHaveLength(2);
+    expect(bs[1]!.id).not.toBe(srcId); // fresh id
+    expect(bs[1]!.type).toBe("rvw"); // same config
+    expect(bs[1]!.exercises).toEqual(["Squat"]);
+    expect(bs[1]!.exercises).not.toBe(bs[0]!.exercises); // not aliased
+  });
+
+  it("duplicateTab copies the tab (re-id'd bubbles, ' copy' name) and activates it", () => {
+    let d = defaultDashboard();
+    const srcTab = d.tabs[0]!;
+    d = updateBubble(d, srcTab.id, srcTab.bubbles[0]!.id, { exercises: ["Bench"] });
+    d = duplicateTab(d, srcTab.id);
+    expect(d.tabs).toHaveLength(2);
+    expect(d.tabs[1]!.name).toBe("Graphs copy");
+    expect(d.activeTabId).toBe(d.tabs[1]!.id);
+    expect(d.tabs[1]!.id).not.toBe(d.tabs[0]!.id);
+    expect(d.tabs[1]!.bubbles[0]!.id).not.toBe(d.tabs[0]!.bubbles[0]!.id); // bubbles re-id'd
+    expect(d.tabs[1]!.bubbles[0]!.exercises).toEqual(["Bench"]); // config carried
   });
 
   it("cycleBubbleType cycles time ⇄ rvw", () => {

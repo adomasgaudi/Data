@@ -1112,6 +1112,14 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .gmini-foot .wa-graph-fold-cur { display: none; }
 .gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s ; }
 .gmini-dot.is-on { background: var(--accent); transform: scale(1.25); }
+/* Active bubble indicator = a bigger clickable ⋯ pill opening the bubble options menu. */
+.gdash-bubble-opt {
+  width: auto; height: auto; min-width: var(--tap-min); min-height: 18px; border-radius: var(--r-pill);
+  padding: 0 8px; display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; background: var(--accent); font-size: 0.95rem; line-height: 1; font-weight: 700;
+  transform: none;
+}
+.gdash-bubble-opt.is-on { transform: none; }
 /* ── Custom graph dashboard (CHART-160) ──────────────────────────────────────
    A tab strip + a per-bubble control row + the bubble's chart + the reel foot. Compact,
    one horizontally-scrolling row each (#cram), reusing the carousel dots/nav for the reel. */
