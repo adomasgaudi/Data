@@ -11196,14 +11196,44 @@ function spellingSourcesHtml(name: string, variants: string[]): string {
 // strength model here, only presentation.
 
 // Per-lift free-text setup notes (e.g. "rack height 7, safeties at 4"). Net-new
-// store, same device-local layering pattern as codes/coeffs.
+// store, same device-local layering pattern as codes/coeffs. A lift can have SEVERAL setup
+// notes (owner: addable / deletable / editable), so each value is a string[]. Legacy single
+// strings (v1 shape) are migrated to a one-element array on load.
 const SETUP_NOTES_KEY = "colosseum.exerciseSetupNotes.v1";
-const setupNotes: Record<string, string> = loadJsonObject<Record<string, string>>(SETUP_NOTES_KEY) ?? {};
-function setupNoteFor(name: string): string { return setupNotes[name] ?? ""; }
-function setSetupNote(name: string, text: string): void {
-  const t = text.trim();
-  if (t) setupNotes[name] = t; else delete setupNotes[name];
+const setupNotes: Record<string, string[]> = (() => {
+  const raw = loadJsonObject<Record<string, unknown>>(SETUP_NOTES_KEY) ?? {};
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) { const a = v.filter((x): x is string => typeof x === "string"); if (a.length) out[k] = a; }
+    else if (typeof v === "string" && v.trim()) out[k] = [v];
+  }
+  return out;
+})();
+function setupNotesFor(name: string): string[] { return setupNotes[name] ?? []; }
+function saveSetupNotes(name: string, list: string[]): void {
+  if (list.length) setupNotes[name] = list; else delete setupNotes[name];
   saveJson(SETUP_NOTES_KEY, setupNotes);
+}
+/** Edit one note in place (keeps empties so the textarea indices stay stable while typing). */
+function setSetupNoteAt(name: string, idx: number, text: string): void {
+  const list = setupNotesFor(name).slice();
+  while (list.length <= idx) list.push("");
+  list[idx] = text;
+  saveSetupNotes(name, list);
+}
+function addSetupNote(name: string): void { saveSetupNotes(name, [...setupNotesFor(name), ""]); }
+function deleteSetupNote(name: string, idx: number): void {
+  const list = setupNotesFor(name).slice();
+  list.splice(idx, 1);
+  saveSetupNotes(name, list);
+}
+/** The Setup-notes editor: one row (textarea + ✕ delete) per note, then a "+ note" button. */
+function setupNotesHtml(name: string): string {
+  const rows = setupNotesFor(name).map((n, i) =>
+    `<div class="lt-note-row"><textarea class="lt-note" rows="1" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}" data-noteidx="${i}">${escapeHtml(n)}</textarea>` +
+    `<button type="button" class="lt-note-del" data-notedel="${escapeHtml(name)}|${i}" title="Delete note" aria-label="Delete note">✕</button></div>`
+  ).join("");
+  return `<div class="lt-notes">${rows}<button type="button" class="lt-note-add" data-noteadd="${escapeHtml(name)}">+ note</button></div>`;
 }
 
 // Owner's 5-level pairing grade (super → no way). Glyph + label live in ONE place
@@ -11859,11 +11889,10 @@ function liftTrainingHtml(name: string): string {
   if (e1rm === null || !(e1rm > 0)) {
     // No logged data AND nothing typed — show the inline calculator (so a never-logged lift
     // still works) + the always-editable setup notes.
-    const note = setupNoteFor(name);
     return `<div class="lt-wrap">` +
       focusHtml +
       sec("Calculate", calcRow) +
-      sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
+      sec("Setup notes", setupNotesHtml(name)) +
       `</div>`;
   }
 
@@ -12000,7 +12029,6 @@ function liftTrainingHtml(name: string): string {
       `<div class="lt-pair-body">${pairCtrls}${antBody}</div>` +
     `</details>`;
 
-  const note = setupNoteFor(name);
   return `<div class="lt-wrap">` +
     focusHtml +
     // Logged lift → the 1RM-fit graph IS the calculator (slider + real points on the
@@ -12011,7 +12039,7 @@ function liftTrainingHtml(name: string): string {
     sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
-    sec("Setup notes", `<textarea class="lt-note" rows="2" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}">${escapeHtml(note)}</textarea>`) +
+    sec("Setup notes", setupNotesHtml(name)) +
     pairSecHtml +
     `</div>`;
 }
@@ -13842,6 +13870,22 @@ async function init() {
       }
       return;
     }
+    // Setup-notes add / delete (the per-lift list of notes).
+    const noteAdd = (e.target as HTMLElement).closest<HTMLElement>("[data-noteadd]");
+    if (noteAdd?.dataset.noteadd) {
+      e.preventDefault(); e.stopPropagation();
+      addSetupNote(noteAdd.dataset.noteadd);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
+    const noteDel = (e.target as HTMLElement).closest<HTMLElement>("[data-notedel]");
+    if (noteDel?.dataset.notedel) {
+      e.preventDefault(); e.stopPropagation();
+      const cut = noteDel.dataset.notedel.lastIndexOf("|");
+      deleteSetupNote(noteDel.dataset.notedel.slice(0, cut), Number(noteDel.dataset.notedel.slice(cut + 1)));
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
     // Per-set warm-up nudge buttons (− + weight, − + reps): bump the row's delta + re-render.
     const bump = (e.target as HTMLElement).closest<HTMLElement>("[data-wuadj]");
     if (bump?.dataset.wuadj) {
@@ -14761,7 +14805,7 @@ async function init() {
     // "How to train" per-lift setup notes (rack height etc.) — save on blur, no
     // re-render so the textarea keeps focus/scroll.
     const note = t.closest<HTMLTextAreaElement>(".lt-note");
-    if (note?.dataset.setupnote) { setSetupNote(note.dataset.setupnote, note.value); return; }
+    if (note?.dataset.setupnote) { setSetupNoteAt(note.dataset.setupnote, Number(note.dataset.noteidx ?? 0), note.value); return; }
     const code = t.closest<HTMLInputElement>(".ex-edit-code");
     if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); renderAll(); reopenIndexDetail(code.dataset.editex); return; }
     const short = t.closest<HTMLInputElement>(".ex-edit-short");
