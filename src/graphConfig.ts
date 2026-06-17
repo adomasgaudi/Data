@@ -9,8 +9,9 @@ import type { SetRecord } from "./domain";
 export interface GraphConfig {
   /** How same-interval points are combined: none = every set, else per interval. */
   aggregation: "none" | "max" | "avg" | "sum";
-  /** Bucket size when aggregating. */
-  interval: "day" | "week" | "biweek" | "month";
+  /** Bucket size when aggregating (volume/counts bars + aggregation). The month-multiples
+   *  (quarter = 3 mo, halfyear = 6 mo, year = 12 mo) read longer-range volume. */
+  interval: "day" | "week" | "biweek" | "month" | "quarter" | "halfyear" | "year";
   /** Moving-average window in points (0 = off). */
   smoothing: number;
   /** Apply the strength-fade (detraining) model to strength metrics. */

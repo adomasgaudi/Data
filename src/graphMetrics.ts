@@ -261,10 +261,14 @@ const WEEK = 7 * DAY;
  * 1st. The value is also a stable per-bucket key for grouping. */
 function bucketCenter(t: number, interval: GraphConfig["interval"]): number {
   if (interval === "day") return Math.floor(t / DAY) * DAY + DAY / 2;
-  if (interval === "month") {
+  // Calendar month-multiples: month (1) · quarter (3) · half-year (6) · year (12). Each set
+  // floors to its block start (aligned to January) so the longer-range volume bars are stable.
+  const monthSpan = interval === "month" ? 1 : interval === "quarter" ? 3 : interval === "halfyear" ? 6 : interval === "year" ? 12 : 0;
+  if (monthSpan) {
     const d = new Date(t);
-    const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-    const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+    const startMo = Math.floor(d.getUTCMonth() / monthSpan) * monthSpan;
+    const start = Date.UTC(d.getUTCFullYear(), startMo, 1);
+    const next = Date.UTC(d.getUTCFullYear(), startMo + monthSpan, 1);
     return (start + next) / 2;
   }
   // WEEK buckets start on MONDAY (matching the workout history + heatmap), NOT the raw

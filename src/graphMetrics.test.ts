@@ -70,6 +70,18 @@ describe("graph metric registry (TASK 26)", () => {
     expect(vol.map((p) => p.y)).toEqual([1000, 500]); // {Jan1+Jan7}, {Jan8}
   });
 
+  it("quarter / year intervals bucket volume into 3- and 12-month blocks", () => {
+    const recs = [
+      rec({ date: "2024-01-15", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-03-20", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-05-10", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const q = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "quarter" });
+    expect(q.map((p) => p.y)).toEqual([1000, 500]); // Q1 {Jan+Mar}=1000, Q2 {May}=500
+    const y = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "year" });
+    expect(y.map((p) => p.y)).toEqual([1500]); // all of 2024 in one bucket
+  });
+
   it("bi-week interval groups two Monday-weeks into one bucket", () => {
     const cfg = { ...DEFAULT_GRAPH_CONFIG, interval: "biweek" as const };
     const recs = [
