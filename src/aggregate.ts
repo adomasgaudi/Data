@@ -764,9 +764,24 @@ export function decayedStrengthSeries(
   displayOffset = 0,
 ): { x: number; y: number }[] {
   if (points.length === 0) return [];
-  const sorted = points.slice().sort((a, b) => a.x - b.x);
   const step = stepDays * MS_PER_DAY;
   const dayOf = (x: number) => Math.round(x / MS_PER_DAY); // group same-day sets into one session
+  // CAP-1: collapse same-day sets into ONE session (the day's BEST e1RM) so the line moves per
+  // SESSION, not per set — strength grows per week/session, not per rep (owner: "3 sets in a day
+  // ≠ 60% growth"). Each session keeps its set COUNT (to advance the hard-set phase boundaries)
+  // and the day's hardest (lowest-RIR) effort for the confidence blend.
+  const ordered = points.slice().sort((a, b) => a.x - b.x);
+  const sorted: { x: number; y: number; rir?: number; nSets: number }[] = [];
+  for (const p of ordered) {
+    const cur = sorted[sorted.length - 1];
+    if (cur && dayOf(cur.x) === dayOf(p.x)) {
+      cur.nSets++;
+      if (p.y > cur.y) { cur.x = p.x; cur.y = p.y; } // the day's best e1RM proves the level
+      if (p.rir != null && (cur.rir == null || p.rir < cur.rir)) cur.rir = p.rir; // hardest effort that day
+    } else {
+      sorted.push({ x: p.x, y: p.y, nSets: 1, ...(p.rir != null ? { rir: p.rir } : {}) });
+    }
+  }
   const out: { x: number; y: number }[] = [];
   // EFF-1 (rule 58/49): the model runs in EFFECTIVE load; `displayOffset` is the bodyweight
   // share peeled back on OUTPUT so the plotted value is the ADDED weight. 0 for bar lifts.
@@ -787,7 +802,7 @@ export function decayedStrengthSeries(
   let level = sorted[0]!.y; // strength carried from that day
   let allTimePeak = level; // highest level ever reached — used for rate-limiting (B)
   let stability: number = params.stabilityDays; // durability; grows with each session (L3)
-  let prevDay = dayOf(anchorX);
+  let setsSoFar = sorted[0]!.nSets; // cumulative hard SETS before the next session (phase index)
   // Strength at time x given the current anchor + stability (grace from the anchor).
   const decayedAt = (x: number) => level * retentionWith((x - anchorX) / MS_PER_DAY, stability, params);
   push(anchorX, level);
@@ -801,17 +816,18 @@ export function decayedStrengthSeries(
 
     for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag
 
-    // A) RIR confidence (L3 + L4 phase 1): blend the set's e1RM with the current decayed
-    //    level. Near-failure sets (low RIR) are trusted fully; high-RIR sets are noisy
-    //    e1RM extrapolations and contribute less to sudden jumps.
+    // A) RIR confidence (L3 + L4 phase 1): blend the session's best e1RM with the current
+    //    decayed level. Near-failure sets (low RIR) are trusted fully; high-RIR sets are
+    //    noisy e1RM extrapolations and contribute less to sudden jumps.
     const conf = full || phased ? rirConfidence(s.rir) : 1;
     const effectiveE1rm = conf * s.y + (1 - conf) * decayedAt(s.x);
 
     if (phased) {
       // Accept only this phase's PACE of the upward jump (the rest accrues over sessions),
-      // capped only by the world record. Downward moves never lower the decayed level.
+      // capped only by the world record. Phase = cumulative hard SETS so far (CAP-2: the
+      // decaying cap IS the per-phase pace — beginner fast, advanced slow).
       const base = decayedAt(s.x);
-      const pace = paceForIndex(i);
+      const pace = paceForIndex(setsSoFar);
       level = capWr(base + pace * Math.max(0, effectiveE1rm - base));
     } else {
       // B) Rate-limited growth (L3): cap upward jumps to 8% above the all-time peak.
@@ -820,11 +836,10 @@ export function decayedStrengthSeries(
     }
     allTimePeak = Math.max(allTimePeak, level);
     anchorX = s.x; // training resets the grace clock
+    setsSoFar += s.nSets;
 
-    const day = dayOf(s.x);
-    if (full && day !== prevDay) {
-      stability = Math.min(maxStability, stability * params.stabilityGrowth); // a session makes future decay weaker (L3)
-      prevDay = day;
+    if (full) {
+      stability = Math.min(maxStability, stability * params.stabilityGrowth); // each session makes future decay weaker (L3)
     }
 
     // C) Observed-interval stability calibration (L3): if the incoming set shows the

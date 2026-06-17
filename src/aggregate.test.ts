@@ -687,6 +687,17 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
     expect(onEffective.at(-1)!.y).toBeLessThan(onAdded.at(-1)!.y);
   });
 
+  it("CAP-1: same-day sets move the line once (per session), not once per set", () => {
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 4 as const, phase1Pace: 0.5, phase1EndSets: 100 };
+    // day 0: one 100 set (anchor). day 1: three rising sets — only the day's BEST (400) counts,
+    // and the pace is applied ONCE: 100 + 0.5·(400−100) = 250 (not the 312.5 of per-set compounding).
+    const pts = [
+      { x: at(0), y: 100, rir: 0 },
+      { x: at(1), y: 200, rir: 0 }, { x: at(1), y: 300, rir: 0 }, { x: at(1), y: 400, rir: 0 },
+    ];
+    expect(decayedStrengthSeries(pts, at(1), 4, p).at(-1)!.y).toBeCloseTo(250, 0);
+  });
+
   it("level 4 (phases) damps each upward jump by its phase pace, capped only by the WR", () => {
     // Four sessions one day apart (inside the grace, so no fade between), rising e1RM.
     // phase 1 (pace 1) accepts the jump fully, phase 2 (0.5) half, phase 3 (0.25) a quarter.
