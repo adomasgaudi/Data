@@ -16496,7 +16496,113 @@ function populateDataFilters() {
 }
 
 
+// ---- StrengthLevel GitHub Action trigger (admin Data tab) ----
+const SL_GH_API = "https://api.github.com";
+const SL_GH_REPO = "adomasgaudi/Data";
+const SL_GH_WORKFLOW = "fetch-data.yml";
+const SL_GH_BRANCH = "opus-4.8";
+const SL_PAT_KEY = "colosseum.ghPat.v1";
+let slPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function slSetStatus(el: HTMLElement, msg: string, cls: "ok" | "err" | "busy"): void {
+  el.hidden = !msg;
+  el.textContent = msg;
+  el.className = cls === "busy" ? "gh-sync gh-sync--busy" : cls === "err" ? "gh-sync gh-sync--err" : "gh-sync gh-sync--ok";
+  if (cls !== "busy") {
+    const t = el as HTMLElement & { _t?: ReturnType<typeof setTimeout> };
+    clearTimeout(t._t);
+    t._t = setTimeout(() => { el.hidden = true; }, 5000);
+  }
+}
+
+async function slFetchLastRun(pat: string): Promise<{ status: string; conclusion: string | null; url: string; ago: string } | null> {
+  try {
+    const r = await fetch(
+      `${SL_GH_API}/repos/${SL_GH_REPO}/actions/workflows/${SL_GH_WORKFLOW}/runs?per_page=1`,
+      { headers: { Authorization: `Bearer ${pat}`, Accept: "application/vnd.github+json" } },
+    );
+    if (!r.ok) return null;
+    const d = await r.json() as { workflow_runs: { status: string; conclusion: string | null; html_url: string; created_at: string }[] };
+    const run = d.workflow_runs?.[0];
+    if (!run) return null;
+    const mins = Math.round((Date.now() - new Date(run.created_at).getTime()) / 60000);
+    return { status: run.status, conclusion: run.conclusion, url: run.html_url, ago: mins < 2 ? "just now" : `${mins} min ago` };
+  } catch { return null; }
+}
+
+function slRenderLastRun(el: HTMLElement, run: { status: string; conclusion: string | null; url: string; ago: string } | null): void {
+  if (!run) { el.textContent = ""; return; }
+  const label = run.status === "completed"
+    ? (run.conclusion === "success" ? "✓ succeeded" : `✗ ${run.conclusion ?? "failed"}`)
+    : run.status === "in_progress" ? "running" : run.status;
+  el.innerHTML = `Last run: ${run.ago} · <a href="${escapeHtml(run.url)}" target="_blank" rel="noopener">${label}</a>`;
+}
+
+async function slTrigger(pat: string, mode: "sync" | "rebuild", statusEl: HTMLElement, lastRunEl: HTMLElement): Promise<void> {
+  if (slPollTimer) { clearInterval(slPollTimer); slPollTimer = null; }
+  slSetStatus(statusEl, "Triggering…", "busy");
+  try {
+    const r = await fetch(
+      `${SL_GH_API}/repos/${SL_GH_REPO}/actions/workflows/${SL_GH_WORKFLOW}/dispatches`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${pat}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify({ ref: SL_GH_BRANCH, inputs: { mode } }),
+      },
+    );
+    if (r.status === 204) {
+      slSetStatus(statusEl, "Queued…", "busy");
+      let elapsed = 0;
+      slPollTimer = setInterval(() => {
+        elapsed += 4;
+        if (elapsed > 300) { clearInterval(slPollTimer!); slPollTimer = null; slSetStatus(statusEl, "Timed out", "err"); return; }
+        void slFetchLastRun(pat).then((run) => {
+          slRenderLastRun(lastRunEl, run);
+          if (run?.status === "in_progress") slSetStatus(statusEl, "Running…", "busy");
+          else if (run?.status === "completed") {
+            clearInterval(slPollTimer!); slPollTimer = null;
+            slSetStatus(statusEl, run.conclusion === "success" ? "✓ Done" : `✗ ${run.conclusion ?? "failed"}`,
+              run.conclusion === "success" ? "ok" : "err");
+          }
+        });
+      }, 4000);
+    } else if (r.status === 401) {
+      slSetStatus(statusEl, "Bad PAT — check token", "err");
+    } else if (r.status === 422) {
+      slSetStatus(statusEl, "Branch not found", "err");
+    } else {
+      slSetStatus(statusEl, `Error ${r.status}`, "err");
+    }
+  } catch { slSetStatus(statusEl, "Network error", "err"); }
+}
+
+function setupSlSyncCard(): void {
+  const patInput = document.getElementById("slGhPat") as HTMLInputElement | null;
+  const syncBtn = document.getElementById("slSyncBtn") as HTMLButtonElement | null;
+  const rebuildBtn = document.getElementById("slRebuildBtn") as HTMLButtonElement | null;
+  const statusEl = document.getElementById("slStatus");
+  const lastRunEl = document.getElementById("slLastRun");
+  if (!patInput || !syncBtn || !rebuildBtn || !statusEl || !lastRunEl) return;
+
+  patInput.value = localStorage.getItem(SL_PAT_KEY) ?? "";
+  const updateBtns = () => { const ok = patInput.value.trim().length > 0; syncBtn.disabled = !ok; rebuildBtn.disabled = !ok; };
+  updateBtns();
+  patInput.addEventListener("input", updateBtns);
+
+  if (patInput.value) void slFetchLastRun(patInput.value).then((run) => slRenderLastRun(lastRunEl, run));
+
+  const go = (mode: "sync" | "rebuild") => {
+    const pat = patInput.value.trim();
+    if (!pat) return;
+    localStorage.setItem(SL_PAT_KEY, pat);
+    void slTrigger(pat, mode, statusEl, lastRunEl);
+  };
+  syncBtn.addEventListener("click", () => go("sync"));
+  rebuildBtn.addEventListener("click", () => go("rebuild"));
+}
+
 function setupDataTab() {
+  setupSlSyncCard();
   populateDataFilters();
   document.querySelectorAll<HTMLButtonElement>(".data-viewbtn").forEach((btn) => {
     btn.addEventListener("click", () => {

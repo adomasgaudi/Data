@@ -606,6 +606,20 @@ const LT: Record<string, string> = {
   "Exclude dropsets": "Neįtraukti dropsetų",
   // ---- Command bar ----
   "Search exercises…   or type . for commands": "Ieškoti pratimų…   arba įvesk . komandoms",
+  // ---- StrengthLevel sync card ----
+  "StrengthLevel sync": "StrengthLevel sinchronizavimas",
+  "Rebuild all": "Atnaujinti viską",
+  "Triggering…": "Paleidžiama…",
+  "Queued…": "Eilėje…",
+  "Running…": "Vykdoma…",
+  "✓ Done": "✓ Atlikta",
+  "Timed out": "Baigėsi laikas",
+  "Bad PAT — check token": "Netinkamas PAT — patikrinkite žetoną",
+  "Branch not found": "Šaka nerasta",
+  "Network error": "Tinklo klaida",
+  "Last run:": "Paskutinis paleidimas:",
+  "just now": "ką tik",
+  "running": "vykdoma",
 };
 
 const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "CODE", "PRE"]);

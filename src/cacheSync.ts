@@ -36,6 +36,7 @@ export const LOCAL_ONLY_KEYS: ReadonlySet<string> = new Set([
   "colosseum.activeSet.include.v1", "colosseum.activeSet.exclude.v1",
   "colosseum.activeSet.solo.v1", "colosseum.activeSet.freq.v1",
   "colosseum.activeSet.cutoff.v1", "colosseum.activeSet.meta.v1",
+  "colosseum.ghPat.v1", // GitHub PAT for Action triggers — secret, never sync
 ]);
 
 /** Keys that already sync via a DEDICATED path, so they skip the kv mirror. */
