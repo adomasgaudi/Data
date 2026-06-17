@@ -4322,7 +4322,7 @@ function snapshotHistoryLive(prev: HistoryTabConfig): HistoryTabConfig {
     grouping: els.workoutGrouping?.value || prev.grouping,
     rmReps: xrmReps,
     aloneFilter,
-    lensFilter: prev.lensFilter, // shared selection — not applied live yet (Part 3)
+    lensFilter: [...waSelected], // the history's OWN exercise selection (per tab)
     showAll: woShowAllExercises,
   };
 }
@@ -4341,6 +4341,9 @@ function applyHistoryTabConfig(c: HistoryTabConfig): void {
   xrmReps = c.rmReps;
   aloneFilter = c.aloneFilter;
   woShowAllExercises = c.showAll;
+  // The history's OWN exercise selection (its title chips + lens) is per-tab too —
+  // switching tabs swaps WHICH lifts the history shows, fully contained per tab.
+  waSelected = [...c.lensFilter];
 }
 /** Save the live state into the active tab + persist. Called at the end of every history
  * render, so the active tab always mirrors what's on screen. */
@@ -4349,6 +4352,15 @@ function saveActiveHistoryTab(): void {
   const act = activeHistoryTab(historyDash);
   historyDash = setHistoryTabConfig(historyDash, act.id, snapshotHistoryLive(act.config));
   saveHistoryDashboard(historyDash);
+}
+/** On the first history render, adopt the active tab's saved view; or, on the very first
+ * run after this feature (no saved dashboard), SEED the default tab from the user's
+ * existing live prefs so nothing resets. Idempotent (runs once). */
+function ensureHistoryTabApplied(): void {
+  if (historyDashReady) return;
+  historyDashReady = true;
+  if (localStorage.getItem(HISTORY_DASH_KEY) != null) applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+  else saveActiveHistoryTab();
 }
 /** Build the tab bar: one chip per tab (active one editable inline) + a "+" to add. */
 function renderWoTabs(): void {
@@ -4370,14 +4382,16 @@ function renderWoTabs(): void {
     }).join("") +
     `<button type="button" class="wo-tab-add" data-hwadd="1" title="Add a new history tab" aria-label="Add tab">＋</button>`;
 }
-/** Switch to a tab: apply its config, mark active, render. */
+/** Switch to a tab: apply its config (incl. its exercise selection), mark active, then
+ * re-render the WHOLE history section — the selection title + exercise picker + the list
+ * (renderWorkoutAnalysis), so the swapped-in exercises + grouping all show at once. */
 function switchHistoryTab(id: string): void {
   historyDash = setActiveHistoryTab(historyDash, id);
   applyHistoryTabConfig(activeHistoryTab(historyDash).config);
   saveHistoryDashboard(historyDash);
   S.workoutsPage = 0;
   syncWorkoutToggles();
-  renderWorkoutsPage();
+  renderWorkoutAnalysis();
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -7558,15 +7572,7 @@ function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): s
 }
 
 function renderWorkoutsPage() {
-  // First history render: if a dashboard was saved, adopt the active tab's view; if NOT
-  // (first run after this feature), SEED the default tab from the user's existing live
-  // prefs so their old display settings carry over instead of being reset. Thereafter
-  // snapshot-on-render keeps the active tab mirrored.
-  if (!historyDashReady) {
-    historyDashReady = true;
-    if (localStorage.getItem(HISTORY_DASH_KEY) != null) applyHistoryTabConfig(activeHistoryTab(historyDash).config);
-    else saveActiveHistoryTab(); // seed from current live state + persist
-  }
+  ensureHistoryTabApplied(); // adopt the active history tab's view on the first render
   workoutGroups = buildWorkoutGroups();
   // Default: order each group's exercises by the athlete's plan priority (the SAME order
   // as the Plan page; non-priority lifts last). New group objects so no cached source is
@@ -18502,6 +18508,7 @@ function defaultGraphSelection(): string[] {
   return (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
 }
 function renderWorkoutAnalysis(): void {
+  ensureHistoryTabApplied(); // active history tab's selection drives the title/picker below
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
   // view opens as a real selection (pills shown), not the implicit aggregate.
   if (!analysisSeeded) {
