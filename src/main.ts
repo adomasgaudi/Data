@@ -8365,22 +8365,15 @@ function currentStrengthByUserExercise(formula: OneRepMaxFormula): Map<string, M
     const d = dayNumber(r.date);
     dm.set(d, Math.max(dm.get(d) ?? -Infinity, eff));
   }
-  // 2) Forward-simulate the fade + consolidation to get the current level per day.
+  // 2) Forward-simulate the OFFICIAL decay model per day, through the SAME engine as the
+  //    chart's Strength Decay line (decayedStrengthSeries) — so each set's predicted RIR is
+  //    judged against the strength curve the owner made official (rule 58, effective frame).
+  const op = officialDecay();
   const out = new Map<string, Map<number, number>>();
   for (const [key, dm] of byKeyDay) {
-    const days = [...dm.keys()].sort((a, b) => a - b);
+    const pts = [...dm.entries()].sort((a, b) => a[0] - b[0]).map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
     const levels = new Map<number, number>();
-    let anchor = days[0]!;
-    let level = dm.get(anchor)!;
-    let stability: number = STRENGTH_DECAY.baseStability;
-    levels.set(anchor, level);
-    for (let i = 1; i < days.length; i++) {
-      const d = days[i]!;
-      level = Math.max(level * strengthRetention(d - anchor, stability), dm.get(d)!);
-      anchor = d;
-      stability = grownStability(stability); // a new session makes future decay weaker
-      levels.set(d, level);
-    }
+    for (const p of decayedStrengthSeries(pts, Date.now(), 30, op)) levels.set(Math.round(p.x / MS_PER_DAY_RIR), p.y);
     out.set(key, levels);
   }
   strengthByExCache = { formula, map: out };
@@ -18568,20 +18561,34 @@ const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
 // complexity level + variables in the graph Options to SEE it on their data. Persisted so
 // the chosen experiment sticks; merged over the defaults so older saves get any new fields.
 const DECAY_PARAMS_KEY = "colosseum.decayParams.v1";
-function loadDecayParams(): DecayParams {
+function loadDecayParamsFrom(key: string): DecayParams {
   try {
-    const raw = JSON.parse(localStorage.getItem(DECAY_PARAMS_KEY) ?? "null") as Partial<DecayParams> | null;
+    const raw = JSON.parse(localStorage.getItem(key) ?? "null") as Partial<DecayParams> | null;
     if (raw && typeof raw === "object") {
-      const lvl = raw.level === 1 || raw.level === 2 || raw.level === 3 ? raw.level : DEFAULT_DECAY_PARAMS.level;
+      const lvl = raw.level === 1 || raw.level === 2 || raw.level === 3 || raw.level === 4 ? raw.level : DEFAULT_DECAY_PARAMS.level;
       return { ...DEFAULT_DECAY_PARAMS, ...raw, level: lvl };
     }
   } catch { /* ignore */ }
   return { ...DEFAULT_DECAY_PARAMS };
 }
+function loadDecayParams(): DecayParams { return loadDecayParamsFrom(DECAY_PARAMS_KEY); }
 function saveDecayParams(): void {
   try { localStorage.setItem(DECAY_PARAMS_KEY, JSON.stringify(waGraphConfig.decayParams)); } catch { /* ignore */ }
 }
 waGraphConfig.decayParams = loadDecayParams();
+// OFFICIAL strength curve (owner): the decay model the owner "makes official" becomes the
+// canonical strength estimate that drives every set's predicted RIR. Stored separately so
+// experimenting with the graph's live decay params doesn't change the official curve until
+// they press the button.
+const OFFICIAL_DECAY_KEY = "colosseum.officialDecay.v1";
+function officialDecay(): DecayParams { return loadDecayParamsFrom(OFFICIAL_DECAY_KEY); }
+function makeDecayOfficial(): void {
+  try { localStorage.setItem(OFFICIAL_DECAY_KEY, JSON.stringify(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS)); } catch { /* ignore */ }
+}
+/** Does the live graph decay model match the official one? (drives the button's ✓ state). */
+function isDecayOfficial(): boolean {
+  try { return JSON.stringify(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) === JSON.stringify(officialDecay()); } catch { return false; }
+}
 // Projection fit-window (ms timestamps): the two draggable vertical lines bounding which
 // logged sets feed the forecast. null = open (data start / end). Reset when the forecast
 // is off; clamped so from < to.
@@ -20205,8 +20212,12 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
       ? `<p class="wa-decay-note">Three phases by hard-set count — beginner (fast, chaotic) → intermediate (predictable, the odd jump) → advanced (slow, stable). Gains are capped ONLY by the world record. Boundary lines show where each phase ends. (Dragging them + the phase-1 level is coming next.)</p>`
       : `<p class="wa-decay-note">The line steps to each session's estimated 1RM, then sags by the formula above until the next session.</p>`;
   const decayExplain = `<div class="wa-decay-explain"><p class="wa-decay-formula"><code>${dFormula}</code></p><ul class="wa-decay-gloss">${dGlossCommon}${dGlossLevel}</ul>${dExtra}</div>`;
+  // "Make official" (owner): promotes THIS curve to the canonical strength model that drives
+  // every set's predicted RIR. ★ when the live params already match the official ones.
+  const officialOn = isDecayOfficial();
+  const decayOfficialBtn = `<button type="button" class="wa-name-opt${officialOn ? " is-on" : ""}" data-wadecayofficial="1" title="Make THIS strength-decay curve the OFFICIAL one — then every set's predicted RIR (pRIR) is judged against it.">${officialOn ? "★ Official curve" : "Make official"}</button>`;
   const cfgDecay = decayShown
-    ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + dCommon + dByLevel + decayExplain, "decaymodel")
+    ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + decayOfficialBtn + dCommon + dByLevel + decayExplain, "decaymodel")
     : "";
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
@@ -22070,6 +22081,15 @@ function setupWorkoutAnalysis(): void {
       dpc.level = ((dpc.level % 4) + 1) as DecayLevel;
       waGraphConfig.decayParams = dpc;
       saveDecayParams();
+      scheduleWaGraph();
+      return;
+    }
+    // "Make official": promote the live decay curve to the canonical strength model, then
+    // refresh the sets tables so every set's predicted RIR is judged against it.
+    if (t.closest<HTMLElement>("[data-wadecayofficial]")) {
+      makeDecayOfficial();
+      strengthByExCache = null; // drop the memoised per-day strength so pRIR recomputes
+      rerenderSetsTables();
       scheduleWaGraph();
       return;
     }
