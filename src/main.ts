@@ -8348,8 +8348,11 @@ const SET_COL_METRICS: { id: string; label: string; name: string; title: string 
   { id: "prir", label: "pRIR", name: "Predicted RIR", title: "Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. Tap a number for the maths." },
   { id: "rir", label: "RIR", name: "Logged RIR", title: "Reps In Reserve — your logged how-many-left grade (low = near failure)." },
 ];
-const SET_COLS_KEY = "colosseum.setColumns.v1";
-const SET_COLS_DEFAULT = ["weight", "e1rm", "volume", "prir", "rir"];
+// v2: RM (1RM) LEADS — it's the leftmost column now (owner: continuity with the collapsed
+// view, where each line reads "1RM exercise …"). The key bumped from v1 so the new order
+// actually lands (column choices aren't precious — a one-time reset to this order is fine).
+const SET_COLS_KEY = "colosseum.setColumns.v2";
+const SET_COLS_DEFAULT = ["e1rm", "weight", "volume", "prir", "rir"];
 let setColumns: string[] = (() => {
   try {
     const v = JSON.parse(localStorage.getItem(SET_COLS_KEY) ?? "null");
@@ -8657,10 +8660,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     predRir === null || !prirText
       ? ""
       : `<tr class="prir-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(prirText)}</td></tr>`;
-  // Edit row: tweak this set's weight / reps / bodyweight / scaling factor. RIR is
-  // the dropdown in the row itself. Bodyweight is just for this set (placeholder
-  // shows the default). Blank a field to clear that one edit.
-  const dfltBw = raw.bodyweight ?? athProfile(s.username)?.weight ?? null;
+  // Edit row: tweak this set's weight / reps / scaling factor. RIR is the dropdown in the
+  // row itself. Blank a field to clear that one edit. (The person's bodyweight is a profile
+  // value, edited in their stats — not a per-set field — so it's not here, per owner.)
   const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
     `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
@@ -8713,13 +8715,26 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       `<span class="set-edit-wreal"><input class="set-edit-input" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" />` +
       `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
     : efld("weight", "Weight (kg)", s.weight, 0.5);
+  // The variation block (owner: "it should also have the variants"): the current
+  // band/lean/support/incline chips PLUS the editable ×scale/variant control, so a set's
+  // variant is editable straight from this panel (the scaleTag opens the floating variant
+  // editor, the same one the row chip uses). Empty for a plain lift with no variant.
+  const variantsBlock = (variationChipsHtml(s).trim() || scaleTag.trim())
+    ? `<div class="set-edit-variants" aria-label="Variants">${variationChipsHtml(s)}${scaleTag}</div>`
+    : "";
+  // Floating popup (owner: "a popup menu, not physical"): the panel is a fixed-position card
+  // (positioned by JS near the tapped set, closed by an outside tap) so it OVERLAYS the
+  // history instead of pushing it down. It stays INSIDE the table so all the existing
+  // table-scoped edit wiring (inputs, toggles, delete) keeps working untouched.
+  // Bodyweight-of-the-person field removed per owner (it's a profile value, not a per-set one).
   const editRow =
-    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid">` +
+    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid set-edit-pop">` +
+    `<button type="button" class="set-edit-close" data-seteditclose title="Close">✕</button>` +
     weightField +
     efld("reps", "Reps", s.reps, 1) +
-    efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
+    variantsBlock +
     uniToggle +
     assistToggle +
     machineToggle +
@@ -9023,7 +9038,53 @@ function togglePrirFormula(target: HTMLElement): boolean {
 // COLLAPSE the panel mid-edit (the recurring rule-24 "tapping a setting closes the menu").
 // renderWorkoutsPage re-applies this after each rebuild, so the panel stays put.
 let openSetEditId: string | null = null;
+/** Position the floating set-edit card near its set-main row (fixed coords, flips above
+ * when it would run off the bottom — mirrors positionScaleEditor). The card stays inside
+ * the table DOM so all the existing edit wiring keeps working; only its rendering floats. */
+function positionSetEditPop(pop: HTMLElement, anchor: HTMLElement): void {
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth - 16, 360);
+  pop.style.width = `${w}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
+  const margin = 8;
+  const ph = pop.offsetHeight; // capped by max-height; content scrolls inside
+  let top = r.bottom + 6;
+  if (top + ph > window.innerHeight - margin) {
+    const above = r.top - 6 - ph;
+    top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - ph);
+  }
+  pop.style.top = `${top}px`;
+}
+/** Re-place every visible floating set-edit card next to its set-main row. */
+function positionSetEditPops(): void {
+  for (const pop of document.querySelectorAll<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-pop")) {
+    let anchor = pop.closest("tr")?.previousElementSibling as HTMLElement | null;
+    while (anchor && !anchor.classList.contains("set-main")) anchor = anchor.previousElementSibling as HTMLElement | null;
+    if (anchor) positionSetEditPop(pop, anchor);
+  }
+}
+/** Close the open set-edit card (hide every matching row, drop the outside listener). */
+function closeSetEdit(): void {
+  if (openSetEditId === null) return;
+  for (const editRow of document.querySelectorAll<HTMLElement>(`.set-edit-row[data-seteditid="${CSS.escape(openSetEditId)}"]`)) {
+    editRow.hidden = true;
+    let p = editRow.previousElementSibling;
+    while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
+    p?.classList.remove("edit-open");
+  }
+  openSetEditId = null;
+  document.removeEventListener("click", setEditOutside, true);
+}
+/** Outside-tap closes the floating card (owner). A tap on a set-main row is left to
+ * toggleSetEdit (which switches/closes), and taps inside the card or its sub-rows stay. */
+function setEditOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest(".set-edit-pop") || t.closest("tr.set-main") || t.closest(".set-note-row, .e1rm-formula-row, .prir-formula-row")) return;
+  if (t.closest("#scaleEditPop") || t.closest(".xdd-menu")) return; // the variant editor / RIR menu it spawns
+  closeSetEdit();
+}
 function toggleSetEdit(target: HTMLElement): boolean {
+  if (target.closest("[data-seteditclose]")) { closeSetEdit(); return true; } // the card's ✕
   const row = target.closest<HTMLElement>("tr.set-main");
   if (!row) return false;
   let sib = row.nextElementSibling;
@@ -9033,9 +9094,18 @@ function toggleSetEdit(target: HTMLElement): boolean {
   }
   if (sib?.classList.contains("set-edit-row")) {
     const willOpen = sib.hasAttribute("hidden"); // currently hidden → this tap opens it
+    const sid = (sib as HTMLElement).dataset.seteditid ?? null;
+    if (openSetEditId && openSetEditId !== sid) closeSetEdit(); // one card at a time (popup)
     sib.toggleAttribute("hidden");
     row.classList.toggle("edit-open");
-    openSetEditId = willOpen ? ((sib as HTMLElement).dataset.seteditid ?? null) : null;
+    openSetEditId = willOpen ? sid : null;
+    if (willOpen) {
+      const pop = sib.querySelector<HTMLElement>(".set-edit-pop");
+      if (pop) positionSetEditPop(pop, row);
+      setTimeout(() => document.addEventListener("click", setEditOutside, true), 0);
+    } else {
+      document.removeEventListener("click", setEditOutside, true);
+    }
   }
   return true;
 }
@@ -9059,6 +9129,7 @@ function reopenSetEdit(): void {
       while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
       p?.classList.add("edit-open");
     }
+    positionSetEditPops(); // the floating card re-anchors to its (rebuilt) row
   };
   reopen();
   requestAnimationFrame(reopen);
@@ -9079,7 +9150,7 @@ function resetSetEdit(target: HTMLElement): boolean {
  * Restorable in Settings → Data health. */
 function deleteSetById(id: string): void {
   setDeleted(id, true);
-  if (openSetEditId === id) openSetEditId = null; // its panel is gone — don't try to reopen
+  if (openSetEditId === id) { openSetEditId = null; document.removeEventListener("click", setEditOutside, true); } // its panel is gone
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
