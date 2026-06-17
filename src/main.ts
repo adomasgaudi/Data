@@ -19682,27 +19682,43 @@ function refreshDash(): void {
 function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remove(); }
 /**
  * ON-SCREEN debug console — the mobile-debug tool (full guide: docs/onscreen-debug.md).
- * Phones have NO devtools console, so `dbg("msg")` paints the last ~9 lines to a fixed green
+ * Phones have NO devtools console, so `dbg("msg")` paints the recent lines to a fixed green
  * panel bottom-left. Instrument every step of a failing flow with it, then ONE screenshot shows
  * exactly where it breaks — this is how PB-38's root (panel-scoped handler vs body-appended menu)
  * was finally found (owner: "#super persistent and #max debug worked, keep the green console").
- * Tap the panel to clear. Disable with `localStorage.setItem("colosseum.dbg","off")` then reload.
+ * Owner: keep it SHORT + COLLAPSABLE — tap the ▾/▸ header to collapse (state persisted), ✕ to
+ * clear, and the body is height-capped + scrolls. Disable with `localStorage.setItem("colosseum.dbg","off")`.
  * Also exposed as `window.dbg` for ad-hoc desktop-console use.
  */
 const dbgLines: string[] = [];
-function dbg(msg: string): void {
-  try { if (localStorage.getItem("colosseum.dbg") === "off") return; } catch { /* ignore */ }
-  dbgLines.push(`${new Date().toTimeString().slice(0, 8)} ${msg}`);
-  while (dbgLines.length > 9) dbgLines.shift();
+function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.dbgCollapsed") === "1"; } catch { return false; } }
+function renderDbg(): void {
   let el = document.getElementById("dbgOverlay");
   if (!el) {
     el = document.createElement("div");
     el.id = "dbgOverlay";
-    el.style.cssText = "position:fixed;left:0;bottom:0;z-index:2147483647;max-width:100vw;background:rgba(0,0,0,0.82);color:#3f6;font:10px/1.35 monospace;padding:3px 6px;white-space:pre-wrap;word-break:break-all";
-    el.addEventListener("click", () => { dbgLines.length = 0; el!.textContent = ""; });
+    el.style.cssText = "position:fixed;left:0;bottom:0;z-index:2147483647;max-width:100vw;background:rgba(0,0,0,0.82);color:#3f6;font:10px/1.3 monospace";
+    el.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.id === "dbgClear") { dbgLines.length = 0; renderDbg(); return; }
+      // anywhere else on the header toggles collapse (persisted)
+      if (t.closest("#dbgHead")) { try { localStorage.setItem("colosseum.dbgCollapsed", dbgCollapsed() ? "0" : "1"); } catch { /* ignore */ } renderDbg(); }
+    });
     document.body.appendChild(el);
   }
-  el.textContent = dbgLines.join("\n");
+  const collapsed = dbgCollapsed();
+  el.innerHTML =
+    `<div id="dbgHead" style="display:flex;gap:8px;align-items:center;padding:2px 6px;cursor:pointer;opacity:0.85">` +
+    `<span>dbg ${collapsed ? "▸" : "▾"}</span><span style="margin-left:auto">${dbgLines.length}</span><span id="dbgClear" style="padding:0 4px">✕</span></div>` +
+    (collapsed ? "" : `<div id="dbgBody" style="max-height:18vh;overflow:auto;padding:0 6px 3px;white-space:pre-wrap;word-break:break-all">${escapeHtml(dbgLines.join("\n"))}</div>`);
+  const body = document.getElementById("dbgBody");
+  if (body) body.scrollTop = body.scrollHeight; // keep the newest line in view
+}
+function dbg(msg: string): void {
+  try { if (localStorage.getItem("colosseum.dbg") === "off") return; } catch { /* ignore */ }
+  dbgLines.push(`${new Date().toTimeString().slice(0, 8)} ${msg}`);
+  while (dbgLines.length > 40) dbgLines.shift();
+  renderDbg();
 }
 // Expose for ad-hoc use from a desktop console or other modules.
 (window as unknown as { dbg?: (m: string) => void }).dbg = dbg;
