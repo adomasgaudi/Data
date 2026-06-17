@@ -19586,6 +19586,23 @@ function refreshDash(): void {
 // Long-press tab menu (owner): a small floating menu — Duplicate / Add tab / Rename / Delete —
 // opened by a long-press or right-click on a tab (no inline icons cluttering the strip).
 function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remove(); }
+// ON-SCREEN debug log (PB-38 #super-persistent): mobile has no console, so paint the last few
+// events to a fixed corner panel. Proves which handler each tap reaches. Temporary — remove
+// once the tab menu is confirmed working on device. Tap the panel to clear it.
+const dbgLines: string[] = [];
+function dbg(msg: string): void {
+  dbgLines.push(`${new Date().toTimeString().slice(0, 8)} ${msg}`);
+  while (dbgLines.length > 9) dbgLines.shift();
+  let el = document.getElementById("dbgOverlay");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "dbgOverlay";
+    el.style.cssText = "position:fixed;left:0;bottom:0;z-index:2147483647;max-width:100vw;background:rgba(0,0,0,0.82);color:#3f6;font:10px/1.35 monospace;padding:3px 6px;white-space:pre-wrap;word-break:break-all";
+    el.addEventListener("click", () => { dbgLines.length = 0; el!.textContent = ""; });
+    document.body.appendChild(el);
+  }
+  el.textContent = dbgLines.join("\n");
+}
 function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   closeDashTabMenu();
   const canDelete = graphDash.tabs.length > 1;
@@ -19598,6 +19615,7 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
     (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-tabmenu="delete" data-tab="${escapeHtml(tabId)}">✕ Delete</button>` : "");
   document.body.appendChild(m);
   clampMenuIntoView(m, anchor);
+  dbg(`menu OPEN (in <body>, ${m.querySelectorAll("[data-tabmenu]").length} items)`);
 }
 /** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
  * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
@@ -21022,26 +21040,20 @@ function setupWorkoutAnalysis(): void {
     }
     // ── Custom graph DASHBOARD interactions (CHART-160) ─────────────────────────
     // ⋯ button on a tab → toggle its options menu (explicit tap, no long-press — PB-38).
+    // NOTE: the tab MENU ITEMS (Duplicate/Rename/…) are handled at DOCUMENT level (see
+    // setupDashHandlers), because the menu is appended to <body> — OUTSIDE this `panel`
+    // listener's subtree, so a panel-scoped handler could never see those clicks (PB-38 ROOT).
     const tabMenuOpen = t.closest<HTMLElement>("[data-tabmenuopen]");
     if (tabMenuOpen?.dataset.tabmenuopen) {
+      dbg(`⋯ tap (panel) → ${document.getElementById("dashTabMenu") ? "close" : "open"}`);
       if (document.getElementById("dashTabMenu")) closeDashTabMenu();
       else openDashTabMenu(tabMenuOpen, tabMenuOpen.dataset.tabmenuopen);
-      return;
-    }
-    // Tab menu actions: Duplicate / Rename / Add / Delete.
-    const tabMenu = t.closest<HTMLElement>("[data-tabmenu]");
-    if (tabMenu?.dataset.tabmenu) {
-      const act = tabMenu.dataset.tabmenu, tid = tabMenu.dataset.tab;
-      closeDashTabMenu();
-      if (act === "add") { graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
-      else if (act === "duplicate" && tid) { graphDash = duplicateTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
-      else if (act === "rename" && tid) { graphDash = setActiveTab(graphDash, tid); dashBubbleIdx = 0; dashEditTab = tid; persistDash(); renderGraphDashboard(); }
-      else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
       return;
     }
     // Switch to a tab (resets the reel to its first bubble).
     const dashTab = t.closest<HTMLElement>("[data-dashtab]");
     if (dashTab?.dataset.dashtab) {
+      dbg(`tab SWITCH → ${dashTab.dataset.dashtab.slice(0, 8)}`);
       dashEditTab = null;
       graphDash = setActiveTab(graphDash, dashTab.dataset.dashtab); dashBubbleIdx = 0; persistDash();
       refreshDash(); return;
@@ -21227,11 +21239,24 @@ function setupWorkoutAnalysis(): void {
     graphDash = renameTab(graphDash, inp.dataset.dashtabname, inp.value.trim() || "Tab");
     dashEditTab = null; persistDash(); refreshDash();
   });
-  // Close the tab options menu on any click outside it OR its ⋯ opener (PB-38: the menu now
-  // opens via an explicit ⋯ tap, so there's no long-press / suppress-flag fragility left).
+  // PB-38 ROOT FIX (#super-persistent): the tab options menu (#dashTabMenu) is appended to
+  // <body>, OUTSIDE the `panel`-scoped click handler — so its Duplicate/Rename/Add/Delete
+  // clicks NEVER reached that handler and did nothing, through every prior attempt. Handle the
+  // menu ACTIONS here at DOCUMENT level (which always sees them), and close-on-outside too.
   document.addEventListener("click", (e) => {
     const tgt = e.target as Element | null;
-    if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu, [data-tabmenuopen]")) closeDashTabMenu();
+    const item = tgt?.closest<HTMLElement>("[data-tabmenu]");
+    if (item?.dataset.tabmenu) {
+      const act = item.dataset.tabmenu, tid = item.dataset.tab;
+      dbg(`menu ACTION ${act}${tid ? " " + tid.slice(0, 6) : ""} (doc) ✓`);
+      closeDashTabMenu();
+      if (act === "add") { graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      else if (act === "duplicate" && tid) { graphDash = duplicateTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      else if (act === "rename" && tid) { graphDash = setActiveTab(graphDash, tid); dashBubbleIdx = 0; dashEditTab = tid; persistDash(); renderGraphDashboard(); }
+      else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      return;
+    }
+    if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu, [data-tabmenuopen]")) { dbg("menu close (outside)"); closeDashTabMenu(); }
   });
 }
 
