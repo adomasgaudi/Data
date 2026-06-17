@@ -18876,7 +18876,7 @@ function stepGraphSlide(d: number): void {
  * `scopeExercises` (the multi-graph's picked lifts, or the carousel's single lift), reading
  * the open state of its sub-folds from `container` so a tap doesn't snap them shut (rule 24).
  * Used by BOTH the full multi-graph bar and the single-lift carousel foot. */
-function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null): string {
+function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null, opts?: { skipRvw?: boolean }): string {
   const scopeAllowed = allGraphsAllowed
     ? new Set(ALL_GRAPH_METRIC_IDS)
     : metricsAllowedForScope(graphPerms, scopeExercises);
@@ -18975,7 +18975,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}${cfgRepsWeight}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgProjection}${opts?.skipRvw ? "" : cfgRepsWeight}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
     `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
     `</div>`;
@@ -19059,13 +19059,16 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     },
   };
   const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
-  const drawMetricIds = bubble.metrics.filter((id) => scopeAllowed.has(id));
+  // Metrics come from the GLOBAL Options menu (shared across bubbles for now); type/view/
+  // lifts/×BW are the per-bubble dials. (bubble.metrics is reserved for future per-bubble metrics.)
+  const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
   return {
     exercises: exs,
     records: isRvw ? rvwWindowRecords(recs) : recs,
     rvwAxis: isRvw ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: cfg,
+    height: 300, // one constant plot height across all bubble types (stable reel, owner)
     rvwFitOf,
     onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"),
@@ -19120,16 +19123,33 @@ function renderGraphDashboard(): void {
   } else {
     waGraphSel = [...bubble.exercises];
   }
+  // TABS live ABOVE the graph (owner): rendered into their own host at the TOP of #waGraphFull,
+  // above the picker + chart — so they read as top-level navigation, not part of the plot.
   const tabsHtml = graphDash.tabs
     .map((t) => `<button type="button" class="gdash-tab${t.id === graphDash.activeTabId ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>`)
     .join("");
+  const full = document.getElementById("waGraphFull");
+  let tabsHost = document.getElementById("gdashTabs");
+  if (!tabsHost && full) {
+    tabsHost = document.createElement("div");
+    tabsHost.id = "gdashTabs"; tabsHost.className = "gdash-tabs";
+    full.insertBefore(tabsHost, full.firstChild);
+  }
+  if (tabsHost) tabsHost.innerHTML = `${tabsHtml}<button type="button" class="gdash-tab gdash-tabadd" data-dashtabadd="1" aria-label="Add a tab" title="Add a tab">＋</button>`;
+  // Metrics + the rest of the Options menu are GLOBAL (shared) for now; per-bubble are the
+  // type, view, lifts and ×BW. S.* flags project the active bubble so the menu reads right.
+  S.waRepsVsWeight = bubble.type === "rvw";
+  S.waPerBodyweight = bubble.perBodyweight;
   const dots = tab.bubbles
     .map((_, i) => `<button type="button" class="gmini-dot${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="Bubble ${i + 1}"></button>`)
     .join("");
   const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
   const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
+  // The shared Options ▾ menu (metrics + aggregation/decay/projection…), scoped to this
+  // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
+  // per-bubble "type" pill owns that switch).
+  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true });
   box.innerHTML =
-    `<div class="gdash-tabs">${tabsHtml}<button type="button" class="gdash-tab gdash-tabadd" data-dashtabadd="1" aria-label="Add a tab" title="Add a tab">＋</button></div>` +
     `<div class="gdash-head">` +
       `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
       `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +
@@ -19143,7 +19163,8 @@ function renderGraphDashboard(): void {
       `<button type="button" class="gmini-nav" data-dashnav="-1" aria-label="Previous bubble">‹</button>` +
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-dashnav="1" aria-label="Next bubble">›</button>` +
-      `<button type="button" class="ms-more" data-dashadd="1" title="Add a graph bubble to this tab">＋ Bubble</button>` +
+      optionsFold +
+      `<button type="button" class="gmini-nav gdash-addbubble" data-dashadd="1" aria-label="Add a graph bubble to this tab" title="Add a graph bubble to this tab">＋</button>` +
     `</div>`;
   const stage = document.getElementById("gdashStage");
   if (stage) {

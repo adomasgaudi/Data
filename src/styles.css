@@ -1115,6 +1115,8 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 /* ── Custom graph dashboard (CHART-160) ──────────────────────────────────────
    A tab strip + a per-bubble control row + the bubble's chart + the reel foot. Compact,
    one horizontally-scrolling row each (#cram), reusing the carousel dots/nav for the reel. */
+/* Tab strip — its OWN host at the top of #waGraphFull, above the picker + chart. */
+#gdashTabs.gdash-tabs { margin: 0 0 0.4rem; }
 .gdash-tabs {
   display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
   overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.25rem; margin-bottom: 0.3rem;
@@ -1140,8 +1142,17 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .gdash-rm { color: var(--remove); background: var(--bg); border-color: var(--line); }
 .gdash-rm:hover { color: #fff; background: var(--remove); border-color: var(--remove); }
 .gdash-bw { flex: 0 0 auto; margin-left: auto; }
-.gdash-stage { min-height: 220px; position: relative; }
+/* STABLE height (owner): every bubble's chart draws at ONE constant plot height (300px, set
+   via buildBubbleInput → input.height) so switching bubbles/tabs doesn't resize the frame —
+   otherwise it feels like buttons snapping the view, not swiping a stable reel. min-height
+   reserves the space (incl. the empty-state) so the foot never jumps up. */
+.gdash-stage { min-height: 300px; position: relative; }
+.gdash-stage .wa-placeholder { padding-top: 5rem; text-align: center; }
 .gdash-foot { display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap; margin-top: 0.3rem; }
+/* The Options ▾ menu in the foot — compact, its long metric-summary readout hidden (#cram). */
+.gdash-foot .wa-graph-fold { flex: 0 0 auto; }
+.gdash-foot .wa-graph-fold-cur { display: none; }
+.gdash-addbubble { font-size: 1.2rem; }
 .athlete-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1rem; color: var(--text); font-size: var(--fs-base); font-weight: 600; }
 .athlete-profile:empty { display: none; }
 .profile-specs { color: var(--text); }

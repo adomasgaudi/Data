@@ -70,6 +70,10 @@ export interface AnalyticsGraphInput {
   /** Enabled metric ids (defaults to estimated 1RM when empty). */
   metrics: readonly string[];
   config: GraphConfig;
+  /** Fixed plot height in px (overrides the per-mode default), so a caller can keep one
+   * constant height across graph types — e.g. the dashboard reel, where a changing height
+   * makes switching bubbles feel like a snap rather than a swipe. */
+  height?: number;
   /** Optional inclusive ISO date bounds. */
   dateFrom?: string;
   dateTo?: string;
@@ -284,7 +288,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     const axis = singleGroup ? input.rvwAxis : undefined;
     const perBW = !!input.perBodyweight;
     const cfg: SvgChartConfig = {
-      series: rvw, xKind: "linear", height: 360, panMode: "xy", yBeginAtZero: true, leftMargin: 30,
+      series: rvw, xKind: "linear", height: input.height ?? 360, panMode: "xy", yBeginAtZero: true, leftMargin: 30,
       formatX: perBW ? (x) => x.toFixed(1) : (x) => `${Math.round(x)}`,
       formatTipX: perBW ? (x) => `${x.toFixed(2)}× BW` : (x) => `${Math.round(x)} kg`,
       xTitle: perBW ? "× bodyweight" : "weight (kg)", yTitle: "reps",
@@ -471,7 +475,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   const config = {
     series, xKind: "time" as const, compactable: true, noCompactToggle: true,
     interactive: input.interactive ?? true,
-    yBeginAtZero: true, rightBeginAtZero: true, height: 300, insideLabels: true,
+    yBeginAtZero: true, rightBeginAtZero: true, height: input.height ?? 300, insideLabels: true,
     // PB-8 (real root): the chart's update() MERGES this config over the previous one
     // (`{...cfg, ...next}`), so any optional key OMITTED when its feature is off keeps its
     // stale ON value. That's why kg→BW worked but BW→kg left the y-axis pinned to the BW
