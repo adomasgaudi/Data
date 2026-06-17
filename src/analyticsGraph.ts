@@ -402,14 +402,16 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       // Per-bodyweight view: divide the kg (left-axis) metrics by bodyweight so they
       // read as multiples of BW; the count metrics (right axis) are left alone. With
       // several athletes overlaid, each series uses its OWN athlete's bodyweight.
+      // "% of best" (pctBest) is ALREADY a relative fraction, not kg — never divide it.
+      const isFraction = m.id === "pctBest";
       const groupBw = g.user != null && input.bodyweightOf ? input.bodyweightOf(g.user) : input.bodyweight;
-      if (input.perBodyweight && m.axis !== "right") {
+      if (input.perBodyweight && m.axis !== "right" && !isFraction) {
         // Note the raw kg MAX (all left-axis series) before dividing, for the pin.
         for (const p of pts) for (const v of [p.y, p.lo, p.hi, ...(p.bands ?? [])]) {
           if (v != null && Number.isFinite(v) && v > kgMax) kgMax = v;
         }
       }
-      if (input.perBodyweight && groupBw && groupBw > 0 && m.axis !== "right") {
+      if (input.perBodyweight && groupBw && groupBw > 0 && m.axis !== "right" && !isFraction) {
         const bw = groupBw;
         const d = (v: number) => Math.round((v / bw) * 1000) / 1000;
         pts = pts.map((p) => ({

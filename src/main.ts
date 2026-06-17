@@ -847,6 +847,49 @@ function setRomDefault(exerciseName: string, value: number) {
   try { localStorage.setItem(ROM_DEFAULT_KEY, JSON.stringify(exerciseRomDefaults)); } catch { /* private mode */ }
 }
 
+// ---- Machine base weight: per-exercise, editable + saved ---------------------
+// Some machines carry a base resistance the dialed plate doesn't show — a leg
+// extension's lever/stack adds ~20 kg even at the lowest pin (owner). This per-
+// exercise "machine weight" (kg) is FOLDED INTO THE EFFECTIVE LOAD for strength /
+// 1RM (like the bodyweight share), so a set logged at 30 kg computes as 30 + base.
+// The DISPLAYED weight stays what you dialed (origWeight), and volume — which reads
+// the dialed/added weight — is unchanged. Editable on EVERY exercise in the Index;
+// 0 = a normal machine/free weight with no hidden base. Layered like the coeff/ROM:
+// a built-in default, the owner's per-lift edit wins.
+const MACHINE_WEIGHT_KEY = "colosseum.machineWeights.v1";
+const MACHINE_WEIGHT_DEFAULTS: Record<string, number> = { "Leg Extension": 20 };
+const machineWeightOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(MACHINE_WEIGHT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+/** The per-exercise machine base weight (kg) folded into the effective load — the
+ * owner's pin, else the built-in default, else 0. */
+function machineWeightFor(exerciseName: string): number {
+  if (Object.prototype.hasOwnProperty.call(machineWeightOverrides, exerciseName)) {
+    const v = machineWeightOverrides[exerciseName]!;
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  }
+  return MACHINE_WEIGHT_DEFAULTS[exerciseName] ?? 0;
+}
+/** Display prefix for a machine-weight lift: "base+" (e.g. "20+") so the shown weight reads
+ * "20+30" — the hidden machine base plus the dialed value (the only editable part). Empty
+ * when the lift has no machine base. */
+function machineWeightPrefix(exerciseName: string): string {
+  const mw = machineWeightFor(exerciseName);
+  return mw > 0 ? `${fmt(mw)}+` : "";
+}
+/** Set (or clear, with null/blank) a lift's machine base weight. Admin-only metadata. */
+function setMachineWeight(exerciseName: string, value: number | null) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
+  if (value === null || !Number.isFinite(value)) delete machineWeightOverrides[exerciseName];
+  else machineWeightOverrides[exerciseName] = Math.max(0, value);
+  try { localStorage.setItem(MACHINE_WEIGHT_KEY, JSON.stringify(machineWeightOverrides)); } catch { /* private mode */ }
+}
+
 
 // Same layering as the coefficient: profile.ts derives a default from the lift's
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
@@ -2501,16 +2544,23 @@ function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   // false so the per-set list always reflects real effort regardless of the graph.
   const viewAdded = viewAddedWeight(r.exerciseName, r.weight, logged);
   const bwMult = viewBwMult(r.exerciseName, r.weight, logged);
+  // Machine base weight (e.g. Leg Extension +20 kg): the machine adds a hidden base, so
+  // the TOTAL load (dialed + base) is what counts. Fold it into BOTH the effective load
+  // (1RM) and origWeight (so volume + every "added weight" read the total too). The set
+  // views still show the dialed value (raw r.weight) — prefixed "base+dialed" — and only
+  // that dialed part is editable; the base is per-exercise metadata (machineWeightFor).
+  const mw = machineWeightFor(r.exerciseName);
+  const effAdded = mw > 0 && viewAdded != null ? viewAdded + mw : viewAdded;
   if (coeff <= 0) {
-    const base = viewAdded === r.weight ? r : { ...r, weight: viewAdded, origWeight: viewAdded };
+    const base = mw <= 0 && viewAdded === r.weight ? r : { ...r, weight: effAdded, origWeight: effAdded };
     return applyMachineMode(base);
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
   // default only when the set didn't record one.
   const bw0 = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
   const bw = bw0 === null ? null : bw0 * bwMult;
-  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-  return applyMachineMode({ ...r, weight: effectiveLoad(viewAdded, bw, coeff), origWeight: viewAdded });
+  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = the total added.
+  return applyMachineMode({ ...r, weight: effectiveLoad(effAdded, bw, coeff), origWeight: effAdded });
 }
 
 // ---- Owner-editable combinable/comparable membership ------------------------
@@ -7484,6 +7534,9 @@ function setDisplay(raw: SetRecord): string {
   const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
+  // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
+  // you dialed (the editable part). Empty for normal lifts.
+  const mwp = machineWeightPrefix(s.exerciseName);
   // Quick-edit "Variant" mode (history ⚙ → Var): each set that HAS a variant — a
   // machine cable/gravity choice, a difficulty family, an incline level, or a note —
   // becomes a tappable chip that opens the floating variant editor for that one set,
@@ -7525,7 +7578,7 @@ function setDisplay(raw: SetRecord): string {
     const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
     const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
     const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`));
+    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -7535,7 +7588,7 @@ function setDisplay(raw: SetRecord): string {
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
     return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
   }
-  return finish(effWrap(`${chips}${wr(s.weight, s.reps)}${mach}`));
+  return finish(effWrap(`${chips}${mwp}${wr(s.weight, s.reps)}${mach}`));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -8348,8 +8401,11 @@ const SET_COL_METRICS: { id: string; label: string; name: string; title: string 
   { id: "prir", label: "pRIR", name: "Predicted RIR", title: "Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. Tap a number for the maths." },
   { id: "rir", label: "RIR", name: "Logged RIR", title: "Reps In Reserve — your logged how-many-left grade (low = near failure)." },
 ];
-const SET_COLS_KEY = "colosseum.setColumns.v1";
-const SET_COLS_DEFAULT = ["weight", "e1rm", "volume", "prir", "rir"];
+// v2: RM (1RM) LEADS — it's the leftmost column now (owner: continuity with the collapsed
+// view, where each line reads "1RM exercise …"). The key bumped from v1 so the new order
+// actually lands (column choices aren't precious — a one-time reset to this order is fine).
+const SET_COLS_KEY = "colosseum.setColumns.v2";
+const SET_COLS_DEFAULT = ["e1rm", "weight", "volume", "prir", "rir"];
 let setColumns: string[] = (() => {
   try {
     const v = JSON.parse(localStorage.getItem(SET_COLS_KEY) ?? "null");
@@ -8626,10 +8682,11 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const cellFor = (id: string): string => {
     switch (id) {
       // Always show the LOGGED dial value (s.weight); a machine set gets a "not real"
-      // mark because its real effort is ~half (shown in the expanded row).
+      // mark because its real effort is ~half (shown in the expanded row). A machine-base
+      // lift (e.g. Leg Extension) shows "base+dialed" via machineWeightPrefix.
       case "weight": return machineSet
-        ? `${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
-        : wr(s.weight, s.reps);
+        ? `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
+        : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`;
       case "e1rm": return e1rmCell;
       case "volume": return vol === null ? "—" : fmt(vol);
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
@@ -8657,10 +8714,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     predRir === null || !prirText
       ? ""
       : `<tr class="prir-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(prirText)}</td></tr>`;
-  // Edit row: tweak this set's weight / reps / bodyweight / scaling factor. RIR is
-  // the dropdown in the row itself. Bodyweight is just for this set (placeholder
-  // shows the default). Blank a field to clear that one edit.
-  const dfltBw = raw.bodyweight ?? athProfile(s.username)?.weight ?? null;
+  // Edit row: tweak this set's weight / reps / scaling factor. RIR is the dropdown in the
+  // row itself. Blank a field to clear that one edit. (The person's bodyweight is a profile
+  // value, edited in their stats — not a per-set field — so it's not here, per owner.)
   const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
     `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
@@ -8713,13 +8769,26 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       `<span class="set-edit-wreal"><input class="set-edit-input" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" />` +
       `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
     : efld("weight", "Weight (kg)", s.weight, 0.5);
+  // The variation block (owner: "it should also have the variants"): the current
+  // band/lean/support/incline chips PLUS the editable ×scale/variant control, so a set's
+  // variant is editable straight from this panel (the scaleTag opens the floating variant
+  // editor, the same one the row chip uses). Empty for a plain lift with no variant.
+  const variantsBlock = (variationChipsHtml(s).trim() || scaleTag.trim())
+    ? `<div class="set-edit-variants" aria-label="Variants">${variationChipsHtml(s)}${scaleTag}</div>`
+    : "";
+  // Floating popup (owner: "a popup menu, not physical"): the panel is a fixed-position card
+  // (positioned by JS near the tapped set, closed by an outside tap) so it OVERLAYS the
+  // history instead of pushing it down. It stays INSIDE the table so all the existing
+  // table-scoped edit wiring (inputs, toggles, delete) keeps working untouched.
+  // Bodyweight-of-the-person field removed per owner (it's a profile value, not a per-set one).
   const editRow =
-    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid">` +
+    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid set-edit-pop">` +
+    `<button type="button" class="set-edit-close" data-seteditclose title="Close">✕</button>` +
     weightField +
     efld("reps", "Reps", s.reps, 1) +
-    efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
+    variantsBlock +
     uniToggle +
     assistToggle +
     machineToggle +
@@ -9023,7 +9092,53 @@ function togglePrirFormula(target: HTMLElement): boolean {
 // COLLAPSE the panel mid-edit (the recurring rule-24 "tapping a setting closes the menu").
 // renderWorkoutsPage re-applies this after each rebuild, so the panel stays put.
 let openSetEditId: string | null = null;
+/** Position the floating set-edit card near its set-main row (fixed coords, flips above
+ * when it would run off the bottom — mirrors positionScaleEditor). The card stays inside
+ * the table DOM so all the existing edit wiring keeps working; only its rendering floats. */
+function positionSetEditPop(pop: HTMLElement, anchor: HTMLElement): void {
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth - 16, 360);
+  pop.style.width = `${w}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
+  const margin = 8;
+  const ph = pop.offsetHeight; // capped by max-height; content scrolls inside
+  let top = r.bottom + 6;
+  if (top + ph > window.innerHeight - margin) {
+    const above = r.top - 6 - ph;
+    top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - ph);
+  }
+  pop.style.top = `${top}px`;
+}
+/** Re-place every visible floating set-edit card next to its set-main row. */
+function positionSetEditPops(): void {
+  for (const pop of document.querySelectorAll<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-pop")) {
+    let anchor = pop.closest("tr")?.previousElementSibling as HTMLElement | null;
+    while (anchor && !anchor.classList.contains("set-main")) anchor = anchor.previousElementSibling as HTMLElement | null;
+    if (anchor) positionSetEditPop(pop, anchor);
+  }
+}
+/** Close the open set-edit card (hide every matching row, drop the outside listener). */
+function closeSetEdit(): void {
+  if (openSetEditId === null) return;
+  for (const editRow of document.querySelectorAll<HTMLElement>(`.set-edit-row[data-seteditid="${CSS.escape(openSetEditId)}"]`)) {
+    editRow.hidden = true;
+    let p = editRow.previousElementSibling;
+    while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
+    p?.classList.remove("edit-open");
+  }
+  openSetEditId = null;
+  document.removeEventListener("click", setEditOutside, true);
+}
+/** Outside-tap closes the floating card (owner). A tap on a set-main row is left to
+ * toggleSetEdit (which switches/closes), and taps inside the card or its sub-rows stay. */
+function setEditOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest(".set-edit-pop") || t.closest("tr.set-main") || t.closest(".set-note-row, .e1rm-formula-row, .prir-formula-row")) return;
+  if (t.closest("#scaleEditPop") || t.closest(".xdd-menu")) return; // the variant editor / RIR menu it spawns
+  closeSetEdit();
+}
 function toggleSetEdit(target: HTMLElement): boolean {
+  if (target.closest("[data-seteditclose]")) { closeSetEdit(); return true; } // the card's ✕
   const row = target.closest<HTMLElement>("tr.set-main");
   if (!row) return false;
   let sib = row.nextElementSibling;
@@ -9033,9 +9148,18 @@ function toggleSetEdit(target: HTMLElement): boolean {
   }
   if (sib?.classList.contains("set-edit-row")) {
     const willOpen = sib.hasAttribute("hidden"); // currently hidden → this tap opens it
+    const sid = (sib as HTMLElement).dataset.seteditid ?? null;
+    if (openSetEditId && openSetEditId !== sid) closeSetEdit(); // one card at a time (popup)
     sib.toggleAttribute("hidden");
     row.classList.toggle("edit-open");
-    openSetEditId = willOpen ? ((sib as HTMLElement).dataset.seteditid ?? null) : null;
+    openSetEditId = willOpen ? sid : null;
+    if (willOpen) {
+      const pop = sib.querySelector<HTMLElement>(".set-edit-pop");
+      if (pop) positionSetEditPop(pop, row);
+      setTimeout(() => document.addEventListener("click", setEditOutside, true), 0);
+    } else {
+      document.removeEventListener("click", setEditOutside, true);
+    }
   }
   return true;
 }
@@ -9059,6 +9183,7 @@ function reopenSetEdit(): void {
       while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
       p?.classList.add("edit-open");
     }
+    positionSetEditPops(); // the floating card re-anchors to its (rebuilt) row
   };
   reopen();
   requestAnimationFrame(reopen);
@@ -9079,7 +9204,7 @@ function resetSetEdit(target: HTMLElement): boolean {
  * Restorable in Settings → Data health. */
 function deleteSetById(id: string): void {
   setDeleted(id, true);
-  if (openSetEditId === id) openSetEditId = null; // its panel is gone — don't try to reopen
+  if (openSetEditId === id) { openSetEditId = null; document.removeEventListener("click", setEditOutside, true); } // its panel is gone
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
@@ -12803,6 +12928,13 @@ function exerciseInfoHtml(name: string): string {
     `<input class="ex-edit-rom" type="number" step="5" min="10" max="100" value="${romDefaultFor(name)}" data-editex="${escapeHtml(name)}" aria-label="Default range of motion percent for ${escapeHtml(name)}" />` +
     `<span class="ex-rom-unit">% of full ROM</span>` +
     `</span>`;
+  // Machine base weight (kg) — a hidden resistance the machine adds even at the lowest
+  // pin (e.g. Leg Extension ≈ 20). Folded into strength/1RM only; 0 = none. Blank to reset.
+  const mwInput =
+    `<span class="ex-mw-range">` +
+    `<input class="ex-edit-mw" type="number" step="1" min="0" max="200" value="${machineWeightFor(name) || ""}" placeholder="0" data-editex="${escapeHtml(name)}" aria-label="Machine base weight (kg) for ${escapeHtml(name)}" />` +
+    `<span class="ex-mw-unit">kg base</span>` +
+    `</span>`;
 
   // Code + Short name share one row (two compact columns) — they're the two tiny
   // name fields, so side-by-side reads tighter than two stacked rows.
@@ -12840,6 +12972,7 @@ function exerciseInfoHtml(name: string): string {
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
     item("Default ROM", romInput),
+    item("Machine weight", mwInput),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -15494,6 +15627,15 @@ async function init() {
     if (romEl?.dataset.editex) {
       const ex = romEl.dataset.editex;
       setRomDefault(ex, parseFloat(romEl.value));
+      scheduleRender(() => reopenIndexDetail(ex));
+      return;
+    }
+    // Machine base weight (kg) for this exercise — folds into strength/1RM. Blank = clear.
+    const mwEl = t.closest<HTMLInputElement>(".ex-edit-mw");
+    if (mwEl?.dataset.editex) {
+      const ex = mwEl.dataset.editex;
+      const txt = mwEl.value.trim();
+      setMachineWeight(ex, txt === "" ? null : parseFloat(txt));
       scheduleRender(() => reopenIndexDetail(ex));
       return;
     }
@@ -18772,7 +18914,6 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // "N exercises ▾" dropdown button that opens the whole clickable list (data-titlelist) —
   // each entry keeps the same Info / Combine / Compare / Remove popup as the inline chips.
   let bodyHtml = "";
-  let exlistBtn = "";
   if (remove) {
     const scope = remove; // narrowed to a non-null SelScope
     // Each name opens a small popup (Info / Combine / Compare / Remove) and is COLOURED by
@@ -18780,7 +18921,10 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     const liftChip = (n: string): string =>
       `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
     if (sel.length > TITLE_NAME_CAP) {
-      exlistBtn = `<button type="button" class="wa-title-exlist" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove">${sel.length} <span class="wa-exlist-lbl">exercises</span><span class="xdd-caret">▾</span></button>`;
+      // Owner: NOT a boxy "N exercises ▾" button — show the FIRST lift as a normal (subtle)
+      // title, with a small ▾ dropdown beside it that reveals the REST as titles too (not
+      // bordered buttons). The caret reuses the data-titlelist floating menu.
+      bodyHtml = `<span class="wa-tl-lead">${liftChip(sel[0]!)}<button type="button" class="wa-title-exmore" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove"><span class="xdd-caret">▾</span></button></span>`;
     } else {
       // ≤ cap → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
       // name in one column NEVER widens or heightens the other (owner: "two separate columns").
@@ -18811,7 +18955,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const seltitleAttrs = cols
     ? ` class="wa-seltitle wa-seltitle--cols"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${remove ? " has-pick" : ""}"><span${seltitleAttrs}>${exlistBtn || emptyCta || bodyHtml}</span>${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${remove ? " has-pick" : ""}"><span${seltitleAttrs}>${emptyCta || bodyHtml}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
@@ -19871,7 +20015,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const hasSetMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "range" || m.type === "scatter"); });
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "pctBest"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
   const openMetricGroups = new Set<string>();
@@ -20249,7 +20393,7 @@ const SETTING_INFO: Record<string, string> = {
   repsweight: "Weight × reps scatter — plot every set as weight (x) × reps (y) instead of the time graph. Best-fit — a straight line through each lift's points.",
   window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
   mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
-  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record.",
+  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
   mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
   allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
   assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",

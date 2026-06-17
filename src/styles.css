@@ -1621,6 +1621,26 @@ body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 /* The editable note spans the whole row and reads left-aligned like text. */
 .set-edit-f-note { flex: 1 1 100%; }
 .set-edit-f-note input { width: 100%; text-align: left; }
+/* Owner: the set editor FLOATS as a popup card (positioned by JS near the tapped set),
+   overlaying the history instead of pushing it down. position:fixed takes it out of the
+   table flow, so its host row collapses to nothing — no "physical" expansion. */
+.set-edit-pop {
+  position: fixed; z-index: 1100; max-width: 92vw; max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22); padding: 1.5rem 0.8rem 0.8rem; margin: 0;
+}
+.set-edit-close {
+  position: absolute; top: 4px; right: 4px;
+  min-width: var(--tap-min); min-height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem;
+}
+.set-edit-close:hover { color: var(--accent); }
+/* The host row holds only the fixed (out-of-flow) card now, so collapse its cell to
+   nothing — otherwise an empty striped row would peek out under the floating card. */
+tr.set-edit-row > td { padding: 0; border: 0; background: none; }
+/* The variants row (chips + editable ×scale/variant control) spans the card width. */
+.set-edit-variants { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 .set-edit-reset {
   align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
   background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
@@ -3467,6 +3487,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-rom-range { display: inline-flex; align-items: center; gap: 5px; }
 .ex-rom-range > input { width: 4rem; }
 .ex-rom-unit { font-size: 0.78rem; color: var(--muted); }
+.ex-mw-range { display: inline-flex; align-items: center; gap: 5px; }
+.ex-mw-range > input { width: 4rem; }
+.ex-mw-unit { font-size: 0.78rem; color: var(--muted); }
 /* World-record editor: per-sex row of compact bordered fields + the gold
    scaled-to-this-athlete calculation. Guess values show faint with an "≈est" tag. */
 .wr-editor .wr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; margin: 0.4rem 0; }
@@ -4331,25 +4354,28 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .wa-title-more { margin-left: 0.3em; font-size: 0.7em; font-weight: 600; color: var(--muted); }
 /* "N exercises ▾" — the title's collapsed dropdown trigger (owner: > 6 lifts collapse to a
    single label + dropdown rather than listing them; no count badge). Finger-sized pill. */
-.wa-title-exlist {
-  display: inline-flex; align-items: center; gap: 0.25em; min-height: var(--tap-min);
-  font: inherit; font-size: inherit; font-weight: 700; color: var(--text);
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-pill);
-  padding: 2px 10px; cursor: pointer;
+/* Owner: the >cap title is the FIRST lift as a normal subtle title + just this small caret
+   beside it (NOT a boxy "N exercises" button). The caret alone is the dropdown affordance. */
+.wa-title-exmore {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--tap-min); min-height: var(--tap-min);
+  background: none; border: none; padding: 0 2px; cursor: pointer; color: var(--muted);
 }
-.wa-title-exlist:hover { border-color: var(--accent); color: var(--accent); }
-.wa-title-exlist .wa-exlist-lbl { font-weight: 600; color: var(--muted); }
-.wa-title-exlist .xdd-caret { font-size: 0.6em; color: var(--muted); }
+.wa-title-exmore:hover { color: var(--accent); }
+.wa-title-exmore .xdd-caret { font-size: 0.7em; }
+.wa-tl-lead { display: inline-flex; align-items: center; gap: 0.1em; }
 /* The floating list it opens (body-appended, fixed + clampMenuIntoView): every picked lift
    as the SAME tap-to-act chip the title uses — so combine / compare / remove still work. */
 .title-exlist {
   position: fixed; z-index: 1000; max-width: min(92vw, 360px); max-height: 60vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); padding: 0.5rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); padding: 0.35rem;
 }
-.title-exlist-grid { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; }
-.title-exlist .wa-title-lift { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px; }
-.title-exlist .wa-title-lift:hover { border-color: var(--accent); }
+/* Owner: "reveals more TITLES, not buttons" — a vertical list of the SAME subtle title chips
+   (no border / box), each on its own line with enough padding to tap comfortably. */
+.title-exlist-grid { display: flex; flex-direction: column; gap: 0.05rem; }
+.title-exlist .wa-title-lift { background: none; border: none; border-radius: var(--r-xs); padding: 6px 8px; text-align: left; width: 100%; }
+.title-exlist .wa-title-lift:hover { background: var(--bg); color: var(--accent); }
 /* The "… +N" trailer is a button (tap to expand/collapse the title) — strip the
    native button chrome so it reads as inline text, but stays tappable. */
 button.wa-title-more { font-family: inherit; background: none; border: none; padding: 0; cursor: pointer; }

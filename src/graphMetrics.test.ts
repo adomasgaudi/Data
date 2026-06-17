@@ -12,10 +12,10 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 11 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(11);
+  it("registers all 12 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(12);
     for (const id of [
-      "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
+      "weightRange", "e1rm", "pctWR", "pctBest", "strength", "strengthDecay", "predicted",
       "volume", "volumeLoad", "reps", "sets", "frequency",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
@@ -36,6 +36,19 @@ describe("graph metric registry (TASK 26)", () => {
     expect(vol.map((p) => p.y)).toEqual([300, 450]); // 100×3, 90×5
     expect(graphMetric("reps")!.compute!(recs, DEFAULT_GRAPH_CONFIG).map((p) => p.y)).toEqual([3, 5]);
     expect(graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBe(2);
+  });
+
+  it("pctBest scales each set to a fraction of the best 1RM in view (peak = 1.0)", () => {
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 5 }),
+      rec({ date: "2024-02-01", weight: 100, origWeight: 100, reps: 5 }), // the strongest set
+    ];
+    const pts = graphMetric("pctBest")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(pts.length).toBe(2);
+    const peak = Math.max(...pts.map((p) => p.y!));
+    expect(peak).toBe(1); // the best set is 100%
+    expect(Math.min(...pts.map((p) => p.y!))).toBeCloseTo(0.5, 1); // half the load ≈ half
+    expect(graphMetric("pctBest")!.compute!([], DEFAULT_GRAPH_CONFIG)).toEqual([]); // empty-safe
   });
 
   it("volume uses ADDED (bar) weight, not the bodyweight-folded effective load", () => {

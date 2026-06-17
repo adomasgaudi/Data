@@ -69,6 +69,16 @@ describe("addedWeight1RM", () => {
     expect(addedWeight1RM(r, "epley")).toBeCloseTo(epley1RM(100, 5)!, 6);
   });
 
+  it("computes a machine-base set's 1RM on the full total load (base folded in)", () => {
+    // Leg Extension dialed at 30 kg × 10 with a 20 kg machine base → effective load 50,
+    // origWeight 50 (the TOTAL is what counts), so the 1RM is the full epley1RM(50, 10) —
+    // higher than the dialed-only 30. The "20+30" breakdown is display-only; calcs use 50.
+    const machine = rec({ weight: 50, origWeight: 50, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")).toBeCloseTo(epley1RM(50, 10)!, 6);
+    const dialedOnly = rec({ weight: 30, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")!).toBeGreaterThan(addedWeight1RM(dialedOnly, "epley")!);
+  });
+
   it("peels the bodyweight share back off for a bodyweight lift", () => {
     // Squat: effective load 200 (= 60 bodyweight share + 140 bar), 3 reps.
     // effective 1RM = 200 × (1 + 3/30) = 220; added-weight 1RM = 220 − 60 = 160.

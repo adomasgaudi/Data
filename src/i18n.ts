@@ -347,6 +347,8 @@ const LT: Record<string, string> = {
   "support": "atrama",
   "Default ROM": "Numatyta amplitudė",
   "% of full ROM": "% nuo pilnos amplitudės",
+  "Machine weight": "Mašinos svoris",
+  "kg base": "kg bazė",
   "Range of motion": "Judesio amplitudė",
   "backrest": "nugaros atrama",
   "back rest": "nugaros atrama",
