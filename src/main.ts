@@ -3519,7 +3519,7 @@ let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
 let cardOrm: number | null = null;
 /** Which sub-tab is active in the exercise info card — "curve" (default, the Nuzzo
  *  fit graph + training brief) or "volume" (the 3D rotatable volume "city"). */
-let exInfoTab: "curve" | "volume" = "curve";
+let exInfoTab: "curve" | "volume" | "map" = "curve";
 /** Camera angles (radians) for the rotatable 3D Volume chart — yaw spins around the
  *  vertical axis, pitch tilts the view down from above. Persist across re-renders so a
  *  re-paint keeps the angle the owner dragged to. */
@@ -11772,15 +11772,140 @@ function cardVolDistHtml(name: string): string {
     `</div>`;
 }
 
-/** Wire pointer-drag rotation onto the mounted 3D Volume SVG. Re-rendered in place
- *  (innerHTML swap) on a coalesced rAF so dragging stays snappy (rule 17). */
-function mountVolChart(name: string): void {
-  const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-vol3d]");
-  if (!svg) return;
-  const d = cardVolDistData(name);
-  if (!d) return;
+// ── Sets-map "table" ─────────────────────────────────────────────────────────
+// The Curve scatter (weight × reps) laid FLAT as a map on a table, with each point
+// raised by how many sets were logged there over time — a 3D terrain of green pins.
+
+interface SetsMap {
+  pts: { w: number; reps: number; count: number }[];
+  loW: number; hiW: number; maxReps: number; maxCount: number;
+}
+
+/** Count a lift's sets per (weight-bin, reps) cell — the height of each map pin. */
+function cardSetsMapData(name: string): SetsMap | null {
+  const sets = cardNuzzoRealSets(name);
+  if (sets.length === 0) return null;
+  const m = new Map<string, { w: number; reps: number; count: number }>();
+  let loW = Infinity, hiW = -Infinity, maxReps = 1;
+  for (const s of sets) {
+    const w = Math.round(s.added / 5) * 5; // 5 kg bins, like the city's X
+    loW = Math.min(loW, w); hiW = Math.max(hiW, w);
+    maxReps = Math.max(maxReps, s.reps);
+    const k = `${w}|${s.reps}`;
+    const e = m.get(k) ?? { w, reps: s.reps, count: 0 };
+    e.count++; m.set(k, e);
+  }
+  if (hiW === loW) hiW = loW + 5;
+  const pts = [...m.values()];
+  const maxCount = Math.max(...pts.map(p => p.count));
+  return { pts, loW, hiW, maxReps, maxCount };
+}
+
+/** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
+ *  green pin standing at each logged point, its height = #sets done there over time. */
+function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
+  const svgW = 400, svgH = 240, margin = 22;
+  const Wd = 6, Dp = 5, maxBarH = 3.2;           // table width (weight), depth (reps), max pin height
+  const cy0 = -maxBarH / 2;                       // table sits at the bottom
+
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+  const rot = (x: number, y: number, z: number) => {
+    const x1 = x * cosY + z * sinY;
+    const z1 = -x * sinY + z * cosY;
+    const y2 = y * cosP - z1 * sinP;
+    const z2 = y * sinP + z1 * cosP;
+    return { X: x1, Y: y2, Z: z2 };
+  };
+  // World mappers (centred on the origin).
+  const mapX = (w: number) => ((w - d.loW) / (d.hiW - d.loW)) * Wd - Wd / 2;
+  const mapZ = (r: number) => (r / d.maxReps) * Dp - Dp / 2;
+  const mapH = (c: number) => (c / d.maxCount) * maxBarH;
+
+  type Pin = { bx: number; by: number; tx: number; ty: number; depth: number; count: number; w: number; reps: number };
+  const pins: Pin[] = [];
+  for (const p of d.pts) {
+    const x = mapX(p.w), z = mapZ(p.reps), h = mapH(p.count);
+    const b = rot(x, cy0, z), t = rot(x, cy0 + h, z);
+    pins.push({ bx: b.X, by: b.Y, tx: t.X, ty: t.Y, depth: b.Z, count: p.count, w: p.w, reps: p.reps });
+  }
+
+  // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
+  const gx0 = -Wd / 2, gx1 = Wd / 2, gz0 = -Dp / 2, gz1 = Dp / 2;
+  const grid: { ax: number; ay: number; bx: number; by: number }[] = [];
+  for (let i = 0; i <= 4; i++) {
+    const x = gx0 + (gx1 - gx0) * (i / 4);
+    const a = rot(x, cy0, gz0), b = rot(x, cy0, gz1);
+    grid.push({ ax: a.X, ay: a.Y, bx: b.X, by: b.Y });
+  }
+  for (let i = 0; i <= 4; i++) {
+    const z = gz0 + (gz1 - gz0) * (i / 4);
+    const a = rot(gx0, cy0, z), b = rot(gx1, cy0, z);
+    grid.push({ ax: a.X, ay: a.Y, bx: b.X, by: b.Y });
+  }
+
+  // Axis anchors.
+  const axO = rot(gx0, cy0, gz0);
+  const axW = rot(gx1, cy0, gz0);
+  const axR = rot(gx0, cy0, gz1);
+  const axS = rot(gx0, cy0 + maxBarH, gz0);
+
+  // Fit over pins (base+top), grid, axes.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const see = (X: number, Y: number) => { if (X < minX) minX = X; if (X > maxX) maxX = X; if (Y < minY) minY = Y; if (Y > maxY) maxY = Y; };
+  for (const p of pins) { see(p.bx, p.by); see(p.tx, p.ty); }
+  for (const g of grid) { see(g.ax, g.ay); see(g.bx, g.by); }
+  for (const q of [axO, axW, axR, axS]) see(q.X, q.Y);
+  const spanX = Math.max(0.001, maxX - minX), spanY = Math.max(0.001, maxY - minY);
+  const scale = Math.min((svgW - 2 * margin) / spanX, (svgH - 2 * margin) / spanY);
+  const offX = (svgW - spanX * scale) / 2 - minX * scale;
+  const offY = (svgH - spanY * scale) / 2 + maxY * scale;
+  const sx = (X: number) => X * scale + offX;
+  const sy = (Y: number) => -Y * scale + offY;
+
+  let out = "";
+  // Table grid first (under everything).
+  for (const g of grid)
+    out += `<line x1="${sx(g.ax).toFixed(1)}" y1="${sy(g.ay).toFixed(1)}" x2="${sx(g.bx).toFixed(1)}" y2="${sy(g.by).toFixed(1)}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
+
+  // Pins far→near so nearer ones overlap farther.
+  pins.sort((a, b) => a.depth - b.depth);
+  const GREEN = "#2f8f88"; // the "Your lifts" teal
+  for (const p of pins) {
+    const r = 2.5 + 2.5 * (p.count / d.maxCount); // taller = bigger dot too
+    out += `<line x1="${sx(p.bx).toFixed(1)}" y1="${sy(p.by).toFixed(1)}" x2="${sx(p.tx).toFixed(1)}" y2="${sy(p.ty).toFixed(1)}" stroke="${GREEN}" stroke-width="1.6" opacity="0.55"/>`;
+    out += `<circle cx="${sx(p.tx).toFixed(1)}" cy="${sy(p.ty).toFixed(1)}" r="${r.toFixed(1)}" fill="${GREEN}"><title>${p.w}kg · ${p.reps} reps · ${p.count} set${p.count !== 1 ? "s" : ""}</title></circle>`;
+  }
+
+  // Axis lines + labels.
+  const axLine = (to: { X: number; Y: number }) => `<line x1="${sx(axO.X).toFixed(1)}" y1="${sy(axO.Y).toFixed(1)}" x2="${sx(to.X).toFixed(1)}" y2="${sy(to.Y).toFixed(1)}" stroke="var(--muted)" stroke-width="1" opacity="0.7"/>`;
+  const lbl = (a: { X: number; Y: number }, dx: number, dy: number, text: string) =>
+    `<text x="${(sx(a.X) + dx).toFixed(1)}" y="${(sy(a.Y) + dy).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#46647f" paint-order="stroke" stroke="#fff" stroke-width="2.5" stroke-linejoin="round">${text}</text>`;
+  out += axLine(axW) + axLine(axR) + axLine(axS);
+  out += lbl(axW, 0, 13, `${d.hiW}kg`);
+  out += lbl(axO, 0, 13, `${d.loW}kg`);
+  out += lbl(axR, 0, 13, `${d.maxReps} reps`);
+  out += lbl(axS, 0, -5, `${d.maxCount} sets`);
+  return out;
+}
+
+/** Sets-map tab body. */
+function cardSetsMapHtml(name: string): string {
+  const d = cardSetsMapData(name);
+  if (!d) return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
+  return `<div class="lt-vol-wrap">` +
+    `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
+    renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
+    `</svg>` +
+    `<div class="lt-vol-note muted">Drag to rotate · the Curve laid flat · pin height = sets done there over time</div>` +
+    `</div>`;
+}
+
+/** Wire pointer-drag rotation onto a mounted 3D SVG. Re-rendered in place (innerHTML
+ *  swap) on a coalesced rAF so dragging stays snappy (rule 17). Shared by both 3D tabs. */
+function mount3dDrag(svg: SVGSVGElement, render: () => string): void {
   let dragging = false, lastX = 0, lastY = 0, raf = 0;
-  const redraw = () => { raf = 0; svg.innerHTML = renderVol3d(d, vol3dYaw, vol3dPitch); };
+  const redraw = () => { raf = 0; svg.innerHTML = render(); };
   svg.addEventListener("pointerdown", (e) => {
     dragging = true; lastX = e.clientX; lastY = e.clientY;
     try { svg.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -11802,16 +11927,30 @@ function mountVolChart(name: string): void {
   svg.addEventListener("pointercancel", end);
 }
 
+function mountVolChart(name: string): void {
+  const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-vol3d]");
+  const d = cardVolDistData(name);
+  if (svg && d) mount3dDrag(svg, () => renderVol3d(d, vol3dYaw, vol3dPitch));
+}
+
+function mountSetsMap(name: string): void {
+  const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-map3d]");
+  const d = cardSetsMapData(name);
+  if (svg && d) mount3dDrag(svg, () => renderSetsMap3d(d, vol3dYaw, vol3dPitch));
+}
+
 /** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
  *  card (re)render funnels through, so the embedded svgChart is never left un-mounted. */
 function paintExInfo(name: string): void {
-  const tabs = `<div class="lt-tabs">` +
-    `<button class="lt-tab${exInfoTab === "curve" ? " is-on" : ""}" data-exitab="curve">Curve</button>` +
-    `<button class="lt-tab${exInfoTab === "volume" ? " is-on" : ""}" data-exitab="volume">Volume</button>` +
-    `</div>`;
+  const tab = (id: string, label: string) =>
+    `<button class="lt-tab${exInfoTab === id ? " is-on" : ""}" data-exitab="${id}">${label}</button>`;
+  const tabs = `<div class="lt-tabs">${tab("curve", "Curve")}${tab("volume", "Volume")}${tab("map", "Map")}</div>`;
   if (exInfoTab === "volume") {
     els.exInfoBody.innerHTML = tabs + cardVolDistHtml(name);
     mountVolChart(name);
+  } else if (exInfoTab === "map") {
+    els.exInfoBody.innerHTML = tabs + cardSetsMapHtml(name);
+    mountSetsMap(name);
   } else {
     els.exInfoBody.innerHTML = tabs + exerciseInfoHtml(name);
     mountExInfoCharts();
@@ -13864,7 +14003,7 @@ async function init() {
     if (tabBtn?.dataset.exitab) {
       e.preventDefault(); e.stopPropagation();
       const tab = tabBtn.dataset.exitab;
-      if ((tab === "curve" || tab === "volume") && tab !== exInfoTab) {
+      if ((tab === "curve" || tab === "volume" || tab === "map") && tab !== exInfoTab) {
         exInfoTab = tab;
         if (currentExInfo) paintExInfo(currentExInfo);
       }
