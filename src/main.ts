@@ -12079,8 +12079,9 @@ function cardSetsMapData(name: string): SetsMap | null {
 /** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
  *  green pin standing at each logged point, its height = #sets done there over time. */
 function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
-  const svgW = 400, svgH = 240, margin = 22;
+  const svgW = 400, svgH = 330, margin = 18;     // taller 3D space (owner) so the city has headroom
   const Wd = 6, Dp = 5, maxBarH = 3.2;           // table width (weight), depth (reps), max pin height
+  const dotRWorld = 0.34;                         // sphere head radius (world units) — the height marker
   const cy0 = -maxBarH / 2;                       // table sits at the bottom
 
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
@@ -12102,10 +12103,10 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   type Face = { c: { X: number; Y: number; Z: number }[]; z: number; fill: string };
   type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string };
   const GREEN = "#2f8f88", GREEN_D = "#226b66"; // teal top, darker sides
-  const unitW = d.hiW > d.loW ? (d.binW / (d.hiW - d.loW)) * Wd : Wd;
-  const unitR = d.maxReps > 0 ? (d.binR / d.maxReps) * Dp : Dp;
-  const hwx = Math.max(0.09, Math.min(Wd * 0.46, unitW * 0.42));
-  const hwz = Math.max(0.09, Math.min(Dp * 0.46, unitR * 0.42));
+  // THIN sticks topped by a sphere: fat boxes hid each other's heights when the grid is
+  // densely packed, so a slim stem + a ball at the top makes each height easy to read
+  // (owner: "make them thinner with sphere at the top").
+  const hwx = 0.11, hwz = 0.11;
   const bars: Bar[] = [];
   for (const p of d.pts) {
     const cx = mapX(p.w), cz = mapZ(p.reps), topY = cy0 + mapH(p.count);
@@ -12139,16 +12140,33 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const axR = rot(gx0, cy0, gz1);
   const axS = rot(gx0, cy0 + maxBarH, gz0);
 
-  // Fit over pins (base+top), grid, axes.
+  // Live bounds — used only to CENTRE the city (so it stays put as you spin).
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const see = (X: number, Y: number) => { if (X < minX) minX = X; if (X > maxX) maxX = X; if (Y < minY) minY = Y; if (Y > maxY) maxY = Y; };
   for (const bar of bars) for (const c of bar.corners) see(c.X, c.Y);
   for (const g of grid) { see(g.ax, g.ay); see(g.bx, g.by); }
   for (const q of [axO, axW, axR, axS]) see(q.X, q.Y);
-  const spanX = Math.max(0.001, maxX - minX), spanY = Math.max(0.001, maxY - minY);
-  const scale = Math.min((svgW - 2 * margin) / spanX, (svgH - 2 * margin) / spanY);
-  const offX = (svgW - spanX * scale) / 2 - minX * scale;
-  const offY = (svgH - spanY * scale) / 2 + maxY * scale;
+  const ctrX = (minX + maxX) / 2, ctrY = (minY + maxY) / 2;
+  // FROZEN scale: fit the full world box at the DEFAULT camera angle, then keep that zoom
+  // CONSTANT at every rotation — the old per-frame fit re-measured the live silhouette, so
+  // tilting blew the span up and shrank everything (owner: "when I rotate it becomes very
+  // zoomed out"). Since the data always spans the whole box (maxCount→maxBarH, loW..hiW,
+  // 0..maxReps), this reference fit equals the nice default view and never zooms out.
+  const REF_Y = -0.62, REF_P = 0.52;
+  const rcY = Math.cos(REF_Y), rsY = Math.sin(REF_Y), rcP = Math.cos(REF_P), rsP = Math.sin(REF_P);
+  const refProj = (x: number, y: number, z: number) => {
+    const x1 = x * rcY + z * rsY, z1 = -x * rsY + z * rcY;
+    return { X: x1, Y: y * rcP - z1 * rsP };
+  };
+  let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMaxY = -Infinity;
+  for (const bx of [-Wd / 2, Wd / 2]) for (const by of [cy0, cy0 + maxBarH]) for (const bz of [-Dp / 2, Dp / 2]) {
+    const q = refProj(bx, by, bz);
+    if (q.X < rMinX) rMinX = q.X; if (q.X > rMaxX) rMaxX = q.X; if (q.Y < rMinY) rMinY = q.Y; if (q.Y > rMaxY) rMaxY = q.Y;
+  }
+  const refSpanX = Math.max(0.001, rMaxX - rMinX), refSpanY = Math.max(0.001, rMaxY - rMinY);
+  const scale = Math.min((svgW - 2 * margin) / refSpanX, (svgH - 2 * margin) / refSpanY);
+  const offX = svgW / 2 - ctrX * scale;
+  const offY = svgH / 2 + ctrY * scale;
   const sx = (X: number) => X * scale + offX;
   const sy = (Y: number) => -Y * scale + offY;
 
@@ -12165,8 +12183,14 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
       const poly = f.c.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
       out += `<polygon points="${poly}" fill="${f.fill}" stroke="${GREEN_D}" stroke-width="0.5" stroke-linejoin="round"/>`;
     }
+    // Sphere HEAD atop the stick — the height marker. A filled teal ball (darker rim) + a
+    // small offset highlight so it reads as a 3D sphere, not a flat disc; a transparent
+    // hit-circle carries the hover tooltip.
     const tc = bar.faces[bar.faces.length - 1]!.c;
-    out += `<circle cx="${sx((tc[0]!.X + tc[2]!.X) / 2).toFixed(1)}" cy="${sy((tc[0]!.Y + tc[2]!.Y) / 2).toFixed(1)}" r="4" fill="transparent"><title>${bar.tip}</title></circle>`;
+    const hcx = sx((tc[0]!.X + tc[2]!.X) / 2), hcy = sy((tc[0]!.Y + tc[2]!.Y) / 2), hr = dotRWorld * scale;
+    out += `<circle cx="${hcx.toFixed(1)}" cy="${hcy.toFixed(1)}" r="${hr.toFixed(1)}" fill="${GREEN}" stroke="${GREEN_D}" stroke-width="0.6"/>`;
+    out += `<circle cx="${(hcx - hr * 0.3).toFixed(1)}" cy="${(hcy - hr * 0.34).toFixed(1)}" r="${(hr * 0.32).toFixed(1)}" fill="#ffffff" opacity="0.4"/>`;
+    out += `<circle cx="${hcx.toFixed(1)}" cy="${hcy.toFixed(1)}" r="${Math.max(6, hr).toFixed(1)}" fill="transparent"><title>${bar.tip}</title></circle>`;
   }
 
   // Axis lines + labels.
@@ -12201,7 +12225,7 @@ function cardSetsMapHtml(name: string): string {
   const tall = vol3dHeight === "reps" ? "total reps" : "sets";
   const range = vol3dRange === "all" ? "over all time" : ({ "1w": "in the last week", "2w": "in the last 2 weeks", "1mo": "in the last month", "3mo": "in the last 3 months", "6mo": "in the last 6 months", "12mo": "in the last 12 months", all: "over all time" } as Record<Vol3dRange,string>)[vol3dRange];
   return `<div class="lt-vol-wrap">` + ctrls +
-    `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
+    `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 330" xmlns="http://www.w3.org/2000/svg">` +
     renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
     `</svg>` +
     `<div class="lt-vol-note muted">Drag to rotate · floor = weight × rep number · bar height = ${tall} that reached that rep, ${range} (so rep 1 is tallest)</div>` +
