@@ -8685,22 +8685,24 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const assistTag = machineSet
     ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. The list shows the LOGGED dial value (your real effort is about half); expand the set to see both. The graph's Assist option doesn't change this list.">machine</span>`
     : "";
-  // The whole set row is the edit handle now — tap anywhere on it (except the
-  // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
-  // this set's edit panel. No separate ✎ pencil button.
-  // The leading cell always carries the set's identity prefix (info button, variation /
-  // scale / machine chips), whatever metric column 0 is set to show.
-  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${romTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
+  // The whole set row is the edit handle now — tap anywhere on it (except the inner 1RM /
+  // pRIR / note / RIR controls) to open the edit panel. Owner layout: the 1RM stands ALONE
+  // in its (left) column; the tags + multipliers sit NEXT TO THE REP COUNT (the weight cell);
+  // the descriptive variation info goes in the Vol column (falling back to volume); the ⓘ
+  // info button is gone (open a lift from its name header instead).
+  const weightChips = `${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
+  // Variation INFO for the Vol cell: technique level (e.g. "Sq 3") · ROM · the note. Shown
+  // when present, else the volume number, else "—".
+  const varInfo = `${lvlTag}${romTag}${note ? `<span class="set-varnote">${escapeHtml(note)}</span>` : ""}`.trim();
   const cellFor = (id: string): string => {
     switch (id) {
-      // Always show the LOGGED dial value (s.weight); a machine set gets a "not real"
-      // mark because its real effort is ~half (shown in the expanded row). A machine-base
-      // lift (e.g. Leg Extension) shows "base+dialed" via machineWeightPrefix.
-      case "weight": return machineSet
+      // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
+      // reps; a machine set gets a "not real" mark; a machine-base lift shows "base+dialed".
+      case "weight": return (machineSet
         ? `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
-        : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`;
-      case "e1rm": return e1rmCell;
-      case "volume": return vol === null ? "—" : fmt(vol);
+        : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`) + (weightChips ? `<span class="set-wtags">${weightChips}</span>` : "");
+      case "e1rm": return e1rmCell; // the 1RM stands alone
+      case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
       case "prir": return prirCell;
       case "rir": return rpeCell;
@@ -8708,16 +8710,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     }
   };
   const tds = setColumns
-    .map((id, i) => `<td class="num${id === "rir" ? " rpe-cell" : ""}${i === 0 ? " wcell" : ""}">${i === 0 ? prefix : ""}${cellFor(id)}</td>`)
+    .map((id) => `<td class="num${id === "rir" ? " rpe-cell" : ""}${id === "weight" ? " wcell" : ""}${id === "volume" ? " volcell" : ""}">${cellFor(id)}</td>`)
     .join("");
   const main =
     `<tr class="set-main${effClass}${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
     `title="Tap to edit this set (weight, reps, bodyweight, scale)${effTitle}">${tds}</tr>`;
-  // Show the WHOLE note on its own line under the set (no truncation) — in the
-  // expanded set views readability beats compactness.
-  const noteRow = note
-    ? `<tr class="set-note-row"><td colspan="5" class="muted">${escapeHtml(note)}</td></tr>`
-    : "";
+  // The note now rides in the Vol column (varInfo) — no separate full-width note row (owner).
+  const noteRow = "";
   const formulaRow =
     e1rm === null
       ? ""

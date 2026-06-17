@@ -2322,6 +2322,12 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: var(--r-xs); padding: 0 4px; line-height: 1.5; }
 .wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
 .wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }
+/* Owner sets-table layout: the tags + multipliers sit NEXT TO the rep count (weight cell);
+   the 1RM stands alone in its column; the descriptive variation info rides in the Vol cell
+   (falling back to the volume number). */
+.set-wtags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-left: 5px; vertical-align: middle; }
+.num.volcell { white-space: normal; }
+.num.volcell .set-varnote { display: inline-block; color: var(--muted); font-size: 0.82em; }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
