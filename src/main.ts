@@ -19121,8 +19121,6 @@ let dashEditTab: string | null = null; // the tab whose name is being inline-edi
 // title toolbar or picker changed waGraphSel → write picker→bubble). Without this the render
 // kept mirroring the bubble back over the toolbar's edit, so changing the exercise never stuck.
 let dashLoadedBubbleId: string | null = null;
-let dashTabPressTimer: number | null = null;   // long-press timer for the tab menu
-let dashTabSuppressClick = false;               // swallow the release-click after a long-press
 /** The bubble currently showing in the reel (active tab, clamped index). */
 function currentBubble(): GraphBubble {
   const t = activeTab(graphDash);
@@ -19561,16 +19559,19 @@ function renderGraphDashboard(): void {
     persistDash();
     bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
   }
-  // TABS live ABOVE the graph (owner): a clean strip of just the tab NAMES — no ✎/✕/＋ icons.
-  // Tap a tab to switch; LONG-PRESS (or right-click) a tab opens a small menu: Add / Rename /
-  // Delete. The active tab being renamed turns into an inline input.
+  // TABS live ABOVE the graph (owner): tap a tab NAME to switch; tap its ⋯ button to open the
+  // options menu (Duplicate / Rename / Add / Delete). NO long-press — it was unreliable on
+  // device and interfered with tapping (PB-38). The active tab being renamed turns into an input.
   const tabsHtml = graphDash.tabs
     .map((t) => {
       const on = t.id === graphDash.activeTabId;
       if (on && dashEditTab === t.id) {
         return `<input class="gdash-tab gdash-tabedit" data-dashtabname="${t.id}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
       }
-      return `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)} — long-press for options">${escapeHtml(t.name)}</button>`;
+      return `<span class="gdash-tab-wrap${on ? " is-on" : ""}">` +
+        `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>` +
+        `<button type="button" class="gdash-tab-more" data-tabmenuopen="${t.id}" aria-label="${escapeHtml(t.name)} options" title="Tab options — duplicate, rename, add, delete">⋯</button>` +
+      `</span>`;
     })
     .join("");
   const full = document.getElementById("waGraphFull");
@@ -20944,7 +20945,14 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // ── Custom graph DASHBOARD interactions (CHART-160) ─────────────────────────
-    // Tab long-press menu actions: Add tab / Rename / Delete.
+    // ⋯ button on a tab → toggle its options menu (explicit tap, no long-press — PB-38).
+    const tabMenuOpen = t.closest<HTMLElement>("[data-tabmenuopen]");
+    if (tabMenuOpen?.dataset.tabmenuopen) {
+      if (document.getElementById("dashTabMenu")) closeDashTabMenu();
+      else openDashTabMenu(tabMenuOpen, tabMenuOpen.dataset.tabmenuopen);
+      return;
+    }
+    // Tab menu actions: Duplicate / Rename / Add / Delete.
     const tabMenu = t.closest<HTMLElement>("[data-tabmenu]");
     if (tabMenu?.dataset.tabmenu) {
       const act = tabMenu.dataset.tabmenu, tid = tabMenu.dataset.tab;
@@ -20955,8 +20963,7 @@ function setupWorkoutAnalysis(): void {
       else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
       return;
     }
-    // Switch to a tab (resets the reel to its first bubble). Long-press opened the menu instead
-    // → the capture listener swallows that release-click, so this only fires on a real tap.
+    // Switch to a tab (resets the reel to its first bubble).
     const dashTab = t.closest<HTMLElement>("[data-dashtab]");
     if (dashTab?.dataset.dashtab) {
       dashEditTab = null;
@@ -21144,45 +21151,12 @@ function setupWorkoutAnalysis(): void {
     graphDash = renameTab(graphDash, inp.dataset.dashtabname, inp.value.trim() || "Tab");
     dashEditTab = null; persistDash(); refreshDash();
   });
-  // Long-press (or right-click) a dashboard tab → its options menu (Add / Rename / Delete).
-  const cancelTabPress = () => { if (dashTabPressTimer) { clearTimeout(dashTabPressTimer); dashTabPressTimer = null; } };
-  document.addEventListener("touchstart", (e) => {
-    // PB-38: a FRESH touch ends the prior long-press's "swallow next click" window. Mobile often
-    // fires NO release-click after a long-press, so the flag would stay stuck true and swallow
-    // the FIRST menu-item tap ("tab rename/duplicate/add don't work"). Clearing it here means a
-    // separate tap (the menu item) always lands; only the immediate release-click is swallowed.
-    dashTabSuppressClick = false;
-    const tabEl = (e.target as HTMLElement).closest<HTMLElement>("[data-dashtab]");
-    if (!tabEl?.dataset.dashtab) return;
-    const id = tabEl.dataset.dashtab;
-    cancelTabPress();
-    dashTabPressTimer = window.setTimeout(() => {
-      dashTabPressTimer = null;
-      dashTabSuppressClick = true; // the finger's still down; swallow the release-click
-      window.setTimeout(() => { dashTabSuppressClick = false; }, 600); // fallback: never stay stuck
-      openDashTabMenu(tabEl, id);
-    }, 450);
-  }, { passive: true });
-  document.addEventListener("touchend", cancelTabPress);
-  document.addEventListener("touchmove", cancelTabPress);
-  document.addEventListener("contextmenu", (e) => {
-    const tabEl = (e.target as HTMLElement).closest<HTMLElement>("[data-dashtab]");
-    if (tabEl?.dataset.dashtab) { e.preventDefault(); openDashTabMenu(tabEl, tabEl.dataset.dashtab); }
-  });
-  // Capture-phase: swallow the post-long-press release-click (so it neither switches the tab
-  // nor closes the just-opened menu); otherwise close either dash menu on a click outside it.
+  // Close the tab options menu on any click outside it OR its ⋯ opener (PB-38: the menu now
+  // opens via an explicit ⋯ tap, so there's no long-press / suppress-flag fragility left).
   document.addEventListener("click", (e) => {
     const tgt = e.target as Element | null;
-    // PB-38 recurrence 2 (ROOT): a click INSIDE the menu is ALWAYS a menu action — never let
-    // the suppress flag swallow it. On mobile the menu opens under the finger, so the release
-    // (or a quick tap) lands on a menu item while dashTabSuppressClick is still true (a
-    // continuous press fires no fresh touchstart to reset it) — the old code stopPropagation'd
-    // that click in capture phase, so the action never ran. Bailing here lets the delegated
-    // handler run the action regardless of the flag.
-    if (tgt?.closest("#dashTabMenu")) return;
-    if (dashTabSuppressClick) { dashTabSuppressClick = false; e.stopPropagation(); e.preventDefault(); return; }
-    if (document.getElementById("dashTabMenu")) closeDashTabMenu();
-  }, true);
+    if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu, [data-tabmenuopen]")) closeDashTabMenu();
+  });
 }
 
 /** Validate the create form and store a new user exercise def (dissolved /

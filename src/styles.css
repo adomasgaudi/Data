@@ -1124,6 +1124,12 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
   overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.25rem; margin-bottom: 0.3rem;
 }
+/* A tab = its name button + a ⋯ options button, joined into one pill. */
+.gdash-tab-wrap {
+  flex: 0 0 auto; display: inline-flex; align-items: stretch; border: 1px solid var(--line);
+  border-radius: var(--r-pill); overflow: hidden; background: var(--bg);
+}
+.gdash-tab-wrap.is-on { border-color: var(--accent); background: var(--accent); }
 .gdash-tab {
   flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 10px; cursor: pointer;
   font-size: 0.78rem; font-weight: 700; white-space: nowrap;
@@ -1131,6 +1137,17 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
   max-width: 9rem; overflow: hidden; text-overflow: ellipsis;
 }
 .gdash-tab.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* Inside a wrap, the name + ⋯ share one pill (no double borders). */
+.gdash-tab-wrap .gdash-tab { border: none; border-radius: 0; background: none; }
+.gdash-tab-wrap.is-on .gdash-tab { color: #fff; }
+.gdash-tab-more {
+  flex: 0 0 auto; min-height: var(--tap-min); min-width: var(--tap-min); padding: 0 6px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; line-height: 1;
+  color: var(--muted); background: none; border: none; border-left: 1px solid var(--line);
+}
+.gdash-tab-wrap.is-on .gdash-tab-more { color: rgba(255,255,255,0.85); border-left-color: rgba(255,255,255,0.3); }
+.gdash-tab-more:hover { color: var(--accent); }
+.gdash-tab-wrap.is-on .gdash-tab-more:hover { color: #fff; }
 /* Tab long-press menu — a small floating list: Add tab / Rename / Delete (rule 32: fixed +
    clampMenuIntoView). No inline ✎/✕/＋ icons on the strip anymore. */
 .dash-tab-menu {
