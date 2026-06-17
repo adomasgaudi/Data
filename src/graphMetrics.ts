@@ -182,7 +182,7 @@ function e1rmPoints(
  * the effective points + a representative bodyweight SHARE (the most-recent comparable set's
  * effective − added) for the caller to peel back so the plotted line stays the ADDED weight
  * (rule 49). For bar-only lifts (coeff 0) the share is 0, so this is a no-op. */
-function effectiveDecayInput(
+export function effectiveDecayInput(
   records: readonly SetRecord[],
   formula: OneRepMaxFormula,
   cfg?: GraphConfig,

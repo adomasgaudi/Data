@@ -108,9 +108,11 @@ export interface AnalyticsGraphInput {
   /** Static vertical reference lines (e.g. a "today" marker) in ms timestamps. Passed
    * straight to the chart; non-draggable. Omitted = none. */
   xRefLines?: { x: number; color?: string; label?: string }[] | undefined;
-  /** Horizontal value-zone bands on the left (kg) axis, e.g. the 60–80% / 80–100%-of-1RM
-   * intensity zones. Ignored on the %WR view (which sets its own bands). */
+  /** Horizontal value-zone bands on the left (kg) axis. Ignored on the %WR view (own bands). */
   yBands?: { from: number; to?: number; fill: string }[] | undefined;
+  /** Filled ribbons that FOLLOW a curve over time (left axis) — e.g. the 60–80% / 80–100%-of-
+   * each-day's-strength intensity zones. Each point gives the band's top & bottom y at that x. */
+  areaBands?: { points: { x: number; yTop: number; yBot: number }[]; fill: string; label?: string }[] | undefined;
   /** Called on release after dragging a fit-window marker (id + new ms timestamp). */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
   /** Reps-vs-weight fit: a manual EFFECTIVE 1RM that POSITIONS the Nuzzo curve for an
@@ -517,7 +519,8 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           { from: 0.4, to: 0.6, fill: "rgba(120,120,120,0.06)" },
           { from: 0.6, fill: "rgba(120,120,120,0.12)" },
         ]
-      : input.yBands, // caller-supplied (e.g. 60–80% / 80–100%-of-1RM intensity zones)
+      : input.yBands, // caller-supplied horizontal zones (off here unless given)
+    areaBands: input.areaBands, // 60–80% / 80–100%-of-each-day's-strength ribbons (always present so the merge clears them when off — PB-8)
     // Projection fit-window lines (always present so the merge clears them when off — PB-8).
     xMarkers: input.xMarkers,
     xRefLines: input.xRefLines,

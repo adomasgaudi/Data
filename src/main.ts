@@ -104,7 +104,7 @@ import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { pairPracticalityScore, pairPracticalityHint } from "./practicality";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
-import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMetrics";
+import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES, effectiveDecayInput } from "./graphMetrics";
 import { initI18n, getLang, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
@@ -20343,23 +20343,22 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     if (dates.length > dpp.phase1EndSets) phaseLines.push({ x: at(dpp.phase1EndSets), color: "#8a6d3b", label: "beginner→inter." });
     if (dates.length > dpp.phase2EndSets) phaseLines.push({ x: at(dpp.phase2EndSets), color: "#6c4ab0", label: "inter.→advanced" });
   }
-  // 80% / 60%-of-1RM intensity ZONES (owner): shade the kg axis 60–80% and 80–100% of the
-  // lift's best EFFECTIVE 1RM, positioned in ADDED-weight terms (rule 49). Single lift, kg view.
-  let yBands: { from: number; to?: number; fill: string }[] | undefined;
+  // 80% / 60%-of-1RM intensity ZONES that FOLLOW EACH DAY's strength (owner: not the all-time
+  // record). Build the effective strength curve (the decay model) and ribbon 60–80% / 80–100%
+  // of it, converted to ADDED kg (pct×effective − bodyweight share) so the zones sit under the
+  // plotted 1RM line. Single lift, kg view.
+  let areaBands: { points: { x: number; yTop: number; yBot: number }[]; fill: string }[] | undefined;
   if (!isRvw && !bubble.perBodyweight && exs.length === 1) {
-    let peakEff = -Infinity;
-    let shareAtPeak = 0;
-    for (const r of plotted) {
-      const eff = effectiveE1RM(r, cfg.formula);
-      if (eff == null || eff <= peakEff) continue;
-      peakEff = eff;
-      shareAtPeak = eff - (addedWeight1RM(r, cfg.formula) ?? eff);
-    }
-    if (Number.isFinite(peakEff) && peakEff > 0) {
-      const addedAt = (pct: number) => pct * peakEff - shareAtPeak; // effective % → shown added kg
-      yBands = [
-        { from: addedAt(0.6), to: addedAt(0.8), fill: "rgba(120,120,120,0.06)" }, // 60–80% hypertrophy
-        { from: addedAt(0.8), to: addedAt(1.0), fill: "rgba(120,120,120,0.12)" }, // 80–100% strength
+    const { pts, offset } = effectiveDecayInput(plotted, cfg.formula, cfg);
+    const effCurve = decayedStrengthSeries(pts, Date.now(), 4, cfg.decayParams, null, 0); // EFFECTIVE (no peel)
+    if (effCurve.length) {
+      const band = (lo: number, hi: number, fill: string) => ({
+        points: effCurve.map((p) => ({ x: p.x, yBot: lo * p.y - offset, yTop: hi * p.y - offset })),
+        fill,
+      });
+      areaBands = [
+        band(0.6, 0.8, "rgba(120,120,120,0.07)"), // 60–80% hypertrophy
+        band(0.8, 1.0, "rgba(120,120,120,0.13)"), // 80–100% strength
       ];
     }
   }
@@ -20370,7 +20369,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     metrics: drawMetricIds,
     config: cfg,
     initialView,
-    yBands,
+    areaBands,
     // A thin red "today" reference line on the time axis (owner: "mark today as a little red").
     // Anchored to midnight today so it lines up with today's datapoint; meaningless on the
     // reps×kg (weight-axis) view, so only on time charts.
