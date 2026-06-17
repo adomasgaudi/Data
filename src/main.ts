@@ -12081,7 +12081,6 @@ function cardSetsMapData(name: string): SetsMap | null {
 function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const svgW = 400, svgH = 330, margin = 18;     // taller 3D space (owner) so the city has headroom
   const Wd = 6, Dp = 5, maxBarH = 3.2;           // table width (weight), depth (reps), max pin height
-  const dotRWorld = 0.34;                         // sphere head radius (world units) — the height marker
   const cy0 = -maxBarH / 2;                       // table sits at the bottom
 
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
@@ -12098,26 +12097,50 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const mapZ = (r: number) => (r / d.maxReps) * Dp - Dp / 2;
   const mapH = (c: number) => (c / d.maxCount) * maxBarH;
 
-  // BARS (owner: "bars with volume, not lines with a sphere"): a 3D box per (weight, rep) cell,
-  // its width/depth growing with the chosen bins (chunkier groups), its height = the count.
-  type Face = { c: { X: number; Y: number; Z: number }[]; z: number; fill: string };
-  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string };
-  const GREEN = "#2f8f88", GREEN_D = "#226b66"; // teal top, darker sides
-  // THIN sticks topped by a sphere: fat boxes hid each other's heights when the grid is
-  // densely packed, so a slim stem + a ball at the top makes each height easy to read
-  // (owner: "make them thinner with sphere at the top").
-  const hwx = 0.11, hwz = 0.11;
+  // BARS: a THIN 3D stick per (weight, rep) cell topped by a small CUBE head. Every face is
+  // shaded by its orientation along a warm-light → cool-shadow gradient so the perspective
+  // reads (flat identical teal was unreadable), with a darker edge and a soft ground shadow.
+  // (Owner: "2× thinner, top spheres → cubes 2× thicker than the bar but smaller, light
+  // shadows + different side shadings, darker edges, real colour theory".)
+  type Face = { pts: { X: number; Y: number }[]; z: number; t: number };
+  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; shadow: { X: number; Y: number } };
+  // Warm-light → cool-shadow gradient: a real value+temperature range (not one flat hue), so
+  // lit faces are bright/warm and shadowed faces deep/cool — the cue the eye uses for form.
+  const COOL: [number, number, number] = [21, 64, 80];    // deep cool teal — faces in shadow
+  const WARM: [number, number, number] = [156, 224, 208];  // bright warm mint — faces in light
+  const EDGE = "#0e2f3a";                                   // darker edge for crisp definition
+  const lit = (t: number): string => {
+    const k = Math.max(0, Math.min(1, t));
+    return `rgb(${Math.round(COOL[0] + (WARM[0] - COOL[0]) * k)},${Math.round(COOL[1] + (WARM[1] - COOL[1]) * k)},${Math.round(COOL[2] + (WARM[2] - COOL[2]) * k)})`;
+  };
+  // Screen-space light (top-front, slightly left), fixed to the viewer so the shading stays
+  // legible at every rotation; Lambert maps a face's screen normal onto the gradient above.
+  const Llen = Math.hypot(-0.4, 0.86, 0.5), L = { x: -0.4 / Llen, y: 0.86 / Llen, z: 0.5 / Llen };
+  const faceT = (nx: number, ny: number, nz: number): number => { const rn = rot(nx, ny, nz); return 0.5 + 0.5 * (rn.X * L.x + rn.Y * L.y + rn.Z * L.z); };
+  const SIDE_N: [number, number, number][] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
+  const hwx = 0.055, hwz = 0.055;        // stick half-width — 2× thinner than before (owner)
+  const cubeHalf = 0.11;                  // cube head half-size — 2× the bar's thickness, small
+  // Append one box's lit faces (4 sides + top) to `faces`; returns its 8 corners.
+  const addBox = (faces: Face[], cx: number, cz: number, yLo: number, yHi: number, hx: number, hz: number): { X: number; Y: number; Z: number }[] => {
+    const cn = (dx: number, dz: number, y: number) => rot(cx + dx, y, cz + dz);
+    const bot = [cn(-hx, -hz, yLo), cn(hx, -hz, yLo), cn(hx, hz, yLo), cn(-hx, hz, yLo)];
+    const top = [cn(-hx, -hz, yHi), cn(hx, -hz, yHi), cn(hx, hz, yHi), cn(-hx, hz, yHi)];
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4, f = [bot[i]!, bot[j]!, top[j]!, top[i]!], n = SIDE_N[i]!;
+      faces.push({ pts: f, z: (f[0]!.Z + f[1]!.Z + f[2]!.Z + f[3]!.Z) / 4, t: faceT(n[0], n[1], n[2]) });
+    }
+    faces.push({ pts: top, z: (top[0]!.Z + top[1]!.Z + top[2]!.Z + top[3]!.Z) / 4 + 0.02, t: faceT(0, 1, 0) });
+    return [...bot, ...top];
+  };
   const bars: Bar[] = [];
   for (const p of d.pts) {
     const cx = mapX(p.w), cz = mapZ(p.reps), topY = cy0 + mapH(p.count);
-    const cn = (dx: number, dz: number, y: number) => rot(cx + dx, y, cz + dz);
-    const bot = [cn(-hwx, -hwz, cy0), cn(hwx, -hwz, cy0), cn(hwx, hwz, cy0), cn(-hwx, hwz, cy0)];
-    const top = [cn(-hwx, -hwz, topY), cn(hwx, -hwz, topY), cn(hwx, hwz, topY), cn(-hwx, hwz, topY)];
     const faces: Face[] = [];
-    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; const f = [bot[i]!, bot[j]!, top[j]!, top[i]!]; faces.push({ c: f, z: (f[0]!.Z + f[1]!.Z + f[2]!.Z + f[3]!.Z) / 4, fill: GREEN_D }); }
-    faces.push({ c: top, z: (top[0]!.Z + top[1]!.Z + top[2]!.Z + top[3]!.Z) / 4 + 0.02, fill: GREEN });
+    const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz);
+    const cube = addBox(faces, cx, cz, topY - cubeHalf, topY + cubeHalf, cubeHalf, cubeHalf);
+    const hd = rot(cx, topY, cz), sh = rot(cx, cy0, cz);
     const unit = d.unit === "reps" ? "rep" : "set";
-    bars.push({ corners: [...bot, ...top], faces, depth: (bot[0]!.Z + bot[2]!.Z) / 2, tip: `${p.w}kg · ${p.repLabel ?? p.reps} reps · ${p.count} ${unit}${p.count !== 1 ? "s" : ""}` });
+    bars.push({ corners: [...stick, ...cube], faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · ${p.repLabel ?? p.reps} reps · ${p.count} ${unit}${p.count !== 1 ? "s" : ""}`, head: { X: hd.X, Y: hd.Y }, shadow: { X: sh.X, Y: sh.Y } });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
@@ -12159,7 +12182,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     return { X: x1, Y: y * rcP - z1 * rsP };
   };
   let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMaxY = -Infinity;
-  for (const bx of [-Wd / 2, Wd / 2]) for (const by of [cy0, cy0 + maxBarH]) for (const bz of [-Dp / 2, Dp / 2]) {
+  for (const bx of [-Wd / 2, Wd / 2]) for (const by of [cy0, cy0 + maxBarH + cubeHalf]) for (const bz of [-Dp / 2, Dp / 2]) {
     const q = refProj(bx, by, bz);
     if (q.X < rMinX) rMinX = q.X; if (q.X > rMaxX) rMaxX = q.X; if (q.Y < rMinY) rMinY = q.Y; if (q.Y > rMaxY) rMaxY = q.Y;
   }
@@ -12175,22 +12198,20 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   for (const g of grid)
     out += `<line x1="${sx(g.ax).toFixed(1)}" y1="${sy(g.ay).toFixed(1)}" x2="${sx(g.bx).toFixed(1)}" y2="${sy(g.by).toFixed(1)}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
 
-  // Bars far→near; within each, far faces first then the top (camera looks down on the table).
+  // Far→near: each bar draws a soft ground shadow first, then its faces sorted far→near so
+  // near faces overpaint far ones (painter's algorithm).
   bars.sort((a, b) => a.depth - b.depth);
+  const shadowR = cubeHalf * scale * 1.6;
   for (const bar of bars) {
+    const shx = sx(bar.shadow.X), shy = sy(bar.shadow.Y);
+    out += `<ellipse cx="${shx.toFixed(1)}" cy="${(shy + 1.5).toFixed(1)}" rx="${shadowR.toFixed(1)}" ry="${(shadowR * 0.4).toFixed(1)}" fill="${EDGE}" opacity="0.16"/>`;
     bar.faces.sort((a, b) => a.z - b.z);
     for (const f of bar.faces) {
-      const poly = f.c.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
-      out += `<polygon points="${poly}" fill="${f.fill}" stroke="${GREEN_D}" stroke-width="0.5" stroke-linejoin="round"/>`;
+      const poly = f.pts.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
+      out += `<polygon points="${poly}" fill="${lit(f.t)}" stroke="${EDGE}" stroke-width="0.5" stroke-linejoin="round"/>`;
     }
-    // Sphere HEAD atop the stick — the height marker. A filled teal ball (darker rim) + a
-    // small offset highlight so it reads as a 3D sphere, not a flat disc; a transparent
-    // hit-circle carries the hover tooltip.
-    const tc = bar.faces[bar.faces.length - 1]!.c;
-    const hcx = sx((tc[0]!.X + tc[2]!.X) / 2), hcy = sy((tc[0]!.Y + tc[2]!.Y) / 2), hr = dotRWorld * scale;
-    out += `<circle cx="${hcx.toFixed(1)}" cy="${hcy.toFixed(1)}" r="${hr.toFixed(1)}" fill="${GREEN}" stroke="${GREEN_D}" stroke-width="0.6"/>`;
-    out += `<circle cx="${(hcx - hr * 0.3).toFixed(1)}" cy="${(hcy - hr * 0.34).toFixed(1)}" r="${(hr * 0.32).toFixed(1)}" fill="#ffffff" opacity="0.4"/>`;
-    out += `<circle cx="${hcx.toFixed(1)}" cy="${hcy.toFixed(1)}" r="${Math.max(6, hr).toFixed(1)}" fill="transparent"><title>${bar.tip}</title></circle>`;
+    // Transparent hit-circle at the cube head carries the hover tooltip.
+    out += `<circle cx="${sx(bar.head.X).toFixed(1)}" cy="${sy(bar.head.Y).toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
   }
 
   // Axis lines + labels.
