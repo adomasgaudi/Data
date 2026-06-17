@@ -3535,15 +3535,15 @@ let vol3dPitch = 0.52;
 // Map-tab controls (owner): merge the floor by a weight bin (2/5/10 kg) and a rep bin
 // (every rep · 1–3/4–6 · 1–10/11–20), choose the time range of sets, and make the pin
 // HEIGHT count sets OR total reps. Device-local display prefs.
-const VOL3D_WTBINS = [2, 5, 10] as const;
-type Vol3dRepBin = "each" | "3s" | "10s";
-type Vol3dRange = "all" | "3mo" | "1mo";
+const VOL3D_WTBINS = [1, 2, 3, 5, 8, 13, 20] as const;
+const VOL3D_REPBINS = [1, 2, 3, 4, 5] as const; type Vol3dRepBin = number; // reps merged into bins of this size (1 = each rep)
+const VOL3D_RANGES = ["1w", "2w", "1mo", "3mo", "6mo", "12mo", "all"] as const; type Vol3dRange = (typeof VOL3D_RANGES)[number];
 type Vol3dHeight = "sets" | "reps";
 const mapPref = (k: string, dflt: string): string => { try { return localStorage.getItem(`colosseum.map.${k}`) ?? dflt; } catch { return dflt; } };
 const setMapPref = (k: string, v: string): void => { try { localStorage.setItem(`colosseum.map.${k}`, v); } catch { /* ignore */ } };
 let vol3dWtBin: number = (() => { const v = Number(mapPref("wtBin", "5")); return (VOL3D_WTBINS as readonly number[]).includes(v) ? v : 5; })();
-let vol3dRepBin: Vol3dRepBin = ((v) => (v === "3s" || v === "10s" ? v : "each"))(mapPref("repBin", "each")) as Vol3dRepBin;
-let vol3dRange: Vol3dRange = ((v) => (v === "3mo" || v === "1mo" ? v : "all"))(mapPref("range", "all")) as Vol3dRange;
+let vol3dRepBin: Vol3dRepBin = (() => { const v = Number(mapPref("repBin", "1")); return (VOL3D_REPBINS as readonly number[]).includes(v) ? v : 1; })();
+let vol3dRange: Vol3dRange = ((v) => (VOL3D_RANGES as readonly string[]).includes(v) ? v : "all")(mapPref("range", "all")) as Vol3dRange;
 let vol3dHeight: Vol3dHeight = ((v) => (v === "reps" ? v : "sets"))(mapPref("height", "sets")) as Vol3dHeight;
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
@@ -11981,15 +11981,16 @@ interface SetsMap {
 function cardSetsMapData(name: string): SetsMap | null {
   const all = cardNuzzoRealSets(name);
   // Time range: keep only sets within the chosen window (anchored to now).
-  const cutoff = vol3dRange === "1mo" ? Date.now() - 30 * 86_400_000 : vol3dRange === "3mo" ? Date.now() - 91 * 86_400_000 : 0;
+  const RANGE_DAYS: Record<Vol3dRange, number> = { "1w": 7, "2w": 14, "1mo": 30, "3mo": 91, "6mo": 182, "12mo": 365, all: 0 };
+  const cutoff = RANGE_DAYS[vol3dRange] ? Date.now() - RANGE_DAYS[vol3dRange] * 86_400_000 : 0;
   const sets = cutoff ? all.filter((s) => { const t = Date.parse(s.date); return Number.isFinite(t) && t >= cutoff; }) : all;
   if (sets.length === 0) return null;
   const bin = vol3dWtBin > 0 ? vol3dWtBin : 5;
   // Rep bin → the floor's rep coordinate (bin upper bound) + a readable label.
   const repCell = (reps: number): { reps: number; label?: string } => {
-    if (vol3dRepBin === "3s") { const b = Math.ceil(reps / 3); return { reps: b * 3, label: `${b * 3 - 2}–${b * 3}` }; }
-    if (vol3dRepBin === "10s") { const b = Math.ceil(reps / 10); return { reps: b * 10, label: `${b * 10 - 9}–${b * 10}` }; }
-    return { reps };
+    const sz = vol3dRepBin > 1 ? vol3dRepBin : 1;
+    if (sz === 1) return { reps };
+    const b = Math.ceil(reps / sz); return { reps: b * sz, label: `${b * sz - sz + 1}–${b * sz}` };
   };
   const m = new Map<string, { w: number; reps: number; count: number; repLabel?: string }>();
   let loW = Infinity, hiW = -Infinity, maxReps = 1;
@@ -12101,13 +12102,14 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
 
 /** The Map-tab merge/range/height control pills (one compact sideways-scrolling row). */
 function cardMapCtrlsHtml(): string {
-  const repLbl = vol3dRepBin === "each" ? "reps: each" : vol3dRepBin === "3s" ? "reps: by 3" : "reps: by 10";
-  const rangeLbl = vol3dRange === "all" ? "all time" : vol3dRange === "3mo" ? "3 months" : "1 month";
+  const repLbl = vol3dRepBin > 1 ? `reps: by ${vol3dRepBin}` : "reps: each";
+  const RANGE_LBL: Record<Vol3dRange, string> = { "1w": "1 week", "2w": "2 weeks", "1mo": "1 month", "3mo": "3 months", "6mo": "6 months", "12mo": "12 months", all: "all time" };
+  const rangeLbl = RANGE_LBL[vol3dRange];
   return `<div class="lt-map-ctrls">` +
-    `<button type="button" class="lt-map-pill" data-mapwt title="Merge weights into bins — tap to cycle 2 / 5 / 10 kg">wt: ${vol3dWtBin}kg</button>` +
-    `<button type="button" class="lt-map-pill" data-maprep title="Merge reps — tap to cycle every rep / by 3 / by 10">${repLbl}</button>` +
+    `<button type="button" class="lt-map-pill" data-mapwt title="Merge weights into bins — tap to cycle 1 / 2 / 3 / 5 / 8 / 13 / 20 kg">wt: ${vol3dWtBin}kg</button>` +
+    `<button type="button" class="lt-map-pill" data-maprep title="Merge reps — tap to cycle 1 / 2 / 3 / 4 / 5">${repLbl}</button>` +
     `<button type="button" class="lt-map-pill" data-mapheight title="Pin height — tap to switch total sets / total reps">tall: ${vol3dHeight}</button>` +
-    `<button type="button" class="lt-map-pill" data-maprange title="Time range — tap to cycle all time / last 3 months / last month">${rangeLbl}</button>` +
+    `<button type="button" class="lt-map-pill" data-maprange title="Time range — tap to cycle 1w / 2w / 1mo / 3mo / 6mo / 12mo / all">${rangeLbl}</button>` +
     `</div>`;
 }
 /** Sets-map tab body. */
@@ -12116,7 +12118,7 @@ function cardSetsMapHtml(name: string): string {
   const ctrls = cardMapCtrlsHtml();
   if (!d) return ctrls + `<p class="muted" style="padding:1rem 0">No logged sets in this range.</p>`;
   const tall = vol3dHeight === "reps" ? "total reps" : "sets";
-  const range = vol3dRange === "all" ? "over all time" : vol3dRange === "3mo" ? "in the last 3 months" : "in the last month";
+  const range = vol3dRange === "all" ? "over all time" : ({ "1w": "in the last week", "2w": "in the last 2 weeks", "1mo": "in the last month", "3mo": "in the last 3 months", "6mo": "in the last 6 months", "12mo": "in the last 12 months", all: "over all time" } as Record<Vol3dRange,string>)[vol3dRange];
   return `<div class="lt-vol-wrap">` + ctrls +
     `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
     renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
@@ -14264,9 +14266,9 @@ async function init() {
     const mapCtl = (e.target as HTMLElement).closest<HTMLElement>("[data-mapwt],[data-maprep],[data-maprange],[data-mapheight]");
     if (mapCtl) {
       e.preventDefault(); e.stopPropagation();
-      if (mapCtl.hasAttribute("data-mapwt")) { vol3dWtBin = VOL3D_WTBINS[(VOL3D_WTBINS.indexOf(vol3dWtBin as 2 | 5 | 10) + 1) % VOL3D_WTBINS.length]!; setMapPref("wtBin", String(vol3dWtBin)); }
-      else if (mapCtl.hasAttribute("data-maprep")) { vol3dRepBin = vol3dRepBin === "each" ? "3s" : vol3dRepBin === "3s" ? "10s" : "each"; setMapPref("repBin", vol3dRepBin); }
-      else if (mapCtl.hasAttribute("data-maprange")) { vol3dRange = vol3dRange === "all" ? "3mo" : vol3dRange === "3mo" ? "1mo" : "all"; setMapPref("range", vol3dRange); }
+      if (mapCtl.hasAttribute("data-mapwt")) { vol3dWtBin = VOL3D_WTBINS[((VOL3D_WTBINS as readonly number[]).indexOf(vol3dWtBin) + 1) % VOL3D_WTBINS.length]!; setMapPref("wtBin", String(vol3dWtBin)); }
+      else if (mapCtl.hasAttribute("data-maprep")) { vol3dRepBin = VOL3D_REPBINS[((VOL3D_REPBINS as readonly number[]).indexOf(vol3dRepBin) + 1) % VOL3D_REPBINS.length]!; setMapPref("repBin", String(vol3dRepBin)); }
+      else if (mapCtl.hasAttribute("data-maprange")) { vol3dRange = VOL3D_RANGES[((VOL3D_RANGES as readonly string[]).indexOf(vol3dRange) + 1) % VOL3D_RANGES.length]!; setMapPref("range", vol3dRange); }
       else { vol3dHeight = vol3dHeight === "sets" ? "reps" : "sets"; setMapPref("height", vol3dHeight); }
       if (currentExInfo) paintExInfo(currentExInfo);
       return;
