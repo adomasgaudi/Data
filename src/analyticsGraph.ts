@@ -434,7 +434,10 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           // the chosen horizon (out to 15 yr) is actually visible and the ceiling-approach
           // curve has room to flatten (owner: "the graph should extend to 15 years"). Dashed
           // so the forecast still reads as a projection, not as logged data.
-          ...(m.id === "predicted" ? { dashed: true } : {}),
+          // Strength Decay is also dashed (owner: "should be a dashed line not a collection of
+          // bubbles") — decayedStrengthSeries emits many points, so as a plain line it drew a
+          // dot at each; dashed turns those off (dotR=0) and reads as a continuous trend.
+          ...(m.id === "predicted" || m.id === "strengthDecay" ? { dashed: true } : {}),
         });
     }
   }
