@@ -15260,10 +15260,14 @@ async function init() {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-mglvl-chip, .ex-mglvl-reset");
     const ex = chip?.dataset.mglvlEx;
     if (!ex) return;
-    if (chip!.classList.contains("ex-mglvl-reset")) resetMgLevel(ex);
+    if (chip!.classList.contains("ex-mglvl-reset")) { dbg(`mglvl RESET ${ex} admin=${canEditGlobalMeta()}`); resetMgLevel(ex); }
     else {
       const m = chip!.dataset.mglvlMuscle as MuscleGroup;
-      setMgLevel(ex, m, (mgLevelOf(ex, m) + 1) % 5);
+      const before = mgLevelOf(ex, m);
+      setMgLevel(ex, m, (before + 1) % 5);
+      // #debug (muscle-group chips "can't change"): one screenshot of this line tells us
+      // if the tap fired, whether it's admin-gated, and if the level actually moved.
+      dbg(`mglvl TAP ${ex}·${m} ${before}->${mgLevelOf(ex, m)} admin=${canEditGlobalMeta()}`);
     }
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
   });
