@@ -215,6 +215,7 @@ const els = {
   authBtn: $<HTMLButtonElement>("authBtn"),
   syncUpBtn: $<HTMLButtonElement>("syncUpBtn"),
   syncDownBtn: $<HTMLButtonElement>("syncDownBtn"),
+  dbgToggleBtn: $<HTMLButtonElement>("dbgToggleBtn"),
   syncStatus: $("syncStatus"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
@@ -14392,6 +14393,18 @@ async function init() {
   els.authBtn.addEventListener("click", showLoginPage);
   els.syncUpBtn.addEventListener("click", () => { void syncManualToSupabase(); });
   els.syncDownBtn.addEventListener("click", () => { void loadManualFromSupabase(); });
+  // Green debug console on/off (admin-only). dbgVisible() reads colosseum.dbg === "on".
+  const syncDbgToggle = () => {
+    const on = dbgVisible();
+    els.dbgToggleBtn.setAttribute("aria-pressed", String(on));
+    els.dbgToggleBtn.textContent = on ? "🐞 Debug console ✓" : "🐞 Debug console";
+  };
+  syncDbgToggle();
+  els.dbgToggleBtn.addEventListener("click", () => {
+    try { localStorage.setItem("colosseum.dbg", dbgVisible() ? "off" : "on"); } catch { /* ignore */ }
+    syncDbgToggle();
+    renderDbg(); // shows or removes the overlay immediately
+  });
   document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") signIn();
@@ -19049,8 +19062,13 @@ function renderSelector(scope: SelScope): void {
   // the picker's current group / search / identity filter (vs "Select all" = shown only).
   const everyEx = scope === "graph" ? [] : waSelectorExercises().map((e) => e.name);
   const completeOn = everyEx.length > 0 && everyEx.every((n) => cur.includes(n));
+  // GRAPH has a fixed lift budget, so there's no real "Select all" — "First N" is the
+  // graph's equivalent. But people LOOK for "Select all" (it's in the history picker), so
+  // we still show it, permanently DISABLED (grey), with a tooltip pointing at First N —
+  // discoverable, not functional (owner: "people might search for it so put it back, grey").
   const selAllToggle = scope === "graph"
-    ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
+    ? `<button type="button" class="wa-clear wa-selall" disabled title="The graph plots a fixed budget of ${graphExerciseCap()} lifts, so there's no “select all” — use “First ${graphExerciseCap()}” instead">Select all</button>` +
+      `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
     : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
       `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>`;
   // "Deselect all" — the title's old oversized ✕, demoted into the drawer next to its
@@ -20124,12 +20142,18 @@ function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remo
  * exactly where it breaks — this is how PB-38's root (panel-scoped handler vs body-appended menu)
  * was finally found (owner: "#super persistent and #max debug worked, keep the green console").
  * Owner: keep it SHORT + COLLAPSABLE — tap the ▾/▸ header to collapse (state persisted), ✕ to
- * clear, and the body is height-capped + scrolls. Disable with `localStorage.setItem("colosseum.dbg","off")`.
+ * clear, and the body is height-capped + scrolls. HIDDEN by default now — turn it on via the
+ * admin Settings ⚙ "🐞 Debug console" toggle (or `localStorage.setItem("colosseum.dbg","on")`).
  * Also exposed as `window.dbg` for ad-hoc desktop-console use.
  */
 const dbgLines: { t: string; err: boolean }[] = [];
 function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.dbgCollapsed") === "1"; } catch { return false; } }
+// The green console is HIDDEN by default now (owner) — it only shows when explicitly
+// switched ON via the admin Settings ⚙ toggle (localStorage colosseum.dbg === "on").
+// (Old behaviour was the reverse: shown unless "off".)
+function dbgVisible(): boolean { try { return localStorage.getItem("colosseum.dbg") === "on"; } catch { return false; } }
 function renderDbg(): void {
+  if (!dbgVisible()) { document.getElementById("dbgOverlay")?.remove(); return; }
   let el = document.getElementById("dbgOverlay");
   if (!el) {
     el = document.createElement("div");
@@ -20155,7 +20179,7 @@ function renderDbg(): void {
   if (body) body.scrollTop = 0; // owner: auto-scroll to the TOP (show the start of the trace)
 }
 function dbg(msg: string, isErr = false): void {
-  try { if (localStorage.getItem("colosseum.dbg") === "off") return; } catch { /* ignore */ }
+  if (!dbgVisible()) return;
   dbgLines.push({ t: `${new Date().toTimeString().slice(0, 8)} ${msg}`, err: isErr });
   while (dbgLines.length > 40) dbgLines.shift();
   renderDbg();
