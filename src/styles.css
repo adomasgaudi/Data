@@ -509,6 +509,39 @@ body.on-s-anl .appfoot { display: none; }
 main { padding-bottom: 5rem; }
 
 /* Persistent command / search bar, pinned at the bottom of the screen. */
+/* Floating "grade recent updates" button + its panel (owner). Small, constant, left-edge. */
+.grade-fab {
+  position: fixed; left: 6px; top: 50%; transform: translateY(-50%); z-index: 60;
+  min-width: var(--tap-min); min-height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; cursor: pointer; color: var(--accent); background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--r-pill); box-shadow: var(--shadow-sm); opacity: 0.82;
+}
+.grade-fab:hover, .grade-fab:active { opacity: 1; border-color: var(--accent); }
+.grade-panel {
+  position: fixed; z-index: 130; width: 300px; max-width: 88vw; max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(20, 24, 38, 0.28); padding: 8px;
+}
+.grade-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 0.82rem; margin-bottom: 4px; }
+.grade-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.05rem; padding: 0 4px; }
+.grade-row { padding: 6px 0; border-top: 1px solid var(--line); }
+.grade-row-head { font-size: 0.8rem; margin-bottom: 5px; }
+.grade-row-head .muted { font-weight: 400; }
+.grade-opts { display: flex; flex-wrap: wrap; gap: 4px; }
+.grade-opt {
+  font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 4px 9px; min-height: var(--tap-min);
+  display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--muted);
+}
+.grade-opt.grade-bad { color: var(--remove); }
+.grade-opt.grade-good { color: var(--accent); }
+.grade-opt.is-on { color: #fff; }
+.grade-opt.is-on.grade-bad { background: var(--remove); border-color: var(--remove); }
+.grade-opt.is-on.grade-mid { background: var(--muted); border-color: var(--muted); }
+.grade-opt.is-on.grade-good { background: var(--accent); border-color: var(--accent); }
+/* The owner's grade chip in the version-history tree (beside the model / AI chips). */
+.cl-grade { flex: none; font-size: 0.66rem; font-weight: 700; white-space: nowrap; border-radius: var(--r-pill); padding: 1px 6px; }
+.cl-grade--bad { color: var(--remove); border: 1px solid var(--remove); }
+.cl-grade--mid { color: var(--muted); border: 1px solid var(--line); }
+.cl-grade--good { color: var(--accent); border: 1px solid var(--accent); }
 .cmd-bar {
   position: fixed; left: 0; right: 0; z-index: 55;
   /* Sit at the bottom normally, but ride just above the on-screen keyboard when

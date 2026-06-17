@@ -52,7 +52,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.66</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.67</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -1169,6 +1169,8 @@
     <!-- Persistent command / search bar, pinned just above the bottom nav and
          always visible. Plain text searches the Analysis exercise selector;
          typing "." opens a command palette of shortcuts. -->
+    <!-- Constant floating button: grade the last 5 updates (owner) -->
+    <button type="button" id="gradeBtn" class="grade-fab" title="Grade recent updates" aria-label="Grade recent updates">★</button>
     <div id="cmdBar" class="cmd-bar">
       <div id="cmdPalette" class="cmd-palette" role="listbox" hidden></div>
       <input id="cmdInput" class="cmd-input" type="search" autocomplete="off" spellcheck="false"

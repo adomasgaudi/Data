@@ -173,7 +173,7 @@ import { benchKey, benchmarkKg, sortBenchmarks, topMet, cleanStore, type Benchma
 import { DEFAULT_FORMULA } from "./config";
 import { supabase, upsertSets, fetchKv, upsertKv } from "./supabase";
 import { isSyncable, merge3, SYNC_BASE_KEY } from "./cacheSync";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
+import { CHANGELOG, CURRENT_VERSION, RELEASES, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { modelLabelFor } from "./modelName";
 // __BUILD_BRANCH__ (baked in by vite.config's define) names the MODEL working this
@@ -3778,11 +3778,15 @@ function renderChangelog() {
     // AI session CODE-NAME chip (rule 50): which AI chat made this version. Several AIs share the
     // one model on the branch, so the throwaway per-chat code-name disambiguates them. Leaf-only.
     const aiTag = r.ai ? `<span class="cl-ai" title="Made by AI session “${escapeHtml(r.ai)}”">${escapeHtml(r.ai)}</span>` : "";
+    // Owner's quality grade for this version (set via the floating grade button), as a chip.
+    const gMeta = r.children?.length ? undefined : gradeMeta(gradeOf(r.version));
+    const gradeTag = gMeta ? `<span class="cl-grade cl-grade--${(gMeta as { tone: string }).tone}" title="Your grade">${escapeHtml(gMeta.label)}</span>` : "";
     const spOrTag = r.soon
       ? `<span class="cl-meta"><span class="cl-soon">soon</span></span>`
       : `<span class="cl-meta">` +
         modelTag +
         aiTag +
+        gradeTag +
         `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>` +
         `<span class="cl-cost" title="Real cost: this ${r.children?.length ? "collection's" : "update's"} share of the project's actual subscription spend, weighted by the model that made it (not API list price)">${fmtEur(costForNode(r))}</span>` +
         `</span>`;
@@ -21831,7 +21835,78 @@ function setupBottomNav() {
   });
 }
 
+// ───────────────────────── Grade recent updates (owner) ─────────────────────────
+// A constant floating button → a panel of the last 5 versions, each gradeable on the owner's
+// 6-level quality scale (bug → perfect). Grades are device-local and also show as a chip in
+// the version history (renderNode). Floating menu per rule 32 (position:fixed + clamp).
+const VERSION_GRADES: { id: string; label: string; tone: "bad" | "mid" | "good" }[] = [
+  { id: "bug", label: "bug", tone: "bad" },
+  { id: "verybuggy", label: "very buggy", tone: "bad" },
+  { id: "notwanted", label: "not what i wanted", tone: "bad" },
+  { id: "ok", label: "ok", tone: "mid" },
+  { id: "smart", label: "smart", tone: "good" },
+  { id: "perfect", label: "perfect", tone: "good" },
+];
+const VERSION_GRADE_KEY = "colosseum.versionGrades.v1";
+const versionGrades: Record<string, string> = loadJsonObject<Record<string, string>>(VERSION_GRADE_KEY) ?? {};
+function gradeOf(version: string): string { return versionGrades[version] ?? ""; }
+function gradeMeta(id: string): { label: string; tone: string } | undefined { return VERSION_GRADES.find((x) => x.id === id); }
+function setVersionGrade(version: string, id: string): void {
+  if (versionGrades[version] === id) delete versionGrades[version]; else versionGrades[version] = id; // tap the same grade again = clear
+  saveJson(VERSION_GRADE_KEY, versionGrades);
+}
+function gradePanelHtml(): string {
+  const last5 = RELEASES.filter((r) => !r.soon).slice(0, 5);
+  const rows = last5.map((r) => {
+    const cur = gradeOf(r.version);
+    const patch = r.version.split(".").pop() ?? r.version;
+    const opts = VERSION_GRADES.map((g) =>
+      `<button type="button" class="grade-opt grade-${g.tone}${cur === g.id ? " is-on" : ""}" data-grade="${escapeHtml(r.version)}|${g.id}">${escapeHtml(g.label)}</button>`).join("");
+    return `<div class="grade-row"><div class="grade-row-head"><b>v.${escapeHtml(patch)}</b> <span class="muted">${escapeHtml(r.shortTitle ?? r.title)}</span></div><div class="grade-opts">${opts}</div></div>`;
+  }).join("");
+  return `<div class="grade-head"><span>Grade the last 5 updates</span><button type="button" class="grade-close" data-gradeclose aria-label="Close">✕</button></div>${rows}`;
+}
+function gradeOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest("#gradePanel") || t.closest("#gradeBtn")) return;
+  closeGradePanel();
+}
+function closeGradePanel(): void {
+  document.getElementById("gradePanel")?.remove();
+  document.removeEventListener("click", gradeOutside, true);
+}
+function renderGradePanel(): void {
+  let panel = document.getElementById("gradePanel");
+  if (!panel) {
+    panel = document.createElement("div"); panel.id = "gradePanel"; panel.className = "grade-panel";
+    document.body.appendChild(panel);
+    setTimeout(() => document.addEventListener("click", gradeOutside, true), 0);
+  }
+  panel.innerHTML = gradePanelHtml();
+  const btn = document.getElementById("gradeBtn");
+  if (btn) clampMenuIntoView(panel, btn);
+}
+function setupGradeButton(): void {
+  const btn = document.getElementById("gradeBtn");
+  if (!btn) return;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (document.getElementById("gradePanel")) closeGradePanel(); else renderGradePanel();
+  });
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest("[data-gradeclose]")) { closeGradePanel(); return; }
+    const opt = t.closest<HTMLElement>("[data-grade]");
+    if (opt?.dataset.grade) {
+      const i = opt.dataset.grade.lastIndexOf("|");
+      setVersionGrade(opt.dataset.grade.slice(0, i), opt.dataset.grade.slice(i + 1));
+      renderGradePanel();
+    }
+  });
+}
+
 void init();
+setupGradeButton();
 // Fetch other users' manual sets from Supabase after the app loads.
 // Silent no-op if Supabase is unreachable or RLS blocks access.
 setTimeout(async () => { await loadManualFromSupabase(); await syncManualToSupabase(); await pullMergeKv(); }, 1500);
