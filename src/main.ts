@@ -18593,7 +18593,7 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // off `.wa-title-picker[data-titlepicker]`, so the gesture wiring is unchanged. Capture-
   // handled so it doesn't toggle the fold it sits in.
   const pickerBtn = remove
-    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">Pick</span></button>`
+    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">+</span></button>`
     : "";
   // Quick title toolbar (graph + history identical): + add an exercise · ✕ remove all ·
   // = match the OTHER view's selection. Reuse the existing capture handlers (data-title*).
@@ -18603,8 +18603,6 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   // add / match without first finding the picker. ✕ no-ops when nothing's picked.
   const titleTools = remove
     ? `<span class="wa-title-tools">` +
-        `<button type="button" class="wa-title-tool" data-titlepicker="${remove}" title="Add an exercise" aria-label="Add an exercise">+</button>` +
-        `<button type="button" class="wa-title-tool" data-titledeselect="${remove}" title="Remove all — clear the ${remove === "graph" ? "graph" : "history"} selection" aria-label="Remove all">✕</button>` +
         `<button type="button" class="wa-title-tool" data-titlematch="${remove}" title="Match the ${otherLabel} selection" aria-label="Match ${otherLabel}">=</button>` +
       `</span>`
     : "";
@@ -19834,7 +19832,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   const formula = currentFormula();
   const user = els.athlete.value;
   const isRvw = bubble.type === "rvw";
-  const exsBase = bubble.view === "single" ? bubble.exercises.slice(0, 1) : bubble.exercises;
+  const exsBase = bubble.exercises; // always multi-lift overlay (owner: the single/multi toggle is gone)
   const exs = lensExpand("graph", exsBase).slice(0, graphExerciseCap());
   const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
   const sm = currentStrengthByUserExercise(formula);
@@ -19967,6 +19965,22 @@ if (typeof window !== "undefined") {
   window.addEventListener("error", (e) => dbg(`ERR ${e.message} @ ${(e.filename || "").split("/").pop() ?? ""}:${e.lineno}`, true));
   window.addEventListener("unhandledrejection", (e) => dbg(`REJECT ${String((e as PromiseRejectionEvent).reason).slice(0, 90)}`, true));
 }
+function closeDashBubbleMenu(): void { document.getElementById("dashBubbleMenu")?.remove(); }
+/** The "＋" view-bubble menu (rule 32: fixed + clampMenuIntoView). Mirrors openDashTabMenu —
+ * appended to <body>, actions handled at DOCUMENT level (PB-38 root fix). */
+function openDashBubbleMenu(anchor: HTMLElement): void {
+  closeDashBubbleMenu();
+  const canDelete = activeTab(graphDash).bubbles.length > 1;
+  const m = document.createElement("div");
+  m.id = "dashBubbleMenu"; m.className = "dash-tab-menu";
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-bubmenu="add">＋ Add view</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-bubmenu="duplicate">⧉ Duplicate view</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-bubmenu="delete">✕ Delete view</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+  dbg(`bub menu OPEN (in <body>, ${m.querySelectorAll("[data-bubmenu]").length} items)`);
+}
 function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   closeDashTabMenu();
   const canDelete = graphDash.tabs.length > 1;
@@ -20059,14 +20073,13 @@ function renderGraphDashboard(): void {
   for (const m of bubble.metrics) waMetrics.add(m);
   S.waRepsVsWeight = bubble.type === "rvw";
   S.waPerBodyweight = bubble.perBodyweight;
-  // Reel dots: tap one to JUMP to that bubble (active one is bigger). The per-bubble Duplicate
-  // (⧉) and Delete (✕) live as direct buttons in the foot right next to these dots (owner:
-  // "the deletion btn should be next to the bubble").
+  // View bubbles: tap one to JUMP to that view (active one filled). Owner redesign — the bubbles
+  // ARE the navigation now (no ‹ › arrows, no separate ⧉/✕/＋ buttons): bigger tappable circles,
+  // then a final "＋" bubble that opens a small menu (duplicate / delete / add this view).
   const dots = tab.bubbles
-    .map((_, i) => `<button type="button" class="gmini-dot${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="Go to bubble ${i + 1}"></button>`)
+    .map((_, i) => `<button type="button" class="gdash-bub${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="View ${i + 1}">${i + 1}</button>`)
     .join("");
   const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
-  const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
   // The FULL lift-selection title toolbar (owner: "no big title, no + / = / ✕ button") — the
   // SAME one the old graph had: big title naming the lift(s) (each tap-to-remove), the + add /
   // = match / ✕ remove-all tools, and the "Pick" drawer tab. Operates on waGraphSel, which the
@@ -20090,20 +20103,16 @@ function renderGraphDashboard(): void {
     `<div class="gdash-titlerow wa-seltitle-host">${titleHtml}</div>` +
     `<div class="gdash-head">` +
       `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
-      `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +
       `<button type="button" class="wa-gov-btn gdash-bw${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
     `</div>` +
     `<div id="gdashStageSlot"></div>` +
     (S.waRepsVsWeight ? rvwPagerHtml() : "") +
     `<div class="gdash-foot">` +
-      `<button type="button" class="gmini-nav" data-dashnav="-1" aria-label="Previous bubble">‹</button>` +
-      `<div class="gmini-dots">${dots}</div>` +
-      `<button type="button" class="gmini-nav" data-dashnav="1" aria-label="Next bubble">›</button>` +
-      // Per-bubble actions, right next to the dots: ⧉ duplicate · ✕ delete (when >1).
-      `<button type="button" class="gmini-nav gdash-bubdup" data-dashbubdup="1" aria-label="Duplicate this bubble" title="Duplicate this bubble">⧉</button>` +
-      (tab.bubbles.length > 1 ? `<button type="button" class="gmini-nav gdash-bubdel" data-dashremove="1" aria-label="Delete this bubble" title="Delete this bubble">✕</button>` : "") +
+      `<div class="gdash-bubbles">${dots}` +
+        // The trailing "＋" bubble: tap → menu (duplicate current · delete current · add new view).
+        `<button type="button" class="gdash-bub gdash-bub-add" data-dashbubmenu="1" aria-label="Add or manage views" title="Duplicate, delete or add a view">＋</button>` +
+      `</div>` +
       optionsFold +
-      `<button type="button" class="gmini-nav gdash-addbubble" data-dashadd="1" aria-label="Add a graph bubble to this tab" title="Add a graph bubble to this tab">＋</button>` +
     `</div>`;
   // Slot the (preserved or new) stage element into place.
   const slot = document.getElementById("gdashStageSlot");
@@ -21437,35 +21446,16 @@ function setupWorkoutAnalysis(): void {
       graphDash = setActiveTab(graphDash, dashTab.dataset.dashtab); dashBubbleIdx = 0; persistDash();
       refreshDash(); return;
     }
-    // Prev / next bubble in the reel (wraps).
-    const dashNav = t.closest<HTMLElement>("[data-dashnav]");
-    if (dashNav?.dataset.dashnav) {
-      const n = activeTab(graphDash).bubbles.length;
-      dashBubbleIdx = (dashBubbleIdx + Number(dashNav.dataset.dashnav) + n) % n;
-      refreshDash(); return;
-    }
-    // Jump to a bubble via its dot.
+    // Jump to a view via its bubble.
     const dashDot = t.closest<HTMLElement>("[data-dashdot]");
     if (dashDot?.dataset.dashdot != null) { dashBubbleIdx = Number(dashDot.dataset.dashdot) || 0; refreshDash(); return; }
-    // Add a bubble to the active tab (jump the reel to it).
-    if (t.closest<HTMLElement>("[data-dashadd]")) {
-      const tab = activeTab(graphDash);
-      graphDash = addBubble(graphDash, tab.id, { exercises: [...currentBubble().exercises] });
-      dashBubbleIdx = activeTab(graphDash).bubbles.length - 1; persistDash(); refreshDash(); return;
-    }
-    // Remove the current bubble (guarded: a tab always keeps one).
-    if (t.closest<HTMLElement>("[data-dashremove]")) {
-      const tab = activeTab(graphDash);
-      graphDash = removeBubble(graphDash, tab.id, currentBubble().id);
-      if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
-      persistDash(); refreshDash(); return;
-    }
-    // Duplicate the current bubble (a fresh-id copy, same config) and jump the reel to it.
-    if (t.closest<HTMLElement>("[data-dashbubdup]")) {
-      const tab = activeTab(graphDash);
-      graphDash = duplicateBubble(graphDash, tab.id, currentBubble().id);
-      dashBubbleIdx = Math.min(dashBubbleIdx + 1, activeTab(graphDash).bubbles.length - 1);
-      persistDash(); refreshDash(); return;
+    // The trailing "＋" bubble → open the view menu (add / duplicate / delete). The menu lives in
+    // <body> so its ACTIONS are handled at document level (PB-38 root fix), like the tab menu.
+    const bubMenuOpen = t.closest<HTMLElement>("[data-dashbubmenu]");
+    if (bubMenuOpen) {
+      if (document.getElementById("dashBubbleMenu")) closeDashBubbleMenu();
+      else openDashBubbleMenu(bubMenuOpen);
+      return;
     }
     // Per-bubble: cycle graph type (Over time ⇄ Reps × kg) — independent, persisted.
     if (t.closest<HTMLElement>("[data-dashtype]")) {
@@ -21636,6 +21626,27 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu, [data-tabmenuopen]")) { dbg("menu close (outside)"); closeDashTabMenu(); }
+    // The "＋" view-bubble menu (same PB-38 reasoning) — add / duplicate / delete the current view.
+    const bubItem = tgt?.closest<HTMLElement>("[data-bubmenu]");
+    if (bubItem?.dataset.bubmenu) {
+      const act = bubItem.dataset.bubmenu;
+      const tab = activeTab(graphDash);
+      dbg(`bub menu ACTION ${act} (doc) ✓`);
+      closeDashBubbleMenu();
+      if (act === "add") {
+        graphDash = addBubble(graphDash, tab.id, {});
+        dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+      } else if (act === "duplicate") {
+        graphDash = duplicateBubble(graphDash, tab.id, currentBubble().id);
+        dashBubbleIdx = Math.min(dashBubbleIdx + 1, activeTab(graphDash).bubbles.length - 1);
+      } else if (act === "delete") {
+        graphDash = removeBubble(graphDash, tab.id, currentBubble().id);
+        if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+      }
+      persistDash(); refreshDash();
+      return;
+    }
+    if (document.getElementById("dashBubbleMenu") && !tgt?.closest("#dashBubbleMenu, [data-dashbubmenu]")) { dbg("bub menu close (outside)"); closeDashBubbleMenu(); }
   });
 }
 

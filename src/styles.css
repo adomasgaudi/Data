@@ -1148,9 +1148,23 @@ body.admin-only-hidden .tab[data-tab="coach"] { display: none; }
 .gmini-foot .wa-graph-fold-cur { display: none; }
 .gmini-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line); cursor: pointer; transition: background 0.15s, transform 0.15s ; }
 .gmini-dot.is-on { background: var(--accent); transform: scale(1.25); }
-/* Per-bubble Duplicate / Delete sit right after the dots in the reel foot. */
-.gdash-bubdup, .gdash-bubdel { flex: 0 0 auto; font-size: 0.95rem; }
-.gdash-bubdel { color: var(--remove); }
+/* View bubbles (owner redesign): big tappable circles that ARE the nav — tap one to switch view,
+   the trailing "＋" bubble opens the add/duplicate/delete menu. One horizontally-scrolling row. */
+.gdash-bubbles {
+  display: flex; align-items: center; gap: 0.35rem; flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px;
+}
+.gdash-bub {
+  flex: 0 0 auto; min-width: var(--tap-min); min-height: var(--tap-min); width: var(--tap-min); height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--bg);
+  color: var(--accent); font-size: 0.85rem; font-weight: 700; line-height: 1; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.gdash-bub:hover { border-color: var(--accent); }
+.gdash-bub.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.gdash-bub-add { color: var(--muted); font-size: 1.05rem; }
+.gdash-bub-add:hover { color: var(--accent); border-color: var(--accent); }
 /* ── Custom graph dashboard (CHART-160) ──────────────────────────────────────
    A tab strip + a per-bubble control row + the bubble's chart + the reel foot. Compact,
    one horizontally-scrolling row each (#cram), reusing the carousel dots/nav for the reel. */
