@@ -138,7 +138,14 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
  * it becomes a normal data-derived exercise and this entry is just a no-op dedupe.
  * Add a name here when the owner says "create exercise X". (PB-25.)
  */
-export const EXTRA_EXERCISES: readonly string[] = ["Knee Raise", "Cross-Legged Squats"];
+export const EXTRA_EXERCISES: readonly string[] = [
+  "Knee Raise", "Cross-Legged Squats",
+  // Leverbell — an adjustable one-sided loaded handle held like a sword/axe (the weight sits
+  // toward one end on a movable plate, you grip the other), for forearm/wrist leverage. Four
+  // movements across the two rotational axes the owner trains (NOT wrist flexion/extension):
+  // forearm rotation (pronation/supination) + wrist deviation (radial/ulnar).
+  "Leverbell Pronation", "Leverbell Supination", "Leverbell Radial Deviation", "Leverbell Ulnar Deviation",
+];
 
 /**
  * The exercise names a picker/selector should offer for a set of records.
