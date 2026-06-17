@@ -12134,29 +12134,32 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   // (Owner: "2× thinner, top spheres → cubes 2× thicker than the bar but smaller, light
   // shadows + different side shadings, darker edges, real colour theory".)
   type Face = { pts: { X: number; Y: number }[]; z: number; t: number; op: number };
-  type BarColor = { hue: number; sat: number; baseL: number };
-  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; shadow: { X: number; Y: number }; count: number; color: BarColor };
-  // COLOUR ENCODES THE DATA (owner: "darker with increasing weight, hue more red at higher
-  // reps"): hue runs teal→red as reps rise, lightness runs light→dark as weight rises. Lambert
-  // then modulates each face's lightness so the 3D form still reads (lit faces brighter,
-  // shadowed darker), keeping the bar's identity colour.
+  type BarColor = { r: number; g: number; b: number };
+  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; count: number; color: BarColor; cx: number; cz: number; topY: number; shTip: { X: number; Y: number } };
+  // COLOUR: a clean cool→warm SEQUENTIAL ramp (deep teal → warm brick-red), not a hue-wheel
+  // rainbow — redder with more reps, and darkened as weight rises. Richer chroma; the
+  // world-fixed light then brightens/darkens each face for form. (Owner: nicer colour theory.)
   const wRange = Math.max(1, d.hiW - d.loW);
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+  const COOL: [number, number, number] = [40, 132, 150];
+  const WARM: [number, number, number] = [198, 74, 52];
   const barColor = (w: number, reps: number): BarColor => {
-    const wf = Math.max(0, Math.min(1, (w - d.loW) / wRange));
-    const rf = d.maxReps > 0 ? Math.max(0, Math.min(1, reps / d.maxReps)) : 0;
-    return { hue: 186 - 178 * rf, sat: 50, baseL: 60 - 30 * wf };
+    const wf = clamp01((w - d.loW) / wRange), rf = d.maxReps > 0 ? clamp01(reps / d.maxReps) : 0;
+    const dk = 1 - 0.4 * wf; // darker as weight rises
+    return { r: (COOL[0] + (WARM[0] - COOL[0]) * rf) * dk, g: (COOL[1] + (WARM[1] - COOL[1]) * rf) * dk, b: (COOL[2] + (WARM[2] - COOL[2]) * rf) * dk };
   };
-  const clampL = (l: number) => Math.max(9, Math.min(88, l));
-  const faceFill = (c: BarColor, t: number) => `hsl(${c.hue.toFixed(0)}, ${c.sat}%, ${clampL(c.baseL * (0.7 + 0.55 * t)).toFixed(1)}%)`;
-  const edgeFill = (c: BarColor) => `hsl(${c.hue.toFixed(0)}, ${c.sat}%, ${Math.max(7, c.baseL * 0.4).toFixed(1)}%)`;
-  const SHADOW = "#1a2733"; // neutral soft ground shadow
-  // Screen-space light (top-front, slightly left), fixed to the viewer so the shading stays
-  // legible at every rotation; Lambert maps a face's screen normal onto the gradient above.
-  const Llen = Math.hypot(-0.4, 0.86, 0.5), L = { x: -0.4 / Llen, y: 0.86 / Llen, z: 0.5 / Llen };
-  const faceT = (nx: number, ny: number, nz: number): number => { const rn = rot(nx, ny, nz); return 0.5 + 0.5 * (rn.X * L.x + rn.Y * L.y + rn.Z * L.z); };
+  const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  const faceFill = (c: BarColor, t: number) => { const f = 0.55 + 0.62 * t; return `rgb(${cl(c.r * f)},${cl(c.g * f)},${cl(c.b * f)})`; };
+  const edgeFill = (c: BarColor) => `rgb(${cl(c.r * 0.6)},${cl(c.g * 0.6)},${cl(c.b * 0.6)})`; // lighter than before (owner: corners too black)
+  const SHADOW = "#26323d"; // soft ground shadow
+  // WORLD-FIXED light from an ANGLE (upper-front-right), NOT rotated into screen space — so
+  // spinning the model moves which faces are lit and the shadow direction (owner: "light stays
+  // the same, rotating changes shadow position; from an angle, not overhead"). Face normals are
+  // world-fixed, so the dot is constant per world-face; rotating the camera reveals them.
+  const Lw = (() => { const n = Math.hypot(0.55, 0.6, 0.45); return { x: 0.55 / n, y: 0.6 / n, z: 0.45 / n }; })();
+  const faceT = (nx: number, ny: number, nz: number): number => 0.3 + 0.7 * Math.max(0, nx * Lw.x + ny * Lw.y + nz * Lw.z);
   const SIDE_N: [number, number, number][] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
-  const hwx = 0.055, hwz = 0.055;        // stick half-width — 2× thinner than before (owner)
-  const cubeHalf = 0.11;                  // cube head half-size — 2× the bar's thickness, small
+  const hwx = 0.055, hwz = 0.055;        // stick half-width — thin (owner)
   // Append one box's lit faces (4 sides + optional top) to `faces` at opacity `op`; returns
   // its 8 corners. `skipTop` omits the top face (for stacked recency segments, where an
   // intermediate top would be hidden under the segment above and only muddy the transparency).
@@ -12178,17 +12181,20 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     // Stick = stacked RECENCY segments (recent at the bottom solid, older above and fading):
     // a tier of t occurrences is mapH(t) tall, at that tier's opacity (owner: older = fainter).
     let cum = 0; const lastTier = p.tiers.reduce((m, c, i) => (c > 0 ? i : m), 0);
-    const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz, MAP_TIER_OP[0]); // base footprint (corners + solid base)
-    faces.length = 0; // rebuilt as segments below; keep `stick` corners for bounds
+    const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz, MAP_TIER_OP[0]); // for corners/bounds
+    faces.length = 0; // rebuilt as recency segments below (no cube head anymore — owner)
     for (let i = 0; i < p.tiers.length; i++) {
       const c = p.tiers[i]!; if (c <= 0) continue;
       const yLo = cy0 + mapH(cum), yHi = cy0 + mapH(cum + c);
       addBox(faces, cx, cz, yLo, yHi, hwx, hwz, MAP_TIER_OP[i] ?? 0.22, i !== lastTier);
       cum += c;
     }
-    const cube = addBox(faces, cx, cz, topY - cubeHalf, topY + cubeHalf, cubeHalf, cubeHalf);
-    const hd = rot(cx, topY, cz), sh = rot(cx, cy0, cz);
-    bars.push({ corners: [...stick, ...cube], faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, shadow: { X: sh.X, Y: sh.Y }, count: p.count, color: barColor(p.w, p.reps) });
+    const hd = rot(cx, topY, cz);
+    // Shadow tip: the bar's foot cast along the world light's opposite horizontal, length ∝
+    // height — so taller bars throw longer shadows and rotating moves them (light is world-fixed).
+    const shLen = mapH(p.count) * 0.5 + 0.12;
+    const shT = rot(cx - Lw.x * shLen, cy0, cz - Lw.z * shLen);
+    bars.push({ corners: stick, faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, count: p.count, color: barColor(p.w, p.reps), cx, cz, topY, shTip: { X: shT.X, Y: shT.Y } });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
@@ -12230,7 +12236,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     return { X: x1, Y: y * rcP - z1 * rsP };
   };
   let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMaxY = -Infinity;
-  for (const bx of [-Wd / 2, Wd / 2]) for (const by of [cy0, cy0 + maxBarH + cubeHalf]) for (const bz of [-Dp / 2, Dp / 2]) {
+  for (const bx of [-Wd / 2, Wd / 2]) for (const by of [cy0, cy0 + maxBarH]) for (const bz of [-Dp / 2, Dp / 2]) {
     const q = refProj(bx, by, bz);
     if (q.X < rMinX) rMinX = q.X; if (q.X > rMaxX) rMaxX = q.X; if (q.Y < rMinY) rMinY = q.Y; if (q.Y > rMaxY) rMaxY = q.Y;
   }
@@ -12273,21 +12279,30 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   // Far→near: each bar draws a soft ground shadow first, then its faces sorted far→near so
   // near faces overpaint far ones (painter's algorithm).
   bars.sort((a, b) => a.depth - b.depth);
-  const shadowR = cubeHalf * scale * 1.6;
   for (const bar of bars) {
-    const shx = sx(bar.shadow.X), shy = sy(bar.shadow.Y);
-    out += `<ellipse cx="${shx.toFixed(1)}" cy="${(shy + 1.5).toFixed(1)}" rx="${shadowR.toFixed(1)}" ry="${(shadowR * 0.4).toFixed(1)}" fill="${SHADOW}" opacity="0.16"/>`;
+    // Elongated ANGLED shadow: the foot smeared toward the world-light's cast direction, its
+    // length set per-bar (taller = longer). Rotated to the screen angle of foot→tip.
+    const foot = rot(bar.cx, cy0, bar.cz);
+    const fx = sx(foot.X), fy = sy(foot.Y), tx = sx(bar.shTip.X), ty = sy(bar.shTip.Y);
+    const mx = (fx + tx) / 2, my = (fy + ty) / 2, ddx = tx - fx, ddy = ty - fy;
+    const slen = Math.hypot(ddx, ddy), sang = Math.atan2(ddy, ddx) * 180 / Math.PI;
+    out += `<ellipse cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" rx="${(slen / 2 + hwx * scale * 1.2).toFixed(1)}" ry="${Math.max(2, hwx * scale * 1.4).toFixed(1)}" transform="rotate(${sang.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)})" fill="${SHADOW}" opacity="0.17"/>`;
     bar.faces.sort((a, b) => a.z - b.z);
     const edge = edgeFill(bar.color);
     for (const f of bar.faces) {
       const poly = f.pts.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
       out += `<polygon points="${poly}" fill="${faceFill(bar.color, f.t)}" fill-opacity="${f.op.toFixed(2)}" stroke="${edge}" stroke-width="0.5" stroke-opacity="${f.op.toFixed(2)}" stroke-linejoin="round"/>`;
     }
-    // Number ON TOP of the cube = how many times that rep was done (owner). White-haloed
-    // so it stays legible over any bar; a transparent hit-circle carries the hover tooltip.
-    const lx = sx(bar.head.X), ly = sy(bar.head.Y);
-    out += `<text x="${lx.toFixed(1)}" y="${(ly - cubeHalf * scale - 2).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#1f2a44" paint-order="stroke" stroke="#fff" stroke-width="2" stroke-linejoin="round">${bar.count}</text>`;
-    out += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
+    // SECTIONED height (owner: "sectioned heights instead of numbers, so I see how many"): a thin
+    // cross-section ring at each count level lets you count the units; thinned out on tall bars.
+    const ringStep = bar.count > 12 ? 2 : 1;
+    for (let k = ringStep; k < bar.count; k += ringStep) {
+      const yk = cy0 + mapH(k);
+      const rc = [rot(bar.cx - hwx, yk, bar.cz - hwz), rot(bar.cx + hwx, yk, bar.cz - hwz), rot(bar.cx + hwx, yk, bar.cz + hwz), rot(bar.cx - hwx, yk, bar.cz + hwz)];
+      out += `<polygon points="${rc.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ")}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.5"/>`;
+    }
+    // Transparent hit-circle at the bar top carries the hover tooltip (count is in the tip).
+    out += `<circle cx="${sx(bar.head.X).toFixed(1)}" cy="${sy(bar.head.Y).toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
   }
 
   // Axis lines + labels.
