@@ -19694,7 +19694,7 @@ function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remo
  * clear, and the body is height-capped + scrolls. Disable with `localStorage.setItem("colosseum.dbg","off")`.
  * Also exposed as `window.dbg` for ad-hoc desktop-console use.
  */
-const dbgLines: string[] = [];
+const dbgLines: { t: string; err: boolean }[] = [];
 function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.dbgCollapsed") === "1"; } catch { return false; } }
 function renderDbg(): void {
   let el = document.getElementById("dbgOverlay");
@@ -19711,21 +19711,30 @@ function renderDbg(): void {
     document.body.appendChild(el);
   }
   const collapsed = dbgCollapsed();
+  const hasErr = dbgLines.some((l) => l.err);
+  // Errors render RED, normal trace GREEN (header too) — one screenshot tells a crash from flow (owner: "red logs").
+  const lines = dbgLines.map((l) => `<span style="color:${l.err ? "#f55" : "#3f6"}">${escapeHtml(l.t)}</span>`).join("\n");
   el.innerHTML =
     `<div id="dbgHead" style="display:flex;gap:8px;align-items:center;padding:2px 6px;cursor:pointer;opacity:0.85">` +
-    `<span>dbg ${collapsed ? "▸" : "▾"}</span><span style="margin-left:auto">${dbgLines.length}</span><span id="dbgClear" style="padding:0 4px">✕</span></div>` +
-    (collapsed ? "" : `<div id="dbgBody" style="max-height:18vh;overflow:auto;padding:0 6px 3px;white-space:pre-wrap;word-break:break-all">${escapeHtml(dbgLines.join("\n"))}</div>`);
+    `<span style="color:${hasErr ? "#f55" : "#3f6"}">dbg ${collapsed ? "▸" : "▾"}</span><span style="margin-left:auto">${dbgLines.length}</span><span id="dbgClear" style="padding:0 4px">✕</span></div>` +
+    (collapsed ? "" : `<div id="dbgBody" style="max-height:18vh;overflow:auto;padding:0 6px 3px;white-space:pre-wrap;word-break:break-all">${lines}</div>`);
   const body = document.getElementById("dbgBody");
   if (body) body.scrollTop = body.scrollHeight; // keep the newest line in view
 }
-function dbg(msg: string): void {
+function dbg(msg: string, isErr = false): void {
   try { if (localStorage.getItem("colosseum.dbg") === "off") return; } catch { /* ignore */ }
-  dbgLines.push(`${new Date().toTimeString().slice(0, 8)} ${msg}`);
+  dbgLines.push({ t: `${new Date().toTimeString().slice(0, 8)} ${msg}`, err: isErr });
   while (dbgLines.length > 40) dbgLines.shift();
   renderDbg();
 }
 // Expose for ad-hoc use from a desktop console or other modules.
-(window as unknown as { dbg?: (m: string) => void }).dbg = dbg;
+(window as unknown as { dbg?: (m: string, e?: boolean) => void }).dbg = dbg;
+// Surface any uncaught JS error / promise rejection on the on-screen console (phones have no
+// devtools) — the owner asked for visible error logging; a crash now shows up in red on-device.
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (e) => dbg(`ERR ${e.message} @ ${(e.filename || "").split("/").pop() ?? ""}:${e.lineno}`, true));
+  window.addEventListener("unhandledrejection", (e) => dbg(`REJECT ${String((e as PromiseRejectionEvent).reason).slice(0, 90)}`, true));
+}
 function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
   closeDashTabMenu();
   const canDelete = graphDash.tabs.length > 1;

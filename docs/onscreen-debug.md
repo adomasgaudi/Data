@@ -11,11 +11,13 @@ that shows exactly what happened. This is what finally cracked **PB-38** (the ta
 
 ## What it is
 
-`dbg(msg: string)` in `src/main.ts`:
-- appends a timestamped line to a fixed **green-on-black panel, bottom-left**, `z-index` max;
+`dbg(msg: string, isErr = false)` in `src/main.ts`:
+- appends a timestamped line to a fixed panel, **bottom-left**, `z-index` max — **green** for normal trace, **red** for errors (`isErr` / the auto error-capture below);
 - keeps the **last ~9 lines** (older ones scroll off);
 - **tap the panel to clear it**;
 - also reachable as **`window.dbg("…")`** (handy from a desktop console, or any module).
+
+**Uncaught errors show automatically.** `window.error` and `unhandledrejection` handlers feed `dbg(…, true)`, so any JS crash or rejected promise paints a **red** line on-device (the owner can screenshot a phone crash that would otherwise be invisible).
 
 It's on by default. To silence it: `localStorage.setItem("colosseum.dbg","off")` then reload.
 
