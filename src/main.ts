@@ -20077,7 +20077,16 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   // restored ONLY while the plotted CONTENT is unchanged (this signature) — change the lift /
   // metric / type / athlete / time-compaction and it re-fits instead of keeping a stale frame.
   const tabId = activeTab(graphDash).id;
-  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), athletes]);
+  // DATA FINGERPRINT in the saved-view signature: the saved pan/zoom is kept only while the
+  // PLOTTED DATA is unchanged. Without this, logging a set didn't change the sig, so the frozen
+  // view was restored and update() only re-fit the right axis — the new datapoint fell outside
+  // the stale frame and was clipped off-screen (owner: "I add a set but don't see the dot").
+  // Folding count + latest date + a cheap value-sum in means any add / delete / edit re-fits.
+  const plotted = recs.filter((r) => exs.includes(r.exerciseName));
+  let dataMax = "";
+  let dataSum = plotted.length;
+  for (const r of plotted) { if (r.date && r.date > dataMax) dataMax = r.date; dataSum += (r.weight ?? 0) * 31 + (r.reps ?? 0); }
+  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), athletes, dataSum, dataMax]);
   const initialView = bubble.savedView && bubble.savedView.sig === sig ? bubble.savedView.box : null;
   return {
     exercises: exs,
@@ -20086,6 +20095,10 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     metrics: drawMetricIds,
     config: cfg,
     initialView,
+    // A thin red "today" reference line on the time axis (owner: "mark today as a little red").
+    // Anchored to midnight today so it lines up with today's datapoint; meaningless on the
+    // reps×kg (weight-axis) view, so only on time charts.
+    xRefLines: isRvw ? undefined : [{ x: Date.parse(todayIso()), color: "#cf5a4a", label: "today" }],
     onViewChange: (box) => {
       // Persist only — never re-render here (that would destroy the chart mid-gesture).
       graphDash = setBubbleView(graphDash, tabId, bubble.id, box ? { sig, box } : null);

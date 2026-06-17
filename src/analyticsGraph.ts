@@ -105,6 +105,9 @@ export interface AnalyticsGraphInput {
   /** Draggable vertical fit-window markers (the projection's include-from/to lines),
    * in ms timestamps. Passed straight to the chart; omitted = no markers. */
   xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
+  /** Static vertical reference lines (e.g. a "today" marker) in ms timestamps. Passed
+   * straight to the chart; non-draggable. Omitted = none. */
+  xRefLines?: { x: number; color?: string; label?: string }[] | undefined;
   /** Called on release after dragging a fit-window marker (id + new ms timestamp). */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
   /** Reps-vs-weight fit: a manual EFFECTIVE 1RM that POSITIONS the Nuzzo curve for an
@@ -512,6 +515,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       : undefined, // cleared when the %WR metric is turned off (no stale shading)
     // Projection fit-window lines (always present so the merge clears them when off — PB-8).
     xMarkers: input.xMarkers,
+    xRefLines: input.xRefLines,
     onMarkerDrag: input.onMarkerDrag,
     initialView: input.initialView, // restore the bubble's saved pan/zoom on mount
     onViewChange: input.onViewChange, // persist the user's pan/zoom (null = re-fit)

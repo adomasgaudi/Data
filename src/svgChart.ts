@@ -210,6 +210,9 @@ export interface SvgChartConfig {
    * start/end lines. Each draws a labelled line + grab handle; dragging one calls
    * onMarkerDrag with its committed x. Inert (no extra interaction) when absent. */
   xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
+  /** STATIC vertical reference lines in x (data) space — non-draggable, no grip, thin.
+   * E.g. a "today" marker on a time chart. Skipped when its x falls outside the view. */
+  xRefLines?: { x: number; color?: string; label?: string }[] | undefined;
   /** Called on release after a marker drag, with the marker id and its new x value. */
   onMarkerDrag?: ((id: string, x: number) => void) | undefined;
   /** Draggable HORIZONTAL markers in y (LEFT-axis data) space — e.g. the projection's
@@ -929,6 +932,21 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // Draggable vertical fit-window markers (e.g. the projection's include-from/to lines):
     // a coloured dashed line top-to-bottom + a grip tab at the top + a fat transparent
     // hit-line. Their pixel x is cached for pointer hit-testing.
+    // STATIC x reference lines (e.g. "today"): a thin line, no grip, no hit-target. Drawn
+    // before the draggable markers so those sit on top. Skipped when off the visible plot.
+    if (cfg.xRefLines && cfg.xRefLines.length) {
+      for (const rl of cfg.xRefLines) {
+        const px = xPix(rl.x);
+        if (px < M.l - 0.5 || px > W - M.r + 0.5) continue; // outside the view → don't draw
+        const col = rl.color ?? "#cf5a4a";
+        const lbl = rl.label ? `<text class="svgc-xref-lbl" x="${(px + 3).toFixed(1)}" y="${(h - M.b - 3).toFixed(1)}" font-size="9" fill="${col}" fill-opacity="0.8">${esc(rl.label)}</text>` : "";
+        body +=
+          `<g class="svgc-xref">` +
+          `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${(h - M.b).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="3 3" stroke-opacity="0.7"/>` +
+          lbl +
+          `</g>`;
+      }
+    }
     markerPx = [];
     if (cfg.xMarkers && cfg.xMarkers.length) {
       for (const mk of cfg.xMarkers) {
