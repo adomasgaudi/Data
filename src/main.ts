@@ -4533,6 +4533,7 @@ function renderAthlete() {
     lastAnalysisAthlete = els.athlete.value;
     waSelected = defaultHistorySelection();
     waGraphSel = defaultGraphSelection();
+    dashLoadedBubbleId = null; // force the dashboard to RELOAD the bubble's lifts (not write the athlete-default over them)
     titleExpanded.graph = false;
     titleExpanded.hist = false;
     statsFullShown = false; // new athlete → lead with the mini facts again
@@ -18468,13 +18469,6 @@ function openPickDrawer(scope: SelScope): void {
   box.hidden = false;
   box.classList.add("is-pick-drawer", "is-entering"); // start off the right edge…
   requestAnimationFrame(() => box.classList.remove("is-entering")); // …then slide in
-  // PB-36 diagnostic — remove once root cause confirmed on device
-  { const gf = document.getElementById("waGraphFull"), card = box, ch = document.getElementById("waChips-graph");
-    const d = Object.assign(document.createElement("div"), { id: "pb36dbg" });
-    d.style.cssText = "position:fixed;top:0;left:0;z-index:99999;background:#c00;color:#fff;font:11px monospace;padding:2px 6px;white-space:pre;pointer-events:none";
-    d.textContent = `PB-36 scope=${scope} full.hidden=${gf?.hidden} card.oh=${card.offsetHeight} chips=${ch?.children.length ?? "?"}`;
-    document.getElementById("pb36dbg")?.remove();
-    document.body.appendChild(d); }
 }
 function closePickDrawer(): void {
   if (pickDrawerScope === null) return;
@@ -18754,6 +18748,11 @@ let graphCarOverride: string[] | null = null;
 let graphDash: GraphDashboard = loadDashboard();
 let dashBubbleIdx = 0;
 let dashEditTab: string | null = null; // the tab whose name is being inline-edited (null = none)
+// PB-37: which bubble's lifts are currently LOADED into the shared graph selection (waGraphSel).
+// Lets the dashboard tell a bubble SWITCH (load bubble→picker) from a user EDIT (the +/✕/=
+// title toolbar or picker changed waGraphSel → write picker→bubble). Without this the render
+// kept mirroring the bubble back over the toolbar's edit, so changing the exercise never stuck.
+let dashLoadedBubbleId: string | null = null;
 /** The bubble currently showing in the reel (active tab, clamped index). */
 function currentBubble(): GraphBubble {
   const t = activeTab(graphDash);
@@ -19110,31 +19109,30 @@ function renderGraphDashboard(): void {
   const tab = activeTab(graphDash);
   if (dashBubbleIdx >= tab.bubbles.length) dashBubbleIdx = 0;
   let bubble = tab.bubbles[dashBubbleIdx]!;
-  // Friendly first-run: an unconfigured (empty) bubble seeds from the athlete's top lift so the
-  // graph shows something immediately rather than a blank placeholder. Only when not editing.
-  if (bubble.exercises.length === 0 && pickDrawerScope !== "graph") {
-    const seed = graphCarouselLifts()[0];
-    if (seed) {
-      graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [seed] });
-      persistDash();
-      bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
+  // PB-37 sync — the bubble is the SSOT, mirrored to the shared selection (waGraphSel) the
+  // title toolbar + picker operate on. FIRST paint of a bubble (id changed) → LOAD its lifts
+  // into waGraphSel (seeding a brand-new empty bubble from the top lift so it shows something).
+  // SAME bubble again → the +/✕/= toolbar or picker just edited waGraphSel, so WRITE it back to
+  // the bubble (persist) — even to empty (the owner chose to clear it). This is what lets
+  // "change the exercise" stick; the old code re-mirrored the bubble over every edit.
+  if (dashLoadedBubbleId !== bubble.id) {
+    if (bubble.exercises.length === 0) {
+      const seed = graphCarouselLifts()[0]; // friendly first-run: don't open blank
+      if (seed) {
+        graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [seed] });
+        persistDash();
+        bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
+      }
     }
-  }
-  // SSOT = the bubble. The picker is open → the owner is editing this bubble's lifts, so write
-  // the picker's selection BACK to the bubble; otherwise mirror the bubble into the picker AND
-  // re-render the selector so its title/chips actually show THIS bubble's lifts (the selector
-  // renders before this fn in the analysis flow, so without this it showed a stale/empty pick).
-  if (pickDrawerScope === "graph") {
-    if (JSON.stringify(waGraphSel) !== JSON.stringify(bubble.exercises)) {
-      graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [...waGraphSel] });
-      persistDash();
-    }
-  } else {
     const want = [...bubble.exercises];
-    if (JSON.stringify(waGraphSel) !== JSON.stringify(want)) {
-      waGraphSel = want;
-      renderSelector("graph"); // refresh the picker + its lift title to this bubble
-    }
+    const changed = JSON.stringify(waGraphSel) !== JSON.stringify(want);
+    waGraphSel = want;
+    dashLoadedBubbleId = bubble.id;
+    if (changed) renderSelector("graph"); // refresh the picker card to this bubble's lifts
+  } else if (JSON.stringify(waGraphSel) !== JSON.stringify(bubble.exercises)) {
+    graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [...waGraphSel] });
+    persistDash();
+    bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
   }
   // TABS live ABOVE the graph (owner): rendered into their own host at the TOP of #waGraphFull,
   // above the picker + chart. The ACTIVE tab carries a ✎ rename (inline input) + ✕ delete.
@@ -19174,18 +19172,17 @@ function renderGraphDashboard(): void {
     .join("");
   const typeLbl = bubble.type === "rvw" ? "✦ Reps × kg" : "↗ Over time";
   const viewLbl = bubble.view === "multi" ? "Multi" : "Single";
-  // Per-bubble TITLE (owner: "what exercise is this?") — the lift name(s) this bubble graphs,
-  // tappable to open the lift picker. single → the one lift; multi → all, dotted.
-  const exNames = bubble.exercises.map((e) => displayName(e, "graph"));
-  const titleTxt = exNames.length === 0
-    ? "Pick a lift…"
-    : bubble.view === "single" ? exNames[0]! : exNames.join(" · ");
+  // The FULL lift-selection title toolbar (owner: "no big title, no + / = / ✕ button") — the
+  // SAME one the old graph had: big title naming the lift(s) (each tap-to-remove), the + add /
+  // = match / ✕ remove-all tools, and the "Pick" drawer tab. Operates on waGraphSel, which the
+  // PB-37 sync above writes back to this bubble — so add/remove/change all persist per bubble.
+  const titleHtml = liftSelectionTitle(waGraphSel, "graph");
   // The shared Options ▾ menu (metrics + aggregation/decay/projection…), scoped to this
   // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
   // per-bubble "type" pill owns that switch).
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true });
   box.innerHTML =
-    `<div class="gdash-titlerow"><button type="button" class="gdash-title wa-title-lift${bubble.exercises.length ? "" : " is-empty"}" data-dashpick="1" title="Tap to change this bubble's lift(s)">${escapeHtml(titleTxt)}</button></div>` +
+    `<div class="gdash-titlerow wa-seltitle-host">${titleHtml}</div>` +
     `<div class="gdash-head">` +
       `<button type="button" class="gdash-pill" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${typeLbl}</button>` +
       `<button type="button" class="gdash-pill" data-dashview="1" title="Single lift ⇄ multi-lift overlay">${viewLbl}</button>` +

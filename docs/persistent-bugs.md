@@ -1,5 +1,15 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-37 — Can't change the graph exercise in the new dashboard (no title toolbar; edits reverted)
+
+- **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph (custom dashboard, CHART-160+). Owner: "i cant change the exercise #persistent #debug with error red logs on screen" then "can add but its not as it was before — no big title, no plus button, no equals button, no delete button."
+- **Root cause (two compounding):** (1) The new dashboard replaced the old graph's `liftSelectionTitle` toolbar (big title + `+` add / `=` match / `✕` remove-all + the "Pick" drawer tab + each lift name a tap-to-remove button) with a plain text title — so the only affordances to add/remove/change lifts were gone. (2) The bubble↔`waGraphSel` sync MIRRORED the bubble back into `waGraphSel` on EVERY render, so even when a toolbar/picker edit changed `waGraphSel`, the next render reverted it — the change never stuck.
+- **Fix (b.2.9.33):** (1) Render the real `liftSelectionTitle(waGraphSel, "graph")` in the dashboard title row — the same toolbar the old graph had. (2) Track `dashLoadedBubbleId`: a bubble's FIRST paint (id changed) LOADS its lifts into `waGraphSel`; the SAME bubble again means a toolbar/picker edit, so WRITE `waGraphSel` back to the bubble (persist) — never re-mirror over the edit. (3) On athlete change (which resets `waGraphSel` to the athlete default), null `dashLoadedBubbleId` so the dashboard RELOADS the bubble's lifts instead of writing the default over them. Removed the stale PB-36 red on-screen diagnostic banner (its area is reworked; `#waGraphFull` is now always visible in the dashboard, so the picker's hidden-parent failure can't occur).
+- **Watch:** any per-bubble field projected onto a shared global (waGraphSel, waMetrics, S.wa*) needs the same load-on-switch / write-on-edit discipline, or edits get reverted. Don't re-mirror SSOT→global every render.
+- **Recurrences:** 0 (first log).
+
+---
+
 ## PB-36 — Graph exercise picker drawer opens blank/white (no chips visible)
 
 - **First seen / reported:** 2026-06-16, mobile (Brave, Android), Analysis → Graph → tap "▦ Pick". Owner: "can't choose exercises side graph not working / side menu / out of bounds css #persistent". Saw a white rectangle on the right (~307px wide) but it was blank — no controls, no chips.
