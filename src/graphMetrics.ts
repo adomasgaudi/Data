@@ -241,6 +241,13 @@ function bucketCenter(t: number, interval: GraphConfig["interval"]): number {
   // epoch-day to the Monday on/before: Monday-as-0 index = (dayOfEpoch + 3) % 7.
   const day = Math.floor(t / DAY);
   const mondayDay = day - ((day + 3) % 7);
+  if (interval === "biweek") {
+    // 2-week buckets anchored to a fixed Monday (epoch day −3 is a Monday), so pairs of
+    // Monday-weeks group consistently; centre = the bucket's midpoint (+7 days).
+    const ANCHOR = -3;
+    const startDay = ANCHOR + Math.floor((day - ANCHOR) / 14) * 14;
+    return (startDay + 7) * DAY;
+  }
   return mondayDay * DAY + WEEK / 2; // week (Monday-anchored)
 }
 /** Sum a per-set value into one point per time bucket (volume / reps "by date").

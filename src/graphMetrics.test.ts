@@ -57,6 +57,18 @@ describe("graph metric registry (TASK 26)", () => {
     expect(vol.map((p) => p.y)).toEqual([1000, 500]); // {Jan1+Jan7}, {Jan8}
   });
 
+  it("bi-week interval groups two Monday-weeks into one bucket", () => {
+    const cfg = { ...DEFAULT_GRAPH_CONFIG, interval: "biweek" as const };
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-08", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-15", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const vol = graphMetric("volume")!.compute!(recs, cfg);
+    expect(vol.length).toBe(2); // 3 consecutive Monday-weeks span exactly 2 bi-week buckets
+    expect(vol.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(1500); // volume conserved
+  });
+
   it("every registered metric now has a compute (TASKS 31–41)", () => {
     // pctWR is computed specially in analyticsGraph (needs sex/bodyweight/the WR),
     // so it deliberately carries no registry compute.

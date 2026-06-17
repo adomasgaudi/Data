@@ -10,7 +10,7 @@ export interface GraphConfig {
   /** How same-interval points are combined: none = every set, else per interval. */
   aggregation: "none" | "max" | "avg" | "sum";
   /** Bucket size when aggregating. */
-  interval: "day" | "week" | "month";
+  interval: "day" | "week" | "biweek" | "month";
   /** Moving-average window in points (0 = off). */
   smoothing: number;
   /** Apply the strength-fade (detraining) model to strength metrics. */
