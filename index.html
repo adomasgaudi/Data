@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.99</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.100</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -1091,6 +1091,8 @@
           <button type="button" id="graphToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the Graph section">Graph</button>
           <button type="button" id="planToggleBtn" class="wa-topact-btn admin-only is-on" aria-pressed="true" title="Hide the Plan section">Plan</button>
           <button type="button" id="histToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the History section">History</button>
+          <button type="button" id="histHorizToggleBtn" class="wa-topact-btn admin-only" aria-pressed="false" title="Show the Horizontal history section">Horizontal</button>
+          <button type="button" id="calToggleBtn" class="wa-topact-btn admin-only" aria-pressed="false" title="Show the Calendar section">Calendar</button>
         </div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,
              just under the athlete picker and above the Analysis card. -->
@@ -1158,7 +1160,7 @@
                period buckets (days / weeks / months) but laid out as columns you
                scroll SIDEWAYS through time, instead of stacked vertically. New, may
                break; restore point recorded in docs/restore-points.md. -->
-          <details class="wa-fold wa-fold-titled" id="waHistHorizFold">
+          <details class="wa-fold wa-fold-titled" id="waHistHorizFold" hidden>
             <summary class="wa-fold-sum">Horizontal history <span class="muted hh-exp">experimental</span></summary>
             <div id="waHistHoriz" class="wa-section"></div>
           </details>
@@ -1166,7 +1168,7 @@
                mode so it never disappears; with exercises selected it highlights only
                those lifts' squares. Returned to #workoutsPanel on leave. Sits below the
                history (it's still being built — tagged "developing"). Collapsed by default. -->
-          <details class="wa-fold wa-fold-titled" id="waCalendarFold">
+          <details class="wa-fold wa-fold-titled" id="waCalendarFold" hidden>
             <summary class="wa-fold-sum">Training calendar <span class="muted hh-exp">developing</span></summary>
             <div id="waCalendarHost" class="wa-section"></div>
           </details>

@@ -5193,12 +5193,15 @@ function setupStatsToggle(): void {
 // Both default to SHOWN (they're visible normally); the button just hides them. The
 // folds are static in the DOM (only their inner sections re-render), so a one-time
 // apply on init + on click keeps the hidden state — no per-render reapply needed.
-type SectionToggle = { btnId: string; foldId: string; key: string; label: string; onShow?: () => void };
+type SectionToggle = { btnId: string; foldId: string; key: string; label: string; onShow?: () => void; defaultShown?: boolean };
 const SECTION_TOGGLES: SectionToggle[] = [
   { btnId: "graphToggleBtn", foldId: "waGraphFold", key: "colosseum.graphSectionShown", label: "Graph" },
   // Plan is its own card now (moved out of the old overlay) — render it when shown.
   { btnId: "planToggleBtn", foldId: "waPlanFold", key: "colosseum.planSectionShown", label: "Plan", onShow: () => renderWorkoutPlan() },
   { btnId: "histToggleBtn", foldId: "waHistFold", key: "colosseum.histSectionShown", label: "History" },
+  // Experimental views — OFF by default, revealed only when their button is tapped.
+  { btnId: "histHorizToggleBtn", foldId: "waHistHorizFold", key: "colosseum.histHorizSectionShown", label: "Horizontal history", defaultShown: false },
+  { btnId: "calToggleBtn", foldId: "waCalendarFold", key: "colosseum.calSectionShown", label: "Calendar", defaultShown: false },
 ];
 const sectionShown: Record<string, boolean> = {};
 function applySectionToggle(s: SectionToggle): void {
@@ -5229,9 +5232,10 @@ function renderWorkoutPlanIfShown(): void {
 }
 function setupSectionToggles(): void {
   for (const s of SECTION_TOGGLES) {
-    sectionShown[s.key] = (() => { try { return localStorage.getItem(s.key) !== "0"; } catch { return true; } })();
+    const def = s.defaultShown ?? true; // most sections show by default; experimental ones don't
+    sectionShown[s.key] = (() => { try { const v = localStorage.getItem(s.key); return v === null ? def : v !== "0"; } catch { return def; } })();
     document.getElementById(s.btnId)?.addEventListener("click", () => {
-      sectionShown[s.key] = !(sectionShown[s.key] ?? true);
+      sectionShown[s.key] = !(sectionShown[s.key] ?? def);
       try { localStorage.setItem(s.key, sectionShown[s.key] ? "1" : "0"); } catch { /* storage may be unavailable */ }
       applySectionToggle(s);
     });
@@ -20652,7 +20656,13 @@ function commandList(): CmdSpec[] {
     { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { const cur = effectiveNameMode(); setNameMode(cur === "code" ? "short" : cur === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
-    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true; } },
+    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => {
+      goToAnalysis();
+      // The Calendar section is OFF by default now — reveal it via its toggle, then open the fold.
+      const s = SECTION_TOGGLES.find((x) => x.foldId === "waCalendarFold");
+      if (s) { sectionShown[s.key] = true; try { localStorage.setItem(s.key, "1"); } catch { /* ignore */ } applySectionToggle(s); }
+      for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true;
+    } },
     { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
     { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },
   ];
