@@ -69,13 +69,12 @@ describe("addedWeight1RM", () => {
     expect(addedWeight1RM(r, "epley")).toBeCloseTo(epley1RM(100, 5)!, 6);
   });
 
-  it("folds a machine base weight into the rep-curve, then peels it back (dialed-basis 1RM)", () => {
-    // Leg Extension dialed at 30 kg × 10, with a 20 kg machine base → effective load 50,
-    // displayed (origWeight) 30. effective 1RM = 50 × (1 + 10/30) = 66.667; the machine base
-    // (50 − 30 = 20) peels back → 46.667 — higher than the dialed-only 40, so the hidden
-    // resistance counts toward strength while the shown weight stays the dialed value.
-    const machine = rec({ weight: 50, origWeight: 30, reps: 10 });
-    expect(addedWeight1RM(machine, "epley")).toBeCloseTo(epley1RM(50, 10)! - 20, 6);
+  it("computes a machine-base set's 1RM on the full total load (base folded in)", () => {
+    // Leg Extension dialed at 30 kg × 10 with a 20 kg machine base → effective load 50,
+    // origWeight 50 (the TOTAL is what counts), so the 1RM is the full epley1RM(50, 10) —
+    // higher than the dialed-only 30. The "20+30" breakdown is display-only; calcs use 50.
+    const machine = rec({ weight: 50, origWeight: 50, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")).toBeCloseTo(epley1RM(50, 10)!, 6);
     const dialedOnly = rec({ weight: 30, reps: 10 });
     expect(addedWeight1RM(machine, "epley")!).toBeGreaterThan(addedWeight1RM(dialedOnly, "epley")!);
   });

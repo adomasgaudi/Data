@@ -875,6 +875,13 @@ function machineWeightFor(exerciseName: string): number {
   }
   return MACHINE_WEIGHT_DEFAULTS[exerciseName] ?? 0;
 }
+/** Display prefix for a machine-weight lift: "base+" (e.g. "20+") so the shown weight reads
+ * "20+30" — the hidden machine base plus the dialed value (the only editable part). Empty
+ * when the lift has no machine base. */
+function machineWeightPrefix(exerciseName: string): string {
+  const mw = machineWeightFor(exerciseName);
+  return mw > 0 ? `${fmt(mw)}+` : "";
+}
 /** Set (or clear, with null/blank) a lift's machine base weight. Admin-only metadata. */
 function setMachineWeight(exerciseName: string, value: number | null) {
   if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
@@ -2537,21 +2544,23 @@ function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   // false so the per-set list always reflects real effort regardless of the graph.
   const viewAdded = viewAddedWeight(r.exerciseName, r.weight, logged);
   const bwMult = viewBwMult(r.exerciseName, r.weight, logged);
-  // Machine base weight (e.g. Leg Extension +20 kg): folded into the EFFECTIVE load for
-  // strength / 1RM, but NOT into origWeight — so the displayed kg + volume stay on the
-  // dialed value, while the 1RM peels it back like a bodyweight share (machineWeightFor).
+  // Machine base weight (e.g. Leg Extension +20 kg): the machine adds a hidden base, so
+  // the TOTAL load (dialed + base) is what counts. Fold it into BOTH the effective load
+  // (1RM) and origWeight (so volume + every "added weight" read the total too). The set
+  // views still show the dialed value (raw r.weight) — prefixed "base+dialed" — and only
+  // that dialed part is editable; the base is per-exercise metadata (machineWeightFor).
   const mw = machineWeightFor(r.exerciseName);
   const effAdded = mw > 0 && viewAdded != null ? viewAdded + mw : viewAdded;
   if (coeff <= 0) {
-    const base = mw <= 0 && viewAdded === r.weight ? r : { ...r, weight: effAdded, origWeight: viewAdded };
+    const base = mw <= 0 && viewAdded === r.weight ? r : { ...r, weight: effAdded, origWeight: effAdded };
     return applyMachineMode(base);
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
   // default only when the set didn't record one.
   const bw0 = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
   const bw = bw0 === null ? null : bw0 * bwMult;
-  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-  return applyMachineMode({ ...r, weight: effectiveLoad(effAdded, bw, coeff), origWeight: viewAdded });
+  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = the total added.
+  return applyMachineMode({ ...r, weight: effectiveLoad(effAdded, bw, coeff), origWeight: effAdded });
 }
 
 // ---- Owner-editable combinable/comparable membership ------------------------
@@ -7525,6 +7534,9 @@ function setDisplay(raw: SetRecord): string {
   const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
   const note = s.notes?.trim();
   const bw = s.weight === 0 || s.weight === 1;
+  // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
+  // you dialed (the editable part). Empty for normal lifts.
+  const mwp = machineWeightPrefix(s.exerciseName);
   // Quick-edit "Variant" mode (history ⚙ → Var): each set that HAS a variant — a
   // machine cable/gravity choice, a difficulty family, an incline level, or a note —
   // becomes a tappable chip that opens the floating variant editor for that one set,
@@ -7566,7 +7578,7 @@ function setDisplay(raw: SetRecord): string {
     const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
     const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
     const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`));
+    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -7576,7 +7588,7 @@ function setDisplay(raw: SetRecord): string {
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
     return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
   }
-  return finish(effWrap(`${chips}${wr(s.weight, s.reps)}${mach}`));
+  return finish(effWrap(`${chips}${mwp}${wr(s.weight, s.reps)}${mach}`));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -8670,10 +8682,11 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const cellFor = (id: string): string => {
     switch (id) {
       // Always show the LOGGED dial value (s.weight); a machine set gets a "not real"
-      // mark because its real effort is ~half (shown in the expanded row).
+      // mark because its real effort is ~half (shown in the expanded row). A machine-base
+      // lift (e.g. Leg Extension) shows "base+dialed" via machineWeightPrefix.
       case "weight": return machineSet
-        ? `${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
-        : wr(s.weight, s.reps);
+        ? `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
+        : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`;
       case "e1rm": return e1rmCell;
       case "volume": return vol === null ? "—" : fmt(vol);
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
