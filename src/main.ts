@@ -3532,16 +3532,14 @@ let vol3dPitch = 0.52;
 // Map-tab controls (owner): merge the floor by a weight bin (2/5/10 kg) and a rep bin
 // (every rep · 1–3/4–6 · 1–10/11–20), choose the time range of sets, and make the pin
 // HEIGHT count sets OR total reps. Device-local display prefs.
-const VOL3D_WTBINS = [1, 2, 3, 5, 8, 13, 20] as const;
+const VOL3D_WTBINS = [1, 2, 5, 10, 15, 20] as const; // round kg bins (owner)
 const VOL3D_REPBINS = [1, 2, 3, 4, 5] as const; type Vol3dRepBin = number; // reps merged into bins of this size (1 = each rep)
 const VOL3D_RANGES = ["1w", "2w", "1mo", "3mo", "6mo", "12mo", "all"] as const; type Vol3dRange = (typeof VOL3D_RANGES)[number];
-type Vol3dHeight = "sets" | "reps";
 const mapPref = (k: string, dflt: string): string => { try { return localStorage.getItem(`colosseum.map.${k}`) ?? dflt; } catch { return dflt; } };
 const setMapPref = (k: string, v: string): void => { try { localStorage.setItem(`colosseum.map.${k}`, v); } catch { /* ignore */ } };
 let vol3dWtBin: number = (() => { const v = Number(mapPref("wtBin", "5")); return (VOL3D_WTBINS as readonly number[]).includes(v) ? v : 5; })();
 let vol3dRepBin: Vol3dRepBin = (() => { const v = Number(mapPref("repBin", "1")); return (VOL3D_REPBINS as readonly number[]).includes(v) ? v : 1; })();
 let vol3dRange: Vol3dRange = ((v) => (VOL3D_RANGES as readonly string[]).includes(v) ? v : "all")(mapPref("range", "all")) as Vol3dRange;
-let vol3dHeight: Vol3dHeight = ((v) => (v === "reps" ? v : "sets"))(mapPref("height", "sets")) as Vol3dHeight;
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
@@ -12029,51 +12027,61 @@ function cardVolDistHtml(name: string): string {
 interface SetsMap {
   pts: { w: number; reps: number; count: number; repLabel?: string }[];
   loW: number; hiW: number; maxReps: number; maxCount: number;
-  /** What the bar HEIGHT (count) measures — "sets" or total "reps" (axis + tooltip label). */
-  unit: Vol3dHeight;
-  /** The chosen weight-bin (kg) and rep-bin sizes — drive the bar width/depth (bigger group = chunkier bar). */
+  /** The chosen weight-bin (kg) and rep-bin sizes — drive the bin grid. */
   binW: number; binR: number;
 }
 
-/** Count a lift's sets per (weight-bin, reps) cell — the height of each map pin. */
+/** Count a lift's sets per (weight-bin, reps) cell — the height of each map bar. */
 function cardSetsMapData(name: string): SetsMap | null {
   const all = cardNuzzoRealSets(name);
+  if (all.length === 0) return null;
   // Time range: keep only sets within the chosen window (anchored to now).
   const RANGE_DAYS: Record<Vol3dRange, number> = { "1w": 7, "2w": 14, "1mo": 30, "3mo": 91, "6mo": 182, "12mo": 365, all: 0 };
   const cutoff = RANGE_DAYS[vol3dRange] ? Date.now() - RANGE_DAYS[vol3dRange] * 86_400_000 : 0;
   const sets = cutoff ? all.filter((s) => { const t = Date.parse(s.date); return Number.isFinite(t) && t >= cutoff; }) : all;
-  if (sets.length === 0) return null;
   const bin = vol3dWtBin > 0 ? vol3dWtBin : 5;
   const sz = vol3dRepBin > 1 ? vol3dRepBin : 1;
-  // Group each set's rep count by its weight bin.
-  const byW = new Map<number, number[]>();
-  let loW = Infinity, hiW = -Infinity;
-  for (const s of sets) {
-    const w = Math.round(s.added / bin) * bin;
-    loW = Math.min(loW, w); hiW = Math.max(hiW, w);
-    const list = byW.get(w); if (list) list.push(s.reps); else byW.set(w, [s.reps]);
-  }
-  // CUMULATIVE rep-survival (owner-confirmed): at (weight, rep-bin k) the height = how many sets
-  // REACHED that rep — a set of R reps counts toward every rep position 1..R, so rep 1 is tallest.
-  // "reps" height sums the reaching sets' reps (volume) instead of counting the sets.
-  const pts: { w: number; reps: number; count: number; repLabel?: string }[] = [];
-  let maxReps = 1, maxCount = 1;
-  for (const [w, repList] of byW) {
-    const wMax = Math.max(...repList);
-    const nBins = Math.max(1, Math.ceil(wMax / sz));
-    for (let k = 1; k <= nBins; k++) {
-      const binLow = (k - 1) * sz + 1;
-      const reaching = repList.filter((r) => r >= binLow);
-      if (reaching.length === 0) continue;
-      const count = vol3dHeight === "reps" ? reaching.reduce((a, r) => a + r, 0) : reaching.length;
-      const repCoord = k * sz;
-      pts.push({ w, reps: repCoord, count, repLabel: sz > 1 ? `${binLow}–${repCoord}` : `${k}` });
-      maxReps = Math.max(maxReps, repCoord);
-      maxCount = Math.max(maxCount, count);
+  // Bin a set-list into per-rep OCCURRENCE cells: at (weight, rep-position k) the height =
+  // how many TIMES that rep was performed at that weight — i.e. how many sets reached rep k
+  // (one set of R reps does rep 1 once, rep 2 once … rep R once). So "60kg rep 1" counts every
+  // 60kg set, "60kg rep 7" only the 60kg sets that got to a 7th rep — rep 1 is tallest, tapering
+  // up. (Owner: "count how many of EACH rep was done; a 16-rep set did the 1st rep only once" —
+  // the old sets/total-reps toggle is gone.)
+  type Pt = { w: number; reps: number; count: number; repLabel?: string };
+  const binSets = (list: typeof sets): { pts: Pt[]; loW: number; hiW: number; maxReps: number; maxCount: number } => {
+    const byW = new Map<number, number[]>();
+    let loW = Infinity, hiW = -Infinity;
+    for (const s of list) {
+      const w = Math.round(s.added / bin) * bin;
+      loW = Math.min(loW, w); hiW = Math.max(hiW, w);
+      const a = byW.get(w); if (a) a.push(s.reps); else byW.set(w, [s.reps]);
     }
-  }
+    const pts: Pt[] = [];
+    let maxReps = 1, maxCount = 1;
+    for (const [w, repList] of byW) {
+      const wMax = Math.max(...repList);
+      const nBins = Math.max(1, Math.ceil(wMax / sz));
+      for (let k = 1; k <= nBins; k++) {
+        const binLow = (k - 1) * sz + 1;
+        const reaching = repList.filter((r) => r >= binLow); // sets that performed this rep
+        if (reaching.length === 0) continue;
+        const count = reaching.length; // how many TIMES this rep was done at this weight
+        const repCoord = k * sz;
+        pts.push({ w, reps: repCoord, count, repLabel: sz > 1 ? `${binLow}–${repCoord}` : `${k}` });
+        maxReps = Math.max(maxReps, repCoord);
+        maxCount = Math.max(maxCount, count);
+      }
+    }
+    return { pts, loW, hiW, maxReps, maxCount };
+  };
+  // FRAME (axes) is computed from ALL sets so the X/Y/Z extents stay FIXED when you filter by
+  // time — a sparse window then shows shorter bars on the same scale, so you can SEE the
+  // difference (owner). The displayed bars come from the time-filtered subset.
+  const frame = binSets(all);
+  const disp = cutoff ? binSets(sets) : frame;
+  let loW = frame.loW, hiW = frame.hiW;
   if (hiW === loW) hiW = loW + bin;
-  return { pts, loW, hiW, maxReps, maxCount, unit: vol3dHeight, binW: bin, binR: sz };
+  return { pts: disp.pts, loW, hiW, maxReps: frame.maxReps, maxCount: frame.maxCount, binW: bin, binR: sz };
 }
 
 /** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
@@ -12103,16 +12111,22 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   // (Owner: "2× thinner, top spheres → cubes 2× thicker than the bar but smaller, light
   // shadows + different side shadings, darker edges, real colour theory".)
   type Face = { pts: { X: number; Y: number }[]; z: number; t: number };
-  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; shadow: { X: number; Y: number } };
-  // Warm-light → cool-shadow gradient: a real value+temperature range (not one flat hue), so
-  // lit faces are bright/warm and shadowed faces deep/cool — the cue the eye uses for form.
-  const COOL: [number, number, number] = [21, 64, 80];    // deep cool teal — faces in shadow
-  const WARM: [number, number, number] = [156, 224, 208];  // bright warm mint — faces in light
-  const EDGE = "#0e2f3a";                                   // darker edge for crisp definition
-  const lit = (t: number): string => {
-    const k = Math.max(0, Math.min(1, t));
-    return `rgb(${Math.round(COOL[0] + (WARM[0] - COOL[0]) * k)},${Math.round(COOL[1] + (WARM[1] - COOL[1]) * k)},${Math.round(COOL[2] + (WARM[2] - COOL[2]) * k)})`;
+  type BarColor = { hue: number; sat: number; baseL: number };
+  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; shadow: { X: number; Y: number }; count: number; color: BarColor };
+  // COLOUR ENCODES THE DATA (owner: "darker with increasing weight, hue more red at higher
+  // reps"): hue runs teal→red as reps rise, lightness runs light→dark as weight rises. Lambert
+  // then modulates each face's lightness so the 3D form still reads (lit faces brighter,
+  // shadowed darker), keeping the bar's identity colour.
+  const wRange = Math.max(1, d.hiW - d.loW);
+  const barColor = (w: number, reps: number): BarColor => {
+    const wf = Math.max(0, Math.min(1, (w - d.loW) / wRange));
+    const rf = d.maxReps > 0 ? Math.max(0, Math.min(1, reps / d.maxReps)) : 0;
+    return { hue: 186 - 178 * rf, sat: 50, baseL: 60 - 30 * wf };
   };
+  const clampL = (l: number) => Math.max(9, Math.min(88, l));
+  const faceFill = (c: BarColor, t: number) => `hsl(${c.hue.toFixed(0)}, ${c.sat}%, ${clampL(c.baseL * (0.7 + 0.55 * t)).toFixed(1)}%)`;
+  const edgeFill = (c: BarColor) => `hsl(${c.hue.toFixed(0)}, ${c.sat}%, ${Math.max(7, c.baseL * 0.4).toFixed(1)}%)`;
+  const SHADOW = "#1a2733"; // neutral soft ground shadow
   // Screen-space light (top-front, slightly left), fixed to the viewer so the shading stays
   // legible at every rotation; Lambert maps a face's screen normal onto the gradient above.
   const Llen = Math.hypot(-0.4, 0.86, 0.5), L = { x: -0.4 / Llen, y: 0.86 / Llen, z: 0.5 / Llen };
@@ -12139,8 +12153,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz);
     const cube = addBox(faces, cx, cz, topY - cubeHalf, topY + cubeHalf, cubeHalf, cubeHalf);
     const hd = rot(cx, topY, cz), sh = rot(cx, cy0, cz);
-    const unit = d.unit === "reps" ? "rep" : "set";
-    bars.push({ corners: [...stick, ...cube], faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · ${p.repLabel ?? p.reps} reps · ${p.count} ${unit}${p.count !== 1 ? "s" : ""}`, head: { X: hd.X, Y: hd.Y }, shadow: { X: sh.X, Y: sh.Y } });
+    bars.push({ corners: [...stick, ...cube], faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, shadow: { X: sh.X, Y: sh.Y }, count: p.count, color: barColor(p.w, p.reps) });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
@@ -12204,14 +12217,18 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const shadowR = cubeHalf * scale * 1.6;
   for (const bar of bars) {
     const shx = sx(bar.shadow.X), shy = sy(bar.shadow.Y);
-    out += `<ellipse cx="${shx.toFixed(1)}" cy="${(shy + 1.5).toFixed(1)}" rx="${shadowR.toFixed(1)}" ry="${(shadowR * 0.4).toFixed(1)}" fill="${EDGE}" opacity="0.16"/>`;
+    out += `<ellipse cx="${shx.toFixed(1)}" cy="${(shy + 1.5).toFixed(1)}" rx="${shadowR.toFixed(1)}" ry="${(shadowR * 0.4).toFixed(1)}" fill="${SHADOW}" opacity="0.16"/>`;
     bar.faces.sort((a, b) => a.z - b.z);
+    const edge = edgeFill(bar.color);
     for (const f of bar.faces) {
       const poly = f.pts.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
-      out += `<polygon points="${poly}" fill="${lit(f.t)}" stroke="${EDGE}" stroke-width="0.5" stroke-linejoin="round"/>`;
+      out += `<polygon points="${poly}" fill="${faceFill(bar.color, f.t)}" stroke="${edge}" stroke-width="0.5" stroke-linejoin="round"/>`;
     }
-    // Transparent hit-circle at the cube head carries the hover tooltip.
-    out += `<circle cx="${sx(bar.head.X).toFixed(1)}" cy="${sy(bar.head.Y).toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
+    // Number ON TOP of the cube = how many times that rep was done (owner). White-haloed
+    // so it stays legible over any bar; a transparent hit-circle carries the hover tooltip.
+    const lx = sx(bar.head.X), ly = sy(bar.head.Y);
+    out += `<text x="${lx.toFixed(1)}" y="${(ly - cubeHalf * scale - 2).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#1f2a44" paint-order="stroke" stroke="#fff" stroke-width="2" stroke-linejoin="round">${bar.count}</text>`;
+    out += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
   }
 
   // Axis lines + labels.
@@ -12222,7 +12239,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   out += lbl(axW, 0, 13, `${d.loW}kg`);
   out += lbl(axO, 0, 13, `${d.hiW}kg`);
   out += lbl(axR, 0, 13, `${d.maxReps} reps`);
-  out += lbl(axS, 0, -5, `${d.maxCount} ${d.unit === "reps" ? "reps" : "sets"}`);
+  out += lbl(axS, 0, -5, `${d.maxCount}× done`);
   return out;
 }
 
@@ -12232,9 +12249,8 @@ function cardMapCtrlsHtml(): string {
   const RANGE_LBL: Record<Vol3dRange, string> = { "1w": "1 week", "2w": "2 weeks", "1mo": "1 month", "3mo": "3 months", "6mo": "6 months", "12mo": "12 months", all: "all time" };
   const rangeLbl = RANGE_LBL[vol3dRange];
   return `<div class="lt-map-ctrls">` +
-    `<button type="button" class="lt-map-pill" data-mapwt title="Merge weights into bins — tap to cycle 1 / 2 / 3 / 5 / 8 / 13 / 20 kg">wt: ${vol3dWtBin}kg</button>` +
+    `<button type="button" class="lt-map-pill" data-mapwt title="Merge weights into bins — tap to cycle 1 / 2 / 5 / 10 / 15 / 20 kg">wt: ${vol3dWtBin}kg</button>` +
     `<button type="button" class="lt-map-pill" data-maprep title="Merge reps — tap to cycle 1 / 2 / 3 / 4 / 5">${repLbl}</button>` +
-    `<button type="button" class="lt-map-pill" data-mapheight title="Pin height — tap to switch total sets / total reps">tall: ${vol3dHeight}</button>` +
     `<button type="button" class="lt-map-pill" data-maprange title="Time range — tap to cycle 1w / 2w / 1mo / 3mo / 6mo / 12mo / all">${rangeLbl}</button>` +
     `</div>`;
 }
@@ -12242,14 +12258,13 @@ function cardMapCtrlsHtml(): string {
 function cardSetsMapHtml(name: string): string {
   const d = cardSetsMapData(name);
   const ctrls = cardMapCtrlsHtml();
-  if (!d) return ctrls + `<p class="muted" style="padding:1rem 0">No logged sets in this range.</p>`;
-  const tall = vol3dHeight === "reps" ? "total reps" : "sets";
+  if (!d) return ctrls + `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
   const range = vol3dRange === "all" ? "over all time" : ({ "1w": "in the last week", "2w": "in the last 2 weeks", "1mo": "in the last month", "3mo": "in the last 3 months", "6mo": "in the last 6 months", "12mo": "in the last 12 months", all: "over all time" } as Record<Vol3dRange,string>)[vol3dRange];
   return `<div class="lt-vol-wrap">` + ctrls +
     `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 330" xmlns="http://www.w3.org/2000/svg">` +
     renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
     `</svg>` +
-    `<div class="lt-vol-note muted">Drag to rotate · floor = weight × rep number · bar height = ${tall} that reached that rep, ${range} (so rep 1 is tallest)</div>` +
+    `<div class="lt-vol-note muted">Drag to rotate · floor = weight × rep number · bar height = how many times that rep was done ${range} (so rep 1 is tallest); axes stay fixed across time filters</div>` +
     `</div>`;
 }
 
@@ -14389,13 +14404,12 @@ async function init() {
   });
   els.exInfoBody.addEventListener("click", (e) => {
     // Map-tab merge/range/height pills (cycle the value, persist, re-render the map).
-    const mapCtl = (e.target as HTMLElement).closest<HTMLElement>("[data-mapwt],[data-maprep],[data-maprange],[data-mapheight]");
+    const mapCtl = (e.target as HTMLElement).closest<HTMLElement>("[data-mapwt],[data-maprep],[data-maprange]");
     if (mapCtl) {
       e.preventDefault(); e.stopPropagation();
       if (mapCtl.hasAttribute("data-mapwt")) { vol3dWtBin = VOL3D_WTBINS[((VOL3D_WTBINS as readonly number[]).indexOf(vol3dWtBin) + 1) % VOL3D_WTBINS.length]!; setMapPref("wtBin", String(vol3dWtBin)); }
       else if (mapCtl.hasAttribute("data-maprep")) { vol3dRepBin = VOL3D_REPBINS[((VOL3D_REPBINS as readonly number[]).indexOf(vol3dRepBin) + 1) % VOL3D_REPBINS.length]!; setMapPref("repBin", String(vol3dRepBin)); }
-      else if (mapCtl.hasAttribute("data-maprange")) { vol3dRange = VOL3D_RANGES[((VOL3D_RANGES as readonly string[]).indexOf(vol3dRange) + 1) % VOL3D_RANGES.length]!; setMapPref("range", vol3dRange); }
-      else { vol3dHeight = vol3dHeight === "sets" ? "reps" : "sets"; setMapPref("height", vol3dHeight); }
+      else { vol3dRange = VOL3D_RANGES[((VOL3D_RANGES as readonly string[]).indexOf(vol3dRange) + 1) % VOL3D_RANGES.length]!; setMapPref("range", vol3dRange); }
       if (currentExInfo) paintExInfo(currentExInfo);
       return;
     }
