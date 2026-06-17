@@ -696,9 +696,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // shouldn't be hide-able into a blank chart).
     const legendCount = cfg.series.filter((s) => !s.noLegend).length;
     const toggleable = legendCount >= 2;
-    // Bar series are drawn SIDE BY SIDE (grouped) within each x-slot, not stacked
-    // on top of each other — so when several volume/count bars share a bucket you
-    // can read each one's height. Each visible bar series gets its own lane.
+    // Bar series share each x-slot at FULL width (a month bar stays month-wide no
+    // matter how many lifts are shown); extra series are slid slightly right so they
+    // overlap "one on top of another" with a rightward slant (see the bars branch).
     const visBars = geomSeries().filter((s) => s.type === "bars" && visible(s));
     const barN = Math.max(1, visBars.length);
     // Direct labels: floating series names next to their last record (collected in
@@ -839,17 +839,25 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // rigid and just clips at the floor/ceiling instead of stretching.
         const base = ymap(0);
         const clampY = (y: number) => Math.min(h - M.b, Math.max(M.t, y));
-        // Split the histogram slot into one lane per visible bar series and offset
-        // THIS series into its lane, so the bars sit side by side (centred on x as a
-        // group) instead of overlapping. One series → full-width bar as before.
-        const lane = bw / barN;
+        // Multiple bar series: keep EVERY bar the SAME full width (a month-wide
+        // bar stays month-wide no matter how many lifts are shown) and OFFSET each
+        // extra series a little to the RIGHT, so they overlap "one on top of
+        // another" with a slight rightward slant instead of splitting the slot into
+        // thin side-by-side lanes that shrink as you add lifts. One series → a plain
+        // full-width bar centred on its bucket, as before.
         const bi = Math.max(0, visBars.indexOf(s));
-        const laneCenter = (bi - (barN - 1) / 2) * lane;
-        const rectW = barN > 1 ? Math.max(1.2, lane * 0.86) : bw; // small gap between lanes
+        const rightShift = Math.min(bw * 0.3, 10); // per-series rightward slant
+        const laneCenter = bi * rightShift;
+        const rectW = bw; // same width for every series, regardless of how many
+        // Overlapping bars need SOME translucency so the one behind still shows, but
+        // the owner wants them solid-ish ("not too transparent") — floor the fill so
+        // a low opacity slider can't wash the overlap into mud when 2+ bars stack.
+        const baseOp = s.fillOpacity ?? 1;
+        const fillOp = barN > 1 ? Math.max(baseOp, 0.78) : baseOp;
         // Bars can be outline-only or a translucent fill so they don't hide other series.
         const paint = s.outline
           ? `fill="none" stroke="${s.color}" stroke-width="1.3"`
-          : `fill="${s.color}" fill-opacity="${s.fillOpacity ?? 1}"`;
+          : `fill="${s.color}" fill-opacity="${fillOp}"`;
         for (const p of s.points) {
           const x = xPix(p.x) + laneCenter;
           if (x < M.l - bw || x > W - M.r + bw) continue;
