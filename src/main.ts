@@ -8252,7 +8252,10 @@ function renderWorkoutsPage() {
         // done per-set INSIDE the expanded set table (swipe a set row there), never by
         // dragging a whole exercise off the collapsed day view.
         const expTxt = isExperimental(exerciseName) ? ` <span class="wo-exp-tag" title="Experimental — a scratchpad; excluded from all 1RM, volume, graphs and leaderboards">exp</span>` : "";
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        // The "+ set" button lives in its OWN right-hand grid column (3rd col of
+        // .wo-ex-line), aligned to the name row — so every "+ set" lines up in a
+        // column on the right instead of wrapping under each exercise's sets (owner).
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {

@@ -2367,10 +2367,14 @@ select.subtle-select:hover, select.subtle-select:focus {
    never wrap the day row into a tall block. */
 .wo-note { font-style: italic; white-space: nowrap; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
-/* Each exercise line is a 2-column grid: the day's record 1RM in its OWN fixed
-   column (right-aligned), then the name + sets — so every exercise name lines up
-   at the same x regardless of the 1RM's width (or its absence). */
-.wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr; align-items: baseline; column-gap: 0.45rem; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
+/* Each exercise line is a 3-column grid: the day's record 1RM in its OWN fixed
+   column (right-aligned), then the name + sets, then the "+ set" button in its
+   OWN fixed right-hand column — so every exercise name lines up at the same x
+   regardless of the 1RM's width, AND every "+ set" lines up in a column on the
+   right, in line with the exercise name (owner). The last column is `auto` so it
+   collapses to 0 when "+ set" is off. */
+.wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr auto; align-items: baseline; column-gap: 0.45rem; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
+.wo-ex-line > .wo-addset { justify-self: end; }
 /* Swipe an exercise line right to delete its sets that day. While dragging we follow the
    finger (no transition); past the commit threshold a red tint shows it'll delete. */
 .wo-ex-line.wo-ex-swiping { transition: none; will-change: transform; }
