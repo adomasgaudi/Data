@@ -7663,14 +7663,14 @@ function variationChipsHtml(r: SetRecord): string {
   // config default per dimension, so no reference level (free / floor / none / 0cm…)
   // ever shows; e.g. a free push-up renders nothing, an on-knees one shows "knees".
   const defs = FAMILIES[fam]?.defaults ?? {};
-  const SUP: Record<string, string> = { free: "free", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ladder" };
-  const POS: Record<string, string> = { floor: "free", knees: "knees" };
+  // Labels come from the SHARED AF_LEVEL_LBL map (afLevelText), so a tag reads
+  // IDENTICALLY to the picker option that set it (e.g. both say "b2w" / "knees").
   const chips: string[] = [];
   const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
   const sup = vec.support != null ? String(vec.support) : null;
-  if (sup && sup !== defs.support) push(" wo-var-sup", SUP[sup] ?? sup);
+  if (sup && sup !== defs.support) push(" wo-var-sup", afLevelText("support", sup));
   const pos = vec.position != null ? String(vec.position) : null;
-  if (pos && pos !== defs.position) push("", POS[pos] ?? pos);
+  if (pos && pos !== defs.position) push("", afLevelText("position", pos));
   if (vec.band != null && String(vec.band) !== (defs.band ?? "none")) push(" wo-var-band", `band ${String(vec.band)}`);
   if (vec.lean != null && String(vec.lean) !== (defs.lean ?? "0cm")) push("", `lean ${String(vec.lean)}`);
   return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
@@ -17937,20 +17937,29 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 // order. Ladder sub-dims (grip/height) are left to the full per-set editor.
 const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
 const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", shoulderDist: "back support", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
-const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
-  support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder", hanging: "hanging", dips_bar: "dips bar" },
+// ONE canonical label per (dimension, level), shared by the history TAG
+// (variationChipsHtml) and the add-set PICKER so the two can never drift — the
+// owner: "the variation selection should look like the tag and vice versa". The
+// short `label` is what BOTH show; the optional `hint` is a small-gray explanation
+// rendered ONLY in the open picker menu (e.g. "b2w" with hint "back to wall").
+type AfLevelLabel = { label: string; hint?: string };
+const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
+  support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hanging" }, dips_bar: { label: "dips bar" } },
   // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.
-  shoulderDist: { "0cm": "none", blue: "blue 6cm", "30cm": "30cm", "45cm": "45cm" },
-  backrest: { none: "none", "30cm": "30cm rest" },
-  obstacle: { none: "none", S: "yoga S (6cm)", M: "yoga M (15cm)", L: "yoga L (23cm)" },
-  continuity: { paused: "paused", uninterrupted: "uninterrupted" },
-  band: { none: "no band", "1": "band 1", "2": "band 2", "3": "band 3", "4": "band 4", "5": "band 5", "6": "band 6" },
-  position: { floor: "floor (on feet)", knees: "on knees" },
+  shoulderDist: { "0cm": { label: "none" }, blue: { label: "blue", hint: "6cm block" }, "30cm": { label: "30cm" }, "45cm": { label: "45cm" } },
+  backrest: { none: { label: "none" }, "30cm": { label: "30cm", hint: "back rest" } },
+  obstacle: { none: { label: "none" }, S: { label: "yoga S", hint: "6cm" }, M: { label: "yoga M", hint: "15cm" }, L: { label: "yoga L", hint: "23cm" } },
+  continuity: { paused: { label: "paused" }, uninterrupted: { label: "uninterrupted" } },
+  band: { none: { label: "no band" }, "1": { label: "band 1" }, "2": { label: "band 2" }, "3": { label: "band 3" }, "4": { label: "band 4" }, "5": { label: "band 5" }, "6": { label: "band 6" } },
+  // A floor push-up is just "free" (the plain exercise, the default → never tags); on-knees is the only real variation.
+  position: { floor: { label: "free" }, knees: { label: "knees" } },
   // Lever (plate distance from the grip) levels are cm, left as-is; reach (arm held out) reads in words.
-  reach: { tucked: "tucked in", neutral: "neutral", extended: "extended", far: "far out" },
+  reach: { tucked: { label: "tucked in" }, neutral: { label: "neutral" }, extended: { label: "extended" }, far: { label: "far out" } },
 };
-/** Readable label for a dimension level (cm levels like "+23cm" are left as-is). */
-function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level] ?? level; }
+/** Canonical short label for a dimension level (cm levels like "+23cm" are left as-is) — used by BOTH the tag and the picker. */
+function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.label ?? level; }
+/** Optional small-gray explanation for a level, shown only in the picker menu. */
+function afLevelHint(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.hint ?? ""; }
 /** The variation field for the inline add form. For a lift with a VARIATION MODEL
  * (a family), it's a row of structured pickers — the real variables (support, ROM,
  * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
@@ -17968,7 +17977,10 @@ function afVariationField(exerciseName: string): string {
       const showFactor = dim === "lever" || dim === "reach";
       const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l)} ×${levels[l]}` : afLevelText(dim, l));
       const opts = Object.keys(levels)
-        .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(optLbl(l))}</option>`)
+        .map((l) => {
+          const hint = afLevelHint(dim, l);
+          return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
+        })
         .join("");
       return `<select class="wo-af-dim wo-af-dimpill" data-dim="${escapeHtml(dim)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
     }).join("");
@@ -23357,8 +23369,12 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     if (c !== "dd-native" && c !== "dd-wide" && c !== "subtle-select" && c !== "plain-select") dd.classList.add(c);
   sel.insertAdjacentElement("afterend", dd);
 
-  const optHtml = (o: HTMLOptionElement) =>
-    `<button type="button" class="xdd-opt${o.value === sel.value ? " is-active" : ""}" data-val="${escapeHtml(o.value)}" role="option">${escapeHtml(o.textContent ?? "")}</button>`;
+  const optHtml = (o: HTMLOptionElement) => {
+    // A `data-hint` on the option renders as small-gray explanation text beside the
+    // label in the MENU only (the trigger stays label-only so it reads like a tag).
+    const hint = o.dataset.hint ? ` <span class="xdd-opt-hint">${escapeHtml(o.dataset.hint)}</span>` : "";
+    return `<button type="button" class="xdd-opt${o.value === sel.value ? " is-active" : ""}" data-val="${escapeHtml(o.value)}" role="option">${escapeHtml(o.textContent ?? "")}${hint}</button>`;
+  };
 
   const sync = () => {
     let menu = "";

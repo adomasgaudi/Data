@@ -1994,6 +1994,9 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 }
 .xdd-opt:hover { background: var(--accent-soft); color: var(--accent); }
 .xdd-opt.is-active { color: var(--accent); font-weight: 700; }
+/* Small-gray explanation beside a picker option's label (owner: the picker can have
+   explanations in small gray text, but the chosen pill stays a clean tag label). */
+.xdd-opt-hint { color: var(--muted); font-size: 0.78em; font-weight: 400; margin-left: 0.4em; }
 .xdd-opt[hidden], .xdd-group[hidden] { display: none; }
 /* Sticky search box atop a long dropdown — filters the options as you type. Stays put
    while the list scrolls; opaque background so options don't show through it. */
@@ -2667,6 +2670,20 @@ sup.wr-bw { font-size: 0.85em; }
 /* Each tag/ROM pill in the block (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
 .addm-variant-slot select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
 .addm-variant-slot .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
+/* The variation PICKER pill reads like the history TAG it sets (owner: "the css of the
+   variation selector should look the same as the final tag"): uppercase, bold, square
+   --r-xs corners, neutral muted-on-line like .wo-var-chip — kept at --tap-min so it
+   stays tappable. The chosen label shows clean; explanations live in the open menu. */
+.addm-variant-slot .wo-af-dimpill .xdd-btn {
+  min-height: var(--tap-min); width: auto; gap: 0.25rem;
+  padding: 2px 8px; font-size: 0.66rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.02em;
+  border-radius: var(--r-xs); border-color: var(--line);
+  background: var(--line); color: var(--text);
+}
+.addm-variant-slot .wo-af-dimpill .xdd-btn:hover,
+.addm-variant-slot .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
+.addm-variant-slot .wo-af-dimpill .xdd-caret { font-size: 0.6rem; }
 .addm-variant-slot .xdd { flex: 0 0 auto; }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
