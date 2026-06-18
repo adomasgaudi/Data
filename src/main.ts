@@ -7766,6 +7766,17 @@ function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): s
 }
 
 function renderWorkoutsPage() {
+  // Which days/weeks are expanded RIGHT NOW — captured by DATE from the live DOM before
+  // workoutGroups is rebuilt below (rows index into the CURRENT groups). The expanded day
+  // is a `.detail-row` inserted into the table; the innerHTML rebuild below destroys it,
+  // so without this every in-place edit inside an open day (RIR/pRIR picker, the ×chip
+  // modifier, note toggles…) would collapse the day. Reopened after the rebuild so the
+  // expansion survives any re-render path, not just the add-set flow (rule 24 / PB-12 class).
+  const openDates = new Set(
+    Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
+      .map((r) => workoutGroups[Number(r.dataset.index)]?.date)
+      .filter((d): d is string => Boolean(d)),
+  );
   ensureHistoryTabApplied(); // adopt the active history tab's view on the first render
   workoutGroups = buildWorkoutGroups();
   // Default: order each group's exercises by the athlete's plan priority (the SAME order
@@ -7958,6 +7969,7 @@ function renderWorkoutsPage() {
     head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
+  if (openDates.size) reopenWorkoutGroups(openDates); // re-expand the days that were open BEFORE reopenSetEdit, so the set editor inside one can re-anchor (rule 24 / PB-12)
   reopenSetEdit(); // PB-12: keep the set-edit panel open across the rebuild a control triggered
   renderHorizontalHistory(); // EXPERIMENTAL sideways view — reuses the same groups
   saveActiveHistoryTab(); // mirror the live view back into the active history tab
