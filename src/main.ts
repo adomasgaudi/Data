@@ -18698,7 +18698,7 @@ function syncAddmRir(form: HTMLElement): void {
 /** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
 function syncPendingFromModal(): void {
   const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
-  if (!form) { pendingAdd = null; scheduleGhostRender(); return; }
+  if (!form) { pendingAdd = null; refreshGhost(); return; }
   syncAddmVtags(form);
   syncAddmReal(form);
   syncAddmRir(form);
@@ -18713,9 +18713,11 @@ function syncPendingFromModal(): void {
     reps: numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value),
   }));
   pendingAdd = ex ? { ex, date, lines, note: form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "" } : null;
-  scheduleGhostRender();
+  refreshGhost();
 }
-/** Re-render the history (debounced, scroll-preserving) so the ghost set tracks the inputs. */
+/** Re-render the history (debounced, scroll-preserving) so the ghost set tracks the inputs.
+ * Used only when the ghost's LOCATION changes (open / day switch / close) — NOT on every
+ * keystroke; refreshGhost updates the existing slot in place for that (snappy recipe, rule 17). */
 function scheduleGhostRender(): void {
   if (pendingAddTimer) clearTimeout(pendingAddTimer);
   pendingAddTimer = setTimeout(() => {
@@ -18726,15 +18728,35 @@ function scheduleGhostRender(): void {
     window.scrollTo(0, y);
   }, 130);
 }
+/** Update the live ghost-set preview WITHOUT rebuilding the page (the old per-keystroke full
+ * renderWorkoutsPage was the add-sheet lag, owner). The ghost lives on ONE line (the pending
+ * exercise+date): if its slot is already in the DOM, just rewrite its chips — an O(1) DOM
+ * touch that keeps typing + the keyboard animation smooth. Only when the target line CHANGES
+ * (different day/exercise) or the slot doesn't exist yet do we fall back to one debounced full
+ * render to move/create it. This is the "separate the heavy work from the UI" the owner asked
+ * for — done on the main thread (a Web Worker can't touch the DOM, rule 17), just decoupled
+ * from the keystroke. */
+function refreshGhost(): void {
+  const p = pendingAdd;
+  const key = p ? `${p.date}|${p.ex}` : "";
+  const slot = document.querySelector<HTMLElement>(".wo-ghost-slot");
+  if (p && slot && slot.dataset.ghostkey === key) { slot.innerHTML = ghostChipsInner(p); return; }
+  if (!p && slot) { slot.remove(); return; }
+  scheduleGhostRender();
+}
+/** The ghost-set chips (dashed/greyed previews) for the pending add's lines. */
+function ghostChipsInner(p: { lines: { weight: number | null; reps: number | null }[] }): string {
+  return (p.lines.length ? p.lines : [{ weight: null, reps: null }])
+    .map((l) => `<span class="wo-set-ghost" title="New set — adding… (not saved yet)">${l.weight === null && l.reps === null ? "?" : wr(l.weight, l.reps)}</span>`)
+    .join("");
+}
 /** The faint GHOST set chips for a pending add on this exercise+date (empty otherwise) — a
- * dashed, greyed preview of the set(s) being typed in the add popup. */
+ * dashed, greyed preview of the set(s) being typed in the add popup, wrapped in a keyed slot
+ * so refreshGhost can update it in place without a full re-render. */
 function ghostSetsHtml(exerciseName: string, date: string): string {
   const p = pendingAdd;
   if (!p || p.ex !== exerciseName || p.date !== date) return "";
-  const cells = (p.lines.length ? p.lines : [{ weight: null, reps: null }])
-    .map((l) => `<span class="wo-set-ghost" title="New set — adding… (not saved yet)">${l.weight === null && l.reps === null ? "?" : wr(l.weight, l.reps)}</span>`)
-    .join("");
-  return ` ${cells}`;
+  return ` <span class="wo-ghost-slot" data-ghostkey="${escapeHtml(`${date}|${exerciseName}`)}">${ghostChipsInner(p)}</span>`;
 }
 /** The wrapped "Variant" block for the add popup — the structured dim pickers for a
  * modelled lift, or "" when the lift has no variation model. Shared by the initial
