@@ -170,8 +170,28 @@ export function loadHistoryDashboardFor(user: string): HistoryDashboard | null {
 export function saveHistoryDashboardFor(user: string, d: HistoryDashboard): void {
   if (!user) return;
   const all = loadAllHistoryDashboards();
-  all[user] = d;
+  all[user] = stripTempHistory(d); // the temporary jump tab is session-only — never persist it
   saveJson(HISTORY_DASH_KEY_V2, all);
+}
+
+// ---- TEMPORARY jump tab (owner) --------------------------------------------
+// Jump-to-exercise actions (see-in-history) target this ONE session-only tab so the owner's
+// saved custom tabs are never overridden; it's stripped before persisting, so a refresh
+// resets it. Each jump REPLACES it (same fixed id) and makes it active.
+export const TEMP_HISTORY_TAB_ID = "__temp__";
+export function setTempHistoryTab(d: HistoryDashboard, exercises: string[], name = "↪ temp"): HistoryDashboard {
+  const tab: HistoryTab = { id: TEMP_HISTORY_TAB_ID, name, config: { ...defaultHistoryConfig(), lensFilter: [...exercises] } };
+  const has = d.tabs.some((t) => t.id === TEMP_HISTORY_TAB_ID);
+  const tabs = has ? d.tabs.map((t) => (t.id === TEMP_HISTORY_TAB_ID ? tab : t)) : [...d.tabs, tab];
+  return { tabs, activeTabId: TEMP_HISTORY_TAB_ID };
+}
+/** Remove the temporary tab (used at the persist boundary, and on refresh-reset). */
+export function stripTempHistory(d: HistoryDashboard): HistoryDashboard {
+  if (!d.tabs.some((t) => t.id === TEMP_HISTORY_TAB_ID)) return d;
+  const tabs = d.tabs.filter((t) => t.id !== TEMP_HISTORY_TAB_ID);
+  if (!tabs.length) return defaultHistoryDashboard();
+  const activeTabId = tabs.some((t) => t.id === d.activeTabId) ? d.activeTabId : tabs[0]!.id;
+  return { tabs, activeTabId };
 }
 
 // ---- pure tab operations (return a NEW dashboard; never mutate) -------------

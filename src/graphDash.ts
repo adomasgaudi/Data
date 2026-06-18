@@ -151,8 +151,29 @@ export function loadDashboardFor(user: string): GraphDashboard | null {
 export function saveDashboardFor(user: string, d: GraphDashboard): void {
   if (!user) return;
   const all = loadAllDashboards();
-  all[user] = d;
+  all[user] = stripTempGraph(d); // the temporary jump tab is session-only — never persist it
   saveJson(GRAPH_DASH_KEY_V2, all);
+}
+
+// ---- TEMPORARY jump tab (owner) --------------------------------------------
+// Jump-to-exercise actions (see-in-graph) target this ONE session-only tab+bubble so the
+// owner's saved tabs/bubbles are never overridden; stripped before persisting, so a refresh
+// resets it. Each jump REPLACES it (same fixed id) and makes it active.
+export const TEMP_GRAPH_TAB_ID = "__temp__";
+export function setTempGraphTab(d: GraphDashboard, exercises: string[], name = "↪ temp"): GraphDashboard {
+  const bubble = makeBubble({ exercises: [...exercises], view: exercises.length > 1 ? "multi" : "single" });
+  const tab: GraphTab = { id: TEMP_GRAPH_TAB_ID, name, bubbles: [bubble] };
+  const has = d.tabs.some((t) => t.id === TEMP_GRAPH_TAB_ID);
+  const tabs = has ? d.tabs.map((t) => (t.id === TEMP_GRAPH_TAB_ID ? tab : t)) : [...d.tabs, tab];
+  return { tabs, activeTabId: TEMP_GRAPH_TAB_ID };
+}
+/** Remove the temporary tab (used at the persist boundary, and on refresh-reset). */
+export function stripTempGraph(d: GraphDashboard): GraphDashboard {
+  if (!d.tabs.some((t) => t.id === TEMP_GRAPH_TAB_ID)) return d;
+  const tabs = d.tabs.filter((t) => t.id !== TEMP_GRAPH_TAB_ID);
+  if (!tabs.length) return defaultDashboard();
+  const activeTabId = tabs.some((t) => t.id === d.activeTabId) ? d.activeTabId : tabs[0]!.id;
+  return { tabs, activeTabId };
 }
 
 // ---- pure transforms (return a NEW dashboard; never mutate in place) --------

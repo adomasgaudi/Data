@@ -110,12 +110,14 @@ import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
   loadDashboardFor, saveDashboardFor, defaultDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
   addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble, setBubbleView,
+  setTempGraphTab,
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
 import {
   loadHistoryDashboardFor, saveHistoryDashboardFor, defaultHistoryDashboard,
   activeHistoryTab, addHistoryTab, removeHistoryTab,
   renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig,
+  setTempHistoryTab,
   type HistoryDashboard, type HistoryTabConfig, type HistorySortMode,
 } from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
@@ -22967,10 +22969,21 @@ function createUserExerciseDef(): void {
  * right exercises already selected.
  */
 function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
-  if (opts.exercises) {
-    const ex = opts.exercises.filter((n) => n.length > 0);
-    waSelected = ex;
-    waGraphSel = capGraphSel([...ex]); // an explicit "show this lift" focuses BOTH selectors (graph caps at 20)
+  const ex = (opts.exercises ?? []).filter((n) => n.length > 0);
+  if (ex.length) {
+    // Owner: a jump-to-exercise must NOT override the carefully-set custom tabs/bubbles.
+    // Route it into a dedicated TEMPORARY history tab + graph bubble (session-only, stripped
+    // on save → reset on refresh). Load the athlete's dashboards FIRST so the temp rides on
+    // top (and ensureHistory/Dash early-returns for this athlete during the render below).
+    const name = `↪ ${ex.length === 1 ? displayName(ex[0]!) : `${ex.length} lifts`}`;
+    ensureHistoryTabApplied();
+    historyDash = setTempHistoryTab(historyDash, ex, name);
+    applyHistoryTabConfig(activeHistoryTab(historyDash).config); // → waSelected = ex
+    ensureDashUser();
+    graphDash = setTempGraphTab(graphDash, ex, name);
+    dashBubbleIdx = 0;
+    dashLoadedBubbleId = null; // force the temp bubble's lifts to load into waGraphSel
+    waGraphSel = capGraphSel([...ex]); // graph caps at 20
   }
   switchTopTab(analysisTabName()); // full or simplified per the detail flag (no drift)
 }
