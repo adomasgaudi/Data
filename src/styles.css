@@ -2757,26 +2757,31 @@ sup.wr-bw { font-size: 0.85em; }
 /* Each tag/ROM pill in the line (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
 .addm-line-vars select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
 .addm-line-vars .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
-/* The variation PICKER pill reads like the history TAG it sets (owner: "the css of the
-   variation selector should look the same as the final tag"): uppercase, bold, square
-   --r-xs corners, neutral muted-on-line like .wo-var-chip — kept at --tap-min so it
-   stays tappable. The chosen label shows clean; explanations live in the open menu. */
+/* The variation PICKER pill reads like the history TAG it sets (owner: "these should be
+   small and styled like the final history tags"): matches .wo-var-chip — 0.6rem, uppercase,
+   bold, square --r-xs corners, muted-on-line, tight padding, NO --tap-min (owner chose small
+   over the tap-min floor for these). The chosen label shows clean; explanations in the menu. */
 .addm-line-vars .wo-af-dimpill .xdd-btn {
-  min-height: var(--tap-min); width: auto; gap: 0.25rem;
-  padding: 2px 8px; font-size: 0.66rem; font-weight: 700;
+  min-height: 0; width: auto; gap: 0.15rem;
+  padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
   text-transform: uppercase; letter-spacing: 0.02em;
-  border-radius: var(--r-xs); border-color: var(--line);
-  background: var(--line); color: var(--text);
+  border-radius: var(--r-xs); border: 1px solid var(--line);
+  background: var(--line); color: var(--muted);
 }
+/* A SET dimension (away from default) reads in its history-tag colour: support→accent,
+   band→gold (matching .wo-var-sup / .wo-var-band) so the add pills look like the final
+   tags. The is-set class rides on the <select>; its xdd twin is the next element sibling. */
+.addm-line-vars .wo-af-dim.is-set[data-dim="support"] + .xdd .xdd-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
+.addm-line-vars .wo-af-dim.is-set[data-dim="band"] + .xdd .xdd-btn { background: var(--gold); border-color: var(--gold); color: #fff; }
 .addm-line-vars .wo-af-dimpill .xdd-btn:hover,
-.addm-line-vars .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
-.addm-line-vars .wo-af-dimpill .xdd-caret { font-size: 0.6rem; }
+.addm-line-vars .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); }
+.addm-line-vars .wo-af-dimpill .xdd-caret { font-size: 0.55rem; opacity: 0.7; }
 .addm-line-vars .xdd { flex: 0 0 auto; }
 /* ＋ tag — reveal the dims still at their default so you can add one (owner: only the tags
    you've set show; tap ＋ to add more). A subtle dashed pill matching the tag density. */
 .addm-add-tag {
-  flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 8px;
-  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
+  flex: 0 0 auto; padding: 1px 6px; line-height: 1.5;
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
   border: 1px dashed var(--line); border-radius: var(--r-xs);
   background: none; color: var(--muted); cursor: pointer;
 }

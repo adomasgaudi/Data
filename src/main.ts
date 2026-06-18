@@ -18686,7 +18686,10 @@ function syncAddmVtags(form: HTMLElement): void {
     const showAll = slot.classList.contains("show-all");
     for (const sel of slot.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
       const def = sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "";
-      setEnhancedSelectHidden(sel, sel.value === def && !showAll);
+      const isDefault = sel.value === def;
+      // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
+      sel.classList.toggle("is-set", !isDefault);
+      setEnhancedSelectHidden(sel, isDefault && !showAll);
     }
   }
 }
@@ -19040,6 +19043,10 @@ function openAddModal(exerciseName: string | null, date: string): void {
         lastKey = key;
         // Rebuild EVERY set-line's variation pickers (each line carries its own now).
         for (const lv of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) lv.innerHTML = name ? addmVariantField(name) : "";
+        // Rebuilt selects start showing every dim — re-run the only-set hide once they're
+        // xdd-enhanced (rAF), so defaults collapse in the Add-exercise modal too.
+        const f = wrap.querySelector<HTMLElement>(".wo-addform");
+        if (f) { syncAddmVtags(f); requestAnimationFrame(() => { if (addModalEl) syncAddmVtags(f); }); }
       };
       exInput.addEventListener("change", refreshVariant);
       exInput.addEventListener("input", refreshVariant);
