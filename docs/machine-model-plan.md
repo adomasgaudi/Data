@@ -170,9 +170,15 @@ On first load with the new model, fold today's per-exercise settings into machin
 - [x] **3f** Edit toasts read "changed for all users with this machine" (named) / the lift
   (default). New sets are STAMPED at log time (`setEquipment[setId]`), so switching only
   affects new sets (owner: "only new sets"); old sets fall back to the exercise default.
-- [ ] **3g** Resolver/stamp logic lives in main.ts (not a unit-tested module). Existing 655
-  tests + typecheck + build green; the per-set-stamp + default-fallback invariant is small and
-  covered by the single-resolver design. Dedicated unit tests = a follow-up if extracted.
+- [x] **3g** `resolveEquip` extracted to `src/equipment.ts` (pure) — the stamp→registry→default
+  rule — with `src/equipment.test.ts` (5 tests: registry hit, no-id/unknown-id fallback, fresh
+  object, old-vs-new-set independence). main.ts's two resolvers delegate to it. `EQUIP-4`.
+
+## Status — equipment model COMPLETE
+
+All of Phases 1–3 shipped (`EQUIP-1`…`EQUIP-4`, `b.2.9.193`–`197`). Possible follow-ups if the
+owner wants: a per-exercise GLOBAL default machine (today "Default" = the lift's own settings);
+deleting machines from the cog; syncing the per-set stamp store is automatic (colosseum.*).
 
 ---
 

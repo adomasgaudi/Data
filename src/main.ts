@@ -10,6 +10,7 @@ import {
 } from "./format";
 import { hashHueHex, cellBgColor, cellBgGradient, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
+import { resolveEquip, type Equipment, type EquipSettings } from "./equipment";
 // Tasks & roadmap (Settings overlay) are shown straight from the docs/ markdown,
 // imported as raw text so the panel is always a projection of the files and can
 // never drift from them (single source of truth).
@@ -2374,9 +2375,8 @@ function setMachineMultWithUndo(ex: string, value: number | undefined): void {
 // settings — NOT in the registry. A user picks WHICH equipment they use for a lift (per-user, the
 // default for NEW sets); each set is STAMPED at log time, so switching equipment never rewrites
 // past sets (owner decision: "only new sets"). ONE resolver feeds BOTH metrics and the display
-// formula, so the shown −20/N can never disagree with the computed 1RM.
-interface Equipment { id: string; name: string; kind?: string; kgBase: number; divisor: number; assisted: boolean; }
-type EquipSettings = { kgBase: number; divisor: number; assisted: boolean };
+// formula, so the shown −20/N can never disagree with the computed 1RM. The stamp→registry→
+// default resolution is the pure `resolveEquip` (src/equipment.ts), unit-tested.
 const EQUIPMENT_KEY = "colosseum.equipment.v1";
 const equipmentReg: Record<string, Equipment> = (() => {
   try { const o = JSON.parse(localStorage.getItem(EQUIPMENT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
@@ -2406,17 +2406,16 @@ function setCurrentEquipment(ex: string, id: string | null): void {
   clearMachineCache();
 }
 /** Settings to use for what a NEW set of this lift will be logged on (the current equipment). */
+function legacyEquipSettings(ex: string): EquipSettings {
+  return { kgBase: machineWeightFor(ex), divisor: machineMultFor(ex), assisted: isAssistedMachine(ex) };
+}
 function equipSettingsCurrent(ex: string): EquipSettings {
-  const e = equipmentReg[currentEquipmentIdFor(ex) ?? ""];
-  return e ? { kgBase: e.kgBase, divisor: e.divisor, assisted: e.assisted }
-           : { kgBase: machineWeightFor(ex), divisor: machineMultFor(ex), assisted: isAssistedMachine(ex) };
+  return resolveEquip(currentEquipmentIdFor(ex), equipmentReg, legacyEquipSettings(ex));
 }
 /** Settings for an EXISTING set — its STAMPED equipment, else the exercise's legacy default. This
  * is the single resolver every metric + the display formula reads, so they always agree. */
 function equipmentSettingsForSet(r: SetRecord): EquipSettings {
-  const e = equipmentReg[setEquipment[setId(r)] ?? ""];
-  return e ? { kgBase: e.kgBase, divisor: e.divisor, assisted: e.assisted }
-           : { kgBase: machineWeightFor(r.exerciseName), divisor: machineMultFor(r.exerciseName), assisted: isAssistedMachine(r.exerciseName) };
+  return resolveEquip(setEquipment[setId(r)], equipmentReg, legacyEquipSettings(r.exerciseName));
 }
 /** A machine set FOR DISPLAY (equipment-aware): a negative weight on assisted equipment. */
 function isMachineSetEq(r: SetRecord): boolean {
