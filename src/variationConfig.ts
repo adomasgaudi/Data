@@ -479,6 +479,10 @@ export function familyOf(
   // kg like HSPU — however it's spelled (assisted, wide/neutral grip, weighted…). Lat
   // PULLDOWNs contain "pull" but not "pullup", so they're correctly excluded.
   if (n.includes("pullup") || n.includes("chinup")) return "PULLUP";
+  // A bare "Pull" / "Chin" is the owner's combined pull-up + chin-up lift — give it the
+  // PULLUP model too (band "guma" picker + kg-assist), matched EXACTLY so "pulldown" /
+  // "pullover" / "facepull" (which contain "pull" but aren't the bar movement) stay out.
+  if (n === "pull" || n === "pulls" || n === "chin" || n === "chins") return "PULLUP";
   // Any OTHER handstand (wall tap / touch / kicks / hold / walk / steps / leg curls /
   // on head / dance…) uses the HANDSTAND setup model — "handstand" anywhere. The
   // push-up variants were already returned as HSPU above ("handstandpush" is caught

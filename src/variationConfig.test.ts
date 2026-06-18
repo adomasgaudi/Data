@@ -8,6 +8,15 @@ describe("familyOf", () => {
     expect(familyOf("Push Up")).toBe("PUSHUP");
     expect(familyOf("Back Squat")).toBeNull();
   });
+  it("maps pull-ups, chin-ups and the bare combined Pull/Chin lift to PULLUP", () => {
+    expect(familyOf("Pull Ups")).toBe("PULLUP");
+    expect(familyOf("Chin Up")).toBe("PULLUP");
+    expect(familyOf("Pull")).toBe("PULLUP");   // the owner's combined pull-up + chin-up lift
+    expect(familyOf("Chin")).toBe("PULLUP");
+    // Cable "pull*" lifts that merely contain "pull" are NOT the bar movement.
+    expect(familyOf("Lat Pulldown")).toBeNull();
+    expect(familyOf("Face Pull")).toBeNull();
+  });
   it("recognises EVERY handstand push-up variant as HSPU, any spelling/origin", () => {
     for (const name of [
       "Handstand Push-ups",       // hyphen

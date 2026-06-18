@@ -218,9 +218,14 @@ export const DEFAULT_BW_COEFF = 0;
 
 /** True for bar pull-up / chin-up / dip movements, where a *negative* logged weight
  * means assistance from a machine (not added load). Excludes pulldowns, pull
- * overs and other cable "pull" work, which are always loaded positively. */
+ * overs and other cable "pull" work, which are always loaded positively. A bare
+ * "Pull" / "Chin" (the owner's combined pull-up + chin-up lift) counts too — matched
+ * as the WHOLE name so "Pulldown" / "Pullover" / "Face Pull" stay excluded. */
 export function isAssistablePullup(exerciseName: string): boolean {
-  return /pull[\s-]?ups?|chin[\s-]?ups?|dips?/.test(exerciseName.toLowerCase());
+  const n = exerciseName.toLowerCase();
+  const bare = n.replace(/[^a-z]/g, "");
+  if (bare === "pull" || bare === "pulls" || bare === "chin" || bare === "chins") return true;
+  return /pull[\s-]?ups?|chin[\s-]?ups?|dips?/.test(n);
 }
 
 /**

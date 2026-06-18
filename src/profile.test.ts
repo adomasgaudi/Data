@@ -512,6 +512,14 @@ describe("realPullupWeight", () => {
     expect(isAssistablePullup("Pullover")).toBe(false);
     expect(isAssistablePullup("Bench Press")).toBe(false);
   });
+  it("treats a bare Pull / Chin (the combined pull-up + chin-up lift) as assistable", () => {
+    expect(isAssistablePullup("Pull")).toBe(true);
+    expect(isAssistablePullup("Chin")).toBe(true);
+    expect(isAssistablePullup("Pulls")).toBe(true);
+    // …but still excludes the cable "pull*" lifts that merely contain "pull".
+    expect(isAssistablePullup("Face Pull")).toBe(false);
+    expect(isAssistablePullup("Pulldown")).toBe(false);
+  });
 
   it("halves a negative (machine-assisted) pull-up weight", () => {
     expect(realPullupWeight("Pull Ups", -30)).toBe(-15);
