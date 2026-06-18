@@ -391,6 +391,7 @@ const LT: Record<string, string> = {
   "⚖ gravity": "⚖ gravitacija",
   "Machine assist (kg)": "Treniruoklio pagalba (kg)",
   "machine": "treniruoklis",
+  "real": "tikras",
   "Assist: real ½": "Pagalba: tikra ½",
   "Assist: logged ×2": "Pagalba: įrašyta ×2",
   "0cm (wall)": "0cm (siena)",

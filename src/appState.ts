@@ -49,6 +49,7 @@ export const S: {
   showAddSets: boolean;
   showVariants: boolean;
   showAllScale: boolean;
+  machineReal: boolean;
   showAloneTags: boolean;
   showRestDays: boolean;
   restCompact: boolean;
@@ -78,6 +79,7 @@ export const S: {
   showAddSets: false,
   showVariants: false,
   showAllScale: false, // collapsed-line ×N mode: false = variation (hide ×N a chip implies), true = show every ×N
+  machineReal: false, // assisted-machine weight: false = logged dial (m-20), true = real halved effort (-10)
   showAloneTags: false,
   showRestDays: true, // rest-day slivers shown by default (the gaps between sessions read as the timeline)
   restCompact: false, // when showRestDays is on, shrink the slivers to a 3px hairline (the Rest button's 3rd state)

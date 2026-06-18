@@ -323,6 +323,7 @@ const els = {
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   variantToggle: $<HTMLButtonElement>("variantToggle"),
   scaleModeToggle: $<HTMLButtonElement>("scaleModeToggle"),
+  machineRealToggle: $<HTMLButtonElement>("machineRealToggle"),
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   woShowAllToggle: $<HTMLButtonElement>("woShowAllToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
@@ -4386,6 +4387,7 @@ let workoutGroups: WorkoutGroup[] = [];
 S.showAddSets = localStorage.getItem("colosseum.showAddSets") !== "0";
 S.showVariants = localStorage.getItem("colosseum.showVariants") === "1";
 S.showAllScale = localStorage.getItem("colosseum.showAllScale") === "1";
+S.machineReal = localStorage.getItem("colosseum.machineReal") === "1";
 S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 // When on, the workout history ignores the Index app-wide filter and shows EVERY
 // lift this athlete logged (the lifts the filter hides come back), so you can see
@@ -4432,6 +4434,8 @@ function syncWorkoutToggles(): void {
   els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
   els.scaleModeToggle.classList.toggle("is-active", S.showAllScale);
   els.scaleModeToggle.setAttribute("aria-pressed", S.showAllScale ? "true" : "false");
+  els.machineRealToggle.classList.toggle("is-active", S.machineReal);
+  els.machineRealToggle.setAttribute("aria-pressed", S.machineReal ? "true" : "false");
   els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
   els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
   // The "Hidden" control sits in the head row next to the ⚙. Label shows the
@@ -7658,12 +7662,18 @@ function setDisplay(raw: SetRecord): string {
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
   const computedForMach = computeRecord(s);
-  // Assisted machine → a short lowercase "m" to the LEFT of the weight (owner). Gravity /
-  // review keep their right-side tag.
-  const machPre = isMachineSet(s.exerciseName, s.weight)
-    ? `<span class="wo-mach wo-mach-asst wo-mach-pre" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default.">m</span>`
-    : "";
-  const mach = isMachineSet(s.exerciseName, s.weight)
+  const isAsstMach = isMachineSet(s.exerciseName, s.weight);
+  const machReal = isAsstMach ? realAddedWeight(s.exerciseName, s.weight) : null;
+  const machRepsSup = s.reps === null ? "" : `<sup>${s.reps}</sup>`;
+  // Assisted-machine weight has a real/logged toggle (S.machineReal — the ⚙ 'real' pill, owner):
+  // LOGGED = the dial value joined with an 'm' tag in ONE outlined, tinted box (m-20⁷); REAL =
+  // the halved real effort, plainly (-10⁷). Non-machine sets render the normal weight^reps.
+  const weightHtml = isAsstMach
+    ? (S.machineReal
+        ? wr(machReal, s.reps)
+        : `<span class="wo-mlog" title="Logged machine dial — over-reads ~2×; real effort ≈ ${machReal === null ? "half" : fmt(machReal)}. Toggle 'real' in the ⚙ for the real value.">m${fmt(s.weight ?? 0)}${machRepsSup}</span>`)
+    : `${mwp}${wr(s.weight, s.reps)}`;
+  const mach = isAsstMach
     ? ""
     : computedForMach.machineType === "review"
       ? ` <span class="wo-mach wo-mach-review" title="Mixed machine: too ambiguous to trust — could be a light cable set or a gravity-machine warm-up. Check it.">⚠</span>`
@@ -7699,10 +7709,10 @@ function setDisplay(raw: SetRecord): string {
       const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
       const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
       const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-      return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${machPre}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
+      return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${weightHtml}${tag}${mach}`));
     }
     // Multiplier implied by the chip → show just the chip (+ weight) and reps, no ×N.
-    return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${machPre}${mwp}${wr(s.weight, s.reps)}${mach}`));
+    return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${weightHtml}${mach}`));
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -7712,7 +7722,7 @@ function setDisplay(raw: SetRecord): string {
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
     return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
   }
-  return finish(effWrap(`${chips}${machPre}${mwp}${wr(s.weight, s.reps)}${mach}`));
+  return finish(effWrap(`${chips}${weightHtml}${mach}`));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -16519,6 +16529,13 @@ async function init() {
     localStorage.setItem("colosseum.showAllScale", S.showAllScale ? "1" : "0");
     els.scaleModeToggle.classList.toggle("is-active", S.showAllScale); // instant pill feedback
     els.scaleModeToggle.setAttribute("aria-pressed", S.showAllScale ? "true" : "false");
+    renderWorkoutsPage();
+  });
+  els.machineRealToggle.addEventListener("click", () => {
+    S.machineReal = !S.machineReal;
+    localStorage.setItem("colosseum.machineReal", S.machineReal ? "1" : "0");
+    els.machineRealToggle.classList.toggle("is-active", S.machineReal); // instant pill feedback
+    els.machineRealToggle.setAttribute("aria-pressed", S.machineReal ? "true" : "false");
     renderWorkoutsPage();
   });
   els.aloneTagToggle.addEventListener("click", () => {

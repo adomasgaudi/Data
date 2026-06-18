@@ -1809,6 +1809,10 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .wo-mach-review { text-transform: none; color: var(--gold); background: var(--gold-soft); }
 .wo-mach-asst { color: var(--accent); background: var(--accent-soft); }
 .wo-mach-pre { text-transform: none; margin-right: 3px; } /* the short "m" to the LEFT of the weight */
+/* LOGGED assisted-machine value (S.machineReal off): the dial value joined with an "m" tag in
+   ONE outlined, tinted box (m-20⁷) — a distinct look that flags it over-reads ~2× (owner). */
+.wo-mlog { border: 1px solid var(--accent); color: var(--accent); border-radius: var(--r-xs); padding: 0 4px; font-weight: 600; white-space: nowrap; }
+.wo-mlog > sup { font-size: 0.7em; }
 /* Machine-type toggle in the Analysis selector (single mode). */
 .wa-machine { margin: 0 0 0.5rem; }
 .wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
