@@ -118,7 +118,7 @@ import {
   loadHistoryDashboardFor, saveHistoryDashboardFor, defaultHistoryDashboard,
   activeHistoryTab, addHistoryTab, removeHistoryTab,
   renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig,
-  setTempHistoryTab,
+  setTempHistoryTab, HISTORY_DASH_KEY_V2,
   type HistoryDashboard, type HistoryTabConfig, type HistorySortMode,
 } from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
@@ -4769,13 +4769,19 @@ function applyHistoryTabConfig(c: HistoryTabConfig): void {
   // The history's OWN exercise selection (its title chips + lens) is per-tab too —
   // switching tabs swaps WHICH lifts the history shows, fully contained per tab.
   waSelected = [...c.lensFilter];
+  dbg(`HD apply lens=${c.lensFilter.length}`, c.lensFilter.length === 0); // DIAG #super-persistent
 }
 /** Save the live state into the active tab + persist. Called at the end of every history
  * render, so the active tab always mirrors what's on screen. */
 function saveActiveHistoryTab(): void {
   if (historyDashUser === null) return; // not loaded for an athlete yet
   const act = activeHistoryTab(historyDash);
-  historyDash = setHistoryTabConfig(historyDash, act.id, snapshotHistoryLive(act.config));
+  const snap = snapshotHistoryLive(act.config);
+  // DIAG (history-tab reset #super-persistent): log every save + flag an EMPTY lens save in red,
+  // so the owner's green-console screenshot shows IF/WHEN an empty selection gets persisted over a
+  // good one, and in what render sequence (paired with HD ensure/apply/seed below).
+  dbg(`HD save u=${historyDashUser} tab=${act.id} lens=${snap.lensFilter.length} waSel=${waSelected.length}`, snap.lensFilter.length === 0);
+  historyDash = setHistoryTabConfig(historyDash, act.id, snap);
   saveHistoryDashboardFor(historyDashUser, historyDash);
 }
 /** Load the CURRENT athlete's history dashboard and apply its active tab — re-running
@@ -4792,6 +4798,8 @@ function ensureHistoryTabApplied(): void {
   // history render, and renderAthlete saves it explicitly before resetting the selection.
   const firstThisSession = historyDashUser === null;
   const loaded = loadHistoryDashboardFor(user);
+  // DIAG #super-persistent: what the store returns for this athlete on an athlete-change / first load.
+  dbg(`HD ensure u=${user} loaded=${loaded ? "Y" : "N"} firstSess=${firstThisSession} tabs=${loaded ? loaded.tabs.length : 0} actLens=${loaded ? activeHistoryTab(loaded).config.lensFilter.length : "-"}`);
   if (loaded) {
     historyDash = loaded;
     historyDashUser = user;
@@ -18263,6 +18271,12 @@ async function pullMergeKv(): Promise<void> {
       const localV = localStorage.getItem(k) ?? undefined;
       const cloudV = cloud[k];
       const merged = merge3(base[k], localV, cloudV);
+      // DIAG (history-tab reset #super-persistent): trace the cloud merge for the history dashboard
+      // key — flags in RED when the merge SHRINKS the local value (a sign the cloud copy wiped tabs/
+      // selections). base/local/cloud/merged are JSON string lengths; CHANGED = a reload will follow.
+      if (k === HISTORY_DASH_KEY_V2)
+        dbg(`HD sync base=${base[k]?.length ?? 0} local=${localV?.length ?? 0} cloud=${cloudV?.length ?? 0} merged=${merged?.length ?? 0}${merged !== localV ? " CHANGED" : ""}`,
+          merged !== localV && (merged?.length ?? 0) < (localV?.length ?? 0));
       if (merged !== localV) {
         if (merged === undefined) localStorage.removeItem(k); else localStorage.setItem(k, merged);
         localChanged++;
@@ -20826,6 +20840,7 @@ function renderWorkoutAnalysis(): void {
   ensureHistoryTabApplied(); // active history tab's selection drives the title/picker below
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
   // view opens as a real selection (pills shown), not the implicit aggregate.
+  dbg(`HD render seeded=${analysisSeeded} waSel=${waSelected.length}`); // DIAG #super-persistent (every analysis render)
   if (!analysisSeeded) {
     analysisSeeded = true;
     // History opens with EVERY exercise (all groups); the GRAPH opens with the TOP 5

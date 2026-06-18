@@ -11,6 +11,20 @@
 
 ---
 
+## PB-44 — History tab settings/selection keep RESETTING TO EMPTY (not cached to Supabase)
+
+- **First seen / reported:** 2026-06-18, mobile (Brave, Android), Analysis → History fold. Owner #super-persistent #max-debug #?: "the history tab settings and selections are not cached and saved to supabase, keeps resetting to empty." Screenshot: the History WORKOUTS section shows "Select an exercise" / "No workouts for this athlete" while the graph above is full of data — i.e. the saved history selection (`waSelected` / the active tab's `lensFilter`) came back EMPTY.
+- **Prior fix attempts (didn't fully hold):** DASH-1 (b.2.9.178) made the Zod load LOSSLESS (`.catch()` per field so a drifted dashboard is repaired, not wiped). DASH-2 (b.2.9.182) moved the outgoing-athlete save to `renderAthlete` BEFORE the `waSelected` reset and removed the snapshot-and-save from `ensureHistoryTabApplied`. The reset still recurs.
+- **Suspected candidates (mapped, NOT yet confirmed — instrument first):**
+  1. **`analysisSeeded`-gated default-fill (main.ts ~20593):** `if (waSelected.length === 0) waSelected = defaultHistorySelection()` only runs on the FIRST `renderWorkoutAnalysis` of a session (`if (!analysisSeeded)`). After that an empty `waSelected` is NEVER re-filled — and `saveActiveHistoryTab()` runs at the end of EVERY history render (incl. `renderWorkoutsPage` line ~8333), so an empty selection gets PERSISTED. Empty is a *valid* state (owner can clear all), so the question is what empties it without the owner clearing.
+  2. **Cloud merge wipes it (`pullMergeKv` / `merge3Json`):** `colosseum.historyDash.v2` is syncable ('user'). If an empty selection was saved locally then synced, a later 3-way merge where base had lifts but both local+remote are empty resolves to empty across all devices. `pullMergeKv` reloads on any local change, so a sync that shrinks the dashboard wipes the view on reload.
+  3. **Save/reset race on athlete switch:** `renderAthlete` resets `waSelected` then renders; a `saveActiveHistoryTab` firing before `ensureHistoryTabApplied` re-applies the incoming athlete's tab could persist the reset default.
+- **Diagnostic added (b.2.9.x, DASH-3):** permanent on-screen `dbg()` lines (admin Settings ⚙ → 🐞 Debug console). `HD ensure` (loaded?/tabs/active lens len on athlete-change), `HD apply` (lens len written to `waSelected`), `HD render` (seeded?/waSel len every analysis render), `HD save` (lens+waSel len on every save — RED when it saves EMPTY), `HD sync` (base/local/cloud/merged JSON lengths for the historyDash key — RED when the cloud merge SHRINKS the local value). The sequence in one screenshot localises which step empties it. Remove once root confirmed.
+- **Watch:** an empty selection that round-trips through save→sync→load is indistinguishable from an intentional "clear all"; the fix must tell the two apart (e.g. never auto-persist an empty selection that wasn't an explicit clear, or re-seed the default whenever the active selection is empty rather than only once per session).
+- **Recurrences:** 2+ (DASH-1, DASH-2 prior; this is the standing reset).
+
+---
+
 ## PB-42 — Add-set sheet: variant pills not inline with weight/reps
 
 - **First seen / reported:** 2026-06-18, mobile, History → + set on a variation lift. Owner: "the variants should be before the weight and reps in the same line" → then "still not inline #persistent" (the first fix did not hold).
