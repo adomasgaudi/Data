@@ -40,6 +40,10 @@
   --lens-compare: #b8902f; /* golden — comparable (owner choice) */
   --lens-both: #5b4f96;    /* amethyst — the tertiary (has both lenses) */
   --remove: color-mix(in srgb, var(--lens-combine), var(--lens-compare)); /* the ✕ matches the two lens colours (blue + gold blend) */
+  /* Spectating-another-profile accent: amethyst, distinct from the blue accent
+     ("you / home") so a chip you're spectating never reads as your own. Fixed across
+     light/dark like the lens colours (medium-toned, reads on both). */
+  --spectate: #7a5fb0;
   /* Chart structural colours (gridlines / axis / labels / label halo), themed so
      the SVG charts follow light/dark. Series colours stay fixed (data colours). */
   --chart-grid: #d4d9e2;
@@ -1000,6 +1004,12 @@ body.admin-only-hidden .admin-only { display: none !important; }
 }
 .athlete-chip:hover { color: var(--text); border-color: var(--accent); }
 .athlete-chip.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
+/* Locked / spectate views — make YOUR own profile obvious vs ones you spectate (owner):
+   blue = you/home, amethyst = spectating someone, gray (default) = other public chips. */
+/* Your own chip while NOT selected → blue outline so you can always find your profile. */
+.athlete-chip.is-self:not(.is-active) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+/* A chip you're spectating (an OTHER profile, selected) → amethyst fill, not the home blue. */
+.athlete-chip.is-spectate.is-active { color: #fff; background: var(--spectate); border-color: var(--spectate); }
 /* User view: every athlete but Adomas is locked out. */
 .athlete-chip.is-locked { opacity: 0.4; cursor: not-allowed; }
 .athlete-chip.is-locked:hover { color: var(--muted); border-color: var(--line); }

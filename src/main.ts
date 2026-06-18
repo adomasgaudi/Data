@@ -583,7 +583,11 @@ function setViewTier(tier: ViewTier): void {
 function renderViewSwitch(): void {
   const box = document.getElementById("viewSwitch");
   if (!box) return;
-  const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spec";
+  // Spectating = a locked (non-admin) view whose SELECTED athlete isn't your own — the
+  // pill flips User → Spec so you can tell at a glance you're peeking at someone else.
+  const own = lockedUsername();
+  const spectating = viewMode !== "admin" && own !== null && els.athlete.value !== own;
+  const modeLabel = viewMode === "admin" ? "Admin" : spectating ? "Spec" : viewMode === "user" ? "User" : "Spec";
   const detailLabel = viewTier === "s1" ? "s1" : viewTier === "s2" ? "s2" : "adv";
   // Only a REAL admin gets the Admin/User/Spectator switch — a logged-in user or
   // spectator is locked to their view (no toggle). The detail (Simple/Adv) toggle
@@ -4876,12 +4880,13 @@ function syncAthleteChips() {
       // them read-only). Non-public others stay hidden. No sex filtering, no lock styling.
       btn.hidden = btn.dataset.username !== locked && !isPublicProfile(btn.dataset.username);
       btn.disabled = false;
+      btn.classList.toggle("is-self", btn.dataset.username === locked);     // YOUR own profile (home)
       btn.classList.toggle("is-spectate", btn.dataset.username !== locked); // a public OTHER = read-only spectate chip
       btn.classList.remove("is-sexhidden", "is-locked");
       if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
       continue;
     }
-    btn.classList.remove("is-spectate");
+    btn.classList.remove("is-spectate", "is-self");
     // Admin: every chip is selectable; the M/W filter hides the other sex (the
     // active one stays visible so you can always see who's currently selected).
     btn.hidden = false;
@@ -4894,6 +4899,7 @@ function syncAthleteChips() {
     btn.classList.toggle("is-sexhidden", sex !== undefined && sex !== athleteSexFilter && !on);
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
+  renderViewSwitch(); // the mode pill flips User → Spec when you select someone else
   syncPublicProfileToggle();
 }
 /** Settings "Public profile" toggle: reflects + controls whether YOUR profile (the selected
