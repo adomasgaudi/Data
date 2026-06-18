@@ -2783,6 +2783,10 @@ sup.wr-bw { font-size: 0.85em; }
    flips its value on tap; rest / +sets light up when on; alone shows its state. */
 .wo-dj { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 .wo-controls-fold[open] .wo-dj { padding: 5px; width: max-content; max-width: 62vw; }
+/* Footer description: tapping a setting pill shows that setting's explanation here
+   (owner). Full-width row under the pill grid, small muted text that wraps. */
+.wo-dj-desc { flex: 1 1 100%; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 0.68rem; font-weight: 500; line-height: 1.35; color: var(--muted); white-space: normal; }
+.wo-controls-fold:not([open]) .wo-dj-desc { display: none; }
 .wo-dj-btn {
   font: inherit; font-size: 0.7rem; font-weight: 700; line-height: 1; cursor: pointer;
   min-width: 2.5rem; padding: 5px 6px; text-align: center;

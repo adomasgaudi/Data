@@ -16380,6 +16380,22 @@ async function init() {
     if (scaleEditState && !scaleEditInCard && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
   });
   els.summariseBtn.addEventListener("click", runSummary);
+  // ⚙ history settings: tapping any pill shows its description in the footer bar (owner:
+  // "explain each setting with a little text; whichever i click, that description appears").
+  // Reuses each pill's own title as the description, delegated so it covers every pill,
+  // present and future. The ⚙ popout is static markup, so the bar survives re-renders.
+  const djBox = document.querySelector<HTMLElement>(".wo-controls.wo-dj");
+  const djDesc = document.getElementById("woDjDesc");
+  if (djBox && djDesc) {
+    const djDefault = (djDesc.textContent ?? "").trim();
+    djBox.addEventListener("click", (e) => {
+      const pill = (e.target as HTMLElement).closest<HTMLElement>(".wo-dj-btn, .wo-hidden-toggle");
+      if (!pill) return;
+      const label = (pill.textContent ?? "").trim();
+      const desc = (pill.getAttribute("title") ?? "").trim();
+      djDesc.textContent = desc ? `${label} — ${desc}` : (label || djDefault);
+    });
+  }
   // Each control is one toggle button now: tap to flip its value (no segments).
   els.workoutViewToggle.addEventListener("click", () => {
     // Cycle Day → Week → 2 wks → Month → 3 mo → Day.

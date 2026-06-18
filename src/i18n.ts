@@ -325,6 +325,7 @@ const LT: Record<string, string> = {
   "Name for the merged lift:": "Sujungto pratimo pavadinimas:",
   "↺ Default": "↺ Numatyta",
   "Hidden lifts": "Paslėpti pratimai",
+  "Tap a setting to see what it does.": "Bakstelėkite nustatymą, kad pamatytumėte, ką jis daro.",
   "⧉ Duplicate set": "⧉ Dubliuoti seriją",
   "✎ Change variant": "✎ Keisti variantą",
   "＋1 rep": "＋1 pakartojimas",
