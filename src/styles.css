@@ -2875,10 +2875,11 @@ sup.wr-bw { font-size: 0.85em; }
    with the reps raised as a superscript, so it reads like the final logged chip. */
 .addm-set-chip {
   display: inline-flex; align-items: flex-start; gap: 0; flex: 0 0 auto;
-  /* Owner: the weight/reps entry was "invisible" (bare text) — give it a real boxed field:
-     a visible panel background, a border and generous padding, kept compact (not wide). */
-  border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
-  padding: 5px 9px;
+  /* Owner: the weight/reps entry was "invisible" — note --panel == #fff == the modal bg, so a
+     panel fill vanished. Use a clearly-visible gray fill (like the tag pills) + generous
+     padding, kept compact (not wide). */
+  border: 1px solid var(--line); background: var(--line); border-radius: 8px;
+  padding: 6px 11px;
 }
 /* Weight = the main number, as text (the box chrome lives on .addm-set-chip). */
 .addm-set-chip .wo-af-weight {
