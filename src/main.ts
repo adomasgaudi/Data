@@ -4334,7 +4334,10 @@ let workoutGroups: WorkoutGroup[] = [];
 // Workouts-list view state lives on S (appState). The two localStorage-backed
 // flags get their initial values right here so behaviour matches the previous
 // `let x = localStorage.getItem(…)` form.
-S.showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+// "+ set" is ALWAYS ON by default (owner: "always have the + set setting on") — so it
+// defaults on unless explicitly turned off this session (and applyHistoryTabConfig forces
+// it on per tab too); the pill still toggles it off within a tab if you want a clean view.
+S.showAddSets = localStorage.getItem("colosseum.showAddSets") !== "0";
 S.showVariants = localStorage.getItem("colosseum.showVariants") === "1";
 S.showAllScale = localStorage.getItem("colosseum.showAllScale") === "1";
 S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
@@ -4437,7 +4440,7 @@ function applyHistoryTabConfig(c: HistoryTabConfig): void {
   woSortByPriority = c.sortByPriority;
   S.showRestDays = c.showRest;
   S.restCompact = c.restCompact;
-  S.showAddSets = c.showAddSets;
+  S.showAddSets = true; // owner: "+ set" is always on — ignore any stored-off per-tab value
   S.showVariants = c.showVariants;
   S.showAllScale = c.showAllScale ?? false;
   S.showAloneTags = c.showAloneTags;
