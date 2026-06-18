@@ -2714,26 +2714,25 @@ sup.wr-bw { font-size: 0.85em; }
 /* Multi-set add: one weight×reps LINE per set, looks like a set chip (weight + superscript reps). */
 .addm-lines { display: flex; flex-direction: column; gap: 0.4rem; }
 .addm-line { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
-/* The chip-style container — mirrors the collapsed set chips in history */
+/* The set line: the variant tag, then the weight and reps as their OWN clearly-outlined
+   input boxes (owner: the old borderless chip was unclear where to tap). */
 .addm-set-chip {
-  display: inline-flex; align-items: flex-end; gap: 0; flex: 1 1 auto;
-  border: 1.5px solid var(--border); border-radius: var(--r-pill);
-  padding: 4px 9px 4px 7px; background: var(--card); cursor: text;
-  min-height: var(--tap-min);
+  display: inline-flex; align-items: center; gap: 0.4rem; flex: 1 1 auto;
+  border: none; background: none; padding: 0; min-height: var(--tap-min);
 }
-.addm-set-chip:focus-within { border-color: var(--accent); }
 .addm-set-chip .wo-af-weight {
-  flex: 1 1 auto; max-width: 5rem; min-width: 2.5rem;
-  border: none; background: transparent; padding: 0; margin: 0;
-  font-size: 1rem; font-weight: 600; text-align: right; color: inherit;
-  border-radius: 0;
+  flex: 1 1 auto; max-width: 7rem; min-width: 3rem; box-sizing: border-box;
+  border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--card);
+  padding: 4px 10px; margin: 0; min-height: var(--tap-min);
+  font-size: 1rem; font-weight: 600; text-align: center; color: inherit;
 }
 .addm-set-chip .wo-af-reps {
-  flex: 0 0 2.3rem;
-  border: none; background: transparent; padding: 0 0 0.2em; margin: 0;
-  font-size: 0.72rem; font-weight: 700; color: var(--muted);
-  align-self: flex-start; text-align: center; border-radius: 0;
+  flex: 0 0 3.2rem; box-sizing: border-box;
+  border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--card);
+  padding: 4px 6px; margin: 0; min-height: var(--tap-min);
+  font-size: 0.9rem; font-weight: 700; text-align: center; color: inherit;
 }
+.addm-set-chip .wo-af-weight:focus, .addm-set-chip .wo-af-reps:focus { border-color: var(--accent); outline: none; }
 /* Variant tag strip shown inside the chip before the weight */
 .addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
 .addm-vtag-strip:empty { display: none; }
