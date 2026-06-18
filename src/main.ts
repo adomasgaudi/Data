@@ -8004,7 +8004,7 @@ function renderWorkoutsPage() {
       // One exercise's compact line (1RM · name · sets), reused for the day's active
       // lifts AND for its hidden-lift reveal.
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
-        const setsTxt = setListHtml(sets);
+        const setsTxt = setListHtml(sets) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
         const name = displayName(exerciseName);
         // In a merged / comparable view the row name is the GROUP (e.g. "Bicep+") but
         // each set keeps its real source lift in originalExerciseName. Show the distinct
@@ -18028,6 +18028,50 @@ function addSetSuggestions(username: string, exercise: string): { prefill: AddSu
 
 let addModalEl: HTMLElement | null = null;
 function addModalEsc(e: KeyboardEvent): void { if (e.key === "Escape") closeAddModal(); }
+// PENDING-ADD live preview (owner): while the add popup is open, a faint GHOST set shows
+// inline in the history on the lift's row, updating as you type — so you see the set you're
+// about to add next to the real ones before committing. Cleared on close/add.
+let pendingAdd: { ex: string; date: string; lines: { weight: number | null; reps: number | null }[]; note: string } | null = null;
+let pendingAddTimer: ReturnType<typeof setTimeout> | null = null;
+const numOrNull = (v: string | undefined): number | null => { const n = parseFloat(v ?? ""); return Number.isFinite(n) ? n : null; };
+/** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
+function syncPendingFromModal(): void {
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  if (!form) { pendingAdd = null; scheduleGhostRender(); return; }
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
+  const date =
+    (when === "pick" ? form.dataset.pickdate : when === "today" ? form.dataset.todaydate : form.dataset.daydate) ||
+    form.dataset.daydate || todayIso();
+  const lines = [...form.querySelectorAll<HTMLElement>(".addm-line")].map((ln) => ({
+    weight: numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value),
+    reps: numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value),
+  }));
+  pendingAdd = ex ? { ex, date, lines, note: form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "" } : null;
+  scheduleGhostRender();
+}
+/** Re-render the history (debounced, scroll-preserving) so the ghost set tracks the inputs. */
+function scheduleGhostRender(): void {
+  if (pendingAddTimer) clearTimeout(pendingAddTimer);
+  pendingAddTimer = setTimeout(() => {
+    pendingAddTimer = null;
+    if (!document.getElementById("workoutsTable")) return;
+    const y = window.scrollY;
+    renderWorkoutsPage();
+    window.scrollTo(0, y);
+  }, 130);
+}
+/** The faint GHOST set chips for a pending add on this exercise+date (empty otherwise) — a
+ * dashed, greyed preview of the set(s) being typed in the add popup. */
+function ghostSetsHtml(exerciseName: string, date: string): string {
+  const p = pendingAdd;
+  if (!p || p.ex !== exerciseName || p.date !== date) return "";
+  const cells = (p.lines.length ? p.lines : [{ weight: null, reps: null }])
+    .map((l) => `<span class="wo-set-ghost" title="New set — adding… (not saved yet)">${l.weight === null && l.reps === null ? "?" : wr(l.weight, l.reps)}</span>`)
+    .join("");
+  return ` ${cells}`;
+}
 /** The wrapped "Variant" block for the add popup — the structured dim pickers for a
  * modelled lift, or "" when the lift has no variation model. Shared by the initial
  * render and the reactive rebuild when the exercise is picked in the new-lift popup
@@ -18043,6 +18087,7 @@ function closeAddModal(): void {
   addModalEl?.remove();
   addModalEl = null;
   document.removeEventListener("keydown", addModalEsc, true);
+  if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); window.scrollTo(0, y); } } // drop the ghost
 }
 /** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
 function openAddModal(exerciseName: string | null, date: string): void {
@@ -18110,6 +18155,17 @@ function openAddModal(exerciseName: string | null, date: string): void {
     setv(".wo-af-reps", String(prefill.reps));
   }
   wrap.addEventListener("click", onAddModalClick);
+  // Live ghost preview: every input/change/click in the popup re-derives the pending set(s)
+  // and re-renders the history ghost. Seed it now, and scroll the lift's row up into view so
+  // the ghost is visible above the bottom-docked popup (owner).
+  wrap.addEventListener("input", syncPendingFromModal);
+  wrap.addEventListener("change", syncPendingFromModal);
+  syncPendingFromModal();
+  if (!isNew && ex) requestAnimationFrame(() => {
+    const row = document.querySelector<HTMLElement>(`.wo-addset[data-addex="${CSS.escape(ex)}"][data-adddate="${CSS.escape(date)}"]`)?.closest<HTMLElement>(".wo-ex-line")
+      ?? document.querySelector<HTMLElement>(`.wo-exlink[data-exname="${CSS.escape(ex)}"]`)?.closest<HTMLElement>(".wo-ex-line");
+    row?.scrollIntoView({ block: "start", behavior: "smooth" });
+  });
   document.addEventListener("keydown", addModalEsc, true);
   // New-lift popup: rebuild the Variant pickers the moment a modelled exercise is
   // PICKED (or typed) — so you set support/back-rest/obstacle etc. while first adding
@@ -18147,12 +18203,14 @@ function onAddModalClick(e: MouseEvent): void {
     const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
     fill(".wo-af-weight", chip.dataset.fillw);
     fill(".wo-af-reps", chip.dataset.fillr);
+    syncPendingFromModal();
     return;
   }
   // "+ set" — append another weight×reps line (each line = one set).
   if (t.closest(".wo-af-addline")) {
     const lines = form.querySelector<HTMLElement>(".addm-lines");
     if (lines) { lines.insertAdjacentHTML("beforeend", AF_LINE); lines.lastElementChild?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus(); }
+    syncPendingFromModal();
     return;
   }
   // ✕ on a line — remove it (never the last remaining line).
@@ -18160,6 +18218,7 @@ function onAddModalClick(e: MouseEvent): void {
   if (rmLine) {
     const lines = form.querySelector<HTMLElement>(".addm-lines");
     if (lines && lines.querySelectorAll(".addm-line").length > 1) rmLine.closest(".addm-line")?.remove();
+    syncPendingFromModal();
     return;
   }
   if (t.closest(".wo-af-go")) { if (onInlineAddGo(form)) closeAddModal(); return; }
@@ -18169,8 +18228,9 @@ function onAddModalClick(e: MouseEvent): void {
     const activate = () => { for (const b of form.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn")) b.classList.toggle("is-active", b === seg); };
     if (seg.dataset.when === "pick") {
       const cur = form.dataset.pickdate || form.dataset.daydate || todayIso();
-      openDatePicker(seg, cur, (iso) => { form.dataset.pickdate = iso; seg.textContent = shortDate(iso); seg.title = `Logging to ${shortDate(iso)} — tap to change`; activate(); });
+      openDatePicker(seg, cur, (iso) => { form.dataset.pickdate = iso; seg.textContent = shortDate(iso); seg.title = `Logging to ${shortDate(iso)} — tap to change`; activate(); syncPendingFromModal(); });
     } else activate();
+    syncPendingFromModal(); // the ghost follows the chosen day
   }
 }
 

@@ -2264,6 +2264,10 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-sore { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #d98a3a; vertical-align: middle; margin: 0 0.15rem; flex: none; cursor: help; }
 .wo-sore.is-high { width: 8px; height: 8px; background: #c0492f; box-shadow: 0 0 0 2px color-mix(in srgb, #c0492f 22%, transparent); }
 .wo-setlist { font-size: 0.95rem; line-height: 1.7; color: var(--accent); } /* weights + reps in blue — a bit bigger + roomier so each tappable set is easy to hit (owner) */
+/* The live GHOST set being added (owner): a dashed, greyed, slightly transparent chip that
+   tracks the add popup's inputs — clearly tentative ("deciding if we want to add it"). */
+.wo-set-ghost { display: inline-block; border: 1px dashed var(--muted); color: var(--muted); border-radius: var(--r-xs); padding: 0 5px; margin-left: 2px; opacity: 0.75; font-style: italic; animation: ghost-pulse 1.6s ease-in-out infinite; }
+@keyframes ghost-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.85; } }
 /* Period buckets (week / month modes) tint each SESSION's run of sets with a
    faint rounded band, so distinct sessions read at a glance without loud dividers.
    box-decoration-break keeps the band tidy when the set list wraps to more lines. */
@@ -2666,16 +2670,18 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-addform .wo-af-when .seg-btn { padding: 3px 10px; font-size: 0.94rem; font-weight: 700; }
 .wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
 /* ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) ---- */
-.addm-overlay { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(20, 24, 38, 0.42); }
+/* Owner: the add popup DOCKS at the bottom (a sheet) with a LIGHT backdrop, so the history
+   above stays visible — you watch the live ghost set appear as you type. */
+.addm-overlay { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(20, 24, 38, 0.18); }
 .addm-card {
   /* PB-24: cap the card against the VIEWPORT itself (min of 26rem and 100vw−gutter),
      not just width:100% of the overlay — so it can NEVER be wider than the screen even
      if a child forces intrinsic width or the visual viewport desyncs (keyboard open).
      min-width:0 lets the flex item shrink; overflow-x hidden clips any stray child. */
-  width: 100%; max-width: min(26rem, calc(100vw - 1.25rem)); min-width: 0;
-  max-height: 88vh; overflow: hidden auto;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
+  width: 100%; max-width: min(30rem, 100vw); min-width: 0;
+  max-height: 72vh; overflow: hidden auto;
+  background: var(--panel); border: 1px solid var(--line); border-bottom: none; border-radius: 14px 14px 0 0;
+  box-shadow: 0 -8px 40px rgba(20, 24, 38, 0.22); padding: 0.7rem 0.9rem 1rem;
 }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
 .addm-title { font-size: 1rem; font-weight: 700; }
