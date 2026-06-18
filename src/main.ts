@@ -1440,6 +1440,14 @@ function levelCm(dim: LevelDim, value: number): number {
   const t = INCLINE_TOOLS[dim];
   return Math.round((t.anchorCm + (value - t.anchorLevel) * inclineCmPerStep(dim)) * 10) / 10;
 }
+/** Inverse of levelCm: the value in `dim`'s own units for a given cm hand-height —
+ * used to CONVERT when the incline picker switches unit (so SQ5 ⇄ 60cm ⇄ Smith… keep
+ * the same height). cm is rounded to a whole cm; the notch/hole units to a half-step. */
+function cmToLevel(dim: LevelDim, cm: number): number {
+  if (dim === "cm") return Math.round(cm);
+  const t = INCLINE_TOOLS[dim];
+  return Math.round((t.anchorLevel + (cm - t.anchorCm) / inclineCmPerStep(dim)) * 2) / 2;
+}
 // The cm→× curve is a handful of editable anchor heights; in between we interpolate,
 // so SQ/Smith (any cm) read off the same curve. An anchor defaults to the formula.
 const CM_ANCHORS = [0, 15, 30, 45, 60, 75, 90];
@@ -18904,7 +18912,80 @@ function addmVariantField(ex: string): string {
   const rom = `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
   // Owner: show only the tags you've SET (away from default); a ＋ reveals the rest to add one.
   const addBtn = `<button type="button" class="addm-add-tag" title="Add a variation tag (band, lean, ROM…)" aria-label="Add a variation tag">＋ tag</button>`;
-  return dims + rom + addBtn;
+  // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
+  // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
+  // one cm height). Tap the pill to set it; floor (0cm) is the default. (Only incline lifts.)
+  const incline = isInclineLevelExercise(ex)
+    ? `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`
+    : "";
+  return dims + incline + rom + addBtn;
+}
+/** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
+function inclinePillLabel(dim: LevelDim, val: number): string {
+  return levelCm(dim, val) === 0 ? "floor" : levelLabel(dim, val);
+}
+// Floating incline/height picker for the add-set pill (NOT a native control). Units are
+// cm / SQ hole / Smith notch — switching one CONVERTS the value to keep the same cm height,
+// and the readout shows that height + its difficulty ×. Outside-tap / Esc closes it.
+let inclinePickerClose: (() => void) | null = null;
+function closeInclinePicker(): void { inclinePickerClose?.(); }
+function openInclinePicker(pill: HTMLElement): void {
+  closeInclinePicker();
+  let dim = ((pill.dataset.incdim as LevelDim) || "cm");
+  let val = Number(pill.dataset.incval) || 0;
+  const units: LevelDim[] = ["cm", "sq", "smith"];
+  const pop = document.createElement("div");
+  pop.className = "inc-pop";
+  const place = () => {
+    const r = pill.getBoundingClientRect();
+    const w = pop.offsetWidth || 210, h = pop.offsetHeight || 150;
+    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const commit = () => {
+    pill.dataset.incdim = dim; pill.dataset.incval = String(val);
+    pill.textContent = `↕ ${inclinePillLabel(dim, val)}`;
+    pill.classList.toggle("is-set", levelCm(dim, val) !== 0);
+  };
+  const render = () => {
+    const step = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1;
+    pop.innerHTML =
+      `<div class="inc-units">` +
+      units.map((u) => `<button type="button" class="inc-unit${u === dim ? " is-on" : ""}" data-incunit="${u}">${escapeHtml(inclineDimLabel(u))}</button>`).join("") +
+      `</div>` +
+      `<div class="inc-valrow"><button type="button" class="inc-step" data-incstep="-1" aria-label="Lower">−</button>` +
+      `<input type="number" class="inc-val" step="${step}" value="${val}" inputmode="decimal" aria-label="Height value" />` +
+      `<button type="button" class="inc-step" data-incstep="1" aria-label="Higher">+</button></div>` +
+      `<div class="inc-eq muted">= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}</div>` +
+      `<button type="button" class="inc-floor" data-incfloor>floor (0cm)</button>`;
+    place();
+  };
+  pop.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const u = t.closest<HTMLElement>(".inc-unit");
+    if (u?.dataset.incunit) { const cm = levelCm(dim, val); dim = u.dataset.incunit as LevelDim; val = cmToLevel(dim, cm); render(); commit(); return; }
+    const s = t.closest<HTMLElement>(".inc-step");
+    if (s?.dataset.incstep) { const d = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1; val = Math.round((val + Number(s.dataset.incstep) * d) * 2) / 2; render(); commit(); return; }
+    if (t.closest("[data-incfloor]")) { dim = "cm"; val = 0; render(); commit(); return; }
+  });
+  pop.addEventListener("input", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".inc-val");
+    if (!inp) return;
+    const v = parseFloat(inp.value);
+    if (Number.isFinite(v)) { val = v; pop.querySelector(".inc-eq")!.textContent = `= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}`; commit(); }
+  });
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeInclinePicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeInclinePicker(); };
+  inclinePickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); inclinePickerClose = null;
+  };
+  document.body.appendChild(pop);
+  render();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 /** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the add-page ⚙ cog's
  * expanded per-exercise settings — assisted-machine, machine weight, ÷ multiplier, unilateral.
@@ -19126,6 +19207,9 @@ function onAddModalClick(e: MouseEvent): void {
     syncAddmVtags(form);
     return;
   }
+  // ↕ incline/height pill → the unit + value picker (cm / SQ / Smith).
+  const incPill = t.closest<HTMLElement>(".wo-af-incpill");
+  if (incPill) { openInclinePicker(incPill); return; }
   // ⚙ Exercise-settings cog: toggle the expanded per-exercise panel (rebuilt from the live
   // exercise so a just-typed new lift targets the right name).
   const cogBtn = t.closest<HTMLElement>(".addm-cog");
@@ -19311,7 +19395,12 @@ function onInlineAddGo(form: HTMLElement): boolean {
         const romDef = parseInt(romSel.dataset.romdefault ?? "", 10);
         if (Number.isFinite(romPct) && romPct !== romDef) note = note ? `${note} ROM ${romPct}%` : `ROM ${romPct}%`;
       }
-      return { weight, reps, rir, chosenDims, note };
+      // This line's incline/height (push-ups): a non-floor cm/SQ/Smith level is pinned to the
+      // created set's per-set override below. Floor (0cm) = the default, left unset.
+      const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
+      const incDim = incPill ? (incPill.dataset.incdim as LevelDim) : undefined;
+      const incVal = incPill ? Number(incPill.dataset.incval) : NaN;
+      return { weight, reps, rir, chosenDims, note, incDim, incVal };
     })
     .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   const username = els.athlete.value;
@@ -19352,6 +19441,15 @@ function onInlineAddGo(form: HTMLElement): boolean {
   // (assumed) picker is left unset, so the set keeps the standard assumed-RIR behaviour.
   for (let i = 0; i < setLines.length; i++) {
     if (setLines[i]!.rir) setRpe(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rir);
+  }
+  // A non-floor incline/height per line (push-ups) → pin it to the created set as a level
+  // override (cm/SQ/Smith). Floor (0cm) stays unset — it's the default.
+  if (isInclineLevelExercise(exerciseName)) {
+    for (let i = 0; i < setLines.length; i++) {
+      const { incDim, incVal } = setLines[i]!;
+      if (incDim && Number.isFinite(incVal) && levelCm(incDim, incVal) !== 0)
+        setSetOverrideLevel(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, incDim, incVal);
+    }
   }
   // STAMP each new set with the current equipment (Phase 3) — so a later equipment switch never
   // rewrites these sets (owner: "only new sets"). Only when a non-default machine is chosen.

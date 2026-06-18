@@ -2812,6 +2812,39 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-add-tag:hover { border-color: var(--accent); color: var(--accent); }
 .addm-line-vars.show-all .addm-add-tag { border-style: solid; color: var(--accent); border-color: var(--accent); }
+/* INCLINE / height pill (push-ups) — same small history-tag look as the dim pills; a non-floor
+   height lights up in the accent colour. Tap → the cm / SQ / Smith picker popup (.inc-pop). */
+.addm-line-vars .wo-af-incpill {
+  flex: 0 0 auto; min-height: 0; width: auto;
+  padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
+  text-transform: uppercase; letter-spacing: 0.02em;
+  border-radius: var(--r-xs); border: 1px solid var(--line);
+  background: var(--line); color: var(--muted); cursor: pointer;
+}
+.addm-line-vars .wo-af-incpill:hover { border-color: var(--accent); color: var(--accent); }
+.addm-line-vars .wo-af-incpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* The incline picker popup (a fixed card, above the add modal): a cm / SQ / Smith unit row, a
+   value stepper, the live cm-equivalence + difficulty ×, and a floor reset. */
+.inc-pop {
+  position: fixed; z-index: 220; min-width: 190px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 8px; display: flex; flex-direction: column; gap: 7px;
+}
+.inc-units { display: flex; gap: 4px; }
+.inc-unit {
+  flex: 1 1 0; padding: 5px 4px; font: inherit; font-size: 0.78rem; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--line); color: var(--muted); cursor: pointer;
+}
+.inc-unit.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.inc-valrow { display: flex; align-items: center; gap: 6px; }
+.inc-step {
+  flex: 0 0 auto; min-width: var(--tap-min); min-height: var(--tap-min); font-size: 1.1rem; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer;
+}
+.inc-val { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 1rem; text-align: center; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
+.inc-eq { text-align: center; font-size: 0.8rem; }
+.inc-floor { font: inherit; font-size: 0.78rem; padding: 4px; border: none; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.inc-floor:hover { color: var(--accent); background: var(--accent-soft); }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;

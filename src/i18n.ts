@@ -437,6 +437,8 @@ const LT: Record<string, string> = {
   "band 5": "guma 5",
   "band 6": "guma 6",
   "floor (on feet)": "ant kojų",
+  "floor": "grindys",
+  "floor (0cm)": "grindys (0cm)",
   "on knees": "ant kelių",
   "Data health": "Duomenų būklė",
   "The cleanup backlog and feature roadmap, shown straight from the docs/ files.": "Tvarkymo darbų sąrašas ir funkcijų planas, rodomi tiesiai iš docs/ failų.",
