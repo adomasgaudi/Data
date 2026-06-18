@@ -9507,14 +9507,17 @@ function scaleEditLevelBlock(): string {
 }
 function renderScaleEditor(): void {
   if (!scaleEditState) return;
-  const lv = scaleEditState.level;
-  const lvlFactor = lv ? levelScaleFor(scaleEditState.ex, lv.dim, lv.value) : 1;
+  // The variation editor is now the SAME add-set-style dim dropdowns everywhere
+  // (DEDUP-2 owner: "the edit menu should be the same as the add one") — no more rich
+  // pad/chip popover here. The incline LEVEL block stays above it (it's the per-set
+  // cm/Smith/squat-hole tool, not part of the family variation).
+  const variantUi = variantSelectsHtml(scaleEditState.ex, { note: scaleEditState.note });
   // INLINE-IN-CARD mode (DEDUP-2): render only the model body into the open card's
   // container — the card frames it (close/✕, machine, not-comparable are its own controls).
   if (scaleEditInCard) {
     const host = document.querySelector<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-varmodel");
     if (!host) return;
-    host.innerHTML = scaleEditLevelBlock() + notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor);
+    host.innerHTML = scaleEditLevelBlock() + variantUi;
     refreshPoseViz();
     return;
   }
@@ -9544,7 +9547,7 @@ function renderScaleEditor(): void {
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     machBlock +
     scaleEditLevelBlock() +
-    notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor) +
+    variantUi +
     ncBtn;
   refreshPoseViz();
 }
@@ -16398,6 +16401,19 @@ async function init() {
     shoulderRefPhoto = !shoulderRefPhoto;
     if (scaleEditState) renderScaleEditor();
   });
+  // The UNIFIED variation picker (DEDUP-2): the per-set edit card/popover renders the
+  // same add-set-style <select> dim dropdowns, each tagged with data-vecdim-ex/note.
+  // Picking a level fires the auto-xdd's native `change` — save it to THIS set's vec and
+  // re-render in place (the popover/card stays open so several dims can be set in a row;
+  // the heavy table/graph sync defers to close via scaleEditDirty). Add-popup dim selects
+  // carry no data-vecdim-ex, so they're skipped here (they're read once on "Add").
+  document.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("select.wo-af-dim[data-vecdim-ex]");
+    if (!sel || !sel.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.dim) return;
+    setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.dim, sel.value);
+    if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+    else refreshAfterDifficultyEdit();
+  });
   // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
   document.addEventListener("click", (e) => {
     const lvl = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-lvl");
@@ -18413,9 +18429,12 @@ function variationNotesFor(exerciseName: string): string[] {
 let afNoteSeq = 0; // unique <datalist> id per open form
 
 // Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
-// order. Ladder sub-dims (grip/height) are left to the full per-set editor.
-const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", shoulderDist: "back support", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+// order. This is now the SINGLE variation picker — used by both the add popup AND the
+// per-set edit card/popover (DEDUP-2 owner: "the edit menu should be the same as the
+// add one") — so EVERY dimension a lift has lives here, including the ladder sub-dims
+// (grip + rung height) that used to be in the old rich popover only.
+const AF_DIM_ORDER = ["lever", "reach", "support", "ladderGrip", "ladderH", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "back support", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 // ONE canonical label per (dimension, level), shared by the history TAG
 // (variationChipsHtml) and the add-set PICKER so the two can never drift — the
 // owner: "the variation selection should look like the tag and vice versa". The
@@ -18424,6 +18443,9 @@ const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "h
 type AfLevelLabel = { label: string; hint?: string };
 const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
   support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hanging" }, dips_bar: { label: "dips bar" } },
+  // Ladder leg grip + rung height (only meaningful on the ladder support).
+  ladderGrip: { none: { label: "no grip" }, lsit: { label: "L-sit" }, hooked: { label: "hooked", hint: "hooked legs" } },
+  ladderH: { none: { label: "any rung" }, lad3: { label: "rung 3" }, lad5: { label: "rung 5" }, lad6: { label: "rung 6" }, lad9: { label: "rung 9" } },
   // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.
   shoulderDist: { "0cm": { label: "none" }, blue: { label: "blue", hint: "6cm block" }, "30cm": { label: "30cm" }, "45cm": { label: "45cm" } },
   backrest: { none: { label: "none" }, "30cm": { label: "30cm", hint: "back rest" } },
@@ -18468,30 +18490,55 @@ function frequentLevelFor(exerciseName: string, fam: string, dim: string, fallba
  * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
  * so you choose the variation, not type a note. Lifts with no model fall back to the
  * free-text note (datalist of past notes). */
-function afVariationField(exerciseName: string): string {
+/** The structured variation dim pickers — ONE `<select>` per dimension, the add-set
+ * style. This is the SINGLE variation editor (DEDUP-2 owner: "the edit menu should be
+ * the same as the add one"): the add popup calls it with no `edit` (each select
+ * pre-selects the athlete's most-used level over the last 3 months, read once on Add),
+ * while the per-set edit card/popover passes `edit` so each select PRE-SELECTS that
+ * set's current level and carries `data-vecdim-*` — a change then edits THIS set's vec
+ * live (handled by the delegated `change` listener). Returns "" for a non-family lift
+ * in the add path (the caller falls back to a free note); in the edit path a non-family
+ * noted set gets the plain per-note × input the old picker used. */
+function variantSelectsHtml(exerciseName: string, edit?: { note: string }): string {
   const fam = familyOf(exerciseName);
-  const famDef = fam ? FAMILIES[fam] : null;
-  if (famDef) {
-    const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
-      const levels = famDef.dims[dim]!;
-      const dflt = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
-      // Pre-select the athlete's most-used level over the last 3 months (else the default).
-      const freq = frequentLevelFor(exerciseName, fam!, dim, dflt);
-      const cur = levels[freq] != null ? freq : dflt;
-      // For the leverage knobs (lever / reach) show the torque factor in each option
-      // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
-      const showFactor = dim === "lever" || dim === "reach";
-      const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l)} ×${levels[l]}` : afLevelText(dim, l));
-      const opts = Object.keys(levels)
-        .map((l) => {
-          const hint = afLevelHint(dim, l);
-          return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
-        })
-        .join("");
-      return `<select class="wo-af-dim wo-af-dimpill" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
-    }).join("");
-    if (selects) return `<span class="wo-af-dims">${selects}</span>`;
+  if (!fam) {
+    if (!edit) return "";
+    // Non-family noted set, edit path: the per-note relative × (the `.ex-var-input`
+    // handler already saves it). Mirrors the old notePickerHtml no-family branch.
+    const scale = variationScaleFor(exerciseName, edit.note);
+    return (
+      `<div class="ex-var-picker"><label class="ex-var-lbl">× ` +
+      `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(exerciseName)}" data-var-note="${escapeHtml(edit.note)}" aria-label="Difficulty for ${escapeHtml(edit.note)}" /></label></div>`
+    );
   }
+  const famDef = FAMILIES[fam]!;
+  // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
+  // implies + any per-set picks); the add path pre-selects the most-used recent level.
+  const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
+  const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
+  const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
+    const levels = famDef.dims[dim]!;
+    const dflt = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
+    let cur: string;
+    if (effVec) { const v = String(effVec[dim] ?? dflt); cur = levels[v] != null ? v : dflt; }
+    else { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
+    // For the leverage knobs (lever / reach) show the torque factor in each option
+    // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
+    const showFactor = dim === "lever" || dim === "reach";
+    const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l)} ×${levels[l]}` : afLevelText(dim, l));
+    const opts = Object.keys(levels)
+      .map((l) => {
+        const hint = afLevelHint(dim, l);
+        return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
+      })
+      .join("");
+    return `<select class="wo-af-dim wo-af-dimpill"${editAttrs} data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
+  }).join("");
+  return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
+}
+function afVariationField(exerciseName: string): string {
+  const selects = variantSelectsHtml(exerciseName);
+  if (selects) return selects;
   const notes = variationNotesFor(exerciseName);
   if (!notes.length) return "";
   const listId = `afNotes-${++afNoteSeq}`;
