@@ -8655,6 +8655,7 @@ function exerciseSetRowsHtml(
   formula: OneRepMaxFormula,
   strengthByDay: Map<string, Map<number, number>>,
   divMode: "day" | "week" | null,
+  includeHeader = true,
 ): string {
   const addBtn = showAddSetsNow()
     ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
@@ -8682,7 +8683,10 @@ function exerciseSetRowsHtml(
       return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
     })
     .join("");
-  return header + setRows;
+  // The inline single-exercise expand omits this header — the collapsed .wo-ex-line
+  // right above it is already the exercise's title (owner: don't show the collapsed
+  // line AND a duplicate title, just the title + the expanded table).
+  return (includeHeader ? header : "") + setRows;
 }
 
 /** The expanded set table for a SINGLE exercise within a day/period — the
@@ -8697,7 +8701,7 @@ function workoutExerciseDetailHtml(group: WorkoutGroup, exerciseName: string): s
   const divMode: "day" | "week" | null =
     historyByExercise ? "day"
     : mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
-  return `<table class="data-table detail-table">${setsHead()}<tbody>${exerciseSetRowsHtml(group, e, group.sets, formula, strengthByDay, divMode)}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${exerciseSetRowsHtml(group, e, group.sets, formula, strengthByDay, divMode, false)}</tbody></table>`;
 }
 
 /** Expand / collapse a SINGLE exercise's sets inline under its collapsed line

@@ -2387,6 +2387,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 .wo-ex-detail { margin: 0.1rem 0 0.5rem; }
 .wo-ex-detail .detail-table { margin: 0; }
 .wo-ex-line.ex-open { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 6px; }
+/* When an exercise is expanded its collapsed compact set chips are redundant with the
+   table below — hide them so the line is just the title + 1RM (owner). */
+.wo-ex-line.ex-open .wo-setlist { display: none; }
 /* Swipe an exercise line right to delete its sets that day. While dragging we follow the
    finger (no transition); past the commit threshold a red tint shows it'll delete. */
 .wo-ex-line.wo-ex-swiping { transition: none; will-change: transform; }
