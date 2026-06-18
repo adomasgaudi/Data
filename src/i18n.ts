@@ -53,6 +53,8 @@ const LT: Record<string, string> = {
   "Suggested": "Siūloma",
   "Add this set directly": "Pridėti seriją iš karto",
   "Add immediately": "Pridėti iš karto",
+  "add a goal…": "pridėti tikslą…",
+  "No goals yet — add one below.": "Dar nėra tikslų — pridėkite žemiau.",
   "Note": "Užrašas",
   "Variant": "Variacija",
   "optional note": "neprivalomas užrašas",

@@ -8127,7 +8127,7 @@ function renderWorkoutsPage() {
         const live = liveByKey.get(g.date);
         const hiddenLines = live && activeSet
           ? live.exercises.filter((e) => !activeSet!.has(e.exerciseName))
-              .map((e) => exLineHtml(e.exerciseName, live.sets.filter((s) => s.exerciseName === e.exerciseName))).join("")
+              .map((e) => `<div class="wo-hidden-day-item">${exLineHtml(e.exerciseName, live.sets.filter((s) => s.exerciseName === e.exerciseName))}<button type="button" class="wo-hidden-unhide" data-unhideex="${escapeHtml(e.exerciseName)}" title="Unhide ${escapeHtml(displayName(e.exerciseName))} (show it in this list again)">＋ unhide</button></div>`).join("")
           : "";
         const lbl = `${hc.hidden}/${hc.total}`;
         did +=
@@ -8438,6 +8438,9 @@ function onWorkoutRowClick(e: MouseEvent) {
     toggleInlineAddForm(addBtn);
     return;
   }
+  // "＋ unhide" next to a lift in the per-day hidden reveal: un-hide just that lift (owner).
+  const unhideBtn = target.closest<HTMLElement>(".wo-hidden-unhide");
+  if (unhideBtn?.dataset.unhideex) { unhideLifts([unhideBtn.dataset.unhideex]); return; }
   // Per-day / expanded "hidden N/M" reveal toggles itself (own document handlers,
   // PB-2) — swallow it here so it never falls through to expand/collapse the day.
   if (target.closest("[data-woshowday]") || target.closest("[data-woshowexp]")) return;
@@ -12174,7 +12177,7 @@ function renderWorkoutPlan(): void {
   // The Plan card's summary doubles as its title — name the athlete it's planning for.
   const planSummary = document.getElementById("waPlanSummary");
   if (planSummary) planSummary.textContent = `${athleteLabel()} plan`;
-  els.planBody.innerHTML = summary + list + addBlock;
+  els.planBody.innerHTML = summary + list + addBlock + planGoalsHtml(user);
 }
 
 function openWorkoutPlan(): void {
@@ -12235,6 +12238,39 @@ function spellingSourcesHtml(name: string, variants: string[]): string {
 // store, same device-local layering pattern as codes/coeffs. A lift can have SEVERAL setup
 // notes (owner: addable / deletable / editable), so each value is a string[]. Legacy single
 // strings (v1 shape) are migrated to a one-element array on load.
+// Per-athlete free-text GOALS shown in the Plan overlay alongside the focus lifts (owner:
+// "let me add notes in the plan section — general goals"). Synced like other per-user data.
+const PLAN_GOALS_KEY = "colosseum.planGoals.v1";
+const planGoals: Record<string, string[]> = (() => {
+  const raw = loadJsonObject<Record<string, unknown>>(PLAN_GOALS_KEY) ?? {};
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) { const a = v.filter((x): x is string => typeof x === "string" && x.trim() !== ""); if (a.length) out[k] = a; }
+  }
+  return out;
+})();
+function goalsFor(user: string): string[] { return planGoals[user] ?? []; }
+function saveGoals(user: string, list: string[]): void {
+  const clean = list.map((g) => g.trim()).filter(Boolean);
+  if (clean.length) planGoals[user] = clean; else delete planGoals[user];
+  saveJson(PLAN_GOALS_KEY, planGoals);
+}
+function addGoal(user: string, text: string): void { if (text.trim()) saveGoals(user, [...goalsFor(user), text]); }
+function removeGoalAt(user: string, idx: number): void { const l = goalsFor(user).slice(); l.splice(idx, 1); saveGoals(user, l); }
+/** The Plan overlay's Goals block: the athlete's general goals, each removable, plus an
+ * input + "＋" to add a new one. */
+function planGoalsHtml(user: string): string {
+  const goals = goalsFor(user);
+  const items = goals.length
+    ? goals.map((g, i) => `<li class="plan-goal"><span class="plan-goal-txt">${escapeHtml(g)}</span><button type="button" class="plan-goal-del" data-goaldel="${i}" title="Remove this goal" aria-label="Remove goal">✕</button></li>`).join("")
+    : `<li class="plan-goal-empty muted">No goals yet — add one below.</li>`;
+  return (
+    `<div class="plan-goals"><div class="plan-goals-hd">Goals</div>` +
+    `<ul class="plan-goals-list">${items}</ul>` +
+    `<div class="plan-goal-add"><input class="plan-goal-input" type="text" placeholder="add a goal…" aria-label="New goal" autocomplete="off" />` +
+    `<button type="button" class="plan-goal-addbtn" data-goaladd title="Add goal" aria-label="Add goal">＋</button></div></div>`
+  );
+}
 const SETUP_NOTES_KEY = "colosseum.exerciseSetupNotes.v1";
 const setupNotes: Record<string, string[]> = (() => {
   const raw = loadJsonObject<Record<string, unknown>>(SETUP_NOTES_KEY) ?? {};
@@ -15512,6 +15548,13 @@ async function init() {
     else delete pri[ex]!.goalKg;
     savePriorities(); renderWorkoutPlan();
   });
+  // Enter in the Goals input adds the goal (same as the ＋ button).
+  els.planBody.addEventListener("keydown", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".plan-goal-input");
+    if (!inp || e.key !== "Enter") return;
+    e.preventDefault();
+    if (inp.value.trim()) { addGoal(els.athlete.value, inp.value); renderWorkoutPlan(); }
+  });
   els.planBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const user = els.athlete.value;
@@ -15524,6 +15567,14 @@ async function init() {
       if (prioSectionCollapsed.has(k)) prioSectionCollapsed.delete(k); else prioSectionCollapsed.add(k);
       return;
     }
+    // Goals (owner): add the typed goal, or remove one. Per-athlete, shown alongside priorities.
+    if (t.closest("[data-goaladd]")) {
+      const inp = els.planBody.querySelector<HTMLInputElement>(".plan-goal-input");
+      if (inp && inp.value.trim()) { addGoal(user, inp.value); renderWorkoutPlan(); }
+      return;
+    }
+    const goalDel = t.closest<HTMLElement>("[data-goaldel]");
+    if (goalDel?.dataset.goaldel !== undefined) { removeGoalAt(user, Number(goalDel.dataset.goaldel)); renderWorkoutPlan(); return; }
     // ↕ Sort pill — cycle the list order: Top → Effort → Drag (free order).
     if (t.closest("[data-priosort]")) {
       prioSortMode = PRIO_SORTS[(PRIO_SORTS.indexOf(prioSortMode) + 1) % PRIO_SORTS.length]!;

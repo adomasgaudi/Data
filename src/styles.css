@@ -3025,6 +3025,11 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-hidden-toggle.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 /* A grayed "another exercise line" under a day/week that has filter-hidden lifts. */
 .wo-hidden-line { display: block; margin-top: 2px; }
+/* Each lift in the per-day hidden reveal: its line + a "＋ unhide" button to show it again. */
+.wo-hidden-day-item { display: flex; align-items: center; gap: 0.5rem; }
+.wo-hidden-day-item .wo-ex-line { flex: 1 1 auto; min-width: 0; }
+.wo-hidden-unhide { flex: 0 0 auto; font: inherit; font-size: 0.72rem; font-weight: 600; white-space: nowrap; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 9px; min-height: var(--tap-min); }
+.wo-hidden-unhide:hover { background: var(--accent); color: #fff; }
 .wo-hidden-daybtn { font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; padding: 1px 9px; border-radius: var(--r-pill); border: 1px dashed var(--line); background: none; color: var(--muted); }
 .wo-hidden-daybtn:hover { border-color: var(--accent); color: var(--accent); }
 .wo-hidden-daybtn.is-active { border-style: solid; border-color: var(--accent); color: var(--accent); }
@@ -5607,6 +5612,20 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
    gets the divider instead (only when it actually has content). */
 .plan-planner { margin: 0 0 0.6rem; }
 .plan-planner-hd { margin: 0 0 0.5rem; }
+/* ---- Plan GOALS: free-text general goals alongside the focus lifts (owner) ---- */
+.plan-goals { margin-top: 0.9rem; border-top: 1px solid var(--line); padding-top: 0.6rem; }
+.plan-goals-hd { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin-bottom: 0.35rem; }
+.plan-goals-list { list-style: none; margin: 0 0 0.4rem; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.plan-goal { display: flex; align-items: center; gap: 0.5rem; }
+.plan-goal-txt { flex: 1 1 auto; min-width: 0; }
+.plan-goal-del { flex: 0 0 auto; min-width: var(--tap-min); min-height: var(--tap-min); border: none; background: none; color: var(--muted); cursor: pointer; font-size: 0.9rem; border-radius: var(--r-pill); }
+.plan-goal-del:hover { color: var(--remove); }
+.plan-goal-empty { font-size: 0.85rem; }
+.plan-goal-add { display: flex; align-items: center; gap: 0.4rem; }
+.plan-goal-input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.92rem; padding: 5px 9px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel); color: inherit; }
+.plan-goal-input:focus { outline: none; border-color: var(--accent); }
+.plan-goal-addbtn { flex: 0 0 auto; min-width: var(--tap-min); min-height: var(--tap-min); font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-pill); }
+.plan-goal-addbtn:hover { background: var(--accent); color: #fff; }
 
 /* ---- Focus-lifts planner: weekly-sets summary line (cram: one scrolling row) ---- */
 .prio-summary {
