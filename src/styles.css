@@ -3320,6 +3320,17 @@ body.view-s2 .wa-metric[data-wametric="volume"],
 body.view-s2 .wa-metric[data-wametric="frequency"] { display: none; }
 /* Graph Options: drop the bottom All-graphs / Assist row. */
 body.view-s2 .wa-gmenu-cell:has([data-allgraphs]) { display: none; }
+/* Settings: no Code name option (s2 shows full names), no public-profile toggle,
+   no backup up/download buttons. */
+body.view-s2 .name-mode-opt[data-namemode="code"],
+body.view-s2 #publicProfileToggle,
+body.view-s2 #backupNowBtn,
+body.view-s2 #restoreBtn { display: none; }
+/* Analysis sub-tabs: drop the Stats pill and the not-yet-shipped SOON pills. */
+body.view-s2 #statsToggleBtn,
+body.view-s2 .wa-topact-btn.wa-soon { display: none; }
+/* Exercise-picker drawer: hide the group-by chooser (s2 is fixed to Discipline). */
+body.view-s2 .wa-sel-group { display: none; }
 /* Menu hugs the cell width and wraps long descriptions instead of going wide.
    The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
    edge (it grows leftward) — left-anchored it overflowed off the screen. */

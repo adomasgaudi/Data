@@ -1276,9 +1276,14 @@ let nameMode: NameMode = (() => {
 })();
 /** The default name mode before any explicit pick: full names for a user/spectator
  * view, compact short codes for admin. */
-function defaultNameMode(): NameMode { return viewMode === "admin" ? "short" : "full"; }
-/** The GLOBAL effective name mode: an explicit pick wins, else the view-aware default. */
-function effectiveNameMode(): NameMode { return nameModeExplicit ? nameMode : defaultNameMode(); }
+function defaultNameMode(): NameMode { return viewMode === "admin" && viewTier === "adv" ? "short" : "full"; }
+/** The GLOBAL effective name mode: an explicit pick wins, else the view-aware default.
+ * The simplified views (s1/s2) always show FULL names and never the code names (owner):
+ * the default is full and a saved "code" pick is coerced to full there. */
+function effectiveNameMode(): NameMode {
+  const m = nameModeExplicit ? nameMode : defaultNameMode();
+  return viewTier !== "adv" && m === "code" ? "full" : m;
+}
 // Per-area (graph / hist) local overrides. Empty → every area follows the global.
 const nameModeByScope: Partial<Record<SelScope, NameMode>> = (() => {
   try {
@@ -19689,7 +19694,9 @@ function renderSelector(scope: SelScope): void {
   const sel = document.getElementById(scope === "graph" ? "waExerciseSelector" : "waExerciseSelectorHist");
   if (!sel) return;
   curSelScope = scope;
-  waGroupBy = waGroupByScope[scope]; // this scope's grouping drives every picker read below
+  // s2 (simplified-2) fixes the picker grouping to Discipline and hides the chooser (owner) —
+  // s1/adv keep the per-scope choice. The scope store is untouched, so adv re-reads it.
+  waGroupBy = viewTier === "s2" ? "discipline" : waGroupByScope[scope]; // this scope's grouping drives every picker read below
   // This selector (and the chips/pills it draws) shows THIS area's name mode.
   const prevNameScope = nameScope;
   nameScope = scope;
