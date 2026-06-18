@@ -162,7 +162,37 @@ On first load with the new model, fold today's per-exercise settings into machin
 
 ---
 
+## Owner decisions (Jun 18) — MODEL LOCKED
+
+1. **Shared pool — YES, and it's EQUIPMENT, not just machines.** "some exercises can
+   share a machine or dumbbells or bar etc." → the entity is a piece of **equipment**
+   (machine / dumbbell / barbell / cable / bodyweight…) that several exercises point at.
+   Rename `Machine` → `Equipment` with an optional `kind`; the weight/÷/assisted
+   settings are the *machine* kind's fields (a dumbbell/bar mostly just groups
+   exercises, no ÷). Settings stay GLOBAL per equipment.
+2. **Pick a shared machine; settings global.** Confirmed — a user chooses WHICH shared
+   equipment they use; to get different numbers they switch to / create another one.
+3. **Only NEW sets — so stamp the equipment PER SET at log time.** A set remembers the
+   equipment it was logged on; switching equipment changes only sets logged AFTER the
+   switch. Past sets keep their stamped equipment.
+
+### Resulting model refinements
+
+- **Set gains `equipmentId`** stamped when logged (in the set record /
+  `colosseum.setOverrides.v1` for imported sets). A set's formula reads ITS stamped
+  equipment, NOT a live (user,exercise) lookup.
+- **`(user, exercise) → currentEquipmentId`** (per-user, synced) is the DEFAULT stamped
+  onto a NEW set — never applied retroactively.
+- **Migration** stamps every EXISTING set with its exercise's default equipment (the
+  auto-created one carrying today's per-exercise settings) — what they were computed with.
+- Stores: `colosseum.equipment.v1` (registry), `colosseum.exerciseEquipment.v1` (global
+  default per exercise), `colosseum.userExerciseEquipment.v1` (per-user current choice).
+  Set-level `equipmentId` rides in the set record / setOverrides.
+- Resolver split: `equipmentForSet(set)` (stamped id, for rendering past sets);
+  `currentEquipmentFor(user, ex)` (what a new set will stamp).
+
 ## Status
 
-- **Plan written, awaiting owner sign-off on the model + the 5 open questions.**
-- Nothing built yet (owner: "plan first").
+- **Model LOCKED (owner answered the 3 forks Jun 18).** Open Qs 4–5 ride as defaults
+  (auto-create equipment on migration; add/rename from the cog).
+- **Phase 1 (add-page cog) — STARTING.** Phases 2–3 follow, one box at a time.
