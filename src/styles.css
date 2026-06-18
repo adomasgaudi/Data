@@ -3253,6 +3253,14 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
 .xdd-rpe .xdd-caret { font-size: 0.6rem; }
 .xdd-rpe.is-set .xdd-btn { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; }
 .xdd-rpe.is-set .xdd-caret { color: rgba(255, 255, 255, 0.85); }
+/* ASSUMED RIR (owner: auto-assigned, not yet graded): a dashed, faded pill so it reads
+   as a guess — visually distinct from a solid REAL (user-set) value. Tapping a band
+   makes it real (.is-set above). */
+.xdd-rpe.is-assumed .xdd-btn {
+  color: var(--muted); background: transparent;
+  border: 1px dashed var(--border); border-style: dashed; font-weight: 600; opacity: 0.85;
+}
+.xdd-rpe.is-assumed .xdd-caret { color: var(--muted); }
 /* Menu hugs the cell width and wraps long descriptions instead of going wide.
    The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
    edge (it grows leftward) — left-anchored it overflowed off the screen. */

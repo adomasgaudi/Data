@@ -1985,6 +1985,24 @@ function rirBandMid(id: string | undefined): number | null {
   const [lo, hi] = id.split(/[–-]/).map((n) => parseFloat(n));
   return lo !== undefined && Number.isFinite(lo) ? (hi !== undefined && Number.isFinite(hi) ? (lo + hi) / 2 : lo) : null;
 }
+/** The RIR_BANDS band whose range contains a numeric RIR (bands are ascending and
+ * contiguous, so the first band whose upper bound exceeds `rir` holds it). */
+function bandContainingRir(rir: number): string {
+  for (const b of RIR_BANDS) {
+    const hi = parseFloat(b.id.split(/[–-]/)[1] ?? b.id);
+    if (Number.isFinite(hi) && rir < hi) return b.id;
+  }
+  return RIR_BANDS[RIR_BANDS.length - 1]!.id;
+}
+/** The ASSUMED RIR band for a set the owner hasn't graded (owner: "always add a rir
+ * to sets automatically"). Prefers the set's own predicted RIR (snapped to a band);
+ * with no prediction it falls back to the muscle-group typical — legs 4–8, upper body
+ * 2.5–4. The store (rpeGrades) stays the single source of truth for what's REAL: a
+ * graded set has an entry, an assumed one doesn't, so picking a band turns it real. */
+function assumedRirBandId(exerciseName: string, predRir: number | null): string {
+  if (predRir !== null && Number.isFinite(predRir)) return bandContainingRir(predRir);
+  return LOWER_BODY_MG.has(mgFor(exerciseName)) ? "4–8" : "2.5–4";
+}
 /** Big compound leg lifts (squat / deadlift patterns, leg press) fatigue more, so
  * they get the wider "mid" effort band — see effortClass(). */
 function isBigLegsLift(name: string): boolean {
@@ -8670,7 +8688,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const uniTag = uni
     ? `<span class="set-uni${sidesDifferNow ? " is-diff" : ""}" title="Unilateral — counts as a right + a left set${sidesDifferNow ? "; the sides differ (edit below)" : " (both sides, linked)"}">⇄${sidesDifferNow && both ? ` R${both.right.reps}/L${both.left.reps}` : ""}</span>`
     : "";
-  const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
+  const rpeCell = rpeDropdownHtml(sid, rpeFor(s), assumedRirBandId(s.exerciseName, predRir));
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
   // The variation difficulty multiplier applied to this set (note model × level ×
@@ -8865,18 +8883,25 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
  * unset); the open menu lists every band with its full description, plus a Clear
  * row. Reuses the app's .xdd dropdown styling; matched to the cell width. Clicks
  * are handled by delegation in the sets-table handler (onSetRpeClick). */
-function rpeDropdownHtml(sid: string, grade: string | undefined): string {
+function rpeDropdownHtml(sid: string, grade: string | undefined, assumedId?: string): string {
   const band = rirBand(grade);
-  const label = band ? band.id : "–";
+  // No graded value → show the ASSUMED band (faded/dashed) instead of "–", so every set
+  // carries a RIR. Picking one writes to rpeGrades and it becomes REAL (solid). The
+  // assumed id rides on data-assumed so a clear (re-render) can restore the assumption.
+  const assumed = !band && assumedId ? rirBand(assumedId) : undefined;
+  const shown = band ?? assumed;
+  const label = shown ? shown.id : "–";
   const optHtml = (val: string, text: string, title: string, active: boolean) =>
     `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
   // Just the number range — no explanations (the why stays as a hover tooltip).
   const menu =
-    optHtml("", "–", "Clear the grade", !band) +
-    RIR_BANDS.map((b) => optHtml(b.id, b.id, b.desc, grade === b.id)).join("");
+    optHtml("", "–", "Clear — back to the assumed RIR", !band) +
+    RIR_BANDS.map((b) => optHtml(b.id, b.id, b.desc, shown?.id === b.id)).join("");
+  const cls = band ? " is-set" : assumed ? " is-assumed" : "";
+  const aria = band ? "Reps in reserve (RIR)" : "Assumed reps in reserve — tap to set the real value";
   return (
-    `<div class="xdd xdd-rpe${band ? " is-set" : ""}" data-setid="${escapeHtml(sid)}">` +
-    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve (RIR)">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd xdd-rpe${cls}" data-setid="${escapeHtml(sid)}" data-assumed="${escapeHtml(assumedId ?? "")}">` +
+    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="${aria}" title="${escapeHtml(aria)}">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
     `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
     `</div>`
   );
@@ -8902,8 +8927,9 @@ function onSetRpeClick(target: HTMLElement): boolean {
   if (opt?.dataset.rir !== undefined) {
     const v = opt.dataset.rir === "" ? null : opt.dataset.rir;
     setRpe(dd.dataset.setid, v);
-    // Swap in a freshly-rendered dropdown so the button label + is-set update.
-    dd.outerHTML = rpeDropdownHtml(dd.dataset.setid, v ?? undefined);
+    // Swap in a freshly-rendered dropdown so the button label + is-set/is-assumed update.
+    // Clearing (v=null) falls back to the assumed band carried on data-assumed.
+    dd.outerHTML = rpeDropdownHtml(dd.dataset.setid, v ?? undefined, dd.dataset.assumed || undefined);
     return true;
   }
   return true; // a click inside the open menu (e.g. on a gap) — swallow it
