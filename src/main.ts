@@ -1784,6 +1784,30 @@ function setFamLabel(family: string, dim: string, level: string, label: string):
   if (Object.keys(fam).length === 0) delete famLabelOverrides[family];
   saveJson(FAM_LABELS_KEY, famLabelOverrides);
 }
+// GRAY tags (owner): a "gray" level is HIDDEN from the history (collapsed + expanded) and
+// from the add/edit picker until you ＋reveal it — it shows only while editing. The OBVIOUS
+// baseline (the config reference level, e.g. free / no support / none / 0cm) is gray BY
+// DEFAULT; a meaningful owner-set default that ISN'T the baseline (e.g. back-to-wall) stays
+// visible. The owner can flip any level's gray with the 👁 toggle in the tag editor. Saved.
+const FAM_GRAY_KEY = "colosseum.famGray.v1";
+const famGrayOverrides = loadJsonObject<Record<string, Record<string, Record<string, boolean>>>>(FAM_GRAY_KEY);
+/** Is a (family, dim, level) gray — hidden from history/picker? Defaults to "it's the
+ * obvious config baseline"; an owner toggle overrides that either way. */
+function isGray(family: string, dim: string, level: string): boolean {
+  const ov = famGrayOverrides[family]?.[dim]?.[level];
+  if (ov !== undefined) return ov;
+  return level === famBaseDefault(family, dim);
+}
+/** Flip a level's gray flag (cleared when it matches the implicit baseline default). */
+function setFamGray(family: string, dim: string, level: string, gray: boolean): void {
+  const fam = (famGrayOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  if (gray === (level === famBaseDefault(family, dim))) delete d[level];
+  else d[level] = gray;
+  if (Object.keys(d).length === 0) delete fam[dim];
+  if (Object.keys(fam).length === 0) delete famGrayOverrides[family];
+  saveJson(FAM_GRAY_KEY, famGrayOverrides);
+}
 
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
@@ -7889,15 +7913,16 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 // every label comes from the shared AF_LEVEL_LBL map (afLevelText). (WO-235 #prune)
 function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>): string {
   if (!fam) return "";
-  const defs = FAMILIES[fam]?.defaults ?? {};
   const chips: string[] = [];
   const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
+  // A GRAY level (the obvious baseline, or an owner 👁 override) is "just the exercise" and
+  // never a history chip; a meaningful value (incl. a non-baseline default like b2w) shows.
   const sup = vec.support != null ? String(vec.support) : null;
-  if (sup && sup !== defs.support) push(" wo-var-sup", afLevelText("support", sup, fam));
+  if (sup && !isGray(fam, "support", sup)) push(" wo-var-sup", afLevelText("support", sup, fam));
   const pos = vec.position != null ? String(vec.position) : null;
-  if (pos && pos !== defs.position) push("", afLevelText("position", pos, fam));
-  if (vec.band != null && String(vec.band) !== (defs.band ?? "none")) push(" wo-var-band", `band ${String(vec.band)}`);
-  if (vec.lean != null && String(vec.lean) !== (defs.lean ?? "0cm")) push("", `lean ${String(vec.lean)}`);
+  if (pos && !isGray(fam, "position", pos)) push("", afLevelText("position", pos, fam));
+  if (vec.band != null && !isGray(fam, "band", String(vec.band))) push(" wo-var-band", `band ${String(vec.band)}`);
+  if (vec.lean != null && !isGray(fam, "lean", String(vec.lean))) push("", `lean ${String(vec.lean)}`);
   return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
 }
 function variationChipsHtml(r: SetRecord): string {
@@ -18757,11 +18782,14 @@ function syncAddmVtags(form: HTMLElement): void {
     const showAll = slot.classList.contains("show-all");
     for (const sel of slot.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
       const isRom = sel.classList.contains("wo-af-rom"); // a PROMOTED passive tag — always shown
-      const def = sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "";
-      const isDefault = sel.value === def;
+      const fam = sel.dataset.ex ? familyOf(sel.dataset.ex) : null;
+      const dim = sel.dataset.dim ?? "";
+      // GRAY = the obvious baseline (or an owner override): hidden until ＋reveal. A meaningful
+      // value (incl. a non-baseline default like b2w) is NOT gray, so it stays visible.
+      const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "");
       // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
-      sel.classList.toggle("is-set", !isDefault);
-      setEnhancedSelectHidden(sel, !isRom && isDefault && !showAll);
+      sel.classList.toggle("is-set", !gray);
+      setEnhancedSelectHidden(sel, !isRom && gray && !showAll);
     }
   }
 }
@@ -24504,6 +24532,7 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     const lvl = o.value;
     const name = afLevelText(vtagDim, lvl, fam);
     const isDefault = famDefaultLevel(fam, vtagDim) === lvl;
+    const gray = isGray(fam, vtagDim, lvl); // hidden from history / picker when at this level
     const factor = vtagDim === "band" ? undefined : famLevels(fam, vtagDim)[lvl]; // band is a kg knob, not a ×
     const hint = afLevelHint(vtagDim, lvl);
     const editing = vtagEditLevel === lvl;
@@ -24514,11 +24543,12 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
         `</div>`
       : "";
     return (
-      `<div class="xdd-opt vtag-opt${lvl === sel.value ? " is-active" : ""}${isDefault ? " is-default" : ""}" role="option">` +
+      `<div class="xdd-opt vtag-opt${lvl === sel.value ? " is-active" : ""}${isDefault ? " is-default" : ""}${gray ? " is-gray" : ""}" role="option">` +
       `<button type="button" class="vtag-pick" data-val="${escapeHtml(lvl)}">${escapeHtml(name)}` +
       (factor !== undefined ? ` <span class="vtag-mult-lbl">×${factor}</span>` : "") +
       (hint ? ` <span class="xdd-opt-hint">${escapeHtml(hint)}</span>` : "") +
       `</button>` +
+      `<button type="button" class="vtag-gray${gray ? "" : " is-on"}" data-vtag-gray="${escapeHtml(lvl)}" aria-pressed="${!gray}" title="${gray ? "Hidden from the history (only shows in this editor) — tap to SHOW it as a tag" : "Shown as a history tag — tap to HIDE it (gray: only in the editor)"}">${gray ? "🚫" : "👁"}</button>` +
       `<button type="button" class="vtag-default${isDefault ? " is-on" : ""}" data-vtag-default="${escapeHtml(lvl)}" aria-pressed="${isDefault}" title="${isDefault ? "The default tag for this exercise" : "Set as the default tag for this exercise"}">${isDefault ? "★" : "☆"}</button>` +
       `<button type="button" class="vtag-editbtn${editing ? " is-on" : ""}" data-vtag-edit="${escapeHtml(lvl)}" title="Edit this tag's name and multiplier">✎</button>` +
       editRow +
@@ -24611,6 +24641,12 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     if (vd?.dataset.vtagDefault !== undefined) {
       const fam = vtagFam();
       if (fam) { setFamDefaultLevel(fam, vtagDim, vd.dataset.vtagDefault); resyncOpen(); }
+      return;
+    }
+    const vg = t.closest<HTMLElement>(".vtag-gray");
+    if (vg?.dataset.vtagGray !== undefined) {
+      const fam = vtagFam();
+      if (fam) { setFamGray(fam, vtagDim, vg.dataset.vtagGray, !isGray(fam, vtagDim, vg.dataset.vtagGray)); resyncOpen(); }
       return;
     }
     const ve = t.closest<HTMLElement>(".vtag-editbtn");
