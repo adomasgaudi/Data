@@ -7677,7 +7677,10 @@ function setDisplay(raw: SetRecord): string {
   const effCls = effClass === "hard" ? "wo-eff wo-eff-hard" : effClass === "mid" ? "wo-eff wo-eff-mid" : "";
   const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
   const note = s.notes?.trim();
-  const bw = s.weight === 0 || s.weight === 1;
+  // Bodyweight = no real added weight (0, 1, or unlogged null): the VARIATION (tag / ×N) is
+  // the description and becomes the shaded base, with reps as the trailing superscript — so a
+  // bodyweight set reads "B2W⁷" / "×0.82⁷", never "0⁷ ×0.82" (owner: tags before reps, reps last).
+  const bw = s.weight === 0 || s.weight === 1 || s.weight === null;
   // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
   // you dialed (the editable part). Empty for normal lifts.
   const mwp = machineWeightPrefix(s.exerciseName);
@@ -7709,7 +7712,7 @@ function setDisplay(raw: SetRecord): string {
   const weightHtml = isAsstMach
     ? (S.machineReal
         ? wr(machReal, s.reps)
-        : `<span class="wo-mlog" title="Logged machine dial — over-reads ~2×; real effort ≈ ${machReal === null ? "half" : fmt(machReal)}. Toggle 'real' in the ⚙ for the real value."><span class="wo-mlog-m">m</span>${fmt(s.weight ?? 0)}${machRepsSup}</span>`)
+        : `<span class="wo-mlog" title="Logged machine dial — over-reads ~2×; real effort ≈ ${machReal === null ? "half" : fmt(machReal)}. Toggle 'real' in the ⚙ for the real value."><span class="wo-mlog-m">m</span>${fmt(s.weight ?? 0)}</span>${machRepsSup}`)
     : `${mwp}${wr(s.weight, s.reps)}`;
   const mach = isAsstMach
     ? ""
