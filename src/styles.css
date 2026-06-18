@@ -2875,12 +2875,15 @@ sup.wr-bw { font-size: 0.85em; }
    with the reps raised as a superscript, so it reads like the final logged chip. */
 .addm-set-chip {
   display: inline-flex; align-items: flex-start; gap: 0; flex: 0 0 auto;
-  border: none; background: none; padding: 0;
+  /* Owner: the weight/reps entry was "invisible" (bare text) — give it a real boxed field:
+     a visible panel background, a border and generous padding, kept compact (not wide). */
+  border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+  padding: 5px 9px;
 }
-/* Weight = the main number, as text (no input chrome). */
+/* Weight = the main number, as text (the box chrome lives on .addm-set-chip). */
 .addm-set-chip .wo-af-weight {
-  flex: 0 0 auto; width: 3.1rem; box-sizing: border-box;
-  border: none; background: none; padding: 0; margin: 0; min-height: var(--tap-min);
+  flex: 0 0 auto; width: 2.6rem; box-sizing: border-box;
+  border: none; background: none; padding: 0; margin: 0;
   font-size: 1.15rem; font-weight: 700; text-align: right; color: inherit;
   -moz-appearance: textfield; appearance: textfield; /* no spinner → reads as text */
 }
@@ -2895,10 +2898,9 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-set-chip .wo-af-reps::-webkit-outer-spin-button, .addm-set-chip .wo-af-reps::-webkit-inner-spin-button {
   -webkit-appearance: none; margin: 0;
 }
-/* Editing affordance WITHOUT the box look: a faint accent underline only while focused. */
-.addm-set-chip .wo-af-weight:focus, .addm-set-chip .wo-af-reps:focus {
-  outline: none; box-shadow: inset 0 -1.5px 0 var(--accent);
-}
+/* Focus shows on the whole field box (owner: visible, not a faint underline). */
+.addm-set-chip:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.addm-set-chip .wo-af-weight:focus, .addm-set-chip .wo-af-reps:focus { outline: none; }
 /* Live REAL-weight conversion (assisted machines, owner): the dialed counterweight halved
    (−20 → −10) shown immediately as plain text with the reps as a TRUE superscript (owner: the
    reps sat too low). Hidden for non-machine lifts. */
