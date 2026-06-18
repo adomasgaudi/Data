@@ -18736,11 +18736,12 @@ function syncAddmVtags(form: HTMLElement): void {
   for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
     const showAll = slot.classList.contains("show-all");
     for (const sel of slot.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
+      const isRom = sel.classList.contains("wo-af-rom"); // a PROMOTED passive tag — always shown
       const def = sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "";
       const isDefault = sel.value === def;
       // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
       sel.classList.toggle("is-set", !isDefault);
-      setEnhancedSelectHidden(sel, isDefault && !showAll);
+      setEnhancedSelectHidden(sel, !isRom && isDefault && !showAll);
     }
   }
 }
@@ -18898,20 +18899,40 @@ function ghostSetsHtml(exerciseName: string, date: string): string {
  * render and the reactive rebuild when the exercise is picked in the new-lift popup
  * (so its variants show as you choose it, not only after it's added). The note
  * fallback afVariationField can emit is NOT used here — the popup has its own Note. */
+// ---- ACTIVE vs PASSIVE add-set tags (owner) ----.
+// ACTIVE tags = the family variation pills shown per set line (support, band, …) at their
+// default, inviting a change. PASSIVE tags = ones NOT shown until you PROMOTE them with ＋
+// (so e.g. ROM stops nagging you with a meaningless "90%" on every lift). A promotion is
+// remembered PER EXERCISE — "full ROM is an exception for this lift" sticks. Saved on device.
+const ADDM_PASSIVE_KEY = "colosseum.addmPassive.v1";
+const addmPassivePromoted = loadJsonObject<Record<string, string[]>>(ADDM_PASSIVE_KEY);
+/** The passive tags promoted (made active) for an exercise — e.g. ["rom"]. */
+function passivePromoted(ex: string): string[] { return addmPassivePromoted[ex] ?? []; }
+function isPassivePromoted(ex: string, id: string): boolean { return passivePromoted(ex).includes(id); }
+/** Toggle a passive tag's promotion for an exercise (persisted). */
+function togglePassivePromoted(ex: string, id: string): void {
+  const cur = new Set(passivePromoted(ex));
+  if (cur.has(id)) cur.delete(id); else cur.add(id);
+  if (cur.size) addmPassivePromoted[ex] = [...cur]; else delete addmPassivePromoted[ex];
+  saveJson(ADDM_PASSIVE_KEY, addmPassivePromoted);
+}
+/** The ROM pill (a passive tag): only rendered on a line when ROM is promoted for the lift. */
+function romPillHtml(ex: string): string {
+  const romDef = romDefaultFor(ex || "");
+  const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
+    .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
+  return `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
+}
 function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
   // Just the compact value-pills (owner: cram it, variants on the SAME line as weight/reps);
   // no header/labels. Wrapped inline so it flows before the weight in one row.
   const dims = vf.includes("wo-af-dims") ? vf : "";
-  // ROM is just another variant/tag (owner): a 90% pill sitting WITH the other tags in the
-  // block, not its own labelled field. Universal — shown for every lift; default = the lift's
-  // ROM. Recorded per-set as a "ROM X%" note token only when it differs from the default.
-  const romDef = romDefaultFor(ex || "");
-  const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
-    .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
-  const rom = `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
+  // ROM is a PASSIVE tag now (owner: "90% as a default doesn't make sense, don't always ask me"):
+  // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
+  const rom = ex && isPassivePromoted(ex, "rom") ? romPillHtml(ex) : "";
   // Owner: show only the tags you've SET (away from default); a ＋ reveals the rest to add one.
-  const addBtn = `<button type="button" class="addm-add-tag" title="Add a variation tag (band, lean, ROM…)" aria-label="Add a variation tag">＋ tag</button>`;
+  const addBtn = `<button type="button" class="addm-add-tag" title="Add a variation tag (band, lean…)" aria-label="Add a variation tag">＋ tag</button>`;
   // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
   // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
   // one cm height). Tap the pill to set it; floor (0cm) is the default. (Only incline lifts.)
@@ -18919,6 +18940,18 @@ function addmVariantField(ex: string): string {
     ? `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`
     : "";
   return dims + incline + rom + addBtn;
+}
+/** The PASSIVE-tag palette shown ABOVE the set lines: a ＋ for each promotable passive tag
+ * (ROM today; machine base weight / ÷ multiplier live in the ⚙ cog). Promoting one adds it as
+ * an active pill to every set line; tapping an active one removes it again. */
+function passivePaletteHtml(ex: string): string {
+  if (!ex) return "";
+  const tags: { id: string; label: string }[] = [{ id: "rom", label: "ROM" }];
+  const pills = tags.map((t) => {
+    const on = isPassivePromoted(ex, t.id);
+    return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag to this exercise`}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
+  }).join("");
+  return `<div class="addm-passive" aria-label="Add a passive tag"><span class="addm-passive-lbl muted">tags</span>${pills}</div>`;
 }
 /** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
 function inclinePillLabel(dim: LevelDim, val: number): string {
@@ -19028,7 +19061,33 @@ function refreshAddmSettings(): void {
   body.dataset.cogex = addmCogEx(form);
   body.innerHTML = addmSettingsPanelInner(body.dataset.cogex);
 }
+/** Place the ⚙ cog popup as a fixed, viewport-clamped card under (or above) its button. */
+function placeCogPop(panel: HTMLElement, anchor: HTMLElement): void {
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth - 16, 320);
+  panel.style.width = `${w}px`;
+  const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+  const h = panel.offsetHeight || 220;
+  let top = r.bottom + 6;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - 6 - h);
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+}
+function closeCogPop(): void {
+  const panel = addModalEl?.querySelector<HTMLElement>(".addm-set-cog");
+  if (panel) { panel.hidden = true; panel.classList.remove("addm-set-cog--pop"); panel.style.cssText = ""; }
+  const cog = addModalEl?.querySelector<HTMLElement>(".addm-cog");
+  cog?.classList.remove("is-on"); cog?.setAttribute("aria-expanded", "false");
+  document.removeEventListener("click", cogOutside, true);
+}
+function cogOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest(".addm-set-cog") || t.closest(".addm-cog")) return; // a tap inside the popup / on the cog
+  e.stopPropagation(); // first outside tap closes the cog ONLY (not the whole modal)
+  closeCogPop();
+}
 function closeAddModal(): void {
+  closeCogPop();
   addModalEl?.remove();
   addModalEl = null;
   addmStrength = null; // drop the cached strength map (recomputed on next open)
@@ -19083,6 +19142,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
     exField +
     `<div class="addm-set-cog" data-cogex="${escapeHtml(ex)}" hidden>${addmSettingsPanelInner(ex)}</div>` +
     afWhenToggle(date, today) +
+    `<div class="addm-passive-slot">${passivePaletteHtml(ex)}</div>` +
     `<div class="addm-lines">${afLine(ex)}</div>` +
     `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
     suggSection +
@@ -19179,6 +19239,9 @@ function openAddModal(exerciseName: string | null, date: string): void {
         lastKey = key;
         // Rebuild EVERY set-line's variation pickers (each line carries its own now).
         for (const lv of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) lv.innerHTML = name ? addmVariantField(name) : "";
+        // The passive-tag palette (＋ ROM …) is per-exercise → rebuild it for the typed lift.
+        const ps = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+        if (ps) ps.innerHTML = passivePaletteHtml(name);
         // Rebuilt selects start showing every dim — re-run the only-set hide once they're
         // xdd-enhanced (rAF), so defaults collapse in the Add-exercise modal too.
         const f = wrap.querySelector<HTMLElement>(".wo-addform");
@@ -19210,17 +19273,45 @@ function onAddModalClick(e: MouseEvent): void {
   // ↕ incline/height pill → the unit + value picker (cm / SQ / Smith).
   const incPill = t.closest<HTMLElement>(".wo-af-incpill");
   if (incPill) { openInclinePicker(incPill); return; }
+  // Passive-tag palette ＋ (e.g. ＋ ROM): promote/demote the tag for this exercise and add or
+  // remove its pill on EVERY set line in place (so typed weights/reps + other tags survive).
+  const passBtn = t.closest<HTMLElement>(".addm-passive-pill");
+  if (passBtn?.dataset.passive) {
+    const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+    if (ex) {
+      togglePassivePromoted(ex, passBtn.dataset.passive);
+      if (passBtn.dataset.passive === "rom") {
+        const on = isPassivePromoted(ex, "rom");
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
+          if (on && !existing) slot.querySelector(".addm-add-tag")?.insertAdjacentHTML("beforebegin", romPillHtml(ex));
+          else if (!on && existing) { (existing.nextElementSibling?.classList.contains("xdd") ? existing.nextElementSibling : null)?.remove(); existing.remove(); }
+        }
+      }
+      const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+      if (palette) palette.innerHTML = passivePaletteHtml(ex);
+      syncAddmVtags(form);
+    }
+    return;
+  }
   // ⚙ Exercise-settings cog: toggle the expanded per-exercise panel (rebuilt from the live
   // exercise so a just-typed new lift targets the right name).
   const cogBtn = t.closest<HTMLElement>(".addm-cog");
   if (cogBtn) {
     const panel = wrap.querySelector<HTMLElement>(".addm-set-cog");
     if (panel) {
-      refreshAddmSettings();
-      const show = panel.hasAttribute("hidden");
-      panel.toggleAttribute("hidden", !show);
-      cogBtn.classList.toggle("is-on", show);
-      cogBtn.setAttribute("aria-expanded", String(show));
+      if (panel.hasAttribute("hidden")) {
+        // Owner: the cog should open a floating POPUP, not push the layout down with an inline
+        // expansion. The panel stays inside the modal (so its existing click/change handlers keep
+        // working) but renders as a fixed, viewport-clamped card closed by an outside tap.
+        refreshAddmSettings();
+        panel.hidden = false;
+        panel.classList.add("addm-set-cog--pop");
+        placeCogPop(panel, cogBtn);
+        cogBtn.classList.add("is-on");
+        cogBtn.setAttribute("aria-expanded", "true");
+        setTimeout(() => document.addEventListener("click", cogOutside, true), 0);
+      } else closeCogPop();
     }
     return;
   }

@@ -2894,6 +2894,23 @@ sup.wr-bw { font-size: 0.85em; }
   margin: 0.1rem 0 0.45rem; padding: 0.5rem 0.6rem; border: 1px solid var(--line);
   border-radius: var(--r-pill); background: var(--accent-soft);
 }
+/* Owner: the ⚙ cog opens a floating POPUP, not an inline expansion that pushes the form down. */
+.addm-set-cog--pop {
+  position: fixed; z-index: 221; margin: 0; max-height: 70vh; overflow: auto;
+  border-radius: 10px; background: var(--panel); box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+/* PASSIVE-tag palette above the sets: ＋ ROM (and future common passive tags). A ＋ promotes the
+   tag to an active pill on every set line; once on it shows ✓ and removes on a second tap. */
+.addm-passive { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.15rem 0 0.1rem 0.35rem; }
+.addm-passive:empty { display: none; }
+.addm-passive-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.addm-passive-pill {
+  flex: 0 0 auto; padding: 2px 8px; font: inherit; font-size: 0.62rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.02em; cursor: pointer;
+  border: 1px dashed var(--line); border-radius: var(--r-xs); background: none; color: var(--muted);
+}
+.addm-passive-pill:hover { border-color: var(--accent); color: var(--accent); }
+.addm-passive-pill.is-on { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
 .addm-cog-pill {
   font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
   padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line);

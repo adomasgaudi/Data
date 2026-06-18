@@ -439,6 +439,7 @@ const LT: Record<string, string> = {
   "floor (on feet)": "ant kojų",
   "floor": "grindys",
   "floor (0cm)": "grindys (0cm)",
+  "tags": "žymos",
   "on knees": "ant kelių",
   "Data health": "Duomenų būklė",
   "The cleanup backlog and feature roadmap, shown straight from the docs/ files.": "Tvarkymo darbų sąrašas ir funkcijų planas, rodomi tiesiai iš docs/ failų.",
