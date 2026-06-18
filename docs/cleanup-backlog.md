@@ -22,6 +22,20 @@ ones, re-grade as the code changes.
   route `vecSelect` through `afLevelText`/`afLevelHint`, keeping the ×factor display.
   Found during the WO-233..235 variation-UI prune (tag + add-preview already unified
   on `variationChipsFromVec`; this editor is the remaining sibling).
+- 🟠 **CLN-DEAD-EXPORTS** [several modules] (SP:2) — Dead-code sweep (owner: "always ~10×
+  more lines added than removed", rule 61). `noUnusedLocals` already guarantees no unused
+  LOCALS, so the dead code is unused EXPORTS. Confirmed unreferenced across all src (incl
+  tests + scripts + html), READY to delete (typecheck/tests are the safety net):
+  **safe / superseded** — `DEFAULT_BW_COEFF`, `JOINT_MOVEMENTS`+`JOINT_KEYWORDS`+`jointMovements`
+  (the whole unused joint-movement taxonomy, ~38 lines, `profile.ts`); `GRAPH_DASH_KEY` (v1,
+  superseded by `GRAPH_DASH_KEY_V2`, `graphDash.ts`); `loadHistoryDashboard`+`saveHistoryDashboard`
+  +`HISTORY_DASH_KEY` (v1, superseded by the `…For` per-athlete v2, `historyDash.ts`);
+  `costForSp`+`COST_PER_SP_EUR` (superseded by the model-aware `costForNode`/`EUR_PER_WEIGHTED_SP`,
+  `changelog.ts`). **Verify-before-cut (data layer — maybe intended entry points)** —
+  `fetchFromSupabase` (`dataSource.ts`), `fetchAllRows` (`strengthlevel.ts`), `isAdmin`
+  (`supabase.ts`). NOTE: a naive CSS-class sweep flagged ~288 "unused" classes but most are
+  FALSE POSITIVES from dynamically-built names (e.g. `cl-model--${…}`, `eff-${…}`) — a CSS
+  prune needs per-class verification against template strings, not bulk grep.
 - ✅ **UIC-DEAD-CSS (DONE)** [CSS] (SP:0.5) — Deleted the unused bottom-nav classes
   `.subtabs` / `.subtab` / `.subtab-ico` (+ `:hover`/`.is-active`) in `src/styles.css`:
   the bottom tab bar was replaced by the `.ex-tab` tabs, so these were dead. The retired
