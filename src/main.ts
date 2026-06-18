@@ -23049,12 +23049,18 @@ function setVersionGrade(version: string, id: string): void {
   if (versionGrades[version] === id) delete versionGrades[version]; else versionGrades[version] = id; // tap the same grade again = clear
   saveJson(VERSION_GRADE_KEY, versionGrades);
 }
+// How many updates the popup shows; grows by GRADE_PAGE on "Show more" (owner: "i might
+// want to see more than 5"). Reset to one page each time the panel is opened fresh.
+const GRADE_PAGE = 5;
+let gradeShown = GRADE_PAGE;
 function gradePanelHtml(): string {
-  // Owner: no grading — each of the last 5 updates is an EXPANDABLE row: the 2–5w
-  // shortTitle in the summary, and on expand the 5–15w title + full note + details,
-  // mirroring the Settings → Version history leaf (reuses its cl-* body classes).
-  const last5 = RELEASES.filter((r) => !r.soon).slice(0, 5);
-  const rows = last5.map((r) => {
+  // Owner: no grading — each update is an EXPANDABLE row: the 2–5w shortTitle in the
+  // summary, and on expand the 5–15w title + full note + details, mirroring the
+  // Settings → Version history leaf (reuses its cl-* body classes). Paginated: a
+  // "Show more" button at the bottom reveals GRADE_PAGE more at a time.
+  const all = RELEASES.filter((r) => !r.soon);
+  const visible = all.slice(0, gradeShown);
+  const rows = visible.map((r) => {
     const patch = r.version.split(".").pop() ?? r.version;
     const code = r.code ? ` <span class="cl-code">${escapeHtml(r.code)}</span>` : "";
     const med = r.shortTitle && r.title ? `<p class="cl-meddesc">${escapeHtml(r.title)}</p>` : "";
@@ -23069,7 +23075,11 @@ function gradePanelHtml(): string {
       `<div class="cl-body grade-body">${med}${note}${details}</div></details>`
     );
   }).join("");
-  return `<div class="grade-head"><span>Last 5 updates</span><button type="button" class="grade-close" data-gradeclose aria-label="Close">✕</button></div>${rows}`;
+  const remaining = all.length - visible.length;
+  const more = remaining > 0
+    ? `<button type="button" class="grade-more" data-grademore>Show ${Math.min(GRADE_PAGE, remaining)} more <span class="muted">(${remaining} left)</span></button>`
+    : "";
+  return `<div class="grade-head"><span>Recent updates <span class="muted">(${visible.length}${remaining > 0 ? `/${all.length}` : ""})</span></span><button type="button" class="grade-close" data-gradeclose aria-label="Close">✕</button></div>${rows}${more}`;
 }
 function gradeOutside(e: MouseEvent): void {
   const t = e.target as HTMLElement;
@@ -23096,11 +23106,13 @@ function setupGradeButton(): void {
   if (!btn) return;
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (document.getElementById("gradePanel")) closeGradePanel(); else renderGradePanel();
+    if (document.getElementById("gradePanel")) closeGradePanel();
+    else { gradeShown = GRADE_PAGE; renderGradePanel(); } // fresh open starts at one page
   });
   document.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     if (t.closest("[data-gradeclose]")) { closeGradePanel(); return; }
+    if (t.closest("[data-grademore]")) { gradeShown += GRADE_PAGE; renderGradePanel(); return; } // reveal 5 more
     const opt = t.closest<HTMLElement>("[data-grade]");
     if (opt?.dataset.grade) {
       const i = opt.dataset.grade.lastIndexOf("|");

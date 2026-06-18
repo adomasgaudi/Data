@@ -513,6 +513,13 @@ main { padding-bottom: 5rem; }
 .grade-row-head .muted { font-weight: 400; }
 .grade-body { margin-top: 4px; }
 .grade-body .cl-bodynote { white-space: pre-wrap; }
+/* "Show more" pagination for the recent-updates popup (owner: see more than 5). */
+.grade-more {
+  display: block; width: 100%; margin-top: 6px; padding: 7px 9px;
+  border: 1px dashed var(--line); border-radius: var(--r-pill); background: none;
+  color: var(--accent); font-weight: 600; font-size: 0.8rem; cursor: pointer;
+}
+.grade-more:active { background: var(--panel-2, rgba(0, 0, 0, 0.04)); }
 .grade-opts { display: flex; flex-wrap: wrap; gap: 4px; }
 .grade-opt {
   font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 4px 9px; min-height: var(--tap-min);
