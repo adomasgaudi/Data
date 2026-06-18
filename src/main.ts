@@ -8114,6 +8114,13 @@ function renderWorkoutsPage() {
       .map((r) => workoutGroups[Number(r.dataset.index)]?.date)
       .filter((d): d is string => Boolean(d)),
   );
+  // Same idea for single-exercise inline expansions (date|exname) so a tap-expanded
+  // exercise survives an in-place re-render (owner's per-exercise expand).
+  const openExLines = new Set(
+    Array.from(document.querySelectorAll<HTMLElement>(".wo-ex-line.ex-open"))
+      .map((el) => `${el.dataset.date}|${el.dataset.exname}`)
+      .filter((k) => !k.includes("undefined")),
+  );
   ensureHistoryTabApplied(); // adopt the active history tab's view on the first render
   workoutGroups = buildWorkoutGroups();
   // Order each group's exercises by the chosen sort mode (owner: priority / recency /
@@ -8254,7 +8261,7 @@ function renderWorkoutsPage() {
         // The "+ set" button lives in its OWN right-hand grid column (3rd col of
         // .wo-ex-line), aligned to the name row — so every "+ set" lines up in a
         // column on the right instead of wrapping under each exercise's sets (owner).
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -8320,6 +8327,7 @@ function renderWorkoutsPage() {
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
   if (openDates.size) reopenWorkoutGroups(openDates); // re-expand the days that were open BEFORE reopenSetEdit, so the set editor inside one can re-anchor (rule 24 / PB-12)
+  reopenExLines(openExLines); // re-expand single-exercise inline expansions too
   reopenSetEdit(); // PB-12: keep the set-edit panel open across the rebuild a control triggered
   renderHorizontalHistory(); // EXPERIMENTAL sideways view — reuses the same groups
   saveActiveHistoryTab(); // mirror the live view back into the active history tab
@@ -8608,6 +8616,20 @@ function onWorkoutRowClick(e: MouseEvent) {
     return;
   }
 
+  // Tapping the EMPTY AREA of one collapsed exercise (its 1RM / sets / blank space —
+  // NOT the blue name link, which opened its Index info above, nor the + set button)
+  // expands JUST that one exercise's sets inline (owner: "tap the empty area where the
+  // exercise+sets is → expand only that one exercise", where tapping the day used to
+  // expand all). The day DATE TITLE sits outside any .wo-ex-line, so tapping it still
+  // expands the whole day below.
+  const exLine = target.closest<HTMLElement>(".wo-ex-line");
+  if (exLine?.dataset.exname && exLine.dataset.date && !target.closest(".wo-summary")) {
+    // (.wo-exlink name and .wo-addset already returned above; the golden .wo-summary
+    // chip keeps its own column-change handler, so don't hijack it into an expand.)
+    toggleExLineExpand(exLine);
+    return;
+  }
+
   // A day/week -> expand straight to every exercise with all its sets. But ONLY when
   // the DATE TITLE LINE is tapped — clicking the collapsed exercise lines (or their ⓘ)
   // never expands the day, so you can open a lift's Index info without unfolding.
@@ -8621,6 +8643,98 @@ function onWorkoutRowClick(e: MouseEvent) {
   const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
   insertDetail(row, 2, workoutGroupHtml(grp));
+}
+
+/** One exercise's expanded sub-table rows (header + each set, newest-first),
+ * shared by the whole-day expand (workoutGroupHtml) and the single-exercise
+ * inline expand (workoutExerciseDetailHtml) so the two render identically. */
+function exerciseSetRowsHtml(
+  group: WorkoutGroup,
+  e: ExerciseCount,
+  sets: readonly SetRecord[],
+  formula: OneRepMaxFormula,
+  strengthByDay: Map<string, Map<number, number>>,
+  divMode: "day" | "week" | null,
+): string {
+  const addBtn = showAddSetsNow()
+    ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
+    : "";
+  const header =
+    `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
+    `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
+    `${addBtn}</td></tr>`;
+  // Newest-first: reverse the date-sorted sets so the latest day/set leads (matches
+  // the history's newest→oldest order); the day/week dividers fire on each date change.
+  const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
+  let lastDay: string | null = null;
+  let lastWeek: string | null = null;
+  const setRows = exSets
+    .map((s) => {
+      let div = "";
+      if (divMode && s.date !== lastDay) {
+        const wk = mondayKey(s.date);
+        const newWeek = divMode === "week" && wk !== lastWeek;
+        const label = newWeek ? `${shortDate(s.date)} · ${periodGroupLabel(wk, "week")}` : shortDate(s.date);
+        div = `<tr class="set-daydiv${newWeek ? " set-weekdiv" : ""}"><td colspan="5">${escapeHtml(label)}</td></tr>`;
+        lastDay = s.date;
+        lastWeek = wk;
+      }
+      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
+    })
+    .join("");
+  return header + setRows;
+}
+
+/** The expanded set table for a SINGLE exercise within a day/period — the
+ * per-exercise counterpart of workoutGroupHtml, for the inline one-exercise
+ * expand. Mirrors workoutGroupHtml's formula / strength / divider setup. */
+function workoutExerciseDetailHtml(group: WorkoutGroup, exerciseName: string): string {
+  const e = group.exercises.find((x) => x.exerciseName === exerciseName);
+  if (!e) return "";
+  const formula = currentFormula();
+  const strengthByDay = currentStrengthByUserExercise(formula);
+  const mode = S.workoutViewMode;
+  const divMode: "day" | "week" | null =
+    historyByExercise ? "day"
+    : mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${exerciseSetRowsHtml(group, e, group.sets, formula, strengthByDay, divMode)}</tbody></table>`;
+}
+
+/** Expand / collapse a SINGLE exercise's sets inline under its collapsed line
+ * (owner: tap an exercise's empty area → expand just that one). The expanded
+ * table is inserted as a .wo-ex-detail block right after the tapped .wo-ex-line;
+ * tapping again removes it. Re-applied across re-renders by reopenExLines (like
+ * reopenWorkoutGroups does for whole days). */
+function toggleExLineExpand(exLine: HTMLElement): void {
+  const next = exLine.nextElementSibling;
+  if (next && next.classList.contains("wo-ex-detail")) {
+    next.remove();
+    exLine.classList.remove("ex-open");
+    return;
+  }
+  const date = exLine.dataset.date;
+  const exname = exLine.dataset.exname;
+  if (!date || !exname) return;
+  const grp = workoutGroups.find((g) => !g.rest && g.date === date);
+  if (!grp) return;
+  const html = workoutExerciseDetailHtml(grp, exname);
+  if (!html) return;
+  const detail = document.createElement("div");
+  detail.className = "wo-ex-detail";
+  detail.innerHTML = html;
+  exLine.insertAdjacentElement("afterend", detail);
+  exLine.classList.add("ex-open");
+}
+
+/** Re-expand the single-exercise inline expansions that were open before a
+ * workouts re-render (collected by date|exname), so an in-place edit elsewhere
+ * doesn't silently collapse an exercise the owner had open. */
+function reopenExLines(keys: Set<string>): void {
+  if (!keys.size) return;
+  for (const el of document.querySelectorAll<HTMLElement>(".wo-ex-line")) {
+    if (el.classList.contains("ex-open")) continue;
+    if (keys.has(`${el.dataset.date}|${el.dataset.exname}`)) toggleExLineExpand(el);
+  }
 }
 
 /** Inner table for one expanded day/week: every exercise as a sub-header row
@@ -8655,38 +8769,11 @@ function workoutGroupHtml(group: WorkoutGroup): string {
     historyByExercise ? "day" // by-exercise spans many days → date dividers between sets
     : mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
   // One exercise's header + set-rows; reused for the day's active lifts AND for its
-  // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest.
-  const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string => {
-    const addBtn = showAddSetsNow()
-      ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
-      : "";
-    const header =
-      `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-      `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
-      `${addBtn}</td></tr>`;
-    // Newest-first: reverse the date-sorted sets so the latest DAY (and within a day
-    // the latest SET) leads, matching the history's newest→oldest order — so a
-    // session's warmup (done first) reads at the END, not the top. The day/week
-    // dividers below still fire on each date change in this reversed order.
-    const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
-    let lastDay: string | null = null;
-    let lastWeek: string | null = null;
-    const setRows = exSets
-      .map((s) => {
-        let div = "";
-        if (divMode && s.date !== lastDay) {
-          const wk = mondayKey(s.date);
-          const newWeek = divMode === "week" && wk !== lastWeek;
-          const label = newWeek ? `${shortDate(s.date)} · ${periodGroupLabel(wk, "week")}` : shortDate(s.date);
-          div = `<tr class="set-daydiv${newWeek ? " set-weekdiv" : ""}"><td colspan="5">${escapeHtml(label)}</td></tr>`;
-          lastDay = s.date;
-          lastWeek = wk;
-        }
-        return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
-      })
-      .join("");
-    return header + setRows;
-  };
+  // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest. Delegates to
+  // the module-level renderer so a SINGLE exercise can be expanded inline too (owner:
+  // tapping one exercise's area expands just that exercise).
+  const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string =>
+    exerciseSetRowsHtml(group, e, sets, formula, strengthByDay, divMode);
   const body = group.exercises.map((e) => exRows(e, group.sets)).join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
   const addExRow = showAddSetsNow()

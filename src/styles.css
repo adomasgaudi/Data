@@ -2375,6 +2375,18 @@ select.subtle-select:hover, select.subtle-select:focus {
    collapses to 0 when "+ set" is off. */
 .wo-ex-line { display: grid; grid-template-columns: 3.6rem 1fr auto; align-items: baseline; column-gap: 0.45rem; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
 .wo-ex-line > .wo-addset { justify-self: end; }
+/* Subtle gray separators between consecutive exercises in a collapsed day, so each
+   exercise reads as its OWN tappable row (owner: "create little gray lines so I can
+   tell where to click"). The line sits ABOVE each exercise after the first — none
+   above the first or below the last. */
+.wo-did > .wo-ex-line + .wo-ex-line,
+.wo-did > .wo-ex-detail + .wo-ex-line { border-top: 1px solid var(--line); margin-top: 0.35rem; padding-top: 0.35rem; }
+/* One exercise expanded inline under its collapsed line (owner: tap an exercise's
+   area to expand just that one). The expanded set table sits in a .wo-ex-detail
+   block; the open line gets a faint accent wash so it's clear which is open. */
+.wo-ex-detail { margin: 0.1rem 0 0.5rem; }
+.wo-ex-detail .detail-table { margin: 0; }
+.wo-ex-line.ex-open { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 6px; }
 /* Swipe an exercise line right to delete its sets that day. While dragging we follow the
    finger (no transition); past the commit threshold a red tint shows it'll delete. */
 .wo-ex-line.wo-ex-swiping { transition: none; will-change: transform; }
