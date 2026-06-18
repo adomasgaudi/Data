@@ -17861,8 +17861,8 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 
 // Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
 // order. Ladder sub-dims (grip/height) are left to the full per-set editor.
-const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", shoulderDist: "back support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", shoulderDist: "back support", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
   support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder", hanging: "hanging", dips_bar: "dips bar" },
   // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.

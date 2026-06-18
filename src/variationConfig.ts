@@ -84,8 +84,12 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // reference shown with a diagram/photo); 30cm / 45cm = a taller box/support.
       // Multipliers are NEUTRAL for now (calibrate later — likely farther = harder).
       shoulderDist: { "0cm": 1.0, blue: 1.0, "30cm": 1.0, "45cm": 1.0 },
+      // FOREARM SUPPORT (owner) — resting the forearms on a block/support at this height
+      // (cm) makes the handstand work easier. Neutral ×1 placeholders for now — calibrate
+      // in ⚙ Difficulty multipliers (likely taller = more support = easier, <1).
+      forearmSupport: { none: 1.0, "7cm": 1.0, "15cm": 1.0, "23cm": 1.0, "30cm": 1.0 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "uninterrupted", hands: "two", range: "full", shoulderDist: "0cm" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "uninterrupted", hands: "two", range: "full", shoulderDist: "0cm", forearmSupport: "none" },
   },
   PUSHUP: {
     // INCLINE (hands raised) is NOT a family dimension — it's how high the hands are,
@@ -167,8 +171,11 @@ export const FAMILIES: Record<string, FamilyDef> = {
       lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
       // BACK SUPPORT (back-to-wall) — same as HSPU: blue 6cm block, or a 30/45cm box.
       shoulderDist: { "0cm": 1.0, blue: 1.0, "30cm": 1.0, "45cm": 1.0 },
+      // FOREARM SUPPORT (owner) — forearms rested on a block at this height (cm). Neutral
+      // ×1 placeholders for now — calibrate in ⚙ Difficulty multipliers.
+      forearmSupport: { none: 1.0, "7cm": 1.0, "15cm": 1.0, "23cm": 1.0, "30cm": 1.0 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm", forearmSupport: "none" },
   },
   // The owner's "Lever" lifts (EXR-163) — an adjustable one-sided loaded handle: a
   // plate on a movable collar near one END, gripped at the other, swung like a
@@ -239,6 +246,11 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "blue block": { support: "back_to_wall", shoulderDist: "blue" },
     "30cm back": { support: "back_to_wall", shoulderDist: "30cm" },
     "45cm back": { support: "back_to_wall", shoulderDist: "45cm" },
+    // FOREARM SUPPORT — forearms rested on a block at this height (cm).
+    "forearm 7": { forearmSupport: "7cm" },
+    "forearm 15": { forearmSupport: "15cm" },
+    "forearm 23": { forearmSupport: "23cm" },
+    "forearm 30": { forearmSupport: "30cm" },
     // lean / continuity
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
@@ -370,6 +382,11 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "blue block": { support: "back_to_wall", shoulderDist: "blue" },
     "30cm back": { support: "back_to_wall", shoulderDist: "30cm" },
     "45cm back": { support: "back_to_wall", shoulderDist: "45cm" },
+    // FOREARM SUPPORT — forearms rested on a block at this height (cm).
+    "forearm 7": { forearmSupport: "7cm" },
+    "forearm 15": { forearmSupport: "15cm" },
+    "forearm 23": { forearmSupport: "23cm" },
+    "forearm 30": { forearmSupport: "30cm" },
     // Forward lean.
     "forward lean": { lean: "15cm" },
     // Ladder rung height (+ the ladder support it implies).
@@ -392,7 +409,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 19;
+export const CONFIG_VERSION = 20;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
