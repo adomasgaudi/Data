@@ -9011,11 +9011,22 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // Assisted machine: the Weight field IS the machine's dialed counterweight
   // ("machine assist"); show the REAL assistance (half) calculated right beside it.
   const realW = realAddedWeight(s.exerciseName, s.weight);
-  const weightField = (assisted && s.weight !== null && s.weight < 0 && realW !== null)
-    ? `<label class="set-edit-f">Machine assist (kg)` +
-      `<span class="set-edit-wreal"><input class="set-edit-input" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" />` +
-      `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
-    : efld("weight", "Weight (kg)", s.weight, 0.5);
+  // Weight + reps rendered as a CHIP — the weight is the main number, the reps a small
+  // superscript, and the variation tags sit BEFORE it — so the editor reads like the final
+  // history set chip (owner: "I want the edit menu to look more like the final menu after it's
+  // added … reps above the weights … the tags before the weight and reps"). The inputs keep
+  // their .set-edit-input + data-field wiring, so the existing edit handlers are untouched.
+  const editTags = variationChipsHtml(s); // the same small chips the collapsed history line shows
+  const realHint = (assisted && s.weight !== null && s.weight < 0 && realW !== null)
+    ? `<span class="set-edit-real" title="Real effort counted for strength — the dial halved (the machine over-reads ~2×)">/2 = ${fmt(realW)}</span>`
+    : "";
+  const chipRow =
+    `<div class="set-edit-chiprow">` +
+    `<div class="set-edit-chip" title="Weight · reps — tap to edit">` +
+    (editTags ? `<span class="set-edit-chip-tags">${editTags}</span>` : "") +
+    `<input class="set-edit-input set-edit-cw" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" placeholder="0" aria-label="Weight (kg)" />` +
+    `<input class="set-edit-input set-edit-cr" type="number" step="1" min="1" inputmode="numeric" data-setid="${escapeHtml(sid)}" data-field="reps" value="${s.reps ?? ""}" placeholder="0" aria-label="Reps" />` +
+    `</div>${realHint}</div>`;
   // The variation block. DEDUP-2 (owner: "there shouldn't be two separate set-editing
   // menus — put the old one into the new"): when the set is difficulty-MODEL-editable
   // (a family lift or a noted set → `editNote`), the FULL variation model (incline level +
@@ -9039,8 +9050,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const editRow =
     `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid set-edit-pop">` +
     `<button type="button" class="set-edit-close" data-seteditclose title="Close">✕</button>` +
-    weightField +
-    efld("reps", "Reps", s.reps, 1) +
+    chipRow +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
     variantsBlock +
