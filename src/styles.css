@@ -2652,10 +2652,13 @@ sup.wr-bw { font-size: 0.85em; }
 /* Structured variation pickers: a tight, horizontally-scrolling row of small labelled
    dropdowns (the lift's variables — support, ROM, lean…), one tap each. ~30% larger
    here too, matching the rest of the add-set form. */
-.wo-addform .wo-af-dims { display: inline-flex; flex-wrap: nowrap; gap: 0.4rem; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; vertical-align: middle; }
-.wo-af-dimf { display: inline-flex; flex-direction: column; gap: 1px; flex: 0 0 auto; }
-.wo-af-dimlbl { font-size: 0.73rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
-.wo-addform .wo-af-dims select { font: inherit; font-size: 0.99rem; padding: 3px 6px; }
+/* Crammed variant pickers (owner): a tight WRAPPING row of compact value-pills — no header,
+   no per-dim labels — each tapping into its own options popup, sitting before the weight. */
+.wo-addform .wo-af-dims { display: flex; flex-wrap: wrap; gap: 0.3rem; max-width: 100%; align-items: center; padding: 0; }
+.wo-addform .addm-variant-field { margin: 0.2rem 0 0.35rem; }
+.wo-addform .wo-af-dims select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
+.wo-addform .wo-af-dims .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
+.wo-addform .wo-af-dims .xdd { flex: 0 0 auto; }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;

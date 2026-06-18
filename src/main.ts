@@ -17902,7 +17902,7 @@ function afVariationField(exerciseName: string): string {
       const opts = Object.keys(levels)
         .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(optLbl(l))}</option>`)
         .join("");
-      return `<label class="wo-af-dimf"><span class="wo-af-dimlbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim" data-dim="${escapeHtml(dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></label>`;
+      return `<select class="wo-af-dim wo-af-dimpill" data-dim="${escapeHtml(dim)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
     }).join("");
     if (selects) return `<span class="wo-af-dims">${selects}</span>`;
   }
@@ -18108,9 +18108,9 @@ function ghostSetsHtml(exerciseName: string, date: string): string {
  * fallback afVariationField can emit is NOT used here — the popup has its own Note. */
 function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
-  return vf.includes("wo-af-dims")
-    ? `<div class="addm-field"><span class="addm-flbl">Variant</span>${vf}</div>`
-    : "";
+  // No "VARIANT" header / per-dim labels (owner: cram it) — just the compact value-pills,
+  // each tappable for its options popup, sitting right before the weight.
+  return vf.includes("wo-af-dims") ? `<div class="addm-field addm-variant-field">${vf}</div>` : "";
 }
 function closeAddModal(): void {
   addModalEl?.remove();
