@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSyncable, deepEq, merge3, merge3Json } from "./cacheSync";
+import { isSyncable, cacheCategory, deepEq, merge3, merge3Json } from "./cacheSync";
 
 describe("cacheSync key classification", () => {
   it("syncs shared data keys, never device prefs or the sets/base keys", () => {
@@ -26,6 +26,30 @@ describe("cacheSync key classification", () => {
     expect(isSyncable("colosseum.viewUser.v1")).toBe(false);
     expect(isSyncable("colosseum.viewMode")).toBe(false);
     expect(isSyncable("colosseum.lastAthlete.v1")).toBe(false);
+  });
+
+  it("categorizes every key as device / user / global (and the tier matches isSyncable)", () => {
+    // device = never synced (browser/session only)
+    expect(cacheCategory("colosseum.viewMode")).toBe("device");
+    expect(cacheCategory("colosseum.theme")).toBe("device");
+    expect(cacheCategory("colosseum.lastAthlete.v1")).toBe("device");
+    // global = app-wide shared data
+    expect(cacheCategory("colosseum.exerciseCodes.v1")).toBe("global");
+    expect(cacheCategory("colosseum.metaOverrides.v1")).toBe("global");
+    expect(cacheCategory("colosseum.manualAthletes.v1")).toBe("global");
+    // user = per-athlete data that follows the person (the dashboards live here)
+    expect(cacheCategory("colosseum.historyDash.v2")).toBe("user");
+    expect(cacheCategory("colosseum.graphDash.v2")).toBe("user");
+    expect(cacheCategory("colosseum.priorities.v1")).toBe("user");
+    expect(cacheCategory("colosseum.exerciseLens.v1")).toBe("user");
+    // manualSets syncs via a dedicated path (sets table) — still per-USER data, not device.
+    expect(cacheCategory("colosseum.manualSets.v1")).toBe("user");
+    // invariant: a "device" key is never kv-syncable (the converse doesn't hold — dedicated-path
+    // keys like manualSets are non-kv-syncable yet still "user").
+    for (const k of ["colosseum.viewMode", "colosseum.theme", "colosseum.lastAthlete.v1"]) {
+      expect(cacheCategory(k)).toBe("device");
+      expect(isSyncable(k)).toBe(false);
+    }
   });
 });
 

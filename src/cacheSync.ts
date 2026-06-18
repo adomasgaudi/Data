@@ -54,6 +54,47 @@ export function isSyncable(key: string): boolean {
     && !KV_EXCLUDE.has(key);
 }
 
+// ---- CACHE CATEGORY MODEL (owner: "categorize the cache / Supabase info") ------------------
+// Every persisted value falls in exactly ONE of three tiers. The DEFAULT is to sync (owner:
+// "all cache is synced with Supabase unless I specifically say it only stays in the browser"):
+//
+//   • "device"  — browser/session-only, NEVER synced. Strictly per-device: who is logged in,
+//                 the view mode/tier, theme, language, transient UI toggles / open-closed states.
+//                 Syncing these would leak one device's session to everyone. == LOCAL_ONLY_KEYS.
+//   • "user"    — per-ATHLETE data that should FOLLOW the person across devices/logins (synced):
+//                 sets, per-set overrides, priorities, history tabs, graph tabs + bubbles,
+//                 exercise lens, setup notes, stats. The DEFAULT for anything syncable not global.
+//   • "global"  — app-WIDE data identical for everyone (synced): exercise codes/short-names,
+//                 classification/metadata, the strength-model config, world records, the athlete
+//                 roster, coaching. Admin-authored; everyone reads the same copy.
+//
+// device → not synced; user + global → synced (today both ride the same kv mirror — the split is
+// documentation + a seam for future per-user namespacing). isSyncable stays the single source of
+// truth for the sync DECISION; cacheCategory just NAMES the tier.
+export type CacheCategory = "device" | "user" | "global";
+
+/** App-wide data identical for every user (synced). Extend as global stores are added; anything
+ * syncable NOT listed here is treated as per-user ("user"). */
+export const GLOBAL_KEYS: ReadonlySet<string> = new Set([
+  "colosseum.exerciseCodes.v1", "colosseum.exerciseShortNames.v1", "colosseum.exerciseRomDefaults.v1",
+  "colosseum.metaOverrides.v1", "colosseum.groupMembers.v1", "colosseum.groupDisplay.v1",
+  "colosseum.bwCoeffs.v1", "colosseum.bwCoeffRange.v1", "colosseum.benchmarks.v1",
+  "colosseum.decayParams.v1", "colosseum.officialDecay.v1", "colosseum.famFactors.v1",
+  "colosseum.levelScales.v1", "colosseum.inclineScales.v1", "colosseum.machineMode.v1",
+  "colosseum.machineWeights.v1", "colosseum.assistedHalve.v1", "colosseum.noteRenames.v1",
+  "colosseum.notComparableNotes.v1", "colosseum.manualAthletes.v1", "colosseum.coaching.v1",
+  "colosseum.designTokens.v1",
+]);
+
+/** The tier a localStorage key belongs to. "device" = the browser-only set (never synced) plus
+ * the internal base/non-namespaced keys; everything else is synced (user by default, or global).
+ * NOTE: a KV_EXCLUDE key like manualSets is still "user" — it syncs via a DEDICATED path, it's
+ * not device-only — so this keys off the true device set, not isSyncable. */
+export function cacheCategory(key: string): CacheCategory {
+  if (!key.startsWith("colosseum.") || key === SYNC_BASE_KEY || LOCAL_ONLY_KEYS.has(key)) return "device";
+  return GLOBAL_KEYS.has(key) ? "global" : "user";
+}
+
 type Json = unknown;
 
 const isObj = (v: Json): v is Record<string, Json> =>

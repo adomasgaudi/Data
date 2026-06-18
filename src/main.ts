@@ -4573,12 +4573,12 @@ function saveActiveHistoryTab(): void {
 function ensureHistoryTabApplied(): void {
   const user = els.athlete.value;
   if (historyDashUser === user) return; // already loaded + applied for this athlete
-  const outgoing = historyDashUser; // null on the very first athlete this session
-  if (outgoing !== null) {
-    const act = activeHistoryTab(historyDash);
-    historyDash = setHistoryTabConfig(historyDash, act.id, snapshotHistoryLive(act.config));
-    saveHistoryDashboardFor(outgoing, historyDash);
-  }
+  // NOTE: we DON'T snapshot-and-save the outgoing athlete here anymore. The live state may
+  // already have been reset to defaults for the incoming athlete (renderAthlete runs first),
+  // so snapshotting it onto the outgoing athlete used to WIPE their saved tab. The outgoing
+  // athlete is persisted correctly elsewhere: saveActiveHistoryTab() runs at the end of every
+  // history render, and renderAthlete saves it explicitly before resetting the selection.
+  const firstThisSession = historyDashUser === null;
   const loaded = loadHistoryDashboardFor(user);
   if (loaded) {
     historyDash = loaded;
@@ -4587,7 +4587,7 @@ function ensureHistoryTabApplied(): void {
   } else {
     historyDash = defaultHistoryDashboard();
     historyDashUser = user;
-    if (outgoing === null) {
+    if (firstThisSession) {
       saveActiveHistoryTab(); // keep this athlete's existing live prefs as their first tab
     } else {
       // A different athlete with no tabs yet → clean default view (never another user's tabs).
@@ -4950,6 +4950,12 @@ function renderAthlete() {
   // selections for the new athlete — this replaces the old "↺ Default" button, which
   // now runs automatically. Guarded so ordinary re-renders don't wipe the selection.
   if (els.athlete.value !== lastAnalysisAthlete) {
+    // CLOBBER GUARD: persist the OUTGOING athlete's history tab with its CURRENT (still-correct)
+    // selection BEFORE we reset the live selection just below. Otherwise the default we're about
+    // to set would later be snapshotted onto the previous athlete and wipe their saved tab — the
+    // "my tabs reset when I switch athlete" bug. historyDashUser still points at the outgoing
+    // athlete here (it only advances inside ensureHistoryTabApplied), so this saves to the right one.
+    saveActiveHistoryTab();
     lastAnalysisAthlete = els.athlete.value;
     waSelected = defaultHistorySelection();
     waGraphSel = defaultGraphSelection();
