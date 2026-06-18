@@ -3316,12 +3316,21 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
    s1 / adv are untouched. The controls still exist in the DOM, just display:none here. ── */
 /* Graph: the type-switch row + the top-right legend / Fit / kg overlay cluster. */
 body.view-s2 .wa-graphtabs,
+body.view-s2 .wa-gmenu-typerow,
 body.view-s2 .gmini-overlay { display: none; }
-/* Graph Options: drop the Data, Projection, Set-spread and Potential groups outright. */
+/* Graph: the multi-lift toolbar legend + Fit + kg (keep fullscreen ⛶). The legend is
+   relocated into the overlay/bar, so hiding .svgc-legend covers both graph views. */
+body.view-s2 .svgc-legend,
+body.view-s2 #waGraphOverlay [data-waperbw],
+body.view-s2 #waGraphOverlay [data-graphfit] { display: none; }
+/* Graph Options: drop the Data, Projection, Set-spread, Potential and Decay-model groups,
+   plus the Decay line toggle. */
 body.view-s2 .wa-cfg-group[data-cfggroup="Data"],
 body.view-s2 .wa-cfg-group[data-cfggroup="Projection"],
 body.view-s2 .wa-cfg-group[data-cfggroup="Set spread"],
-body.view-s2 .wa-cfg-group[data-cfggroup="Potential (log)"] { display: none; }
+body.view-s2 .wa-cfg-group[data-cfggroup="Potential (log)"],
+body.view-s2 .wa-cfg-group[data-cfggroup="Decay model"],
+body.view-s2 [data-wacfgtoggle="decay"] { display: none; }
 /* Graph Options: keep only 1RM · Weight Range · Strength · Volume Load · Reps · Sets. */
 body.view-s2 .wa-metric[data-wametric="strengthDecay"],
 body.view-s2 .wa-metric[data-wametric="pctWR"],
@@ -3330,10 +3339,12 @@ body.view-s2 .wa-metric[data-wametric="volume"],
 body.view-s2 .wa-metric[data-wametric="frequency"] { display: none; }
 /* Graph Options: drop the bottom All-graphs / Assist row. */
 body.view-s2 .wa-gmenu-cell:has([data-allgraphs]) { display: none; }
-/* Settings: no Code name option (s2 shows full names), no public-profile toggle,
-   no backup up/download buttons. */
-body.view-s2 .name-mode-opt[data-namemode="code"],
+/* Settings: drop the whole name-mode choice (s2 is always full names), the public-profile
+   toggle, the Upload/Download-sets buttons, and the backup-overlay up/download. */
+body.view-s2 .name-mode-field,
 body.view-s2 #publicProfileToggle,
+body.view-s2 #syncUpBtn,
+body.view-s2 #syncDownBtn,
 body.view-s2 #backupNowBtn,
 body.view-s2 #restoreBtn { display: none; }
 /* Analysis sub-tabs: drop the Stats pill and the not-yet-shipped SOON pills. */

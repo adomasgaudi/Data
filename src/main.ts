@@ -20321,7 +20321,7 @@ function renderWaCatMenu(): void {
   const m = document.getElementById("waCatMenu");
   if (!m || waCatMenuKey === null) return;
   curSelScope = waCatMenuScope;
-  waGroupBy = waGroupByScope[waCatMenuScope]; // the menu groups by its opener scope's mode
+  waGroupBy = viewTier === "s2" ? "discipline" : waGroupByScope[waCatMenuScope]; // s2 fixes grouping to Discipline (match the picker — else the drill-in is empty)
   const key = waCatMenuKey;
   const items = sortCatMenuItems(waCatItems(key), key);
   const sel = waSelCount(items);
