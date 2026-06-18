@@ -13,8 +13,6 @@
 import { z } from "zod";
 import { loadJsonObject, saveJson } from "./storage";
 
-export const HISTORY_DASH_KEY = "colosseum.historyDash.v1";
-
 export type HistoryViewMode = "day" | "week" | "2week" | "month" | "3month";
 export type HistoryAloneFilter = "both" | "alone" | "notAlone";
 export type HistoryShowMode = "exercises" | "groups";
@@ -154,13 +152,6 @@ export function normalizeHistoryDashboard(raw: unknown): HistoryDashboard {
   const d = parsed.data;
   if (!d.tabs.some((t) => t.id === d.activeTabId)) d.activeTabId = d.tabs[0]!.id;
   return d;
-}
-
-export function loadHistoryDashboard(): HistoryDashboard {
-  return normalizeHistoryDashboard(loadJsonObject<Record<string, unknown>>(HISTORY_DASH_KEY));
-}
-export function saveHistoryDashboard(d: HistoryDashboard): void {
-  saveJson(HISTORY_DASH_KEY, d);
 }
 
 // ---- per-athlete persistence -----------------------------------------------

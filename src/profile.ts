@@ -213,8 +213,6 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
   "Cross-Legged Squat": 0.6,
 };
 
-/** Exercises with no match contribute no bodyweight (treated as pure load). */
-export const DEFAULT_BW_COEFF = 0;
 
 /** True for bar pull-up / chin-up / dip movements, where a *negative* logged weight
  * means assistance from a machine (not added load). Excludes pulldowns, pull
@@ -754,48 +752,6 @@ export function exerciseDisciplines(exerciseName: string): Discipline[] {
   const n = exerciseName.toLowerCase();
   if (/wall climb|wall run|run ?up|vault|\bkong\b|cat leap|precision jump|parkour|rag wall/.test(n) && !out.includes("Parkour"))
     out.push("Parkour");
-  return out;
-}
-
-/**
- * JOINT MOVEMENTS — the biomechanical action(s) a lift trains, used by the Index
- * "Joint movement" grouping. Multi-membership: a squat is hip + knee extension, a
- * bench is shoulder horizontal adduction + elbow extension. Keyword-based; a lift
- * with no match simply doesn't appear under this grouping.
- */
-export const JOINT_MOVEMENTS: string[] = [
-  "Shoulder horizontal adduction", "Shoulder horizontal abduction", "Shoulder abduction",
-  "Shoulder flexion", "Shoulder extension", "Elbow flexion", "Elbow extension",
-  "Hip extension", "Hip flexion", "Hip abduction", "Hip adduction",
-  "Knee extension", "Knee flexion", "Spinal flexion", "Spinal extension",
-  "Trunk rotation", "Anti-rotation / anti-extension", "Ankle plantarflexion",
-];
-const JOINT_KEYWORDS: [string, string[]][] = [
-  ["Shoulder horizontal adduction", ["bench", "chest press", "chest fly", "pec fly", "pec deck", "push up", "pushup", "push-up", "pushups", "press up", "fly", "dip"]],
-  ["Shoulder horizontal abduction", ["row", "rear delt", "reverse fly", "face pull", "inverted row", "seal row"]],
-  ["Shoulder abduction", ["lateral raise", "side raise", "upright row"]],
-  ["Shoulder flexion", ["front raise", "shoulder press", "overhead press", "military", "ohp", "handstand push"]],
-  ["Shoulder extension", ["pullover", "pull over", "straight arm", "pulldown", "lat pull", "pull up", "pullup", "pull-up", "chin up", "chinup"]],
-  ["Elbow flexion", ["curl", "chin up", "chinup", "preacher", "hammer"]],
-  ["Elbow extension", ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip", "close-grip", "dip", "bench", "overhead press", "shoulder press", "military", "press up", "push up", "pushup"]],
-  ["Hip extension", ["squat", "deadlift", "hip thrust", "glute", "lunge", "rdl", "romanian", "good morning", "step up", "step-up", "bridge", "hyperextension", "back extension", "kettlebell swing"]],
-  ["Hip flexion", ["leg raise", "legs raise", "knee raise", "knee tuck", "hanging", "l-sit", "l sit", "lsit", "sit up", "situp", "sit-up"]],
-  ["Hip abduction", ["hip abduction", "abduction", "abductor"]],
-  ["Hip adduction", ["hip adduction", "adduction", "adductor"]],
-  ["Knee extension", ["squat", "leg extension", "leg press", "lunge", "step up", "step-up", "sissy", "hack", "pistol", "wall sit"]],
-  ["Knee flexion", ["leg curl", "hamstring", "ham ", "nordic"]],
-  ["Spinal flexion", ["crunch", "sit up", "situp", "sit-up"]],
-  ["Spinal extension", ["back extension", "hyperextension", "reverse hyper", "superman", "good morning"]],
-  ["Trunk rotation", ["twist", "woodchop", "russian twist", "oblique", "bicycle"]],
-  ["Anti-rotation / anti-extension", ["plank", "pallof", "hollow", "ab wheel", "rollout", "l-sit", "l sit", "lsit", "front lever", "planche", "dragon flag"]],
-  ["Ankle plantarflexion", ["calf", "calves"]],
-];
-/** Every joint movement an exercise trains (one or more), by keyword. */
-export function jointMovements(exerciseName: string): string[] {
-  const n = exerciseName.toLowerCase();
-  const out: string[] = [];
-  for (const [bucket, kws] of JOINT_KEYWORDS)
-    if (kws.some((k) => n.includes(k)) && !out.includes(bucket)) out.push(bucket);
   return out;
 }
 

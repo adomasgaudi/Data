@@ -16,8 +16,6 @@
 import { z } from "zod";
 import { loadJsonObject, saveJson } from "./storage";
 
-export const GRAPH_DASH_KEY = "colosseum.graphDash.v1";
-
 /** time = a metric over time (the classic line/bar view); rvw = reps-vs-weight scatter. */
 export type GraphType = "time" | "rvw";
 /** single = focus one lift; multi = overlay several lifts (and/or several athletes). */
