@@ -2671,7 +2671,8 @@ sup.wr-bw { font-size: 0.85em; }
   background: var(--panel); color: var(--muted);
 }
 .wo-addform .wo-af-msg { font-size: 0.72rem; }
-.wo-addform .wo-af-when .seg-btn { padding: 3px 10px; font-size: 0.94rem; font-weight: 700; }
+.wo-addform .wo-af-when { align-self: flex-start; } /* fit the buttons, no full-width empty space (owner) */
+.wo-addform .wo-af-when .seg-btn { padding: 2px 8px; font-size: 0.8rem; font-weight: 600; } /* much smaller calendar btns (owner) */
 .wo-addform-row td { padding-top: 0.1rem; padding-bottom: 0.3rem; }
 /* ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) ---- */
 /* Owner: the add popup DOCKS at the bottom (a sheet) with a LIGHT backdrop, so the history
@@ -2683,10 +2684,10 @@ sup.wr-bw { font-size: 0.85em; }
      if a child forces intrinsic width or the visual viewport desyncs (keyboard open).
      min-width:0 lets the flex item shrink; overflow-x hidden clips any stray child. */
   width: 100%; max-width: min(30rem, 100vw); min-width: 0;
-  /* Keep the sheet to ~half the LIVE (keyboard-aware) viewport so the history + the live
-     ghost set stay visible above it while the number keyboard is open (owner). dvh tracks
-     the keyboard; vh is the fallback. */
-  max-height: 52vh; max-height: 52dvh; overflow: hidden auto;
+  /* Owner: don't make the sheet tiny — show it tall (it scrolls), leaving just a little space
+     at the top so the history + the live ghost set stay visible above it. dvh tracks the
+     keyboard so the sheet rides above it; vh is the fallback. */
+  max-height: 82vh; max-height: 82dvh; overflow: hidden auto;
   background: var(--panel); border: 1px solid var(--line); border-bottom: none; border-radius: 14px 14px 0 0;
   box-shadow: 0 -8px 40px rgba(20, 24, 38, 0.22); padding: 0.7rem 0.9rem 1rem;
 }
@@ -2694,12 +2695,8 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-title { font-size: 1rem; font-weight: 700; }
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
 .addm-field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.45rem 0; }
-/* While typing weight/reps (keyboard up) collapse the tall secondary fields so the sheet is
-   just a few rows and the history + live ghost stay visible above it (owner). */
-.addm-card.is-typing .addm-sugg,
-.addm-card.is-typing .addm-variant-slot,
-.addm-card.is-typing .addm-field:has(.wo-af-rom),
-.addm-card.is-typing .addm-field:has(.wo-af-note) { display: none; }
+/* Owner: everything stays VISIBLE while editing numbers (the sheet just scrolls) — the
+   variant pickers, suggestions, ROM and note are no longer hidden when the keyboard is up. */
 .addm-flbl { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
 .addm-exname { font-size: 0.95rem; font-weight: 600; color: var(--accent); }
 /* The popup form stacks full-width (overrides .wo-addform's inline-flex wrap). */
