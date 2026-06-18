@@ -31,9 +31,14 @@ ones, re-grade as the code changes.
   superseded by `GRAPH_DASH_KEY_V2`, `graphDash.ts`); `loadHistoryDashboard`+`saveHistoryDashboard`
   +`HISTORY_DASH_KEY` (v1, superseded by the `…For` per-athlete v2, `historyDash.ts`);
   `costForSp`+`COST_PER_SP_EUR` (superseded by the model-aware `costForNode`/`EUR_PER_WEIGHTED_SP`,
-  `changelog.ts`). **Verify-before-cut (data layer — maybe intended entry points)** —
-  `fetchFromSupabase` (`dataSource.ts`), `fetchAllRows` (`strengthlevel.ts`), `isAdmin`
-  (`supabase.ts`). NOTE: a naive CSS-class sweep flagged ~288 "unused" classes but most are
+  `changelog.ts`). **Verify-before-cut → VERDICT: KEEP (verified, not rot).** `fetchFromSupabase`
+  (+ its only consumer `fetchSets` + `dbSetToRawRow`, `dataSource.ts`), `fetchAllRows`
+  (`strengthlevel.ts`) and `isAdmin`/`ADMIN_EMAIL` (`supabase.ts`) are DORMANT INFRASTRUCTURE
+  for the stated multi-user/cloud goal (rule 41 "mirroring the rest is the goal") + the
+  website-side scraper that's deliberately not wired YET — deleting them would erase progress,
+  not trim rot. Leave them unless the owner abandons the cloud/scraper plans. The CLEARLY-DEAD
+  set above was removed in CLN-1 (b.2.9.209, −70 lines); sweep closed.
+  NOTE: a naive CSS-class sweep flagged ~288 "unused" classes but most are
   FALSE POSITIVES from dynamically-built names (e.g. `cl-model--${…}`, `eff-${…}`) — a CSS
   prune needs per-class verification against template strings, not bulk grep.
 - ✅ **UIC-DEAD-CSS (DONE)** [CSS] (SP:0.5) — Deleted the unused bottom-nav classes
