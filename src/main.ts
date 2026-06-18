@@ -15270,6 +15270,7 @@ async function init() {
     return;
   }
   applyViewTierClass(); // reflect the saved view tier on <body> so s2 CSS simplifications apply from load
+  replayHdDiag(); // PB-44: surface any history-dash cloud-merge line stashed before a sync-triggered reload
   // Fold in any hand-logged sets saved on this device (the Add tab).
   loadedRecords = data.records; // immutable base for spelling-split re-derivation
   mergeManualSets();
@@ -18271,12 +18272,16 @@ async function pullMergeKv(): Promise<void> {
       const localV = localStorage.getItem(k) ?? undefined;
       const cloudV = cloud[k];
       const merged = merge3(base[k], localV, cloudV);
-      // DIAG (history-tab reset #super-persistent): trace the cloud merge for the history dashboard
-      // key — flags in RED when the merge SHRINKS the local value (a sign the cloud copy wiped tabs/
-      // selections). base/local/cloud/merged are JSON string lengths; CHANGED = a reload will follow.
-      if (k === HISTORY_DASH_KEY_V2)
-        dbg(`HD sync base=${base[k]?.length ?? 0} local=${localV?.length ?? 0} cloud=${cloudV?.length ?? 0} merged=${merged?.length ?? 0}${merged !== localV ? " CHANGED" : ""}`,
-          merged !== localV && (merged?.length ?? 0) < (localV?.length ?? 0));
+      // DIAG (history-tab reset #super-persistent / PB-44): trace the cloud merge for the history
+      // dashboard key — flags RED + "SHRINK" when the merge makes the local value SMALLER (a sign the
+      // cloud copy wiped tabs/selections). base/local/cloud/merged = JSON string lengths; CHANGED = a
+      // reload will follow → the line is also stashed (hdDiagPush) so it survives that reload.
+      if (k === HISTORY_DASH_KEY_V2) {
+        const shrink = merged !== localV && (merged?.length ?? 0) < (localV?.length ?? 0);
+        const line = `HD sync base=${base[k]?.length ?? 0} local=${localV?.length ?? 0} cloud=${cloudV?.length ?? 0} merged=${merged?.length ?? 0}${merged !== localV ? " CHANGED" : ""}${shrink ? " SHRINK" : ""}`;
+        dbg(line, shrink);
+        if (merged !== localV) hdDiagPush(line); // a local change → reload follows; keep the line across it
+      }
       if (merged !== localV) {
         if (merged === undefined) localStorage.removeItem(k); else localStorage.setItem(k, merged);
         localChanged++;
@@ -22323,6 +22328,30 @@ function dbg(msg: string, isErr = false): void {
 if (typeof window !== "undefined") {
   window.addEventListener("error", (e) => dbg(`ERR ${e.message} @ ${(e.filename || "").split("/").pop() ?? ""}:${e.lineno}`, true));
   window.addEventListener("unhandledrejection", (e) => dbg(`REJECT ${String((e as PromiseRejectionEvent).reason).slice(0, 90)}`, true));
+}
+// PB-44 history-tab reset diagnostic: pullMergeKv RELOADS the page when a cloud merge changes
+// localStorage, which clears the in-memory green console — so the `HD sync` line that would
+// explain a wipe vanishes. Stash it in localStorage (timestamped) and replay it into the console
+// after the reload. Kept until the console is actually ON, so it can't be missed on a silent boot.
+const HD_DIAG_KEY = "colosseum.__hdDiag";
+function hdDiagPush(line: string): void {
+  try {
+    const arr = JSON.parse(localStorage.getItem(HD_DIAG_KEY) || "[]") as string[];
+    arr.push(`${new Date().toTimeString().slice(0, 8)} ${line}`);
+    while (arr.length > 8) arr.shift();
+    localStorage.setItem(HD_DIAG_KEY, JSON.stringify(arr));
+  } catch { /* ignore */ }
+}
+function replayHdDiag(): void {
+  if (!dbgVisible()) return; // keep the breadcrumb until the console is on, so a wipe is never missed
+  try {
+    const arr = JSON.parse(localStorage.getItem(HD_DIAG_KEY) || "[]") as string[];
+    if (!arr.length) return;
+    for (const t of arr) dbgLines.push({ t: `HDprev ${t}`, err: t.includes("SHRINK") });
+    while (dbgLines.length > 40) dbgLines.shift();
+    localStorage.removeItem(HD_DIAG_KEY);
+    renderDbg();
+  } catch { /* ignore */ }
 }
 function closeDashBubbleMenu(): void { document.getElementById("dashBubbleMenu")?.remove(); }
 /** The "＋" view-bubble menu (rule 32: fixed + clampMenuIntoView). Mirrors openDashTabMenu —
