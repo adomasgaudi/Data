@@ -9681,6 +9681,20 @@ function handleSetAct(item: HTMLElement): void {
     deleteSetsWithUndo([sid], src ? displayName(src.exerciseName) : "set");
     return;
   }
+  if (act === "edit") {
+    // Open the FULL per-set editor (owner). It lives in the EXPANDED day rows, so jump to the
+    // set's day (which expands it + renders the set rows), then open + anchor this set's editor.
+    const src = liveRecords().find((r) => setId(r) === sid);
+    if (!src?.date) return;
+    openSetEditId = sid;
+    if (jumpToWorkoutDate(src.date)) {
+      reopenSetEdit(); // un-hide + anchor the editor for openSetEditId
+      setTimeout(() => document.addEventListener("click", setEditOutside, true), 0); // outside-tap closes it
+    } else {
+      openSetEditId = null; // the set's day isn't in the current (Workouts) view
+    }
+    return;
+  }
   if (act === "ruleradd") {
     // Read the values dialed on the reps / weight rulers and log a new set like the tapped one.
     const menu = document.getElementById("setActionMenu");
@@ -9756,6 +9770,7 @@ function openSetActionMenu(anchor: HTMLElement): void {
     `<div class="set-act-icons">` +
     ico("dup", "⧉", "Duplicate set") +
     (hasVar ? ico("variant", "✎", "Change variant") : "") +
+    ico("edit", "⚙", "Edit set — open the full editor") +
     ico("del", "✕", "Delete set", " set-act-ico--del") +
     `</div>` +
     `<div class="set-act-sec">Add a set</div>` +
