@@ -51,6 +51,8 @@ const LT: Record<string, string> = {
   "Add set": "Pridėti seriją",
   "Add exercise": "Pridėti pratimą",
   "Suggested": "Siūloma",
+  "Add this set directly": "Pridėti seriją iš karto",
+  "Add immediately": "Pridėti iš karto",
   "Note": "Užrašas",
   "Variant": "Variacija",
   "optional note": "neprivalomas užrašas",

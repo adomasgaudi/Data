@@ -17832,8 +17832,11 @@ function populateAddExerciseList(): void {
 // reps). The ✕ removes a line; CSS hides it on the only line.
 const AF_LINE =
   `<div class="addm-line">` +
-  `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
-  `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+  `<div class="addm-set-chip">` +
+  `<span class="addm-vtag-strip"></span>` +
+  `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="0" aria-label="Weight (kg)" />` +
+  `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
+  `</div>` +
   `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
   `</div>`;
 const AF_BUTTONS =
@@ -18034,10 +18037,33 @@ function addModalEsc(e: KeyboardEvent): void { if (e.key === "Escape") closeAddM
 let pendingAdd: { ex: string; date: string; lines: { weight: number | null; reps: number | null }[]; note: string } | null = null;
 let pendingAddTimer: ReturnType<typeof setTimeout> | null = null;
 const numOrNull = (v: string | undefined): number | null => { const n = parseFloat(v ?? ""); return Number.isFinite(n) ? n : null; };
+/** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
+ * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
+function syncAddmVtags(form: HTMLElement): void {
+  const dimEls = [...form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")];
+  const tags: string[] = [];
+  const SUP: Record<string, string> = { free: "", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ldr", hanging: "hang", dips_bar: "dips" };
+  for (const sel of dimEls) {
+    const dim = sel.dataset.dim ?? "";
+    const val = sel.value;
+    if (!val || val === "none" || val === "0" || val === "0cm") continue;
+    let abbr = "";
+    let cls = "";
+    if (dim === "support") { abbr = SUP[val] ?? val; cls = " wo-var-sup"; }
+    else if (dim === "band") { abbr = `b${val}`; cls = " wo-var-band"; }
+    else if (dim === "lean" || dim === "obstacle") { abbr = val; }
+    if (!abbr || abbr === "free") continue;
+    tags.push(`<span class="wo-var-chip${cls}">${escapeHtml(abbr)}</span>`);
+  }
+  const html = tags.join("");
+  for (const strip of form.querySelectorAll<HTMLElement>(".addm-vtag-strip")) strip.innerHTML = html;
+}
+
 /** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
 function syncPendingFromModal(): void {
   const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
   if (!form) { pendingAdd = null; scheduleGhostRender(); return; }
+  syncAddmVtags(form);
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
   const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
@@ -18106,9 +18132,14 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<div class="addm-field"><span class="addm-flbl">Note</span>` +
     `<input class="wo-af-note" list="${noteListId}" placeholder="optional note" autocomplete="off" /></div>` +
     `<datalist id="${noteListId}">${notes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`;
-  const suggRow = chips.length
+  const suggSection = chips.length
     ? `<div class="addm-sugg"><span class="addm-flbl">Suggested</span><div class="addm-sugg-row">` +
-      chips.map((c) => `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}">${escapeHtml(c.label)}</button>`).join("") +
+      chips.map((c) =>
+        `<div class="addm-sugg-item">` +
+        `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}">${escapeHtml(c.label)}</button>` +
+        `<button type="button" class="addm-chip-go" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}" aria-label="Add this set directly" title="Add immediately">＋</button>` +
+        `</div>`
+      ).join("") +
       `</div></div>`
     : "";
   const exHead = isNew
@@ -18133,8 +18164,9 @@ function openAddModal(exerciseName: string | null, date: string): void {
     exField +
     afWhenToggle(date, today) +
     `<div class="addm-variant-slot">${variantBlock}</div>` +
-    `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps</span><div class="addm-lines">${AF_LINE}</div>` +
-    `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button></div></div>` +
+    `<div class="addm-lines">${AF_LINE}</div>` +
+    `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
+    suggSection +
     romField +
     noteField +
     `<div class="addm-actions">${AF_BUTTONS}</div>` +
@@ -18145,7 +18177,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
     `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
-    suggRow + form +
+    form +
     `</div>`;
   document.body.appendChild(wrap);
   addModalEl = wrap;
@@ -18206,7 +18238,7 @@ function onAddModalClick(e: MouseEvent): void {
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
   const chip = t.closest<HTMLElement>(".addm-chip");
-  if (chip) {
+  if (chip && !t.closest(".addm-chip-go")) {
     // Fill the FIRST set line (a suggestion is one set's weight × reps).
     const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
     fill(".wo-af-weight", chip.dataset.fillw);
@@ -18214,10 +18246,24 @@ function onAddModalClick(e: MouseEvent): void {
     syncPendingFromModal();
     return;
   }
+  const chipGo = t.closest<HTMLElement>(".addm-chip-go");
+  if (chipGo) {
+    // Direct-add: fill form with the suggestion then immediately log it.
+    const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
+    fill(".wo-af-weight", chipGo.dataset.fillw);
+    fill(".wo-af-reps", chipGo.dataset.fillr);
+    syncPendingFromModal();
+    if (onInlineAddGo(form)) closeAddModal();
+    return;
+  }
   // "+ set" — append another weight×reps line (each line = one set).
   if (t.closest(".wo-af-addline")) {
     const lines = form.querySelector<HTMLElement>(".addm-lines");
-    if (lines) { lines.insertAdjacentHTML("beforeend", AF_LINE); lines.lastElementChild?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus(); }
+    if (lines) {
+      lines.insertAdjacentHTML("beforeend", AF_LINE);
+      syncAddmVtags(form);
+      lines.lastElementChild?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+    }
     syncPendingFromModal();
     return;
   }

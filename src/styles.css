@@ -2707,27 +2707,58 @@ sup.wr-bw { font-size: 0.85em; }
    inputs always share the row and never push the card sideways. */
 .wo-addform--modal .addm-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
 .wo-addform--modal .addm-inputs input { width: 100%; min-width: 0; }
-/* Multi-set add: one weight×reps LINE per set, a "+ set" appends another (owner: no sets-count). */
+/* Multi-set add: one weight×reps LINE per set, looks like a set chip (weight + superscript reps). */
 .addm-lines { display: flex; flex-direction: column; gap: 0.4rem; }
-.addm-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--tap-min); gap: 0.4rem; align-items: center; }
-.addm-line input { width: 100%; min-width: 0; }
+.addm-line { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
+/* The chip-style container — mirrors the collapsed set chips in history */
+.addm-set-chip {
+  display: inline-flex; align-items: flex-end; gap: 0; flex: 1 1 auto;
+  border: 1.5px solid var(--border); border-radius: var(--r-pill);
+  padding: 4px 9px 4px 7px; background: var(--card); cursor: text;
+  min-height: var(--tap-min);
+}
+.addm-set-chip:focus-within { border-color: var(--accent); }
+.addm-set-chip .wo-af-weight {
+  flex: 1 1 auto; max-width: 5rem; min-width: 2.5rem;
+  border: none; background: transparent; padding: 0; margin: 0;
+  font-size: 1rem; font-weight: 600; text-align: right; color: inherit;
+  border-radius: 0;
+}
+.addm-set-chip .wo-af-reps {
+  flex: 0 0 2.3rem;
+  border: none; background: transparent; padding: 0 0 0.2em; margin: 0;
+  font-size: 0.72rem; font-weight: 700; color: var(--muted);
+  align-self: flex-start; text-align: center; border-radius: 0;
+}
+/* Variant tag strip shown inside the chip before the weight */
+.addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
+.addm-vtag-strip:empty { display: none; }
 .addm-line .wo-af-rmline { min-width: var(--tap-min); min-height: var(--tap-min); border: none; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; border-radius: var(--r-pill); }
 .addm-line .wo-af-rmline:hover { color: var(--remove); }
-.addm-line:only-child .wo-af-rmline { visibility: hidden; } /* nothing to remove when it's the only set */
+.addm-line:only-child .wo-af-rmline { visibility: hidden; }
 .wo-af-addline { margin-top: 0.4rem; align-self: flex-start; padding: 5px 11px; min-height: var(--tap-min); border: 1px dashed var(--border); border-radius: var(--r-pill); background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
 .wo-af-addline:hover { background: var(--bg); }
 .wo-addform--modal .wo-af-ex, .wo-addform--modal .wo-af-note { width: 100%; }
 .wo-addform--modal .wo-af-dims { max-width: 100%; }
 .addm-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
 .addm-actions .wo-af-go { flex: 1 1 auto; padding: 9px 13px; }
-/* Suggestions: ONE tight, sideways-scrolling row of chips, kept clear of the inputs. */
-.addm-sugg { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.1rem 0 0.5rem; }
-.addm-sugg-row { display: flex; flex-wrap: nowrap; gap: 0.35rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+/* Suggestions: below the lines, gray ghost pills with a direct-add "+" button. */
+.addm-sugg { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.45rem 0 0.2rem; }
+.addm-sugg-row { display: flex; flex-wrap: nowrap; gap: 0.4rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+/* Each suggestion: chip label + "+" direct-add button joined as one unit */
+.addm-sugg-item { display: inline-flex; align-items: stretch; flex: 0 0 auto; border-radius: var(--r-pill); overflow: hidden; }
 .addm-chip {
   flex: 0 0 auto; font: inherit; font-size: 0.82rem; font-weight: 600; white-space: nowrap; cursor: pointer;
-  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 4px 11px;
+  border: 1px solid var(--accent); border-right: none; border-radius: var(--r-pill) 0 0 var(--r-pill); padding: 4px 10px;
   background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min);
 }
+.addm-chip-go {
+  flex: 0 0 auto; font: inherit; font-size: 0.95rem; font-weight: 700; white-space: nowrap; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 0 var(--r-pill) var(--r-pill) 0; padding: 4px 10px;
+  background: var(--accent-soft); color: var(--accent); min-height: var(--tap-min);
+}
+.addm-chip-go:hover, .addm-chip-go:active { background: var(--accent); color: #fff; }
+.addm-chip:hover { background: var(--bg); }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }
