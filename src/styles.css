@@ -1808,6 +1808,7 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .wo-mach { display: inline-block; font-size: 0.6em; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: var(--r-xs); padding: 0 3px; vertical-align: middle; color: var(--muted); background: var(--line); }
 .wo-mach-review { text-transform: none; color: var(--gold); background: var(--gold-soft); }
 .wo-mach-asst { color: var(--accent); background: var(--accent-soft); }
+.wo-mach-pre { text-transform: none; margin-right: 3px; } /* the short "m" to the LEFT of the weight */
 /* Machine-type toggle in the Analysis selector (single mode). */
 .wa-machine { margin: 0 0 0.5rem; }
 .wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

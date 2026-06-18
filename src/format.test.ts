@@ -34,9 +34,9 @@ describe("pct / bwMult", () => {
 });
 
 describe("wr", () => {
-  it("drops the meaningless 0 base for bodyweight reps", () => {
-    expect(wr(null, 5)).toBe('<sup class="wr-bw">5</sup>');
-    expect(wr(0, 5)).toBe('<sup class="wr-bw">5</sup>');
+  it("shows a 0 base when no weight was added (owner: always write 0)", () => {
+    expect(wr(null, 5)).toBe("0<sup>5</sup>");
+    expect(wr(0, 5)).toBe("0<sup>5</sup>");
   });
   it("shows an em-dash when there is neither weight nor reps", () => {
     expect(wr(null, null)).toBe("—");

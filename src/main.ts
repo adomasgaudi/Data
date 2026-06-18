@@ -1992,13 +1992,12 @@ function saveAlone() {
 // run hardest (almost no reps left) → easiest (many reps in reserve).
 // Contiguous, non-overlapping.
 const RIR_BANDS: ReadonlyArray<{ id: string; word: string; desc: string }> = [
-  { id: "0.1–0.3", word: "max", desc: "almost impossible — elite powerlifter grinding ~10s" },
   { id: "0.3–0.5", word: "brutal", desc: "extremely difficult — trained person, 2–4s grind" },
   { id: "0.5–1.3", word: "difficult", desc: "difficult — 1–2s grind, a 2nd rep seems improbable" },
   { id: "1.3–1.5", word: "very hard", desc: "maybe one more rep, but very hard" },
   { id: "1.5–1.8", word: "hard", desc: "could do another rep, but hard" },
   { id: "1.8–2.5", word: "1–2 left", desc: "1 RIR for sure, maybe 2" },
-  { id: "2.5–4", word: "2–3 left", desc: "2–3 reps in reserve" },
+  { id: "2.5–4.5", word: "2–3 left", desc: "2–3 reps in reserve" },
   { id: "4–8", word: "easy", desc: "4–8 reps in reserve" },
   { id: "8–15", word: "very easy", desc: "8–15 reps in reserve" },
   { id: "15–30", word: "light", desc: "15–30 reps in reserve" },
@@ -2029,7 +2028,7 @@ function bandContainingRir(rir: number): string {
  * graded set has an entry, an assumed one doesn't, so picking a band turns it real. */
 function assumedRirBandId(exerciseName: string, predRir: number | null): string {
   if (predRir !== null && Number.isFinite(predRir)) return bandContainingRir(predRir);
-  return LOWER_BODY_MG.has(mgFor(exerciseName)) ? "4–8" : "2.5–4";
+  return LOWER_BODY_MG.has(mgFor(exerciseName)) ? "4–8" : "2.5–4.5";
 }
 /** Big compound leg lifts (squat / deadlift patterns, leg press) fatigue more, so
  * they get the wider "mid" effort band — see effortClass(). */
@@ -7649,8 +7648,13 @@ function setDisplay(raw: SetRecord): string {
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
   const computedForMach = computeRecord(s);
+  // Assisted machine → a short lowercase "m" to the LEFT of the weight (owner). Gravity /
+  // review keep their right-side tag.
+  const machPre = isMachineSet(s.exerciseName, s.weight)
+    ? `<span class="wo-mach wo-mach-asst wo-mach-pre" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default.">m</span>`
+    : "";
   const mach = isMachineSet(s.exerciseName, s.weight)
-    ? ` <span class="wo-mach wo-mach-asst" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default.">machine</span>`
+    ? ""
     : computedForMach.machineType === "review"
       ? ` <span class="wo-mach wo-mach-review" title="Mixed machine: too ambiguous to trust — could be a light cable set or a gravity-machine warm-up. Check it.">⚠</span>`
       : computedForMach.machineType === "gravity"
@@ -7685,10 +7689,10 @@ function setDisplay(raw: SetRecord): string {
       const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
       const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
       const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-      return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
+      return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${machPre}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
     }
     // Multiplier implied by the chip → show just the chip (+ weight) and reps, no ×N.
-    return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${mach}`));
+    return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${machPre}${mwp}${wr(s.weight, s.reps)}${mach}`));
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -7698,7 +7702,7 @@ function setDisplay(raw: SetRecord): string {
     const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
     return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
   }
-  return finish(effWrap(`${chips}${mwp}${wr(s.weight, s.reps)}${mach}`));
+  return finish(effWrap(`${chips}${machPre}${mwp}${wr(s.weight, s.reps)}${mach}`));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -8940,7 +8944,7 @@ function rpeDropdownHtml(sid: string, grade: string | undefined, assumedId?: str
     `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
   // Just the number range — no explanations (the why stays as a hover tooltip).
   const menu =
-    optHtml("", "–", "Clear — back to the assumed RIR", !band) +
+    optHtml("", "clear", "Clear — back to the assumed RIR", !band) +
     RIR_BANDS.map((b) => optHtml(b.id, b.id, b.desc, shown?.id === b.id)).join("");
   const cls = band ? " is-set" : assumed ? " is-assumed" : "";
   const aria = band ? "Reps in reserve (RIR)" : "Assumed reps in reserve — tap to set the real value";

@@ -25,12 +25,12 @@ export const pct = (fraction: number): string => `${Math.round(fraction * 100)}%
 export const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
 
 /** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header.
- * When there's no (added) weight — bodyweight reps, holds — the meaningless "0"
- * base is dropped and just the reps show as the superscript. Negative (assisted)
- * weights keep their number. */
+ * When there's no (added) weight — bodyweight reps, holds — show "0" as the base
+ * (owner: always write 0 when no weight was added), with the reps as the superscript.
+ * Truly empty (no weight AND no reps) stays "—". Negative (assisted) weights keep theirs. */
 export const wr = (weight: number | null, reps: number | null): string =>
   weight === null || weight === 0
-    ? (reps === null ? "—" : `<sup class="wr-bw">${reps}</sup>`)
+    ? (reps === null ? "—" : `0<sup>${reps}</sup>`)
     : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
 
 /** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
