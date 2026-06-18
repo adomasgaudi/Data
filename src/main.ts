@@ -18160,6 +18160,14 @@ function openAddModal(exerciseName: string | null, date: string): void {
   // the ghost is visible above the bottom-docked popup (owner).
   wrap.addEventListener("input", syncPendingFromModal);
   wrap.addEventListener("change", syncPendingFromModal);
+  // Collapse the tall fields while a weight/reps input is focused, so the sheet shrinks and
+  // the history ghost stays visible above the keyboard (owner).
+  const setTyping = () => {
+    const a = document.activeElement as HTMLElement | null;
+    wrap.querySelector(".addm-card")?.classList.toggle("is-typing", !!a?.matches?.(".wo-af-weight, .wo-af-reps"));
+  };
+  wrap.addEventListener("focusin", setTyping);
+  wrap.addEventListener("focusout", () => setTimeout(setTyping, 0));
   syncPendingFromModal();
   if (!isNew && ex) requestAnimationFrame(() => {
     const row = document.querySelector<HTMLElement>(`.wo-addset[data-addex="${CSS.escape(ex)}"][data-adddate="${CSS.escape(date)}"]`)?.closest<HTMLElement>(".wo-ex-line")

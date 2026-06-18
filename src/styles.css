@@ -2679,7 +2679,10 @@ sup.wr-bw { font-size: 0.85em; }
      if a child forces intrinsic width or the visual viewport desyncs (keyboard open).
      min-width:0 lets the flex item shrink; overflow-x hidden clips any stray child. */
   width: 100%; max-width: min(30rem, 100vw); min-width: 0;
-  max-height: 72vh; overflow: hidden auto;
+  /* Keep the sheet to ~half the LIVE (keyboard-aware) viewport so the history + the live
+     ghost set stay visible above it while the number keyboard is open (owner). dvh tracks
+     the keyboard; vh is the fallback. */
+  max-height: 52vh; max-height: 52dvh; overflow: hidden auto;
   background: var(--panel); border: 1px solid var(--line); border-bottom: none; border-radius: 14px 14px 0 0;
   box-shadow: 0 -8px 40px rgba(20, 24, 38, 0.22); padding: 0.7rem 0.9rem 1rem;
 }
@@ -2687,6 +2690,12 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-title { font-size: 1rem; font-weight: 700; }
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
 .addm-field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.45rem 0; }
+/* While typing weight/reps (keyboard up) collapse the tall secondary fields so the sheet is
+   just a few rows and the history + live ghost stay visible above it (owner). */
+.addm-card.is-typing .addm-sugg,
+.addm-card.is-typing .addm-variant-slot,
+.addm-card.is-typing .addm-field:has(.wo-af-rom),
+.addm-card.is-typing .addm-field:has(.wo-af-note) { display: none; }
 .addm-flbl { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
 .addm-exname { font-size: 0.95rem; font-weight: 600; color: var(--accent); }
 /* The popup form stacks full-width (overrides .wo-addform's inline-flex wrap). */
