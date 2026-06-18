@@ -18043,6 +18043,7 @@ const AF_LINE =
   `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
   `<span class="addm-real" aria-hidden="true" hidden></span>` +
   `</div>` +
+  `<span class="addm-rir-slot"></span>` +
   `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
   `</div>`;
 const AF_BUTTONS =
@@ -18322,12 +18323,68 @@ function syncAddmReal(form: HTMLElement): void {
   }
 }
 
+// The current athlete's strength map for the open add-modal (computed once on open / ex change),
+// so the live assumed-RIR per line is cheap to refresh as you type reps. Cleared on close.
+let addmStrength: Map<string, Map<number, number>> | null = null;
+/** The assumed RIR band for a candidate set (lift + dialed weight/reps), from the same
+ * predicted-RIR model the history uses. Falls back to the lift's default band with no reps. */
+function addmAssumedRirBand(ex: string, date: string, weight: number | null, reps: number | null): string {
+  if (!ex) return "2.5–4.5";
+  if (reps === null || reps <= 0) return assumedRirBandId(ex, null);
+  const formula = currentFormula();
+  if (!addmStrength) addmStrength = currentStrengthByUserExercise(formula);
+  const pseudo = { username: els.athlete.value, exerciseName: ex, date, weight, reps } as SetRecord;
+  const anchor = currentStrengthFor(addmStrength, pseudo);
+  return assumedRirBandId(ex, predictedRir(anchor, weight, reps, formula));
+}
+/** The add-line RIR picker (custom .xdd dropdown, reusing the per-set RIR styles): shows the
+ * ASSUMED band (faded) until the owner picks one, then it becomes a chosen value recorded on
+ * the new set. No setId — the value is read on Add and written to the created set's id. */
+function addmRirHtml(assumedId: string): string {
+  const band = rirBand(assumedId);
+  const label = band ? band.id : "–";
+  const opt = (val: string, text: string, title: string, active: boolean) =>
+    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
+  const menu = opt("", "clear", "Clear — back to the assumed RIR", false) +
+    RIR_BANDS.map((b) => opt(b.id, b.id, b.desc, b.id === assumedId)).join("");
+  return (
+    `<div class="xdd xdd-rpe addm-rir is-assumed" data-addmrir data-assumed="${escapeHtml(assumedId)}">` +
+    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve — assumed from reps & 1RM; tap to set" title="RIR — assumed from your reps & 1RM; tap to set">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${menu}</div></div>`
+  );
+}
+/** Fill / refresh each add-line's RIR picker. A line with no picker yet gets one; a line whose
+ * picker the owner hasn't manually set tracks the live assumed band as the reps change. */
+function syncAddmRir(form: HTMLElement): void {
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
+  const date =
+    (when === "pick" ? form.dataset.pickdate : when === "today" ? form.dataset.todaydate : form.dataset.daydate) ||
+    form.dataset.daydate || todayIso();
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const slot = ln.querySelector<HTMLElement>(".addm-rir-slot");
+    if (!slot) continue;
+    const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
+    const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
+    const assumed = addmAssumedRirBand(ex, date, w, reps);
+    const dd = slot.querySelector<HTMLElement>(".addm-rir");
+    if (!dd) { slot.innerHTML = addmRirHtml(assumed); continue; }
+    if (dd.dataset.picked) continue; // the owner set it → leave their choice alone
+    // Not picked → track the live assumed band: update the button label + the menu's active row.
+    dd.dataset.assumed = assumed;
+    const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
+    if (btn) btn.innerHTML = `${escapeHtml(rirBand(assumed)?.id ?? "–")}<span class="xdd-caret">▾</span>`;
+    for (const o of dd.querySelectorAll<HTMLElement>(".set-rpe-opt")) o.classList.toggle("is-active", o.dataset.rir === assumed);
+  }
+}
 /** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
 function syncPendingFromModal(): void {
   const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
   if (!form) { pendingAdd = null; scheduleGhostRender(); return; }
   syncAddmVtags(form);
   syncAddmReal(form);
+  syncAddmRir(form);
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
   const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
@@ -18384,6 +18441,7 @@ function addmVariantField(ex: string): string {
 function closeAddModal(): void {
   addModalEl?.remove();
   addModalEl = null;
+  addmStrength = null; // drop the cached strength map (recomputed on next open)
   document.removeEventListener("keydown", addModalEsc, true);
   if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); window.scrollTo(0, y); } } // drop the ghost
 }
@@ -18489,6 +18547,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
       const refreshVariant = () => {
         const name = exInput.value.trim();
         const key = name ? (familyOf(name) ?? "") : "";
+        addmStrength = null; // a different lift → recompute the strength anchor for the assumed RIR
         if (key === lastKey) return; // same model → nothing to rebuild
         lastKey = key;
         slot.innerHTML = addmVariantField(name);
@@ -18506,6 +18565,32 @@ function onAddModalClick(e: MouseEvent): void {
   if (t === wrap) { closeAddModal(); return; } // backdrop tap
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
+  // Add-line RIR picker: toggle its menu, or apply a picked band (which becomes the new set's
+  // recorded RIR; "clear" reverts to the live assumed value).
+  const rirDd = t.closest<HTMLElement>(".addm-rir");
+  if (rirDd) {
+    const menu = rirDd.querySelector<HTMLElement>(".xdd-menu")!;
+    const optEl = t.closest<HTMLElement>(".set-rpe-opt");
+    if (optEl) {
+      const val = optEl.dataset.rir ?? "";
+      if (val) { rirDd.dataset.picked = val; rirDd.classList.remove("is-assumed"); rirDd.classList.add("is-set"); }
+      else { delete rirDd.dataset.picked; rirDd.classList.remove("is-set"); rirDd.classList.add("is-assumed"); }
+      const shown = val || (rirDd.dataset.assumed ?? "");
+      const btn = rirDd.querySelector<HTMLElement>(".set-rpe-btn");
+      if (btn) btn.innerHTML = `${escapeHtml(rirBand(shown)?.id ?? "–")}<span class="xdd-caret">▾</span>`;
+      for (const o of rirDd.querySelectorAll<HTMLElement>(".set-rpe-opt")) o.classList.toggle("is-active", o.dataset.rir === val);
+      menu.setAttribute("hidden", "");
+      rirDd.classList.remove("open");
+      syncPendingFromModal();
+    } else {
+      const opening = menu.hasAttribute("hidden");
+      for (const m of form.querySelectorAll<HTMLElement>(".addm-rir .xdd-menu")) m.setAttribute("hidden", "");
+      for (const d of form.querySelectorAll<HTMLElement>(".addm-rir")) d.classList.remove("open");
+      menu.toggleAttribute("hidden", !opening);
+      rirDd.classList.toggle("open", opening);
+    }
+    return;
+  }
   const chip = t.closest<HTMLElement>(".addm-chip");
   if (chip && !t.closest(".addm-chip-go")) {
     // Fill the FIRST set line (a suggestion is one set's weight × reps).
@@ -18606,6 +18691,9 @@ function onInlineAddGo(form: HTMLElement): boolean {
     .map((ln) => ({
       weight: parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight")!.value),
       reps: Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps")!.value)),
+      // Only a MANUALLY-picked RIR is recorded; an untouched (assumed) picker stays empty so the
+      // new set keeps the same assumed-RIR behaviour as every other ungraded set.
+      rir: (ln.querySelector?.<HTMLElement>(".addm-rir")?.dataset.picked) || "",
     }))
     .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   // Chosen variation. Structured pickers (a modelled lift) → the picked levels are
@@ -18665,6 +18753,11 @@ function onInlineAddGo(form: HTMLElement): boolean {
       const synthNote = `__set:${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
       for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
     }
+  }
+  // A manually-picked RIR per line → record it on the created set (same id formula). An untouched
+  // (assumed) picker is left unset, so the set keeps the standard assumed-RIR behaviour.
+  for (let i = 0; i < setLines.length; i++) {
+    if (setLines[i]!.rir) setRpe(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rir);
   }
   saveManual();
   mergeManualSets();

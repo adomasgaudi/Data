@@ -2808,42 +2808,53 @@ sup.wr-bw { font-size: 0.85em; }
 /* Multi-set add: one weight×reps LINE per set, looks like a set chip (weight + superscript reps). */
 .addm-lines { display: flex; flex-direction: column; gap: 0.4rem; }
 .addm-line { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
-/* The set line: the variant tag, then the weight and reps as their OWN clearly-outlined
-   input boxes (owner: the old borderless chip was unclear where to tap). */
+/* The set line: the variant tag, then the weight and reps as PLAIN EDITABLE TEXT (owner: "remove
+   the input look altogether, let me just edit text") — no border/box/fill, sitting close together
+   with the reps raised as a superscript, so it reads like the final logged chip. */
 .addm-set-chip {
-  display: inline-flex; align-items: flex-start; gap: 0.3rem; flex: 0 0 auto; /* weight + reps close (owner) */
+  display: inline-flex; align-items: flex-start; gap: 0; flex: 0 0 auto;
   border: none; background: none; padding: 0;
 }
-/* Owner: a SHADED, clearly-OUTLINED weight box (the old --border token was undefined, so the
-   outline silently dropped and it looked like a plain white field). */
+/* Weight = the main number, as text (no input chrome). */
 .addm-set-chip .wo-af-weight {
-  flex: 0 0 auto; width: 4.2rem; box-sizing: border-box;
-  border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
-  padding: 4px 8px; margin: 0; min-height: var(--tap-min);
-  font-size: 1.04rem; font-weight: 700; text-align: center; color: inherit;
+  flex: 0 0 auto; width: 3.1rem; box-sizing: border-box;
+  border: none; background: none; padding: 0; margin: 0; min-height: var(--tap-min);
+  font-size: 1.15rem; font-weight: 700; text-align: right; color: inherit;
+  -moz-appearance: textfield; appearance: textfield; /* no spinner → reads as text */
 }
-/* Reps as a SUPERSCRIPT box (owner: a superscript reps number, also outlined — not a plain
-   white field): smaller, raised, its own shaded outline. */
+/* Reps = a small RAISED superscript number, right next to the weight (also plain text). */
 .addm-set-chip .wo-af-reps {
-  flex: 0 0 2.4rem; box-sizing: border-box; align-self: flex-start; margin-top: -1px;
-  border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
-  padding: 2px 4px; min-height: calc(var(--tap-min) - 4px);
-  font-size: 0.82rem; font-weight: 700; text-align: center; color: var(--muted);
+  flex: 0 0 1.5rem; box-sizing: border-box; align-self: flex-start; margin: 0 0 0 1px;
+  border: none; background: none; padding: 1px 0 0 0;
+  font-size: 0.74rem; font-weight: 700; text-align: left; color: var(--muted);
+  -moz-appearance: textfield; appearance: textfield;
 }
-.addm-set-chip .wo-af-weight:focus, .addm-set-chip .wo-af-reps:focus { border-color: var(--accent); outline: none; }
+.addm-set-chip .wo-af-weight::-webkit-outer-spin-button, .addm-set-chip .wo-af-weight::-webkit-inner-spin-button,
+.addm-set-chip .wo-af-reps::-webkit-outer-spin-button, .addm-set-chip .wo-af-reps::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+/* Editing affordance WITHOUT the box look: a faint accent underline only while focused. */
+.addm-set-chip .wo-af-weight:focus, .addm-set-chip .wo-af-reps:focus {
+  outline: none; box-shadow: inset 0 -1.5px 0 var(--accent);
+}
 /* Live REAL-weight conversion (assisted machines, owner): the dialed counterweight halved
-   (−20 → −10) shown immediately as a shaded chip with the reps as a superscript, so you see
-   the real set as you type. Hidden for non-machine lifts. */
+   (−20 → −10) shown immediately as plain text with the reps as a TRUE superscript (owner: the
+   reps sat too low). Hidden for non-machine lifts. */
 .addm-real {
-  display: inline-flex; align-items: center; align-self: flex-start; box-sizing: border-box;
-  border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
-  padding: 2px 7px; min-height: var(--tap-min); font-size: 0.95rem; font-weight: 700;
-  color: var(--accent); white-space: nowrap;
+  display: inline-block; align-self: center; margin-left: 0.45rem;
+  font-size: 1.04rem; font-weight: 700; color: var(--accent); white-space: nowrap;
 }
+.addm-real sup { font-size: 0.66em; vertical-align: super; line-height: 0; font-weight: 700; }
 .addm-real[hidden] { display: none; }
 /* Variant tag strip shown inside the chip before the weight */
 .addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
 .addm-vtag-strip:empty { display: none; }
+/* Add-line RIR picker (reuses the per-set .xdd-rpe dropdown styles): sits inline after the
+   weight/reps, compact and auto-width (the shared rule makes it block/100%, undo that here). */
+.addm-rir-slot { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.addm-rir-slot:empty { display: none; }
+.addm-line .addm-rir.xdd-rpe { display: inline-block; width: auto; }
+.addm-line .addm-rir .xdd-btn { min-height: var(--tap-min); padding: 3px 8px; }
 .addm-line .wo-af-rmline { min-width: var(--tap-min); min-height: var(--tap-min); border: none; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; border-radius: var(--r-pill); }
 .addm-line .wo-af-rmline:hover { color: var(--remove); }
 .addm-line:only-child .wo-af-rmline { visibility: hidden; }
