@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-43 — Add-set weight/reps box: the never-ending restyle (escalation war)
+
+- **First seen / reported:** styled & re-styled across 2026-06-16…18, mobile (Add-exercise / + set sheet). The owner kept screenshotting the weight/reps entry asking for a different look; `#super-persistent` invoked 2026-06-18.
+- **The war (6 rewrites of the SAME ~10 lines of `.addm-set-chip` CSS in ~2 days):** WO-223 `add-sheet-chip-style-inputs` (b.2.9.167) → WO-225 `add-set-outlined-inputs` (169) → WO-235 `reads-like-the-final-chip` (183) → **WO-238 `add-set-plain-text-inputs`** (189, owner: "remove the input look altogether, let me just edit text" → box deleted) → **UI-26 `add-set-weight-field-visible-box`** (208, owner: "it's invisible" → box re-added) → UI-27 `add-set-weight-box-visible` (210). It ping-ponged between two OPPOSITE complaints: "looks like an input (bad)" ↔ "I can't see/find it (bad)".
+- **Root cause (TWO, both process not pixels):** (1) **No single design reconciled both poles**, so each AI patched the latest screenshot and over-corrected to the other extreme. (2) **STALE DEVICE CACHE** — the single-file build is browser-cached; the owner's screenshots showed a state (wide box, ~100px dead margin) that was ALREADY changed on the live build (b.2.9.210 was compact), so AIs "fixed" a box that no longer existed. The header version chip is OUTSIDE the modal, so a modal screenshot never revealed which build it was.
+- **Fix (b.2.9.211, UI-28):** ONE reconciling design that answers both complaints at once — TWO small **slightly-shaded** boxes (visible → findable, fixes "invisible") that **don't look like input bars** and **hug their text** (≤9px pad, fit-content, fixes "too wide"), with **W / reps** as the default placeholder labels and the reps raised like the collapsed `65⁵`, a clear gap so each is easy to tap, tap-to-edit accent ring. PLUS a permanent diagnostic: the loaded build is stamped into the modal header (`.addm-ver`) so every future modal screenshot self-identifies its version — kills the stale-cache ambiguity that fed the war.
+- **Watch:** before re-styling this element AGAIN, (a) confirm the owner is on the latest build (read the `.addm-ver` stamp in their screenshot — if it's behind, the answer is HARD-REFRESH, not new CSS); (b) one AI owns this element at a time (it's a hot `#co-work` file); (c) a request that contradicts the last "fix" means the design didn't reconcile — find the form that satisfies BOTH, don't bounce to the opposite extreme.
+- **Recurrences:** 5 (six total restylings of the same rule).
+
+---
+
 ## PB-42 — Add-set sheet: variant pills not inline with weight/reps
 
 - **First seen / reported:** 2026-06-18, mobile, History → + set on a variation lift. Owner: "the variants should be before the weight and reps in the same line" → then "still not inline #persistent" (the first fix did not hold).

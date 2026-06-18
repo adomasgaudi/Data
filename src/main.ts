@@ -18376,8 +18376,8 @@ function afLine(ex: string): string {
     `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
     `<div class="addm-line-main">` +
     `<div class="addm-set-chip">` +
-    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="0" aria-label="Weight (kg)" />` +
-    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
+    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
+    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
     `<span class="addm-real" aria-hidden="true" hidden></span>` +
     `</div>` +
     `<span class="addm-rir-slot"></span>` +
@@ -18970,6 +18970,10 @@ function openAddModal(exerciseName: string | null, date: string): void {
   wrap.innerHTML =
     `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
     `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
+    // PB-43 diagnostic: stamp the LOADED build into the modal so a screenshot of it self-
+    // identifies its version — the weight/reps box has been re-styled 6× and the owner kept
+    // screenshotting a STALE cached build, so AIs chased a box that was already changed.
+    `<span class="addm-ver" title="Loaded build. If this isn't the latest version, hard-refresh — the weight/reps box may already be fixed.">${escapeHtml(CURRENT_VERSION)}</span>` +
     `<button type="button" class="addm-cog" aria-label="Exercise settings" aria-expanded="false" title="Exercise settings — assisted machine, machine weight, multiplier, unilateral">⚙</button>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
     form +
