@@ -67,6 +67,9 @@ const LT: Record<string, string> = {
   "unilateral": "vienpusis",
   "unilateral?": "vienpusis?",
   "machine wt": "mašinos sv.",
+  "name": "pavadinimas",
+  "Default": "Numatytoji",
+  "＋ New machine": "＋ Nauja mašina",
   "Name the exercise first.": "Pirma įveskite pratimo pavadinimą.",
   "Index": "Rodyklė",
   // ---- Live coaching page ----

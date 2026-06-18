@@ -906,8 +906,9 @@ function machineWeightFor(exerciseName: string): number {
 /** Display prefix for a machine-weight lift: "base+" (e.g. "20+") so the shown weight reads
  * "20+30" — the hidden machine base plus the dialed value (the only editable part). Empty
  * when the lift has no machine base. */
-function machineWeightPrefix(exerciseName: string): string {
-  const mw = machineWeightFor(exerciseName);
+/** Set-aware "base+" prefix — reads the SET's stamped equipment (Phase 3), else the default. */
+function machineWeightPrefixForSet(r: SetRecord): string {
+  const mw = equipmentSettingsForSet(r).kgBase;
   return mw > 0 ? `${fmt(mw)}+` : "";
 }
 /** Set (or clear, with null/blank) a lift's machine base weight. Admin-only metadata. */
@@ -2366,6 +2367,80 @@ function setMachineMultWithUndo(ex: string, value: number | undefined): void {
   afterMachineEdit(ex);
   showToast(`Machine multiplier for ${displayName(ex)} → ÷${fmt(value ?? 2)}, changed for all users with this machine.`, "Undo", () => { setMachineMult(ex, prev); afterMachineEdit(ex); });
 }
+
+// ===== Phase 3: EQUIPMENT entities (docs/machine-model-plan.md) =====
+// A named piece of EQUIPMENT (machine / dumbbell / bar…) shared by exercises, owning the machine
+// settings (kg base, ÷ multiplier, assisted). "Default" = the exercise's own legacy per-exercise
+// settings — NOT in the registry. A user picks WHICH equipment they use for a lift (per-user, the
+// default for NEW sets); each set is STAMPED at log time, so switching equipment never rewrites
+// past sets (owner decision: "only new sets"). ONE resolver feeds BOTH metrics and the display
+// formula, so the shown −20/N can never disagree with the computed 1RM.
+interface Equipment { id: string; name: string; kind?: string; kgBase: number; divisor: number; assisted: boolean; }
+type EquipSettings = { kgBase: number; divisor: number; assisted: boolean };
+const EQUIPMENT_KEY = "colosseum.equipment.v1";
+const equipmentReg: Record<string, Equipment> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(EQUIPMENT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function saveEquipment(): void { saveJson(EQUIPMENT_KEY, equipmentReg); }
+const USER_EX_EQUIP_KEY = "colosseum.userExerciseEquipment.v1";
+const userExerciseEquipment: Record<string, Record<string, string>> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(USER_EX_EQUIP_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function saveUserExerciseEquipment(): void { saveJson(USER_EX_EQUIP_KEY, userExerciseEquipment); }
+const SET_EQUIP_KEY = "colosseum.setEquipment.v1";
+const setEquipment: Record<string, string> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(SET_EQUIP_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function saveSetEquipment(): void { saveJson(SET_EQUIP_KEY, setEquipment); }
+/** The named equipment a user currently uses for a lift (their choice; the default for NEW sets).
+ * null = "Default" (the exercise's legacy per-exercise settings). */
+function currentEquipmentIdFor(ex: string): string | null {
+  return userExerciseEquipment[els.athlete.value || ""]?.[ex] ?? null;
+}
+function setCurrentEquipment(ex: string, id: string | null): void {
+  const u = els.athlete.value || "";
+  if (!u) return;
+  const m = (userExerciseEquipment[u] ??= {});
+  if (id) m[ex] = id; else delete m[ex];
+  saveUserExerciseEquipment();
+  clearMachineCache();
+}
+/** Settings to use for what a NEW set of this lift will be logged on (the current equipment). */
+function equipSettingsCurrent(ex: string): EquipSettings {
+  const e = equipmentReg[currentEquipmentIdFor(ex) ?? ""];
+  return e ? { kgBase: e.kgBase, divisor: e.divisor, assisted: e.assisted }
+           : { kgBase: machineWeightFor(ex), divisor: machineMultFor(ex), assisted: isAssistedMachine(ex) };
+}
+/** Settings for an EXISTING set — its STAMPED equipment, else the exercise's legacy default. This
+ * is the single resolver every metric + the display formula reads, so they always agree. */
+function equipmentSettingsForSet(r: SetRecord): EquipSettings {
+  const e = equipmentReg[setEquipment[setId(r)] ?? ""];
+  return e ? { kgBase: e.kgBase, divisor: e.divisor, assisted: e.assisted }
+           : { kgBase: machineWeightFor(r.exerciseName), divisor: machineMultFor(r.exerciseName), assisted: isAssistedMachine(r.exerciseName) };
+}
+/** A machine set FOR DISPLAY (equipment-aware): a negative weight on assisted equipment. */
+function isMachineSetEq(r: SetRecord): boolean {
+  return r.weight !== null && r.weight < 0 && equipmentSettingsForSet(r).assisted;
+}
+/** Create a new named machine seeded from a lift's current settings, and select it for the lift. */
+function createEquipmentFor(ex: string): string {
+  const base = equipSettingsCurrent(ex);
+  const id = `eq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
+  const n = Object.keys(equipmentReg).length + 1;
+  equipmentReg[id] = { id, name: `Machine ${n}`, kgBase: base.kgBase, divisor: base.divisor, assisted: base.assisted };
+  saveEquipment();
+  setCurrentEquipment(ex, id);
+  return id;
+}
+/** Edit a named machine's kg-base or ÷ (GLOBAL — every set on it), with an Undo toast (Phase 2+3). */
+function setEquipFieldWithUndo(id: string, field: "kgBase" | "divisor", value: number, ex: string): void {
+  const e = equipmentReg[id];
+  if (!e || e[field] === value) return;
+  const prev = e[field];
+  e[field] = value; saveEquipment(); clearMachineCache(); afterMachineEdit(ex);
+  const what = field === "kgBase" ? `weight → ${fmt(value)} kg` : `multiplier → ÷${fmt(value)}`;
+  showToast(`${e.name} ${what}, changed for all users with this machine.`, "Undo", () => { e[field] = prev; saveEquipment(); clearMachineCache(); afterMachineEdit(ex); });
+}
 // EXPERIMENTAL exercises (owner): a preliminary scratchpad while exploring a movement — log a
 // lot of sets/notes without worrying about precision. Experimental data is EXCLUDED from ALL
 // analysis (1RM, volume, graphs, leaderboards, PRs) by routing it through notComparable in
@@ -2391,10 +2466,6 @@ function setAssistedOverride(exerciseName: string, state: boolean | undefined): 
   else assistedHalveOverrides[exerciseName] = state;
   saveJson(ASSIST_HALVE_KEY, assistedHalveOverrides);
   clearMachineCache();
-}
-/** A "machine" set: an assisted lift logged with a NEGATIVE weight (a counterweight). */
-function isMachineSet(exerciseName: string, weight: number | null): boolean {
-  return weight !== null && weight < 0 && isAssistedMachine(exerciseName);
 }
 // Assist-weight VIEW (global): REAL (default) halves a machine set's counterweight
 // (−40 → −20) and uses normal bodyweight — the lifter's true effort. LOGGED keeps the
@@ -2422,13 +2493,6 @@ function viewAddedWeight(exerciseName: string, weight: number | null, logged = a
 function realAddedWeight(exerciseName: string, weight: number | null): number | null {
   return assistedRealWeight(weight, isAssistedMachine(exerciseName), machineMultFor(exerciseName));
 }
-/** Bodyweight multiplier for the given view (default = the global flag): machine sets in
- * LOGGED view fold 2× the bodyweight share (the machine's 2× scale), keeping the logged
- * load = 2× the real one. */
-function viewBwMult(exerciseName: string, weight: number | null, logged = assistLoggedView): number {
-  return logged && isMachineSet(exerciseName, weight) ? 2 : 1;
-}
-
 const SET_SIDES_KEY = "colosseum.setSides.v1";
 const setSidesStore: Record<string, SideDivergence> = (() => {
   try { const o = JSON.parse(localStorage.getItem(SET_SIDES_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
@@ -2704,14 +2768,17 @@ function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   // bodyweight; LOGGED keeps −40 and doubles the bodyweight share. origWeight is the
   // value to DISPLAY. `logged` defaults to the global graph flag; the history passes
   // false so the per-set list always reflects real effort regardless of the graph.
-  const viewAdded = viewAddedWeight(r.exerciseName, r.weight, logged);
-  const bwMult = viewBwMult(r.exerciseName, r.weight, logged);
+  // Resolve THIS set's equipment once (its stamped machine, else the exercise default) and
+  // drive every machine fact from it, so metrics match the displayed −20/N formula exactly.
+  const eq = equipmentSettingsForSet(r);
+  const viewAdded = logged ? r.weight : assistedRealWeight(r.weight, eq.assisted, eq.divisor);
+  const bwMult = logged && r.weight !== null && r.weight < 0 && eq.assisted ? 2 : 1;
   // Machine base weight (e.g. Leg Extension +20 kg): the machine adds a hidden base, so
   // the TOTAL load (dialed + base) is what counts. Fold it into BOTH the effective load
   // (1RM) and origWeight (so volume + every "added weight" read the total too). The set
   // views still show the dialed value (raw r.weight) — prefixed "base+dialed" — and only
-  // that dialed part is editable; the base is per-exercise metadata (machineWeightFor).
-  const mw = machineWeightFor(r.exerciseName);
+  // that dialed part is editable; the base is the resolved equipment's kg base.
+  const mw = eq.kgBase;
   const effAdded = mw > 0 && viewAdded != null ? viewAdded + mw : viewAdded;
   if (coeff <= 0) {
     const base = mw <= 0 && viewAdded === r.weight ? r : { ...r, weight: effAdded, origWeight: effAdded };
@@ -7821,7 +7888,7 @@ function setDisplay(raw: SetRecord): string {
   const bw = s.weight === 0 || s.weight === 1 || s.weight === null;
   // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
   // you dialed (the editable part). Empty for normal lifts.
-  const mwp = machineWeightPrefix(s.exerciseName);
+  const mwp = machineWeightPrefixForSet(s);
   // Quick-edit "Variant" mode (history ⚙ → Var): each set that HAS a variant — a
   // machine cable/gravity choice, a difficulty family, an incline level, or a note —
   // becomes a tappable chip that opens the floating variant editor for that one set,
@@ -7841,14 +7908,14 @@ function setDisplay(raw: SetRecord): string {
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
   const computedForMach = computeRecord(s);
-  const isAsstMach = isMachineSet(s.exerciseName, s.weight);
+  const isAsstMach = isMachineSetEq(s);
   const machRepsSup = s.reps === null ? "" : `<sup>${s.reps}</sup>`;
   // Assisted-machine weight shows the FORMULA inline (owner): the dialed counterweight reads
   // ~2× the real help, so the real effort is the dial halved — written as "-20/2" (like a
   // machine-base lift shows "20+30"), instead of a real-vs-logged toggle. Non-machine sets
   // render the normal weight^reps.
   const weightHtml = isAsstMach
-    ? `<span class="wo-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(machineMultFor(s.exerciseName))}${machRepsSup}</span>`
+    ? `<span class="wo-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(equipmentSettingsForSet(s).divisor)}${machRepsSup}</span>`
     : `${mwp}${wr(s.weight, s.reps)}`;
   const mach = isAsstMach
     ? ""
@@ -9027,7 +9094,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const edited = setOverrides[sid] !== undefined;
   // Assisted MACHINE set (negative counterweight) — an auto tag. The weight cell shows the
   // FORMULA "-20/2" (dial halved = the real effort) so the math is visible inline.
-  const machineSet = isMachineSet(s.exerciseName, s.weight);
+  const machineSet = isMachineSetEq(s);
   const assistTag = machineSet
     ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. The list shows the LOGGED dial value (your real effort is about half); expand the set to see both. The graph's Assist option doesn't change this list.">machine</span>`
     : "";
@@ -9045,8 +9112,8 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
       // reps; a machine set gets a "not real" mark; a machine-base lift shows "base+dialed".
       case "weight": return (machineSet
-        ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(machineMultFor(s.exerciseName))}${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
-        : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`) + (weightChips ? `<span class="set-wtags">${weightChips}</span>` : "");
+        ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(equipmentSettingsForSet(s).divisor)}${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
+        : `${machineWeightPrefixForSet(s)}${wr(s.weight, s.reps)}`) + (weightChips ? `<span class="set-wtags">${weightChips}</span>` : "");
       case "e1rm": return e1rmCell; // the 1RM stands alone
       case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
@@ -18449,14 +18516,16 @@ function syncAddmVtags(form: HTMLElement): void {
 function syncAddmReal(form: HTMLElement): void {
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
-  const machine = ex ? isAssistedMachine(ex) : false;
+  // Use the equipment the NEW set will be logged on (the current choice), so the live preview
+  // matches what the set will compute once added (Phase 3).
+  const eq = ex ? equipSettingsCurrent(ex) : null;
   for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
     const out = ln.querySelector<HTMLElement>(".addm-real");
     if (!out) continue;
     const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
     const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
-    if (machine && w !== null && w < 0) {
-      out.innerHTML = `= ${wr(realAddedWeight(ex, w), reps)}`;
+    if (eq && eq.assisted && w !== null && w < 0) {
+      out.innerHTML = `= ${wr(assistedRealWeight(w, true, eq.divisor), reps)}`;
       out.removeAttribute("hidden");
     } else {
       out.textContent = "";
@@ -18588,14 +18657,23 @@ function addmSettingsPanelInner(ex: string): string {
   if (!ex) return `<span class="muted addm-cog-hint">Name the exercise first.</span>`;
   const assisted = isAssistedMachine(ex);
   const uni = isUni(ex);
-  const mw = machineWeightFor(ex);
-  const mult = machineMultFor(ex);
+  // The machine weight / ÷ shown are the CURRENT equipment's (Default = the lift's own settings;
+  // a named machine = the registry's). assisted / unilateral stay exercise-level.
+  const eq = equipSettingsCurrent(ex);
+  const curId = currentEquipmentIdFor(ex);
+  const named = curId ? equipmentReg[curId] : null;
+  const equipOpts =
+    `<option value=""${!curId ? " selected" : ""}>Default</option>` +
+    Object.values(equipmentReg).map((e) => `<option value="${escapeHtml(e.id)}"${e.id === curId ? " selected" : ""}>${escapeHtml(e.name)}</option>`).join("") +
+    `<option value="__new__">＋ New machine</option>`;
   return (
-    `<button type="button" class="addm-cog-pill${assisted ? " is-on" : ""}" data-cog="assisted" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~${fmt(mult)}× the real help), counted at a fraction for strength.">${assisted ? "assisted ½" : "assisted?"}</button>` +
+    `<label class="addm-cog-num" title="Which machine / equipment this lift uses. New sets are stamped with it; switching never changes past sets. Settings below belong to the chosen machine.">machine <select class="addm-cog-equip" aria-label="Equipment / machine">${equipOpts}</select></label>` +
+    (named ? `<label class="addm-cog-num">name <input class="addm-cog-name" type="text" value="${escapeHtml(named.name)}" aria-label="Machine name" /></label>` : "") +
+    `<button type="button" class="addm-cog-pill${assisted ? " is-on" : ""}" data-cog="assisted" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~${fmt(eq.divisor)}× the real help), counted at a fraction for strength.">${assisted ? "assisted ½" : "assisted?"}</button>` +
     `<button type="button" class="addm-cog-pill${uni ? " is-on" : ""}" data-cog="uni" aria-pressed="${uni}" title="Unilateral — each set counts as a right + a left set (single-arm / single-leg).">${uni ? "unilateral" : "unilateral?"}</button>` +
-    `<label class="addm-cog-num" title="Machine base weight (kg) — a hidden resistance the machine adds even at the lowest pin; shown as the 20+30 formula.">machine wt <input class="addm-cog-mw" type="number" inputmode="decimal" step="1" min="0" max="200" value="${mw || ""}" placeholder="0" aria-label="Machine base weight (kg)" /> kg</label>` +
+    `<label class="addm-cog-num" title="Machine base weight (kg) — a hidden resistance the machine adds even at the lowest pin; shown as the 20+30 formula.">machine wt <input class="addm-cog-mw" type="number" inputmode="decimal" step="1" min="0" max="200" value="${eq.kgBase || ""}" placeholder="0" aria-label="Machine base weight (kg)" /> kg</label>` +
     (assisted
-      ? `<label class="addm-cog-num" title="Machine multiplier — the dial over-read factor; the real effort is the dialed weight over this.">÷ <input class="addm-cog-mm" type="number" inputmode="decimal" step="0.1" min="0.5" max="5" value="${fmt(mult)}" placeholder="2" aria-label="Machine multiplier (dial over-read)" /></label>`
+      ? `<label class="addm-cog-num" title="Machine multiplier — the dial over-read factor; the real effort is the dialed weight over this.">÷ <input class="addm-cog-mm" type="number" inputmode="decimal" step="0.1" min="0.5" max="5" value="${fmt(eq.divisor)}" placeholder="2" aria-label="Machine multiplier (dial over-read)" /></label>`
       : "")
   );
 }
@@ -18701,13 +18779,25 @@ function openAddModal(exerciseName: string | null, date: string): void {
     const el = ev.target as HTMLElement;
     const cex = wrap.querySelector<HTMLElement>(".addm-set-cog")?.dataset.cogex ?? "";
     if (!cex) return;
-    if (el.classList.contains("addm-cog-mw")) {
+    const curId = currentEquipmentIdFor(cex); // null = Default (legacy per-exercise settings)
+    if (el.classList.contains("addm-cog-equip")) {
+      const v = (el as HTMLSelectElement).value;
+      if (v === "__new__") createEquipmentFor(cex);
+      else setCurrentEquipment(cex, v || null);
+      refreshAddmSettings(); syncPendingFromModal();
+    } else if (el.classList.contains("addm-cog-name")) {
+      if (curId && equipmentReg[curId]) { equipmentReg[curId]!.name = (el as HTMLInputElement).value.trim() || equipmentReg[curId]!.name; saveEquipment(); refreshAddmSettings(); }
+    } else if (el.classList.contains("addm-cog-mw")) {
       const txt = (el as HTMLInputElement).value.trim();
-      setMachineWeightWithUndo(cex, txt === "" ? null : parseFloat(txt));
+      const val = txt === "" ? null : parseFloat(txt);
+      if (curId && equipmentReg[curId]) setEquipFieldWithUndo(curId, "kgBase", val ?? 0, cex);
+      else setMachineWeightWithUndo(cex, val);
     } else if (el.classList.contains("addm-cog-mm")) {
       const txt = (el as HTMLInputElement).value.trim();
       const v = parseFloat(txt);
-      setMachineMultWithUndo(cex, txt === "" || !Number.isFinite(v) ? undefined : v);
+      const val = txt === "" || !Number.isFinite(v) ? undefined : v;
+      if (curId && equipmentReg[curId]) setEquipFieldWithUndo(curId, "divisor", val ?? 2, cex);
+      else setMachineMultWithUndo(cex, val);
     }
   });
   // Collapse the tall fields while a weight/reps input is focused, so the sheet shrinks and
@@ -18978,6 +19068,13 @@ function onInlineAddGo(form: HTMLElement): boolean {
   // (assumed) picker is left unset, so the set keeps the standard assumed-RIR behaviour.
   for (let i = 0; i < setLines.length; i++) {
     if (setLines[i]!.rir) setRpe(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rir);
+  }
+  // STAMP each new set with the current equipment (Phase 3) — so a later equipment switch never
+  // rewrites these sets (owner: "only new sets"). Only when a non-default machine is chosen.
+  const stampEquip = currentEquipmentIdFor(exerciseName);
+  if (stampEquip) {
+    for (let i = 0; i < setLines.length; i++) setEquipment[`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`] = stampEquip;
+    saveSetEquipment();
   }
   saveManual();
   mergeManualSets();

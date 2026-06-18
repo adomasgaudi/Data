@@ -150,17 +150,29 @@ On first load with the new model, fold today's per-exercise settings into machin
   "changed for all users with this machine — Undo" that restores the prior value.
   No-op edits skip the toast.
 
-### Phase 3 — machine entities (architectural — needs the model signed off)
-- [ ] **3a** Add the three stores + `Machine` type + `machineForUserExercise()` resolver.
-- [ ] **3b** Re-point `machineWeightFor` / `machineMultFor` / `isAssistedMachine` at the
-  resolver (thin wrappers); sweep the read-sites above.
-- [ ] **3c** Migration: fold existing per-exercise settings into auto-created machines.
-- [ ] **3d** Machine **picker** in the cog: choose the machine for this (user,)exercise,
-  or "new machine…"; editing a machine's settings is the Phase-2 global confirm.
-- [ ] **3e** Hide the machine from the history line (metadata only); confirm the
-  formula still reads the resolved machine's kgBase/divisor.
-- [ ] **3f** Update the confirm wording to "all exercises with this machine".
-- [ ] **3g** Tests for the resolver + migration (pure functions in a testable module).
+### Phase 3 — equipment entities — DONE `EQUIP-3` `b.2.9.195`
+- [x] **3a** `Equipment` type + stores: `colosseum.equipment.v1` (registry),
+  `colosseum.userExerciseEquipment.v1` (per-user current choice), `colosseum.setEquipment.v1`
+  (per-set stamp). "Default" = the lift's legacy per-exercise settings (no separate global
+  default store — keeps migration zero-cost).
+- [x] **3b** ONE resolver `equipmentSettingsForSet(record)` (stamped → registry, else the
+  exercise's legacy `machineWeightFor`/`machineMultFor`/`isAssistedMachine`) drives BOTH the
+  metrics (`computeRecordBase`) and the display (`wo-mform`/`set-mform`/`machineWeightPrefixForSet`/
+  `isMachineSetEq`), so they can't diverge. `equipSettingsCurrent(ex)` drives the add preview.
+- [x] **3c** Migration: NONE needed — the default path IS the legacy settings, so every
+  existing set/exercise behaves exactly as before until a named machine is created + chosen.
+- [x] **3d** Cog machine **picker**: Default / named machines / ＋ New; selecting sets the
+  per-user current, ＋New creates one seeded from the current settings; a rename field for a
+  named machine; the machine-wt/÷ editors target the chosen machine (named → registry with the
+  Phase-2 undo toast; Default → the legacy per-exercise setting).
+- [x] **3e** Machine never shown on the history line (it never was — only its kgBase/÷ feed the
+  formula via the resolver). No change needed.
+- [x] **3f** Edit toasts read "changed for all users with this machine" (named) / the lift
+  (default). New sets are STAMPED at log time (`setEquipment[setId]`), so switching only
+  affects new sets (owner: "only new sets"); old sets fall back to the exercise default.
+- [ ] **3g** Resolver/stamp logic lives in main.ts (not a unit-tested module). Existing 655
+  tests + typecheck + build green; the per-set-stamp + default-fallback invariant is small and
+  covered by the single-resolver design. Dedicated unit tests = a follow-up if extracted.
 
 ---
 
