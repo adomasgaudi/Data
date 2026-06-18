@@ -41,10 +41,13 @@ at a time (rule 7/59). Codes are re-derived at commit (rule 8).
   → `openExerciseInfo`). Wired on the reps×weight scatter and the time-series dots
   via a new `SvgPoint.histEx` + `SvgChartConfig.onPointHistory`.
 
-- [ ] **5 · Merged-pattern title + switcher** (LAST, owner said do after all else) —
-  when a lift is viewed as a Merged/Separated member of a pattern group (e.g. Belt
-  Squat → squat pattern), the title should read the GROUP ("Squat pattern"), not
-  the single lift, and offer a way to pick any single member exercise of the group.
+- [x] **5 · Merged-pattern title + switcher** — DONE. When a lift is MERGED into a
+  group, the graph/history title now shows the GROUP name (e.g. "Squat pattern") via
+  `chosenGroup(...,"combine")` in `liftSelectionTitle`. And the lift-menu's group
+  members are now TAPPABLE buttons (`data-lm="member"`) that isolate the selection to
+  that single exercise — so from the merged pattern you can pick any one member.
+
+## ALL FIVE TASKS COMPLETE — deployed to opus-4.8 (b.2.9.180 → 188).
 
 ## NOTES
 - Heavy concurrent churn on `opus-4.8` (3 rebase collisions on task 1). Re-derive

@@ -5936,7 +5936,14 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
 /* Member legend in the lift menu: each group member on its own line with the dot
    SHAPE it uses in the merged graph view, so the shapes are decodable. */
 .lift-menu-grp-sub { display: flex; flex-direction: column; gap: 2px; }
-.lift-menu-mem { display: inline-flex; align-items: center; gap: 5px; }
+/* Tappable group member (pick one to view just that lift) — reset the button, keep the
+   small-grey legend look, light up on hover. */
+.lift-menu-mem {
+  display: inline-flex; align-items: center; gap: 5px; width: 100%; text-align: left;
+  border: none; background: none; color: var(--muted); font: inherit; font-size: 0.7rem;
+  padding: 3px 4px; border-radius: var(--r-xs); cursor: pointer;
+}
+.lift-menu-mem:hover, .lift-menu-mem:active { background: var(--accent-soft); color: var(--accent); }
 .lift-shape { flex: 0 0 auto; }
 
 /* Merge-review: a per-row "⤳ merge?" flag + the flagged-to-merge queue atop the Index. */

@@ -2896,8 +2896,10 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
     // Members SORTED the same way the chart assigns shapes (distinctOrigins sorts), so
     // each member shows the exact dot shape it gets in the merged graph view.
     const ordered = [...new Set((g.members ?? []).map((m) => m.exerciseName))].sort();
+    // Each member is TAPPABLE — pick one to view just that single exercise (owner: "from
+    // squat pattern I should be able to choose specifically which single exercise I want").
     const legend = ordered
-      .map((ex, i) => `<span class="lift-menu-mem">${shapeIconSvg(ORIGIN_SHAPES[i % ORIGIN_SHAPES.length]!)}${escapeHtml(displayName(ex))}</span>`)
+      .map((ex, i) => `<button type="button" class="lift-menu-mem" data-lm="member" data-lmmem="${escapeHtml(ex)}" title="View only ${escapeHtml(displayName(ex))}">${shapeIconSvg(ORIGIN_SHAPES[i % ORIGIN_SHAPES.length]!)}${escapeHtml(displayName(ex))}</button>`)
       .join("");
     return `<div class="lift-menu-grp">` +
       `<div class="lift-menu-grp-name">${escapeHtml(g.derivedName ?? g.label)}</div>` +
@@ -15652,6 +15654,7 @@ async function init() {
         else { setLens(scope, name, key, gid); if (chosenGroup(scope, name, other)?.id === gid) setLens(scope, name, other, undefined); } // one view per group
       }
       else if (act === "only") { if (scope === "graph") waGraphSel = [name]; else waSelected = [name]; }
+      else if (act === "member") { const mem = row.dataset.lmmem; if (mem) { if (scope === "graph") waGraphSel = [mem]; else waSelected = [mem]; } }
       closeLiftMenu();
       deferRender(renderWorkoutAnalysis);
       return;
@@ -19858,9 +19861,9 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
   const sep = `<span class="wa-title-sep"> · </span>`;
   // Per-title font STEP: longer names shrink (s1→s2→s3) so more shows before the hard
   // CLIP (owner: 2–3 sizes, then truncate — and NO "…" ellipsis, a subtle cut-off). A
-  // char-length heuristic picks the step; the CSS clip is the real guarantee that every
-  // title stays a single line whatever its length.
-  const sizeClass = (n: string): string => { const L = displayName(n).length; return L <= 12 ? " wa-tl-s1" : L <= 17 ? " wa-tl-s2" : " wa-tl-s3"; };
+  // char-length heuristic picks the step (computed per chip from its shown label, which may
+  // be a merged group's name); the CSS clip is the real guarantee that every title stays a
+  // single line whatever its length.
   // The title BODY (owner redesign): no count badge ever. With ≤ TITLE_NAME_CAP lifts list
   // every one as a tap-to-act chip (two balanced columns). With MORE, collapse to a single
   // "N exercises ▾" dropdown button that opens the whole clickable list (data-titlelist) —
@@ -19870,8 +19873,19 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     const scope = remove; // narrowed to a non-null SelScope
     // Each name opens a small popup (Info / Combine / Compare / Remove) and is COLOURED by
     // its lens state — replaces the old inline ⓘ ⊕ ⇄ button cluster.
-    const liftChip = (n: string): string =>
-      `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
+    // When a lift is MERGED into a group (combine lens), the title shows the GROUP's name
+    // (e.g. "Squat pattern"), not the seed member — owner: "I press Belt Squat as a merged
+    // exercise but the top still says Belt Squat; it should say Squat pattern." Tapping the
+    // chip still opens the seed lift's menu (whose member list isolates a single exercise).
+    const titleName = (n: string): string => {
+      const cg = chosenGroup(scope, n, "combine");
+      return cg ? (cg.label || cg.derivedName || displayName(n)) : displayName(n);
+    };
+    const liftChip = (n: string): string => {
+      const label = titleName(n);
+      const sc = label.length <= 12 ? " wa-tl-s1" : label.length <= 17 ? " wa-tl-s2" : " wa-tl-s3";
+      return `<button type="button" class="wa-title-lift${sc}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(label)} — tap for Info / Combine / Compare / Remove / pick a member">${escapeHtml(label)}</button>`;
+    };
     if (sel.length > TITLE_NAME_CAP) {
       // More than TITLE_NAME_CAP (6) lifts → the title is a COUNT ("7 exercises"), not the
       // top lift's name (owner: showing one lift's name misrepresented a big mixed selection).
