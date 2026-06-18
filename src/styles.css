@@ -3743,6 +3743,24 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-mw-range > input { width: 4rem; }
 .ex-mw-unit { font-size: 0.78rem; color: var(--muted); }
 .ex-mm-pre { font-size: 0.95rem; font-weight: 700; color: var(--muted); }
+/* Experimental toggle (index card + add-exercise popup): a pressable state pill (rule #toggle).
+   Off = muted outline, ON = amethyst (matches the "set apart / not in the analysis" feel). */
+.ex-exp-toggle, .wo-af-exp {
+  font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
+  padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line);
+  background: var(--card); color: var(--muted);
+}
+.ex-exp-toggle.is-on, .wo-af-exp.is-on {
+  color: #fff; background: var(--spectate, #7a5fb0); border-color: var(--spectate, #7a5fb0);
+}
+.ex-exp-toggle:disabled { opacity: 0.85; cursor: default; }
+.wo-af-exp { align-self: flex-start; margin-top: 3px; }
+/* The "exp" tag beside an experimental lift in the history — small, amethyst, low-key. */
+.wo-exp-tag {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--spectate, #7a5fb0); border: 1px solid var(--spectate, #7a5fb0); border-radius: var(--r-pill);
+  padding: 0 4px; vertical-align: middle;
+}
 /* World-record editor: per-sex row of compact bordered fields + the gold
    scaled-to-this-athlete calculation. Guess values show faint with an "≈est" tag. */
 .wr-editor .wr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; margin: 0.4rem 0; }

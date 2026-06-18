@@ -2344,6 +2344,26 @@ function setMachineMult(exerciseName: string, value: number | undefined): void {
   saveJson(MACHINE_MULT_KEY, machineMultOverrides);
   clearMachineCache();
 }
+// EXPERIMENTAL exercises (owner): a preliminary scratchpad while exploring a movement — log a
+// lot of sets/notes without worrying about precision. Experimental data is EXCLUDED from ALL
+// analysis (1RM, volume, graphs, leaderboards, PRs) by routing it through notComparable in
+// computeRecord; it stays visible in the history as notes. The built-in "Experimentation" lift
+// is always experimental. Synced (shared config) like the other per-exercise overrides.
+const EXPERIMENTATION_EXERCISE = "Experimentation";
+const EXPERIMENTAL_KEY = "colosseum.experimentalExercises.v1";
+const experimentalOverrides: Record<string, boolean> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(EXPERIMENTAL_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+function isExperimental(exerciseName: string): boolean {
+  return exerciseName === EXPERIMENTATION_EXERCISE || experimentalOverrides[exerciseName] === true;
+}
+function setExperimental(exerciseName: string, state: boolean | undefined): void {
+  if (!state) delete experimentalOverrides[exerciseName];
+  else experimentalOverrides[exerciseName] = true;
+  saveJson(EXPERIMENTAL_KEY, experimentalOverrides);
+  clearMachineCache();
+}
 function setAssistedOverride(exerciseName: string, state: boolean | undefined): void {
   if (state === undefined) delete assistedHalveOverrides[exerciseName];
   else assistedHalveOverrides[exerciseName] = state;
@@ -2645,8 +2665,9 @@ function computeRecord(r: SetRecord, logged = assistLoggedView): SetRecord {
   let out = base;
   if (mult !== 1) out = { ...out, difficultyMult: mult };
   if (kg > 0) out = { ...out, assistKg: kg };
-  // Not comparable if THIS set is marked (per-set), or its NOTE is (per-note).
-  const nc = notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
+  // Not comparable if THIS set is marked (per-set), or its NOTE is (per-note), or the whole
+  // exercise is EXPERIMENTAL (owner: a scratchpad — never feeds 1RM/volume/graphs/leaderboards).
+  const nc = isExperimental(out.exerciseName) || notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
   return nc ? { ...out, notComparable: true } : out;
 }
 function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
@@ -8083,7 +8104,8 @@ function renderWorkoutsPage() {
         // NO swipe-to-delete on this collapsed day line (owner request): removing sets is
         // done per-set INSIDE the expanded set table (swipe a set row there), never by
         // dragging a whole exercise off the collapsed day view.
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        const expTxt = isExperimental(exerciseName) ? ` <span class="wo-exp-tag" title="Experimental — a scratchpad; excluded from all 1RM, volume, graphs and leaderboards">exp</span>` : "";
+        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -8712,6 +8734,8 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   // Explain EVERY reason a 1RM is dropped (owner: "the dash should be clickable with an
   // explanation of why it's missing, so I can correct it") — in the SAME order addedWeight1RM
   // returns null, so the message always matches why the value is actually absent.
+  if (isExperimental(c.exerciseName))
+    return why(`No 1RM: <b>${escapeHtml(displayName(c.exerciseName))}</b> is an <b>experimental</b> exercise — a scratchpad for exploration, so it's excluded from every metric (1RM, volume, graphs, leaderboards) on purpose. Turn off the experimental toggle in the exercise's index card to count it.`);
   if (c.notComparable)
     return why(`No 1RM: this set is marked <b>“not comparable”</b>, so its 1RM (and volume) are dropped on purpose — the reps/sets still count. Tap the set, then the ⊘ <b>not comparable</b> toggle to bring the 1RM back.`);
   if (isIsometric(c.exerciseName))
@@ -13483,6 +13507,15 @@ function exerciseInfoHtml(name: string): string {
     `<input class="ex-edit-mm" type="number" step="0.1" min="0.5" max="5" value="${fmt(machineMultFor(name))}" placeholder="2" data-editex="${escapeHtml(name)}" aria-label="Machine multiplier (dial over-read factor) for ${escapeHtml(name)}" />` +
     `<span class="ex-mw-unit">dial over-read</span>` +
     `</span>`;
+  // Experimental toggle (owner): a scratchpad lift while exploring — its sets are excluded from
+  // every metric/graph. A pressable pill showing its state (rule #toggle). The built-in
+  // Experimentation lift is always experimental, so its pill is locked on.
+  const expOn = isExperimental(name);
+  const expLocked = name === EXPERIMENTATION_EXERCISE;
+  const expToggle =
+    `<button type="button" class="ex-exp-toggle${expOn ? " is-on" : ""}" data-editex="${escapeHtml(name)}"${expLocked ? " disabled" : ""} aria-pressed="${expOn}" ` +
+    `title="Experimental — a scratchpad while exploring; its sets are excluded from all 1RM, volume, graphs and leaderboards${expLocked ? " (the built-in Experimentation lift is always experimental)" : ""}">` +
+    `${expOn ? "experimental" : "not experimental"}</button>`;
 
   // Code + Short name share one row (two compact columns) — they're the two tiny
   // name fields, so side-by-side reads tighter than two stacked rows.
@@ -13522,6 +13555,7 @@ function exerciseInfoHtml(name: string): string {
     item("Default ROM", romInput),
     item("Machine weight", mwInput),
     isAssistedMachine(name) ? item("Machine ÷", mmInput) : "",
+    item("Experimental", expToggle),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -16202,6 +16236,16 @@ async function init() {
   });
   // Category / Muscle group / Tier are multi-select chips — tap to toggle membership
   // (a lift can belong to several at once); the ↺ chip resets to the auto default.
+  // Experimental toggle in the index card — flip the whole lift in/out of scratchpad mode
+  // (its sets are then excluded from / re-included in every metric). The built-in
+  // Experimentation lift is locked on (the button is disabled, so this never fires for it).
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-exp-toggle");
+    const ex = btn?.dataset.editex;
+    if (!ex || btn?.disabled) return;
+    setExperimental(ex, !isExperimental(ex));
+    scheduleRender(() => reopenIndexDetail(ex));
+  });
   document.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip, .ex-meta-reset");
     const ex = chip?.dataset.metaEx, kind = chip?.dataset.metaKind, val = chip?.dataset.metaVal;
@@ -18305,7 +18349,14 @@ function openAddModal(exerciseName: string | null, date: string): void {
   // read path (form.querySelector('.wo-af-ex')) finds it — when it sat outside the
   // form, the lookup returned null, the name fell back to the empty data-addex, and
   // Add silently no-op'd ("nothing happens" on a new exercise).
-  const exField = isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "";
+  // New exercise: an EXPERIMENTAL toggle (owner) — mark the lift a scratchpad as you create it,
+  // so its sets never feed any metric while you're still exploring. A pressable pill (rule
+  // #toggle); onInlineAddGo reads its state and flags the new lift.
+  const exField = isNew
+    ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}` +
+      `<button type="button" class="wo-af-exp" aria-pressed="false" title="Experimental — a scratchpad while exploring; its sets are excluded from all 1RM, volume, graphs and leaderboards">experimental?</button>` +
+      `</div>`
+    : "";
   // ROM is now a pill INSIDE the variant tag block (addmVariantField), not its own field (owner).
   const form =
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
@@ -18423,6 +18474,14 @@ function onAddModalClick(e: MouseEvent): void {
   }
   if (t.closest(".wo-af-go")) { if (onInlineAddGo(form)) closeAddModal(); return; }
   if (t.closest(".wo-af-cancel")) { closeAddModal(); return; }
+  const expBtn = t.closest<HTMLElement>(".wo-af-exp");
+  if (expBtn) {
+    const on = expBtn.getAttribute("aria-pressed") !== "true";
+    expBtn.setAttribute("aria-pressed", String(on));
+    expBtn.classList.toggle("is-on", on);
+    expBtn.textContent = on ? "experimental" : "experimental?";
+    return;
+  }
   const seg = t.closest<HTMLElement>(".wo-af-when .seg-btn");
   if (seg) {
     const activate = () => { for (const b of form.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn")) b.classList.toggle("is-active", b === seg); };
@@ -18463,6 +18522,10 @@ function onInlineAddGo(form: HTMLElement): boolean {
     exInput.focus();
     return false;
   }
+  // New-exercise EXPERIMENTAL toggle on → flag the lift as a scratchpad (owner) so its sets
+  // never feed any metric. Only the isNew form has .wo-af-exp.
+  if (exerciseName && form.querySelector<HTMLElement>(".wo-af-exp")?.getAttribute("aria-pressed") === "true")
+    setExperimental(exerciseName, true);
   // Each .addm-line is ONE set's weight × reps (the "+ set" button adds lines). Read them
   // all; keep only those with valid reps. The shared variant / ROM / note below apply to
   // every created set.

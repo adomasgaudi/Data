@@ -147,6 +147,10 @@ export const EXTRA_EXERCISES: readonly string[] = [
   // movements across the two rotational axes the owner trains (NOT wrist flexion/extension):
   // forearm rotation (pronation/supination) + wrist deviation (abduction = radial, adduction = ulnar).
   "Lever Pronation", "Lever Supination", "Lever Abduction", "Lever Adduction",
+  // Experimentation — a built-in EXPERIMENTAL scratchpad (owner): log a lot of sets/notes while
+  // exploring a new movement, without precision. Always experimental, so it never feeds any
+  // metric/graph (see isExperimental in main.ts). Kept last so it sorts to the bottom.
+  "Experimentation",
 ];
 
 /**
