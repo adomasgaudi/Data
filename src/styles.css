@@ -2724,10 +2724,17 @@ sup.wr-bw { font-size: 0.85em; }
 /* All the workout-history display controls collapse behind one compact button;
    the panel floats (overlay) when open so it never pushes the list down. */
 /* Workout-history title + Display options on one line, tight against the list. */
-.wo-head-row { display: flex; align-items: center; gap: 0.5rem 0.9rem; flex-wrap: wrap; margin: 0 0 0.4rem; }
+/* The head row (title + ⚙ settings, + the hidden-lifts pill now inside the ⚙) STICKS to
+   the top as you scroll a long history, so settings stay reachable (owner). Needs the panel
+   to not trap sticky — `.panel`'s overflow-x:auto would otherwise scope it; clear it here. */
+.wo-head-row { display: flex; align-items: center; gap: 0.5rem 0.9rem; flex-wrap: wrap; margin: 0 0 0.4rem; position: sticky; top: 0; z-index: 6; background: var(--panel); padding: 0.35rem 0; }
 .wo-head-row #workoutsTitle { margin: 0; }
 .wo-head-row .wo-controls-fold { margin: 0 0 0 auto; } /* cog sits in the right corner */
+#workoutsPanel { overflow: visible; } /* let .wo-head-row's position:sticky pin to the page, not the panel */
 #workoutsPanel .data-table { margin-top: 0; }
+/* The hidden-lifts pill now lives INSIDE the ⚙ popout — a full-width row at the bottom of
+   the toggle grid (owner: moved out of the head row to declutter it). */
+.wo-dj .wo-hidden-toggle { flex: 1 1 100%; margin-top: 5px; display: inline-flex; align-items: center; justify-content: center; }
 .wo-controls-fold { position: relative; margin-bottom: 0.6rem; }
 .wo-controls-sum {
   cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center;
