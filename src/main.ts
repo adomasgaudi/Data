@@ -3296,7 +3296,8 @@ function refreshActiveSet(): void {
   activeSet = base;
 }
 
-/** Persist the active-set controls to localStorage. */
+/** Persist the active-set controls to localStorage (the legacy single keys — kept as the
+ * device-local SEED), and mirror them into the CURRENT athlete's per-user filter (v2). */
 function saveActiveSet(): void {
   try {
     localStorage.setItem(ACTIVE_CUTOFF_KEY, activeCutoff ?? "none");
@@ -3306,6 +3307,58 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
     localStorage.setItem(ACTIVE_META_KEY, JSON.stringify(activeMetaFilters));
   } catch { /* storage may be unavailable */ }
+  saveIndexFilterForCurrent();
+}
+
+// ---- PER-ATHLETE Index filter (owner: "each user has a separate filtering system — seeded
+// from the current one, then their changes stay with that user"). The live module vars above
+// are the CURRENTLY-loaded athlete's filter; this v2 map stores every athlete's own copy and
+// is swapped on athlete change. It SYNCS (per-user data), unlike the device-local legacy keys. */
+const INDEX_FILTER_KEY_V2 = "colosseum.indexFilter.v2";
+interface IndexFilterState {
+  cutoff: string | null; freq: string[]; include: string[]; exclude: string[];
+  solo: string[] | null; meta: Partial<Record<ExerciseFilterDim, string[]>>;
+}
+function captureIndexFilter(): IndexFilterState {
+  return {
+    cutoff: activeCutoff, freq: [...activeFreqTiers], include: [...activeInclude],
+    exclude: [...activeExclude], solo: activeSolo ? [...activeSolo] : null,
+    meta: JSON.parse(JSON.stringify(activeMetaFilters)),
+  };
+}
+function applyIndexFilter(s: IndexFilterState): void {
+  activeCutoff = s.cutoff ?? null;
+  activeFreqTiers = new Set(Array.isArray(s.freq) ? s.freq : []);
+  activeInclude = new Set(Array.isArray(s.include) ? s.include : []);
+  activeExclude = new Set(Array.isArray(s.exclude) ? s.exclude : []);
+  activeSolo = Array.isArray(s.solo) && s.solo.length ? new Set(s.solo) : null;
+  activeMetaFilters = (s.meta && typeof s.meta === "object" ? s.meta : {}) as Partial<Record<ExerciseFilterDim, string[]>>;
+}
+// The SEED = the filter present at startup (the legacy single keys), so every athlete who has
+// no saved filter yet starts identical to "right now", then keeps their own changes.
+const INDEX_FILTER_SEED: IndexFilterState = captureIndexFilter();
+let indexFilterUser: string | null = null;
+function loadAllIndexFilters(): Record<string, IndexFilterState> {
+  const raw = loadJsonObject<Record<string, unknown>>(INDEX_FILTER_KEY_V2) ?? {};
+  const out: Record<string, IndexFilterState> = {};
+  for (const [u, v] of Object.entries(raw)) if (v && typeof v === "object") out[u] = v as IndexFilterState;
+  return out;
+}
+/** Save the live filter into the CURRENT athlete's v2 entry (no-op before an athlete loads). */
+function saveIndexFilterForCurrent(): void {
+  if (!indexFilterUser) return;
+  try { const all = loadAllIndexFilters(); all[indexFilterUser] = captureIndexFilter(); saveJson(INDEX_FILTER_KEY_V2, all); }
+  catch { /* ignore */ }
+}
+/** Swap the live filter to `user`'s own copy (seeded from the startup filter if they have none),
+ * saving the outgoing athlete's first. Self-guards, so it's cheap to call on every render. */
+function ensureIndexFilterFor(user: string): void {
+  if (indexFilterUser === user) return;
+  if (indexFilterUser !== null) saveIndexFilterForCurrent(); // bank the outgoing athlete's filter
+  const all = loadAllIndexFilters();
+  applyIndexFilter(all[user] ?? INDEX_FILTER_SEED);
+  indexFilterUser = user;
+  refreshActiveSet();
 }
 
 /** Apply a group's "Only / Hide / Show" filter to the app-wide active set. */
@@ -4960,6 +5013,9 @@ function syncPublicProfileToggle(): void {
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
   saveLastAthlete(els.athlete.value); // remember across reloads
+  // Swap to THIS athlete's own Index filter (seeded from the startup filter the first time) —
+  // before any filter-dependent compute below. Self-guards, so same-athlete re-renders are free.
+  ensureIndexFilterFor(els.athlete.value);
   // The M/W toggle auto-follows whoever is selected (it's always Men or Women).
   const sex = athProfile(els.athlete.value)?.sex;
   if (sex === "m" || sex === "f") athleteSexFilter = sex;
