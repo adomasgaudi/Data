@@ -2774,6 +2774,16 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-variant-slot .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
 .addm-variant-slot .wo-af-dimpill .xdd-caret { font-size: 0.6rem; }
 .addm-variant-slot .xdd { flex: 0 0 auto; }
+/* ＋ tag — reveal the dims still at their default so you can add one (owner: only the tags
+   you've set show; tap ＋ to add more). A subtle dashed pill matching the tag density. */
+.addm-add-tag {
+  flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 8px;
+  font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
+  border: 1px dashed var(--line); border-radius: var(--r-xs);
+  background: none; color: var(--muted); cursor: pointer;
+}
+.addm-add-tag:hover { border-color: var(--accent); color: var(--accent); }
+.addm-variant-slot.show-all .addm-add-tag { border-style: solid; color: var(--accent); border-color: var(--accent); }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;

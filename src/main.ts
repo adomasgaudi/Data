@@ -18353,7 +18353,6 @@ function populateAddExerciseList(): void {
 const AF_LINE =
   `<div class="addm-line">` +
   `<div class="addm-set-chip">` +
-  `<span class="addm-vtag-strip"></span>` +
   `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="0" aria-label="Weight (kg)" />` +
   `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
   `<span class="addm-real" aria-hidden="true" hidden></span>` +
@@ -18460,7 +18459,7 @@ function afVariationField(exerciseName: string): string {
           return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
         })
         .join("");
-      return `<select class="wo-af-dim wo-af-dimpill" data-dim="${escapeHtml(dim)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
+      return `<select class="wo-af-dim wo-af-dimpill" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
     }).join("");
     if (selects) return `<span class="wo-af-dims">${selects}</span>`;
   }
@@ -18601,19 +18600,18 @@ const numOrNull = (v: string | undefined): number | null => { const n = parseFlo
 /** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
  * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
 function syncAddmVtags(form: HTMLElement): void {
-  // Build a vec from the live dim selects and render it through the SAME chip function
-  // the history tag uses, so the add-form preview reads identically (WO-235 #prune —
-  // this used to keep its own drifting SUP map: ldr/hang, no knees).
-  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
-  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
-  const fam = ex ? familyOf(ex) : null;
-  const vec: Record<string, string> = {};
+  // Owner: ONE styled set of tags, not a picker row PLUS a duplicate preview. Each variation
+  // dimension is its own pill (the xdd-enhanced <select>); we SHOW only the ones SET away from
+  // their default, hiding the rest unless the ＋ ("show all") is on — so you see only the tags
+  // you've set, tap one to change it, and ＋ reveals the rest to add another. The selects stay
+  // the source of truth read on Add (onInlineAddGo) — capture is unchanged.
+  const slot = form.querySelector<HTMLElement>(".addm-variant-slot");
+  const showAll = !!slot?.classList.contains("show-all");
   for (const sel of form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
-    const dim = sel.dataset.dim;
-    if (dim && sel.value) vec[dim] = sel.value;
+    const def = sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "";
+    const isDefault = sel.value === def;
+    setEnhancedSelectHidden(sel, isDefault && !showAll);
   }
-  const html = variationChipsFromVec(fam, vec);
-  for (const strip of form.querySelectorAll<HTMLElement>(".addm-vtag-strip")) strip.innerHTML = html;
 }
 
 /** For an assisted-MACHINE lift, show the live REAL conversion of each typed dial weight
@@ -18775,7 +18773,9 @@ function addmVariantField(ex: string): string {
   const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
     .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
   const rom = `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
-  return dims + rom;
+  // Owner: show only the tags you've SET (away from default); a ＋ reveals the rest to add one.
+  const addBtn = `<button type="button" class="addm-add-tag" title="Add a variation tag (band, lean, ROM…)" aria-label="Add a variation tag">＋ tag</button>`;
+  return dims + rom + addBtn;
 }
 /** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the add-page ⚙ cog's
  * expanded per-exercise settings — assisted-machine, machine weight, ÷ multiplier, unilateral.
@@ -18937,6 +18937,9 @@ function openAddModal(exerciseName: string | null, date: string): void {
   wrap.addEventListener("focusin", setTyping);
   wrap.addEventListener("focusout", () => setTimeout(setTyping, 0));
   syncPendingFromModal();
+  // The dim <select>s are enhanced into .xdd twins async (MutationObserver); re-run the
+  // tag visibility once the twins exist so default dims hide (else they'd flash visible).
+  requestAnimationFrame(() => { const f = wrap.querySelector<HTMLElement>(".wo-addform"); if (addModalEl && f) syncAddmVtags(f); });
   if (!isNew && ex) requestAnimationFrame(() => {
     const row = document.querySelector<HTMLElement>(`.wo-addset[data-addex="${CSS.escape(ex)}"][data-adddate="${CSS.escape(date)}"]`)?.closest<HTMLElement>(".wo-ex-line")
       ?? document.querySelector<HTMLElement>(`.wo-exlink[data-exname="${CSS.escape(ex)}"]`)?.closest<HTMLElement>(".wo-ex-line");
@@ -18976,6 +18979,13 @@ function onAddModalClick(e: MouseEvent): void {
   if (t === wrap) { closeAddModal(); return; } // backdrop tap
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
+  // ＋ tag: reveal ALL variation dimensions (so you can set a default one) — tap again to
+  // collapse back to only the tags you've set (owner: one styled tag set, ＋ to add more).
+  if (t.closest(".addm-add-tag")) {
+    form.querySelector<HTMLElement>(".addm-variant-slot")?.classList.toggle("show-all");
+    syncAddmVtags(form);
+    return;
+  }
   // ⚙ Exercise-settings cog: toggle the expanded per-exercise panel (rebuilt from the live
   // exercise so a just-typed new lift targets the right name).
   const cogBtn = t.closest<HTMLElement>(".addm-cog");
