@@ -2325,6 +2325,24 @@ function isAssistedMachine(exerciseName: string): boolean {
   const o = assistedHalveOverrides[exerciseName];
   return o === undefined ? isAssistablePullup(exerciseName) : o;
 }
+// Per-exercise MACHINE MULTIPLIER (the ÷ divisor): an assisted machine's dial over-reads
+// the real help by this factor (default 2 → −20 dials as −10 real). Editable per lift in the
+// index card (owner: "I cannot edit the machine multiplier which currently is 2").
+const MACHINE_MULT_KEY = "colosseum.machineMult.v1";
+const machineMultOverrides: Record<string, number> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(MACHINE_MULT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+function machineMultFor(exerciseName: string): number {
+  const v = machineMultOverrides[exerciseName];
+  return typeof v === "number" && v > 0 ? v : 2;
+}
+function setMachineMult(exerciseName: string, value: number | undefined): void {
+  if (value === undefined || value === 2) delete machineMultOverrides[exerciseName];
+  else machineMultOverrides[exerciseName] = value;
+  saveJson(MACHINE_MULT_KEY, machineMultOverrides);
+  clearMachineCache();
+}
 function setAssistedOverride(exerciseName: string, state: boolean | undefined): void {
   if (state === undefined) delete assistedHalveOverrides[exerciseName];
   else assistedHalveOverrides[exerciseName] = state;
@@ -2354,12 +2372,12 @@ function setAssistLoggedView(on: boolean): void {
  * toggle (the history list forces real so the graph's Assist option can't change it). */
 function viewAddedWeight(exerciseName: string, weight: number | null, logged = assistLoggedView): number | null {
   if (logged) return weight;
-  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName), machineMultFor(exerciseName));
 }
-/** The REAL (half) assistance for a machine set, IGNORING the view flag — used by the
+/** The REAL (÷ multiplier) assistance for a machine set, IGNORING the view flag — used by the
  * set editor to show "= −12.5 real" beside the dialed counterweight. */
 function realAddedWeight(exerciseName: string, weight: number | null): number | null {
-  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName), machineMultFor(exerciseName));
 }
 /** Bodyweight multiplier for the given view (default = the global flag): machine sets in
  * LOGGED view fold 2× the bodyweight share (the machine's 2× scale), keeping the logged
@@ -7710,7 +7728,7 @@ function setDisplay(raw: SetRecord): string {
   // machine-base lift shows "20+30"), instead of a real-vs-logged toggle. Non-machine sets
   // render the normal weight^reps.
   const weightHtml = isAsstMach
-    ? `<span class="wo-mform" title="Assisted machine: the dialed counterweight over-reads ~2×, so the real effort is half — shown as the formula.">${fmt(s.weight ?? 0)}/2${machRepsSup}</span>`
+    ? `<span class="wo-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(machineMultFor(s.exerciseName))}${machRepsSup}</span>`
     : `${mwp}${wr(s.weight, s.reps)}`;
   const mach = isAsstMach
     ? ""
@@ -8878,7 +8896,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
       // reps; a machine set gets a "not real" mark; a machine-base lift shows "base+dialed".
       case "weight": return (machineSet
-        ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads ~2×, so the real effort is half — shown as the formula.">${fmt(s.weight ?? 0)}/2${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
+        ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(machineMultFor(s.exerciseName))}${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
         : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`) + (weightChips ? `<span class="set-wtags">${weightChips}</span>` : "");
       case "e1rm": return e1rmCell; // the 1RM stands alone
       case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
@@ -13404,6 +13422,15 @@ function exerciseInfoHtml(name: string): string {
     `<input class="ex-edit-mw" type="number" step="1" min="0" max="200" value="${machineWeightFor(name) || ""}" placeholder="0" data-editex="${escapeHtml(name)}" aria-label="Machine base weight (kg) for ${escapeHtml(name)}" />` +
     `<span class="ex-mw-unit">kg base</span>` +
     `</span>`;
+  // Machine multiplier (the ÷ divisor): an assisted machine's dial over-reads the real help
+  // by this factor (default 2 → −20 reads as −10). Editable here (owner). Shown only for
+  // assisted-machine lifts, where the −20/2 formula uses it.
+  const mmInput =
+    `<span class="ex-mw-range">` +
+    `<span class="ex-mm-pre">÷</span>` +
+    `<input class="ex-edit-mm" type="number" step="0.1" min="0.5" max="5" value="${fmt(machineMultFor(name))}" placeholder="2" data-editex="${escapeHtml(name)}" aria-label="Machine multiplier (dial over-read factor) for ${escapeHtml(name)}" />` +
+    `<span class="ex-mw-unit">dial over-read</span>` +
+    `</span>`;
 
   // Code + Short name share one row (two compact columns) — they're the two tiny
   // name fields, so side-by-side reads tighter than two stacked rows.
@@ -13442,6 +13469,7 @@ function exerciseInfoHtml(name: string): string {
     item("Bodyweight part", coeffInput),
     item("Default ROM", romInput),
     item("Machine weight", mwInput),
+    isAssistedMachine(name) ? item("Machine ÷", mmInput) : "",
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -16106,6 +16134,16 @@ async function init() {
       const ex = mwEl.dataset.editex;
       const txt = mwEl.value.trim();
       setMachineWeight(ex, txt === "" ? null : parseFloat(txt));
+      scheduleRender(() => reopenIndexDetail(ex));
+      return;
+    }
+    // Machine multiplier (÷ divisor) for this assisted-machine lift — the −20/N formula. Blank/2 = default.
+    const mmEl = t.closest<HTMLInputElement>(".ex-edit-mm");
+    if (mmEl?.dataset.editex) {
+      const ex = mmEl.dataset.editex;
+      const txt = mmEl.value.trim();
+      const v = parseFloat(txt);
+      setMachineMult(ex, txt === "" || !Number.isFinite(v) ? undefined : v);
       scheduleRender(() => reopenIndexDetail(ex));
       return;
     }

@@ -359,6 +359,8 @@ const LT: Record<string, string> = {
   "% of full ROM": "% nuo pilnos amplitudės",
   "Machine weight": "Mašinos svoris",
   "kg base": "kg bazė",
+  "Machine ÷": "Mašinos daliklis",
+  "dial over-read": "ciferblato perviršis",
   "Range of motion": "Judesio amplitudė",
   "backrest": "nugaros atrama",
   "back rest": "nugaros atrama",

@@ -545,4 +545,11 @@ describe("assistedRealWeight (per-exercise override)", () => {
     expect(assistedRealWeight(0, true)).toBe(0);
     expect(assistedRealWeight(null, true)).toBeNull();
   });
+  it("divides by a custom machine multiplier (default 2, invalid falls back to 2)", () => {
+    expect(assistedRealWeight(-20, true, 4)).toBe(-5);
+    expect(assistedRealWeight(-20, true, 2.5)).toBe(-8);
+    expect(assistedRealWeight(-20, true)).toBe(-10); // default
+    expect(assistedRealWeight(-20, true, 0)).toBe(-10); // 0 → fall back to 2
+    expect(assistedRealWeight(-20, false, 4)).toBe(-20); // not assisted → unchanged
+  });
 });

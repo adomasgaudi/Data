@@ -244,9 +244,9 @@ export function realPullupWeight(exerciseName: string, weight: number | null): n
  * (a machine counterweight that reads ~2× the real help), it's halved; otherwise
  * the value passes through. Keeps the override logic out here so it's unit-tested.
  */
-export function assistedRealWeight(weight: number | null, assisted: boolean): number | null {
+export function assistedRealWeight(weight: number | null, assisted: boolean, divisor = 2): number | null {
   if (weight === null || weight >= 0) return weight;
-  return assisted ? weight / 2 : weight;
+  return assisted ? weight / (divisor > 0 ? divisor : 2) : weight;
 }
 
 /**
