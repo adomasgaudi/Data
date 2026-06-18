@@ -116,7 +116,7 @@ import {
   loadHistoryDashboardFor, saveHistoryDashboardFor, defaultHistoryDashboard,
   activeHistoryTab, addHistoryTab, removeHistoryTab,
   renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig,
-  type HistoryDashboard, type HistoryTabConfig,
+  type HistoryDashboard, type HistoryTabConfig, type HistorySortMode,
 } from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
@@ -4429,8 +4429,10 @@ function syncWorkoutToggles(): void {
   // Tri-state: off → Rest (full slivers) → Rest· (compact hairline) → off. The dot marks
   // the compact mode; is-active covers both shown states. The compact CSS class on the
   // table shrinks the rest rows.
-  els.prioSortToggle.classList.toggle("is-active", woSortByPriority);
-  els.prioSortToggle.setAttribute("aria-pressed", woSortByPriority ? "true" : "false");
+  els.prioSortToggle.textContent = WO_SORT_LABEL[woSortMode];
+  els.prioSortToggle.setAttribute("data-sub", WO_SORT_SUB[woSortMode]);
+  els.prioSortToggle.classList.toggle("is-active", woSortMode !== "logged");
+  els.prioSortToggle.setAttribute("aria-pressed", woSortMode !== "logged" ? "true" : "false");
   els.restToggle.classList.toggle("is-active", S.showRestDays);
   els.restToggle.classList.toggle("is-compact", S.showRestDays && S.restCompact);
   els.restToggle.textContent = S.showRestDays && S.restCompact ? "Rest·" : "Rest";
@@ -4478,7 +4480,8 @@ function snapshotHistoryLive(prev: HistoryTabConfig): HistoryTabConfig {
   return {
     viewMode: S.workoutViewMode,
     byExercise: historyByExercise,
-    sortByPriority: woSortByPriority,
+    sortByPriority: woSortMode !== "logged", // back-compat mirror
+    sortMode: woSortMode,
     showRest: S.showRestDays,
     restCompact: S.restCompact,
     showAddSets: S.showAddSets,
@@ -4497,7 +4500,7 @@ function snapshotHistoryLive(prev: HistoryTabConfig): HistoryTabConfig {
 function applyHistoryTabConfig(c: HistoryTabConfig): void {
   S.workoutViewMode = c.viewMode;
   historyByExercise = c.byExercise; saveHistByExercise();
-  woSortByPriority = c.sortByPriority;
+  woSortMode = c.sortMode ?? (c.sortByPriority ? "priority" : "logged"); // migrate old tabs
   S.showRestDays = c.showRest;
   S.restCompact = c.restCompact;
   S.showAddSets = true; // owner: "+ set" is always on — ignore any stored-off per-tab value
@@ -7879,13 +7882,22 @@ function renderWorkoutsPage() {
   );
   ensureHistoryTabApplied(); // adopt the active history tab's view on the first render
   workoutGroups = buildWorkoutGroups();
-  // Default: order each group's exercises by the athlete's plan priority (the SAME order
-  // as the Plan page; non-priority lifts last). New group objects so no cached source is
-  // mutated; both the collapsed summary and the expanded set table read this one array.
-  if (woSortByPriority) {
-    const cmp = priorityComparator(els.athlete.value);
-    if (cmp) workoutGroups = workoutGroups.map((g) =>
-      g.exercises ? { ...g, exercises: [...g.exercises].sort((x, y) => cmp(x.exerciseName, y.exerciseName)) } : g);
+  // Order each group's exercises by the chosen sort mode (owner: priority / recency /
+  // volume, or the logged order). New group objects so no cached source is mutated; both
+  // the collapsed summary and the expanded set table read this one ordered array.
+  if (woSortMode !== "logged") {
+    const prioCmp = woSortMode === "priority" ? priorityComparator(els.athlete.value) : null;
+    if (woSortMode !== "priority" || prioCmp) {
+      workoutGroups = workoutGroups.map((g) => {
+        if (!g.exercises) return g;
+        // recency/volume read the group's own sets; priority uses the plan comparator.
+        const metric = woSortMode === "priority" ? null : exerciseSortMetric(g.sets, woSortMode);
+        const cmp = (x: ExerciseCount, y: ExerciseCount): number =>
+          prioCmp ? prioCmp(x.exerciseName, y.exerciseName)
+            : (metric!.get(y.exerciseName) ?? -Infinity) - (metric!.get(x.exerciseName) ?? -Infinity);
+        return { ...g, exercises: [...g.exercises].sort(cmp) };
+      });
+    }
   }
   const workoutFormula = currentFormula();
   const period = historyByExercise ? null : historyPeriod(S.workoutViewMode);
@@ -11584,9 +11596,32 @@ function priorityComparator(user: string): ((a: string, b: string) => number) | 
 }
 /** History view pref (device-local, rule 41): sort exercises within each day/week/month
  * by the athlete's plan priorities. DEFAULT ON (owner) — only an explicit "0" turns it off. */
-const WO_PRIO_SORT_KEY = "colosseum.woSortByPriority";
-let woSortByPriority: boolean = (() => { try { return localStorage.getItem(WO_PRIO_SORT_KEY) !== "0"; } catch { return true; } })();
-function saveWoSortByPriority(): void { try { localStorage.setItem(WO_PRIO_SORT_KEY, woSortByPriority ? "1" : "0"); } catch { /* ignore */ } }
+// History exercise SORT mode — the ⚙ pill cycles: priority → recency → volume → logged
+// (owner added recency + volume). Each group's exercises are ordered accordingly.
+const WO_SORT_MODES: readonly HistorySortMode[] = ["priority", "recency", "volume", "logged"];
+const WO_SORT_LABEL: Record<HistorySortMode, string> = { priority: "Prio", recency: "Recent", volume: "Volume", logged: "Logged" };
+const WO_SORT_SUB: Record<HistorySortMode, string> = { priority: "priority", recency: "most recent", volume: "volume", logged: "logged order" };
+const WO_SORT_KEY = "colosseum.woSortMode.v1";
+let woSortMode: HistorySortMode = (() => {
+  try {
+    const v = localStorage.getItem(WO_SORT_KEY);
+    if (v && (WO_SORT_MODES as readonly string[]).includes(v)) return v as HistorySortMode;
+    return localStorage.getItem("colosseum.woSortByPriority") === "0" ? "logged" : "priority"; // migrate old boolean
+  } catch { return "priority"; }
+})();
+function saveWoSortMode(): void { try { localStorage.setItem(WO_SORT_KEY, woSortMode); } catch { /* ignore */ } }
+const nextWoSortMode = (m: HistorySortMode): HistorySortMode => WO_SORT_MODES[(WO_SORT_MODES.indexOf(m) + 1) % WO_SORT_MODES.length]!;
+/** Per-exercise sort key from a group's sets (higher = ordered first): "recency" = the
+ * exercise's LAST set position in the day (later logged → higher), "volume" = its total
+ * weight×reps. Used by the history sort pill for the recency / volume orders. */
+function exerciseSortMetric(sets: readonly SetRecord[], mode: HistorySortMode): Map<string, number> {
+  const m = new Map<string, number>();
+  sets.forEach((s, i) => {
+    if (mode === "recency") m.set(s.exerciseName, i); // last occurrence wins (sets are date-ordered)
+    else m.set(s.exerciseName, (m.get(s.exerciseName) ?? 0) + (setVolume(s.weight, s.reps) ?? 0)); // volume
+  });
+  return m;
+}
 // The rank / effort-level pills open a small PICK MENU (not tap-to-cycle, owner request).
 // position:fixed + clamp into the viewport (rule 32), mirroring openLiftMenu.
 function closePrioPickMenu(): void { document.getElementById("prioPickMenu")?.remove(); }
@@ -16521,10 +16556,12 @@ async function init() {
     renderWorkoutsPage();
   });
   els.prioSortToggle.addEventListener("click", () => {
-    woSortByPriority = !woSortByPriority;
-    saveWoSortByPriority();
-    els.prioSortToggle.classList.toggle("is-active", woSortByPriority); // instant pill feedback
-    els.prioSortToggle.setAttribute("aria-pressed", woSortByPriority ? "true" : "false");
+    woSortMode = nextWoSortMode(woSortMode); // cycle priority → recency → volume → logged
+    saveWoSortMode();
+    els.prioSortToggle.textContent = WO_SORT_LABEL[woSortMode]; // instant pill feedback
+    els.prioSortToggle.setAttribute("data-sub", WO_SORT_SUB[woSortMode]);
+    els.prioSortToggle.classList.toggle("is-active", woSortMode !== "logged");
+    els.prioSortToggle.setAttribute("aria-pressed", woSortMode !== "logged" ? "true" : "false");
     renderWorkoutsPage();
   });
   els.variantToggle.addEventListener("click", () => {

@@ -21,13 +21,20 @@ export type HistoryShowMode = "exercises" | "groups";
 
 /** One history tab's COMPLETE, independent view config — every setting the ⚙ console +
  * the exercise picker drive, snapshotted per tab so tabs never share state. */
+/** How a history group's exercises are ordered (the ⚙ sort pill cycles these). */
+export type HistorySortMode = "priority" | "recency" | "volume" | "logged";
+
 export interface HistoryTabConfig {
   /** Period grouping (Sessions = "day"); ignored when byExercise is on. */
   viewMode: HistoryViewMode;
   /** Group by LIFT (one row per exercise, its sets across dates) instead of by period. */
   byExercise: boolean;
-  /** Order each group's exercises by the plan priorities. */
+  /** Order each group's exercises by the plan priorities. Kept for back-compat; the
+   *  richer choice now lives in `sortMode` (this stays true for any non-"logged" mode). */
   sortByPriority: boolean;
+  /** How to order each group's exercises: by plan priority, most-recent, total volume, or
+   *  the logged order. Optional + falls back to sortByPriority so old saved tabs migrate. */
+  sortMode?: HistorySortMode | undefined;
   showRest: boolean;
   restCompact: boolean;
   showAddSets: boolean;
@@ -64,6 +71,7 @@ export function defaultHistoryConfig(): HistoryTabConfig {
     viewMode: "day",
     byExercise: false,
     sortByPriority: true,
+    sortMode: "priority",
     showRest: false,
     restCompact: false,
     showAddSets: false,
@@ -100,6 +108,7 @@ const ConfigSchema: z.ZodType<HistoryTabConfig> = z.object({
   viewMode: z.enum(["day", "week", "2week", "month", "3month"]),
   byExercise: z.boolean(),
   sortByPriority: z.boolean(),
+  sortMode: z.enum(["priority", "recency", "volume", "logged"]).optional(),
   showRest: z.boolean(),
   restCompact: z.boolean(),
   showAddSets: z.boolean(),
