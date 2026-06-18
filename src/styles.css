@@ -3134,6 +3134,11 @@ sup.wr-bw { font-size: 0.85em; }
   color: var(--gold); font-weight: 700; border-bottom: 1px dotted var(--gold); /* calculated → gold */
 }
 .e1rm-btn:hover, .e1rm-btn.is-open { filter: brightness(0.9); border-bottom-style: solid; }
+/* A MISSING 1RM: the dash is still tappable (owner) — muted, dotted underline, opens the
+   why-it's-missing explanation. */
+.e1rm-btn.e1rm-missing { color: var(--muted); border-bottom-color: var(--muted); font-weight: 600; }
+/* The leading "no 1RM: …" reason line inside the derivation popup reads as a sentence. */
+.rm-why { display: block; line-height: 1.4; }
 /* 1RM = a weight done for 1 rep, shown as value¹ (like the weight column's
    weight^reps). The "1" is a muted superscript so the number still reads first. */
 .onerm-sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }

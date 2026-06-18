@@ -152,6 +152,7 @@ import {
   defaultBwCoeff,
   assistedRealWeight,
   isAssistablePullup,
+  isIsometric,
   exerciseCategory,
   exerciseCategories,
   muscleGroup,
@@ -7896,9 +7897,13 @@ function woSummaryInner(sets: readonly SetRecord[], formula: OneRepMaxFormula): 
     case "sets": return sets.length ? String(sets.length) : "";
     case "e1rm":
     default: {
-      const e1rms = applied.map(({ c }) => addedWeight1RM(c, formula)).filter((v): v is number => v !== null && Number.isFinite(v));
+      // Compute in REAL mode (logged=false) to MATCH the expanded set rows — otherwise the
+      // collapsed summary used the graph's Assist flag and could disagree with the per-set
+      // 1RMs. A missing 1RM now reads as a dash "—" (owner: not "0"), consistent with the
+      // expanded rows; tap the day to open them and see WHY each is missing.
+      const e1rms = applied.map(({ s }) => addedWeight1RM(computeRecord(s, false), formula)).filter((v): v is number => v !== null && Number.isFinite(v));
       const best = e1rms.length ? Math.max(...e1rms) : null;
-      return best === null ? "" : xrmInner(best);
+      return best === null ? "—" : xrmInner(best);
     }
   }
 }
@@ -8685,7 +8690,18 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const effLoad = c.weight; // bodyweight-inclusive load
   const r = c.reps;
   const wrap = (s: string) => `<div class="rm-derive">${s}</div>`;
-  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return wrap(`<div class="rm-step">Needs a weight and reps to estimate a 1RM.</div>`);
+  const why = (s: string) => wrap(`<div class="rm-step rm-why">${s}</div>`);
+  // Explain EVERY reason a 1RM is dropped (owner: "the dash should be clickable with an
+  // explanation of why it's missing, so I can correct it") — in the SAME order addedWeight1RM
+  // returns null, so the message always matches why the value is actually absent.
+  if (c.notComparable)
+    return why(`No 1RM: this set is marked <b>“not comparable”</b>, so its 1RM (and volume) are dropped on purpose — the reps/sets still count. Tap the set, then the ⊘ <b>not comparable</b> toggle to bring the 1RM back.`);
+  if (isIsometric(c.exerciseName))
+    return why(`No 1RM: <b>${escapeHtml(displayName(c.exerciseName))}</b> is an isometric hold — it's logged in seconds, not reps, so there's no rep-based 1RM.`);
+  if (r === null || r <= 0)
+    return why(`No 1RM: this set has <b>no reps</b> logged, so the rep-curve has nothing to estimate from.`);
+  if (effLoad === null || effLoad <= 0)
+    return why(`No 1RM: the effective load is <b>0 or less</b> (no weight, and no bodyweight share for this lift), so there's nothing to estimate a 1RM from. Set a Bodyweight part in the index card if this lift should carry bodyweight.`);
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
   const kg = (n: number) => `${f2(n)} kg`;
   const frac = (n: string, d: string) => `<span class="rm-frac"><span class="rm-num">${n}</span><span class="rm-den">${d}</span></span>`;
@@ -8705,6 +8721,11 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const curveLoad = scaledLoad - assist; // what the rep-curve runs on (matches addedWeight1RM)
   const eff1rm = curveLoad > 0 ? estimate1RM(curveLoad, r, formula) : curveLoad;
   const added1rm = addedWeight1RM(c, formula);
+  // Catch-all: if the 1RM is still null here (none of the named reasons above fired), the
+  // rep-curve itself couldn't produce a value for these numbers — say so with the inputs, so
+  // the owner can see what to correct rather than a bare dash.
+  if (added1rm === null)
+    return why(`No 1RM: the ${formula} rep-curve couldn't produce a value from this set's load (${kg(curveLoad)}) and ${r} reps. Check the weight, reps and variation multiplier.`);
 
   const lines: string[] = [];
   // 1) Effective load = bar + bodyweight share.
@@ -8814,7 +8835,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const rmShown = e1rm === null ? null : (xrmReps <= 1 ? e1rm : weightForReps(e1rm, xrmReps, formula));
   const e1rmCell =
     rmShown === null
-      ? "—"
+      ? `<button type="button" class="e1rm-btn e1rm-missing" title="No 1RM for this set — tap to see why">—</button>`
       : `<button type="button" class="e1rm-btn" title="Estimated ${xrmReps}RM — the weight you could do for ${xrmReps} rep${xrmReps === 1 ? "" : "s"}${xrmReps > 1 ? " (from the 1RM)" : ""}. Tap for the formula.">${fmt(rmShown)}<sup class="onerm-sup">${xrmReps}</sup></button>`;
   const sid = setId(s);
   // Unilateral (single-arm/leg): this set was done on BOTH sides, so it reads as a
@@ -8917,10 +8938,10 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     `title="Tap to edit this set (weight, reps, bodyweight, scale)${effTitle}">${tds}</tr>`;
   // The note now rides in the Vol column (varInfo) — no separate full-width note row (owner).
   const noteRow = "";
+  // Always render the explanation row — when the 1RM is MISSING it explains WHY (owner), so
+  // the dash is tappable just like a present 1RM is.
   const formulaRow =
-    e1rm === null
-      ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${oneRmFormulaText(computed, formula)}</td></tr>`;
+    `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${oneRmFormulaText(computed, formula)}</td></tr>`;
   const prirRow =
     predRir === null || !prirText
       ? ""
