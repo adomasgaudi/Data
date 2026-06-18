@@ -7698,7 +7698,7 @@ function setDisplay(raw: SetRecord): string {
   const weightHtml = isAsstMach
     ? (S.machineReal
         ? wr(machReal, s.reps)
-        : `<span class="wo-mlog" title="Logged machine dial — over-reads ~2×; real effort ≈ ${machReal === null ? "half" : fmt(machReal)}. Toggle 'real' in the ⚙ for the real value.">m${fmt(s.weight ?? 0)}${machRepsSup}</span>`)
+        : `<span class="wo-mlog" title="Logged machine dial — over-reads ~2×; real effort ≈ ${machReal === null ? "half" : fmt(machReal)}. Toggle 'real' in the ⚙ for the real value."><span class="wo-mlog-m">m</span>${fmt(s.weight ?? 0)}${machRepsSup}</span>`)
     : `${mwp}${wr(s.weight, s.reps)}`;
   const mach = isAsstMach
     ? ""

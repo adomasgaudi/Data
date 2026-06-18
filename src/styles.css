@@ -1810,8 +1810,9 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .wo-mach-asst { color: var(--accent); background: var(--accent-soft); }
 .wo-mach-pre { text-transform: none; margin-right: 3px; } /* the short "m" to the LEFT of the weight */
 /* LOGGED assisted-machine value (S.machineReal off): the dial value joined with an "m" tag in
-   ONE outlined, tinted box (m-20⁷) — a distinct look that flags it over-reads ~2× (owner). */
-.wo-mlog { border: 1px solid var(--accent); color: var(--accent); border-radius: var(--r-xs); padding: 0 4px; font-weight: 600; white-space: nowrap; }
+   ONE SHADED box (no outline, owner) joining an "m" TAG with the dial value (m-20⁷). */
+.wo-mlog { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-xs); padding: 0 4px 0 1px; font-weight: 600; white-space: nowrap; }
+.wo-mlog-m { display: inline-block; background: var(--accent); color: #fff; border-radius: var(--r-xs); padding: 0 3px; margin-right: 3px; font-size: 0.7em; font-weight: 800; vertical-align: middle; }
 .wo-mlog > sup { font-size: 0.7em; }
 /* Machine-type toggle in the Analysis selector (single mode). */
 .wa-machine { margin: 0 0 0.5rem; }
@@ -2789,7 +2790,7 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-controls-fold[open] .wo-dj { padding: 5px; width: max-content; max-width: 62vw; }
 /* Footer description: tapping a setting pill shows that setting's explanation here
    (owner). Full-width row under the pill grid, small muted text that wraps. */
-.wo-dj-desc { flex: 1 1 100%; grid-column: 1 / -1; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 0.68rem; font-weight: 500; line-height: 1.35; color: var(--muted); white-space: normal; max-width: 88vw; }
+.wo-dj-desc { flex: 1 1 100%; grid-column: 1 / -1; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 0.68rem; font-weight: 500; line-height: 1.35; color: var(--muted); white-space: normal; max-width: 100%; }
 .wo-controls-fold:not([open]) .wo-dj-desc { display: none; }
 .wo-dj-btn {
   font: inherit; font-size: 0.7rem; font-weight: 700; line-height: 1; cursor: pointer;
