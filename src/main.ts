@@ -7658,13 +7658,22 @@ function variationChipsHtml(r: SetRecord): string {
   const note = (r.notes ?? "").trim();
   if (!fam || !note) return "";
   const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  // A dimension's BASELINE level is "just the exercise" (a free push-up / free pull-up)
+  // and is NOT a tag — only real modifiers get a chip. The baseline is the family's
+  // config default per dimension, so no reference level (free / floor / none / 0cm…)
+  // ever shows; e.g. a free push-up renders nothing, an on-knees one shows "knees".
+  const defs = FAMILIES[fam]?.defaults ?? {};
   const SUP: Record<string, string> = { free: "free", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ladder" };
+  const POS: Record<string, string> = { floor: "free", knees: "knees" };
   const chips: string[] = [];
-  const sup = String(vec.support ?? "free");
-  chips.push(`<span class="wo-var-chip wo-var-sup">${escapeHtml(SUP[sup] ?? sup)}</span>`);
-  if (vec.band && vec.band !== "none") chips.push(`<span class="wo-var-chip wo-var-band">band ${escapeHtml(String(vec.band))}</span>`);
-  if (vec.lean && vec.lean !== "0cm") chips.push(`<span class="wo-var-chip">lean ${escapeHtml(String(vec.lean))}</span>`);
-  return `<span class="wo-var-chips">${chips.join("")}</span>`;
+  const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
+  const sup = vec.support != null ? String(vec.support) : null;
+  if (sup && sup !== defs.support) push(" wo-var-sup", SUP[sup] ?? sup);
+  const pos = vec.position != null ? String(vec.position) : null;
+  if (pos && pos !== defs.position) push("", POS[pos] ?? pos);
+  if (vec.band != null && String(vec.band) !== (defs.band ?? "none")) push(" wo-var-band", `band ${String(vec.band)}`);
+  if (vec.lean != null && String(vec.lean) !== (defs.lean ?? "0cm")) push("", `lean ${String(vec.lean)}`);
+  return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
 }
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
