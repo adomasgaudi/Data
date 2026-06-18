@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-42 — Add-set sheet: variant pills not inline with weight/reps
+
+- **First seen / reported:** 2026-06-18, mobile, History → + set on a variation lift. Owner: "the variants should be before the weight and reps in the same line" → then "still not inline #persistent" (the first fix did not hold).
+- **Root cause (two compounding things):** (1) In `.addm-setblock` the variant pills lived inside wrapper boxes (`.addm-variant-slot` → `.wo-af-dims`) that were themselves flex containers, so the whole pill group counted as ONE wide flex item and wrapped the weight/reps `.addm-lines` chip onto the row below it. (2) A leftover equal-specificity rule `.wo-addform .wo-af-dims { display: flex; … }` sat AFTER the v.172 attempt's flatten rule, so by CSS source-order it won and re-boxed the dims back into a single item.
+- **Failed fix (b.2.9.172, WO-228):** wrapped the pills + weight/reps in one flex-wrap `.addm-setblock` and made `.addm-variant-slot` `inline-flex` — but the inner `.wo-af-dims` was still a flex box, so the group stayed one wide item and still wrapped. The conflicting `display:flex` rule made it worse.
+- **Fix (b.2.9.173, WO-229):** gave BOTH `.addm-variant-slot` and `.wo-af-dims` `display: contents` so their wrapper boxes dissolve and each individual pill joins the `.addm-setblock` flex flow directly, sitting right before the `.addm-lines` weight/reps chip; and DELETED the conflicting `display:flex` base rule (kept only the pill/select styling). Empty slot still `display:none` via `:empty` (higher specificity, wins over the contents rule).
+- **Watch:** `display:contents` is the right tool to flatten a wrapper into its grandparent's flex/grid, but it is silently re-boxed by ANY later equal-specificity `display:` rule on the same selector — grep for every `display:` on the selector and ensure the flatten is the LAST word (or higher specificity). `max-width`/`padding` on a `display:contents` element are ignored, so leftover sizing rules on it are dead but harmless.
+- **Recurrences:** 1 (v.172 attempt failed → v.173).
+
+---
+
 ## PB-41 — "Compare other athletes" button missing from the graph
 
 - **First seen / reported:** 2026-06-17, mobile, Analysis → Graph. Owner: "i don't see the comparison btn to compare with other users #persistent."
