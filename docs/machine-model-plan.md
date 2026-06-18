@@ -144,10 +144,11 @@ On first load with the new model, fold today's per-exercise settings into machin
 - [x] **1c** LT i18n for the new labels (also covers the set-edit assisted/unilateral
   toggles); panel re-targets the lift on new-exercise name change.
 
-### Phase 2 — global-change confirm + undo
-- [ ] **2a** Wrap machine-weight (and ÷) edits in a confirm/undo toast: "changed for
-  all users — undo?" (pre-Phase-3 wording; becomes "…with this machine" after Phase 3).
-  Undo restores the previous value. Reuse one shared toast helper.
+### Phase 2 — global-change confirm + undo — DONE (with `EQUIP-2`)
+- [x] **2a** Machine-weight + ÷ edits (index card AND the add-page cog) now route through
+  `setMachineWeightWithUndo` / `setMachineMultWithUndo`: apply, then a `showToast`
+  "changed for all users with this machine — Undo" that restores the prior value.
+  No-op edits skip the toast.
 
 ### Phase 3 — machine entities (architectural — needs the model signed off)
 - [ ] **3a** Add the three stores + `Machine` type + `machineForUserExercise()` resolver.

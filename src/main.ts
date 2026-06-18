@@ -2344,6 +2344,28 @@ function setMachineMult(exerciseName: string, value: number | undefined): void {
   saveJson(MACHINE_MULT_KEY, machineMultOverrides);
   clearMachineCache();
 }
+// Phase 2 of the equipment model (docs/machine-model-plan.md): machine settings are GLOBAL —
+// editing one changes it for EVERY user/exercise on that machine. So apply the change, then
+// offer an Undo toast (owner: "all exercises for all users with this machine has been changed.
+// undo?"). After Phase 3 the wording names the equipment; pre-Phase-3 it's "all users".
+function afterMachineEdit(ex: string): void {
+  if (addModalEl) { refreshAddmSettings(); syncPendingFromModal(); }
+  scheduleRender(() => reopenIndexDetail(ex));
+}
+function setMachineWeightWithUndo(ex: string, value: number | null): void {
+  const prev = machineWeightFor(ex);
+  if ((value ?? 0) === prev) return; // no real change → no toast
+  setMachineWeight(ex, value);
+  afterMachineEdit(ex);
+  showToast(`Machine weight for ${displayName(ex)} → ${value == null ? "none" : `${fmt(value)} kg`}, changed for all users with this machine.`, "Undo", () => { setMachineWeight(ex, prev || null); afterMachineEdit(ex); });
+}
+function setMachineMultWithUndo(ex: string, value: number | undefined): void {
+  const prev = machineMultFor(ex);
+  if ((value ?? 2) === prev) return;
+  setMachineMult(ex, value);
+  afterMachineEdit(ex);
+  showToast(`Machine multiplier for ${displayName(ex)} → ÷${fmt(value ?? 2)}, changed for all users with this machine.`, "Undo", () => { setMachineMult(ex, prev); afterMachineEdit(ex); });
+}
 // EXPERIMENTAL exercises (owner): a preliminary scratchpad while exploring a movement — log a
 // lot of sets/notes without worrying about precision. Experimental data is EXCLUDED from ALL
 // analysis (1RM, volume, graphs, leaderboards, PRs) by routing it through notComparable in
@@ -16413,8 +16435,7 @@ async function init() {
     if (mwEl?.dataset.editex) {
       const ex = mwEl.dataset.editex;
       const txt = mwEl.value.trim();
-      setMachineWeight(ex, txt === "" ? null : parseFloat(txt));
-      scheduleRender(() => reopenIndexDetail(ex));
+      setMachineWeightWithUndo(ex, txt === "" ? null : parseFloat(txt)); // global change → confirm/undo (Phase 2)
       return;
     }
     // Machine multiplier (÷ divisor) for this assisted-machine lift — the −20/N formula. Blank/2 = default.
@@ -16423,8 +16444,7 @@ async function init() {
       const ex = mmEl.dataset.editex;
       const txt = mmEl.value.trim();
       const v = parseFloat(txt);
-      setMachineMult(ex, txt === "" || !Number.isFinite(v) ? undefined : v);
-      scheduleRender(() => reopenIndexDetail(ex));
+      setMachineMultWithUndo(ex, txt === "" || !Number.isFinite(v) ? undefined : v); // global change → confirm/undo (Phase 2)
       return;
     }
   });
@@ -18683,13 +18703,11 @@ function openAddModal(exerciseName: string | null, date: string): void {
     if (!cex) return;
     if (el.classList.contains("addm-cog-mw")) {
       const txt = (el as HTMLInputElement).value.trim();
-      setMachineWeight(cex, txt === "" ? null : parseFloat(txt));
-      syncPendingFromModal();
+      setMachineWeightWithUndo(cex, txt === "" ? null : parseFloat(txt));
     } else if (el.classList.contains("addm-cog-mm")) {
       const txt = (el as HTMLInputElement).value.trim();
       const v = parseFloat(txt);
-      setMachineMult(cex, txt === "" || !Number.isFinite(v) ? undefined : v);
-      syncPendingFromModal();
+      setMachineMultWithUndo(cex, txt === "" || !Number.isFinite(v) ? undefined : v);
     }
   });
   // Collapse the tall fields while a weight/reps input is focused, so the sheet shrinks and
