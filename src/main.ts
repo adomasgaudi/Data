@@ -23021,15 +23021,26 @@ function setVersionGrade(version: string, id: string): void {
   saveJson(VERSION_GRADE_KEY, versionGrades);
 }
 function gradePanelHtml(): string {
+  // Owner: no grading — each of the last 5 updates is an EXPANDABLE row: the 2–5w
+  // shortTitle in the summary, and on expand the 5–15w title + full note + details,
+  // mirroring the Settings → Version history leaf (reuses its cl-* body classes).
   const last5 = RELEASES.filter((r) => !r.soon).slice(0, 5);
   const rows = last5.map((r) => {
-    const cur = gradeOf(r.version);
     const patch = r.version.split(".").pop() ?? r.version;
-    const opts = VERSION_GRADES.map((g) =>
-      `<button type="button" class="grade-opt grade-${g.tone}${cur === g.id ? " is-on" : ""}" data-grade="${escapeHtml(r.version)}|${g.id}">${escapeHtml(g.label)}</button>`).join("");
-    return `<div class="grade-row"><div class="grade-row-head"><b>v.${escapeHtml(patch)}</b> <span class="muted">${escapeHtml(r.shortTitle ?? r.title)}</span></div><div class="grade-opts">${opts}</div></div>`;
+    const code = r.code ? ` <span class="cl-code">${escapeHtml(r.code)}</span>` : "";
+    const med = r.shortTitle && r.title ? `<p class="cl-meddesc">${escapeHtml(r.title)}</p>` : "";
+    const note = r.note ? `<p class="cl-bodynote">${escapeHtml(r.note)}</p>` : "";
+    const details = r.details?.length
+      ? `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
+      : "";
+    return (
+      `<details class="grade-row"><summary class="grade-row-head">` +
+      `<span class="grade-caret" aria-hidden="true">▸</span><b>v.${escapeHtml(patch)}</b> ` +
+      `<span class="muted">${escapeHtml(r.shortTitle ?? r.title)}</span>${code}</summary>` +
+      `<div class="cl-body grade-body">${med}${note}${details}</div></details>`
+    );
   }).join("");
-  return `<div class="grade-head"><span>Grade the last 5 updates</span><button type="button" class="grade-close" data-gradeclose aria-label="Close">✕</button></div>${rows}`;
+  return `<div class="grade-head"><span>Last 5 updates</span><button type="button" class="grade-close" data-gradeclose aria-label="Close">✕</button></div>${rows}`;
 }
 function gradeOutside(e: MouseEvent): void {
   const t = e.target as HTMLElement;

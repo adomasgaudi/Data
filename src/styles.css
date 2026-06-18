@@ -506,8 +506,13 @@ main { padding-bottom: 5rem; }
 .grade-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 0.82rem; margin-bottom: 4px; }
 .grade-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.05rem; padding: 0 4px; }
 .grade-row { padding: 6px 0; border-top: 1px solid var(--line); }
-.grade-row-head { font-size: 0.8rem; margin-bottom: 5px; }
+.grade-row > summary.grade-row-head { font-size: 0.8rem; cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.grade-row > summary.grade-row-head::-webkit-details-marker { display: none; }
+.grade-caret { font-size: 0.7em; color: var(--muted); transition: transform var(--dur-normal) ease; }
+.grade-row[open] > summary .grade-caret { transform: rotate(90deg); }
 .grade-row-head .muted { font-weight: 400; }
+.grade-body { margin-top: 4px; }
+.grade-body .cl-bodynote { white-space: pre-wrap; }
 .grade-opts { display: flex; flex-wrap: wrap; gap: 4px; }
 .grade-opt {
   font: inherit; font-size: 0.72rem; font-weight: 600; cursor: pointer; padding: 4px 9px; min-height: var(--tap-min);
