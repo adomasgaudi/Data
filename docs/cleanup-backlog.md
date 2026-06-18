@@ -13,6 +13,15 @@ attic/warehouse tiers (rule 10). Keep this file updated — mark items done, add
 ones, re-grade as the code changes.
 
 ## 🎨 UI consistency (UIC — see docs/ui-consistency-audit.md)
+- 🟠 **CLN-VEC-LABELS** [main.ts variant editor] (SP:3) — The per-set "Change variant"
+  vector editor (`vecSelect`, ~main.ts:13734) still keeps its OWN level-label maps
+  (`SUPPORT_LBL`, `SHD_LBL`, `GRIP_LBL`, `HT_LBL`) instead of the shared `AF_LEVEL_LBL`
+  SSOT (rule 60). They match for support today, but `shoulderDist` already drifts
+  ("0cm (wall)"/"blue 6cm" vs the picker's "none"/"blue"+hint), and `ladderGrip`/
+  `ladderH` aren't in the shared map at all. Fold these dims into `AF_LEVEL_LBL` +
+  route `vecSelect` through `afLevelText`/`afLevelHint`, keeping the ×factor display.
+  Found during the WO-233..235 variation-UI prune (tag + add-preview already unified
+  on `variationChipsFromVec`; this editor is the remaining sibling).
 - ✅ **UIC-DEAD-CSS (DONE)** [CSS] (SP:0.5) — Deleted the unused bottom-nav classes
   `.subtabs` / `.subtab` / `.subtab-ico` (+ `:hover`/`.is-active`) in `src/styles.css`:
   the bottom tab bar was replaced by the `.ex-tab` tabs, so these were dead. The retired

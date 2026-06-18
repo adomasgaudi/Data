@@ -7659,18 +7659,14 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 /** Compact chips summarising a set's resolved variation (support, band, lean) for
  * model lifts — so the workout history shows b2w / f2w / ladder / free / band at a
  * glance, not just the ×multiplier. Empty for non-model lifts or noteless sets. */
-function variationChipsHtml(r: SetRecord): string {
-  const fam = familyOf(r.exerciseName);
-  const note = (r.notes ?? "").trim();
-  if (!fam || !note) return "";
-  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
-  // A dimension's BASELINE level is "just the exercise" (a free push-up / free pull-up)
-  // and is NOT a tag — only real modifiers get a chip. The baseline is the family's
-  // config default per dimension, so no reference level (free / floor / none / 0cm…)
-  // ever shows; e.g. a free push-up renders nothing, an on-knees one shows "knees".
+// SINGLE renderer for a resolved variation vector → chip HTML, shared by the history
+// tag, the live add-form preview, and any other surface — so a chip ALWAYS reads the
+// same. A dimension's BASELINE level is "just the exercise" (a free push-up) and is
+// NOT a tag: only levels that differ from the family's config default get a chip, and
+// every label comes from the shared AF_LEVEL_LBL map (afLevelText). (WO-235 #prune)
+function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>): string {
+  if (!fam) return "";
   const defs = FAMILIES[fam]?.defaults ?? {};
-  // Labels come from the SHARED AF_LEVEL_LBL map (afLevelText), so a tag reads
-  // IDENTICALLY to the picker option that set it (e.g. both say "b2w" / "knees").
   const chips: string[] = [];
   const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
   const sup = vec.support != null ? String(vec.support) : null;
@@ -7680,6 +7676,13 @@ function variationChipsHtml(r: SetRecord): string {
   if (vec.band != null && String(vec.band) !== (defs.band ?? "none")) push(" wo-var-band", `band ${String(vec.band)}`);
   if (vec.lean != null && String(vec.lean) !== (defs.lean ?? "0cm")) push("", `lean ${String(vec.lean)}`);
   return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
+}
+function variationChipsHtml(r: SetRecord): string {
+  const fam = familyOf(r.exerciseName);
+  const note = (r.notes ?? "").trim();
+  if (!fam || !note) return "";
+  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  return variationChipsFromVec(fam, vec);
 }
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
@@ -17976,6 +17979,30 @@ const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
 function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.label ?? level; }
 /** Optional small-gray explanation for a level, shown only in the picker menu. */
 function afLevelHint(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.hint ?? ""; }
+/** The level the CURRENT athlete used most for this exercise+dimension over the last
+ * ~3 months — so the add-set picker pre-selects "what you usually do", not the config
+ * reference (owner: pick the default by the most frequent one in the last 3 months, or
+ * the first/reference if there's no data). Noteless sets count as the `fallback` level. */
+function frequentLevelFor(exerciseName: string, fam: string, dim: string, fallback: string): string {
+  const username = els.athlete.value;
+  const d = new Date();
+  d.setMonth(d.getMonth() - 3);
+  const cutoff = d.toISOString().slice(0, 10);
+  const counts = new Map<string, number>();
+  for (const r of data.records) {
+    if (r.username !== username || r.exerciseName !== exerciseName) continue;
+    if (!r.date || r.date < cutoff) continue;
+    const note = (r.notes ?? "").trim();
+    const lvl = note
+      ? String({ ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) }[dim] ?? fallback)
+      : fallback;
+    counts.set(lvl, (counts.get(lvl) ?? 0) + 1);
+  }
+  let best = fallback, bestN = 0;
+  for (const [lvl, n] of counts) if (n > bestN) { best = lvl; bestN = n; }
+  return bestN > 0 ? best : fallback;
+}
+
 /** The variation field for the inline add form. For a lift with a VARIATION MODEL
  * (a family), it's a row of structured pickers — the real variables (support, ROM,
  * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
@@ -17987,7 +18014,10 @@ function afVariationField(exerciseName: string): string {
   if (famDef) {
     const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
       const levels = famDef.dims[dim]!;
-      const cur = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
+      const dflt = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
+      // Pre-select the athlete's most-used level over the last 3 months (else the default).
+      const freq = frequentLevelFor(exerciseName, fam!, dim, dflt);
+      const cur = levels[freq] != null ? freq : dflt;
       // For the leverage knobs (lever / reach) show the torque factor in each option
       // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
       const showFactor = dim === "lever" || dim === "reach";
@@ -18139,22 +18169,18 @@ const numOrNull = (v: string | undefined): number | null => { const n = parseFlo
 /** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
  * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
 function syncAddmVtags(form: HTMLElement): void {
-  const dimEls = [...form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")];
-  const tags: string[] = [];
-  const SUP: Record<string, string> = { free: "", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ldr", hanging: "hang", dips_bar: "dips" };
-  for (const sel of dimEls) {
-    const dim = sel.dataset.dim ?? "";
-    const val = sel.value;
-    if (!val || val === "none" || val === "0" || val === "0cm") continue;
-    let abbr = "";
-    let cls = "";
-    if (dim === "support") { abbr = SUP[val] ?? val; cls = " wo-var-sup"; }
-    else if (dim === "band") { abbr = `b${val}`; cls = " wo-var-band"; }
-    else if (dim === "lean" || dim === "obstacle") { abbr = val; }
-    if (!abbr || abbr === "free") continue;
-    tags.push(`<span class="wo-var-chip${cls}">${escapeHtml(abbr)}</span>`);
+  // Build a vec from the live dim selects and render it through the SAME chip function
+  // the history tag uses, so the add-form preview reads identically (WO-235 #prune —
+  // this used to keep its own drifting SUP map: ldr/hang, no knees).
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  const fam = ex ? familyOf(ex) : null;
+  const vec: Record<string, string> = {};
+  for (const sel of form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
+    const dim = sel.dataset.dim;
+    if (dim && sel.value) vec[dim] = sel.value;
   }
-  const html = tags.join("");
+  const html = variationChipsFromVec(fam, vec);
   for (const strip of form.querySelectorAll<HTMLElement>(".addm-vtag-strip")) strip.innerHTML = html;
 }
 

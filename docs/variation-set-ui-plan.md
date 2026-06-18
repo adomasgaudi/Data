@@ -13,20 +13,20 @@ at a time (rule 7/59). Codes are re-derived at commit (rule 8).
   added the `position` dimension so on-knees shows "knees". Root for the
   "baseline shown as a tag" class.
 
-- [ ] **2 · Picker == tag (unified variation control)** — the original
-  `#remember`/`#prune` build. Sub-parts:
-  - [ ] **2a SSOT label source** — collapse the tag's `SUP`/`POS` maps and the
-    picker's `AF_LEVEL_LBL` into ONE level→label map so picker and tag can't drift.
-  - [ ] **2b Rename** the picker's `floor (on feet)` → `free` (one canonical name).
-  - [ ] **2c Picker default selection** = the user's most-frequent variation over
-    the last ~3 months for that exercise; first option if no data.
-  - [ ] **2d Restyle** the picker pill to match the tag pill (`.wo-var-chip`) look;
-    explanations allowed as small gray subtext.
-  - [ ] **2e `#prune` sweep** every family/dimension for baseline-as-tag + label
-    drift; log finds in `docs/cleanup-backlog.md`.
-  - [ ] **2f Close-out** — LT i18n for any new label; `#remember` the UI rule
-    (picker must look like the final tag; a default/free level is not a tag; one
-    canonical name per variation).
+- [x] **2 · Picker == tag (unified variation control)** — DONE (`WO-234` v181 +
+  `WO-235`). Sub-parts:
+  - [x] **2a SSOT label source** — `AF_LEVEL_LBL` is now the single `{label,hint}`
+    map; tag + add-preview both render via `variationChipsFromVec`/`afLevelText`.
+  - [x] **2b Rename** — `floor (on feet)` → `free`; support shows short `b2w`/`f2w`.
+  - [x] **2c Picker default selection** — `frequentLevelFor` pre-selects the athlete's
+    most-used level over the last 3 months, else the config default.
+  - [x] **2d Restyle** — picker pill restyled to the `.wo-var-chip` tag look; hints in
+    `.xdd-opt-hint` gray menu text.
+  - [x] **2e `#prune` sweep** — unified the 3rd renderer (`syncAddmVtags`); logged the
+    remaining `vecSelect` editor sibling as `CLN-VEC-LABELS` in cleanup-backlog.
+  - [x] **2f Close-out** — `#remember`ed as CLAUDE.md rule 60. (LT i18n: the compact
+    variation codes — b2w/knees — were never in `i18n.ts`; left as codes per existing
+    convention, noted not forgotten.)
 
 - [ ] **3 · Set context-menu redesign** (the popup when you tap a collapsed set):
   - [ ] Duplicate + Change-variant become **icon-only** (no text), crammed at top.
