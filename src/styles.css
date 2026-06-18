@@ -2653,9 +2653,13 @@ sup.wr-bw { font-size: 0.85em; }
    dropdowns (the lift's variables — support, ROM, lean…), one tap each. ~30% larger
    here too, matching the rest of the add-set form. */
 /* Crammed variant pickers (owner): a tight WRAPPING row of compact value-pills — no header,
-   no per-dim labels — each tapping into its own options popup, sitting before the weight. */
+   no per-dim labels — each tapping into its own options popup, sitting before the weight on
+   the SAME line as the weight/reps. */
+.addm-setblock { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.35rem 0; }
+.addm-setblock .addm-variant-slot { display: inline-flex; flex: 0 1 auto; min-width: 0; }
+.addm-setblock .addm-variant-slot:empty { display: none; }
+.addm-setblock .addm-lines { flex: 0 0 auto; }
 .wo-addform .wo-af-dims { display: flex; flex-wrap: wrap; gap: 0.3rem; max-width: 100%; align-items: center; padding: 0; }
-.wo-addform .addm-variant-field { margin: 0.2rem 0 0.35rem; }
 .wo-addform .wo-af-dims select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
 .wo-addform .wo-af-dims .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
 .wo-addform .wo-af-dims .xdd { flex: 0 0 auto; }
@@ -2717,17 +2721,17 @@ sup.wr-bw { font-size: 0.85em; }
 /* The set line: the variant tag, then the weight and reps as their OWN clearly-outlined
    input boxes (owner: the old borderless chip was unclear where to tap). */
 .addm-set-chip {
-  display: inline-flex; align-items: center; gap: 0.4rem; flex: 1 1 auto;
+  display: inline-flex; align-items: center; gap: 0.25rem; flex: 0 0 auto; /* weight + reps close together (owner) */
   border: none; background: none; padding: 0; min-height: var(--tap-min);
 }
 .addm-set-chip .wo-af-weight {
-  flex: 1 1 auto; max-width: 7rem; min-width: 3rem; box-sizing: border-box;
+  flex: 0 0 auto; width: 4.5rem; box-sizing: border-box;
   border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--card);
-  padding: 4px 10px; margin: 0; min-height: var(--tap-min);
+  padding: 4px 8px; margin: 0; min-height: var(--tap-min);
   font-size: 1rem; font-weight: 600; text-align: center; color: inherit;
 }
 .addm-set-chip .wo-af-reps {
-  flex: 0 0 3.2rem; box-sizing: border-box;
+  flex: 0 0 2.8rem; box-sizing: border-box;
   border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--card);
   padding: 4px 6px; margin: 0; min-height: var(--tap-min);
   font-size: 0.9rem; font-weight: 700; text-align: center; color: inherit;

@@ -18009,7 +18009,7 @@ function removeInlineAddForm(form: HTMLElement) {
 // the last hard set, suggests sets from history, and holds the richer fields
 // (variant pickers + a free note). Reuses the proven write path (onInlineAddGo on
 // the same .wo-addform markup) so logging itself is unchanged.
-interface AddSuggestion { label: string; weight: number | null; reps: number; sets: number; }
+interface AddSuggestion { label: string; weight: number | null; reps: number; sets: number; rec?: SetRecord; }
 /** Prefill (the last HARD set = the heaviest of the most recent session) + a couple
  * of quick set-suggestion chips, from this athlete's logged sets for the lift. */
 function addSetSuggestions(username: string, exercise: string): { prefill: AddSuggestion | null; chips: AddSuggestion[] } {
@@ -18023,12 +18023,12 @@ function addSetSuggestions(username: string, exercise: string): { prefill: AddSu
   const wr = (w: number | null, r: number) => (w != null && w > 0 ? `${Math.round(w * 10) / 10}×${r}` : `${r} reps`);
   const prefill: AddSuggestion = { label: "last session", weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length };
   const chips: AddSuggestion[] = [
-    { label: `Last · ${wr(heaviest.weight, heaviest.reps ?? 1)}${lastSets.length > 1 ? ` ·${lastSets.length}×` : ""}`, weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length },
+    { label: `Last · ${wr(heaviest.weight, heaviest.reps ?? 1)}${lastSets.length > 1 ? ` ·${lastSets.length}×` : ""}`, weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length, rec: heaviest },
   ];
   const cutoff = new Date(Date.now() - 84 * 86_400_000).toISOString().slice(0, 10);
   let top: SetRecord | null = null;
   for (const r of recs) if (r.date >= cutoff && (top === null || (r.weight ?? 0) > (top.weight ?? 0))) top = r;
-  if (top && (top.weight ?? 0) > (heaviest.weight ?? 0)) chips.push({ label: `Top · ${wr(top.weight, top.reps ?? 1)}`, weight: top.weight, reps: top.reps ?? 1, sets: 1 });
+  if (top && (top.weight ?? 0) > (heaviest.weight ?? 0)) chips.push({ label: `Top · ${wr(top.weight, top.reps ?? 1)}`, weight: top.weight, reps: top.reps ?? 1, sets: 1, rec: top });
   return { prefill, chips };
 }
 
@@ -18108,9 +18108,9 @@ function ghostSetsHtml(exerciseName: string, date: string): string {
  * fallback afVariationField can emit is NOT used here — the popup has its own Note. */
 function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
-  // No "VARIANT" header / per-dim labels (owner: cram it) — just the compact value-pills,
-  // each tappable for its options popup, sitting right before the weight.
-  return vf.includes("wo-af-dims") ? `<div class="addm-field addm-variant-field">${vf}</div>` : "";
+  // Just the compact value-pills (owner: cram it, variants on the SAME line as weight/reps);
+  // no header/labels. Wrapped inline so it flows before the weight in one row.
+  return vf.includes("wo-af-dims") ? vf : "";
 }
 function closeAddModal(): void {
   addModalEl?.remove();
@@ -18139,7 +18139,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
     ? `<div class="addm-sugg"><span class="addm-flbl">Suggested</span><div class="addm-sugg-row">` +
       chips.map((c) =>
         `<div class="addm-sugg-item">` +
-        `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}">${escapeHtml(c.label)}</button>` +
+        `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}" aria-label="${escapeHtml(c.label)}" title="${escapeHtml(c.label)}">${c.rec ? variationChipsHtml(c.rec) : ""}${wr(c.weight, c.reps)}</button>` +
         `<button type="button" class="addm-chip-go" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}" aria-label="Add this set directly" title="Add immediately">＋</button>` +
         `</div>`
       ).join("") +
@@ -18166,8 +18166,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     exField +
     afWhenToggle(date, today) +
-    `<div class="addm-variant-slot">${variantBlock}</div>` +
-    `<div class="addm-lines">${AF_LINE}</div>` +
+    `<div class="addm-setblock"><div class="addm-variant-slot">${variantBlock}</div><div class="addm-lines">${AF_LINE}</div></div>` +
     `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
     suggSection +
     romField +
