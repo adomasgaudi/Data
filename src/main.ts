@@ -9157,12 +9157,20 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // The setId + the readable note ride along so the popover can show the ORIGINAL note
   // and edit THIS set's incline level (per-set override).
   const rawNote = (s.notes ?? "").trim();
-  const scaleTag = editNote
-    ? // Editable chip that opens the floating modifier editor (note OR per-set form).
-      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
-    : Math.abs(scaleVal - 1) > 1e-6
-      ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
-      : "";
+  // Tag-first display (owner): the named variation CHIP (B2W / band / lean …) IS the tag, and
+  // tapping the row opens its editor — so there's ONE control, not a styled chip PLUS a raw ×N
+  // picker. The ×N multiplier shows ONLY when there's no chip to imply it (or a manual per-set
+  // scale, or the ×N-mode pill forces it) — the same rule the collapsed line (setDisplay) uses.
+  // UN (not-comparable) always shows.
+  const namedChips = variationChipsHtml(s);
+  const customScale = (setOverrides[sid]?.scale ?? 1) !== 1;
+  const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (S.showAllScale || customScale || namedChips === ""));
+  const scaleTag = !showScaleNum
+    ? ""
+    : editNote
+      ? // Editable chip that opens the per-set variation editor.
+        `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
+      : `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`;
   // Effort from RIR (logged, else predicted): hard / mid / warm-up. Big leg lifts get a
   // wider "mid" band (see effortClass). It no longer shows as a tag — it colours the
   // WHOLE set-row OUTLINE (red = hard, orange = mid, grey = warm-up; .set-main.eff-* CSS).
@@ -9192,7 +9200,11 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // in its (left) column; the tags + multipliers sit NEXT TO THE REP COUNT (the weight cell);
   // the descriptive variation info goes in the Vol column (falling back to volume); the ⓘ
   // info button is gone (open a lift from its name header instead).
-  const weightChips = `${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
+  // Owner: the variation TAG sits BEFORE the weight/reps (matching the collapsed line), while
+  // the auto machine / assisted / unilateral FLAGS trail after. leadTags = the styled tag
+  // (or the ×N fallback when there's no tag); trailTags = the auto flags.
+  const leadTags = `${namedChips}${scaleTag}`;
+  const trailTags = `${machineTag}${assistTag}${uniTag}`;
   // Variation INFO for the Vol cell: technique level (e.g. "Sq 3") · ROM · the note. Shown
   // when present, else the volume number, else "—".
   const varInfo = `${lvlTag}${romTag}${note ? `<span class="set-varnote">${escapeHtml(note)}</span>` : ""}`.trim();
@@ -9200,9 +9212,10 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     switch (id) {
       // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
       // reps; a machine set gets a "not real" mark; a machine-base lift shows "base+dialed".
-      case "weight": return (machineSet
+      case "weight": return (leadTags ? `<span class="set-wtags set-wtags-lead">${leadTags}</span>` : "")
+        + (machineSet
         ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(equipmentSettingsForSet(s).divisor)}${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
-        : `${machineWeightPrefixForSet(s)}${wr(s.weight, s.reps)}`) + (weightChips ? `<span class="set-wtags">${weightChips}</span>` : "");
+        : `${machineWeightPrefixForSet(s)}${wr(s.weight, s.reps)}`) + (trailTags ? `<span class="set-wtags">${trailTags}</span>` : "");
       case "e1rm": return e1rmCell; // the 1RM stands alone
       case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);

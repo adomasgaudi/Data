@@ -2479,6 +2479,8 @@ select.subtle-select:hover, select.subtle-select:focus {
    the 1RM stands alone in its column; the descriptive variation info rides in the Vol cell
    (falling back to the volume number). */
 .set-wtags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-left: 5px; vertical-align: middle; }
+/* The variation tag that LEADS the weight cell (owner: tags before the weight/reps). */
+.set-wtags-lead { margin-left: 0; margin-right: 5px; }
 .num.volcell { white-space: normal; }
 .num.volcell .set-varnote { display: inline-block; color: var(--muted); font-size: 0.82em; }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
