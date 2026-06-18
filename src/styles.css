@@ -3301,6 +3301,24 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
 /* Read-only RIR (spectating someone else's profile): a plain value, no dropdown. */
 .rpe-ro { display: inline-block; font-size: 0.74rem; font-weight: 700; color: var(--text); padding: 2px 4px; }
 .rpe-ro.is-assumed { color: var(--muted); font-weight: 600; opacity: 0.85; }
+/* ── s2 (simplified-2) view: hide advanced chrome (owner). Only this tier hides them;
+   s1 / adv are untouched. The controls still exist in the DOM, just display:none here. ── */
+/* Graph: the type-switch row + the top-right legend / Fit / kg overlay cluster. */
+body.view-s2 .wa-graphtabs,
+body.view-s2 .gmini-overlay { display: none; }
+/* Graph Options: drop the Data, Projection, Set-spread and Potential groups outright. */
+body.view-s2 .wa-cfg-group[data-cfggroup="Data"],
+body.view-s2 .wa-cfg-group[data-cfggroup="Projection"],
+body.view-s2 .wa-cfg-group[data-cfggroup="Set spread"],
+body.view-s2 .wa-cfg-group[data-cfggroup="Potential (log)"] { display: none; }
+/* Graph Options: keep only 1RM · Weight Range · Strength · Volume Load · Reps · Sets. */
+body.view-s2 .wa-metric[data-wametric="strengthDecay"],
+body.view-s2 .wa-metric[data-wametric="pctWR"],
+body.view-s2 .wa-metric[data-wametric="pctBest"],
+body.view-s2 .wa-metric[data-wametric="volume"],
+body.view-s2 .wa-metric[data-wametric="frequency"] { display: none; }
+/* Graph Options: drop the bottom All-graphs / Assist row. */
+body.view-s2 .wa-gmenu-cell:has([data-allgraphs]) { display: none; }
 /* Menu hugs the cell width and wraps long descriptions instead of going wide.
    The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
    edge (it grows leftward) — left-anchored it overflowed off the screen. */

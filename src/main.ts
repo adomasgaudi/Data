@@ -556,9 +556,17 @@ function placeVersionLine(): void {
 
 /** Switch the detail TIER (simple-1 · simple-2 · advanced) — the analysis home + bottom-nav
  * label — and keep the header quick switcher in sync. */
+/** Reflect the active view tier onto <body> so CSS can simplify the s2 view (hide a lot
+ * of advanced chrome — owner). One class per tier; s2 is the one the s2 rules target. */
+function applyViewTierClass(): void {
+  document.body.classList.toggle("view-s1", viewTier === "s1");
+  document.body.classList.toggle("view-s2", viewTier === "s2");
+  document.body.classList.toggle("view-adv", viewTier === "adv");
+}
 function setViewTier(tier: ViewTier): void {
   viewTier = tier;
   simplifiedView = tier === "s1";
+  applyViewTierClass();
   try {
     localStorage.setItem(VIEW_TIER_KEY, tier);
     localStorage.setItem("colosseum.simplifiedView", simplifiedView ? "1" : "0"); // keep the old flag in step
@@ -14705,6 +14713,7 @@ async function init() {
     els.status.innerHTML = `<span class="badge warn">Failed to load data</span> ${escapeHtml(String(err))}`;
     return;
   }
+  applyViewTierClass(); // reflect the saved view tier on <body> so s2 CSS simplifications apply from load
   // Fold in any hand-logged sets saved on this device (the Add tab).
   loadedRecords = data.records; // immutable base for spelling-split re-derivation
   mergeManualSets();
@@ -20591,7 +20600,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
     if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
   const cfgGroup = (label: string, sub: string, body: string, infoKey?: string) =>
-    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}${infoKey ? infoBtn(infoKey) : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
+    `<details class="wa-cfg-group" data-cfggroup="${escapeHtml(label)}"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}${infoKey ? infoBtn(infoKey) : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
     `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("biweek", c.interval, "Bi-week")}${opt("month", c.interval, "Month")}${opt("quarter", c.interval, "3 months")}${opt("halfyear", c.interval, "6 months")}${opt("year", c.interval, "12 months")}</select></label>` +
