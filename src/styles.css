@@ -1822,12 +1822,14 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 /* LOGGED assisted-machine value (S.machineReal off): the dial value joined with an "m" tag in
    ONE SHADED box (no outline, owner) joining an "m" TAG with the dial value (m-20⁷). */
 .wo-mlog { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-xs); padding: 0 4px 0 1px; font-weight: 600; white-space: nowrap; }
-/* The "m" tag — a LIGHTER shade (owner: was too dark), distinct from the box behind it. */
+/* The "m" tag — a LIGHTER shade (owner: was too dark), distinct from the box behind it.
+   (Legacy: kept for any residual .wo-mlog; the assisted display now uses the formula below.) */
 .wo-mlog-m { display: inline-block; background: color-mix(in srgb, var(--accent) 32%, transparent); color: var(--accent); border-radius: var(--r-xs); padding: 0 3px; margin-right: 3px; font-size: 0.7em; font-weight: 800; vertical-align: middle; }
-/* Reps sit OUTSIDE the shaded box now, so no special sup styling inside it. The set's own
-   button wrapper must NOT add a SECOND shade around a set that already has its own box (owner:
-   "the outer envelope is unnecessary"). */
 .wo-set-menu:has(.wo-mlog) { background: none; }
+/* Assisted-machine weight shown as a formula "-20/2" (dial halved = real effort), inline
+   like a machine-base lift's "20+30" — replaces the old real-vs-logged display toggle. */
+.wo-mform, .set-mform { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.wo-mform > sup, .set-mform > sup { font-size: 0.7em; }
 /* Machine-type toggle in the Analysis selector (single mode). */
 .wa-machine { margin: 0 0 0.5rem; }
 .wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

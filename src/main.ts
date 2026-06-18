@@ -7704,15 +7704,13 @@ function setDisplay(raw: SetRecord): string {
   // Empty for plain cable / free-weight sets.
   const computedForMach = computeRecord(s);
   const isAsstMach = isMachineSet(s.exerciseName, s.weight);
-  const machReal = isAsstMach ? realAddedWeight(s.exerciseName, s.weight) : null;
   const machRepsSup = s.reps === null ? "" : `<sup>${s.reps}</sup>`;
-  // Assisted-machine weight has a real/logged toggle (S.machineReal — the ⚙ 'real' pill, owner):
-  // LOGGED = the dial value joined with an 'm' tag in ONE outlined, tinted box (m-20⁷); REAL =
-  // the halved real effort, plainly (-10⁷). Non-machine sets render the normal weight^reps.
+  // Assisted-machine weight shows the FORMULA inline (owner): the dialed counterweight reads
+  // ~2× the real help, so the real effort is the dial halved — written as "-20/2" (like a
+  // machine-base lift shows "20+30"), instead of a real-vs-logged toggle. Non-machine sets
+  // render the normal weight^reps.
   const weightHtml = isAsstMach
-    ? (S.machineReal
-        ? wr(machReal, s.reps)
-        : `<span class="wo-mlog" title="Logged machine dial — over-reads ~2×; real effort ≈ ${machReal === null ? "half" : fmt(machReal)}. Toggle 'real' in the ⚙ for the real value."><span class="wo-mlog-m">m</span>${fmt(s.weight ?? 0)}</span>${machRepsSup}`)
+    ? `<span class="wo-mform" title="Assisted machine: the dialed counterweight over-reads ~2×, so the real effort is half — shown as the formula.">${fmt(s.weight ?? 0)}/2${machRepsSup}</span>`
     : `${mwp}${wr(s.weight, s.reps)}`;
   const mach = isAsstMach
     ? ""
@@ -8860,11 +8858,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
         ? `<span class="set-grav" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
   const edited = setOverrides[sid] !== undefined;
-  // Assisted MACHINE set (negative counterweight) — an auto tag. The history ALWAYS shows
-  // the LOGGED dial value (real effort is half; the graph's Assist option no longer changes
-  // this list). machineReal = the real (halved) effort, shown in the expanded row.
+  // Assisted MACHINE set (negative counterweight) — an auto tag. The weight cell shows the
+  // FORMULA "-20/2" (dial halved = the real effort) so the math is visible inline.
   const machineSet = isMachineSet(s.exerciseName, s.weight);
-  const machineReal = machineSet ? realAddedWeight(s.exerciseName, s.weight) : null;
   const assistTag = machineSet
     ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. The list shows the LOGGED dial value (your real effort is about half); expand the set to see both. The graph's Assist option doesn't change this list.">machine</span>`
     : "";
@@ -8882,7 +8878,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
       // reps; a machine set gets a "not real" mark; a machine-base lift shows "base+dialed".
       case "weight": return (machineSet
-        ? `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}<sup class="set-notreal" title="Logged machine dial — over-reads ~2×. Real effort ≈ ${machineReal === null ? "half" : fmt(machineReal)}; expand the set to see both.">*</sup>`
+        ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads ~2×, so the real effort is half — shown as the formula.">${fmt(s.weight ?? 0)}/2${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
         : `${machineWeightPrefix(s.exerciseName)}${wr(s.weight, s.reps)}`) + (weightChips ? `<span class="set-wtags">${weightChips}</span>` : "");
       case "e1rm": return e1rmCell; // the 1RM stands alone
       case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
