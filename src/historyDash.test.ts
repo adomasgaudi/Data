@@ -89,4 +89,42 @@ describe("historyDash model", () => {
     const built = { tabs: [makeHistoryTab("A")], activeTabId: "" };
     expect(normalizeHistoryDashboard(built).tabs[0]!.name).toBe("A");
   });
+
+  it("LOSSLESS: a drifted/partial config is REPAIRED, never wiped — keeps every valid field", () => {
+    // Simulates a dashboard saved before a field existed AND with one field that no longer
+    // validates: the tab + its name + the still-valid fields must survive; only the bad/missing
+    // fields fall back to defaults. (The old all-or-nothing parse dropped the whole dashboard.)
+    const drifted = {
+      tabs: [{
+        id: "t1",
+        name: "glutes",
+        config: {
+          byExercise: true,            // a valid custom value — MUST be kept
+          rmReps: 5,                   // a valid custom value — MUST be kept
+          viewMode: "garbage-enum",    // no longer valid → default
+          // showVariants / showAloneTags / etc. MISSING (old save) → defaults
+        },
+      }],
+      activeTabId: "t1",
+    };
+    const n = normalizeHistoryDashboard(drifted);
+    expect(n.tabs).toHaveLength(1);
+    expect(n.tabs[0]!.name).toBe("glutes");        // not wiped
+    expect(n.tabs[0]!.config.byExercise).toBe(true); // valid field preserved
+    expect(n.tabs[0]!.config.rmReps).toBe(5);        // valid field preserved
+    expect(n.tabs[0]!.config.viewMode).toBe("day");  // invalid field → default
+    expect(n.tabs[0]!.config.showVariants).toBe(false); // missing field → default
+    expect(n.activeTabId).toBe("t1");
+  });
+
+  it("LOSSLESS round-trip through save/load preserves a custom tab across a schema-ish change", () => {
+    let ada = defaultHistoryDashboard();
+    ada = renameHistoryTab(ada, ada.activeTabId, "back day");
+    ada = setHistoryTabConfig(ada, ada.activeTabId, { ...activeHistoryTab(ada).config, byExercise: true, rmReps: 3 });
+    saveHistoryDashboardFor("ada", ada);
+    const loaded = loadHistoryDashboardFor("ada")!;
+    expect(loaded.tabs[0]!.name).toBe("back day");
+    expect(loaded.tabs[0]!.config.byExercise).toBe(true);
+    expect(loaded.tabs[0]!.config.rmReps).toBe(3);
+  });
 });

@@ -167,9 +167,25 @@ describe("graphDash — normalize (load-boundary validation)", () => {
   it("garbage / empty → default dashboard", () => {
     expect(normalizeDashboard(null).tabs).toHaveLength(1);
     expect(normalizeDashboard({}).tabs).toHaveLength(1);
-    expect(normalizeDashboard({ tabs: [] }).tabs).toHaveLength(1); // min(1) fails → default
-    expect(normalizeDashboard({ tabs: [{ id: "t", name: "x", bubbles: [] }], activeTabId: "t" }).tabs)
-      .toHaveLength(1); // a tab with no bubbles is invalid → default
+    expect(normalizeDashboard({ tabs: [] }).tabs).toHaveLength(1); // no tabs → default
+  });
+
+  it("LOSSLESS: a tab that lost its bubbles is REPAIRED with a starter bubble (not wiped)", () => {
+    const n = normalizeDashboard({ tabs: [{ id: "t", name: "keepme", bubbles: [] }], activeTabId: "t" });
+    expect(n.tabs).toHaveLength(1);
+    expect(n.tabs[0]!.name).toBe("keepme");        // the tab survives
+    expect(n.tabs[0]!.bubbles).toHaveLength(1);     // given a fresh starter bubble
+  });
+
+  it("LOSSLESS: a drifted bubble field is repaired, the rest of the bubble survives", () => {
+    const drifted = {
+      tabs: [{ id: "t", name: "V", bubbles: [{ id: "b", type: "time", view: "garbage", exercises: ["Squat"], athletes: [], perBodyweight: true, metrics: ["e1rm"] }] }],
+      activeTabId: "t",
+    };
+    const n = normalizeDashboard(drifted);
+    expect(n.tabs[0]!.bubbles[0]!.exercises).toEqual(["Squat"]); // valid field preserved
+    expect(n.tabs[0]!.bubbles[0]!.perBodyweight).toBe(true);     // valid field preserved
+    expect(n.tabs[0]!.bubbles[0]!.view).toBe("single");          // invalid field → default
   });
 
   it("a valid dashboard round-trips unchanged", () => {
@@ -220,11 +236,13 @@ describe("graphDash — savedView (remembered pan/zoom)", () => {
     expect(n.tabs[0]!.bubbles[0]!.savedView).toEqual({ sig: "s1", box });
   });
 
-  it("a malformed saved view is rejected at the boundary (→ default)", () => {
+  it("a malformed saved view is dropped to null, but the bubble survives (lossless)", () => {
     const bad = {
-      tabs: [{ id: "t", name: "x", bubbles: [{ ...makeBubble(), savedView: { sig: "s", box: { xMin: "no" } } }] }],
+      tabs: [{ id: "t", name: "x", bubbles: [{ ...makeBubble({ exercises: ["Bench"] }), savedView: { sig: "s", box: { xMin: "no" } } }] }],
       activeTabId: "t",
     };
-    expect(normalizeDashboard(bad).tabs[0]!.bubbles[0]!.savedView ?? null).toBeNull();
+    const n = normalizeDashboard(bad);
+    expect(n.tabs[0]!.bubbles[0]!.savedView ?? null).toBeNull(); // the bad view → null
+    expect(n.tabs[0]!.bubbles[0]!.exercises).toEqual(["Bench"]); // the rest of the bubble is kept
   });
 });

@@ -104,38 +104,53 @@ export function defaultHistoryDashboard(): HistoryDashboard {
 }
 
 // ---- validation (Zod, at the load boundary) --------------------------------
-const ConfigSchema: z.ZodType<HistoryTabConfig> = z.object({
-  viewMode: z.enum(["day", "week", "2week", "month", "3month"]),
-  byExercise: z.boolean(),
-  sortByPriority: z.boolean(),
-  sortMode: z.enum(["priority", "recency", "volume", "logged"]).optional(),
-  showRest: z.boolean(),
-  restCompact: z.boolean(),
-  showAddSets: z.boolean(),
-  showVariants: z.boolean(),
-  showAloneTags: z.boolean(),
-  showMode: z.enum(["exercises", "groups"]),
-  grouping: z.string(),
-  rmReps: z.number(),
-  aloneFilter: z.enum(["both", "alone", "notAlone"]),
-  lensFilter: z.array(z.string()),
-  showAll: z.boolean(),
+// LOSSLESS by design: each field .catch()-es to its default, so a stored dashboard whose
+// shape has DRIFTED (an old save from before we added a field, or a field that no longer
+// validates) is REPAIRED field-by-field — keeping every value that still validates —
+// instead of the whole dashboard being dropped to a fresh default. That all-or-nothing drop
+// was the silent "my tabs reset" bug: with cloud sync on, the wiped default then syncs out
+// and the reset propagates to every device. Never wipe a user's customisation on a schema bump.
+const DC = defaultHistoryConfig();
+// No explicit z.ZodType<…> annotation: .catch() widens each field's INPUT to unknown, which
+// is incompatible with the invariant ZodType annotation — so we let Zod infer and rely on the
+// structural match to HistoryTabConfig (asserted by the tests + the typed normalize return).
+const ConfigSchema = z.object({
+  viewMode: z.enum(["day", "week", "2week", "month", "3month"]).catch(DC.viewMode),
+  byExercise: z.boolean().catch(DC.byExercise),
+  sortByPriority: z.boolean().catch(DC.sortByPriority),
+  sortMode: z.enum(["priority", "recency", "volume", "logged"]).optional().catch(DC.sortMode),
+  showRest: z.boolean().catch(DC.showRest),
+  restCompact: z.boolean().catch(DC.restCompact),
+  showAddSets: z.boolean().catch(DC.showAddSets),
+  showVariants: z.boolean().catch(DC.showVariants),
+  showAllScale: z.boolean().catch(false), // was absent from the schema before → got stripped on load; now persists
+  showAloneTags: z.boolean().catch(DC.showAloneTags),
+  showMode: z.enum(["exercises", "groups"]).catch(DC.showMode),
+  grouping: z.string().catch(DC.grouping),
+  rmReps: z.number().catch(DC.rmReps),
+  aloneFilter: z.enum(["both", "alone", "notAlone"]).catch(DC.aloneFilter),
+  lensFilter: z.array(z.string()).catch(DC.lensFilter),
+  showAll: z.boolean().catch(DC.showAll),
 });
-const TabSchema: z.ZodType<HistoryTab> = z.object({
+const TabSchema = z.object({
   id: z.string(),
   name: z.string(),
   config: ConfigSchema,
 });
-const DashboardSchema: z.ZodType<HistoryDashboard> = z.object({
-  tabs: z.array(TabSchema).min(1),
-  activeTabId: z.string(),
+// Tabs/activeTabId also .catch() so a dashboard with valid tabs but one odd field is kept
+// (empty/garbage tabs fall through to the default in normalizeHistoryDashboard).
+const DashboardSchema = z.object({
+  tabs: z.array(TabSchema).catch([]),
+  activeTabId: z.string().catch(""),
 });
 
 /** Coerce arbitrary loaded JSON into a valid dashboard, or fall back to default. Repairs a
  * dangling activeTabId (points at a removed tab) by snapping to the first tab. */
 export function normalizeHistoryDashboard(raw: unknown): HistoryDashboard {
   const parsed = DashboardSchema.safeParse(raw);
-  if (!parsed.success) return defaultHistoryDashboard();
+  // Only fall back to a fresh default when there's genuinely nothing usable (not an object,
+  // or no tabs survived). A dashboard with ≥1 tab is REPAIRED, never replaced.
+  if (!parsed.success || !parsed.data.tabs.length) return defaultHistoryDashboard();
   const d = parsed.data;
   if (!d.tabs.some((t) => t.id === d.activeTabId)) d.activeTabId = d.tabs[0]!.id;
   return d;
@@ -158,8 +173,11 @@ function loadAllHistoryDashboards(): Record<string, HistoryDashboard> {
   const raw = loadJsonObject<Record<string, unknown>>(HISTORY_DASH_KEY_V2);
   const out: Record<string, HistoryDashboard> = {};
   for (const [user, d] of Object.entries(raw)) {
+    // Keep a user as long as their stored dashboard has ≥1 repairable tab (lossless parse).
+    // A user with genuinely no usable tabs is omitted → the caller seeds a fresh default,
+    // but a user with valid tabs is NEVER dropped (which would wipe their customisation).
     const parsed = DashboardSchema.safeParse(d);
-    if (parsed.success) out[user] = normalizeHistoryDashboard(parsed.data);
+    if (parsed.success && parsed.data.tabs.length) out[user] = normalizeHistoryDashboard(parsed.data);
   }
   return out;
 }

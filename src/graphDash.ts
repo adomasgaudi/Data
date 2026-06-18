@@ -94,38 +94,48 @@ export function defaultDashboard(): GraphDashboard {
 }
 
 // ---- validation (Zod, at the load boundary) --------------------------------
-const BubbleSchema: z.ZodType<GraphBubble> = z.object({
+// LOSSLESS by design (same as historyDash): each bubble field .catch()-es to its default,
+// so a stored dashboard whose shape has DRIFTED is REPAIRED field-by-field instead of being
+// dropped to a fresh default. The all-or-nothing drop was the silent "my graph tabs/bubbles
+// reset" bug — and with cloud sync on, the wiped default propagates to every device.
+const DB = makeBubble();
+// No explicit z.ZodType<…> annotation: .catch() widens each field's INPUT to unknown, which
+// the invariant ZodType annotation rejects — so we infer and rely on the structural match.
+const BubbleSchema = z.object({
   id: z.string(),
-  type: z.enum(["time", "rvw"]),
-  view: z.enum(["single", "multi"]),
-  exercises: z.array(z.string()),
-  athletes: z.array(z.string()),
-  perBodyweight: z.boolean(),
-  metrics: z.array(z.string()),
+  type: z.enum(["time", "rvw"]).catch(DB.type),
+  view: z.enum(["single", "multi"]).catch(DB.view),
+  exercises: z.array(z.string()).catch([]),
+  athletes: z.array(z.string()).catch([]),
+  perBodyweight: z.boolean().catch(DB.perBodyweight),
+  metrics: z.array(z.string()).catch(DB.metrics),
   // nullish() = optional + nullable, so dashboards saved before this field still validate.
   savedView: z
     .object({
       sig: z.string(),
       box: z.object({ xMin: z.number(), xMax: z.number(), yMin: z.number(), yMax: z.number() }),
     })
-    .nullish(),
+    .nullish()
+    .catch(null),
 });
-const TabSchema: z.ZodType<GraphTab> = z.object({
+const TabSchema = z.object({
   id: z.string(),
   name: z.string(),
-  bubbles: z.array(BubbleSchema).min(1), // a tab always has at least one bubble
+  bubbles: z.array(BubbleSchema).catch([]), // empty → repaired to a starter bubble in normalize
 });
-const DashboardSchema: z.ZodType<GraphDashboard> = z.object({
-  tabs: z.array(TabSchema).min(1),
-  activeTabId: z.string(),
+const DashboardSchema = z.object({
+  tabs: z.array(TabSchema).catch([]),
+  activeTabId: z.string().catch(""),
 });
 
-/** Coerce arbitrary loaded JSON into a valid dashboard, or fall back to default. Also
- * repairs a dangling activeTabId (points at a removed tab) by snapping to the first tab. */
+/** Coerce arbitrary loaded JSON into a valid dashboard, repairing it losslessly. Only falls
+ * back to a fresh default when there's genuinely nothing usable (not an object / no tabs).
+ * Also gives any tab that lost its bubbles a starter bubble, and repairs a dangling activeTabId. */
 export function normalizeDashboard(raw: unknown): GraphDashboard {
   const parsed = DashboardSchema.safeParse(raw);
-  if (!parsed.success) return defaultDashboard();
+  if (!parsed.success || !parsed.data.tabs.length) return defaultDashboard();
   const d = parsed.data;
+  for (const t of d.tabs) if (!t.bubbles.length) t.bubbles = [makeBubble()];
   if (!d.tabs.some((t) => t.id === d.activeTabId)) d.activeTabId = d.tabs[0]!.id;
   return d;
 }
@@ -139,8 +149,10 @@ function loadAllDashboards(): Record<string, GraphDashboard> {
   const raw = loadJsonObject<Record<string, unknown>>(GRAPH_DASH_KEY_V2);
   const out: Record<string, GraphDashboard> = {};
   for (const [user, d] of Object.entries(raw)) {
+    // Keep a user as long as their stored dashboard has ≥1 repairable tab (lossless parse) —
+    // never drop a user with valid tabs, which would wipe their bubbles/views.
     const parsed = DashboardSchema.safeParse(d);
-    if (parsed.success) out[user] = normalizeDashboard(parsed.data);
+    if (parsed.success && parsed.data.tabs.length) out[user] = normalizeDashboard(parsed.data);
   }
   return out;
 }
