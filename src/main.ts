@@ -551,11 +551,15 @@ function placeVersionLine(): void {
   }
 }
 
-/** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
- * label), keep the header quick switcher in sync. */
-function setSimplified(on: boolean): void {
-  simplifiedView = on;
-  try { localStorage.setItem("colosseum.simplifiedView", on ? "1" : "0"); } catch { /* ignore */ }
+/** Switch the detail TIER (simple-1 · simple-2 · advanced) — the analysis home + bottom-nav
+ * label — and keep the header quick switcher in sync. */
+function setViewTier(tier: ViewTier): void {
+  viewTier = tier;
+  simplifiedView = tier === "s1";
+  try {
+    localStorage.setItem(VIEW_TIER_KEY, tier);
+    localStorage.setItem("colosseum.simplifiedView", simplifiedView ? "1" : "0"); // keep the old flag in step
+  } catch { /* ignore */ }
   const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
   if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
   updateBottomNav();
@@ -569,13 +573,13 @@ function renderViewSwitch(): void {
   const box = document.getElementById("viewSwitch");
   if (!box) return;
   const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spec";
-  const detailLabel = simplifiedView ? "Simple" : "Adv";
+  const detailLabel = viewTier === "s1" ? "s1" : viewTier === "s2" ? "s2" : "adv";
   // Only a REAL admin gets the Admin/User/Spectator switch — a logged-in user or
   // spectator is locked to their view (no toggle). The detail (Simple/Adv) toggle
   // stays for everyone.
   box.innerHTML =
     (isAdminRole() ? `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` : "") +
-    `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: Simplified · Advanced">${detailLabel}</button>`;
+    `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: simple 1 · simple 2 · advanced">${detailLabel}</button>`;
 }
 
 /** The "Colosseum" title acts as a Back-to-home button (jumps to the analysis
@@ -596,11 +600,8 @@ function setupViewSwitch(): void {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-toggle");
     if (!b) return;
     if (b.dataset.vcycle === "detail") {
-      // Decide from the page ACTUALLY shown (not the saved flag, which can drift),
-      // so one tap always flips simplified ⇄ full — never a wasted first tap.
-      const onSimplified = document.getElementById("tab-s-analysis")?.hidden === false;
-      const onFull = document.getElementById("tab-analysis")?.hidden === false;
-      setSimplified(onSimplified ? false : onFull ? true : !simplifiedView);
+      // Cycle the detail tier: simple 1 → simple 2 → advanced → simple 1.
+      setViewTier(viewTier === "s1" ? "s2" : viewTier === "s2" ? "adv" : "s1");
       return;
     }
     // Mode toggle cycles admin → user → spectator → admin.
@@ -4600,15 +4601,24 @@ let exerciseSort: "sets" | "category" | "tier" = "category";
 // hidden by default — but it's a normal category like any other, shown/hidden via
 // the "Show:" chips (hiddenExCats), not a dedicated Settings toggle.
 // Simplified view: when on, the bottom "Analysis" button opens the S-ANL page.
-// Defaults ON outside admin (spectator/user), OFF for admin — until explicitly set.
-let simplifiedView = (() => {
+// View detail TIER (owner): three levels — "s1" simple (the s-analysis tab), "s2" simple-2
+// (currently a copy of advanced, to be trimmed down later), "adv" advanced. `simplifiedView`
+// is derived (= s1) and still drives the s-analysis ⇄ analysis tab choice; s2 and adv both
+// use the full analysis tab for now. Stored device-local (colosseum.viewTier.v1), migrating
+// the old boolean. Defaults to simple (s1) outside admin, advanced for admin.
+type ViewTier = "s1" | "s2" | "adv";
+const VIEW_TIER_KEY = "colosseum.viewTier.v1";
+let viewTier: ViewTier = (() => {
   try {
-    const v = localStorage.getItem("colosseum.simplifiedView");
-    if (v === "1") return true;
-    if (v === "0") return false;
+    const v = localStorage.getItem(VIEW_TIER_KEY);
+    if (v === "s1" || v === "s2" || v === "adv") return v;
+    const old = localStorage.getItem("colosseum.simplifiedView"); // migrate the retired boolean
+    if (old === "1") return "s1";
+    if (old === "0") return "adv";
   } catch { /* ignore */ }
-  return viewMode !== "admin";
+  return viewMode !== "admin" ? "s1" : "adv";
 })();
+let simplifiedView = viewTier === "s1";
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
