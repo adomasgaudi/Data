@@ -1745,12 +1745,26 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .scale-edit-mach.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
 /* Quick-edit "Variant" chip: a collapsed-line set token made tappable (history ⚙ → Var).
    A faint pill background signals it opens the variant editor; the token reads as before. */
-.wo-set-variant { font: inherit; cursor: pointer; color: inherit; background: var(--accent-soft); border: 1px solid transparent; border-radius: var(--r-pill); padding: 0 4px; }
-.wo-set-variant:hover { border-color: var(--accent); }
-/* Tap a collapsed set to DUPLICATE it (owner): a near-invisible button that just adds a
-   touch of padding (a bigger tap target) and lights up on press. */
-.wo-set-dup { font: inherit; color: inherit; cursor: pointer; background: none; border: none; border-radius: var(--r-pill); padding: 1px 4px; }
-.wo-set-dup:hover, .wo-set-dup:active { background: var(--accent-soft); }
+/* Tap a collapsed set → its action menu (duplicate / change variant / add suggested).
+   A near-invisible button with a touch of padding (a bigger tap target) that lights up
+   on press; a set WITH a variant gets the outline highlight (.has-var) the owner likes. */
+.wo-set-menu { font: inherit; color: inherit; cursor: pointer; background: none; border: 1px solid transparent; border-radius: var(--r-pill); padding: 1px 4px; }
+.wo-set-menu:hover, .wo-set-menu:active { background: var(--accent-soft); }
+.wo-set-menu.has-var { background: var(--accent-soft); }
+.wo-set-menu.has-var:hover { border-color: var(--accent); }
+/* The small per-set action menu (rule 32: fixed + clampMenuIntoView). */
+.set-act-menu {
+  position: fixed; z-index: 140; min-width: 9.5rem; max-width: 88vw;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(20, 24, 38, 0.28); padding: 5px; display: flex; flex-direction: column; gap: 2px;
+}
+.set-act-item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px; min-height: var(--tap-min);
+  border: none; border-radius: var(--r-pill); background: none; color: var(--text);
+  font-size: 0.84rem; font-weight: 600; cursor: pointer;
+}
+.set-act-item:hover, .set-act-item:active { background: var(--accent-soft); color: var(--accent); }
+.set-act-sec { padding: 5px 10px 2px; font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .scale-edit-hd { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
 .scale-edit-title { font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; }
 .scale-edit-close { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; line-height: 1.6; }

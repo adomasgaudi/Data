@@ -6867,7 +6867,7 @@ const CURRENT_STRENGTH_COLOR = "#2e7d52";
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
-  if (duplicateSetClick(target)) return; // tap a COLLAPSED-view set → duplicate it (owner)
+  if (openSetMenuClick(target)) return; // tap a COLLAPSED-view set → small action menu (owner)
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
@@ -7636,15 +7636,14 @@ function setDisplay(raw: SetRecord): string {
   // so you can flip it without expanding the full editor. `finish` wraps the token.
   const sid = setId(raw);
   const hasVariant = machineModeEligible(s.exerciseName) || !!familyOf(s.exerciseName) || !!note || s.levelDim !== undefined;
-  // In "Var" mode a set is a variant-edit button; otherwise (owner) a tap DUPLICATES the
-  // set — a quick "did another one just like it" — so each collapsed set is a dup button
-  // (only when you can edit this athlete; spectators get plain text).
+  // Tapping a collapsed set opens a small ACTION MENU (owner): duplicate it, change its
+  // variant, or add a suggested next set. A set that HAS a variant carries the variant
+  // attrs (so the menu can open the editor) and — when the Var toggle is on — shows the
+  // outline highlight the owner likes. Spectators (can't edit) get plain text.
   const finish = (h: string): string =>
-    S.showVariants && hasVariant
-      ? `<button type="button" class="wo-set-variant" ${variantTriggerData(s, sid)} title="Tap to edit this set's variant">${h}</button>`
-      : canEditCurrentAthlete()
-        ? `<button type="button" class="wo-set-dup" data-dupid="${escapeHtml(sid)}" title="Tap to duplicate this set">${h}</button>`
-        : h;
+    canEditCurrentAthlete()
+      ? `<button type="button" class="wo-set-menu${hasVariant && S.showVariants ? " has-var" : ""}" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
+      : h;
   const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
@@ -8247,7 +8246,7 @@ function renderWoHiddenNote(): void {
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
-  if (duplicateSetClick(target)) return; // tap a COLLAPSED-view set → duplicate it (owner)
+  if (openSetMenuClick(target)) return; // tap a COLLAPSED-view set → small action menu (owner)
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
@@ -9412,12 +9411,117 @@ function deleteSetById(id: string): void {
   window.scrollTo(0, y);
 }
 
-/** Tap a COLLAPSED-view set chip → duplicate it (owner: "simply duplicate it"). */
-function duplicateSetClick(target: HTMLElement): boolean {
-  const btn = target.closest<HTMLElement>(".wo-set-dup");
-  if (!btn?.dataset.dupid) return false;
-  duplicateSetFromId(btn.dataset.dupid);
+/** Tap a COLLAPSED-view set chip → open its small action menu (owner: duplicate /
+ * change variant / add a suggested set). */
+function openSetMenuClick(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".wo-set-menu");
+  if (!btn?.dataset.setmenu) return false;
+  openSetActionMenu(btn);
   return true;
+}
+function closeSetActionMenu(): void {
+  document.getElementById("setActionMenu")?.remove();
+  document.removeEventListener("click", setActOutside, true);
+}
+/** Capture-phase listener while the set menu is open: run a tapped action, else close
+ * on an outside tap. (One menu at a time; rule 32 floating menu.) */
+function setActOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  const item = t.closest<HTMLElement>("[data-setact]");
+  if (item) { e.preventDefault(); e.stopPropagation(); handleSetAct(item); closeSetActionMenu(); return; }
+  if (!t.closest("#setActionMenu")) closeSetActionMenu();
+}
+/** Perform a set-menu action: duplicate, open the variant editor, or add a suggested set. */
+function handleSetAct(item: HTMLElement): void {
+  const sid = item.dataset.sid;
+  if (!sid) return;
+  if (item.dataset.setact === "dup") { duplicateSetFromId(sid); return; }
+  if (item.dataset.setact === "variant") {
+    // Re-find the live set button (it still carries the data-scaleedit-* attrs) and open
+    // the same variant editor the expanded-row chip uses.
+    const src = document.querySelector<HTMLElement>(`.wo-set-menu[data-setmenu="${CSS.escape(sid)}"]`);
+    if (src) openVariantFromAttrs(src);
+    return;
+  }
+  if (item.dataset.setact === "sugg") { addSuggestedSet(sid, item.dataset.mode ?? "same"); return; }
+}
+/** Open the floating variant editor from a button carrying data-scaleedit-* attrs. */
+function openVariantFromAttrs(btn: HTMLElement): void {
+  if (!btn.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return;
+  const ld = btn.dataset.scaleeditLeveldim, lv = btn.dataset.scaleeditLevelvalue, ll = btn.dataset.scaleeditLevellabel;
+  const level = ld && lv !== undefined && ll !== undefined ? { dim: ld as LevelDim, value: Number(lv), label: ll } : undefined;
+  openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn, level, { setId: btn.dataset.scaleeditSetid, rawNote: btn.dataset.scaleeditRawnote });
+}
+/** The small per-set action menu (rule 32: fixed + clampMenuIntoView, body-appended). */
+function openSetActionMenu(anchor: HTMLElement): void {
+  closeSetActionMenu();
+  const sid = anchor.dataset.setmenu!;
+  const hasVar = anchor.dataset.scaleeditEx !== undefined;
+  const src = liveRecords().find((r) => setId(r) === sid);
+  // Suggestions read off the tapped set: a touch more reps, a touch more weight, or a
+  // lighter back-off — the everyday "what next set" choices, each one tap to log.
+  const w = src?.weight ?? 0;
+  const canWeight = w > 0; // bodyweight-only sets have no plate to bump / back off
+  const item = (act: string, label: string, extra = "") =>
+    `<button type="button" class="set-act-item" data-setact="${act}" data-sid="${escapeHtml(sid)}"${extra}>${label}</button>`;
+  const menu = document.createElement("div");
+  menu.id = "setActionMenu";
+  menu.className = "set-act-menu";
+  menu.innerHTML =
+    item("dup", "⧉ Duplicate set") +
+    (hasVar ? item("variant", "✎ Change variant") : "") +
+    `<div class="set-act-sec">Add a set</div>` +
+    item("sugg", "＋1 rep", ` data-mode="rep"`) +
+    (canWeight ? item("sugg", "＋2.5 kg", ` data-mode="wt"`) : "") +
+    (canWeight ? item("sugg", "−10% back-off", ` data-mode="back"`) : "");
+  document.body.appendChild(menu);
+  clampMenuIntoView(menu, anchor);
+  setTimeout(() => document.addEventListener("click", setActOutside, true), 0);
+}
+/** Add a new manual set based on an existing one, tweaked per the suggestion mode
+ * (+1 rep, +2.5 kg, −10% back-off). Keeps the note/level; a fresh set, so per-set
+ * side-stores aren't copied (unlike a faithful Duplicate). */
+function addSuggestedSet(id: string, mode: string): void {
+  if (!canEditCurrentAthlete()) return;
+  const src = liveRecords().find((r) => setId(r) === id);
+  if (!src) return;
+  let weight = src.weight ?? 0;
+  let reps = src.reps ?? 0;
+  if (mode === "rep") reps = (reps || 0) + 1;
+  else if (mode === "wt") weight = (weight || 0) + 2.5;
+  else if (mode === "back") weight = Math.round((weight || 0) * 0.9 * 10) / 10;
+  const username = src.username;
+  const exerciseName = src.originalExerciseName ?? src.exerciseName;
+  manualEntries.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    seq: Date.now() % 2000000000,
+    user: athleteLabel(),
+    username,
+    date: src.date,
+    exerciseName,
+    weight,
+    reps,
+    ...(src.notes ? { notes: src.notes } : {}),
+    ...(src.levelDim === "sq" && src.levelValue !== undefined ? { levelValue: src.levelValue } : {}),
+  });
+  const entryId = manualEntries[manualEntries.length - 1]!.id;
+  saveManual();
+  mergeManualSets();
+  const refresh = () => {
+    const y = window.scrollY;
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    refreshExerciseInfo();
+    window.scrollTo(0, y);
+  };
+  refresh();
+  showToast(`Added ${displayName(exerciseName)} set (${reps}×${fmt(weight)})`, "Undo", () => {
+    manualEntries = manualEntries.filter((e) => e.id !== entryId);
+    saveManual();
+    mergeManualSets();
+    refresh();
+  });
 }
 /** Create a hand-logged COPY of an existing set (same day, same effective weight/reps/
  * note + every per-set variation), then refresh. Faithful: it mirrors the source's base
