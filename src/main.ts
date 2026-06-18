@@ -18350,20 +18350,49 @@ function populateAddExerciseList(): void {
 // One weight×reps LINE = one set (owner: drop the "how many sets" count — a set is always
 // one; instead the "+ set" button appends another line, so each set carries its own weight/
 // reps). The ✕ removes a line; CSS hides it on the only line.
-const AF_LINE =
-  `<div class="addm-line">` +
-  `<div class="addm-set-chip">` +
-  `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="0" aria-label="Weight (kg)" />` +
-  `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
-  `<span class="addm-real" aria-hidden="true" hidden></span>` +
-  `</div>` +
-  `<span class="addm-rir-slot"></span>` +
-  `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
-  `</div>`;
+/** One add-set LINE = one set: its OWN variation tags (owner: "all sets should have
+ * their own separate tags") on the left, then the weight × reps chip, RIR and remove ✕
+ * grouped on the right. The variation block is per-line so each set's tags are
+ * independently selectable; a new line copies the previous line's picks (see + set). */
+function afLine(ex: string): string {
+  return (
+    `<div class="addm-line">` +
+    `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
+    `<div class="addm-line-main">` +
+    `<div class="addm-set-chip">` +
+    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="0" aria-label="Weight (kg)" />` +
+    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
+    `<span class="addm-real" aria-hidden="true" hidden></span>` +
+    `</div>` +
+    `<span class="addm-rir-slot"></span>` +
+    `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
+    `</div>` +
+    `</div>`
+  );
+}
 const AF_BUTTONS =
   `<button type="button" class="wo-af-go">Add</button>` +
   `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
   `<span class="wo-af-msg muted"></span>`;
+
+/** Copy one add-set line's variation picks (each dim pill + ROM) into another line,
+ * so a freshly-added set STARTS from the previous set's tags (owner: "by default copy
+ * the existing set's tags") while staying independently editable. Matches selects by
+ * their dimension (data-dim), ROM by class. The <select> value is set synchronously —
+ * before the body MutationObserver auto-enhances the new selects into .xdd — so the
+ * enhanced pill renders the copied label. */
+function copyLineVariation(from: HTMLElement, to: HTMLElement): void {
+  const srcByDim = new Map<string, string>();
+  for (const s of from.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]"))
+    if (s.dataset.dim) srcByDim.set(s.dataset.dim, s.value);
+  for (const s of to.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+    const v = s.dataset.dim ? srcByDim.get(s.dataset.dim) : undefined;
+    if (v != null && [...s.options].some((o) => o.value === v)) s.value = v;
+  }
+  const fromRom = from.querySelector<HTMLSelectElement>(".wo-af-rom");
+  const toRom = to.querySelector<HTMLSelectElement>(".wo-af-rom");
+  if (fromRom && toRom && [...toRom.options].some((o) => o.value === fromRom.value)) toRom.value = fromRom.value;
+}
 
 /** Distinct variation NOTES already logged for an exercise (e.g. a handstand's
  * "b2w +15cm", a push-up's "deficit"), most-used first — the choices we offer when
@@ -18600,17 +18629,18 @@ const numOrNull = (v: string | undefined): number | null => { const n = parseFlo
 /** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
  * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
 function syncAddmVtags(form: HTMLElement): void {
-  // Owner: ONE styled set of tags, not a picker row PLUS a duplicate preview. Each variation
-  // dimension is its own pill (the xdd-enhanced <select>); we SHOW only the ones SET away from
-  // their default, hiding the rest unless the ＋ ("show all") is on — so you see only the tags
-  // you've set, tap one to change it, and ＋ reveals the rest to add another. The selects stay
-  // the source of truth read on Add (onInlineAddGo) — capture is unchanged.
-  const slot = form.querySelector<HTMLElement>(".addm-variant-slot");
-  const showAll = !!slot?.classList.contains("show-all");
-  for (const sel of form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
-    const def = sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "";
-    const isDefault = sel.value === def;
-    setEnhancedSelectHidden(sel, isDefault && !showAll);
+  // Owner: ONE styled set of tags PER set line, not a picker row plus a duplicate preview,
+  // and not one block shared across sets. Each line carries its OWN .addm-line-vars; within
+  // it each variation dimension is its own pill (the xdd-enhanced <select>). We SHOW only the
+  // ones SET away from their default, hiding the rest unless that line's ＋ ("show all") is on
+  // — so each set shows only its own set tags, tap one to change it, ＋ reveals the rest. The
+  // selects stay the source of truth read on Add (onInlineAddGo) — capture is unchanged.
+  for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+    const showAll = slot.classList.contains("show-all");
+    for (const sel of slot.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
+      const def = sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "";
+      setEnhancedSelectHidden(sel, sel.value === def && !showAll);
+    }
   }
 }
 
@@ -18833,8 +18863,8 @@ function openAddModal(exerciseName: string | null, date: string): void {
   const today = todayIso();
   const { prefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
   // Variant = structured dim pickers for modelled lifts only (never conflated with notes).
-  // Lives in a stable slot so the new-lift popup can rebuild it when you PICK an exercise.
-  const variantBlock = addmVariantField(ex);
+  // They live PER set-line now (afLine → addmVariantField), so each set has its own tags;
+  // the new-lift popup rebuilds every line's pickers when you PICK an exercise.
   // Note — always a separate free-text field; past notes fill the datalist.
   const notes = ex ? variationNotesFor(ex) : [];
   const noteListId = `addmNotes-${++afNoteSeq}`;
@@ -18873,7 +18903,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
     exField +
     `<div class="addm-set-cog" data-cogex="${escapeHtml(ex)}" hidden>${addmSettingsPanelInner(ex)}</div>` +
     afWhenToggle(date, today) +
-    `<div class="addm-setblock"><div class="addm-variant-slot">${variantBlock}</div><div class="addm-lines">${AF_LINE}</div></div>` +
+    `<div class="addm-lines">${afLine(ex)}</div>` +
     `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
     suggSection +
     noteField +
@@ -18953,8 +18983,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
   // by the body MutationObserver. Owner: "change the popup based on the selected exercise".
   if (isNew) {
     const exInput = wrap.querySelector<HTMLInputElement>(".wo-af-ex");
-    const slot = wrap.querySelector<HTMLElement>(".addm-variant-slot");
-    if (exInput && slot) {
+    if (exInput) {
       let lastKey = ex ? (familyOf(ex) ?? "") : "";
       const refreshVariant = () => {
         const name = exInput.value.trim();
@@ -18962,7 +18991,8 @@ function openAddModal(exerciseName: string | null, date: string): void {
         addmStrength = null; // a different lift → recompute the strength anchor for the assumed RIR
         if (key === lastKey) return; // same model → nothing to rebuild
         lastKey = key;
-        slot.innerHTML = addmVariantField(name);
+        // Rebuild EVERY set-line's variation pickers (each line carries its own now).
+        for (const lv of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) lv.innerHTML = name ? addmVariantField(name) : "";
       };
       exInput.addEventListener("change", refreshVariant);
       exInput.addEventListener("input", refreshVariant);
@@ -18979,10 +19009,11 @@ function onAddModalClick(e: MouseEvent): void {
   if (t === wrap) { closeAddModal(); return; } // backdrop tap
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
-  // ＋ tag: reveal ALL variation dimensions (so you can set a default one) — tap again to
-  // collapse back to only the tags you've set (owner: one styled tag set, ＋ to add more).
+  // ＋ tag: reveal ALL variation dimensions for THAT set line (so you can set a default one)
+  // — tap again to collapse back to only the tags you've set (owner: one styled tag set per
+  // set, ＋ to add more). Per-line now, so it only affects the line whose ＋ you tapped.
   if (t.closest(".addm-add-tag")) {
-    form.querySelector<HTMLElement>(".addm-variant-slot")?.classList.toggle("show-all");
+    t.closest<HTMLElement>(".addm-line-vars")?.classList.toggle("show-all");
     syncAddmVtags(form);
     return;
   }
@@ -19058,13 +19089,22 @@ function onAddModalClick(e: MouseEvent): void {
     if (onInlineAddGo(form)) closeAddModal();
     return;
   }
-  // "+ set" — append another weight×reps line (each line = one set).
+  // "+ set" — append another weight×reps line (each line = one set). The new line COPIES
+  // the previous line's variation tags by default (owner), then stays independently editable.
   if (t.closest(".wo-af-addline")) {
     const lines = form.querySelector<HTMLElement>(".addm-lines");
     if (lines) {
-      lines.insertAdjacentHTML("beforeend", AF_LINE);
+      const exNow = addmCogEx(form); // the typed new-lift name, else the fixed one
+      const prev = lines.lastElementChild as HTMLElement | null; // copy this line's tags
+      lines.insertAdjacentHTML("beforeend", afLine(exNow));
+      const added = lines.lastElementChild as HTMLElement | null;
+      // Carry the previous set's picks across SYNCHRONOUSLY (before the body MutationObserver
+      // auto-enhances the new selects into .xdd, so the enhanced pill shows the copied value).
+      if (prev && added) copyLineVariation(prev, added);
       syncAddmVtags(form);
-      lines.lastElementChild?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+      // Re-hide the new line's default pills once its selects are enhanced (twins now exist).
+      requestAnimationFrame(() => { const f = addModalEl?.querySelector<HTMLElement>(".wo-addform"); if (addModalEl && f) syncAddmVtags(f); });
+      added?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
     }
     syncPendingFromModal();
     return;
@@ -19131,45 +19171,40 @@ function onInlineAddGo(form: HTMLElement): boolean {
   // never feed any metric. Only the isNew form has .wo-af-exp.
   if (exerciseName && form.querySelector<HTMLElement>(".wo-af-exp")?.getAttribute("aria-pressed") === "true")
     setExperimental(exerciseName, true);
-  // Each .addm-line is ONE set's weight × reps (the "+ set" button adds lines). Read them
-  // all; keep only those with valid reps. The shared variant / ROM / note below apply to
-  // every created set.
+  // Each .addm-line is ONE set, with its OWN weight × reps, RIR, variation tags and ROM
+  // (owner: "all sets should have their own separate tags"). Read every line; keep only
+  // those with valid reps.
+  const fam = familyOf(exerciseName);
+  const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
+  const sharedNote = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
   const lineEls = [...form.querySelectorAll<HTMLElement>(".addm-line")];
   const setLines = (lineEls.length ? lineEls : [form])
-    .map((ln) => ({
-      weight: parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight")!.value),
-      reps: Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps")!.value)),
+    .map((ln) => {
+      const weight = parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
+      const reps = Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
       // Only a MANUALLY-picked RIR is recorded; an untouched (assumed) picker stays empty so the
       // new set keeps the same assumed-RIR behaviour as every other ungraded set.
-      rir: (ln.querySelector?.<HTMLElement>(".addm-rir")?.dataset.picked) || "",
-    }))
+      const rir = (ln.querySelector?.<HTMLElement>(".addm-rir")?.dataset.picked) || "";
+      // This line's picked variation levels = TAGS (pinned to the set's per-set vec below),
+      // recorded only when they differ from the family default. Tags are inferred FROM notes,
+      // but when you pick them directly there's no note to fabricate.
+      const chosenDims: [string, string][] = [];
+      for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+        const dim = s.dataset.dim!; const lvl = s.value;
+        if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]);
+      }
+      // This line's ROM → "ROM X%" appended to its note only when it differs from the
+      // exercise's default (default-ROM sets stay clean). The free-text note rides alongside.
+      let note = sharedNote;
+      const romSel = ln.querySelector<HTMLSelectElement>(".wo-af-rom");
+      if (romSel) {
+        const romPct = parseInt(romSel.value, 10);
+        const romDef = parseInt(romSel.dataset.romdefault ?? "", 10);
+        if (Number.isFinite(romPct) && romPct !== romDef) note = note ? `${note} ROM ${romPct}%` : `ROM ${romPct}%`;
+      }
+      return { weight, reps, rir, chosenDims, note };
+    })
     .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
-  // Chosen variation. Structured pickers (a modelled lift) → the picked levels are
-  // TAGS, not a note: we pin them straight onto each created set's per-set vec (the
-  // __set:<id> synthetic key) below and DON'T fabricate a note from them — tags are
-  // inferred FROM notes, but when you pick tags directly there's no note to create.
-  // Otherwise fall back to the free-text note the owner typed.
-  const dimEls = [...form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")];
-  let note: string;
-  const chosenDims: [string, string][] = [];
-  if (dimEls.length) {
-    const fam = familyOf(exerciseName);
-    const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
-    for (const s of dimEls) { const dim = s.dataset.dim!; const lvl = s.value; if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]); }
-    // Picked tags carry the VARIANT per-set; a free note (if typed) rides ALONGSIDE them
-    // as a plain note — it is NOT assumed to be a variant (owner: notes ≠ variants).
-    note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
-  } else {
-    note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
-  }
-  // Universal per-set ROM: record "ROM X%" in the note ONLY when it differs from this
-  // exercise's default (so default-ROM sets stay clean; a partial-ROM set is captured).
-  const romSel = form.querySelector<HTMLSelectElement>(".wo-af-rom");
-  if (romSel) {
-    const romPct = parseInt(romSel.value, 10);
-    const romDef = parseInt(romSel.dataset.romdefault ?? "", 10);
-    if (Number.isFinite(romPct) && romPct !== romDef) note = note ? `${note} ROM ${romPct}%` : `ROM ${romPct}%`;
-  }
   const username = els.athlete.value;
   const user = athleteLabel();
   if (!username || !exerciseName) return false;
@@ -19189,17 +19224,19 @@ function onInlineAddGo(form: HTMLElement): boolean {
       exerciseName,
       weight: Number.isFinite(l.weight) ? l.weight : null,
       reps: l.reps,
-      ...(note ? { notes: note } : {}),
+      ...(l.note ? { notes: l.note } : {}),
     });
   });
-  // Pin the picked tags to EACH created set's per-set vec (the __set:<id> synthetic
-  // key that variationNote() returns for a noteless model-lift set), so the chosen
+  // Pin EACH line's OWN picked tags to that set's per-set vec (the __set:<id> synthetic
+  // key that variationNote() returns for a noteless model-lift set), so every set's chosen
   // attributes are authoritative without inventing a note. Mirrors the setId formula
   // (username|exercise|date|setNumber) used at read time.
-  if (chosenDims.length && familyOf(exerciseName)) {
+  if (fam) {
     for (let i = 0; i < setLines.length; i++) {
+      const l = setLines[i]!;
+      if (!l.chosenDims.length) continue;
       const synthNote = `__set:${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
-      for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
+      for (const [dim, lvl] of l.chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
     }
   }
   // A manually-picked RIR per line → record it on the created set (same id formula). An untouched

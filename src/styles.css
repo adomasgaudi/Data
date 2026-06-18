@@ -2746,34 +2746,32 @@ sup.wr-bw { font-size: 0.85em; }
 /* Structured variation pickers: a tight, horizontally-scrolling row of small labelled
    dropdowns (the lift's variables — support, ROM, lean…), one tap each. ~30% larger
    here too, matching the rest of the add-set form. */
-/* Crammed variant pickers (owner): the variant/ROM pills form a TAG BLOCK that stays to the
-   LEFT of the weight/reps. When there are many tags (e.g. handstands) they WRAP WITHIN that
-   block, but the weight and reps never drop below — flex-wrap:nowrap on the setblock keeps the
-   weight/reps to the RIGHT of the (possibly multi-row) tag block, which shrinks + wraps. */
-.addm-setblock { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0.4rem; margin: 0.35rem 0; }
-.addm-setblock .addm-variant-slot { display: flex; flex-wrap: wrap; align-content: flex-start; flex: 0 1 auto; min-width: 0; gap: 0.3rem; }
-.addm-setblock .addm-variant-slot:empty { display: none; }
-/* dissolve the .wo-af-dims wrapper so its dim pills join the tag-block wrap directly, beside the ROM pill */
-.addm-setblock .wo-af-dims { display: contents; }
-.addm-setblock .addm-lines { flex: 0 0 auto; } /* weight/reps fixed to the right of the tag block */
-/* Each tag/ROM pill in the block (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
-.addm-variant-slot select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
-.addm-variant-slot .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
+/* Per-line variant pickers (owner: "all sets should have their own separate tags"): each set
+   LINE carries its OWN .addm-line-vars — a TAG BLOCK of variant/ROM pills + a ＋ tag button on
+   the LEFT, with the weight/reps/RIR/✕ grouped on the right (.addm-line-main). Many tags (e.g.
+   handstands) wrap within the block; the right group drops below only when out of room. */
+.addm-line-vars { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center; flex: 1 1 auto; min-width: 0; gap: 0.3rem; }
+.addm-line-vars:empty { display: none; }
+/* dissolve the .wo-af-dims wrapper so its dim pills join the tag wrap directly, beside the ROM pill */
+.addm-line-vars .wo-af-dims { display: contents; }
+/* Each tag/ROM pill in the line (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
+.addm-line-vars select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
+.addm-line-vars .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
 /* The variation PICKER pill reads like the history TAG it sets (owner: "the css of the
    variation selector should look the same as the final tag"): uppercase, bold, square
    --r-xs corners, neutral muted-on-line like .wo-var-chip — kept at --tap-min so it
    stays tappable. The chosen label shows clean; explanations live in the open menu. */
-.addm-variant-slot .wo-af-dimpill .xdd-btn {
+.addm-line-vars .wo-af-dimpill .xdd-btn {
   min-height: var(--tap-min); width: auto; gap: 0.25rem;
   padding: 2px 8px; font-size: 0.66rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.02em;
   border-radius: var(--r-xs); border-color: var(--line);
   background: var(--line); color: var(--text);
 }
-.addm-variant-slot .wo-af-dimpill .xdd-btn:hover,
-.addm-variant-slot .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
-.addm-variant-slot .wo-af-dimpill .xdd-caret { font-size: 0.6rem; }
-.addm-variant-slot .xdd { flex: 0 0 auto; }
+.addm-line-vars .wo-af-dimpill .xdd-btn:hover,
+.addm-line-vars .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); color: var(--accent); }
+.addm-line-vars .wo-af-dimpill .xdd-caret { font-size: 0.6rem; }
+.addm-line-vars .xdd { flex: 0 0 auto; }
 /* ＋ tag — reveal the dims still at their default so you can add one (owner: only the tags
    you've set show; tap ＋ to add more). A subtle dashed pill matching the tag density. */
 .addm-add-tag {
@@ -2783,7 +2781,7 @@ sup.wr-bw { font-size: 0.85em; }
   background: none; color: var(--muted); cursor: pointer;
 }
 .addm-add-tag:hover { border-color: var(--accent); color: var(--accent); }
-.addm-variant-slot.show-all .addm-add-tag { border-style: solid; color: var(--accent); border-color: var(--accent); }
+.addm-line-vars.show-all .addm-add-tag { border-style: solid; color: var(--accent); border-color: var(--accent); }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
@@ -2862,8 +2860,11 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-addform--modal .addm-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
 .wo-addform--modal .addm-inputs input { width: 100%; min-width: 0; }
 /* Multi-set add: one weight×reps LINE per set, looks like a set chip (weight + superscript reps). */
-.addm-lines { display: flex; flex-direction: column; gap: 0.4rem; }
-.addm-line { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
+.addm-lines { display: flex; flex-direction: column; gap: 0.6rem; }
+.addm-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; margin: 0.15rem 0; }
+/* A faint dashed divider between sets so it's clear which tags belong to which set (owner). */
+.addm-lines > .addm-line + .addm-line { border-top: 1px dashed var(--line); padding-top: 0.6rem; }
+.addm-line-main { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; margin-left: auto; }
 /* The set line: the variant tag, then the weight and reps as PLAIN EDITABLE TEXT (owner: "remove
    the input look altogether, let me just edit text") — no border/box/fill, sitting close together
    with the reps raised as a superscript, so it reads like the final logged chip. */
