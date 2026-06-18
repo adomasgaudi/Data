@@ -18694,9 +18694,11 @@ function syncAddmVtags(form: HTMLElement): void {
   }
 }
 
-/** For an assisted-MACHINE lift, show the live REAL conversion of each typed dial weight
- * (−20 → −10) as a shaded chip with superscript reps, so the owner immediately sees the real
- * set. Hidden for non-machine lifts (where the typed weight already IS the real value). */
+/** Live machine FORMULA preview per add-line, matching how the set will read in the history
+ * (owner: "if I add machine weight or assistance multiplier I should see it next to the weight
+ * as x/2 or x+10"): an assisted machine shows the dialed counterweight over its divisor
+ * (−20/2), a machine with a base weight shows base+dial (10+0). Hidden for a plain lift where
+ * the typed weight already IS the real value. */
 function syncAddmReal(form: HTMLElement): void {
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
@@ -18708,13 +18710,17 @@ function syncAddmReal(form: HTMLElement): void {
     if (!out) continue;
     const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
     const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
+    const repsSup = reps === null ? "" : `<sup>${reps}</sup>`;
+    let formula = "";
     if (eq && eq.assisted && w !== null && w < 0) {
-      out.innerHTML = `= ${wr(assistedRealWeight(w, true, eq.divisor), reps)}`;
-      out.removeAttribute("hidden");
-    } else {
-      out.textContent = "";
-      out.setAttribute("hidden", "");
+      // Assisted machine: the dialed counterweight over-reads by the divisor → shown as dial/divisor.
+      formula = `${fmt(w)}/${fmt(eq.divisor)}${repsSup}`;
+    } else if (eq && eq.kgBase > 0 && w !== null) {
+      // Machine base weight: a hidden resistance added to the dial → shown as base+dial (like the history).
+      formula = `${fmt(eq.kgBase)}+${fmt(w)}${repsSup}`;
     }
+    if (formula) { out.innerHTML = `= ${formula}`; out.removeAttribute("hidden"); }
+    else { out.textContent = ""; out.setAttribute("hidden", ""); }
   }
 }
 
@@ -19000,12 +19006,14 @@ function openAddModal(exerciseName: string | null, date: string): void {
       const val = txt === "" ? null : parseFloat(txt);
       if (curId && equipmentReg[curId]) setEquipFieldWithUndo(curId, "kgBase", val ?? 0, cex);
       else setMachineWeightWithUndo(cex, val);
+      syncPendingFromModal(); // refresh the live base+dial preview immediately
     } else if (el.classList.contains("addm-cog-mm")) {
       const txt = (el as HTMLInputElement).value.trim();
       const v = parseFloat(txt);
       const val = txt === "" || !Number.isFinite(v) ? undefined : v;
       if (curId && equipmentReg[curId]) setEquipFieldWithUndo(curId, "divisor", val ?? 2, cex);
       else setMachineMultWithUndo(cex, val);
+      syncPendingFromModal(); // refresh the live dial/divisor preview immediately
     }
   });
   // Collapse the tall fields while a weight/reps input is focused, so the sheet shrinks and
