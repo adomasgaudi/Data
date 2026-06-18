@@ -53,7 +53,7 @@ export const FAMILIES: Record<string, FamilyDef> = {
       },
       // Ladder leg grip (only applies on the ladder). l-sit = legs out front (harder),
       // hooked = legs hooked on a rung (assisted, easier). none = neither.
-      ladderGrip: { none: 1.0, lsit: 1.1, hooked: 0.8 },
+      ladderGrip: { none: 1.0, lsit: 0.8, hooked: 0.5 },
       // Ladder rung height — how high your feet are (higher rung = more assist =
       // easier). none = unspecified. lad3 lowest … lad9 highest.
       ladderH: { none: 1.0, lad3: 0.72, lad5: 0.6, lad6: 0.55, lad9: 0.42 },
@@ -163,7 +163,7 @@ export const FAMILIES: Record<string, FamilyDef> = {
     // lean shows as its own chip row, and the universal per-set ROM% covers range.
     dims: {
       support: { free: 1.0, front_to_wall: 0.92, back_to_wall: 0.82, ladder: 0.55 },
-      ladderGrip: { none: 1.0, lsit: 1.1, hooked: 0.8 },
+      ladderGrip: { none: 1.0, lsit: 0.8, hooked: 0.5 },
       ladderH: { none: 1.0, lad3: 0.72, lad5: 0.6, lad6: 0.55, lad9: 0.42 },
       // Yoga block used as a prop / target (S 6cm · M 15cm · L 23cm) — same obstacle
       // dim the knee-raise uses; neutral ×1 placeholders for now (calibrate).
@@ -409,7 +409,7 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 20;
+export const CONFIG_VERSION = 21;
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many

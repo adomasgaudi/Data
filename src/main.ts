@@ -18500,8 +18500,8 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 // per-set edit card/popover (DEDUP-2 owner: "the edit menu should be the same as the
 // add one") — so EVERY dimension a lift has lives here, including the ladder sub-dims
 // (grip + rung height) that used to be in the old rich popover only.
-const AF_DIM_ORDER = ["lever", "reach", "support", "ladderGrip", "ladderH", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "back support", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["lever", "reach", "support", "ladderGrip", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 // ONE canonical label per (dimension, level), shared by the history TAG
 // (variationChipsHtml) and the add-set PICKER so the two can never drift — the
 // owner: "the variation selection should look like the tag and vice versa". The
@@ -18511,10 +18511,11 @@ type AfLevelLabel = { label: string; hint?: string };
 const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
   support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hanging" }, dips_bar: { label: "dips bar" } },
   // Ladder leg grip + rung height (only meaningful on the ladder support).
-  ladderGrip: { none: { label: "no grip" }, lsit: { label: "L-sit" }, hooked: { label: "hooked", hint: "hooked legs" } },
+  ladderGrip: { none: { label: "no support" }, lsit: { label: "L-shape", hint: "legs out in an L" }, hooked: { label: "hooked", hint: "legs hooked on a rung" } },
   ladderH: { none: { label: "any rung" }, lad3: { label: "rung 3" }, lad5: { label: "rung 5" }, lad6: { label: "rung 6" }, lad9: { label: "rung 9" } },
   // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.
-  shoulderDist: { "0cm": { label: "none" }, blue: { label: "blue", hint: "6cm block" }, "30cm": { label: "30cm" }, "45cm": { label: "45cm" } },
+  // Shoulder gap = how far the shoulders/back sit OFF the wall (back-to-wall handstands).
+  shoulderDist: { "0cm": { label: "none", hint: "shoulders on the wall" }, blue: { label: "blue", hint: "6cm blue block" }, "30cm": { label: "30cm", hint: "30cm off the wall" }, "45cm": { label: "45cm", hint: "45cm off the wall" } },
   backrest: { none: { label: "none" }, "30cm": { label: "30cm", hint: "back rest" } },
   obstacle: { none: { label: "none" }, S: { label: "yoga S", hint: "6cm" }, M: { label: "yoga M", hint: "15cm" }, L: { label: "yoga L", hint: "23cm" } },
   continuity: { paused: { label: "paused" }, uninterrupted: { label: "uninterrupted" } },
