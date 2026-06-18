@@ -8693,8 +8693,11 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
   const bodyLoad = effLoad - added;
   const hasBody = bodyLoad > 0.01;
-  if (r > MAX_1RM_REPS)
-    return wrap(step("reps", `${r} reps is past the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable — no 1RM shown.`));
+  // The cap is EXEMPT for the Nuzzo curve, which is data-derived across the full rep range
+  // (matches addedWeight1RM) — so when Nuzzo is active and IS showing a 1RM for this set, the
+  // derivation must show it too, not claim "no 1RM". Only Epley/Brzycki bail past the cap.
+  if (formula !== "nuzzo" && r > MAX_1RM_REPS)
+    return wrap(step("reps", `${r} reps is past the ${MAX_1RM_REPS}-rep limit where Epley/Brzycki break down — no 1RM shown (switch to the Nuzzo curve, which estimates the full rep range).`));
 
   const mult = c.difficultyMult ?? 1;
   const assist = c.assistKg ?? 0;
