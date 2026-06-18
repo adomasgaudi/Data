@@ -219,6 +219,7 @@ const els = {
   syncUpBtn: $<HTMLButtonElement>("syncUpBtn"),
   syncDownBtn: $<HTMLButtonElement>("syncDownBtn"),
   dbgToggleBtn: $<HTMLButtonElement>("dbgToggleBtn"),
+  publicProfileToggle: $<HTMLButtonElement>("publicProfileToggle"),
   syncStatus: $("syncStatus"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
@@ -517,7 +518,9 @@ function setViewMode(mode: ViewMode) {
   // Outside admin, lock the athlete to the locked user (only their chip is
   // pressable, see syncAthleteChips) and force the selection there.
   if (mode !== "admin") {
-    if (locked && els.athlete.value !== locked) { els.athlete.value = locked; renderAthlete(); }
+    // Lock the selection to the locked user — UNLESS you're spectating a public athlete
+    // (allowed: read-only), which must not snap back to yourself.
+    if (locked && els.athlete.value !== locked && !isPublicProfile(els.athlete.value)) { els.athlete.value = locked; renderAthlete(); }
     // If we entered a restricted view from an admin-only panel, drop back to the
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
@@ -1842,6 +1845,31 @@ function rosterUsers(): { username: string; user: string }[] {
     for (const k of ADMIN_ONLY_USERNAMES) map.delete(k);
   }
   return [...map].map(([username, user]) => ({ username, user })).sort((a, b) => a.user.localeCompare(b.user));
+}
+// ---- PUBLIC PROFILES (spectating) -------------------------------------------------
+// A user can make their profile PUBLIC; every user may then SPECTATE that athlete
+// (read-only — the canEditAthlete write-gates still block edits to anyone but yourself).
+// This relaxes CLAUDE.md rule 21 (locked views showing only yourself) FOR public athletes.
+// SHARED (synced) so the public list is the same for everyone; seeded once with the
+// owner's initial public set (Adomas + Sandra, Simona, Kristina, Indrė, Johan).
+const PUBLIC_PROFILES_KEY = "colosseum.publicProfiles.v1";
+const DEFAULT_PUBLIC = ["adomasgaudi", "sandrakri", "simona", "andromeda94", "indre_ju", "johannesschut"];
+const publicProfiles: Set<string> = (() => {
+  const raw = localStorage.getItem(PUBLIC_PROFILES_KEY);
+  if (raw === null) { saveJson(PUBLIC_PROFILES_KEY, DEFAULT_PUBLIC); return new Set(DEFAULT_PUBLIC); }
+  try { const a = JSON.parse(raw); return new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : DEFAULT_PUBLIC); }
+  catch { return new Set(DEFAULT_PUBLIC); }
+})();
+function isPublicProfile(username: string | null | undefined): boolean { return !!username && publicProfiles.has(username); }
+function setPublicProfile(username: string, on: boolean): void {
+  if (on) publicProfiles.add(username); else publicProfiles.delete(username);
+  saveJson(PUBLIC_PROFILES_KEY, [...publicProfiles]);
+}
+/** Whose public flag the Settings toggle controls: the selected athlete in admin, your
+ * OWN athlete in user view (so spectating someone else never flips THEIR flag), none for
+ * a logged-out spectator. */
+function publicToggleTarget(): string | null {
+  return viewMode === "admin" ? els.athlete.value : viewMode === "user" ? userViewUsername() : null;
 }
 
 /** The athlete's natural nFFMI ceiling — their on-device override, else the sex
@@ -4790,20 +4818,25 @@ function syncAthleteChips() {
   // menu and every other athlete's chip entirely (not just disable them), and drop
   // the full-bleed sticky-bar styling so the lone chip isn't an empty white band.
   els.athleteSexFilter.hidden = locked !== null;
-  els.athleteChips.closest(".ath-row")?.classList.toggle("ath-row--solo", locked !== null);
+  // Public profiles everyone may spectate (besides yourself) — shown as chips even in a
+  // locked view, so it's no longer "solo" when there's anyone to spectate.
+  const publicOthers = locked !== null && [...els.athlete.options].some((o) => o.value !== locked && isPublicProfile(o.value));
+  els.athleteChips.closest(".ath-row")?.classList.toggle("ath-row--solo", locked !== null && !publicOthers);
   for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
     if (locked !== null) {
-      // Locked view: show ONLY the locked user's chip; no sex filtering, no lock-out
-      // styling on others (they're gone), nothing else selectable.
-      btn.hidden = btn.dataset.username !== locked;
+      // Locked view: show your OWN chip + every PUBLIC athlete's chip (tap to spectate
+      // them read-only). Non-public others stay hidden. No sex filtering, no lock styling.
+      btn.hidden = btn.dataset.username !== locked && !isPublicProfile(btn.dataset.username);
       btn.disabled = false;
+      btn.classList.toggle("is-spectate", btn.dataset.username !== locked); // a public OTHER = read-only spectate chip
       btn.classList.remove("is-sexhidden", "is-locked");
       if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
       continue;
     }
+    btn.classList.remove("is-spectate");
     // Admin: every chip is selectable; the M/W filter hides the other sex (the
     // active one stays visible so you can always see who's currently selected).
     btn.hidden = false;
@@ -4816,6 +4849,19 @@ function syncAthleteChips() {
     btn.classList.toggle("is-sexhidden", sex !== undefined && sex !== athleteSexFilter && !on);
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
+  syncPublicProfileToggle();
+}
+/** Settings "Public profile" toggle: reflects + controls whether YOUR profile (the selected
+ * athlete in admin) is public. Hidden for a logged-out spectator (no own profile to share). */
+function syncPublicProfileToggle(): void {
+  const btn = els.publicProfileToggle;
+  if (!btn) return;
+  const t = publicToggleTarget();
+  btn.hidden = !t;
+  if (!t) return;
+  const on = isPublicProfile(t);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.classList.toggle("is-on", on);
 }
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
@@ -14744,6 +14790,15 @@ async function init() {
   updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   els.authBtn.addEventListener("click", showLoginPage);
+  // "Public profile" toggle: flip whether YOUR profile (the selected athlete in admin) is
+  // public, then refresh the chips so the spectate row updates. Synced, so others see it.
+  els.publicProfileToggle.addEventListener("click", () => {
+    const t = publicToggleTarget();
+    if (!t) return;
+    setPublicProfile(t, !isPublicProfile(t));
+    syncPublicProfileToggle();
+    syncAthleteChips();
+  });
   els.syncUpBtn.addEventListener("click", () => { void syncManualToSupabase(); });
   els.syncDownBtn.addEventListener("click", () => { void loadManualFromSupabase(); });
   // Green debug console on/off (admin-only). dbgVisible() reads colosseum.dbg === "on".
@@ -16074,9 +16129,10 @@ async function init() {
   els.athleteChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
     if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
-    // Outside admin, only the locked athlete's chip is selectable.
+    // Outside admin, you can select your OWN chip or any PUBLIC athlete's (to spectate
+    // them read-only); other athletes stay locked out.
     const lock = lockedUsername();
-    if (lock && btn.dataset.username !== lock) return;
+    if (lock && btn.dataset.username !== lock && !isPublicProfile(btn.dataset.username)) return;
     els.athlete.value = btn.dataset.username;
     renderAthlete();
   });

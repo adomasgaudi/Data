@@ -268,6 +268,7 @@ const LT: Record<string, string> = {
   "Backup & restore": "Atsarginė kopija ir atkūrimas",
   "Log out": "Atsijungti",
   "Log in": "Prisijungti",
+  "🌐 Public profile": "🌐 Viešas profilis",
   "Sync with Supabase": "Sinchronizacija su Supabase",
   "Catch up": "Atnaujinti",
   "Import historical data": "Importuoti istorinius duomenis",

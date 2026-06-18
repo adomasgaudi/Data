@@ -332,6 +332,10 @@ body.on-s-anl .appfoot { display: none; }
   border-radius: var(--r-pill); padding: 6px 10px; font: inherit; font-size: 0.83rem; cursor: pointer;
 }
 .settings-link:hover { border-color: var(--accent); color: var(--accent); }
+.settings-link.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); } /* an ON toggle (e.g. Public profile) */
+/* A PUBLIC athlete's chip you can spectate (read-only) shown in a locked view — a dashed
+   outline marks it as someone else's profile, distinct from your own solid chip. */
+.athlete-chip.is-spectate { border-style: dashed; }
 /* Collapsible group inside the Settings panel (calculation/display options). */
 .settings-group { border: 1px solid var(--line); border-radius: var(--r-pill); }
 .settings-group-sum {

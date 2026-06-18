@@ -55,7 +55,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.148</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.149</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">
@@ -89,6 +89,11 @@
           <div class="settings-row">
             <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
             <button type="button" id="authBtn" class="settings-link">Log out</button>
+          </div>
+          <!-- Make your profile PUBLIC so every user can spectate it (read-only). Hidden
+               for a logged-out spectator (no own profile). -->
+          <div class="settings-row">
+            <button type="button" id="publicProfileToggle" class="settings-link" aria-pressed="false" hidden title="When ON, your profile is public — every user can spectate it (read-only). When OFF, only you (and admins) see it.">🌐 Public profile</button>
           </div>
           <div class="settings-row">
             <button type="button" id="syncUpBtn" class="settings-link">⬆ Upload sets</button>
