@@ -1669,7 +1669,7 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .set-edit-variants { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 /* DEDUP-2: the difficulty model rendered INLINE in the set-edit card (was a separate
    popover). Full-width, set off by a hairline; the pad/picker reuse their global styles. */
-.set-edit-varmodel { flex: 1 1 100%; border-top: 1px solid var(--border); padding-top: 0.4rem; }
+.set-edit-varmodel { flex: 1 1 100%; border-top: 1px solid var(--line); padding-top: 0.4rem; }
 .set-edit-varmodel:empty { display: none; }
 .set-edit-varmodel .ex-pad { max-width: 11rem; }
 .set-edit-varmodel .ex-var-picker { padding: 0; }
@@ -2654,21 +2654,20 @@ sup.wr-bw { font-size: 0.85em; }
 /* Structured variation pickers: a tight, horizontally-scrolling row of small labelled
    dropdowns (the lift's variables — support, ROM, lean…), one tap each. ~30% larger
    here too, matching the rest of the add-set form. */
-/* Crammed variant pickers (owner): a tight WRAPPING row of compact value-pills — no header,
-   no per-dim labels — each tapping into its own options popup, sitting before the weight on
-   the SAME line as the weight/reps. */
-.addm-setblock { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.35rem 0; }
-/* PB: "still not inline". The variant pills were nested in their own flex item, so they took a
-   whole row and pushed the weight/reps below. display:contents DISSOLVES the wrapper boxes so
-   the individual pills AND the weight/reps chip become ONE continuous flex flow — the weight
-   starts right after the last pill (wrapping only when truly out of room). */
-.addm-setblock .addm-variant-slot, .addm-setblock .wo-af-dims { display: contents; }
+/* Crammed variant pickers (owner): the variant/ROM pills form a TAG BLOCK that stays to the
+   LEFT of the weight/reps. When there are many tags (e.g. handstands) they WRAP WITHIN that
+   block, but the weight and reps never drop below — flex-wrap:nowrap on the setblock keeps the
+   weight/reps to the RIGHT of the (possibly multi-row) tag block, which shrinks + wraps. */
+.addm-setblock { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0.4rem; margin: 0.35rem 0; }
+.addm-setblock .addm-variant-slot { display: flex; flex-wrap: wrap; align-content: flex-start; flex: 0 1 auto; min-width: 0; gap: 0.3rem; }
 .addm-setblock .addm-variant-slot:empty { display: none; }
-.addm-setblock .addm-lines { flex: 0 0 auto; }
-/* .wo-af-dims itself has no box (display:contents in the setblock) — only its pills are styled. */
-.wo-addform .wo-af-dims select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
-.wo-addform .wo-af-dims .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
-.wo-addform .wo-af-dims .xdd { flex: 0 0 auto; }
+/* dissolve the .wo-af-dims wrapper so its dim pills join the tag-block wrap directly, beside the ROM pill */
+.addm-setblock .wo-af-dims { display: contents; }
+.addm-setblock .addm-lines { flex: 0 0 auto; } /* weight/reps fixed to the right of the tag block */
+/* Each tag/ROM pill in the block (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
+.addm-variant-slot select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
+.addm-variant-slot .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
+.addm-variant-slot .xdd { flex: 0 0 auto; }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
@@ -2727,29 +2726,43 @@ sup.wr-bw { font-size: 0.85em; }
 /* The set line: the variant tag, then the weight and reps as their OWN clearly-outlined
    input boxes (owner: the old borderless chip was unclear where to tap). */
 .addm-set-chip {
-  display: inline-flex; align-items: center; gap: 0.25rem; flex: 0 0 auto; /* weight + reps close together (owner) */
-  border: none; background: none; padding: 0; min-height: var(--tap-min);
+  display: inline-flex; align-items: flex-start; gap: 0.3rem; flex: 0 0 auto; /* weight + reps close (owner) */
+  border: none; background: none; padding: 0;
 }
+/* Owner: a SHADED, clearly-OUTLINED weight box (the old --border token was undefined, so the
+   outline silently dropped and it looked like a plain white field). */
 .addm-set-chip .wo-af-weight {
-  flex: 0 0 auto; width: 4.5rem; box-sizing: border-box;
-  border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--card);
+  flex: 0 0 auto; width: 4.2rem; box-sizing: border-box;
+  border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
   padding: 4px 8px; margin: 0; min-height: var(--tap-min);
-  font-size: 1rem; font-weight: 600; text-align: center; color: inherit;
+  font-size: 1.04rem; font-weight: 700; text-align: center; color: inherit;
 }
+/* Reps as a SUPERSCRIPT box (owner: a superscript reps number, also outlined — not a plain
+   white field): smaller, raised, its own shaded outline. */
 .addm-set-chip .wo-af-reps {
-  flex: 0 0 2.8rem; box-sizing: border-box;
-  border: 1.5px solid var(--border); border-radius: var(--r-pill); background: var(--card);
-  padding: 4px 6px; margin: 0; min-height: var(--tap-min);
-  font-size: 0.9rem; font-weight: 700; text-align: center; color: inherit;
+  flex: 0 0 2.4rem; box-sizing: border-box; align-self: flex-start; margin-top: -1px;
+  border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
+  padding: 2px 4px; min-height: calc(var(--tap-min) - 4px);
+  font-size: 0.82rem; font-weight: 700; text-align: center; color: var(--muted);
 }
 .addm-set-chip .wo-af-weight:focus, .addm-set-chip .wo-af-reps:focus { border-color: var(--accent); outline: none; }
+/* Live REAL-weight conversion (assisted machines, owner): the dialed counterweight halved
+   (−20 → −10) shown immediately as a shaded chip with the reps as a superscript, so you see
+   the real set as you type. Hidden for non-machine lifts. */
+.addm-real {
+  display: inline-flex; align-items: center; align-self: flex-start; box-sizing: border-box;
+  border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
+  padding: 2px 7px; min-height: var(--tap-min); font-size: 0.95rem; font-weight: 700;
+  color: var(--accent); white-space: nowrap;
+}
+.addm-real[hidden] { display: none; }
 /* Variant tag strip shown inside the chip before the weight */
 .addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
 .addm-vtag-strip:empty { display: none; }
 .addm-line .wo-af-rmline { min-width: var(--tap-min); min-height: var(--tap-min); border: none; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; border-radius: var(--r-pill); }
 .addm-line .wo-af-rmline:hover { color: var(--remove); }
 .addm-line:only-child .wo-af-rmline { visibility: hidden; }
-.wo-af-addline { margin-top: 0.4rem; align-self: flex-start; padding: 5px 11px; min-height: var(--tap-min); border: 1px dashed var(--border); border-radius: var(--r-pill); background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
+.wo-af-addline { margin-top: 0.4rem; align-self: flex-start; padding: 5px 11px; min-height: var(--tap-min); border: 1px dashed var(--line); border-radius: var(--r-pill); background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
 .wo-af-addline:hover { background: var(--bg); }
 .wo-addform--modal .wo-af-ex, .wo-addform--modal .wo-af-note { width: 100%; }
 .wo-addform--modal .wo-af-dims { max-width: 100%; }
@@ -3365,7 +3378,7 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
    makes it real (.is-set above). */
 .xdd-rpe.is-assumed .xdd-btn {
   color: var(--muted); background: transparent;
-  border: 1px dashed var(--border); border-style: dashed; font-weight: 600; opacity: 0.85;
+  border: 1px dashed var(--line); border-style: dashed; font-weight: 600; opacity: 0.85;
 }
 .xdd-rpe.is-assumed .xdd-caret { color: var(--muted); }
 /* Read-only RIR (spectating someone else's profile): a plain value, no dropdown. */

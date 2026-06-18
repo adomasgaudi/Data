@@ -17835,6 +17835,7 @@ const AF_LINE =
   `<span class="addm-vtag-strip"></span>` +
   `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="0" aria-label="Weight (kg)" />` +
   `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="0" aria-label="Reps" />` +
+  `<span class="addm-real" aria-hidden="true" hidden></span>` +
   `</div>` +
   `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
   `</div>`;
@@ -18058,11 +18059,34 @@ function syncAddmVtags(form: HTMLElement): void {
   for (const strip of form.querySelectorAll<HTMLElement>(".addm-vtag-strip")) strip.innerHTML = html;
 }
 
+/** For an assisted-MACHINE lift, show the live REAL conversion of each typed dial weight
+ * (−20 → −10) as a shaded chip with superscript reps, so the owner immediately sees the real
+ * set. Hidden for non-machine lifts (where the typed weight already IS the real value). */
+function syncAddmReal(form: HTMLElement): void {
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  const machine = ex ? isAssistedMachine(ex) : false;
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const out = ln.querySelector<HTMLElement>(".addm-real");
+    if (!out) continue;
+    const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
+    const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
+    if (machine && w !== null && w < 0) {
+      out.innerHTML = `= ${wr(realAddedWeight(ex, w), reps)}`;
+      out.removeAttribute("hidden");
+    } else {
+      out.textContent = "";
+      out.setAttribute("hidden", "");
+    }
+  }
+}
+
 /** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
 function syncPendingFromModal(): void {
   const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
   if (!form) { pendingAdd = null; scheduleGhostRender(); return; }
   syncAddmVtags(form);
+  syncAddmReal(form);
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
   const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
@@ -18106,7 +18130,15 @@ function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
   // Just the compact value-pills (owner: cram it, variants on the SAME line as weight/reps);
   // no header/labels. Wrapped inline so it flows before the weight in one row.
-  return vf.includes("wo-af-dims") ? vf : "";
+  const dims = vf.includes("wo-af-dims") ? vf : "";
+  // ROM is just another variant/tag (owner): a 90% pill sitting WITH the other tags in the
+  // block, not its own labelled field. Universal — shown for every lift; default = the lift's
+  // ROM. Recorded per-set as a "ROM X%" note token only when it differs from the default.
+  const romDef = romDefaultFor(ex || "");
+  const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
+    .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
+  const rom = `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
+  return dims + rom;
 }
 function closeAddModal(): void {
   addModalEl?.remove();
@@ -18149,15 +18181,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
   // form, the lookup returned null, the name fell back to the empty data-addex, and
   // Add silently no-op'd ("nothing happens" on a new exercise).
   const exField = isNew ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}</div>` : "";
-  // Universal RANGE OF MOTION picker (owner: every exercise has a ROM variance,
-  // default 90%). Shown for every lift; defaults to this exercise's default ROM.
-  // Recorded per-set as a "ROM X%" note token only when it differs from the default.
-  const romDef = romDefaultFor(ex || "");
-  const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
-    .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
-  const romField =
-    `<div class="addm-field"><span class="addm-flbl">Range of motion</span>` +
-    `<select class="wo-af-rom" data-romdefault="${romDef}" aria-label="Range of motion">${romOpts}</select></div>`;
+  // ROM is now a pill INSIDE the variant tag block (addmVariantField), not its own field (owner).
   const form =
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     exField +
@@ -18165,7 +18189,6 @@ function openAddModal(exerciseName: string | null, date: string): void {
     `<div class="addm-setblock"><div class="addm-variant-slot">${variantBlock}</div><div class="addm-lines">${AF_LINE}</div></div>` +
     `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
     suggSection +
-    romField +
     noteField +
     `<div class="addm-actions">${AF_BUTTONS}</div>` +
     `</span>`;
