@@ -28,12 +28,12 @@ at a time (rule 7/59). Codes are re-derived at commit (rule 8).
     variation codes — b2w/knees — were never in `i18n.ts`; left as codes per existing
     convention, noted not forgotten.)
 
-- [ ] **3 · Set context-menu redesign** (the popup when you tap a collapsed set):
-  - [ ] Duplicate + Change-variant become **icon-only** (no text), crammed at top.
-  - [ ] Add a **delete ✕** icon.
-  - [ ] Replace "+1 rep" with a bigger inline block: **two scrollable rulers**
-    (reps + weight) + an **Add** button that logs a new set like the tapped one
-    at the chosen reps/weight.
+- [x] **3 · Set context-menu redesign** — DONE. Tap a collapsed set:
+  - [x] Duplicate (⧉) + Change-variant (✎) are **icon-only**, crammed in a top row.
+  - [x] Added a **delete ✕** icon (terracotta `--remove`, calls `deleteSetsWithUndo`).
+  - [x] Replaced the "+1 rep" suggestions with **two scroll-snap rulers** (reps +
+    weight, centred on the set's values, live readout) + an **＋ Add set** button
+    (`addManualSetLike`, shared with the old suggestions).
 
 - [ ] **4 · Graph dot tooltip** — tapping a point also shows the **original logged
   weight**, the **variants**, the **date(s) logged**, and a small **link button to

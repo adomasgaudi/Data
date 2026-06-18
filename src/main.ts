@@ -9601,19 +9601,38 @@ function setActOutside(e: MouseEvent): void {
   if (item) { e.preventDefault(); e.stopPropagation(); handleSetAct(item); closeSetActionMenu(); return; }
   if (!t.closest("#setActionMenu")) closeSetActionMenu();
 }
-/** Perform a set-menu action: duplicate, open the variant editor, or add a suggested set. */
+/** Perform a set-menu action: duplicate, open the variant editor, delete the set, or
+ * add a new set (a quick suggestion, or the reps/weight dialed on the rulers). */
 function handleSetAct(item: HTMLElement): void {
   const sid = item.dataset.sid;
   if (!sid) return;
-  if (item.dataset.setact === "dup") { duplicateSetFromId(sid); return; }
-  if (item.dataset.setact === "variant") {
+  const act = item.dataset.setact;
+  if (act === "dup") { duplicateSetFromId(sid); return; }
+  if (act === "variant") {
     // Re-find the live set button (it still carries the data-scaleedit-* attrs) and open
     // the same variant editor the expanded-row chip uses.
     const src = document.querySelector<HTMLElement>(`.wo-set-menu[data-setmenu="${CSS.escape(sid)}"]`);
     if (src) openVariantFromAttrs(src);
     return;
   }
-  if (item.dataset.setact === "sugg") { addSuggestedSet(sid, item.dataset.mode ?? "same"); return; }
+  if (act === "del") {
+    const src = liveRecords().find((r) => setId(r) === sid);
+    deleteSetsWithUndo([sid], src ? displayName(src.exerciseName) : "set");
+    return;
+  }
+  if (act === "ruleradd") {
+    // Read the values dialed on the reps / weight rulers and log a new set like the tapped one.
+    const menu = document.getElementById("setActionMenu");
+    const src = liveRecords().find((r) => setId(r) === sid);
+    if (!menu || !src) return;
+    const repR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="rep"]');
+    const wtR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="wt"]');
+    const reps = repR ? rulerValue(repR) : (src.reps ?? 0);
+    const weight = wtR ? rulerValue(wtR) : (src.weight ?? 0);
+    addManualSetLike(src, weight, reps);
+    return;
+  }
+  if (act === "sugg") { addSuggestedSet(sid, item.dataset.mode ?? "same"); return; }
 }
 /** Open the floating variant editor from a button carrying data-scaleedit-* attrs. */
 function openVariantFromAttrs(btn: HTMLElement): void {
@@ -9622,37 +9641,81 @@ function openVariantFromAttrs(btn: HTMLElement): void {
   const level = ld && lv !== undefined && ll !== undefined ? { dim: ld as LevelDim, value: Number(lv), label: ll } : undefined;
   openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn, level, { setId: btn.dataset.scaleeditSetid, rawNote: btn.dataset.scaleeditRawnote });
 }
+/** The value currently centred under a scrollable ruler (its snapped tick). */
+function rulerValue(ruler: HTMLElement): number {
+  const tick = ruler.querySelector<HTMLElement>(".set-ruler-tick");
+  const tw = tick?.offsetWidth || 1;
+  const min = parseFloat(ruler.dataset.min ?? "0");
+  const step = parseFloat(ruler.dataset.step ?? "1");
+  const count = parseInt(ruler.dataset.count ?? "1", 10);
+  const idx = Math.max(0, Math.min(count - 1, Math.round(ruler.scrollLeft / tw)));
+  return Math.round((min + idx * step) / step) * step;
+}
+/** A horizontal scroll-snap ruler: a row of value ticks you swipe to pick a number, with
+ * a centre mark and a big live readout above it (owner: scroll the line to change reps /
+ * weight, then a button to add the set). */
+function rulerHtml(kind: string, min: number, step: number, count: number, curIdx: number, unit: string): string {
+  let ticks = "";
+  for (let i = 0; i < count; i++) ticks += `<span class="set-ruler-tick">${escapeHtml(fmt(min + i * step))}</span>`;
+  return (
+    `<div class="set-ruler-block">` +
+    `<div class="set-ruler-val" data-rulerval="${escapeHtml(kind)}"><span class="set-ruler-num">${escapeHtml(fmt(min + curIdx * step))}</span><span class="set-ruler-unit">${escapeHtml(unit)}</span></div>` +
+    `<div class="set-ruler-wrap"><span class="set-ruler-mark"></span>` +
+    `<div class="set-ruler" data-ruler="${escapeHtml(kind)}" data-min="${min}" data-step="${step}" data-count="${count}" data-curidx="${curIdx}">${ticks}</div>` +
+    `</div></div>`
+  );
+}
 /** The small per-set action menu (rule 32: fixed + clampMenuIntoView, body-appended). */
 function openSetActionMenu(anchor: HTMLElement): void {
   closeSetActionMenu();
   const sid = anchor.dataset.setmenu!;
   const hasVar = anchor.dataset.scaleeditEx !== undefined;
   const src = liveRecords().find((r) => setId(r) === sid);
-  // Suggestions read off the tapped set: a touch more reps, a touch more weight, or a
-  // lighter back-off — the everyday "what next set" choices, each one tap to log.
+  const curReps = Math.max(1, Math.round(src?.reps ?? 1));
   const w = src?.weight ?? 0;
-  const canWeight = w > 0; // bodyweight-only sets have no plate to bump / back off
-  const item = (act: string, label: string, extra = "") =>
-    `<button type="button" class="set-act-item" data-setact="${act}" data-sid="${escapeHtml(sid)}"${extra}>${label}</button>`;
+  const ico = (act: string, glyph: string, label: string, cls = "") =>
+    `<button type="button" class="set-act-ico${cls}" data-setact="${act}" data-sid="${escapeHtml(sid)}" title="${label}" aria-label="${label}">${glyph}</button>`;
+  // Reps ruler: 1..50. Weight ruler: 2.5-kg steps around the set's weight (0..+ for plate
+  // lifts, negative..0 for an assisted machine); omitted for pure bodyweight (w === 0).
+  const repMin = 1, repStep = 1, repCount = 50;
+  const repIdx = Math.min(repCount - 1, Math.max(0, curReps - repMin));
+  let wtRuler = "";
+  if (w !== 0) {
+    const wtStep = 2.5;
+    const wtMin = w > 0 ? 0 : Math.floor((w - 20) / wtStep) * wtStep;
+    const wtMax = w > 0 ? Math.max(w + 50, 60) : 0;
+    const wtCount = Math.round((wtMax - wtMin) / wtStep) + 1;
+    const wtIdx = Math.min(wtCount - 1, Math.max(0, Math.round((Math.round(w / wtStep) * wtStep - wtMin) / wtStep)));
+    wtRuler = rulerHtml("wt", wtMin, wtStep, wtCount, wtIdx, "kg");
+  }
   const menu = document.createElement("div");
   menu.id = "setActionMenu";
-  menu.className = "set-act-menu";
+  menu.className = "set-act-menu set-act-menu--rulers";
   menu.innerHTML =
-    item("dup", "⧉ Duplicate set") +
-    (hasVar ? item("variant", "✎ Change variant") : "") +
+    `<div class="set-act-icons">` +
+    ico("dup", "⧉", "Duplicate set") +
+    (hasVar ? ico("variant", "✎", "Change variant") : "") +
+    ico("del", "✕", "Delete set", " set-act-ico--del") +
+    `</div>` +
     `<div class="set-act-sec">Add a set</div>` +
-    item("sugg", "＋1 rep", ` data-mode="rep"`) +
-    (canWeight ? item("sugg", "＋2.5 kg", ` data-mode="wt"`) : "") +
-    (canWeight ? item("sugg", "−10% back-off", ` data-mode="back"`) : "");
+    rulerHtml("rep", repMin, repStep, repCount, repIdx, "reps") +
+    wtRuler +
+    `<button type="button" class="set-act-add" data-setact="ruleradd" data-sid="${escapeHtml(sid)}">＋ Add set</button>`;
   document.body.appendChild(menu);
   clampMenuIntoView(menu, anchor);
+  // Centre each ruler on its current value and keep the readout live as you swipe.
+  for (const ruler of menu.querySelectorAll<HTMLElement>(".set-ruler")) {
+    const tw = ruler.querySelector<HTMLElement>(".set-ruler-tick")?.offsetWidth || 1;
+    ruler.scrollLeft = parseInt(ruler.dataset.curidx ?? "0", 10) * tw;
+    const out = menu.querySelector<HTMLElement>(`[data-rulerval="${ruler.dataset.ruler}"] .set-ruler-num`);
+    ruler.addEventListener("scroll", () => { if (out) out.textContent = fmt(rulerValue(ruler)); }, { passive: true });
+  }
   setTimeout(() => document.addEventListener("click", setActOutside, true), 0);
 }
 /** Add a new manual set based on an existing one, tweaked per the suggestion mode
  * (+1 rep, +2.5 kg, −10% back-off). Keeps the note/level; a fresh set, so per-set
  * side-stores aren't copied (unlike a faithful Duplicate). */
 function addSuggestedSet(id: string, mode: string): void {
-  if (!canEditCurrentAthlete()) return;
   const src = liveRecords().find((r) => setId(r) === id);
   if (!src) return;
   let weight = src.weight ?? 0;
@@ -9660,6 +9723,12 @@ function addSuggestedSet(id: string, mode: string): void {
   if (mode === "rep") reps = (reps || 0) + 1;
   else if (mode === "wt") weight = (weight || 0) + 2.5;
   else if (mode === "back") weight = Math.round((weight || 0) * 0.9 * 10) / 10;
+  addManualSetLike(src, weight, reps);
+}
+/** Log a fresh hand-logged set with the given weight/reps, on the same day + exercise +
+ * note/level as `src` (shared by the quick suggestions and the ruler "Add set"). */
+function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
+  if (!canEditCurrentAthlete()) return;
   const username = src.username;
   const exerciseName = src.originalExerciseName ?? src.exerciseName;
   manualEntries.push({

@@ -1797,6 +1797,45 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 }
 .set-act-item:hover, .set-act-item:active { background: var(--accent-soft); color: var(--accent); }
 .set-act-sec { padding: 5px 10px 2px; font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+/* ── Set-tap menu v2: icon-only action row + reps/weight rulers + Add (owner) ── */
+.set-act-menu--rulers { min-width: 14rem; gap: 4px; }
+/* Crammed top row: duplicate / change-variant / delete — icons only, no text labels. */
+.set-act-icons { display: flex; gap: 4px; }
+.set-act-ico {
+  flex: 1 1 0; min-height: var(--tap-min); min-width: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg);
+  color: var(--text); font-size: 1.05rem; line-height: 1; cursor: pointer;
+}
+.set-act-ico:hover, .set-act-ico:active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.set-act-ico--del { color: var(--remove); }
+.set-act-ico--del:hover, .set-act-ico--del:active { border-color: var(--remove); color: var(--remove); background: color-mix(in srgb, var(--remove) 12%, transparent); }
+/* Each ruler: a big live readout above a horizontally swipeable row of value ticks with a
+   fixed centre mark. scroll-snap centres the picked tick; rulerValue() reads it back. */
+.set-ruler-block { display: flex; flex-direction: column; gap: 1px; }
+.set-ruler-val { text-align: center; font-weight: 800; color: var(--accent); line-height: 1; }
+.set-ruler-num { font-size: 1.3rem; }
+.set-ruler-unit { font-size: 0.7rem; font-weight: 700; color: var(--muted); margin-left: 0.2em; }
+.set-ruler-wrap { position: relative; }
+.set-ruler-mark { position: absolute; left: 50%; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--accent); border-radius: 1px; pointer-events: none; z-index: 1; }
+.set-ruler {
+  display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding-inline: calc(50% - 1.4rem); /* let the first/last tick reach the centre mark */
+  scrollbar-width: none; -ms-overflow-style: none;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill); padding-block: 6px;
+}
+.set-ruler::-webkit-scrollbar { display: none; }
+.set-ruler-tick {
+  flex: 0 0 2.8rem; scroll-snap-align: center; text-align: center;
+  font-size: 0.82rem; font-weight: 600; color: var(--muted);
+  border-left: 1px solid var(--line);
+}
+.set-ruler-tick:first-child { border-left: none; }
+.set-act-add {
+  margin-top: 2px; min-height: var(--tap-min); border: 1px solid var(--accent); border-radius: var(--r-pill);
+  background: var(--accent); color: #fff; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+}
+.set-act-add:active { opacity: 0.85; }
 .scale-edit-hd { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
 .scale-edit-title { font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; }
 .scale-edit-close { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; line-height: 1.6; }
