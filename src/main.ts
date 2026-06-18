@@ -321,6 +321,7 @@ const els = {
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   variantToggle: $<HTMLButtonElement>("variantToggle"),
+  scaleModeToggle: $<HTMLButtonElement>("scaleModeToggle"),
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   woShowAllToggle: $<HTMLButtonElement>("woShowAllToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
@@ -2029,8 +2030,15 @@ let rpeGrades: Record<string, string> = (() => {
     return {};
   }
 })();
-/** Stable id for one set. */
-const setId = (r: SetRecord): string => `${r.username}|${r.exerciseName}|${r.date}|${r.setNumber}`;
+/** Stable id for one set. Keys off the ORIGINAL source lift, not the displayed name:
+ * a merged-lift view (remapRegistryCombined) relabels member sets to the synthetic
+ * group name (e.g. "SQ mix") but stashes the real lift in `originalExerciseName`. If
+ * the id followed the display name, a set's id would CHANGE in the merged view, so a
+ * delete/override/not-comparable recorded there (id `…|SQ mix|…`) never matched the raw
+ * `data.records` the filters run on (id `…|Smith Squat|…`) — the set was never actually
+ * hidden. Anchoring identity to the source keeps it constant across every projection. */
+const setId = (r: SetRecord): string =>
+  `${r.username}|${r.originalExerciseName ?? r.exerciseName}|${r.date}|${r.setNumber}`;
 const rpeFor = (r: SetRecord): string | undefined => rpeGrades[setId(r)];
 
 // ---- On-device "deleted" (hidden) sets ----. A bad logged set can be hidden
@@ -4328,6 +4336,7 @@ let workoutGroups: WorkoutGroup[] = [];
 // `let x = localStorage.getItem(…)` form.
 S.showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
 S.showVariants = localStorage.getItem("colosseum.showVariants") === "1";
+S.showAllScale = localStorage.getItem("colosseum.showAllScale") === "1";
 S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 // When on, the workout history ignores the Index app-wide filter and shows EVERY
 // lift this athlete logged (the lifts the filter hides come back), so you can see
@@ -4372,6 +4381,8 @@ function syncWorkoutToggles(): void {
   els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
   els.variantToggle.classList.toggle("is-active", S.showVariants);
   els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
+  els.scaleModeToggle.classList.toggle("is-active", S.showAllScale);
+  els.scaleModeToggle.setAttribute("aria-pressed", S.showAllScale ? "true" : "false");
   els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
   els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
   // The "Hidden" control sits in the head row next to the ⚙. Label shows the
@@ -4409,6 +4420,7 @@ function snapshotHistoryLive(prev: HistoryTabConfig): HistoryTabConfig {
     restCompact: S.restCompact,
     showAddSets: S.showAddSets,
     showVariants: S.showVariants,
+    showAllScale: S.showAllScale,
     showAloneTags: S.showAloneTags,
     showMode: S.workoutShowMode,
     grouping: els.workoutGrouping?.value || prev.grouping,
@@ -4427,6 +4439,7 @@ function applyHistoryTabConfig(c: HistoryTabConfig): void {
   S.restCompact = c.restCompact;
   S.showAddSets = c.showAddSets;
   S.showVariants = c.showVariants;
+  S.showAllScale = c.showAllScale ?? false;
   S.showAloneTags = c.showAloneTags;
   S.workoutShowMode = c.showMode;
   if (els.workoutGrouping) els.workoutGrouping.value = c.grouping;
@@ -6787,6 +6800,7 @@ const CURRENT_STRENGTH_COLOR = "#2e7d52";
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (duplicateSetClick(target)) return; // tap a COLLAPSED-view set → duplicate it (owner)
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
@@ -7555,10 +7569,15 @@ function setDisplay(raw: SetRecord): string {
   // so you can flip it without expanding the full editor. `finish` wraps the token.
   const sid = setId(raw);
   const hasVariant = machineModeEligible(s.exerciseName) || !!familyOf(s.exerciseName) || !!note || s.levelDim !== undefined;
+  // In "Var" mode a set is a variant-edit button; otherwise (owner) a tap DUPLICATES the
+  // set — a quick "did another one just like it" — so each collapsed set is a dup button
+  // (only when you can edit this athlete; spectators get plain text).
   const finish = (h: string): string =>
     S.showVariants && hasVariant
       ? `<button type="button" class="wo-set-variant" ${variantTriggerData(s, sid)} title="Tap to edit this set's variant">${h}</button>`
-      : h;
+      : canEditCurrentAthlete()
+        ? `<button type="button" class="wo-set-dup" data-dupid="${escapeHtml(sid)}" title="Tap to duplicate this set">${h}</button>`
+        : h;
   const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
@@ -7583,14 +7602,27 @@ function setDisplay(raw: SetRecord): string {
   // lift it tags onto the real weight^reps.
   if (scaled) {
     const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
-    // Colour ENCODES the direction (added info, not just a number): a HARDER variation
-    // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
-    // opposite meanings stop looking identical. Tooltip spells it out.
-    const harder = scale > 1;
-    const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
-    const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
-    const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
+    // Owner: the ×N multiplier is NOISE on the collapsed line when a variation CHIP already
+    // conveys the variation (B2W / LEAN…) — the chip says WHAT, and the exact factor is one
+    // tap away in the set editor. So show ×N here ONLY when it's CUSTOM: a manual per-set
+    // "Scale ×" override, OR there's no chip at all (then ×N is the only indicator — e.g. a
+    // plain note the owner gave a difficulty). Otherwise drop it and keep just the chip+reps.
+    // "×N" mode (the scaleModeToggle pill) forces EVERY multiplier on; default "variation"
+    // mode shows ×N only when it's CUSTOM or has no chip to imply it.
+    const customScale = (setOverrides[setId(s)]?.scale ?? 1) !== 1;
+    const showScale = S.showAllScale || customScale || chips === "";
+    if (showScale) {
+      // Colour ENCODES the direction (added info, not just a number): a HARDER variation
+      // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
+      // opposite meanings stop looking identical. Tooltip spells it out.
+      const harder = scale > 1;
+      const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
+      const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
+      const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
+      return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${tag}${mach}`));
+    }
+    // Multiplier implied by the chip → show just the chip (+ weight) and reps, no ×N.
+    return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${mwp}${wr(s.weight, s.reps)}${mach}`));
   }
   if (bw && note) {
     // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
@@ -8136,6 +8168,7 @@ function renderWoHiddenNote(): void {
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (duplicateSetClick(target)) return; // tap a COLLAPSED-view set → duplicate it (owner)
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
@@ -8773,13 +8806,21 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       `<span class="set-edit-wreal"><input class="set-edit-input" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" />` +
       `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
     : efld("weight", "Weight (kg)", s.weight, 0.5);
-  // The variation block (owner: "it should also have the variants"): the current
-  // band/lean/support/incline chips PLUS the editable ×scale/variant control, so a set's
-  // variant is editable straight from this panel (the scaleTag opens the floating variant
-  // editor, the same one the row chip uses). Empty for a plain lift with no variant.
-  const variantsBlock = (variationChipsHtml(s).trim() || scaleTag.trim())
-    ? `<div class="set-edit-variants" aria-label="Variants">${variationChipsHtml(s)}${scaleTag}</div>`
+  // The variation block. DEDUP-2 (owner: "there shouldn't be two separate set-editing
+  // menus — put the old one into the new"): when the set is difficulty-MODEL-editable
+  // (a family lift or a noted set → `editNote`), the FULL variation model (incline level +
+  // support / band / depth×lean / tempo / hands / range) renders INLINE here on open —
+  // no more separate floating popover. The container carries the same data-scaleedit-*
+  // contract the old chip used; renderCardVarModel() populates it. A non-model scaled set
+  // (level / per-set scale only) falls back to the static chip summary.
+  const varModelData = editNote
+    ? ` data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs}`
     : "";
+  const variantsBlock = editNote
+    ? `<div class="set-edit-varmodel" aria-label="Variation"${varModelData}></div>`
+    : (variationChipsHtml(s).trim() || scaleTag.trim())
+      ? `<div class="set-edit-variants" aria-label="Variants">${variationChipsHtml(s)}${scaleTag}</div>`
+      : "";
   // Floating popup (owner: "a popup menu, not physical"): the panel is a fixed-position card
   // (positioned by JS near the tapped set, closed by an outside tap) so it OVERLAYS the
   // history instead of pushing it down. It stays INSIDE the table so all the existing
@@ -8891,6 +8932,13 @@ function openSetInfo(target: HTMLElement): boolean {
 // ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
 let scaleEditState: { ex: string; note: string; setId?: string; rawNote?: string; level?: { dim: LevelDim; value: number; label: string } } | null = null;
 let scaleEditDirty = false; // an edit was made while the popover was open
+// DEDUP-2: the difficulty model used to live ONLY in a separate floating popover
+// (#scaleEditPop). It now ALSO renders INLINE inside the set-edit card (one editor, not
+// two — owner). When true, renderScaleEditor() targets the open card's `.set-edit-varmodel`
+// container and emits just the model BODY (level + note picker); the card already supplies
+// the header, machine toggle and not-comparable button. The standalone popover (reached
+// from the collapsed `wo-set-variant` chip) keeps its full chrome with this false.
+let scaleEditInCard = false;
 // Band is collapsed to "none + banded" until the user expands it (owner request — the
 // assist-level chips are rarely used and eat space). Reset each time the popover opens.
 let scaleBandExpanded = false;
@@ -8947,12 +8995,21 @@ function scaleEditLevelBlock(): string {
   );
 }
 function renderScaleEditor(): void {
-  const pop = document.getElementById("scaleEditPop");
-  if (!pop || !scaleEditState) return;
-  const title = scaleEditState.note.startsWith("__set:") ? "This set's variation" : scaleEditState.note;
-  // The incline level (if any) multiplies into the picker's "final multiplier".
+  if (!scaleEditState) return;
   const lv = scaleEditState.level;
   const lvlFactor = lv ? levelScaleFor(scaleEditState.ex, lv.dim, lv.value) : 1;
+  // INLINE-IN-CARD mode (DEDUP-2): render only the model body into the open card's
+  // container — the card frames it (close/✕, machine, not-comparable are its own controls).
+  if (scaleEditInCard) {
+    const host = document.querySelector<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-varmodel");
+    if (!host) return;
+    host.innerHTML = scaleEditLevelBlock() + notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor);
+    refreshPoseViz();
+    return;
+  }
+  const pop = document.getElementById("scaleEditPop");
+  if (!pop) return;
+  const title = scaleEditState.note.startsWith("__set:") ? "This set's variation" : scaleEditState.note;
   // A per-set "not comparable" toggle, same as the set-edit row — keep this set's
   // reps/sets but drop its 1RM & volume (a static hold or odd one-off). Only a real
   // set (with an id) can be marked; the note-level mark lives in the variations review.
@@ -9002,6 +9059,7 @@ function positionScaleEditor(anchor: HTMLElement): void {
 }
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
   scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
+  scaleEditInCard = false; // this is the standalone popover (the collapsed-line chip), not the card
   scaleBandExpanded = false; // band starts collapsed each time the popover opens
   shoulderRefPhoto = false;  // shoulder-distance reference starts on the SVG diagram
   let pop = document.getElementById("scaleEditPop");
@@ -9026,6 +9084,14 @@ function closeScaleEditor(): void {
   // workouts list + charts so the compact ×multipliers update, scroll preserved.
   if (wasDirty) refreshAfterDifficultyEdit();
 }
+/** DEDUP-2: after a model PICK (vec level / free-lift ×). The standalone popover CLOSES on
+ * a pick (which syncs); the in-card model STAYS OPEN, re-renders inline, and defers its sync
+ * to when the card closes — so you can keep tweaking dimensions without it vanishing. */
+function afterModelPick(): void {
+  scaleEditDirty = true;
+  if (scaleEditInCard) renderScaleEditor();
+  else closeScaleEditor();
+}
 /** Click on a set row's editable ×chip: open/close the floating modifier editor
  * for that note. Returns true if it handled the click (so the row doesn't edit). */
 function toggleScaleEditor(target: HTMLElement): boolean {
@@ -9034,6 +9100,10 @@ function toggleScaleEditor(target: HTMLElement): boolean {
   // collapsed-line quick-edit chip (history ⚙ → Var). Both carry the same data.
   const btn = target.closest<HTMLElement>(".set-scale.is-editable, .wo-set-variant");
   if (!btn?.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return false;
+  // DEDUP-2: an EXPANDED set row's ×N chip now falls through to toggleSetEdit, which opens
+  // the unified card whose inline model edits the same variation — so there's ONE editor, not
+  // two. The collapsed `wo-set-variant` chip (no card there) still uses the standalone popover.
+  if (btn.classList.contains("set-scale") && btn.closest("tr.set-main")) return false;
   if (scaleEditState && scaleEditState.ex === btn.dataset.scaleeditEx && scaleEditState.note === btn.dataset.scaleeditNote)
     closeScaleEditor();
   else {
@@ -9121,6 +9191,28 @@ function positionSetEditPops(): void {
     if (anchor) positionSetEditPop(pop, anchor);
   }
 }
+/** DEDUP-2: (re)render the inline difficulty model into the OPEN set-edit card's
+ * `.set-edit-varmodel` container, driving the shared scaleEditState off the container's
+ * data-scaleedit-* attributes. A no-op for a card whose set has no model (no container). */
+function renderCardVarModel(): void {
+  const host = document.querySelector<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-varmodel");
+  if (!host) { if (scaleEditInCard) { scaleEditInCard = false; scaleEditState = null; } return; }
+  const d = host.dataset;
+  if (!d.scaleeditEx || d.scaleeditNote === undefined) return;
+  scaleEditState = {
+    ex: d.scaleeditEx,
+    note: d.scaleeditNote,
+    ...(d.scaleeditSetid ? { setId: d.scaleeditSetid } : {}),
+    ...(d.scaleeditRawnote ? { rawNote: d.scaleeditRawnote } : {}),
+    ...(d.scaleeditLeveldim && d.scaleeditLevelvalue !== undefined
+      ? { level: { dim: d.scaleeditLeveldim as LevelDim, value: Number(d.scaleeditLevelvalue), label: d.scaleeditLevellabel ?? "" } }
+      : {}),
+  };
+  scaleEditInCard = true;
+  scaleBandExpanded = false;
+  shoulderRefPhoto = false;
+  renderScaleEditor();
+}
 /** Close the open set-edit card (hide every matching row, drop the outside listener). */
 function closeSetEdit(): void {
   if (openSetEditId === null) return;
@@ -9132,6 +9224,19 @@ function closeSetEdit(): void {
   }
   openSetEditId = null;
   document.removeEventListener("click", setEditOutside, true);
+  // DEDUP-2: the inline model rode this card's scaleEditState — tear it down, and sync
+  // the rest of the app ONCE if a difficulty edit was made (mirrors closeScaleEditor).
+  // DEFER the sync a frame: closeSetEdit can run mid-toggleSetEdit (switching sets), and
+  // refreshAfterDifficultyEdit rebuilds the table synchronously — doing it now would detach
+  // the row the caller is still opening. Next frame is safe (reopenSetEdit re-applies any
+  // still-open card via openSetEditId).
+  if (scaleEditInCard) {
+    const wasDirty = scaleEditDirty;
+    scaleEditState = null;
+    scaleEditInCard = false;
+    scaleEditDirty = false;
+    if (wasDirty) requestAnimationFrame(refreshAfterDifficultyEdit);
+  }
 }
 /** Outside-tap closes the floating card (owner). A tap on a set-main row is left to
  * toggleSetEdit (which switches/closes), and taps inside the card or its sub-rows stay. */
@@ -9158,6 +9263,7 @@ function toggleSetEdit(target: HTMLElement): boolean {
     row.classList.toggle("edit-open");
     openSetEditId = willOpen ? sid : null;
     if (willOpen) {
+      renderCardVarModel(); // DEDUP-2: fill the inline variation model BEFORE positioning (it changes height)
       const pop = sib.querySelector<HTMLElement>(".set-edit-pop");
       if (pop) positionSetEditPop(pop, row);
       setTimeout(() => document.addEventListener("click", setEditOutside, true), 0);
@@ -9187,6 +9293,7 @@ function reopenSetEdit(): void {
       while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
       p?.classList.add("edit-open");
     }
+    renderCardVarModel(); // DEDUP-2: repopulate the inline variation model on the rebuilt card
     positionSetEditPops(); // the floating card re-anchors to its (rebuilt) row
   };
   reopen();
@@ -9218,6 +9325,74 @@ function deleteSetById(id: string): void {
   window.scrollTo(0, y);
 }
 
+/** Tap a COLLAPSED-view set chip → duplicate it (owner: "simply duplicate it"). */
+function duplicateSetClick(target: HTMLElement): boolean {
+  const btn = target.closest<HTMLElement>(".wo-set-dup");
+  if (!btn?.dataset.dupid) return false;
+  duplicateSetFromId(btn.dataset.dupid);
+  return true;
+}
+/** Create a hand-logged COPY of an existing set (same day, same effective weight/reps/
+ * note + every per-set variation), then refresh. Faithful: it mirrors the source's base
+ * values into a new manual entry and copies the id-keyed side-stores onto the new setId. */
+function duplicateSetFromId(id: string): void {
+  if (!canEditCurrentAthlete()) return;
+  const src = liveRecords().find((r) => setId(r) === id);
+  if (!src) return;
+  const username = src.username;
+  const date = src.date;
+  const exerciseName = src.originalExerciseName ?? src.exerciseName; // the REAL lift, not a merged display name
+  const a = applySetOverride(src); // effective level (covers a per-set level override)
+  const newSetNumber = 100000 + manualEntries.length; // mirrors mergeManualSets' numbering
+  const newId = `${username}|${exerciseName}|${date}|${newSetNumber}`;
+  manualEntries.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    seq: Date.now() % 2000000000,
+    user: athleteLabel(),
+    username,
+    date,
+    exerciseName,
+    weight: src.weight ?? null,
+    reps: src.reps ?? null,
+    ...(src.notes ? { notes: src.notes } : {}),
+    ...(src.levelDim === "sq" && src.levelValue !== undefined ? { levelValue: src.levelValue } : {}),
+  });
+  // Copy the per-set side-stores keyed by setId so the duplicate is faithful.
+  if (setOverrides[id]) { setOverrides[newId] = { ...setOverrides[id] }; saveSetOverrides(); }
+  if (setSidesStore[id]) { setSidesStore[newId] = { ...setSidesStore[id] }; saveJson(SET_SIDES_KEY, setSidesStore); }
+  if (notComparableSets.has(id)) { notComparableSets.add(newId); saveJson(NC_SETS_KEY, [...notComparableSets]); }
+  if (rpeGrades[id]) { rpeGrades[newId] = rpeGrades[id]!; saveJson(RPE_STORE_KEY, rpeGrades); }
+  // A noted set shares its note's vec automatically (same ex|note); a NOTELESS model set
+  // carries a per-set __set:<id> vec — copy that to the new id so picked tags transfer.
+  const srcVec = variationVecOverrides[variationKey(exerciseName, `__set:${id}`)];
+  if (srcVec && Object.keys(srcVec).length) { variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)] = { ...srcVec }; saveVariationVecs(); }
+  // A non-sq level (smith/cm) rides in setOverrides above; ensure any effective level lands.
+  if (a.levelDim && a.levelDim !== "sq" && a.levelValue !== undefined) setSetOverrideLevel(newId, a.levelDim, a.levelValue);
+  const entryId = manualEntries[manualEntries.length - 1]!.id;
+  saveManual();
+  mergeManualSets();
+  const refresh = () => {
+    const y = window.scrollY;
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    refreshExerciseInfo();
+    window.scrollTo(0, y);
+  };
+  refresh();
+  // A tap adds data, so make it recoverable: a 10s Undo that removes the copy (it's the
+  // last manual entry, so dropping it can't renumber the others) and its copied stores.
+  showToast(`Duplicated ${displayName(exerciseName)} set`, "Undo", () => {
+    manualEntries = manualEntries.filter((e) => e.id !== entryId);
+    delete setOverrides[newId]; saveSetOverrides();
+    if (setSidesStore[newId]) { delete setSidesStore[newId]; saveJson(SET_SIDES_KEY, setSidesStore); }
+    if (notComparableSets.delete(newId)) saveJson(NC_SETS_KEY, [...notComparableSets]);
+    if (rpeGrades[newId]) { delete rpeGrades[newId]; saveJson(RPE_STORE_KEY, rpeGrades); }
+    saveManual();
+    mergeManualSets();
+    refresh();
+  });
+}
 /** Click "Delete set": hide this set everywhere (on-device only — the source CSV
  * is untouched). Confirm first; restorable in Data health. */
 function deleteSetEdit(target: HTMLElement): boolean {
@@ -15368,12 +15543,8 @@ async function init() {
     if (!input?.dataset.varEx || input.dataset.varNote === undefined) return;
     const v = Number(input.value);
     if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
-    if (scaleEditState) {
-      scaleEditDirty = true;
-      closeScaleEditor(); // a selection in the floating popover closes it
-    } else {
-      refreshAfterDifficultyEdit();
-    }
+    if (scaleEditState) afterModelPick(); // popover closes on a pick; in-card model stays open
+    else refreshAfterDifficultyEdit();
   });
   // Close button on the floating modifier editor.
   document.addEventListener("click", (e) => {
@@ -15429,13 +15600,8 @@ async function init() {
     const lvl = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-lvl");
     if (!lvl?.dataset.vecdimEx || lvl.dataset.vecdimNote === undefined || !lvl.dataset.vecdimDim || lvl.dataset.vecdimLevel === undefined) return;
     setNoteVecDim(lvl.dataset.vecdimEx, lvl.dataset.vecdimNote, lvl.dataset.vecdimDim, lvl.dataset.vecdimLevel);
-    if (scaleEditState) {
-      // In the floating popover, a selection closes it (which syncs the table/graph).
-      scaleEditDirty = true;
-      closeScaleEditor();
-    } else {
-      refreshAfterDifficultyEdit();
-    }
+    if (scaleEditState) afterModelPick(); // popover closes on a pick; in-card model stays open to keep tweaking
+    else refreshAfterDifficultyEdit();
   });
   // Nested SUPPORT dropdowns (support / ladder grip / ladder height) — custom
   // floating .xdd menus, never native <select>. Tapping the button toggles its
@@ -15996,7 +16162,7 @@ async function init() {
     // wall) that just re-rendered the popover and orphaned the click target — that
     // isn't a genuine outside click, so the editor should stay open.
     const t = e.target as HTMLElement;
-    if (scaleEditState && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
+    if (scaleEditState && !scaleEditInCard && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
   });
   els.summariseBtn.addEventListener("click", runSummary);
   // Each control is one toggle button now: tap to flip its value (no segments).
@@ -16115,6 +16281,13 @@ async function init() {
     localStorage.setItem("colosseum.showVariants", S.showVariants ? "1" : "0");
     els.variantToggle.classList.toggle("is-active", S.showVariants); // instant pill feedback
     els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
+    renderWorkoutsPage();
+  });
+  els.scaleModeToggle.addEventListener("click", () => {
+    S.showAllScale = !S.showAllScale;
+    localStorage.setItem("colosseum.showAllScale", S.showAllScale ? "1" : "0");
+    els.scaleModeToggle.classList.toggle("is-active", S.showAllScale); // instant pill feedback
+    els.scaleModeToggle.setAttribute("aria-pressed", S.showAllScale ? "true" : "false");
     renderWorkoutsPage();
   });
   els.aloneTagToggle.addEventListener("click", () => {
@@ -17327,10 +17500,15 @@ function populateAddExerciseList(): void {
 
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
 // forms (add-a-set and add-a-new-exercise).
-const AF_INPUTS =
+// One weight×reps LINE = one set (owner: drop the "how many sets" count — a set is always
+// one; instead the "+ set" button appends another line, so each set carries its own weight/
+// reps). The ✕ removes a line; CSS hides it on the only line.
+const AF_LINE =
+  `<div class="addm-line">` +
   `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
   `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
-  `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />`;
+  `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
+  `</div>`;
 const AF_BUTTONS =
   `<button type="button" class="wo-af-go">Add</button>` +
   `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
@@ -17583,7 +17761,8 @@ function openAddModal(exerciseName: string | null, date: string): void {
     exField +
     afWhenToggle(date, today) +
     `<div class="addm-variant-slot">${variantBlock}</div>` +
-    `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps · sets</span><div class="addm-inputs">${AF_INPUTS}</div></div></div>` +
+    `<div class="addm-row"><div class="addm-field"><span class="addm-flbl">Weight · reps</span><div class="addm-lines">${AF_LINE}</div>` +
+    `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button></div></div>` +
     romField +
     noteField +
     `<div class="addm-actions">${AF_BUTTONS}</div>` +
@@ -17602,7 +17781,6 @@ function openAddModal(exerciseName: string | null, date: string): void {
     const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
     setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
     setv(".wo-af-reps", String(prefill.reps));
-    setv(".wo-af-sets", String(prefill.sets));
   }
   wrap.addEventListener("click", onAddModalClick);
   document.addEventListener("keydown", addModalEsc, true);
@@ -17638,10 +17816,23 @@ function onAddModalClick(e: MouseEvent): void {
   if (!form) return;
   const chip = t.closest<HTMLElement>(".addm-chip");
   if (chip) {
+    // Fill the FIRST set line (a suggestion is one set's weight × reps).
     const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
     fill(".wo-af-weight", chip.dataset.fillw);
     fill(".wo-af-reps", chip.dataset.fillr);
-    fill(".wo-af-sets", chip.dataset.fills);
+    return;
+  }
+  // "+ set" — append another weight×reps line (each line = one set).
+  if (t.closest(".wo-af-addline")) {
+    const lines = form.querySelector<HTMLElement>(".addm-lines");
+    if (lines) { lines.insertAdjacentHTML("beforeend", AF_LINE); lines.lastElementChild?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus(); }
+    return;
+  }
+  // ✕ on a line — remove it (never the last remaining line).
+  const rmLine = t.closest<HTMLElement>(".wo-af-rmline");
+  if (rmLine) {
+    const lines = form.querySelector<HTMLElement>(".addm-lines");
+    if (lines && lines.querySelectorAll(".addm-line").length > 1) rmLine.closest(".addm-line")?.remove();
     return;
   }
   if (t.closest(".wo-af-go")) { if (onInlineAddGo(form)) closeAddModal(); return; }
@@ -17685,10 +17876,16 @@ function onInlineAddGo(form: HTMLElement): boolean {
     exInput.focus();
     return false;
   }
-  const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
-  const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
-  const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
-  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
+  // Each .addm-line is ONE set's weight × reps (the "+ set" button adds lines). Read them
+  // all; keep only those with valid reps. The shared variant / ROM / note below apply to
+  // every created set.
+  const lineEls = [...form.querySelectorAll<HTMLElement>(".addm-line")];
+  const setLines = (lineEls.length ? lineEls : [form])
+    .map((ln) => ({
+      weight: parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight")!.value),
+      reps: Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps")!.value)),
+    }))
+    .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   // Chosen variation. Structured pickers (a modelled lift) → the picked levels are
   // TAGS, not a note: we pin them straight onto each created set's per-set vec (the
   // __set:<id> synthetic key) below and DON'T fabricate a note from them — tags are
@@ -17718,13 +17915,13 @@ function onInlineAddGo(form: HTMLElement): boolean {
   const username = els.athlete.value;
   const user = athleteLabel();
   if (!username || !exerciseName) return false;
-  if (!Number.isFinite(reps) || reps < 1) {
+  if (!setLines.length) {
     if (msg) msg.textContent = "Enter reps (1+).";
     form.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
     return false;
   }
   const startIdx = manualEntries.length; // setNumber for entry n is 100000+n (see mergeManualSets)
-  for (let i = 0; i < sets; i++) {
+  setLines.forEach((l, i) => {
     manualEntries.push({
       id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
       seq: (Date.now() % 2000000000) + i, // stable unique key for Supabase
@@ -17732,17 +17929,17 @@ function onInlineAddGo(form: HTMLElement): boolean {
       username,
       date,
       exerciseName,
-      weight: Number.isFinite(weight) ? weight : null,
-      reps,
+      weight: Number.isFinite(l.weight) ? l.weight : null,
+      reps: l.reps,
       ...(note ? { notes: note } : {}),
     });
-  }
+  });
   // Pin the picked tags to EACH created set's per-set vec (the __set:<id> synthetic
   // key that variationNote() returns for a noteless model-lift set), so the chosen
   // attributes are authoritative without inventing a note. Mirrors the setId formula
   // (username|exercise|date|setNumber) used at read time.
   if (chosenDims.length && familyOf(exerciseName)) {
-    for (let i = 0; i < sets; i++) {
+    for (let i = 0; i < setLines.length; i++) {
       const synthNote = `__set:${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
       for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
     }
@@ -18957,10 +19154,11 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     const liftChip = (n: string): string =>
       `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
     if (sel.length > TITLE_NAME_CAP) {
-      // Owner: NOT a boxy "N exercises ▾" button — show the FIRST lift as a normal (subtle)
-      // title, with a small ▾ dropdown beside it that reveals the REST as titles too (not
-      // bordered buttons). The caret reuses the data-titlelist floating menu.
-      bodyHtml = `<span class="wa-tl-lead">${liftChip(sel[0]!)}<button type="button" class="wa-title-exmore" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove"><span class="xdd-caret">▾</span></button></span>`;
+      // More than TITLE_NAME_CAP (6) lifts → the title is a COUNT ("7 exercises"), not the
+      // top lift's name (owner: showing one lift's name misrepresented a big mixed selection).
+      // Still non-boxy — a plain bold title + a ▾ that opens the data-titlelist floating menu;
+      // the whole thing is the dropdown trigger. "exercises" is its own text node so i18n swaps it.
+      bodyHtml = `<span class="wa-tl-lead"><button type="button" class="wa-title-exsum" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove"><span class="wa-exsum-n">${sel.length}</span> exercises <span class="xdd-caret">▾</span></button></span>`;
     } else {
       // ≤ cap → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
       // name in one column NEVER widens or heightens the other (owner: "two separate columns").

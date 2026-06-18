@@ -48,6 +48,7 @@ export const S: {
   workoutShowMode: "exercises" | "groups";
   showAddSets: boolean;
   showVariants: boolean;
+  showAllScale: boolean;
   showAloneTags: boolean;
   showRestDays: boolean;
   restCompact: boolean;
@@ -76,6 +77,7 @@ export const S: {
   // initialised from localStorage in main.ts after import.
   showAddSets: false,
   showVariants: false,
+  showAllScale: false, // collapsed-line ×N mode: false = variation (hide ×N a chip implies), true = show every ×N
   showAloneTags: false,
   showRestDays: true, // rest-day slivers shown by default (the gaps between sessions read as the timeline)
   restCompact: false, // when showRestDays is on, shrink the slivers to a 3px hairline (the Rest button's 3rd state)

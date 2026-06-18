@@ -55,6 +55,7 @@ const LT: Record<string, string> = {
   "Variant": "Variacija",
   "optional note": "neprivalomas užrašas",
   "Weight · reps · sets": "Svoris · kart. · serijos",
+  "Weight · reps": "Svoris · kart.",
   "search exercise…": "ieškoti pratimo…",
   "Index": "Rodyklė",
   // ---- Live coaching page ----
@@ -584,6 +585,7 @@ const LT: Record<string, string> = {
   "rep max": "kart. maks.",
   "add set": "pridėti seriją",
   "edit variant": "keisti variantą",
+  "mult": "daugiklis",
   "day tags": "dienų žymos",
   "Show all": "Rodyti visus",
   "Hide them": "Slėpti juos",

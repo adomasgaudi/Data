@@ -20,6 +20,32 @@ ones, re-grade as the code changes.
   Stop-hook guard (`scripts/rules-check.cjs`) that flags any catalogued class missing
   from CSS, so this drift class can't recur. Found during the UIC-7 catalogue-drift audit.
 
+## 🔁 Duplicated / redundant UI (DEDUP — #prune sweep, Euclid)
+
+Owner #prune on "there shouldn't be two separate set-editing views" + "don't show the
+×N multiplier on the collapsed view." The sweep (Explore agent) mapped the whole class:
+
+- ✅ **DEDUP-1 (DONE, b.2.9.130)** `[history/collapsed]` (SP:1) — **Redundant ×N on the
+  collapsed set line.** `setDisplay()` (`src/main.ts` ~7574) showed `wo-scale` ×N on every
+  scaled set even when a variation CHIP (B2W/LEAN…) already conveyed it. Now ×N shows ONLY
+  when CUSTOM: a manual per-set `Scale ×` override, or no chip at all (then ×N is the only
+  indicator). The expanded row (`set-scale` in `setRowsHtml`) KEEPS ×N — it's the detail view.
+- ✅ **DEDUP-2 (DONE, b.2.9.132)** `[set-editor]` (SP:13) — **TWO parallel per-set editors → ONE.**
+  The old floating "scale editor" popover (Support / Band / Depth×Lean 2D pad / Tempo / Hands /
+  Range) now renders INLINE inside the set-edit card. `renderScaleEditor()` gained an in-card
+  host mode (`scaleEditInCard`): when the card opens, `renderCardVarModel()` sets `scaleEditState`
+  off the container's `data-scaleedit-*` and renders the model BODY (level + `notePickerHtml`)
+  into `.set-edit-varmodel`; the card supplies the frame (✕, machine, not-comparable). `afterModelPick()`
+  keeps the in-card model open on a pick (the standalone popover still closes); the dirty sync is
+  deferred a frame on card-close (avoids detaching the row mid-toggle). The EXPANDED row's ×N chip
+  now falls through to open the card (one editor). The standalone popover stays ONLY for the
+  collapsed `wo-set-variant` chip (no card there). `refreshPoseViz` is a no-op so the pad is static
+  HTML + delegated handlers — they read `scaleEditState` and work in either host.
+- 🟢 **DEDUP-3 (note, mostly moot)** `[set-editor]` — the card's own `set-edit-nc` (not-comparable)
+  + the popover `scale-edit-nc` are no longer both visible at once (the in-card model omits the
+  popover's nc/mach, the card supplies them). Standalone popover still has its own for the
+  collapsed path. Nothing urgent.
+
 ## ✅ Done sweeps (recent)
 
 - **Synthetic-lift inheritance prune (DONE)** `[exercises/grouping]` — synthetic

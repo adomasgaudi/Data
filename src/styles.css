@@ -1641,6 +1641,12 @@ body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 /* The variants row (chips + editable ×scale/variant control) spans the card width. */
 .set-edit-variants { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+/* DEDUP-2: the difficulty model rendered INLINE in the set-edit card (was a separate
+   popover). Full-width, set off by a hairline; the pad/picker reuse their global styles. */
+.set-edit-varmodel { flex: 1 1 100%; border-top: 1px solid var(--border); padding-top: 0.4rem; }
+.set-edit-varmodel:empty { display: none; }
+.set-edit-varmodel .ex-pad { max-width: 11rem; }
+.set-edit-varmodel .ex-var-picker { padding: 0; }
 .set-edit-reset {
   align-self: flex-end; font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted);
   background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px;
@@ -1725,6 +1731,10 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
    A faint pill background signals it opens the variant editor; the token reads as before. */
 .wo-set-variant { font: inherit; cursor: pointer; color: inherit; background: var(--accent-soft); border: 1px solid transparent; border-radius: var(--r-pill); padding: 0 4px; }
 .wo-set-variant:hover { border-color: var(--accent); }
+/* Tap a collapsed set to DUPLICATE it (owner): a near-invisible button that just adds a
+   touch of padding (a bigger tap target) and lights up on press. */
+.wo-set-dup { font: inherit; color: inherit; cursor: pointer; background: none; border: none; border-radius: var(--r-pill); padding: 1px 4px; }
+.wo-set-dup:hover, .wo-set-dup:active { background: var(--accent-soft); }
 .scale-edit-hd { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
 .scale-edit-title { font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; }
 .scale-edit-close { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; line-height: 1.6; }
@@ -2207,7 +2217,7 @@ select.subtle-select:hover, select.subtle-select:focus {
    over-reach × susceptibility is high. */
 .wo-sore { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #d98a3a; vertical-align: middle; margin: 0 0.15rem; flex: none; cursor: help; }
 .wo-sore.is-high { width: 8px; height: 8px; background: #c0492f; box-shadow: 0 0 0 2px color-mix(in srgb, #c0492f 22%, transparent); }
-.wo-setlist { font-size: var(--fs-md); color: var(--accent); } /* weights + reps in blue */
+.wo-setlist { font-size: 0.95rem; line-height: 1.7; color: var(--accent); } /* weights + reps in blue — a bit bigger + roomier so each tappable set is easy to hit (owner) */
 /* Period buckets (week / month modes) tint each SESSION's run of sets with a
    faint rounded band, so distinct sessions read at a glance without loud dividers.
    box-decoration-break keeps the band tidy when the set list wraps to more lines. */
@@ -2636,6 +2646,15 @@ sup.wr-bw { font-size: 0.85em; }
    inputs always share the row and never push the card sideways. */
 .wo-addform--modal .addm-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
 .wo-addform--modal .addm-inputs input { width: 100%; min-width: 0; }
+/* Multi-set add: one weight×reps LINE per set, a "+ set" appends another (owner: no sets-count). */
+.addm-lines { display: flex; flex-direction: column; gap: 0.4rem; }
+.addm-line { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--tap-min); gap: 0.4rem; align-items: center; }
+.addm-line input { width: 100%; min-width: 0; }
+.addm-line .wo-af-rmline { min-width: var(--tap-min); min-height: var(--tap-min); border: none; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; border-radius: var(--r-pill); }
+.addm-line .wo-af-rmline:hover { color: var(--remove); }
+.addm-line:only-child .wo-af-rmline { visibility: hidden; } /* nothing to remove when it's the only set */
+.wo-af-addline { margin-top: 0.4rem; align-self: flex-start; padding: 5px 11px; min-height: var(--tap-min); border: 1px dashed var(--border); border-radius: var(--r-pill); background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
+.wo-af-addline:hover { background: var(--bg); }
 .wo-addform--modal .wo-af-ex, .wo-addform--modal .wo-af-note { width: 100%; }
 .wo-addform--modal .wo-af-dims { max-width: 100%; }
 .addm-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
@@ -4369,6 +4388,15 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 }
 .wa-title-exmore:hover { color: var(--accent); }
 .wa-title-exmore .xdd-caret { font-size: 0.7em; }
+/* >cap title = a COUNT ("7 exercises ▾") instead of the top lift's name (owner). Non-boxy:
+   a plain bold title that is itself the dropdown trigger; the caret stays muted. */
+.wa-title-exsum {
+  display: inline-flex; align-items: center; gap: 0.25em; min-height: var(--tap-min);
+  font: inherit; font-weight: 700; color: var(--text);
+  background: none; border: none; padding: 0; cursor: pointer; white-space: nowrap;
+}
+.wa-title-exsum:hover { color: var(--accent); }
+.wa-title-exsum .xdd-caret { font-size: 0.7em; color: var(--muted); }
 .wa-tl-lead { display: inline-flex; align-items: center; gap: 0.1em; }
 /* The floating list it opens (body-appended, fixed + clampMenuIntoView): every picked lift
    as the SAME tap-to-act chip the title uses — so combine / compare / remove still work. */

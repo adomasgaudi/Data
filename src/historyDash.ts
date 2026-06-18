@@ -32,6 +32,8 @@ export interface HistoryTabConfig {
   restCompact: boolean;
   showAddSets: boolean;
   showVariants: boolean;
+  /** Collapsed-line ×N mode: show every multiplier (true) vs hide chip-implied ones (false/absent). */
+  showAllScale?: boolean;
   showAloneTags: boolean;
   showMode: HistoryShowMode;
   /** Group-by dimension when showMode = "groups" (muscles / functional / combined / compared). */

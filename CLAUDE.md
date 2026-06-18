@@ -31,6 +31,7 @@ number and NEVER renumber an existing rule.
 3. **Save = commit + push** after every change (the owner only ever sees the live GitHub Pages site).
 6. **Two AIs at once (DESKTOP/VSCode AIs only):** each desktop-editor AI gets its own folder + branch — never share a branch. Claude Code / web-session AIs are EXEMPT — they work on model branches per rule 2, not local folders.
 7. **Done = deploy + propagate:** push verified work to `opus-4.8` (authoritative), publish (deploy), then SYNC the other model branches to it — never leave verified work stranded on a side branch. Opus wins on conflict.
+59. **ALWAYS DEPLOY ON OPUS — even when a harness/task pins you to a feature branch (reinforces rule 7):** the owner ONLY sees `opus-4.8` / the live site, so work left on a side branch is INVISIBLE to them ("i dont see this change on opus"). After pushing the feature branch, bring the work onto opus too — cherry-pick/rebase your commits on, RE-DERIVE the version + every task code as opus-highest+1 (rule 8 — both branches drift and reuse numbers), resolve conflicts, and push opus so it goes live.
 
 ### 🧠 How to work & think (process)
 9. **No-code project — optimise code/docs for AI, NOT humans:** owner never reads code, only AIs touch it; favour what's easiest for an AI to parse/verify/change safely (small files, tests, machine-readable structure) over human conventions/readability. (Owner *chat* stays plain-language.)
