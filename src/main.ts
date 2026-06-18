@@ -1737,6 +1737,46 @@ function setFamFactor(family: string, dim: string, level: string, value: number)
   saveFamFactors();
 }
 
+// ---- Per-family DEFAULT level + LEVEL LABEL overrides (the tag editor) ----.
+// The owner sets which tag is the DEFAULT for an exercise (e.g. handstand push-up →
+// "back to wall"), and can RENAME a tag — both per family, saved on device + backup.
+// (Multipliers reuse famFactorOverrides / setFamFactor above.)
+const FAM_DEFAULTS_KEY = "colosseum.famDefaults.v1";
+const famDefaultOverrides = loadJsonObject<Record<string, Record<string, string>>>(FAM_DEFAULTS_KEY);
+const FAM_LABELS_KEY = "colosseum.famLabels.v1";
+const famLabelOverrides = loadJsonObject<Record<string, Record<string, Record<string, string>>>>(FAM_LABELS_KEY);
+/** The config's reference default for a family dimension (first level if none set). */
+function famBaseDefault(family: string, dim: string): string {
+  return FAMILIES[family]?.defaults[dim] ?? Object.keys(FAMILIES[family]?.dims[dim] ?? {})[0] ?? "";
+}
+/** The DEFAULT level for a family dimension — the owner's override, else the config default. */
+function famDefaultLevel(family: string, dim: string): string {
+  return famDefaultOverrides[family]?.[dim] ?? famBaseDefault(family, dim);
+}
+/** Pin (or clear, when set back to the config default) the default level for a dimension. */
+function setFamDefaultLevel(family: string, dim: string, level: string): void {
+  const fam = (famDefaultOverrides[family] ??= {});
+  if (level === famBaseDefault(family, dim)) delete fam[dim];
+  else fam[dim] = level;
+  if (Object.keys(fam).length === 0) delete famDefaultOverrides[family];
+  saveJson(FAM_DEFAULTS_KEY, famDefaultOverrides);
+}
+/** The owner's renamed label for a (family, dim, level), or undefined. */
+function famLabelOf(family: string, dim: string, level: string): string | undefined {
+  return famLabelOverrides[family]?.[dim]?.[level];
+}
+/** Rename a tag (blank clears back to the built-in label). */
+function setFamLabel(family: string, dim: string, level: string, label: string): void {
+  const fam = (famLabelOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  const t = label.trim();
+  if (!t) delete d[level];
+  else d[level] = t;
+  if (Object.keys(d).length === 0) delete fam[dim];
+  if (Object.keys(fam).length === 0) delete famLabelOverrides[family];
+  saveJson(FAM_LABELS_KEY, famLabelOverrides);
+}
+
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
   const fam = FAMILIES[family];
@@ -7837,9 +7877,9 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>)
   const chips: string[] = [];
   const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
   const sup = vec.support != null ? String(vec.support) : null;
-  if (sup && sup !== defs.support) push(" wo-var-sup", afLevelText("support", sup));
+  if (sup && sup !== defs.support) push(" wo-var-sup", afLevelText("support", sup, fam));
   const pos = vec.position != null ? String(vec.position) : null;
-  if (pos && pos !== defs.position) push("", afLevelText("position", pos));
+  if (pos && pos !== defs.position) push("", afLevelText("position", pos, fam));
   if (vec.band != null && String(vec.band) !== (defs.band ?? "none")) push(" wo-var-band", `band ${String(vec.band)}`);
   if (vec.lean != null && String(vec.lean) !== (defs.lean ?? "0cm")) push("", `lean ${String(vec.lean)}`);
   return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
@@ -18458,7 +18498,10 @@ const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
   reach: { tucked: { label: "tucked in" }, neutral: { label: "neutral" }, extended: { label: "extended" }, far: { label: "far out" } },
 };
 /** Canonical short label for a dimension level (cm levels like "+23cm" are left as-is) — used by BOTH the tag and the picker. */
-function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.label ?? level; }
+function afLevelText(dim: string, level: string, family?: string): string {
+  if (family) { const o = famLabelOf(family, dim, level); if (o) return o; } // owner's rename wins
+  return AF_LEVEL_LBL[dim]?.[level]?.label ?? level;
+}
 /** Optional small-gray explanation for a level, shown only in the picker menu. */
 function afLevelHint(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.hint ?? ""; }
 /** The level the CURRENT athlete used most for this exercise+dimension over the last
@@ -18517,22 +18560,22 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
   const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
   const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
-    const levels = famDef.dims[dim]!;
-    const dflt = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
+    const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
+    const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
     let cur: string;
     if (effVec) { const v = String(effVec[dim] ?? dflt); cur = levels[v] != null ? v : dflt; }
     else { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
     // For the leverage knobs (lever / reach) show the torque factor in each option
     // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
     const showFactor = dim === "lever" || dim === "reach";
-    const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l)} ×${levels[l]}` : afLevelText(dim, l));
+    const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l, fam)} ×${levels[l]}` : afLevelText(dim, l, fam));
     const opts = Object.keys(levels)
       .map((l) => {
         const hint = afLevelHint(dim, l);
         return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
       })
       .join("");
-    return `<select class="wo-af-dim wo-af-dimpill"${editAttrs} data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
+    return `<select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
   }).join("");
   return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
 }
@@ -24211,7 +24254,46 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     if (c !== "dd-native" && c !== "dd-wide" && c !== "subtle-select" && c !== "plain-select") dd.classList.add(c);
   sel.insertAdjacentElement("afterend", dd);
 
+  // TAG EDITOR (owner: "when I press a tag, show what it is + add it or set default, and
+  // let me edit each tag's name and multiplier"). A variation-pill select (.wo-af-dimpill
+  // carrying data-ex + data-dim of a family) gets a RICHER menu: each level is a row with
+  // its name + hint, a ★ set-default toggle, and a ✎ that reveals inline name + ×mult
+  // edits. Everything else stays the plain pick-list. `vtagEditLevel` keeps one row open
+  // for editing across the re-syncs the edits trigger.
+  const vtagFam = (): string | null => (sel.dataset.ex ? familyOf(sel.dataset.ex) : null);
+  const vtagDim = sel.dataset.dim ?? "";
+  const isVtag = (): boolean => sel.classList.contains("wo-af-dimpill") && !!vtagDim && !!vtagFam();
+  let vtagEditLevel: string | null = null;
+
+  const vtagOptHtml = (o: HTMLOptionElement): string => {
+    const fam = vtagFam()!;
+    const lvl = o.value;
+    const name = afLevelText(vtagDim, lvl, fam);
+    const isDefault = famDefaultLevel(fam, vtagDim) === lvl;
+    const factor = vtagDim === "band" ? undefined : famLevels(fam, vtagDim)[lvl]; // band is a kg knob, not a ×
+    const hint = afLevelHint(vtagDim, lvl);
+    const editing = vtagEditLevel === lvl;
+    const editRow = editing
+      ? `<div class="vtag-edit">` +
+        `<label class="vtag-efld">name <input class="vtag-name" type="text" value="${escapeHtml(name)}" data-lvl="${escapeHtml(lvl)}" aria-label="Tag name" /></label>` +
+        (factor !== undefined ? `<label class="vtag-efld">× <input class="vtag-mult" type="number" step="0.01" min="0" value="${factor}" data-lvl="${escapeHtml(lvl)}" aria-label="Multiplier" /></label>` : "") +
+        `</div>`
+      : "";
+    return (
+      `<div class="xdd-opt vtag-opt${lvl === sel.value ? " is-active" : ""}${isDefault ? " is-default" : ""}" role="option">` +
+      `<button type="button" class="vtag-pick" data-val="${escapeHtml(lvl)}">${escapeHtml(name)}` +
+      (factor !== undefined ? ` <span class="vtag-mult-lbl">×${factor}</span>` : "") +
+      (hint ? ` <span class="xdd-opt-hint">${escapeHtml(hint)}</span>` : "") +
+      `</button>` +
+      `<button type="button" class="vtag-default${isDefault ? " is-on" : ""}" data-vtag-default="${escapeHtml(lvl)}" aria-pressed="${isDefault}" title="${isDefault ? "The default tag for this exercise" : "Set as the default tag for this exercise"}">${isDefault ? "★" : "☆"}</button>` +
+      `<button type="button" class="vtag-editbtn${editing ? " is-on" : ""}" data-vtag-edit="${escapeHtml(lvl)}" title="Edit this tag's name and multiplier">✎</button>` +
+      editRow +
+      `</div>`
+    );
+  };
+
   const optHtml = (o: HTMLOptionElement) => {
+    if (isVtag()) return vtagOptHtml(o);
     // A `data-hint` on the option renders as small-gray explanation text beside the
     // label in the MENU only (the trigger stays label-only so it reads like a tag).
     const hint = o.dataset.hint ? ` <span class="xdd-opt-hint">${escapeHtml(o.dataset.hint)}</span>` : "";
@@ -24282,18 +24364,62 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
       return;
     }
-    const opt = t.closest<HTMLElement>(".xdd-opt");
+    // Tag editor: keep the menu OPEN (re-place if it's a fixed popup) after a tweak.
+    const resyncOpen = () => {
+      sync();
+      const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+      const btn = dd.querySelector<HTMLElement>(".xdd-btn");
+      if (menu && btn && !menu.hasAttribute("hidden") && (dd.classList.contains("wo-af-dim") || dd.classList.contains("login-input")))
+        placeXddFixed(btn, menu);
+    };
+    if (t.closest(".vtag-edit")) return; // a tap inside the name/× edit row never picks or closes
+    const vd = t.closest<HTMLElement>(".vtag-default");
+    if (vd?.dataset.vtagDefault !== undefined) {
+      const fam = vtagFam();
+      if (fam) { setFamDefaultLevel(fam, vtagDim, vd.dataset.vtagDefault); resyncOpen(); }
+      return;
+    }
+    const ve = t.closest<HTMLElement>(".vtag-editbtn");
+    if (ve?.dataset.vtagEdit !== undefined) {
+      vtagEditLevel = vtagEditLevel === ve.dataset.vtagEdit ? null : ve.dataset.vtagEdit;
+      resyncOpen();
+      dd.querySelector<HTMLInputElement>(".vtag-edit .vtag-name")?.focus();
+      return;
+    }
+    const opt = t.closest<HTMLElement>("[data-val]"); // the pick button (or a plain .xdd-opt)
     if (opt?.dataset.val !== undefined) {
       if (sel.value !== opt.dataset.val) {
         sel.value = opt.dataset.val;
         sel.dispatchEvent(new Event("change", { bubbles: true }));
       }
+      vtagEditLevel = null;
       close();
       sync();
     }
   });
+  // Tag editor: save the inline name / multiplier edits on blur/Enter (the input's
+  // `change`), then re-render the row in place. Multipliers reuse setFamFactor; names
+  // setFamLabel. Both also refresh the source <option> so the trigger pill updates.
+  dd.addEventListener("change", (e) => {
+    const fam = vtagFam();
+    if (!fam) return;
+    const t = e.target as HTMLElement;
+    const nm = t.closest<HTMLInputElement>(".vtag-name");
+    if (nm?.dataset.lvl) {
+      setFamLabel(fam, vtagDim, nm.dataset.lvl, nm.value);
+      for (const o of Array.from(sel.options)) if (o.value === nm.dataset.lvl) o.textContent = afLevelText(vtagDim, nm.dataset.lvl, fam);
+      sync();
+      return;
+    }
+    const ml = t.closest<HTMLInputElement>(".vtag-mult");
+    if (ml?.dataset.lvl) {
+      const v = parseFloat(ml.value);
+      if (Number.isFinite(v)) { setFamFactor(fam, vtagDim, ml.dataset.lvl, v); sync(); }
+      return;
+    }
+  });
   document.addEventListener("click", (e) => {
-    if (!dd.contains(e.target as Node)) close();
+    if (!dd.contains(e.target as Node)) { vtagEditLevel = null; close(); }
   });
   // Search box: filter as you type; Enter picks the first match, Esc closes.
   dd.addEventListener("input", (e) => {

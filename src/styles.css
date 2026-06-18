@@ -2066,6 +2066,31 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
    explanations in small gray text, but the chosen pill stays a clean tag label). */
 .xdd-opt-hint { color: var(--muted); font-size: 0.78em; font-weight: 400; margin-left: 0.4em; }
 .xdd-opt[hidden], .xdd-group[hidden] { display: none; }
+/* ---- Variation TAG EDITOR rows (owner: tap a tag → see what it is + add it / set default,
+   and edit each tag's name + multiplier). Each level is a row: the pick button (name + ×mult
+   + gray hint), a ★ set-default toggle, a ✎ that reveals inline name / × edits. ---- */
+.vtag-opt { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; padding: 2px 4px; }
+.vtag-opt:hover { background: none; }
+.vtag-pick {
+  flex: 1 1 auto; min-width: 0; text-align: left; white-space: normal; cursor: pointer;
+  border: none; background: none; font: inherit; color: var(--text); padding: 5px 6px; border-radius: 6px;
+}
+.vtag-pick:hover { background: var(--accent-soft); color: var(--accent); }
+.vtag-opt.is-active .vtag-pick { color: var(--accent); font-weight: 700; }
+.vtag-mult-lbl { color: var(--muted); font-size: 0.8em; font-weight: 600; margin-left: 0.3em; }
+.vtag-default, .vtag-editbtn {
+  flex: 0 0 auto; border: none; background: none; cursor: pointer; color: var(--muted);
+  min-width: var(--tap-min); min-height: var(--tap-min); border-radius: var(--r-pill); font-size: 1rem; line-height: 1;
+}
+.vtag-default.is-on { color: var(--lens-combine); } /* gold ★ = the exercise's default tag */
+.vtag-editbtn.is-on { color: var(--accent); }
+.vtag-default:hover, .vtag-editbtn:hover { color: var(--accent); background: var(--accent-soft); }
+.vtag-opt.is-default { background: color-mix(in srgb, var(--lens-combine) 12%, transparent); border-radius: 6px; }
+.vtag-edit { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 6px 6px; }
+.vtag-efld { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); }
+.vtag-name, .vtag-mult { font: inherit; font-size: 0.85rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); box-sizing: border-box; }
+.vtag-name { width: 8rem; }
+.vtag-mult { width: 4rem; }
 /* Sticky search box atop a long dropdown — filters the options as you type. Stays put
    while the list scrolls; opaque background so options don't show through it. */
 .xdd-search {
