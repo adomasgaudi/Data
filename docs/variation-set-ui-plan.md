@@ -35,9 +35,11 @@ at a time (rule 7/59). Codes are re-derived at commit (rule 8).
     weight, centred on the set's values, live readout) + an **＋ Add set** button
     (`addManualSetLike`, shared with the old suggestions).
 
-- [ ] **4 · Graph dot tooltip** — tapping a point also shows the **original logged
-  weight**, the **variants**, the **date(s) logged**, and a small **link button to
-  the history entry** it came from (alongside the realistic + 1RM values).
+- [x] **4 · Graph dot tooltip** — DONE. The pinned point popup now shows the date,
+  original **logged** weight×reps, the **effective** load when it differs, the
+  **variants** (note), RIR, and a **"→ in history"** link button (`onPointHistory`
+  → `openExerciseInfo`). Wired on the reps×weight scatter and the time-series dots
+  via a new `SvgPoint.histEx` + `SvgChartConfig.onPointHistory`.
 
 - [ ] **5 · Merged-pattern title + switcher** (LAST, owner said do after all else) —
   when a lift is viewed as a Merged/Separated member of a pattern group (e.g. Belt

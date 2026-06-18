@@ -75,6 +75,9 @@ export interface SvgPoint {
   /** Full per-point detail for the click-to-pin popup, one fact per line (e.g.
    * date, weight×reps, 1RM, RIR, notes). Falls back to value+meta when absent. */
   detail?: string;
+  /** Source exercise this point came from — when set (and cfg.onPointHistory is given)
+   * the pinned popup shows a "→ in history" link that jumps to that exercise. */
+  histEx?: string;
   /** A failed attempt (note contained "fail") — drawn as an ✕ in the series colour. */
   fail?: boolean;
   /** A new record (running-max) set — drawn as a diamond instead of a dot. */
@@ -230,6 +233,9 @@ export interface SvgChartConfig {
    * with null when the user RE-FITS (double-tap / Fit) so the caller drops the saved
    * view. NOT fired for programmatic fits (mount / series update / compact toggle). */
   onViewChange?: ((view: ViewBox | null) => void) | undefined;
+  /** Given a point's `histEx`, jump to that exercise's logged history (the pinned
+   * popup shows a "→ in history" link when this and the point's histEx are set). */
+  onPointHistory?: ((ex: string) => void) | undefined;
 }
 /** The chart's pan/zoom window in DATA space (x = time ms or weight; y = the left axis). */
 export type ViewBox = { xMin: number; xMax: number; yMin: number; yMax: number };
@@ -1184,8 +1190,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (p.fail) badges.push(`<span class="svgc-tip-badge fail">✕ fail</span>`);
     const head = `<div class="svgc-tip-hd">${legendDot(s)}${esc(s.name)}</div>`;
     const body = lines.map((l, i) => `<div class="svgc-tip-line${i === 0 ? " is-first" : ""}">${l}</div>`).join("");
+    const histLink = p.histEx && cfg.onPointHistory
+      ? `<button type="button" class="svgc-tip-hist" data-histex="${esc(p.histEx)}">→ in history</button>`
+      : "";
     return `<button type="button" class="svgc-tip-x" aria-label="Close">✕</button>${head}${body}` +
-      (badges.length ? `<div class="svgc-tip-badges">${badges.join("")}</div>` : "");
+      (badges.length ? `<div class="svgc-tip-badges">${badges.join("")}</div>` : "") + histLink;
   }
   /** Pin the sticky detail popup beside a datapoint; it stays until dismissed. */
   function pinDetail(hp: HitPoint) {
@@ -1212,7 +1221,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   }
   // The ✕ on a pinned popup closes it (the popup gets pointer-events when pinned).
   tipEl.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".svgc-tip-x")) { e.stopPropagation(); hideTip(); }
+    if ((e.target as HTMLElement).closest(".svgc-tip-x")) { e.stopPropagation(); hideTip(); return; }
+    const hist = (e.target as HTMLElement).closest<HTMLElement>(".svgc-tip-hist");
+    if (hist?.dataset.histex && cfg.onPointHistory) { e.stopPropagation(); cfg.onPointHistory(hist.dataset.histex); hideTip(); }
   });
 
   // ---- interactions: 1 finger / mouse = pan, 2 fingers = pinch-zoom, wheel = zoom ----

@@ -130,6 +130,8 @@ export interface AnalyticsGraphInput {
   initialView?: ViewBox | null | undefined;
   /** Persist the user's pan/zoom (the new view), or null when they re-fit. */
   onViewChange?: ((view: ViewBox | null) => void) | undefined;
+  /** Jump to an exercise's logged history (powers the pinned popup's "→ in history" link). */
+  onPointHistory?: ((ex: string) => void) | undefined;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -235,8 +237,16 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
           const w = Math.round(dispW(r)! * 10) / 10;
           const fresh = Number.isFinite(Date.parse(r.date)) && (now - Date.parse(r.date)) / 86_400_000 < 14;
           const rir = input.config.rirOf?.(r); // size the bubble by effort (lower RIR = bigger)
-          const pt: { x: number; y: number; meta: string; op: number; glow: boolean; rir?: number } =
-            { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}`, op: ageOp(r.date), glow: fresh };
+          // Full per-dot facts for the pinned popup (owner): the DATE, the original LOGGED
+          // weight×reps, the effective load when it differs, the VARIANTS (note), then RIR —
+          // plus histEx so the popup can link to where the set was logged.
+          const eff = r.weight != null ? Math.round(r.weight * 10) / 10 : null;
+          const detailLines = [r.date, `${w}kg × ${r.reps} logged`];
+          if (eff != null && Math.abs(eff - w) > 0.05) detailLines.push(`${eff}kg effective`);
+          if (r.notes?.trim()) detailLines.push(r.notes.trim());
+          if (rir != null && Number.isFinite(rir)) detailLines.push(`RIR ${Math.round(rir * 10) / 10}`);
+          const pt: { x: number; y: number; meta: string; op: number; glow: boolean; rir?: number; detail: string; histEx: string } =
+            { x: w, y: r.reps!, meta: `${g.label}: ${w}kg × ${r.reps}`, op: ageOp(r.date), glow: fresh, detail: detailLines.join("\n"), histEx: r.originalExerciseName ?? r.exerciseName };
           if (rir != null && Number.isFinite(rir)) pt.rir = rir;
           return pt;
         });
@@ -310,6 +320,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
       forceXRange: axis ? { min: axis.xMin / axisScale, max: axis.xMax / axisScale } : undefined,
       forceLeftRange: axis ? { min: 0, max: axis.yMax } : undefined,
       initialView: input.initialView, onViewChange: input.onViewChange, // remember pan/zoom
+      onPointHistory: input.onPointHistory,
     };
     // RIR effort zones (single lift): ribbons stepping DOWN from the failure curve in REPS —
     // 0–3 RIR (a hard set), 3–6, 6–12 — teal, fading out the easier they get (matches the card).
@@ -527,6 +538,7 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
     onMarkerDrag: input.onMarkerDrag,
     initialView: input.initialView, // restore the bubble's saved pan/zoom on mount
     onViewChange: input.onViewChange, // persist the user's pan/zoom (null = re-fit)
+    onPointHistory: input.onPointHistory,
   };
   const existing = charts.get(container);
   container.classList.add("svgc-freepan");

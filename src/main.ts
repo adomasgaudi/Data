@@ -20907,6 +20907,7 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
     config: waGraphConfig,
     xMarkers: projMarkers,
     onMarkerDrag: onProjMarkerDrag,
+    onPointHistory: (ex) => openExerciseInfo(ex), // popup "→ in history" link
     rvwFitOf,
     onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"),
@@ -21309,6 +21310,7 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
       graphDash = setBubbleView(graphDash, tabId, bubble.id, box ? { sig, box } : null);
       persistDash();
     },
+    onPointHistory: (ex) => openExerciseInfo(ex), // popup "→ in history" link
     height: 300, // one constant plot height across all bubble types (stable reel, owner)
     xMarkers: projMarkers, // projection fit-window lines (drag to set the forecast fit range)
     onMarkerDrag: onProjMarkerDrag,
@@ -21848,6 +21850,7 @@ function renderWaGraph(): void {
     config: waGraphConfig,
     xMarkers: projMarkers,
     onMarkerDrag: onProjMarkerDrag,
+    onPointHistory: (ex: string) => openExerciseInfo(ex), // popup "→ in history" link
     rvwFitOf,
     onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"), // legend follows the GRAPH area's name mode (fired after the render pass)

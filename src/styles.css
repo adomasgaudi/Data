@@ -933,6 +933,13 @@ body.admin-only-hidden .admin-only { display: none !important; }
 .svgc-tip-badge { font-size: 0.7rem; font-weight: 700; border-radius: var(--r-pill); padding: 0 6px; }
 .svgc-tip-badge.pr { color: #b8902f; background: rgba(184, 144, 47, 0.14); }
 .svgc-tip-badge.fail { color: #a23b3b; background: rgba(162, 59, 59, 0.14); }
+/* "→ in history" link in a pinned point popup — jumps to the set's source exercise (owner). */
+.svgc-tip-hist {
+  display: block; width: 100%; margin-top: 5px; padding: 4px 8px; min-height: var(--tap-min);
+  border: 1px solid var(--accent); border-radius: var(--r-pill); background: var(--accent-soft);
+  color: var(--accent); font-size: 0.74rem; font-weight: 700; cursor: pointer; text-align: center;
+}
+.svgc-tip-hist:hover, .svgc-tip-hist:active { background: var(--accent); color: #fff; }
 
 /* Combined comparison table: all exercises, everyone's est 1RM side by side. */
 .team-summaries { display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; margin: 0 0 0.9rem; }

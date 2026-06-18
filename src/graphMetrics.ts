@@ -28,6 +28,7 @@ export interface GraphPoint {
   bands?: number[];
   meta?: string; // tooltip text
   detail?: string; // full per-set facts for the click-to-pin popup (one per line)
+  histEx?: string; // source exercise → powers the popup's "→ in history" link
   fail?: boolean; // the set's note contained "fail" — drawn as an ✕ in the series colour
   pr?: boolean; // a new running-max (a record at the time) — drawn as a diamond
   rir?: number; // the set's reps-in-reserve — scales the dot (higher RIR = smaller)
@@ -143,6 +144,7 @@ function perSet(
       const p: GraphPoint = { x, y };
       if (metaOf) p.meta = metaOf(r);
       p.detail = setDetail(r, cfg);
+      p.histEx = r.originalExerciseName ?? r.exerciseName;
       if (isFail(r)) p.fail = true;
       const rir = cfg?.rirOf?.(r); // size the dot by effort, when a resolver is given
       if (rir != null && Number.isFinite(rir)) p.rir = rir;
@@ -346,7 +348,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
           const v = addedWeight1RM({ ...r, reps: k }, cfg.formula);
           if (v != null) bands.push(r1(v));
         }
-        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM`, detail: setDetail(r, cfg) });
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM`, detail: setDetail(r, cfg), histEx: r.originalExerciseName ?? r.exerciseName });
       }
       return out.sort((a, b) => a.x - b.x);
     },
