@@ -690,6 +690,10 @@ function canEditGlobalMeta(): boolean {
 function canEditCurrentAthlete(): boolean {
   return canEditAthlete(els.athlete.value);
 }
+/** Show the inline + set / + exercise affordances? Only when the device pref is on AND
+ * you can edit this athlete — viewing someone else's profile is a read-only spectate
+ * view (owner), so the add buttons (and the rest of the edit chrome) are hidden. */
+function showAddSetsNow(): boolean { return S.showAddSets && canEditCurrentAthlete(); }
 
 /* ---- Real auth via Supabase magic-link ----------------------------------------
  * Select a username + password. Admin gets the full admin view;
@@ -7995,7 +7999,7 @@ function renderWorkoutsPage() {
         // weight / reps / sets) — the collapsed-mode counterpart of the sets-table column
         // pickers. Empty placeholder kept so a note-only lift's grid still lines up (PB).
         const rmTxt = woSummaryCell(sets, workoutFormula);
-        const addBtn = S.showAddSets
+        const addBtn = showAddSetsNow()
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
         // SORE Phase 2: a soreness dot when this session over-reached a recent volume
@@ -8053,7 +8057,7 @@ function renderWorkoutsPage() {
         : "";
       // "+ exercise" adds a brand-new exercise to this session (shown with the
       // rest of the quick-add UI).
-      const addExBtn = S.showAddSets
+      const addExBtn = showAddSetsNow()
         ? `<div class="wo-addex-wrap"><button type="button" class="wo-addex" data-adddate="${escapeHtml(g.date)}" title="Add a new exercise to this session">+ exercise</button></div>`
         : "";
       // A subtle separator when this day starts a new week / month / year vs the day
@@ -8418,7 +8422,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   // One exercise's header + set-rows; reused for the day's active lifts AND for its
   // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest.
   const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string => {
-    const addBtn = S.showAddSets
+    const addBtn = showAddSetsNow()
       ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
       : "";
     const header =
@@ -8450,7 +8454,7 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   };
   const body = group.exercises.map((e) => exRows(e, group.sets)).join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
-  const addExRow = S.showAddSets
+  const addExRow = showAddSetsNow()
     ? `<tr class="set-ex-row wo-addex-host"><td colspan="5"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
     : "";
   // Lifts the Index filter hides this day/week — shown under a "hidden N/M" toggle
@@ -8781,7 +8785,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const uniTag = uni
     ? `<span class="set-uni${sidesDifferNow ? " is-diff" : ""}" title="Unilateral — counts as a right + a left set${sidesDifferNow ? "; the sides differ (edit below)" : " (both sides, linked)"}">⇄${sidesDifferNow && both ? ` R${both.right.reps}/L${both.left.reps}` : ""}</span>`
     : "";
-  const rpeCell = rpeDropdownHtml(sid, rpeFor(s), assumedRirBandId(s.exerciseName, predRir));
+  // RIR: editable dropdown when you can edit this athlete; a static value otherwise — a
+  // spectate / someone-else's profile is read-only (owner). The assumed band still shows.
+  const rpeAssumed = assumedRirBandId(s.exerciseName, predRir);
+  const rpeCell = canEditCurrentAthlete()
+    ? rpeDropdownHtml(sid, rpeFor(s), rpeAssumed)
+    : `<span class="rpe-ro${rpeFor(s) ? "" : " is-assumed"}">${escapeHtml(rirBand(rpeFor(s))?.id ?? rpeAssumed)}</span>`;
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
   // The variation difficulty multiplier applied to this set (note model × level ×
@@ -9384,6 +9393,7 @@ function toggleSetEdit(target: HTMLElement): boolean {
   if (target.closest("[data-seteditclose]")) { closeSetEdit(); return true; } // the card's ✕
   const row = target.closest<HTMLElement>("tr.set-main");
   if (!row) return false;
+  if (!canEditCurrentAthlete()) return false; // read-only spectate view — never open the editor (owner)
   let sib = row.nextElementSibling;
   while (sib && !sib.classList.contains("set-edit-row")) {
     if (sib.classList.contains("set-main")) break; // reached the next set's main row

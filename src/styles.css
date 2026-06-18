@@ -3298,6 +3298,9 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
   border: 1px dashed var(--border); border-style: dashed; font-weight: 600; opacity: 0.85;
 }
 .xdd-rpe.is-assumed .xdd-caret { color: var(--muted); }
+/* Read-only RIR (spectating someone else's profile): a plain value, no dropdown. */
+.rpe-ro { display: inline-block; font-size: 0.74rem; font-weight: 700; color: var(--text); padding: 2px 4px; }
+.rpe-ro.is-assumed { color: var(--muted); font-weight: 600; opacity: 0.85; }
 /* Menu hugs the cell width and wraps long descriptions instead of going wide.
    The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
    edge (it grows leftward) — left-anchored it overflowed off the screen. */
