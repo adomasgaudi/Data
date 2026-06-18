@@ -3279,6 +3279,9 @@ table.rx-wu tr.rx-wu-work td { color: var(--text); font-weight: 700; border-top:
    matches the cell width and wraps each band's full description to 2 lines. */
 .rpe-cell { width: 4.6em; max-width: 4.6em; }
 .xdd-rpe { display: block; width: 100%; }
+/* The RIR menu fits its (short) band labels instead of the full, wide cell — owner: "remove
+   the white space, it doesn't have to be this wide". */
+.xdd-rpe .xdd-menu { min-width: max-content; width: max-content; }
 .xdd-rpe .xdd-btn {
   padding: 2px 4px; font-size: 0.74rem; font-weight: 600; gap: 0.15rem;
   border-radius: 6px; background: var(--panel); color: var(--muted);

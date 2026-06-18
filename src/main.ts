@@ -2026,11 +2026,21 @@ function bandContainingRir(rir: number): string {
 /** The ASSUMED RIR band for a set the owner hasn't graded (owner: "always add a rir
  * to sets automatically"). Prefers the set's own predicted RIR (snapped to a band);
  * with no prediction it falls back to the muscle-group typical — legs 4–8, upper body
- * 2.5–4. The store (rpeGrades) stays the single source of truth for what's REAL: a
- * graded set has an entry, an assumed one doesn't, so picking a band turns it real. */
+ * 2.5–4.5. UPPER body never auto-assumes EASIER than 2.5–4.5 (owner: "non-leg-heavy
+ * lifts should auto 2.5–4.5, not 4–8") — a too-easy prediction is floored there. The
+ * store (rpeGrades) stays the single source of truth for what's REAL: a graded set has
+ * an entry, an assumed one doesn't, so picking a band turns it real. */
 function assumedRirBandId(exerciseName: string, predRir: number | null): string {
-  if (predRir !== null && Number.isFinite(predRir)) return bandContainingRir(predRir);
-  return LOWER_BODY_MG.has(mgFor(exerciseName)) ? "4–8" : "2.5–4.5";
+  const lower = LOWER_BODY_MG.has(mgFor(exerciseName));
+  if (predRir !== null && Number.isFinite(predRir)) {
+    const band = bandContainingRir(predRir);
+    if (lower) return band;
+    // Upper body: floor the assumption at 2.5–4.5 (RIR_BANDS run hardest→easiest, so a
+    // higher index = easier — clamp any easier band back to 2.5–4.5).
+    const floor = RIR_BANDS.findIndex((b) => b.id === "2.5–4.5");
+    return RIR_BANDS.findIndex((b) => b.id === band) > floor ? "2.5–4.5" : band;
+  }
+  return lower ? "4–8" : "2.5–4.5";
 }
 /** Big compound leg lifts (squat / deadlift patterns, leg press) fatigue more, so
  * they get the wider "mid" effort band — see effortClass(). */
