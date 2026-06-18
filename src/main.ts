@@ -18560,6 +18560,38 @@ function addmVariantField(ex: string): string {
   const rom = `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
   return dims + rom;
 }
+/** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the add-page ⚙ cog's
+ * expanded per-exercise settings — assisted-machine, machine weight, ÷ multiplier, unilateral.
+ * Reuses the SSOT getters/setters; rebuilt in place on every edit so its state stays live.
+ * (Today these are per-exercise; Phase 3 re-homes them onto the chosen equipment.) */
+function addmSettingsPanelInner(ex: string): string {
+  if (!ex) return `<span class="muted addm-cog-hint">Name the exercise first.</span>`;
+  const assisted = isAssistedMachine(ex);
+  const uni = isUni(ex);
+  const mw = machineWeightFor(ex);
+  const mult = machineMultFor(ex);
+  return (
+    `<button type="button" class="addm-cog-pill${assisted ? " is-on" : ""}" data-cog="assisted" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~${fmt(mult)}× the real help), counted at a fraction for strength.">${assisted ? "assisted ½" : "assisted?"}</button>` +
+    `<button type="button" class="addm-cog-pill${uni ? " is-on" : ""}" data-cog="uni" aria-pressed="${uni}" title="Unilateral — each set counts as a right + a left set (single-arm / single-leg).">${uni ? "unilateral" : "unilateral?"}</button>` +
+    `<label class="addm-cog-num" title="Machine base weight (kg) — a hidden resistance the machine adds even at the lowest pin; shown as the 20+30 formula.">machine wt <input class="addm-cog-mw" type="number" inputmode="decimal" step="1" min="0" max="200" value="${mw || ""}" placeholder="0" aria-label="Machine base weight (kg)" /> kg</label>` +
+    (assisted
+      ? `<label class="addm-cog-num" title="Machine multiplier — the dial over-read factor; the real effort is the dialed weight over this.">÷ <input class="addm-cog-mm" type="number" inputmode="decimal" step="0.1" min="0.5" max="5" value="${fmt(mult)}" placeholder="2" aria-label="Machine multiplier (dial over-read)" /></label>`
+      : "")
+  );
+}
+/** Re-derive the open add-modal's cog exercise (the typed new-lift name, else the fixed one). */
+function addmCogEx(form: HTMLElement): string {
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  return (exInput ? exInput.value.trim() : (form.dataset.addex ?? "")) || "";
+}
+/** Rebuild the cog panel body in place from the live exercise, keeping its open state. */
+function refreshAddmSettings(): void {
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  const body = addModalEl?.querySelector<HTMLElement>(".addm-set-cog");
+  if (!form || !body) return;
+  body.dataset.cogex = addmCogEx(form);
+  body.innerHTML = addmSettingsPanelInner(body.dataset.cogex);
+}
 function closeAddModal(): void {
   addModalEl?.remove();
   addModalEl = null;
@@ -18613,6 +18645,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
   const form =
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     exField +
+    `<div class="addm-set-cog" data-cogex="${escapeHtml(ex)}" hidden>${addmSettingsPanelInner(ex)}</div>` +
     afWhenToggle(date, today) +
     `<div class="addm-setblock"><div class="addm-variant-slot">${variantBlock}</div><div class="addm-lines">${AF_LINE}</div></div>` +
     `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
@@ -18625,6 +18658,7 @@ function openAddModal(exerciseName: string | null, date: string): void {
   wrap.innerHTML =
     `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
     `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
+    `<button type="button" class="addm-cog" aria-label="Exercise settings" aria-expanded="false" title="Exercise settings — assisted machine, machine weight, multiplier, unilateral">⚙</button>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
     form +
     `</div>`;
@@ -18641,6 +18675,23 @@ function openAddModal(exerciseName: string | null, date: string): void {
   // the ghost is visible above the bottom-docked popup (owner).
   wrap.addEventListener("input", syncPendingFromModal);
   wrap.addEventListener("change", syncPendingFromModal);
+  // ⚙ cog number fields (machine weight / ÷) persist on change; the live preview then follows.
+  // No panel rebuild here (the input has already blurred) so the typed value stays put.
+  wrap.addEventListener("change", (ev) => {
+    const el = ev.target as HTMLElement;
+    const cex = wrap.querySelector<HTMLElement>(".addm-set-cog")?.dataset.cogex ?? "";
+    if (!cex) return;
+    if (el.classList.contains("addm-cog-mw")) {
+      const txt = (el as HTMLInputElement).value.trim();
+      setMachineWeight(cex, txt === "" ? null : parseFloat(txt));
+      syncPendingFromModal();
+    } else if (el.classList.contains("addm-cog-mm")) {
+      const txt = (el as HTMLInputElement).value.trim();
+      const v = parseFloat(txt);
+      setMachineMult(cex, txt === "" || !Number.isFinite(v) ? undefined : v);
+      syncPendingFromModal();
+    }
+  });
   // Collapse the tall fields while a weight/reps input is focused, so the sheet shrinks and
   // the history ghost stays visible above the keyboard (owner).
   const setTyping = () => {
@@ -18676,6 +18727,8 @@ function openAddModal(exerciseName: string | null, date: string): void {
       };
       exInput.addEventListener("change", refreshVariant);
       exInput.addEventListener("input", refreshVariant);
+      // The ⚙ cog targets the typed lift — re-point it when the name settles.
+      exInput.addEventListener("change", refreshAddmSettings);
     }
   }
   wrap.querySelector<HTMLInputElement>(isNew ? ".wo-af-ex" : ".wo-af-weight")?.focus();
@@ -18687,6 +18740,33 @@ function onAddModalClick(e: MouseEvent): void {
   if (t === wrap) { closeAddModal(); return; } // backdrop tap
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
+  // ⚙ Exercise-settings cog: toggle the expanded per-exercise panel (rebuilt from the live
+  // exercise so a just-typed new lift targets the right name).
+  const cogBtn = t.closest<HTMLElement>(".addm-cog");
+  if (cogBtn) {
+    const panel = wrap.querySelector<HTMLElement>(".addm-set-cog");
+    if (panel) {
+      refreshAddmSettings();
+      const show = panel.hasAttribute("hidden");
+      panel.toggleAttribute("hidden", !show);
+      cogBtn.classList.toggle("is-on", show);
+      cogBtn.setAttribute("aria-expanded", String(show));
+    }
+    return;
+  }
+  // Cog panel assisted / unilateral toggles — flip the SSOT, rebuild the panel in place, and
+  // refresh the live preview (the −20/N formula reads these).
+  const cogPill = t.closest<HTMLElement>(".addm-cog-pill");
+  if (cogPill) {
+    const cex = wrap.querySelector<HTMLElement>(".addm-set-cog")?.dataset.cogex ?? "";
+    if (cex) {
+      if (cogPill.dataset.cog === "assisted") setAssistedOverride(cex, !isAssistedMachine(cex));
+      else if (cogPill.dataset.cog === "uni") setUnilateralOverride(cex, !isUni(cex));
+      refreshAddmSettings();
+      syncPendingFromModal();
+    }
+    return;
+  }
   // Add-line RIR picker: toggle its menu, or apply a picked band (which becomes the new set's
   // recorded RIR; "clear" reverts to the live assumed value).
   const rirDd = t.closest<HTMLElement>(".addm-rir");

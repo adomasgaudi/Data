@@ -61,6 +61,13 @@ const LT: Record<string, string> = {
   "Weight · reps · sets": "Svoris · kart. · serijos",
   "Weight · reps": "Svoris · kart.",
   "search exercise…": "ieškoti pratimo…",
+  // ---- Add-page ⚙ exercise-settings cog ----
+  "assisted?": "su pagalba?",
+  "assisted ½": "su pagalba ½",
+  "unilateral": "vienpusis",
+  "unilateral?": "vienpusis?",
+  "machine wt": "mašinos sv.",
+  "Name the exercise first.": "Pirma įveskite pratimo pavadinimą.",
   "Index": "Rodyklė",
   // ---- Live coaching page ----
   "Live": "Gyvai",

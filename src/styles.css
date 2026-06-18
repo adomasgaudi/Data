@@ -2789,8 +2789,33 @@ sup.wr-bw { font-size: 0.85em; }
   box-shadow: 0 -8px 40px rgba(20, 24, 38, 0.22); padding: 0.7rem 0.9rem 1rem;
 }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
-.addm-title { font-size: 1rem; font-weight: 700; }
+.addm-title { font-size: 1rem; font-weight: 700; flex: 1 1 auto; } /* grows so the ⚙ + × sit together at the right */
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
+/* ⚙ Exercise-settings cog (Phase 1, equipment model) + its expanded per-exercise panel. */
+.addm-cog {
+  font-size: 1.15rem; line-height: 1; cursor: pointer; background: none; border: none;
+  color: var(--muted); padding: 0 4px; min-height: var(--tap-min);
+}
+.addm-cog.is-on { color: var(--accent); }
+.addm-set-cog {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+  margin: 0.1rem 0 0.45rem; padding: 0.5rem 0.6rem; border: 1px solid var(--line);
+  border-radius: var(--r-pill); background: var(--accent-soft);
+}
+.addm-cog-pill {
+  font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
+  padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line);
+  background: var(--card); color: var(--muted);
+}
+.addm-cog-pill.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.addm-cog-num { font-size: 0.8rem; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.addm-cog-num input {
+  width: 3.4rem; box-sizing: border-box; font: inherit; font-size: 0.85rem; text-align: center;
+  padding: 3px 6px; min-height: var(--tap-min); border: 1.5px solid var(--line);
+  border-radius: var(--r-pill); background: var(--card); color: inherit;
+}
+.addm-cog-num input:focus { border-color: var(--accent); outline: none; }
+.addm-cog-hint { font-size: 0.8rem; }
 .addm-field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.45rem 0; }
 /* Owner: everything stays VISIBLE while editing numbers (the sheet just scrolls) — the
    variant pickers, suggestions, ROM and note are no longer hidden when the keyboard is up. */

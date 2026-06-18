@@ -135,13 +135,14 @@ On first load with the new model, fold today's per-exercise settings into machin
 
 ## Phased build (deploy one box at a time)
 
-### Phase 1 — add-page settings cog (no model change yet)
-- [ ] **1a** Add a **⚙ cog** to the add-set / add-exercise popup that opens a clamped
-  floating popout (rule 32 + 24 — preserve open state across the re-render it triggers).
-- [ ] **1b** In the popout, surface the EXISTING per-exercise editors, reusing the
-  index-card controls so there's one source of truth: machine weight, ÷ multiplier,
-  unilateral, experimental, ROM. Match the tight history-⚙ density (#cram).
-- [ ] **1c** LT i18n for any new labels; keep the index card and the cog in lockstep.
+### Phase 1 — add-page settings cog (no model change yet) — DONE `EQUIP-1` `b.2.9.193`
+- [x] **1a** ⚙ cog in the add-popup header toggles an inline `.addm-set-cog` panel (inline,
+  not a floating popout — sidesteps the rule-32 clamp bug; the card already scrolls).
+- [x] **1b** Panel surfaces the EXISTING per-exercise editors via the SSOT getters/setters:
+  assisted toggle, machine weight, ÷ multiplier (when assisted), unilateral. (ROM +
+  experimental already live inline in the add form, so not duplicated here.)
+- [x] **1c** LT i18n for the new labels (also covers the set-edit assisted/unilateral
+  toggles); panel re-targets the lift on new-exercise name change.
 
 ### Phase 2 — global-change confirm + undo
 - [ ] **2a** Wrap machine-weight (and ÷) edits in a confirm/undo toast: "changed for
