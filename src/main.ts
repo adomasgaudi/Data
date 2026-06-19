@@ -8879,13 +8879,18 @@ function exerciseSetRowsHtml(
   const addBtn = showAddSetsNow()
     ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
     : "";
-  const header =
-    `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-    `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
-    `${addBtn}</td></tr>`;
   // Newest-first: reverse the date-sorted sets so the latest day/set leads (matches
   // the history's newest→oldest order); the day/week dividers fire on each date change.
   const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
+  // Hoist the tags a MAJORITY of these sets share up to the exercise header (owner: don't
+  // repeat the same tag on every set) and suppress them per-set. For the inline single-exercise
+  // expand (no header here) the collapsed .wo-ex-line above already carries these chips.
+  const common = commonTagsFor(exSets);
+  const commonChips = commonTagsChips(familyOf(e.exerciseName), common);
+  const header =
+    `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
+    `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
+    `${commonChips ? ` <span class="wo-ex-commontags">${commonChips}</span>` : ""}${addBtn}</td></tr>`;
   let lastDay: string | null = null;
   let lastWeek: string | null = null;
   const setRows = exSets
@@ -8899,7 +8904,7 @@ function exerciseSetRowsHtml(
         lastDay = s.date;
         lastWeek = wk;
       }
-      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
+      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common);
     })
     .join("");
   // The inline single-exercise expand omits this header — the collapsed .wo-ex-line
@@ -9298,7 +9303,7 @@ function predictedRirText(c: SetRecord, anchorE1RM: number | null, formula: OneR
  * has a note (or is a dropset) the WHOLE note shows on its own muted sub-row right
  * under the set (no truncation). Both reveals are independent sub-rows.
  */
-function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
+function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null, suppress?: Record<string, string>): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
   // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
   // what was actually loaded. `raw` is a raw record; apply the on-device per-set
@@ -9332,7 +9337,9 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // ROM is a per-set VARIATION (chip), never a user note (owner). romOfSet reads the attribute
   // (or strips a legacy "ROM…" token) and gives back the USER note only.
   const romRes = romOfSet(setId(s), s.notes);
-  const romTag = romRes.chip;
+  // Suppress the ROM chip when this set's ROM is the hoisted common one (shown at the exercise
+  // header) — owner: a tag shared by the whole exercise shouldn't repeat on every set.
+  const romTag = suppress && suppress["__rom"] === romRes.label ? "" : romRes.chip;
   const notesNoRom = romRes.note;
   const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, notesNoRom)].filter(Boolean).join(" · ");
   // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
@@ -9387,7 +9394,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // picker. The ×N multiplier shows ONLY when there's no chip to imply it (or a manual per-set
   // scale, or the ×N-mode pill forces it) — the same rule the collapsed line (setDisplay) uses.
   // UN (not-comparable) always shows.
-  const namedChips = variationChipsHtml(s);
+  const namedChips = variationChipsHtml(s, suppress);
   const customScale = (setOverrides[sid]?.scale ?? 1) !== 1;
   const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (S.showAllScale || customScale || namedChips === ""));
   const scaleTag = !showScaleNum
@@ -10471,11 +10478,16 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     if (g) g.push(s);
     else byDate.set(s.date, [s]);
   }
+  // Hoist the tags a MAJORITY of this exercise's sets share to a single header row, and suppress
+  // them per-set (owner: a tag shared by the whole exercise shouldn't repeat on every set).
+  const common = commonTagsFor(sets);
+  const commonChips = commonTagsChips(sets.length ? familyOf(sets[0]!.exerciseName) : null, common);
+  const commonRow = commonChips ? `<tr class="set-ex-row"><td colspan="5"><span class="wo-ex-commontags">${commonChips}</span></td></tr>` : "";
   const body = Array.from(byDate, ([date, daySets]) => {
     const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
+    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common)).join("");
   }).join("");
-  return `<table class="data-table detail-table">${setsHead()}<tbody>${body}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${commonRow}${body}</tbody></table>`;
 }
 
 /** Best / latest / trend summary line for an exercise's day-by-day 1RM series.

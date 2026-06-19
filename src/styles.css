@@ -2491,6 +2491,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hh-card.hh-gap { background: none; border: none; border-left: 1px dashed var(--line); border-right: 1px dashed var(--line); border-radius: 0; display: flex; align-items: center; justify-content: center; }
 .hh-gap-dots { writing-mode: vertical-rl; color: var(--muted); font-size: 0.7rem; letter-spacing: 1px; }
 .wo-ex-body { min-width: 0; display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
+/* Tags shared by the WHOLE exercise (hoisted from the sets) sit on the TITLE row, pushed to the
+   right end — so it reads as the group's tags, not one set's (owner). The per-set list then always
+   starts on its OWN line below the title + shared tags. */
+.wo-ex-body > .wo-ex-commontags { margin-left: auto; align-self: baseline; }
+.wo-ex-body > .wo-setlist { flex-basis: 100%; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
 /* Difficulty-multiplier tag (×1.3): a SMALL distinct pill matching the handstand
