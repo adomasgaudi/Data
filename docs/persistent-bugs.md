@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-45 — Workout history re-sorts (jumps) when you delete a set in an expanded day
+
+- **First seen / reported:** 2026-06-18, mobile, Athlete → Workouts, day expanded. Owner: "if I delete a set the exercises (sorted by most sets) reshuffle and another jumps to the top; it should wait until I close the expanded view, then resort." Recurrence 1 (the b.2.9.220 fix did not hold).
+- **Failed fix (b.2.9.220, WO-246):** added `woSortFreeze` + `applyWoSortFreeze`, but only INSIDE the `if (woSortMode !== "logged")` branch of `renderWorkoutsPage`. The day view's exercise order actually comes from `workoutsForUser` (aggregate.ts) which sorts by **set COUNT** as the BASE order, and the DEFAULT `woSortMode` is `"logged"` (no re-sort) — so the freeze code path never ran for the case that jumps. Classic "fixed the branch I was looking at, not the one that renders."
+- **Root cause:** the exercise reorder is the set-COUNT sort in `workoutsForUser`; deleting a set drops a count and reshuffles, and that base order flows straight through `buildWorkoutGroups` → render regardless of `woSortMode`.
+- **Fix (b.2.9.221, WO-247):** apply `applyWoSortFreeze` to EVERY group's exercises AFTER the optional metric sort AND for the `logged` default (so the count-order base is frozen too). Re-sort only on sparse events: a freeze-key change (athlete/sort/view), `clearWorkoutSortFreeze()` on page change (`showSubtab`) / data refresh, and now on CLOSING an expanded day (`toggleCollapse` true → clear + `deferRender(renderWorkoutsPage)`) — exactly the owner's "wait until I close, then resort". Added on-screen `dbg()` traces (`WO sort …`, `WO freeze SEED/HOLD …`, `WO collapse → …`) so a green-console screenshot confirms the freeze holds across a delete.
+- **Watch:** when freezing/curating a rendered ORDER, freeze it at the point the order is FINALISED for render (the last sort before paint), not in one optional branch — there were TWO sort stages (base count-sort in workoutsForUser + the woSortMode re-sort). Confirm the DEFAULT mode path is covered, not just the configurable one.
+- **Recurrences:** 1.
+
+---
+
 ## PB-43 — Add-set weight/reps box: the never-ending restyle (escalation war)
 
 - **First seen / reported:** styled & re-styled across 2026-06-16…18, mobile (Add-exercise / + set sheet). The owner kept screenshotting the weight/reps entry asking for a different look; `#super-persistent` invoked 2026-06-18.

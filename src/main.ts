@@ -8194,7 +8194,8 @@ function clearWorkoutSortFreeze(): void { woSortFreeze.clear(); }
 function applyWoSortFreeze(date: string, sorted: ExerciseCount[]): ExerciseCount[] {
   const key = `${els.athlete.value}|${woSortMode}|${S.workoutViewMode}|${date}`;
   const frozen = woSortFreeze.get(key);
-  if (!frozen) { woSortFreeze.set(key, sorted.map((e) => e.exerciseName)); return sorted; }
+  if (!frozen) { woSortFreeze.set(key, sorted.map((e) => e.exerciseName)); dbg(`WO freeze SEED ${date} [${sorted.map((e) => e.exerciseName).join(",")}]`); return sorted; }
+  dbg(`WO freeze HOLD ${date} fresh=[${sorted.map((e) => e.exerciseName).join(",")}]`);
   const idx = new Map(frozen.map((n, i) => [n, i] as const));
   // Each exercise keeps its frozen slot; anything new (not yet frozen) sorts to the END in its
   // freshly-computed order (a stable sort preserves that among the equal Infinity keys).
@@ -8234,10 +8235,17 @@ function renderWorkoutsPage() {
         const cmp = (x: ExerciseCount, y: ExerciseCount): number =>
           prioCmp ? prioCmp(x.exerciseName, y.exerciseName)
             : (metric!.get(y.exerciseName) ?? -Infinity) - (metric!.get(x.exerciseName) ?? -Infinity);
-        return { ...g, exercises: applyWoSortFreeze(g.date, [...g.exercises].sort(cmp)) };
+        return { ...g, exercises: [...g.exercises].sort(cmp) };
       });
     }
   }
+  // FREEZE the exercise order for EVERY group, AFTER the optional metric sort above AND for the
+  // default "logged" mode (whose base order is workoutsForUser's set-COUNT sort — the one that
+  // jumped on delete). So an in-place edit (delete a set) keeps every exercise in its slot; it
+  // only re-sorts on a sparse event that cleared the freeze (page change, refresh, or CLOSING
+  // an expanded day — owner). PB-45. (#debug: the previous fix only froze the non-logged branch.)
+  workoutGroups = workoutGroups.map((g) => (g.exercises ? { ...g, exercises: applyWoSortFreeze(g.date, g.exercises) } : g));
+  dbg(`WO sort ${woSortMode} frozen=${woSortFreeze.size} grps=${workoutGroups.length}`);
   const workoutFormula = currentFormula();
   const period = historyByExercise ? null : historyPeriod(S.workoutViewMode);
   const byWeek = period !== null;
@@ -8737,7 +8745,14 @@ function onWorkoutRowClick(e: MouseEvent) {
   // every button already returned above; the golden per-lift summary chip has its own
   // column-change handler, so leave it alone.
   if (target.closest(".wo-summary")) return;
-  if (toggleCollapse(row)) return;
+  if (toggleCollapse(row)) {
+    // Owner: re-sort the history ONLY when the expanded view is CLOSED (not on every in-place
+    // edit). Closing a day clears the freeze and re-renders, so the order catches up now. PB-45.
+    dbg("WO collapse → clear freeze + resort");
+    clearWorkoutSortFreeze();
+    deferRender(renderWorkoutsPage);
+    return;
+  }
   const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
   insertDetail(row, 2, workoutGroupHtml(grp));
