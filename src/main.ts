@@ -19433,11 +19433,16 @@ let romPickerClose: (() => void) | null = null;
 function closeRomPicker(): void { romPickerClose?.(); }
 function openRomPicker(pill: HTMLElement): void {
   closeRomPicker();
-  let unit = pill.dataset.romunit === "cm" ? "cm" : "pct";
+  // Owner: ROM can be entered in cm OR in yoga blocks (like the lean picker), and for handstands
+  // measured FROM the floor or your HEAD. `mode` drives the picker UI (% / cm / block); a block
+  // resolves to its cm height, so storage stays {unit:"cm"|"pct", val, ref} — no schema change.
+  let mode: "pct" | "cm" | "block" = pill.dataset.romunit === "cm" ? "cm" : "pct";
   let val = Number(pill.dataset.romval) || 0;
   let ref = pill.dataset.romref || "floor";
   const def = Number(pill.dataset.romdefault) || 0;
-  const REFS = ["floor", "body", "top", "bar"]; // common references; the text field allows any other
+  const REFS = ["floor", "head", "body", "top", "bar"]; // floor / head lead for handstands; text field allows any other
+  const BLOCKS: YogaBlockSide[] = ["small", "medium", "large"];
+  const committedUnit = (): "pct" | "cm" => (mode === "pct" ? "pct" : "cm");
   const pop = document.createElement("div");
   pop.className = "inc-pop rom-pop";
   const place = () => {
@@ -19449,37 +19454,43 @@ function openRomPicker(pill: HTMLElement): void {
     pop.style.left = `${left}px`; pop.style.top = `${top}px`;
   };
   const commit = () => {
-    pill.dataset.romunit = unit; pill.dataset.romval = String(val); pill.dataset.romref = unit === "cm" ? ref : "";
-    pill.textContent = romPillLabel(unit, val);
-    pill.classList.toggle("is-set", unit === "cm" || val !== def); // cm is always a deliberate value
+    const u = committedUnit();
+    pill.dataset.romunit = u; pill.dataset.romval = String(val); pill.dataset.romref = u === "cm" ? ref : "";
+    pill.textContent = romPillLabel(u, val);
+    pill.classList.toggle("is-set", u === "cm" || val !== def); // cm is always a deliberate value
   };
   const render = () => {
     pop.innerHTML =
       `<div class="inc-units">` +
-      `<button type="button" class="inc-unit${unit === "pct" ? " is-on" : ""}" data-romunit="pct">%</button>` +
-      `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-romunit="cm">cm</button>` +
+      `<button type="button" class="inc-unit${mode === "pct" ? " is-on" : ""}" data-rommode="pct">%</button>` +
+      `<button type="button" class="inc-unit${mode === "cm" ? " is-on" : ""}" data-rommode="cm">cm</button>` +
+      `<button type="button" class="inc-unit${mode === "block" ? " is-on" : ""}" data-rommode="block">block</button>` +
       `</div>` +
-      `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
-      `<input type="number" class="inc-val rom-val" step="${unit === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
-      `<span class="rom-unit-lbl muted">${unit === "cm" ? "cm" : "%"}</span>` +
-      `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>` +
-      (unit === "cm"
-        ? `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
+      (mode === "block"
+        ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === YOGA_BLOCK_CM[b] ? " is-on" : ""}" data-romblock="${b}">${b} · ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`
+        : `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
+          `<input type="number" class="inc-val rom-val" step="${mode === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
+          `<span class="rom-unit-lbl muted">${mode === "cm" ? "cm" : "%"}</span>` +
+          `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>`) +
+      (mode === "pct"
+        ? `<div class="inc-eq muted">% of the full range of motion</div>`
+        : `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
           `<div class="rom-ref-chips">` + REFS.map((r) => `<button type="button" class="rom-ref-chip${r === ref ? " is-on" : ""}" data-romref="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("") + `</div>` +
-          `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`
-        : `<div class="inc-eq muted">% of the full range of motion</div>`) +
+          `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`) +
       `<button type="button" class="inc-floor" data-romdefaultbtn>default (${def}%)</button>`;
     place();
   };
   pop.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
-    const u = t.closest<HTMLElement>("[data-romunit]");
-    if (u?.dataset.romunit) { unit = u.dataset.romunit === "cm" ? "cm" : "pct"; render(); commit(); return; }
+    const m = t.closest<HTMLElement>("[data-rommode]");
+    if (m?.dataset.rommode) { mode = m.dataset.rommode as "pct" | "cm" | "block"; if (mode === "block" && (val === 0 || val === def)) val = YOGA_BLOCK_CM.medium; render(); commit(); return; }
+    const bl = t.closest<HTMLElement>("[data-romblock]");
+    if (bl?.dataset.romblock) { val = YOGA_BLOCK_CM[bl.dataset.romblock as YogaBlockSide]; render(); commit(); return; }
     const s = t.closest<HTMLElement>("[data-romstep]");
-    if (s?.dataset.romstep) { const d = unit === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); render(); commit(); return; }
+    if (s?.dataset.romstep) { const d = mode === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); render(); commit(); return; }
     const rc = t.closest<HTMLElement>(".rom-ref-chip");
     if (rc?.dataset.romref) { ref = rc.dataset.romref; render(); commit(); return; }
-    if (t.closest("[data-romdefaultbtn]")) { unit = "pct"; val = def; ref = "floor"; render(); commit(); return; }
+    if (t.closest("[data-romdefaultbtn]")) { mode = "pct"; val = def; ref = "floor"; render(); commit(); return; }
   });
   pop.addEventListener("input", (e) => {
     const t = e.target as HTMLElement;
