@@ -2906,6 +2906,19 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-line-vars .wo-af-rompill:hover, .addm-line-vars .wo-af-leanpill:hover { border-color: var(--accent); color: var(--accent); }
 .addm-line-vars .wo-af-rompill.is-set, .addm-line-vars .wo-af-leanpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Custom ×multiplier pill — same compact pill look; shows the live total, accent when a custom
+   value is set. Tap → the value + mode (× on top / = total) picker (reuses .inc-pop). */
+.addm-line-vars .wo-af-multpill {
+  flex: 0 0 auto; min-height: 0; width: auto;
+  padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
+  text-transform: uppercase; letter-spacing: 0.02em;
+  border-radius: var(--r-xs); border: 1px solid var(--line);
+  background: var(--line); color: var(--muted); cursor: pointer;
+}
+.addm-line-vars .wo-af-multpill:hover { border-color: var(--accent); color: var(--accent); }
+.addm-line-vars .wo-af-multpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mult-pop .mult-readout { font-size: 0.7rem; margin-bottom: 4px; }
+.mult-pop .mult-val { width: 4rem; }
 /* Lean picker hand-length row (reuses .rom-ref styling); the cm input is narrow. */
 .lean-pop .lean-hand-val { width: 3rem; }
 /* ROM picker (reuses .inc-pop) reference row (cm mode): quick chips + a free-text "from…" field. */

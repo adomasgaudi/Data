@@ -1514,6 +1514,9 @@ function setLevelScale(key: string, value: number) {
  * defaulting to ×1, so they compose instead of one replacing the others). */
 function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
+  // A custom ABSOLUTE multiplier REPLACES the whole computed total (owner: "override the total");
+  // it wins over the tags + the multiply-on-top per-set scale.
+  if (o?.scaleAbs != null && Number.isFinite(o.scaleAbs)) return o.scaleAbs;
   const perSet = o?.scale ?? 1;
   const level = r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
   return perSet * level * noteVariationScale(r);
@@ -2449,7 +2452,7 @@ function setRpe(id: string, v: string | null) {
 // Level data: an override keyed by setId is layered on at load. Bodyweight here
 // is JUST for that set (overrides the profile default); scale is the per-set
 // technique factor (beats the per-hole one). RIR keeps its own store above.
-interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; rom?: { unit: "pct" | "cm"; val: number; ref?: string }; }
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; scaleAbs?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; rom?: { unit: "pct" | "cm"; val: number; ref?: string }; }
 const SET_OVR_KEY = "colosseum.setOverrides.v1";
 let setOverrides: Record<string, SetOverride> = (() => {
   try {
@@ -2890,7 +2893,7 @@ function setSetOverrideNote(id: string, value: string, originalNote: string): vo
   saveSetOverrides();
 }
 /** Set or clear one numeric override field for a set (empty/NaN clears just it). */
-function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight" | "scale", value: number | null) {
+function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight" | "scale" | "scaleAbs", value: number | null) {
   if (!canEditCurrentAthlete()) return;
   const o = setOverrides[id] ?? {};
   if (value === null || !Number.isFinite(value)) delete o[field];
@@ -8221,7 +8224,8 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
     // plain note the owner gave a difficulty). Otherwise drop it and keep just the chip+reps.
     // "×N" mode (the scaleModeToggle pill) forces EVERY multiplier on; default "variation"
     // mode shows ×N only when it's CUSTOM or has no chip to imply it.
-    const customScale = (setOverrides[setId(s)]?.scale ?? 1) !== 1;
+    const ovSc = setOverrides[setId(s)];
+    const customScale = (ovSc?.scale ?? 1) !== 1 || ovSc?.scaleAbs != null;
     const showScale = S.showAllScale || customScale || chips === "";
     if (showScale) {
       // Colour ENCODES the direction (added info, not just a number): a HARDER variation
@@ -9545,7 +9549,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // scale, or the ×N-mode pill forces it) — the same rule the collapsed line (setDisplay) uses.
   // UN (not-comparable) always shows.
   const namedChips = variationChipsHtml(s, suppress);
-  const customScale = (setOverrides[sid]?.scale ?? 1) !== 1;
+  const customScale = (setOverrides[sid]?.scale ?? 1) !== 1 || setOverrides[sid]?.scaleAbs != null;
   const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (S.showAllScale || customScale || namedChips === ""));
   const scaleTag = !showScaleNum
     ? ""
@@ -10482,6 +10486,8 @@ function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
   if (a.levelDim && a.levelDim !== "sq" && a.levelValue !== undefined) setSetOverrideLevel(newId, a.levelDim, a.levelValue);
   const srcScale = setOverrides[setId(src)]?.scale;
   if (srcScale != null && srcScale !== 1) setSetOverrideField(newId, "scale", srcScale);
+  const srcScaleAbs = setOverrides[setId(src)]?.scaleAbs;
+  if (srcScaleAbs != null) setSetOverrideField(newId, "scaleAbs", srcScaleAbs);
   if (srcRom) setSetRom(newId, { ...srcRom });
   saveManual();
   mergeManualSets();
@@ -18953,6 +18959,13 @@ function copyLineVariation(from: HTMLElement, to: HTMLElement): void {
     toRom.textContent = romPillLabel(toRom.dataset.romunit, Number(toRom.dataset.romval) || 0);
     toRom.classList.toggle("is-set", fromRom.classList.contains("is-set"));
   }
+  // Custom ×multiplier pill — copy its value + mode so a "+ set" keeps the same multiplier.
+  const fromMult = from.querySelector<HTMLElement>(".wo-af-multpill");
+  const toMult = to.querySelector<HTMLElement>(".wo-af-multpill");
+  if (fromMult && toMult) {
+    toMult.dataset.multval = fromMult.dataset.multval ?? "";
+    toMult.dataset.multmode = fromMult.dataset.multmode ?? "mult";
+  }
   // Lean pill (button) — copy its snapped level + label (handstand families).
   const fromLean = from.querySelector<HTMLElement>(".wo-af-leanpill");
   const toLean = to.querySelector<HTMLElement>(".wo-af-leanpill");
@@ -19289,6 +19302,14 @@ function syncAddmReal(form: HTMLElement): void {
     const rlbl = ln.querySelector<HTMLElement>(".wo-af-sidelbl-r");
     if (lside) lside.toggleAttribute("hidden", !uni);
     if (rlbl) rlbl.toggleAttribute("hidden", !uni);
+    // Custom-multiplier pill: show the line's effective total ×multiplier live (tags, with any
+    // typed custom value applied), so the owner always sees the total and what they overrode.
+    const mpill = ln.querySelector<HTMLElement>(".wo-af-multpill");
+    if (mpill && ex) {
+      const eff = multPillEffective(ex, ln, mpill);
+      mpill.textContent = `×${Math.round(eff * 100) / 100}`;
+      mpill.classList.toggle("is-set", !!mpill.dataset.multval);
+    }
     const out = ln.querySelector<HTMLElement>(".addm-real");
     const pre = ln.querySelector<HTMLElement>(".wo-af-wpre");
     if (!out) continue;
@@ -19578,6 +19599,96 @@ function openRomPicker(pill: HTMLElement): void {
   setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 
+// ── Custom MULTIPLIER pill + picker (owner: "every tag is a multiplier; I should SEE the total
+// of all tags, ADD my own, and OVERRIDE the total") ──────────────────────────────────────────
+// The pill shows a set's effective ×multiplier; tapping it lets you type your own number that
+// EITHER multiplies on top of the tags OR replaces the total. Stored on the created/edited set as
+// `scale` (multiply) or `scaleAbs` (replace) — both read by scaleForRecord.
+/** The tag-derived multiplier for an add/edit LINE (the family variation product × any incline
+ * level), so the pill + picker can show the total before the set exists. */
+function addLineTagScale(ex: string, ln: HTMLElement): number {
+  const fam = ex ? familyOf(ex) : null;
+  const vec: Record<string, string> = {};
+  for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) if (s.dataset.dim) vec[s.dataset.dim] = s.value;
+  const lean = ln.querySelector<HTMLElement>(".wo-af-leanpill");
+  if (lean?.dataset.leanlevel) vec.lean = lean.dataset.leanlevel;
+  let s = fam ? scalarFromVec(fam, vec) : 1;
+  const inc = ln.querySelector<HTMLElement>(".wo-af-incpill");
+  if (inc && isInclineLevelExercise(ex)) { const d = inc.dataset.incdim as LevelDim; const v = Number(inc.dataset.incval); if (Number.isFinite(v)) s *= levelScaleFor(ex, d, v); }
+  return Math.round(s * 1e6) / 1e6;
+}
+/** The effective multiplier a line will record = the tag total, with the owner's custom value
+ * either replacing it (abs) or multiplying on top (mult). */
+function multPillEffective(ex: string, ln: HTMLElement, pill: HTMLElement): number {
+  const tags = addLineTagScale(ex, ln);
+  const v = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
+  if (!(Number.isFinite(v) && v > 0)) return tags;
+  return pill.dataset.multmode === "abs" ? v : Math.round(tags * v * 1e6) / 1e6;
+}
+function customMultPillHtml(): string {
+  return `<button type="button" class="wo-af-multpill" data-multval="" data-multmode="mult" title="The set's total ×multiplier (the product of its tags). Tap to add your OWN — multiply on top of the tags, or replace the total.">×1</button>`;
+}
+let customMultPickerClose: (() => void) | null = null;
+function closeCustomMultPicker(): void { customMultPickerClose?.(); }
+function openCustomMultPicker(pill: HTMLElement): void {
+  closeCustomMultPicker();
+  const ln = pill.closest<HTMLElement>(".addm-line");
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  const ex = form ? addmCogEx(form) : "";
+  const round = (n: number) => Math.round(n * 100) / 100;
+  let val = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
+  let mode: "mult" | "abs" = pill.dataset.multmode === "abs" ? "abs" : "mult";
+  const tagTotal = ln ? addLineTagScale(ex, ln) : 1;
+  const pop = document.createElement("div");
+  pop.className = "inc-pop mult-pop";
+  const place = () => {
+    const r = pill.getBoundingClientRect();
+    const w = pop.offsetWidth || 200, h = pop.offsetHeight || 160;
+    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const commit = () => {
+    if (Number.isFinite(val) && val > 0) pill.dataset.multval = String(val); else pill.dataset.multval = "";
+    pill.dataset.multmode = mode;
+    if (form) syncPendingFromModal(); // refreshes the pill label via syncAddmReal
+  };
+  const render = () => {
+    const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal;
+    pop.innerHTML =
+      `<div class="mult-readout muted">tags = ×${round(tagTotal)}</div>` +
+      `<div class="inc-valrow"><input type="number" class="inc-val mult-val" step="0.05" min="0" value="${Number.isFinite(val) ? val : ""}" placeholder="1" inputmode="decimal" aria-label="Your multiplier" /></div>` +
+      `<div class="inc-units">` +
+      `<button type="button" class="inc-unit${mode === "mult" ? " is-on" : ""}" data-multmode="mult">× on top</button>` +
+      `<button type="button" class="inc-unit${mode === "abs" ? " is-on" : ""}" data-multmode="abs">= total</button>` +
+      `</div>` +
+      `<div class="inc-eq muted">= ×${round(eff)}</div>` +
+      `<button type="button" class="inc-floor" data-multclear>clear (use tags)</button>`;
+    place();
+  };
+  pop.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const m = t.closest<HTMLElement>("[data-multmode]");
+    if (m?.dataset.multmode) { mode = m.dataset.multmode === "abs" ? "abs" : "mult"; render(); commit(); return; }
+    if (t.closest("[data-multclear]")) { val = NaN; mode = "mult"; render(); commit(); return; }
+  });
+  pop.addEventListener("input", (e) => {
+    const vi = (e.target as HTMLElement).closest<HTMLInputElement>(".mult-val");
+    if (vi) { const v = parseFloat(vi.value); val = Number.isFinite(v) ? v : NaN; const eq = pop.querySelector<HTMLElement>(".inc-eq"); const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal; if (eq) eq.textContent = `= ×${round(eff)}`; commit(); }
+  });
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeCustomMultPicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeCustomMultPicker(); };
+  customMultPickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); customMultPickerClose = null;
+  };
+  document.body.appendChild(pop);
+  render();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
+}
+
 // ── Handstand LEAN pill + picker (hand-to-wall distance → canonical palm-base cm) ──
 // Owner spec (docs/handstand-lean-model.md): the forward LEAN is the distance from the
 // hands to the wall. Enter it from any of 4 hand POINTS, in cm OR as a yoga-block side; it
@@ -19698,9 +19809,12 @@ function addmVariantField(ex: string): string {
   // (handstandLean.ts), captioned like the others. Always shown (lean is the point of wall-taps);
   // it replaces the plain lean select in the ADD path (variantSelectsHtml skips lean there).
   const lean = hasLeanDim(ex) ? cap("fwd lean", leanPillHtml(ex)) : "";
+  // Custom MULTIPLIER pill (owner): shows the set's total ×multiplier from its tags and lets you
+  // add your own (multiply on top, or replace the total). Always shown so the total is glanceable.
+  const mult = ex ? cap("multiplier", customMultPillHtml()) : "";
   // No inline "＋ tag" button — the passive-tag PALETTE above the sets is the one place to add a
   // tag (owner: "a list of all the tags above the sets, press ＋ to add"). Avoids two add paths.
-  return dims + incline + rom + lean;
+  return dims + incline + rom + lean + mult;
 }
 /** Is a tag ACTIVE (shown inline next to the weight) for this exercise? The SINGLE source of truth
  * for both the palette ✓/＋ and the inline pill's visibility, so they can't disagree.
@@ -20024,6 +20138,13 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       romPill.dataset.romref = rom.ref ?? "";
       romPill.textContent = romPillLabel(rom.unit, rom.val);
     }
+    // Custom ×multiplier pill ← the set's stored scaleAbs (replace) or scale (multiply on top).
+    const multPill = wrap.querySelector<HTMLElement>(".wo-af-multpill");
+    if (multPill) {
+      const ov = setOverrides[edit.sid];
+      if (ov?.scaleAbs != null) { multPill.dataset.multval = String(ov.scaleAbs); multPill.dataset.multmode = "abs"; }
+      else if (ov?.scale != null) { multPill.dataset.multval = String(ov.scale); multPill.dataset.multmode = "mult"; }
+    }
     // RIR pill ← the set's grade, if any.
     const grade = rpeGrades[edit.sid];
     const rirPill = wrap.querySelector<HTMLElement>(".addm-rir");
@@ -20186,6 +20307,9 @@ function onAddModalClick(e: MouseEvent): void {
   // Lean pill → the hand-point + cm/block + hand-length distance picker.
   const leanPill = t.closest<HTMLElement>(".wo-af-leanpill");
   if (leanPill) { openLeanPicker(leanPill); return; }
+  // Custom multiplier pill → the value + mode (× on top / = total) picker.
+  const multPill = t.closest<HTMLElement>(".wo-af-multpill");
+  if (multPill) { openCustomMultPicker(multPill); return; }
   // Tag palette ＋/✓ : SHOW or HIDE a tag for this exercise next to the weight. Hiding (deselect)
   // is allowed only when the tag has an obvious baseline to fall back to (tagDeselectable); a
   // locked tag does nothing. PB-48: a hidden tag is REMOVED from the DOM (insert/remove the one
@@ -20422,6 +20546,16 @@ function applySetEdit(form: HTMLElement): boolean {
     else if (Number.isFinite(v) && v !== romDef) rom = { unit: "pct", val: v };
     setSetRom(sid, rom);
   }
+  // Custom ×multiplier — replace the total (scaleAbs) or multiply on top (scale); set ONE, clear
+  // the other. No value → both cleared (back to the tag-derived total).
+  const multPill = ln.querySelector<HTMLElement>(".wo-af-multpill");
+  if (multPill) {
+    const v = multPill.dataset.multval ? parseFloat(multPill.dataset.multval) : NaN;
+    const abs = multPill.dataset.multmode === "abs";
+    const ok = Number.isFinite(v) && v > 0;
+    setSetOverrideField(sid, "scaleAbs", ok && abs ? v : null);
+    setSetOverrideField(sid, "scale", ok && !abs ? v : null);
+  }
   const rir = ln.querySelector<HTMLElement>(".addm-rir")?.dataset.picked || "";
   if (rir) setRpe(sid, rir);
   closeAddModal();
@@ -20510,7 +20644,12 @@ function onInlineAddGo(form: HTMLElement): boolean {
       const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
       const incDim = incPill ? (incPill.dataset.incdim as LevelDim) : undefined;
       const incVal = incPill ? Number(incPill.dataset.incval) : NaN;
-      return { weight, reps, lWeight, lReps, rir, chosenDims, note, incDim, incVal, rom };
+      // Custom ×multiplier: a typed value either multiplies on top of the tags (scale) or replaces
+      // the whole total (scaleAbs). Stored on the created set below.
+      const multPill = ln.querySelector<HTMLElement>(".wo-af-multpill");
+      const custMultVal = multPill?.dataset.multval ? parseFloat(multPill.dataset.multval) : NaN;
+      const custMultMode: "mult" | "abs" = multPill?.dataset.multmode === "abs" ? "abs" : "mult";
+      return { weight, reps, lWeight, lReps, rir, chosenDims, note, incDim, incVal, rom, custMultVal, custMultMode };
     })
     .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   const username = els.athlete.value;
@@ -20586,6 +20725,14 @@ function onInlineAddGo(form: HTMLElement): boolean {
       if (ent && sideScore(lW, lR) < sideScore(rW, rR)) { ent.weight = lW; ent.reps = lR; } // weaker = base
       setSideDivergence(id, { rWeight: rW, rReps: rR, lWeight: lW, lReps: lR });
     }
+  }
+  // Custom ×multiplier per line → store as scaleAbs (replace the total) or scale (multiply on top).
+  for (let i = 0; i < setLines.length; i++) {
+    const l = setLines[i]!;
+    if (!(Number.isFinite(l.custMultVal) && l.custMultVal > 0)) continue;
+    const id = `${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
+    if (l.custMultMode === "abs") setSetOverrideField(id, "scaleAbs", l.custMultVal);
+    else setSetOverrideField(id, "scale", l.custMultVal);
   }
   // STAMP each new set with the current equipment (Phase 3) — so a later equipment switch never
   // rewrites these sets (owner: "only new sets"). Only when a non-default machine is chosen.
